@@ -22,5 +22,5 @@ USER app
 COPY --from=build /app/publish .
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
-HEALTHCHECK CMD curl -f http://localhost:8080/liveness || exit 1
+HEALTHCHECK CMD curl -f http://localhost:8080/quote/liveness || exit 1
 ENTRYPOINT ["dotnet", "Maliev.QuoteEngine.Bff.dll"]
