@@ -16,6 +16,10 @@ window.quoteEngineUploads = (() => {
     }
   }
 
+  function openFilePicker(inputId) {
+    document.getElementById(inputId)?.click();
+  }
+
   async function uploadFile(clientFileId, uploadUrl, contentType) {
     const file = fileMap.get(clientFileId);
     if (!file) {
@@ -37,5 +41,5 @@ window.quoteEngineUploads = (() => {
     }
   }
 
-  return { captureFiles, uploadFile };
+  return { captureFiles, openFilePicker, uploadFile };
 })();
