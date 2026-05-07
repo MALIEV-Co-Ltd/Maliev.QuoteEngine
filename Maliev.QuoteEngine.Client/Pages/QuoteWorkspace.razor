@@ -1,5 +1,6 @@
 @page "/quotes/new"
 @inject QuoteEngineApiClient Api
+@inject IJSRuntime Js
 
 <PageTitle>New manufacturing quote - MALIEV</PageTitle>
 
@@ -12,7 +13,7 @@
         </div>
 
         <label class="upload-zone">
-            <InputFile OnChange="HandleFilesAsync" multiple />
+            <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple />
             <span class="upload-icon">+</span>
             <strong>Drop or choose CAD files</strong>
             <small>STL, STEP, STP, OBJ, 3MF, IGES. Large files use the resumable upload API.</small>
@@ -132,6 +133,7 @@
 </div>
 
 @code {
+    private const string UploadInputId = "quote-cad-files";
     private readonly string _quoteSessionId = Guid.NewGuid().ToString("N");
     private readonly List<QuotePartViewModel> _parts = [];
     private QuoteReferenceDataResponse? _reference;
@@ -149,13 +151,36 @@
     private async Task HandleFilesAsync(InputFileChangeEventArgs args)
     {
         _error = null;
-        foreach (var file in args.GetMultipleFiles(12))
+        var selectedFiles = args.GetMultipleFiles(12).ToArray();
+        var capturedFiles = selectedFiles
+            .Select(file => new CapturedFile(Guid.NewGuid().ToString("N"), file))
+            .ToArray();
+
+        await Js.InvokeVoidAsync(
+            "quoteEngineUploads.captureFiles",
+            UploadInputId,
+            capturedFiles.Select(file => new
+            {
+                clientFileId = file.ClientFileId,
+                fileName = file.File.Name,
+                fileSizeBytes = file.File.Size
+            }));
+
+        foreach (var capturedFile in capturedFiles)
         {
+            var file = capturedFile.File;
             var part = new QuotePartViewModel { FileName = file.Name, Status = "Uploading" };
             _parts.Add(part);
             try
             {
-                var upload = await Api.UploadAsync(_quoteSessionId, file);
+                var initiation = await Api.InitiateUploadAsync(_quoteSessionId, file);
+                await Js.InvokeVoidAsync(
+                    "quoteEngineUploads.uploadFile",
+                    capturedFile.ClientFileId,
+                    initiation.ProxyUploadUrl,
+                    string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
+
+                var upload = await Api.CompleteUploadAsync(initiation.UploadId);
                 var status = await Api.GetAnalysisStatusAsync(upload.UploadId);
                 part.PartId = Guid.NewGuid();
                 part.FileId = upload.FileId;
@@ -172,6 +197,8 @@
             }
         }
     }
+
+    private sealed record CapturedFile(string ClientFileId, IBrowserFile File);
 
     private async Task CalculateAsync()
     {

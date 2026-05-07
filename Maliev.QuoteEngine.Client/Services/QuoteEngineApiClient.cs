@@ -1,4 +1,3 @@
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Quotes;
@@ -8,37 +7,30 @@ namespace Maliev.QuoteEngine.Client.Services;
 
 public sealed class QuoteEngineApiClient(HttpClient httpClient)
 {
-    private const long MaxUploadSize = 10_737_418_240L;
-
     public async Task<QuoteReferenceDataResponse> GetReferenceDataAsync(CancellationToken cancellationToken = default)
     {
         return await httpClient.GetFromJsonAsync<QuoteReferenceDataResponse>("quote/v1/reference-data", cancellationToken)
             ?? new QuoteReferenceDataResponse([], [], [], []);
     }
 
-    public async Task<CompleteQuoteUploadResponse> UploadAsync(string quoteSessionId, IBrowserFile file, CancellationToken cancellationToken = default)
+    public Task<InitiateQuoteUploadResponse> InitiateUploadAsync(string quoteSessionId, IBrowserFile file, CancellationToken cancellationToken = default)
     {
-        var initiation = await PostAsync<InitiateQuoteUploadRequest, InitiateQuoteUploadResponse>(
+        return PostAsync<InitiateQuoteUploadRequest, InitiateQuoteUploadResponse>(
             "quote/v1/uploads/resumable",
             new InitiateQuoteUploadRequest
             {
                 QuoteSessionId = quoteSessionId,
                 FileName = file.Name,
-                ContentType = file.ContentType,
+                ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
                 FileSizeBytes = file.Size
             },
             cancellationToken);
+    }
 
-        using var content = new StreamContent(file.OpenReadStream(MaxUploadSize, cancellationToken));
-        content.Headers.ContentType = MediaTypeHeaderValue.Parse(string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
-        content.Headers.ContentLength = file.Size;
-        content.Headers.ContentRange = new ContentRangeHeaderValue(0, file.Size - 1, file.Size);
-
-        using var put = await httpClient.PutAsync(initiation.ProxyUploadUrl.TrimStart('/'), content, cancellationToken);
-        put.EnsureSuccessStatusCode();
-
+    public async Task<CompleteQuoteUploadResponse> CompleteUploadAsync(string uploadId, CancellationToken cancellationToken = default)
+    {
         return await PostAsync<object, CompleteQuoteUploadResponse>(
-            $"quote/v1/uploads/resumable/{Uri.EscapeDataString(initiation.UploadId)}/complete",
+            $"quote/v1/uploads/resumable/{Uri.EscapeDataString(uploadId)}/complete",
             new { },
             cancellationToken);
     }
