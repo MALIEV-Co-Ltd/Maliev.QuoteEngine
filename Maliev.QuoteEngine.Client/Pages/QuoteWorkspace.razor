@@ -1,0 +1,236 @@
+@page "/quotes/new"
+@inject QuoteEngineApiClient Api
+
+<PageTitle>New manufacturing quote - MALIEV</PageTitle>
+
+<div class="quote-workspace">
+    <section class="quote-main">
+        <div class="section-heading">
+            <span class="eyebrow">New quote</span>
+            <h1>Upload models and configure parts</h1>
+            <p>Each file keeps its own upload, DFM, viewer, material, quantity, and pricing state.</p>
+        </div>
+
+        <label class="upload-zone">
+            <InputFile OnChange="HandleFilesAsync" multiple />
+            <span class="upload-icon">+</span>
+            <strong>Drop or choose CAD files</strong>
+            <small>STL, STEP, STP, OBJ, 3MF, IGES. Large files use the resumable upload API.</small>
+        </label>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <MudAlert Severity="Severity.Error">@_error</MudAlert>
+        }
+
+        <div class="part-list">
+            @foreach (var part in _parts)
+            {
+                <article class="part-card">
+                    <div class="viewer-tile">
+                        <img src="/images/generated/sample-part.svg" alt="Preview for @part.FileName" />
+                    </div>
+                    <div class="part-body">
+                        <div class="part-title">
+                            <strong>@part.FileName</strong>
+                            <span>@part.Status</span>
+                        </div>
+                        <div class="config-grid">
+                            <label>
+                                Process
+                                <select @bind="part.ProcessId">
+                                    @foreach (var process in _reference?.Processes ?? [])
+                                    {
+                                        <option value="@process.Id">@process.Name</option>
+                                    }
+                                </select>
+                            </label>
+                            <label>
+                                Material
+                                <select @bind="part.MaterialId">
+                                    @foreach (var material in MaterialsFor(part.ProcessId))
+                                    {
+                                        <option value="@material.Id">@material.Name</option>
+                                    }
+                                </select>
+                            </label>
+                            <label>
+                                Quantity
+                                <input type="number" min="1" @bind="part.Quantity" />
+                            </label>
+                            <label class="check-row">
+                                <input type="checkbox" @bind="part.DfmAcknowledged" />
+                                DFM reviewed
+                            </label>
+                        </div>
+                        <div class="dfm-strip">
+                            <span>@part.VolumeCc.ToString("0.##") cc</span>
+                            <span>@part.SurfaceAreaCm2.ToString("0.##") cm2</span>
+                            @foreach (var finding in part.Findings)
+                            {
+                                <span>@finding.Severity: @finding.Message</span>
+                            }
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    </section>
+
+    <aside class="quote-summary">
+        <h2>Estimate</h2>
+        <label>
+            Lead time
+            <select @bind="_leadTimeCode">
+                @foreach (var leadTime in _reference?.LeadTimes ?? [])
+                {
+                    <option value="@leadTime.Code">@leadTime.Name (@leadTime.BusinessDays)d</option>
+                }
+            </select>
+        </label>
+        <button class="primary-button full" disabled="@(!_parts.Any())" @onclick="CalculateAsync">Calculate</button>
+
+        @if (_estimate is not null)
+        {
+            <div class="estimate-box">
+                @foreach (var line in _estimate.Lines)
+                {
+                    <div>
+                        <span>@line.FileName</span>
+                        <strong>@line.LineTotal.ToString("N2") @_estimate.Currency</strong>
+                    </div>
+                }
+                <div>
+                    <span>Discount</span>
+                    <strong>-@_estimate.Discount.ToString("N2") @_estimate.Currency</strong>
+                </div>
+                <div class="total">
+                    <span>Total</span>
+                    <strong>@_estimate.Total.ToString("N2") @_estimate.Currency</strong>
+                </div>
+            </div>
+            <button class="primary-button full" @onclick="SubmitQuoteAsync">Request formal quote</button>
+        }
+
+        @if (_formalQuote is not null)
+        {
+            <div class="success-panel">
+                <strong>@_formalQuote.QuoteNumber</strong>
+                <span>@_formalQuote.Status</span>
+                <button class="text-button" @onclick="CreateOrderAsync">Create manufacturing order</button>
+            </div>
+        }
+
+        @if (_order is not null)
+        {
+            <div class="success-panel">
+                <strong>@_order.OrderNumber</strong>
+                <span>@_order.Status</span>
+            </div>
+        }
+    </aside>
+</div>
+
+@code {
+    private readonly string _quoteSessionId = Guid.NewGuid().ToString("N");
+    private readonly List<QuotePartViewModel> _parts = [];
+    private QuoteReferenceDataResponse? _reference;
+    private QuoteEstimateResponse? _estimate;
+    private GenerateFormalQuoteResponse? _formalQuote;
+    private CreateManufacturingOrderResponse? _order;
+    private string _leadTimeCode = "STANDARD";
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _reference = await Api.GetReferenceDataAsync();
+    }
+
+    private async Task HandleFilesAsync(InputFileChangeEventArgs args)
+    {
+        _error = null;
+        foreach (var file in args.GetMultipleFiles(12))
+        {
+            var part = new QuotePartViewModel { FileName = file.Name, Status = "Uploading" };
+            _parts.Add(part);
+            try
+            {
+                var upload = await Api.UploadAsync(_quoteSessionId, file);
+                var status = await Api.GetAnalysisStatusAsync(upload.UploadId);
+                part.PartId = Guid.NewGuid();
+                part.FileId = upload.FileId;
+                part.UploadId = upload.UploadId;
+                part.Status = status.Status;
+                part.VolumeCc = status.VolumeCc;
+                part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
+                part.Findings = status.Findings;
+            }
+            catch (Exception ex)
+            {
+                part.Status = "Upload failed";
+                _error = ex.Message;
+            }
+        }
+    }
+
+    private async Task CalculateAsync()
+    {
+        _estimate = await Api.EstimateAsync(new QuoteEstimateRequest
+        {
+            QuoteSessionId = _quoteSessionId,
+            LeadTimeCode = _leadTimeCode,
+            Parts = _parts.Select(x => x.ToDraft()).ToList()
+        });
+    }
+
+    private async Task SubmitQuoteAsync()
+    {
+        var draft = await Api.CreateDraftProjectAsync(new CreateDraftProjectRequest(_quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Customer quote engine prototype"));
+        _formalQuote = await Api.GenerateFormalQuoteAsync(new GenerateFormalQuoteRequest(draft.ProjectId, _quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Formal quote requested by customer."));
+    }
+
+    private async Task CreateOrderAsync()
+    {
+        if (_formalQuote is null)
+        {
+            return;
+        }
+
+        _order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_formalQuote.QuoteId, string.Empty, "Customer accepted quote."));
+    }
+
+    private IEnumerable<MaterialOptionDto> MaterialsFor(string processId)
+    {
+        return (_reference?.Materials ?? []).Where(x => x.ProcessId == processId);
+    }
+
+    private sealed class QuotePartViewModel
+    {
+        public Guid PartId { get; set; } = Guid.NewGuid();
+        public Guid FileId { get; set; }
+        public string UploadId { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
+        public string ProcessId { get; set; } = "fdm";
+        public string MaterialId { get; set; } = "pla-black";
+        public int Quantity { get; set; } = 1;
+        public decimal VolumeCc { get; set; }
+        public decimal SurfaceAreaCm2 { get; set; }
+        public bool DfmAcknowledged { get; set; }
+        public string Status { get; set; } = "Waiting";
+        public IReadOnlyList<DfmFindingDto> Findings { get; set; } = [];
+
+        public QuotePartDraftDto ToDraft() => new()
+        {
+            PartId = PartId,
+            FileId = FileId,
+            UploadId = UploadId,
+            FileName = FileName,
+            ProcessId = ProcessId,
+            MaterialId = MaterialId,
+            Quantity = Quantity,
+            VolumeCc = Math.Max(VolumeCc, 1m),
+            SurfaceAreaCm2 = SurfaceAreaCm2,
+            DfmAcknowledged = DfmAcknowledged
+        };
+    }
+}

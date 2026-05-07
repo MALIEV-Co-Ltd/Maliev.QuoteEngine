@@ -1,0 +1,14 @@
+@page "/quotes/{QuoteId:guid}"
+
+<PageTitle>Quote detail - MALIEV</PageTitle>
+
+<div class="empty-state">
+    <h1>Quote detail</h1>
+    <p>Quote @QuoteId is ready to connect to QuotationService detail and PDF history.</p>
+    <a class="primary-button" href="/quotes/new">Start another quote</a>
+</div>
+
+@code {
+    [Parameter]
+    public Guid QuoteId { get; set; }
+}

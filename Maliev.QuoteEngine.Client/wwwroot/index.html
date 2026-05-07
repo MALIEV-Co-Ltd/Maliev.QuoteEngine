@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MALIEV Quote Engine</title>
+    <base href="/" />
+    <meta name="description" content="MALIEV customer quote engine for custom manufacturing, CAD upload, DFM review, deterministic estimates, and order tracking." />
+    <link rel="stylesheet" href="_content/MudBlazor/MudBlazor.min.css" />
+    <link rel="stylesheet" href="css/app.css" />
+</head>
+
+<body>
+    <div id="quote-startup" class="startup-screen">
+        <div class="startup-mark">
+            <div class="startup-logo">MALIEV</div>
+            <div class="startup-progress" aria-hidden="true"><span></span></div>
+            <p>Loading quote engine</p>
+        </div>
+    </div>
+    <div id="app"></div>
+    <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script src="js/quote-engine-loader.js"></script>
+    <script src="js/quote-upload.js"></script>
+    <script src="_framework/blazor.webassembly.js"></script>
+</body>
+
+</html>

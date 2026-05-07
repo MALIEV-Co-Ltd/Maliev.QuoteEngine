@@ -1,0 +1,37 @@
+@page "/orders"
+@inject QuoteEngineApiClient Api
+
+<PageTitle>Orders - MALIEV Quote Engine</PageTitle>
+
+<div class="section-heading">
+    <span class="eyebrow">Manufacturing orders</span>
+    <h1>Track custom production</h1>
+</div>
+
+<div class="data-list">
+    @foreach (var order in _orders)
+    {
+        <a class="data-row" href="/orders/@order.OrderId">
+            <span>@order.OrderNumber</span>
+            <strong>@order.Status</strong>
+            <small>@order.TrackingLabel</small>
+        </a>
+    }
+</div>
+
+@if (!_orders.Any())
+{
+    <div class="empty-state">
+        <p>No manufacturing orders yet.</p>
+        <a class="primary-button" href="/quotes/new">Start a quote</a>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<CustomerOrderSummaryDto> _orders = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _orders = await Api.GetOrdersAsync();
+    }
+}

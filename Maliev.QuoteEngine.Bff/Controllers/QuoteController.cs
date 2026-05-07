@@ -1,0 +1,125 @@
+using Asp.Versioning;
+using Maliev.QuoteEngine.Bff.Hubs;
+using Maliev.QuoteEngine.Bff.Services;
+using Maliev.QuoteEngine.Shared.Quotes;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+
+namespace Maliev.QuoteEngine.Bff.Controllers;
+
+[ApiController]
+[ApiVersion("1.0")]
+[Route("quote/v{version:apiVersion}")]
+public sealed class QuoteController(
+    QuoteEnginePrototypeStore store,
+    IHubContext<QuoteNotificationsHub> hubContext) : ControllerBase
+{
+    [HttpGet("reference-data")]
+    public ActionResult<QuoteReferenceDataResponse> GetReferenceData()
+    {
+        return Ok(store.ReferenceData);
+    }
+
+    [HttpPost("uploads/resumable")]
+    public ActionResult<InitiateQuoteUploadResponse> InitiateUpload([FromBody] InitiateQuoteUploadRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var upload = store.InitiateUpload(request);
+        return Ok(new InitiateQuoteUploadResponse(
+            upload.UploadId,
+            $"/quote/v1/uploads/resumable/{upload.UploadId}",
+            upload.StoragePath,
+            upload.ExpectedSizeBytes));
+    }
+
+    [HttpPut("uploads/resumable/{uploadId}")]
+    [DisableRequestSizeLimit]
+    public async Task<IActionResult> ResumeUpload(string uploadId, CancellationToken cancellationToken)
+    {
+        var contentRange = Request.Headers.ContentRange.ToString();
+        if (string.IsNullOrWhiteSpace(contentRange))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Content-Range is required.",
+                Detail = "Quote uploads use the resumable upload contract and must provide Content-Range."
+            });
+        }
+
+        var upload = store.GetUpload(uploadId);
+        if (upload is null)
+        {
+            return NotFound();
+        }
+
+        var received = 0L;
+        var buffer = new byte[64 * 1024];
+        int read;
+        while ((read = await Request.Body.ReadAsync(buffer, cancellationToken)) > 0)
+        {
+            received += read;
+        }
+
+        store.MarkUploaded(uploadId, received);
+        return NoContent();
+    }
+
+    [HttpPost("uploads/resumable/{uploadId}/complete")]
+    public async Task<ActionResult<CompleteQuoteUploadResponse>> CompleteUpload(string uploadId, CancellationToken cancellationToken)
+    {
+        var upload = store.MarkAnalyzed(uploadId);
+        await hubContext.Clients
+            .Group(QuoteNotificationsHub.FileGroup(upload.StoragePath))
+            .SendAsync("FileAnalysisCompleted", upload.ToAnalysisStatus(), cancellationToken);
+
+        return Ok(new CompleteQuoteUploadResponse(upload.UploadId, upload.FileId, upload.FileName, upload.StoragePath, upload.Status));
+    }
+
+    [HttpGet("uploads/{uploadId}/analysis-status")]
+    public ActionResult<QuoteAnalysisStatusResponse> GetAnalysisStatus(string uploadId)
+    {
+        var upload = store.GetUpload(uploadId);
+        return upload is null ? NotFound() : Ok(upload.ToAnalysisStatus());
+    }
+
+    [HttpPost("estimate")]
+    public ActionResult<QuoteEstimateResponse> Estimate([FromBody] QuoteEstimateRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(store.Estimate(request));
+    }
+
+    [HttpPost("projects/draft")]
+    public ActionResult<CreateDraftProjectResponse> CreateDraftProject([FromBody] CreateDraftProjectRequest request)
+    {
+        _ = request;
+        return Ok(store.CreateDraftProject());
+    }
+
+    [HttpPost("quotes/formal")]
+    public ActionResult<GenerateFormalQuoteResponse> GenerateFormalQuote([FromBody] GenerateFormalQuoteRequest request)
+    {
+        _ = request;
+        return Ok(store.GenerateQuote());
+    }
+
+    [HttpPost("quotes/{quoteId:guid}/approve")]
+    public ActionResult<GenerateFormalQuoteResponse> ApproveQuote(Guid quoteId)
+    {
+        return Ok(new GenerateFormalQuoteResponse(quoteId, $"MQ-{DateTime.UtcNow:yyyyMMdd}-APPROVED", "/quote/v1/account/quotes/sample.pdf", "Approved"));
+    }
+
+    [HttpPost("orders")]
+    public ActionResult<CreateManufacturingOrderResponse> CreateOrder([FromBody] CreateManufacturingOrderRequest request)
+    {
+        return Ok(store.CreateOrder(request.QuoteId));
+    }
+}

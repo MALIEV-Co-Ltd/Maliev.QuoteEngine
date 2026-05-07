@@ -1,0 +1,54 @@
+@inherits LayoutComponentBase
+@inject IJSRuntime Js
+
+<MudThemeProvider />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<div class="app-shell">
+    <aside class="app-rail">
+        <a class="brand" href="/">
+            <span class="brand-mark">M</span>
+            <span>
+                <strong>MALIEV</strong>
+                <small>Quote Engine</small>
+            </span>
+        </a>
+        <nav>
+            <NavLink href="/quotes/new" Match="NavLinkMatch.Prefix">New quote</NavLink>
+            <NavLink href="/orders" Match="NavLinkMatch.Prefix">Orders</NavLink>
+            <NavLink href="/ndas" Match="NavLinkMatch.Prefix">NDAs</NavLink>
+            <NavLink href="/documents" Match="NavLinkMatch.Prefix">Documents</NavLink>
+            <NavLink href="/profile" Match="NavLinkMatch.Prefix">Profile</NavLink>
+        </nav>
+        <a class="web-link" href="https://www.maliev.com">www.maliev.com</a>
+    </aside>
+
+    <main class="workspace">
+        <header class="topbar">
+            <div>
+                <span class="eyebrow">Custom manufacturing portal</span>
+                <strong>Upload, configure, quote, and track production.</strong>
+            </div>
+            <div class="top-actions">
+                <a class="text-button" href="/auth/sign-in">Sign in</a>
+                <a class="primary-button" href="/quotes/new">Start quote</a>
+            </div>
+        </header>
+
+        <section class="page-surface">
+            @Body
+        </section>
+    </main>
+</div>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Js.InvokeVoidAsync("quoteEngineLoader.markReady");
+        }
+    }
+}

@@ -1,0 +1,19 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.7" />
+    <PackageReference Update="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.7" />
+    <PackageReference Update="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.7" />
+    <PackageReference Update="Microsoft.AspNetCore.SignalR.Client" Version="10.0.7" />
+    <PackageReference Update="MudBlazor" Version="9.1.0" />
+    <PackageReference Update="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.7" />
+  </ItemGroup>
+</Project>

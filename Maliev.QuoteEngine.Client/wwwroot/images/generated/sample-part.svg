@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" role="img" aria-label="Generated placeholder 3D part">
+  <rect width="800" height="600" fill="#dfe8d8"/>
+  <path d="M180 350 390 220 640 315 420 455Z" fill="#6c8b7c"/>
+  <path d="M390 220 390 132 640 226 640 315Z" fill="#91aa9e"/>
+  <path d="M180 350 180 260 390 132 390 220Z" fill="#2f5e4e"/>
+  <circle cx="412" cy="328" r="72" fill="#dfe8d8"/>
+  <circle cx="412" cy="328" r="42" fill="#335d50"/>
+  <path d="M220 391 420 505 420 455 180 350 180 399Z" fill="#25483d"/>
+  <path d="M420 455 640 315 640 365 420 505Z" fill="#496c5d"/>
+</svg>

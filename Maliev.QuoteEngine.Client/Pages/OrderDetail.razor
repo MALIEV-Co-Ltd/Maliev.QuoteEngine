@@ -1,0 +1,14 @@
+@page "/orders/{OrderId:guid}"
+
+<PageTitle>Order detail - MALIEV</PageTitle>
+
+<div class="empty-state">
+    <h1>Order detail</h1>
+    <p>Order @OrderId will show production milestones, files, payment, delivery, and support notes.</p>
+    <a class="primary-button" href="/orders">Back to orders</a>
+</div>
+
+@code {
+    [Parameter]
+    public Guid OrderId { get; set; }
+}

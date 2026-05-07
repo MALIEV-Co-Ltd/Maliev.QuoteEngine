@@ -1,0 +1,29 @@
+@page "/documents"
+@inject QuoteEngineApiClient Api
+
+<PageTitle>Documents - MALIEV Quote Engine</PageTitle>
+
+<div class="section-heading">
+    <span class="eyebrow">Customer files</span>
+    <h1>Documents</h1>
+</div>
+
+<div class="data-list">
+    @foreach (var document in _documents)
+    {
+        <div class="data-row">
+            <span>@document.FileName</span>
+            <strong>@document.Kind</strong>
+            <small>@document.UploadedAt.ToLocalTime().ToString("d MMM yyyy")</small>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<CustomerDocumentDto> _documents = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _documents = await Api.GetDocumentsAsync();
+    }
+}

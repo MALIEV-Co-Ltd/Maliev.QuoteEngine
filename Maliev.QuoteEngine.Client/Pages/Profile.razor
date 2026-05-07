@@ -1,0 +1,44 @@
+@page "/profile"
+@inject QuoteEngineApiClient Api
+
+<PageTitle>Profile - MALIEV Quote Engine</PageTitle>
+
+<div class="section-heading">
+    <span class="eyebrow">Account</span>
+    <h1>Profile</h1>
+</div>
+
+@if (_profile is null)
+{
+    <MudSkeleton Height="120px" />
+}
+else
+{
+    <div class="profile-grid">
+        <div>
+            <span>Name</span>
+            <strong>@_profile.DisplayName</strong>
+        </div>
+        <div>
+            <span>Email</span>
+            <strong>@_profile.Email</strong>
+        </div>
+        <div>
+            <span>Phone</span>
+            <strong>@_profile.Phone</strong>
+        </div>
+        <div>
+            <span>Company</span>
+            <strong>@_profile.CompanyName</strong>
+        </div>
+    </div>
+}
+
+@code {
+    private CustomerProfileResponse? _profile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _profile = await Api.GetProfileAsync();
+    }
+}

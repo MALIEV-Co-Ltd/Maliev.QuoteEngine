@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="Maliev.QuoteEngine.Bff/Maliev.QuoteEngine.Bff.csproj" />
+  <Project Path="Maliev.QuoteEngine.Client/Maliev.QuoteEngine.Client.csproj" />
+  <Project Path="Maliev.QuoteEngine.Shared/Maliev.QuoteEngine.Shared.csproj" />
+  <Project Path="Maliev.QuoteEngine.Tests/Maliev.QuoteEngine.Tests.csproj" />
+</Solution>

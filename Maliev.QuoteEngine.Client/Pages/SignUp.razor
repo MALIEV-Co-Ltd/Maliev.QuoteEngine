@@ -1,0 +1,27 @@
+@page "/auth/sign-up"
+@inject QuoteEngineApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Sign up - MALIEV Quote Engine</PageTitle>
+
+<div class="auth-panel">
+    <span class="eyebrow">Customer account</span>
+    <h1>Create account</h1>
+    <label>First name <input @bind="_request.FirstName" /></label>
+    <label>Last name <input @bind="_request.LastName" /></label>
+    <label>Email <input type="email" @bind="_request.Email" /></label>
+    <label>Password <input type="password" @bind="_request.Password" /></label>
+    <label>Phone <input @bind="_request.Phone" /></label>
+    <label>Company <input @bind="_request.CompanyName" /></label>
+    <button class="primary-button full" @onclick="SignUpAsync">Create account</button>
+</div>
+
+@code {
+    private readonly SignUpRequest _request = new();
+
+    private async Task SignUpAsync()
+    {
+        await Api.SignUpAsync(_request);
+        Navigation.NavigateTo("/quotes/new");
+    }
+}

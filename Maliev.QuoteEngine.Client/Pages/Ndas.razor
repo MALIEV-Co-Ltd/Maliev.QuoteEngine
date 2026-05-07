@@ -1,0 +1,29 @@
+@page "/ndas"
+@inject QuoteEngineApiClient Api
+
+<PageTitle>NDAs - MALIEV Quote Engine</PageTitle>
+
+<div class="section-heading">
+    <span class="eyebrow">Confidentiality</span>
+    <h1>NDAs</h1>
+</div>
+
+<div class="data-list">
+    @foreach (var nda in _ndas)
+    {
+        <div class="data-row">
+            <span>@nda.Title</span>
+            <strong>@nda.Status</strong>
+            <small>@nda.UpdatedAt.ToLocalTime().ToString("d MMM yyyy")</small>
+        </div>
+    }
+</div>
+
+@code {
+    private IReadOnlyList<CustomerNdaDto> _ndas = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _ndas = await Api.GetNdasAsync();
+    }
+}
