@@ -1,15 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 900" role="img" aria-label="Generated manufacturing quote scene">
-  <rect width="900" height="900" fill="#dfe8d8"/>
-  <rect x="90" y="96" width="720" height="500" fill="#f9fbf4" stroke="#adb8a6" stroke-width="4"/>
-  <rect x="130" y="140" width="260" height="260" fill="#203b33"/>
-  <path d="M170 310 265 250 365 292 264 356Z" fill="#d6a23a"/>
-  <path d="M265 250 265 205 365 246 365 292Z" fill="#f0c766"/>
-  <path d="M170 310 170 266 265 205 265 250Z" fill="#9b752b"/>
-  <rect x="430" y="156" width="330" height="28" fill="#126b4f"/>
-  <rect x="430" y="216" width="260" height="24" fill="#91aa9e"/>
-  <rect x="430" y="268" width="300" height="24" fill="#91aa9e"/>
-  <rect x="430" y="320" width="220" height="24" fill="#91aa9e"/>
-  <rect x="130" y="640" width="200" height="84" fill="#126b4f"/>
-  <rect x="360" y="640" width="200" height="84" fill="#2c5d85"/>
-  <rect x="590" y="640" width="180" height="84" fill="#d6a23a"/>
+  <rect width="900" height="900" fill="#fafafa"/>
+  <rect x="90" y="96" width="720" height="500" rx="10" fill="#ffffff" stroke="#ebebeb" stroke-width="4"/>
+  <rect x="130" y="140" width="260" height="260" rx="8" fill="#171717"/>
+  <path d="M170 310 265 250 365 292 264 356Z" fill="#808080"/>
+  <path d="M265 250 265 205 365 246 365 292Z" fill="#d4d4d4"/>
+  <path d="M170 310 170 266 265 205 265 250Z" fill="#4d4d4d"/>
+  <rect x="430" y="156" width="330" height="28" rx="6" fill="#171717"/>
+  <rect x="430" y="216" width="260" height="24" rx="6" fill="#ebebeb"/>
+  <rect x="430" y="268" width="300" height="24" rx="6" fill="#ebebeb"/>
+  <rect x="430" y="320" width="220" height="24" rx="6" fill="#ebebeb"/>
+  <rect x="130" y="640" width="200" height="84" rx="12" fill="#0a72ef"/>
+  <rect x="360" y="640" width="200" height="84" rx="12" fill="#de1d8d"/>
+  <rect x="590" y="640" width="180" height="84" rx="12" fill="#ff5b4f"/>
 </svg>
