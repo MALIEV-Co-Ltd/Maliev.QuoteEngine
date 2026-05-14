@@ -14,6 +14,16 @@ public sealed record QuoteReferenceDataResponse(
     IReadOnlyList<LeadTimeOptionDto> LeadTimes,
     IReadOnlyList<string> SupportedExtensions);
 
+public sealed record QuoteEngineDemoProjectResponse(
+    string DemoSessionId,
+    string Title,
+    IReadOnlyList<QuotePartDraftDto> Parts,
+    string ViewerUrl,
+    string ThumbnailUrl,
+    string Notice);
+
+public sealed record QuoteAuthStatusResponse(bool IsSignedIn, Guid? CustomerId, string? DisplayName);
+
 public sealed class InitiateQuoteUploadRequest
 {
     [Required]

@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Account;
+using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Maliev.QuoteEngine.Bff.Controllers;
@@ -10,6 +11,23 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 [Route("quote/v{version:apiVersion}/auth")]
 public sealed class AuthController(QuoteEnginePrototypeStore store) : ControllerBase
 {
+    [HttpGet("session")]
+    public ActionResult<QuoteAuthStatusResponse> Session()
+    {
+        Guid? customerId = null;
+        var signedIn = false;
+        if (Request.Cookies.TryGetValue("maliev_quote_customer", out var rawCustomerId)
+            && Guid.TryParse(rawCustomerId, out var parsedCustomerId))
+        {
+            signedIn = true;
+            customerId = parsedCustomerId;
+        }
+
+        return Ok(signedIn
+            ? new QuoteAuthStatusResponse(true, customerId, store.PrototypeCustomer.DisplayName)
+            : new QuoteAuthStatusResponse(false, null, null));
+    }
+
     [HttpPost("sign-in")]
     public ActionResult<AuthSessionResponse> SignIn([FromBody] SignInRequest request)
     {

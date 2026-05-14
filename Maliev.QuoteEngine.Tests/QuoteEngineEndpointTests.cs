@@ -23,9 +23,38 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
     }
 
     [Fact]
-    public async Task ResumableUpload_requires_content_range_and_returns_analysis_metrics()
+    public async Task DemoProject_is_non_mutating_sample_journey()
     {
         using var client = factory.CreateClient();
+
+        var demo = await client.GetFromJsonAsync<QuoteEngineDemoProjectResponse>("/quote/v1/demo/project");
+
+        Assert.NotNull(demo);
+        Assert.Contains("sample", demo.Title, StringComparison.OrdinalIgnoreCase);
+        Assert.Single(demo.Parts);
+        Assert.Contains("does not create", demo.Notice, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ResumableUpload_requires_signed_in_customer()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = "session-unsigned",
+            FileName = "part.stl",
+            ContentType = "model/stl",
+            FileSizeBytes = 12
+        });
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResumableUpload_requires_content_range_and_returns_analysis_metrics()
+    {
+        using var client = CreateSignedInClient();
         var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
             QuoteSessionId = "session-1",
@@ -92,12 +121,19 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
     [Fact]
     public async Task Account_profile_is_resolved_server_side_from_session_boundary()
     {
-        using var client = factory.CreateClient();
+        using var client = CreateSignedInClient();
 
         var profile = await client.GetFromJsonAsync<CustomerProfileResponse>("/quote/v1/account/profile");
 
         Assert.NotNull(profile);
         Assert.NotEqual(Guid.Empty, profile.CustomerId);
         Assert.Contains("@", profile.Email, StringComparison.Ordinal);
+    }
+
+    private HttpClient CreateSignedInClient()
+    {
+        var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Cookie", "maliev_quote_customer=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        return client;
     }
 }

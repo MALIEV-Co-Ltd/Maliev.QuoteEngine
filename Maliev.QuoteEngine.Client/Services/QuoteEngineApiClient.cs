@@ -13,6 +13,17 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             ?? new QuoteReferenceDataResponse([], [], [], []);
     }
 
+    public async Task<QuoteEngineDemoProjectResponse?> GetDemoProjectAsync(CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<QuoteEngineDemoProjectResponse>("quote/v1/demo/project", cancellationToken);
+    }
+
+    public async Task<QuoteAuthStatusResponse> GetAuthStatusAsync(CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<QuoteAuthStatusResponse>("quote/v1/auth/session", cancellationToken)
+            ?? new QuoteAuthStatusResponse(false, null, null);
+    }
+
     public Task<InitiateQuoteUploadResponse> InitiateUploadAsync(string quoteSessionId, IBrowserFile file, CancellationToken cancellationToken = default)
     {
         return PostAsync<InitiateQuoteUploadRequest, InitiateQuoteUploadResponse>(
@@ -89,6 +100,11 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     public Task<AuthSessionResponse> SignInAsync(SignInRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<SignInRequest, AuthSessionResponse>("quote/v1/auth/sign-in", request, cancellationToken);
+    }
+
+    public Task<AuthSessionResponse> ExchangeGoogleAsync(CancellationToken cancellationToken = default)
+    {
+        return PostAsync<object, AuthSessionResponse>("quote/v1/auth/google/exchange", new { }, cancellationToken);
     }
 
     public Task<AuthSessionResponse> SignUpAsync(SignUpRequest request, CancellationToken cancellationToken = default)

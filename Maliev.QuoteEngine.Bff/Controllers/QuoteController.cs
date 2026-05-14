@@ -12,6 +12,7 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 [Route("quote/v{version:apiVersion}")]
 public sealed class QuoteController(
     QuoteEnginePrototypeStore store,
+    CustomerSessionResolver sessionResolver,
     IHubContext<QuoteNotificationsHub> hubContext) : ControllerBase
 {
     [HttpGet("reference-data")]
@@ -20,9 +21,24 @@ public sealed class QuoteController(
         return Ok(store.ReferenceData);
     }
 
+    [HttpGet("demo/project")]
+    public ActionResult<QuoteEngineDemoProjectResponse> GetDemoProject()
+    {
+        return Ok(store.DemoProject);
+    }
+
     [HttpPost("uploads/resumable")]
     public ActionResult<InitiateQuoteUploadResponse> InitiateUpload([FromBody] InitiateQuoteUploadRequest request)
     {
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "Customer-owned uploads create project history and require a signed-in customer account."
+            });
+        }
+
         if (!ModelState.IsValid)
         {
             return ValidationProblem(ModelState);
@@ -40,6 +56,11 @@ public sealed class QuoteController(
     [DisableRequestSizeLimit]
     public async Task<IActionResult> ResumeUpload(string uploadId, CancellationToken cancellationToken)
     {
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized();
+        }
+
         var contentRange = Request.Headers.ContentRange.ToString();
         if (string.IsNullOrWhiteSpace(contentRange))
         {
@@ -71,6 +92,11 @@ public sealed class QuoteController(
     [HttpPost("uploads/resumable/{uploadId}/complete")]
     public async Task<ActionResult<CompleteQuoteUploadResponse>> CompleteUpload(string uploadId, CancellationToken cancellationToken)
     {
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized();
+        }
+
         var upload = store.MarkAnalyzed(uploadId);
         await hubContext.Clients
             .Group(QuoteNotificationsHub.FileGroup(upload.StoragePath))
@@ -100,6 +126,15 @@ public sealed class QuoteController(
     [HttpPost("projects/draft")]
     public ActionResult<CreateDraftProjectResponse> CreateDraftProject([FromBody] CreateDraftProjectRequest request)
     {
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "A formal customer project can only be created for a signed-in customer."
+            });
+        }
+
         _ = request;
         return Ok(store.CreateDraftProject());
     }
@@ -107,6 +142,11 @@ public sealed class QuoteController(
     [HttpPost("quotes/formal")]
     public ActionResult<GenerateFormalQuoteResponse> GenerateFormalQuote([FromBody] GenerateFormalQuoteRequest request)
     {
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized();
+        }
+
         _ = request;
         return Ok(store.GenerateQuote());
     }
@@ -114,12 +154,22 @@ public sealed class QuoteController(
     [HttpPost("quotes/{quoteId:guid}/approve")]
     public ActionResult<GenerateFormalQuoteResponse> ApproveQuote(Guid quoteId)
     {
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized();
+        }
+
         return Ok(new GenerateFormalQuoteResponse(quoteId, $"MQ-{DateTime.UtcNow:yyyyMMdd}-APPROVED", "/quote/v1/account/quotes/sample.pdf", "Approved"));
     }
 
     [HttpPost("orders")]
     public ActionResult<CreateManufacturingOrderResponse> CreateOrder([FromBody] CreateManufacturingOrderRequest request)
     {
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized();
+        }
+
         return Ok(store.CreateOrder(request.QuoteId));
     }
 }

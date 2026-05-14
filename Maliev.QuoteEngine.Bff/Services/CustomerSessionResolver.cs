@@ -6,13 +6,22 @@ public sealed class CustomerSessionResolver(IHttpContextAccessor httpContextAcce
 {
     public Guid ResolveCustomerId()
     {
-        var user = httpContextAccessor.HttpContext?.User;
-        var rawCustomerId = user?.FindFirstValue("customer_id")
-            ?? user?.FindFirstValue("customerId")
-            ?? user?.FindFirstValue(ClaimTypes.NameIdentifier);
-
-        return Guid.TryParse(rawCustomerId, out var customerId)
+        return TryResolveCustomerId(out var customerId)
             ? customerId
             : store.PrototypeCustomer.CustomerId;
+    }
+
+    public bool TryResolveCustomerId(out Guid customerId)
+    {
+        var context = httpContextAccessor.HttpContext;
+        var user = context?.User;
+        var rawCustomerId = user?.FindFirstValue("customer_id")
+            ?? user?.FindFirstValue("customerId")
+            ?? user?.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? (context?.Request.Cookies.TryGetValue("maliev_quote_customer", out var cookieCustomerId) == true
+                ? cookieCustomerId
+                : null);
+
+        return Guid.TryParse(rawCustomerId, out customerId);
     }
 }

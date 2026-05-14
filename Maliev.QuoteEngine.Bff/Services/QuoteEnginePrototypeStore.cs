@@ -51,6 +51,28 @@ public sealed class QuoteEnginePrototypeStore
 
     public IReadOnlyList<CustomerOrderSummaryDto> Orders => _orders.Values.OrderByDescending(x => x.UpdatedAt).ToArray();
 
+    public QuoteEngineDemoProjectResponse DemoProject { get; } = new(
+        "demo-sample-bracket",
+        "MALIEV sample bracket demo",
+        [
+            new QuotePartDraftDto
+            {
+                PartId = Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd"),
+                FileId = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+                UploadId = "demo-upload-sample-bracket",
+                FileName = "maliev-sample-bracket.step",
+                ProcessId = "cnc",
+                MaterialId = "al6061",
+                Quantity = 2,
+                VolumeCc = 12.4m,
+                SurfaceAreaCm2 = 78.2m,
+                DfmAcknowledged = true
+            }
+        ],
+        "/images/generated/sample-part.svg",
+        "/images/generated/sample-part.svg",
+        "Demo mode uses MALIEV-owned sample files and does not create customer projects, uploads, quotations, orders, or history.");
+
     public UploadState InitiateUpload(InitiateQuoteUploadRequest request)
     {
         var uploadId = Guid.NewGuid().ToString("N");

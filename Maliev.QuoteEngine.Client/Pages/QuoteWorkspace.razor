@@ -1,6 +1,9 @@
 @page "/quotes/new"
+@page "/projects/new"
+@page "/demo"
 @inject QuoteEngineApiClient Api
 @inject IJSRuntime Js
+@inject NavigationManager Navigation
 
 <PageTitle>New manufacturing quote - MALIEV</PageTitle>
 
@@ -21,8 +24,8 @@
             <div class="qe-plp-upload-section">
                 <button type="button" class="qe-dropzone qe-dropzone--compact" @onclick="OpenFilePickerAsync">
                     <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Medium" />
-                    <span>Drop CAD files to quote</span>
-                    <small>STL, STEP, STP, OBJ, 3MF, IGES</small>
+                    <span>@UploadCompactLabel</span>
+                    <small>@UploadCompactHint</small>
                 </button>
             </div>
 
@@ -80,8 +83,8 @@
                 <section class="qe-empty-state">
                     <button type="button" class="qe-dropzone qe-dropzone--hero" @onclick="OpenFilePickerAsync">
                         <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Large" />
-                        <span>Drop files here or click to upload</span>
-                        <small>STL, STEP, STP, OBJ, 3MF, IGES · max 10 GB per file</small>
+                        <span>@UploadHeroLabel</span>
+                        <small>@UploadHeroHint</small>
                     </button>
                 </section>
             }
@@ -225,8 +228,8 @@
     <footer class="qe-qsb-root">
         <div class="qe-qsb-zone qe-qsb-customer">
             <span class="qe-zone-label">Bill To</span>
-            <strong>Customer account</strong>
-            <small>Signed-in customer profile boundary</small>
+            <strong>@CustomerBoundaryTitle</strong>
+            <small>@CustomerBoundaryHint</small>
         </div>
         <div class="qe-qsb-divider"></div>
         <div class="qe-qsb-zone qe-qsb-lead">
@@ -254,9 +257,9 @@
             <strong>@(_estimate is null ? "—" : $"{_estimate.Total:N2} {_estimate.Currency}")</strong>
             <div class="qe-qsb-actions">
                 <button type="button" class="qe-secondary-btn" disabled="@(!_parts.Any())" @onclick="CalculateAsync">Estimate</button>
-                <button type="button" class="qe-secondary-btn" disabled="@(_estimate is null)" @onclick="SubmitQuoteAsync">PDF</button>
-                <button type="button" class="qe-primary-btn" disabled="@(_estimate is null)" @onclick="SubmitQuoteAsync">
-                    Quote
+                <button type="button" class="qe-secondary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="SubmitQuoteAsync">PDF</button>
+                <button type="button" class="qe-primary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="SubmitQuoteAsync">
+                    @QuoteButtonLabel
                     <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
                 </button>
             </div>
@@ -284,6 +287,7 @@
     private readonly string _quoteSessionId = Guid.NewGuid().ToString("N");
     private readonly List<QuotePartViewModel> _parts = [];
     private QuoteReferenceDataResponse? _reference;
+    private QuoteAuthStatusResponse _authStatus = new(false, null, null);
     private QuoteEstimateResponse? _estimate;
     private GenerateFormalQuoteResponse? _formalQuote;
     private CreateManufacturingOrderResponse? _order;
@@ -292,20 +296,53 @@
     private int _selectedPartIndex;
     private string? _error;
 
+    private bool IsDemoMode => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/demo", StringComparison.OrdinalIgnoreCase);
+    private bool IsSignedIn => _authStatus.IsSignedIn;
+    private bool CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode;
+    private string UploadCompactLabel => IsDemoMode ? "Demo sample only" : IsSignedIn ? "Drop CAD files to quote" : "Sign in to upload";
+    private string UploadCompactHint => IsDemoMode ? "MALIEV-owned sample file" : "STL, STEP, STP, OBJ, 3MF, IGES";
+    private string UploadHeroLabel => IsDemoMode ? "Demo sample is ready" : IsSignedIn ? "Drop files here or click to upload" : "Sign in to upload your own files";
+    private string UploadHeroHint => IsDemoMode
+        ? "Demo mode cannot create projects, formal quotes, orders, uploads, or history"
+        : IsSignedIn ? "STL, STEP, STP, OBJ, 3MF, IGES · max 10 GB per file" : "Google sign-in is the primary path; email and password is available as a fallback";
+    private string CustomerBoundaryTitle => IsDemoMode ? "Demo mode" : IsSignedIn ? _authStatus.DisplayName ?? "Customer account" : "Sign-in required";
+    private string CustomerBoundaryHint => IsDemoMode
+        ? "No customer data is created"
+        : IsSignedIn ? "Signed-in customer project boundary" : "Required before customer-owned uploads";
+    private string QuoteButtonLabel => IsDemoMode ? "Demo only" : IsSignedIn ? "Quote" : "Sign in";
+
     private QuotePartViewModel? SelectedPart => _parts.Count == 0 ? null : _parts[Math.Min(_selectedPartIndex, _parts.Count - 1)];
 
     protected override async Task OnInitializedAsync()
     {
         _reference = await Api.GetReferenceDataAsync();
+        _authStatus = await Api.GetAuthStatusAsync();
+
+        if (IsDemoMode)
+        {
+            await LoadDemoProjectAsync();
+        }
     }
 
     private async Task OpenFilePickerAsync()
     {
+        if (IsDemoMode || !IsSignedIn)
+        {
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            return;
+        }
+
         await Js.InvokeVoidAsync("quoteEngineUploads.openFilePicker", UploadInputId);
     }
 
     private async Task HandleFilesAsync(InputFileChangeEventArgs args)
     {
+        if (!IsSignedIn)
+        {
+            _error = "Sign in before uploading customer-owned manufacturing files.";
+            return;
+        }
+
         _error = null;
         _estimate = null;
         _formalQuote = null;
@@ -407,6 +444,12 @@
 
     private async Task SubmitQuoteAsync()
     {
+        if (!IsSignedIn || IsDemoMode)
+        {
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            return;
+        }
+
         var draft = await Api.CreateDraftProjectAsync(new CreateDraftProjectRequest(_quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Customer quote engine prototype"));
         _formalQuote = await Api.GenerateFormalQuoteAsync(new GenerateFormalQuoteRequest(draft.ProjectId, _quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Formal quote requested by customer."));
     }
@@ -418,7 +461,53 @@
             return;
         }
 
+        if (!IsSignedIn || IsDemoMode)
+        {
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            return;
+        }
+
         _order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_formalQuote.QuoteId, string.Empty, "Customer accepted quote."));
+    }
+
+    private async Task LoadDemoProjectAsync()
+    {
+        var demo = await Api.GetDemoProjectAsync();
+        if (demo is null)
+        {
+            return;
+        }
+
+        _title = demo.Title;
+        _parts.Clear();
+        foreach (var part in demo.Parts)
+        {
+            _parts.Add(new QuotePartViewModel
+            {
+                PartId = part.PartId,
+                FileId = part.FileId,
+                UploadId = part.UploadId,
+                FileName = part.FileName,
+                ProcessId = part.ProcessId,
+                MaterialId = part.MaterialId,
+                Quantity = part.Quantity,
+                VolumeCc = part.VolumeCc,
+                SurfaceAreaCm2 = part.SurfaceAreaCm2,
+                DfmAcknowledged = part.DfmAcknowledged,
+                Status = "Analyzed",
+                Findings =
+                [
+                    new("Info", "DEMO_SAMPLE", demo.Notice),
+                    new("Info", "DFM_SAMPLE", "Sample geometry is suitable for demo pricing.")
+                ]
+            });
+        }
+
+        if (_parts.Count > 0)
+        {
+            _selectedPartIndex = 0;
+            await CalculateAsync();
+        }
     }
 
     private IEnumerable<MaterialOptionDto> MaterialsFor(string processId)

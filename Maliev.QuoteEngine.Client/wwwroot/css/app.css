@@ -229,6 +229,7 @@ body.quote-ready .startup-screen {
 }
 
 .primary-button,
+.secondary-button,
 .text-button {
     border: 0;
     padding: 10px 16px;
@@ -246,10 +247,28 @@ body.quote-ready .startup-screen {
     background: var(--primary-strong);
 }
 
+.secondary-button {
+    color: var(--ink);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.secondary-button:hover {
+    background: #f7f8fb;
+}
+
 .text-button {
     color: var(--ink);
     background: #ffffff;
     box-shadow: var(--maliev-shadow-ring);
+}
+
+.auth-divider {
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
 }
 
 .full {
