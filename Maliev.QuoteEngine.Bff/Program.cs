@@ -1,9 +1,11 @@
 using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Services;
+using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.WebHost.UseStaticWebAssets();
 builder.AddServiceDefaults();
 builder.AddDefaultApiVersioning();
 
