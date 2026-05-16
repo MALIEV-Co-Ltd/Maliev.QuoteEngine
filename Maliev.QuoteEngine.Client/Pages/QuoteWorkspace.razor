@@ -1,6 +1,8 @@
 @page "/quotes/new"
 @page "/projects/new"
 @page "/demo"
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject IJSRuntime Js
 @inject NavigationManager Navigation
@@ -76,6 +78,15 @@
             @if (!string.IsNullOrWhiteSpace(_error))
             {
                 <MudAlert Severity="Severity.Error" Class="qe-error-alert">@_error</MudAlert>
+            }
+            @if (_liveNotifications.Count > 0)
+            {
+                <div class="qe-live-notifications" role="status" aria-live="polite">
+                    @foreach (var notification in _liveNotifications.Take(3))
+                    {
+                        <span>@notification</span>
+                    }
+                </div>
             }
 
             @if (SelectedPart is null)
@@ -291,6 +302,8 @@
     private QuoteEstimateResponse? _estimate;
     private GenerateFormalQuoteResponse? _formalQuote;
     private CreateManufacturingOrderResponse? _order;
+    private HubConnection? _notificationConnection;
+    private readonly List<string> _liveNotifications = [];
     private string _leadTimeCode = "STANDARD";
     private string _title = "Untitled quote";
     private int _selectedPartIndex;
@@ -372,6 +385,10 @@
             try
             {
                 var initiation = await Api.InitiateUploadAsync(_quoteSessionId, file);
+                part.UploadId = initiation.UploadId;
+                await EnsureNotificationConnectionAsync();
+                await _notificationConnection!.InvokeAsync("JoinFileGroup", initiation.StoragePath);
+
                 await Js.InvokeVoidAsync(
                     "quoteEngineUploads.uploadFile",
                     capturedFile.ClientFileId,
@@ -470,6 +487,42 @@
         _order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_formalQuote.QuoteId, string.Empty, "Customer accepted quote."));
     }
 
+    private async Task EnsureNotificationConnectionAsync()
+    {
+        if (_notificationConnection is null)
+        {
+            _notificationConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/quote-notifications"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            _notificationConnection.On<QuoteAnalysisStatusResponse>("FileAnalysisCompleted", status =>
+            {
+                _ = InvokeAsync(() =>
+                {
+                    var fileName = Path.GetFileName(status.StoragePath);
+                    _liveNotifications.Insert(0, $"Analysis complete for {fileName}");
+
+                    var part = _parts.FirstOrDefault(candidate => string.Equals(candidate.UploadId, status.UploadId, StringComparison.OrdinalIgnoreCase));
+                    if (part is not null)
+                    {
+                        part.Status = status.Status;
+                        part.VolumeCc = status.VolumeCc;
+                        part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
+                        part.Findings = status.Findings;
+                    }
+
+                    StateHasChanged();
+                });
+            });
+        }
+
+        if (_notificationConnection.State == HubConnectionState.Disconnected)
+        {
+            await _notificationConnection.StartAsync();
+        }
+    }
+
     private async Task LoadDemoProjectAsync()
     {
         var demo = await Api.GetDemoProjectAsync();
@@ -559,6 +612,14 @@
         > 1m => $"+{Math.Round((leadTime.PriceMultiplier - 1m) * 100m)}%",
         _ => "base"
     };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_notificationConnection is not null)
+        {
+            await _notificationConnection.DisposeAsync();
+        }
+    }
 
     private sealed record CapturedFile(string ClientFileId, IBrowserFile File);
 
