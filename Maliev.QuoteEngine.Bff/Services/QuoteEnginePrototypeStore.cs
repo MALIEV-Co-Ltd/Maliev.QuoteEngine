@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Quotes;
 
@@ -7,8 +9,10 @@ namespace Maliev.QuoteEngine.Bff.Services;
 public sealed class QuoteEnginePrototypeStore
 {
     private readonly ConcurrentDictionary<string, UploadState> _uploads = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<Guid, CustomerQuoteSummaryDto> _quotes = new();
-    private readonly ConcurrentDictionary<Guid, CustomerOrderSummaryDto> _orders = new();
+    private readonly ConcurrentDictionary<string, Guid> _customerIdsByEmail = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<Guid, CustomerProfileResponse> _customers = new();
+    private readonly ConcurrentDictionary<Guid, CustomerQuoteRecord> _quotes = new();
+    private readonly ConcurrentDictionary<Guid, CustomerOrderRecord> _orders = new();
 
     public CustomerProfileResponse PrototypeCustomer { get; } = new(
         Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
@@ -47,9 +51,41 @@ public sealed class QuoteEnginePrototypeStore
         new(Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"), "manufacturing-requirements.pdf", "Requirement", DateTimeOffset.UtcNow.AddDays(-4))
     ];
 
-    public IReadOnlyList<CustomerQuoteSummaryDto> Quotes => _quotes.Values.OrderByDescending(x => x.UpdatedAt).ToArray();
+    public IReadOnlyList<CustomerQuoteSummaryDto> GetQuotes(Guid customerId)
+    {
+        return _quotes.Values
+            .Where(record => record.CustomerId == customerId)
+            .Select(record => record.Quote)
+            .OrderByDescending(x => x.UpdatedAt)
+            .ToArray();
+    }
 
-    public IReadOnlyList<CustomerOrderSummaryDto> Orders => _orders.Values.OrderByDescending(x => x.UpdatedAt).ToArray();
+    public IReadOnlyList<CustomerOrderSummaryDto> GetOrders(Guid customerId)
+    {
+        return _orders.Values
+            .Where(record => record.CustomerId == customerId)
+            .Select(record => record.Order)
+            .OrderByDescending(x => x.UpdatedAt)
+            .ToArray();
+    }
+
+    public CustomerProfileResponse GetProfile(Guid customerId)
+    {
+        return _customers.TryGetValue(customerId, out var profile) ? profile : PrototypeCustomer;
+    }
+
+    public CustomerProfileResponse GetOrCreateCustomer(string email, string displayName, string phone = "", string companyName = "")
+    {
+        var normalizedEmail = NormalizeEmail(email);
+        var customerId = _customerIdsByEmail.GetOrAdd(normalizedEmail, CreateDeterministicCustomerId);
+        return _customers.GetOrAdd(customerId, _ => new CustomerProfileResponse(
+            customerId,
+            string.IsNullOrWhiteSpace(displayName) ? normalizedEmail : displayName,
+            normalizedEmail,
+            phone,
+            companyName,
+            "en-US"));
+    }
 
     public QuoteEngineDemoProjectResponse DemoProject { get; } = new(
         "demo-sample-bracket",
@@ -158,7 +194,7 @@ public sealed class QuoteEnginePrototypeStore
         return new CreateDraftProjectResponse(Guid.NewGuid(), $"QE-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}", "Draft");
     }
 
-    public GenerateFormalQuoteResponse GenerateQuote()
+    public GenerateFormalQuoteResponse GenerateQuote(Guid customerId)
     {
         var quote = new CustomerQuoteSummaryDto(
             Guid.NewGuid(),
@@ -168,21 +204,36 @@ public sealed class QuoteEnginePrototypeStore
             "THB",
             DateTimeOffset.UtcNow,
             "/quote/v1/account/quotes/sample.pdf");
-        _quotes[quote.QuoteId] = quote;
+        _quotes[quote.QuoteId] = new CustomerQuoteRecord(customerId, quote);
         return new GenerateFormalQuoteResponse(quote.QuoteId, quote.QuoteNumber, quote.PdfUrl, quote.Status);
     }
 
-    public CreateManufacturingOrderResponse CreateOrder(Guid quoteId)
+    public CreateManufacturingOrderResponse CreateOrder(Guid customerId, Guid quoteId)
     {
-        _ = quoteId;
+        if (!_quotes.TryGetValue(quoteId, out var quote) || quote.CustomerId != customerId)
+        {
+            throw new KeyNotFoundException($"Quote '{quoteId}' was not found for the signed-in customer.");
+        }
+
         var order = new CustomerOrderSummaryDto(
             Guid.NewGuid(),
             $"MO-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
             "Order received",
             DateTimeOffset.UtcNow,
             "Waiting for production review");
-        _orders[order.OrderId] = order;
+        _orders[order.OrderId] = new CustomerOrderRecord(customerId, order);
         return new CreateManufacturingOrderResponse(order.OrderId, order.OrderNumber, order.Status);
+    }
+
+    private static string NormalizeEmail(string email)
+    {
+        return string.IsNullOrWhiteSpace(email) ? "customer@example.com" : email.Trim().ToLowerInvariant();
+    }
+
+    private static Guid CreateDeterministicCustomerId(string normalizedEmail)
+    {
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"quote-engine-prototype:{normalizedEmail}"));
+        return new Guid(hash[..16]);
     }
 
     private UploadState GetRequiredUpload(string uploadId)
@@ -190,6 +241,10 @@ public sealed class QuoteEnginePrototypeStore
         return GetUpload(uploadId) ?? throw new KeyNotFoundException($"Upload '{uploadId}' was not found.");
     }
 }
+
+internal sealed record CustomerQuoteRecord(Guid CustomerId, CustomerQuoteSummaryDto Quote);
+
+internal sealed record CustomerOrderRecord(Guid CustomerId, CustomerOrderSummaryDto Order);
 
 public sealed record UploadState(
     string UploadId,

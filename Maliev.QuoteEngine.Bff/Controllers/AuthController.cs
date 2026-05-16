@@ -23,8 +23,9 @@ public sealed class AuthController(QuoteEnginePrototypeStore store) : Controller
             customerId = parsedCustomerId;
         }
 
+        var profile = customerId.HasValue ? store.GetProfile(customerId.Value) : null;
         return Ok(signedIn
-            ? new QuoteAuthStatusResponse(true, customerId, store.PrototypeCustomer.DisplayName)
+            ? new QuoteAuthStatusResponse(true, customerId, profile?.DisplayName ?? store.PrototypeCustomer.DisplayName)
             : new QuoteAuthStatusResponse(false, null, null));
     }
 
@@ -36,8 +37,9 @@ public sealed class AuthController(QuoteEnginePrototypeStore store) : Controller
             return ValidationProblem(ModelState);
         }
 
-        AppendPrototypeCookie();
-        return Ok(new AuthSessionResponse(store.PrototypeCustomer.CustomerId, store.PrototypeCustomer.DisplayName, request.Email, true));
+        var profile = store.GetOrCreateCustomer(request.Email, DisplayNameFromEmail(request.Email));
+        AppendCustomerCookie(profile.CustomerId);
+        return Ok(new AuthSessionResponse(profile.CustomerId, profile.DisplayName, profile.Email, true));
     }
 
     [HttpPost("sign-up")]
@@ -48,15 +50,18 @@ public sealed class AuthController(QuoteEnginePrototypeStore store) : Controller
             return ValidationProblem(ModelState);
         }
 
-        AppendPrototypeCookie();
-        return Ok(new AuthSessionResponse(store.PrototypeCustomer.CustomerId, $"{request.FirstName} {request.LastName}", request.Email, true));
+        var displayName = $"{request.FirstName} {request.LastName}".Trim();
+        var profile = store.GetOrCreateCustomer(request.Email, displayName, request.Phone, request.CompanyName);
+        AppendCustomerCookie(profile.CustomerId);
+        return Ok(new AuthSessionResponse(profile.CustomerId, profile.DisplayName, profile.Email, true));
     }
 
     [HttpPost("google/exchange")]
     public ActionResult<AuthSessionResponse> ExchangeGoogle()
     {
-        AppendPrototypeCookie();
-        return Ok(new AuthSessionResponse(store.PrototypeCustomer.CustomerId, store.PrototypeCustomer.DisplayName, store.PrototypeCustomer.Email, true));
+        var profile = store.GetOrCreateCustomer(store.PrototypeCustomer.Email, store.PrototypeCustomer.DisplayName, store.PrototypeCustomer.Phone, store.PrototypeCustomer.CompanyName);
+        AppendCustomerCookie(profile.CustomerId);
+        return Ok(new AuthSessionResponse(profile.CustomerId, profile.DisplayName, profile.Email, true));
     }
 
     [HttpPost("sign-out")]
@@ -66,14 +71,20 @@ public sealed class AuthController(QuoteEnginePrototypeStore store) : Controller
         return NoContent();
     }
 
-    private void AppendPrototypeCookie()
+    private void AppendCustomerCookie(Guid customerId)
     {
-        Response.Cookies.Append("maliev_quote_customer", store.PrototypeCustomer.CustomerId.ToString("D"), new CookieOptions
+        Response.Cookies.Append("maliev_quote_customer", customerId.ToString("D"), new CookieOptions
         {
             HttpOnly = true,
             IsEssential = true,
             SameSite = SameSiteMode.Lax,
             Secure = Request.IsHttps
         });
+    }
+
+    private static string DisplayNameFromEmail(string email)
+    {
+        var name = email.Split('@', 2)[0].Replace(".", " ", StringComparison.Ordinal).Replace("_", " ", StringComparison.Ordinal).Trim();
+        return string.IsNullOrWhiteSpace(name) ? "Quote customer" : name;
     }
 }

@@ -12,22 +12,22 @@ public sealed class AccountController(QuoteEnginePrototypeStore store, CustomerS
     [HttpGet("profile")]
     public IActionResult GetProfile()
     {
-        _ = sessionResolver.ResolveCustomerId();
-        return Ok(store.PrototypeCustomer);
+        var customerId = sessionResolver.ResolveCustomerId();
+        return Ok(store.GetProfile(customerId));
     }
 
     [HttpGet("quotes")]
     public IActionResult GetQuotes()
     {
-        _ = sessionResolver.ResolveCustomerId();
-        return Ok(store.Quotes);
+        var customerId = sessionResolver.ResolveCustomerId();
+        return Ok(store.GetQuotes(customerId));
     }
 
     [HttpGet("orders")]
     public IActionResult GetOrders()
     {
-        _ = sessionResolver.ResolveCustomerId();
-        return Ok(store.Orders);
+        var customerId = sessionResolver.ResolveCustomerId();
+        return Ok(store.GetOrders(customerId));
     }
 
     [HttpGet("ndas")]

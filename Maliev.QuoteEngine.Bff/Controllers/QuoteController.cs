@@ -142,13 +142,13 @@ public sealed class QuoteController(
     [HttpPost("quotes/formal")]
     public ActionResult<GenerateFormalQuoteResponse> GenerateFormalQuote([FromBody] GenerateFormalQuoteRequest request)
     {
-        if (!sessionResolver.TryResolveCustomerId(out _))
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized();
         }
 
         _ = request;
-        return Ok(store.GenerateQuote());
+        return Ok(store.GenerateQuote(customerId));
     }
 
     [HttpPost("quotes/{quoteId:guid}/approve")]
@@ -165,11 +165,18 @@ public sealed class QuoteController(
     [HttpPost("orders")]
     public ActionResult<CreateManufacturingOrderResponse> CreateOrder([FromBody] CreateManufacturingOrderRequest request)
     {
-        if (!sessionResolver.TryResolveCustomerId(out _))
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized();
         }
 
-        return Ok(store.CreateOrder(request.QuoteId));
+        try
+        {
+            return Ok(store.CreateOrder(customerId, request.QuoteId));
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
     }
 }

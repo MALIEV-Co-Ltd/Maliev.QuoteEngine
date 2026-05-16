@@ -54,7 +54,7 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
     [Fact]
     public async Task ResumableUpload_requires_content_range_and_returns_analysis_metrics()
     {
-        using var client = CreateSignedInClient();
+        using var client = await CreateSignedInClientAsync();
         var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
             QuoteSessionId = "session-1",
@@ -121,19 +121,61 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
     [Fact]
     public async Task Account_profile_is_resolved_server_side_from_session_boundary()
     {
-        using var client = CreateSignedInClient();
+        using var client = await CreateSignedInClientAsync("profile-owner@example.com");
 
         var profile = await client.GetFromJsonAsync<CustomerProfileResponse>("/quote/v1/account/profile");
 
         Assert.NotNull(profile);
         Assert.NotEqual(Guid.Empty, profile.CustomerId);
-        Assert.Contains("@", profile.Email, StringComparison.Ordinal);
+        Assert.Equal("profile-owner@example.com", profile.Email);
     }
 
-    private HttpClient CreateSignedInClient()
+    [Fact]
+    public async Task Account_quote_and_order_history_is_scoped_to_signed_in_customer()
     {
-        var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Add("Cookie", "maliev_quote_customer=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        using var customerA = await CreateSignedInClientAsync("quote-owner-a@example.com");
+        var quoteResponse = await customerA.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-a", [], "Customer A quote."));
+        quoteResponse.EnsureSuccessStatusCode();
+        var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResponse = await customerA.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, string.Empty, "Customer A accepted."));
+        orderResponse.EnsureSuccessStatusCode();
+
+        var customerAQuotes = await customerA.GetFromJsonAsync<CustomerQuoteSummaryDto[]>("/quote/v1/account/quotes");
+        var customerAOrders = await customerA.GetFromJsonAsync<CustomerOrderSummaryDto[]>("/quote/v1/account/orders");
+        Assert.NotNull(customerAQuotes);
+        Assert.NotNull(customerAOrders);
+        Assert.Contains(customerAQuotes, item => item.QuoteId == quote.QuoteId);
+        Assert.Single(customerAOrders);
+
+        using var customerB = await CreateSignedInClientAsync("quote-owner-b@example.com");
+        var customerBQuotes = await customerB.GetFromJsonAsync<CustomerQuoteSummaryDto[]>("/quote/v1/account/quotes");
+        var customerBOrders = await customerB.GetFromJsonAsync<CustomerOrderSummaryDto[]>("/quote/v1/account/orders");
+        Assert.NotNull(customerBQuotes);
+        Assert.NotNull(customerBOrders);
+        Assert.Empty(customerBQuotes);
+        Assert.Empty(customerBOrders);
+
+        var crossCustomerOrder = await customerB.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, string.Empty, "Cross-customer attempt."));
+        Assert.Equal(HttpStatusCode.NotFound, crossCustomerOrder.StatusCode);
+    }
+
+    private async Task<HttpClient> CreateSignedInClientAsync(string email = "customer@example.com")
+    {
+        var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var signIn = await client.PostAsJsonAsync("/quote/v1/auth/sign-in", new SignInRequest
+        {
+            Email = email,
+            Password = "PrototypeOnly123!"
+        });
+        signIn.EnsureSuccessStatusCode();
         return client;
     }
 }
