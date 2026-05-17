@@ -48,6 +48,15 @@
     --maliev-font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Monaco, "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace;
     --mud-palette-primary: var(--primary);
     --mud-palette-primary-text: #ffffff;
+    --blazor-load-percentage: 0%;
+    --blazor-load-percentage-text: "0%";
+    --wasm-logo-progress: 0%;
+    --wasm-loader-progress: 0%;
+    --wasm-logo-empty: #d7dde6;
+    --wasm-logo-fill: #000000;
+    --maliev-logo-loader-shadow:
+        drop-shadow(0 20px 32px rgba(10, 20, 40, 0.2))
+        drop-shadow(0 0 28px rgba(10, 20, 40, 0.1));
 }
 
 * {
@@ -91,24 +100,54 @@ select {
 }
 
 body.quote-ready .startup-screen {
-    display: none;
     opacity: 0;
     visibility: hidden;
+    pointer-events: none;
 }
 
 .startup-mark {
     display: grid;
-    gap: 18px;
-    width: min(280px, calc(100vw - 40px));
+    gap: 16px;
+    width: min(320px, calc(100vw - 40px));
+    justify-items: start;
 }
 
-.startup-logo {
-    font-size: 34px;
-    font-weight: 600;
-    letter-spacing: -1.28px;
+.maliev-logo-loader {
+    --logo-width: clamp(150px, 38vw, 236px);
+    --logo-empty: var(--wasm-logo-empty, #d7dde6);
+    --logo-fill: var(--wasm-logo-fill, #000000);
+    --logo-progress: var(--wasm-logo-progress, 0%);
+    --logo-shadow: var(--maliev-logo-loader-shadow,
+        drop-shadow(0 20px 32px rgba(10, 20, 40, 0.34))
+        drop-shadow(0 0 42px rgba(10, 20, 40, 0.18)));
+    position: relative;
+    width: var(--logo-width);
+    aspect-ratio: 449.33078 / 103.18751;
+    overflow: hidden;
+    color: transparent;
+    background: var(--logo-empty);
+    -webkit-mask: url('/images/logo.svg') center / contain no-repeat;
+    mask: url('/images/logo.svg') center / contain no-repeat;
+    filter: var(--logo-shadow);
+}
+
+.maliev-logo-loader::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: var(--logo-progress);
+    background: var(--logo-fill);
+}
+
+.startup-progress-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
 }
 
 .startup-progress {
+    flex: 1 1 auto;
     height: 8px;
     overflow: hidden;
     background: #ebebeb;
@@ -118,15 +157,26 @@ body.quote-ready .startup-screen {
 
 .startup-progress span {
     display: block;
-    width: 42%;
+    width: var(--wasm-loader-progress);
     height: 100%;
     background: var(--accent);
-    animation: load-sweep 1.2s ease-in-out infinite alternate;
+    border-radius: inherit;
+    transition: width 160ms ease;
 }
 
-@keyframes load-sweep {
-    from { transform: translateX(0); }
-    to { transform: translateX(138%); }
+.startup-percent {
+    min-width: 34px;
+    color: var(--muted);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-small);
+    text-align: right;
+}
+
+.startup-status {
+    margin: 0;
+    color: var(--ink);
+    font-size: 16px;
+    line-height: 1.4;
 }
 
 .app-shell {

@@ -39,4 +39,36 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain(".app-rail", styles, StringComparison.Ordinal);
         Assert.Contains(".workspace--quote", styles, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public void Startup_loader_uses_maliev_logo_progress_and_status_contract()
+    {
+        var clientRoot = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Maliev.QuoteEngine.Client");
+        var index = File.ReadAllText(Path.Combine(clientRoot, "wwwroot", "index.html"));
+        var styles = File.ReadAllText(Path.Combine(clientRoot, "wwwroot", "css", "app.css"));
+        var loaderScript = File.ReadAllText(Path.Combine(clientRoot, "wwwroot", "js", "quote-engine-loader.js"));
+
+        Assert.Contains("class=\"maliev-logo-loader\"", index, StringComparison.Ordinal);
+        Assert.Contains("role=\"img\" aria-label=\"MALIEV\"", index, StringComparison.Ordinal);
+        Assert.Contains("class=\"startup-progress\"", index, StringComparison.Ordinal);
+        Assert.Contains("role=\"progressbar\"", index, StringComparison.Ordinal);
+        Assert.Contains("id=\"startup-status\"", index, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"startup-logo\">MALIEV</div>", index, StringComparison.Ordinal);
+
+        Assert.True(File.Exists(Path.Combine(clientRoot, "wwwroot", "images", "logo.svg")));
+        Assert.Contains("--wasm-logo-progress: 0%", styles, StringComparison.Ordinal);
+        Assert.Contains("--logo-empty: var(--wasm-logo-empty, #d7dde6)", styles, StringComparison.Ordinal);
+        Assert.Contains("--logo-progress: var(--wasm-logo-progress, 0%)", styles, StringComparison.Ordinal);
+        Assert.Contains("mask: url('/images/logo.svg') center / contain no-repeat", styles, StringComparison.Ordinal);
+        Assert.Contains(".maliev-logo-loader::before", styles, StringComparison.Ordinal);
+        Assert.Contains("width: var(--logo-progress)", styles, StringComparison.Ordinal);
+        Assert.Contains(".startup-progress span", styles, StringComparison.Ordinal);
+        Assert.Contains("width: var(--wasm-loader-progress)", styles, StringComparison.Ordinal);
+
+        Assert.Contains("startBlazor", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("loadBootResource", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("let displayedProgress = 0", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("Math.max(displayedProgress, progress)", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("markRuntimeReady", loaderScript, StringComparison.Ordinal);
+    }
 }

@@ -12,18 +12,26 @@
 </head>
 
 <body>
-    <div id="quote-startup" class="startup-screen">
+    <div id="quote-startup" class="startup-screen" aria-live="polite">
         <div class="startup-mark">
-            <div class="startup-logo">MALIEV</div>
-            <div class="startup-progress" aria-hidden="true"><span></span></div>
-            <p>Loading quote engine</p>
+            <div class="maliev-logo-loader" style="--wasm-logo-progress: 0%" role="img" aria-label="MALIEV"></div>
+            <div class="startup-progress-row">
+                <div class="startup-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="startup-status">
+                    <span></span>
+                </div>
+                <span id="startup-percent" class="startup-percent">0%</span>
+            </div>
+            <p id="startup-status" class="startup-status">Preparing quote engine</p>
         </div>
     </div>
     <div id="app"></div>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="js/quote-engine-loader.js"></script>
     <script src="js/quote-upload.js"></script>
-    <script src="_framework/blazor.webassembly.js"></script>
+    <script src="_framework/blazor.webassembly.js" autostart="false"></script>
+    <script>
+        window.quoteEngineLoader.startBlazor();
+    </script>
 </body>
 
 </html>
