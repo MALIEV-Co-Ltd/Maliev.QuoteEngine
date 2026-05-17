@@ -130,25 +130,28 @@ body.quote-ready .startup-screen {
 }
 
 .app-shell {
-    display: grid;
-    grid-template-columns: 260px minmax(0, 1fr);
-    min-height: 100vh;
-}
-
-.app-rail {
-    position: sticky;
-    top: 0;
     display: flex;
     flex-direction: column;
-    gap: 28px;
-    height: 100vh;
-    padding: 24px;
-    color: var(--ink);
-    background: #ffffff;
-    box-shadow: var(--maliev-shadow-ring);
+    min-height: 100vh;
+    background: var(--paper);
 }
 
-.brand {
+.quote-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 20px;
+    align-items: center;
+    min-height: 68px;
+    padding: 0 28px;
+    background: rgba(255, 255, 255, 0.96);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(12px);
+}
+
+.quote-brand {
     display: grid;
     grid-template-columns: 44px minmax(0, 1fr);
     gap: 12px;
@@ -156,7 +159,7 @@ body.quote-ready .startup-screen {
     text-decoration: none;
 }
 
-.brand-mark {
+.quote-brand-mark {
     display: grid;
     place-items: center;
     width: 44px;
@@ -167,7 +170,7 @@ body.quote-ready .startup-screen {
     font-weight: 600;
 }
 
-.brand small,
+.quote-brand small,
 .eyebrow {
     display: block;
     color: var(--muted);
@@ -176,49 +179,58 @@ body.quote-ready .startup-screen {
     text-transform: uppercase;
 }
 
-.app-rail nav {
-    display: grid;
+.quote-topnav {
+    display: flex;
     gap: 6px;
+    align-items: center;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
 }
 
-.app-rail nav a,
+.quote-topnav::-webkit-scrollbar {
+    display: none;
+}
+
+.quote-topnav a,
 .web-link,
 .text-button {
     text-decoration: none;
 }
 
-.app-rail nav a {
-    padding: 10px 12px;
+.quote-topnav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0 12px;
     color: var(--muted);
     border-radius: var(--maliev-radius-sm);
+    font-size: var(--maliev-font-base);
+    font-weight: 600;
+    white-space: nowrap;
 }
 
-.app-rail nav a.active {
+.quote-topnav a:hover,
+.quote-topnav a.active {
     color: var(--ink);
     background: #fafafa;
     box-shadow: var(--maliev-shadow-ring);
 }
 
 .web-link {
-    margin-top: auto;
     color: var(--muted);
+    white-space: nowrap;
 }
 
 .workspace {
-    display: grid;
-    grid-template-rows: auto 1fr;
+    flex: 1 1 auto;
     min-width: 0;
 }
 
-.topbar {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    align-items: center;
-    padding: 18px 28px;
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: var(--maliev-shadow-ring);
-    backdrop-filter: blur(12px);
+.workspace--quote {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .top-actions,
@@ -506,19 +518,22 @@ select {
 }
 
 @media (max-width: 980px) {
-    .app-shell,
     .hero-grid,
     .quote-workspace {
         grid-template-columns: 1fr;
     }
 
-    .app-rail {
-        position: static;
-        height: auto;
+    .quote-topbar {
+        grid-template-columns: auto minmax(0, 1fr);
+        gap: 14px;
+        min-height: 64px;
+        padding: 0 18px;
     }
 
-    .app-rail nav {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+    .quote-topnav {
+        order: 3;
+        grid-column: 1 / -1;
+        padding-bottom: 10px;
     }
 
     .quote-summary {
@@ -527,12 +542,33 @@ select {
 }
 
 @media (max-width: 640px) {
-    .topbar,
     .top-actions,
     .part-card,
     .part-title,
     .data-row {
         display: grid;
+    }
+
+    .quote-topbar {
+        align-items: start;
+        padding-top: 10px;
+    }
+
+    .quote-brand {
+        grid-template-columns: 36px minmax(0, 1fr);
+    }
+
+    .quote-brand-mark {
+        width: 36px;
+        height: 36px;
+    }
+
+    .top-actions {
+        justify-items: end;
+    }
+
+    .top-actions .web-link {
+        display: none;
     }
 
     .page-surface,
@@ -545,8 +581,7 @@ select {
     }
 
     .config-grid,
-    .profile-grid,
-    .app-rail nav {
+    .profile-grid {
         grid-template-columns: 1fr;
     }
 

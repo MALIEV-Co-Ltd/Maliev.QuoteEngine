@@ -8,51 +8,46 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-@if (IsQuoteWorkspace)
-{
-    <div class="quote-workspace-host">
-        @Body
-    </div>
-}
-else
-{
-    <div class="app-shell">
-        <aside class="app-rail">
-            <a class="brand" href="/">
-                <span class="brand-mark">M</span>
-                <span>
-                    <strong>MALIEV</strong>
-                    <small>Quote Engine</small>
-                </span>
-            </a>
-            <nav>
-                <NavLink href="/quotes/new" Match="NavLinkMatch.Prefix">New quote</NavLink>
-                <NavLink href="/orders" Match="NavLinkMatch.Prefix">Orders</NavLink>
-                <NavLink href="/ndas" Match="NavLinkMatch.Prefix">NDAs</NavLink>
-                <NavLink href="/documents" Match="NavLinkMatch.Prefix">Documents</NavLink>
-                <NavLink href="/profile" Match="NavLinkMatch.Prefix">Profile</NavLink>
-            </nav>
+<div class="app-shell">
+    <header class="quote-topbar">
+        <a class="quote-brand" href="https://www.maliev.com" aria-label="MALIEV home">
+            <span class="quote-brand-mark">M</span>
+            <span>
+                <strong>MALIEV</strong>
+                <small>Quote Engine</small>
+            </span>
+        </a>
+
+        <nav class="quote-topnav" aria-label="Customer quote navigation">
+            <NavLink href="/projects/new" Match="NavLinkMatch.Prefix">Quote</NavLink>
+            <NavLink href="/orders" Match="NavLinkMatch.Prefix">Orders</NavLink>
+            <NavLink href="/ndas" Match="NavLinkMatch.Prefix">NDAs</NavLink>
+            <NavLink href="/documents" Match="NavLinkMatch.Prefix">Documents</NavLink>
+            <NavLink href="/profile" Match="NavLinkMatch.Prefix">Profile</NavLink>
+        </nav>
+
+        <div class="top-actions">
             <a class="web-link" href="https://www.maliev.com">www.maliev.com</a>
-        </aside>
+            <a class="text-button" href="/auth/sign-in">Sign in</a>
+            <a class="primary-button" href="/projects/new">Start quote</a>
+        </div>
+    </header>
 
-        <main class="workspace">
-            <header class="topbar">
-                <div>
-                    <span class="eyebrow">Custom manufacturing portal</span>
-                    <strong>Upload, configure, quote, and track production.</strong>
-                </div>
-                <div class="top-actions">
-                    <a class="text-button" href="/auth/sign-in">Sign in</a>
-                    <a class="primary-button" href="/quotes/new">Start quote</a>
-                </div>
-            </header>
-
+    <main class="@WorkspaceClass">
+        @if (IsQuoteWorkspace)
+        {
+            <div class="quote-workspace-host">
+                @Body
+            </div>
+        }
+        else
+        {
             <section class="page-surface">
                 @Body
             </section>
-        </main>
-    </div>
-}
+        }
+    </main>
+</div>
 
 @code {
     private readonly MudTheme _malievTheme = new()
@@ -113,7 +108,16 @@ else
         }
     };
 
-    private bool IsQuoteWorkspace => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/quotes/new", StringComparison.OrdinalIgnoreCase);
+    private bool IsQuoteWorkspace => IsQuoteWorkspacePath(new Uri(Navigation.Uri).AbsolutePath);
+    private string WorkspaceClass => IsQuoteWorkspace ? "workspace workspace--quote" : "workspace";
+
+    private static bool IsQuoteWorkspacePath(string path)
+    {
+        var normalized = path.TrimEnd('/');
+        return normalized.Equals("/projects/new", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("/quotes/new", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("/demo", StringComparison.OrdinalIgnoreCase);
+    }
 
     protected override void OnInitialized()
     {

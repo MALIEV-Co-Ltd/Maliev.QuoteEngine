@@ -21,4 +21,22 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Maliev.QuoteEngine", readme, StringComparison.Ordinal);
         Assert.Contains("browser never supplies a trusted customer id", readme, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Customer_layout_uses_top_navigation_without_left_rail()
+    {
+        var clientRoot = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Maliev.QuoteEngine.Client");
+        var layout = File.ReadAllText(Path.Combine(clientRoot, "Layout", "MainLayout.razor"));
+        var styles = File.ReadAllText(Path.Combine(clientRoot, "wwwroot", "css", "app.css"));
+
+        Assert.Contains("class=\"quote-topbar\"", layout, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Customer quote navigation\"", layout, StringComparison.Ordinal);
+        Assert.Contains("href=\"/projects/new\"", layout, StringComparison.Ordinal);
+        Assert.Contains("IsQuoteWorkspacePath", layout, StringComparison.Ordinal);
+        Assert.Contains("\"/projects/new\"", layout, StringComparison.Ordinal);
+        Assert.Contains("\"/quotes/new\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"app-rail\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain(".app-rail", styles, StringComparison.Ordinal);
+        Assert.Contains(".workspace--quote", styles, StringComparison.Ordinal);
+    }
 }
