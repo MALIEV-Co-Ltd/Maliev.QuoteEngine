@@ -127,6 +127,7 @@
 html,
 body,
 #app {
+    height: 100%;
     min-height: 100%;
     margin: 0;
 }
@@ -291,7 +292,9 @@ body.quote-ready .startup-screen {
 .app-shell {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;
+    height: 100dvh;
+    min-height: 100dvh;
+    overflow-x: clip;
     background: var(--paper);
 }
 
@@ -412,6 +415,7 @@ body.quote-ready .startup-screen {
 
 .workspace--quote {
     flex: 1 1 0;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
 }
@@ -501,6 +505,10 @@ body.quote-ready .startup-screen {
 .quote-chat-drawer {
     background: #ffffff;
     box-shadow: rgba(0, 0, 0, 0.08) -1px 0 0 0;
+}
+
+.quote-chat-drawer.mud-drawer--closed {
+    display: none !important;
 }
 
 .customer-chatbot-panel {
@@ -1154,7 +1162,8 @@ textarea::placeholder {
 }
 
 .quote-workspace-host {
-    height: 100vh;
+    flex: 1 1 0;
+    height: 100%;
     min-height: 0;
     overflow: hidden;
     background: var(--maliev-bg);
@@ -2051,12 +2060,15 @@ textarea::placeholder {
     flex-shrink: 0;
     display: flex;
     align-items: stretch;
+    min-width: 0;
     min-height: 96px;
+    max-height: 128px;
     background: var(--maliev-panel);
     box-shadow: var(--maliev-shadow-ring);
 }
 
 .qe-qsb-zone {
+    min-width: 0;
     padding: 10px 16px;
 }
 
@@ -2080,6 +2092,7 @@ textarea::placeholder {
 
 .qe-qsb-lead {
     flex: 2 1 460px;
+    min-width: 0;
 }
 
 .qe-qsb-lead-options {
@@ -2193,12 +2206,11 @@ textarea::placeholder {
 
 @media (max-width: 1200px) {
     .quote-workspace-host {
-        height: auto;
-        min-height: 100dvh;
-        overflow: visible;
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
     }
 
-    .qe-pn-root,
     .qe-pn-body,
     .qe-pn-center,
     .qe-pn-detail-row,
@@ -2208,6 +2220,17 @@ textarea::placeholder {
         height: auto;
         min-height: unset;
         overflow: visible;
+    }
+
+    .qe-pn-root {
+        height: 100%;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .qe-pn-body {
+        min-height: 0;
+        overflow: auto;
     }
 
     .qe-pn-body,
@@ -2251,6 +2274,7 @@ textarea::placeholder {
 
     .qe-qsb-root {
         flex-wrap: wrap;
+        max-height: none;
     }
 
     .qe-qsb-customer,

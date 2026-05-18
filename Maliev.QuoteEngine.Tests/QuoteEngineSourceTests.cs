@@ -80,6 +80,22 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Quote_workspace_is_single_viewport_application_shell()
+    {
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("height: 100dvh;", styles, StringComparison.Ordinal);
+        Assert.Contains("overflow-x: clip;", styles, StringComparison.Ordinal);
+        Assert.Contains(".workspace--quote {\n    flex: 1 1 0;\n    height: 100%;", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-workspace-host {\n    flex: 1 1 0;\n    height: 100%;", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("height: 100vh;", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-chat-drawer.mud-drawer--closed", styles, StringComparison.Ordinal);
+        Assert.Contains("display: none !important;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-qsb-root", styles, StringComparison.Ordinal);
+        Assert.Contains("max-height: 128px;", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Customer_assistant_drawer_is_integrated_into_quote_layout()
     {
         var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");
