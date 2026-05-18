@@ -1274,25 +1274,59 @@ textarea::placeholder {
 }
 
 .qe-dropzone {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
     width: 100%;
     border: 0;
     border-radius: var(--maliev-radius-md);
     color: var(--maliev-ink);
-    background: #ffffff;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(10, 114, 239, .08), transparent 36%),
+        linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
     box-shadow: var(--maliev-shadow-card);
     cursor: pointer;
     text-align: center;
+    transition: transform 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.qe-dropzone::before {
+    content: "";
+    position: absolute;
+    inset: 10px;
+    z-index: 0;
+    border: 1px dashed rgba(23, 23, 23, .18);
+    border-radius: calc(var(--maliev-radius-md) - 2px);
+    background: rgba(255, 255, 255, .72);
+}
+
+.qe-dropzone > * {
+    position: relative;
+    z-index: 1;
+}
+
+.qe-dropzone .mud-icon-root {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--maliev-radius-pill);
+    background: #ffffff;
+    box-shadow: var(--maliev-shadow-ring-light);
 }
 
 .qe-dropzone:hover,
 .qe-dropzone:focus-visible,
 .qe-dropzone.is-dragover {
-    background: #fafafa;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(10, 114, 239, .12), transparent 40%),
+        linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
     outline: none;
 }
 
 .qe-dropzone:hover {
-    box-shadow: var(--maliev-shadow-card);
+    box-shadow: var(--maliev-shadow-card), rgba(0, 0, 0, .04) 0 14px 34px -24px;
+    transform: translateY(-1px);
 }
 
 .qe-dropzone:focus-visible {
@@ -1301,7 +1335,12 @@ textarea::placeholder {
 
 .qe-dropzone.is-dragover {
     box-shadow: var(--maliev-shadow-card), 0 0 0 4px rgba(0, 112, 243, .15);
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+}
+
+.qe-dropzone.is-dragover::before {
+    border-color: var(--develop);
+    background: rgba(235, 245, 255, .72);
 }
 
 /* Compact dropzone reads as Body Semibold (16px → DESIGN.md §3). */
@@ -1336,6 +1375,11 @@ textarea::placeholder {
     line-height: 1.33;
     font-weight: 600;
     letter-spacing: var(--maliev-track-card);
+}
+
+.qe-dropzone--hero .mud-icon-root {
+    width: 44px;
+    height: 44px;
 }
 
 /* Header row in the parts list — mono technical label. */

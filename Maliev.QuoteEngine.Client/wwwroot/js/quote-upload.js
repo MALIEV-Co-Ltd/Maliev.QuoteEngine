@@ -21,6 +21,30 @@ window.quoteEngineUploads = (() => {
     document.getElementById(inputId)?.click();
   }
 
+  async function loadSampleFile(sampleUrl, fileName, contentType, dotNetRef) {
+    if (!dotNetRef) {
+      throw new Error("The quote workspace is not ready to load the sample file.");
+    }
+
+    const response = await fetch(sampleUrl, { credentials: "include" });
+    if (!response.ok) {
+      throw new Error(`Sample file failed to load with HTTP ${response.status}.`);
+    }
+
+    const blob = await response.blob();
+    const resolvedContentType = contentType || blob.type || "application/octet-stream";
+    const file = new File([blob], fileName, { type: resolvedContentType });
+    const clientFileId = createClientFileId();
+    fileMap.set(clientFileId, file);
+
+    await dotNetRef.invokeMethodAsync("HandleDroppedFilesAsync", [{
+      clientFileId,
+      fileName: file.name,
+      contentType: resolvedContentType,
+      fileSizeBytes: file.size
+    }]);
+  }
+
   function registerDropzone(dropzoneId, inputId, dotNetRef) {
     const dropzone = document.getElementById(dropzoneId);
     const input = document.getElementById(inputId);
@@ -55,7 +79,7 @@ window.quoteEngineUploads = (() => {
       }
 
       const files = Array.from(event.dataTransfer.files).map(file => {
-        const clientFileId = crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : `${Date.now()}${Math.random()}`;
+        const clientFileId = createClientFileId();
         fileMap.set(clientFileId, file);
         return {
           clientFileId,
@@ -95,6 +119,10 @@ window.quoteEngineUploads = (() => {
     dropzoneMap.delete(dropzoneId);
   }
 
+  function createClientFileId() {
+    return crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : `${Date.now()}${Math.random()}`;
+  }
+
   async function uploadFile(clientFileId, uploadUrl, contentType) {
     const file = fileMap.get(clientFileId);
     if (!file) {
@@ -116,5 +144,5 @@ window.quoteEngineUploads = (() => {
     }
   }
 
-  return { captureFiles, openFilePicker, registerDropzone, unregisterDropzone, uploadFile };
+  return { captureFiles, loadSampleFile, openFilePicker, registerDropzone, unregisterDropzone, uploadFile };
 })();

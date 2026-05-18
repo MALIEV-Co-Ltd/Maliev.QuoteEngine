@@ -106,7 +106,7 @@
                                 <span class="qe-zone-label">Demo sample</span>
                                 <strong>Try the Quote Engine with a MALIEV sample file.</strong>
                                 <p>Load a known sample part, review DFM feedback, adjust material and lead time, and test pricing without uploading your own CAD.</p>
-                                <button type="button" class="qe-secondary-btn" @onclick="LoadDemoProjectAsync">Use sample file</button>
+                                <button type="button" class="qe-secondary-btn" @onclick="LoadSampleFileAsync">Use sample file</button>
                             </article>
                         }
                     </div>
@@ -310,6 +310,9 @@
     private const string UploadInputId = "quote-cad-files";
     private const string CompactDropzoneId = "quote-compact-dropzone";
     private const string HeroDropzoneId = "quote-hero-dropzone";
+    private const string SampleFilePath = "/samples/maliev-sample-bracket.step";
+    private const string SampleFileName = "maliev-sample-bracket.step";
+    private const string SampleFileContentType = "application/step";
     private string _quoteSessionId = Guid.NewGuid().ToString("N");
     private readonly List<QuotePartViewModel> _parts = [];
     private QuoteReferenceDataResponse? _reference;
@@ -436,6 +439,7 @@
         foreach (var candidate in candidates)
         {
             var part = new QuotePartViewModel { FileName = candidate.FileName, Status = "Uploading" };
+            ApplyDefaultRouting(part, candidate.FileName);
             _parts.Add(part);
             _selectedPartIndex = _parts.Count - 1;
             try
@@ -664,6 +668,52 @@
         {
             _selectedPartIndex = 0;
             await CalculateAsync();
+        }
+    }
+
+    private async Task LoadSampleFileAsync()
+    {
+        if (_dotNetRef is null)
+        {
+            _error = "The sample file loader is not ready yet. Please try again.";
+            return;
+        }
+
+        _error = null;
+        try
+        {
+            await Js.InvokeVoidAsync(
+                "quoteEngineUploads.loadSampleFile",
+                SampleFilePath,
+                SampleFileName,
+                SampleFileContentType,
+                _dotNetRef);
+            if (_parts.Count > 0)
+            {
+                await CalculateAsync();
+            }
+        }
+        catch (JSException ex)
+        {
+            _error = $"We could not load the MALIEV sample file. {ex.Message}";
+        }
+    }
+
+    private void ApplyDefaultRouting(QuotePartViewModel part, string fileName)
+    {
+        var extension = Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant();
+        var process = _reference?.Processes.FirstOrDefault(candidate =>
+            candidate.SupportedFileTypes.Any(type => type.Equals(extension, StringComparison.OrdinalIgnoreCase)));
+        if (process is null)
+        {
+            return;
+        }
+
+        part.ProcessId = process.Id;
+        var material = MaterialsFor(process.Id).FirstOrDefault();
+        if (material is not null)
+        {
+            part.MaterialId = material.Id;
         }
     }
 

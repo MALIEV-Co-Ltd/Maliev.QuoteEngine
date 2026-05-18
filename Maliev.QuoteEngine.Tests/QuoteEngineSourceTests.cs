@@ -19,9 +19,20 @@ public sealed class QuoteEngineSourceTests
     public void New_quote_workspace_supports_demo_sample_and_anonymous_upload_state()
     {
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var script = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
 
         Assert.Contains("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
         Assert.Contains("Use sample file", source, StringComparison.Ordinal);
+        Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
+        Assert.Contains("SampleFilePath = \"/samples/maliev-sample-bracket.step\"", source, StringComparison.Ordinal);
+        Assert.Contains("quoteEngineUploads.loadSampleFile", source, StringComparison.Ordinal);
+        Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
+        Assert.Contains("async function loadSampleFile", script, StringComparison.Ordinal);
+        Assert.Contains("fetch(sampleUrl", script, StringComparison.Ordinal);
+        Assert.Contains("HandleDroppedFilesAsync", script, StringComparison.Ordinal);
+        Assert.Contains(".qe-dropzone::before", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css"), StringComparison.Ordinal);
+        Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "samples", "maliev-sample-bracket.step")));
+        Assert.False(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "sample-file.step")));
         Assert.Contains("\"Sign in to quote\"", source, StringComparison.Ordinal);
         Assert.Contains("Temporary upload storage until you sign in", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadHandoffRequest", source, StringComparison.Ordinal);
