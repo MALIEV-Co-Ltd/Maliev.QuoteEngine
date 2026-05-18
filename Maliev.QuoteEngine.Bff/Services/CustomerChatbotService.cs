@@ -77,16 +77,16 @@ internal sealed class CustomerChatbotService(
             return accountResponse;
         }
 
-        sessionId = await EnsureSessionAsync(sessionId, language, cancellationToken);
+        var ensuredSessionId = await EnsureSessionAsync(sessionId, language, cancellationToken) ?? Guid.NewGuid();
         var chatbotResponse = await chatbotClient.SendMessageAsync(new ChatbotSendMessageRequest
         {
-            SessionId = sessionId.Value,
+            SessionId = ensuredSessionId,
             Content = ComposeMessage(message, request.CustomerContext, identity)
         }, cancellationToken);
 
         var response = new CustomerChatbotResponse
         {
-            SessionId = sessionId,
+            SessionId = ensuredSessionId,
             MessageId = chatbotResponse?.MessageId,
             Content = string.IsNullOrWhiteSpace(chatbotResponse?.Content)
                 ? FallbackAnswer(language)
