@@ -1,4 +1,8 @@
+using Maliev.Aspire.ServiceDefaults;
+using Maliev.Aspire.ServiceDefaults.IAM;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Hubs;
+using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using System.Text.Json;
@@ -8,12 +12,17 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseStaticWebAssets();
 builder.AddServiceDefaults();
 builder.AddDefaultApiVersioning();
+builder.AddIAMServiceClient("QuoteEngineBff");
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<QuoteEnginePrototypeStore>();
 builder.Services.AddScoped<CustomerSessionResolver>();
+builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
+builder.Services.AddScoped<ICustomerChatbotService, CustomerChatbotService>();
+builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(45));
 
 var app = builder.Build();
 

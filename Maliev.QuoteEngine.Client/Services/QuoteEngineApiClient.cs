@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using Maliev.QuoteEngine.Shared.Account;
+using Maliev.QuoteEngine.Shared.Chatbot;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Components.Forms;
 
@@ -130,6 +131,22 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     public Task<AuthSessionResponse> SignUpAsync(SignUpRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<SignUpRequest, AuthSessionResponse>("quote/v1/auth/sign-up", request, cancellationToken);
+    }
+
+    public Task<CustomerChatbotResponse> SendChatbotMessageAsync(CustomerChatbotRequest request, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<CustomerChatbotRequest, CustomerChatbotResponse>("quote/v1/chatbot/messages", request, cancellationToken);
+    }
+
+    public Task<CustomerChatbotHydrateResponse> HydrateChatbotAsync(CustomerChatbotHydrateRequest request, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<CustomerChatbotHydrateRequest, CustomerChatbotHydrateResponse>("quote/v1/chatbot/hydrate", request, cancellationToken);
+    }
+
+    public async Task<CustomerChatbotSessionResponse> GetChatbotSessionAsync(CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<CustomerChatbotSessionResponse>("quote/v1/chatbot/session", cancellationToken)
+            ?? new CustomerChatbotSessionResponse();
     }
 
     private async Task<TResponse> PostAsync<TRequest, TResponse>(string uri, TRequest request, CancellationToken cancellationToken)

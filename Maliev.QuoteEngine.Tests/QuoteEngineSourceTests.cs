@@ -5,7 +5,7 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Upload_script_matches_browser_files_by_name_and_size()
     {
-        var source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js"));
+        var source = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
 
         Assert.Contains("file.name === mapping.fileName", source, StringComparison.Ordinal);
         Assert.Contains("file.size === mapping.fileSizeBytes", source, StringComparison.Ordinal);
@@ -18,7 +18,7 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void New_quote_workspace_supports_demo_sample_and_anonymous_upload_state()
     {
-        var source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor"));
+        var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
 
         Assert.Contains("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
         Assert.Contains("Use sample file", source, StringComparison.Ordinal);
@@ -31,7 +31,7 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Web_and_quote_engine_boundaries_are_documented()
     {
-        var readme = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "README.md"));
+        var readme = ReadRepoFile("README.md");
 
         Assert.Contains("Maliev.Web", readme, StringComparison.Ordinal);
         Assert.Contains("Maliev.QuoteEngine", readme, StringComparison.Ordinal);
@@ -41,9 +41,8 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Customer_layout_uses_top_navigation_without_left_rail()
     {
-        var clientRoot = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Maliev.QuoteEngine.Client");
-        var layout = File.ReadAllText(Path.Combine(clientRoot, "Layout", "MainLayout.razor"));
-        var styles = File.ReadAllText(Path.Combine(clientRoot, "wwwroot", "css", "app.css"));
+        var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
         Assert.Contains("class=\"quote-topbar\"", layout, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Customer quote navigation\"", layout, StringComparison.Ordinal);
@@ -57,12 +56,27 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Customer_assistant_drawer_is_integrated_into_quote_layout()
+    {
+        var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
+        var authComplete = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "AuthChatbotComplete.razor");
+
+        Assert.Contains("CustomerAssistantDrawer", layout, StringComparison.Ordinal);
+        Assert.Contains("topbar-chat-toggle", layout, StringComparison.Ordinal);
+        Assert.Contains("MudDrawer", layout, StringComparison.Ordinal);
+        Assert.Contains("chatbot-open", styles, StringComparison.Ordinal);
+        Assert.Contains("js/maliev-chatbot.js", index, StringComparison.Ordinal);
+        Assert.Contains("@page \"/auth/chatbot-complete\"", authComplete, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Startup_loader_uses_maliev_logo_progress_and_status_contract()
     {
-        var clientRoot = Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Maliev.QuoteEngine.Client");
-        var index = File.ReadAllText(Path.Combine(clientRoot, "wwwroot", "index.html"));
-        var styles = File.ReadAllText(Path.Combine(clientRoot, "wwwroot", "css", "app.css"));
-        var loaderScript = File.ReadAllText(Path.Combine(clientRoot, "wwwroot", "js", "quote-engine-loader.js"));
+        var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var loaderScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
 
         Assert.Contains("class=\"maliev-logo-loader\"", index, StringComparison.Ordinal);
         Assert.Contains("role=\"img\" aria-label=\"MALIEV\"", index, StringComparison.Ordinal);
@@ -71,7 +85,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("id=\"startup-status\"", index, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"startup-logo\">MALIEV</div>", index, StringComparison.Ordinal);
 
-        Assert.True(File.Exists(Path.Combine(clientRoot, "wwwroot", "images", "logo.svg")));
+        Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "images", "logo.svg")));
         Assert.Contains("--wasm-logo-progress: 0%", styles, StringComparison.Ordinal);
         Assert.Contains("--logo-empty: var(--wasm-logo-empty, #d7dde6)", styles, StringComparison.Ordinal);
         Assert.Contains("--logo-progress: var(--wasm-logo-progress, 0%)", styles, StringComparison.Ordinal);
@@ -86,5 +100,33 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("let displayedProgress = 0", loaderScript, StringComparison.Ordinal);
         Assert.Contains("Math.max(displayedProgress, progress)", loaderScript, StringComparison.Ordinal);
         Assert.Contains("markRuntimeReady", loaderScript, StringComparison.Ordinal);
+    }
+
+    private static string ReadRepoFile(params string[] pathParts)
+    {
+        return File.ReadAllText(RepoPath(pathParts));
+    }
+
+    private static string RepoPath(params string[] pathParts)
+    {
+        var root = FindRepoRoot();
+        return Path.Combine([root, .. pathParts]);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Maliev.QuoteEngine.slnx"))
+                && Directory.Exists(Path.Combine(directory.FullName, "Maliev.QuoteEngine.Client")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate the Maliev.QuoteEngine repository root.");
     }
 }

@@ -1,0 +1,28 @@
+@page "/auth/chatbot-complete"
+@inject IJSRuntime JS
+
+<PageTitle>Authentication complete - MALIEV Quote Engine</PageTitle>
+
+<section class="auth-panel">
+    <span class="eyebrow">Customer assistant</span>
+    <h1>Authentication complete</h1>
+    <p>You can return to the assistant window and continue your MALIEV conversation.</p>
+</section>
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("malievChatbot.notifyAuthenticationComplete");
+        }
+        catch (JSException)
+        {
+        }
+    }
+}

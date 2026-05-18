@@ -1,9 +1,14 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Shared.Account;
+using Maliev.QuoteEngine.Shared.Chatbot;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Maliev.QuoteEngine.Tests;
 
@@ -203,6 +208,57 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
         Assert.Equal(HttpStatusCode.NotFound, crossCustomerOrder.StatusCode);
     }
 
+    [Fact]
+    public async Task Chatbot_message_routes_through_quote_boundary()
+    {
+        using var chatbotFactory = CreateChatbotFactory();
+        using var client = chatbotFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/chatbot/messages", new CustomerChatbotRequest
+        {
+            Message = "Can you help with CNC aluminum fixtures?",
+            Language = "en"
+        });
+        var body = await response.Content.ReadFromJsonAsync<CustomerChatbotResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal("assistant", body.Role);
+        Assert.NotEqual(Guid.Empty, body.SessionId);
+    }
+
+    [Fact]
+    public async Task Chatbot_session_endpoint_reports_quote_auth_state()
+    {
+        using var client = await CreateSignedInClientAsync("quote-chat@example.com");
+
+        var session = await client.GetFromJsonAsync<CustomerChatbotSessionResponse>("/quote/v1/chatbot/session");
+
+        Assert.NotNull(session);
+        Assert.True(session.IsAuthenticated);
+        Assert.Equal("quote-chat@example.com", session.Email);
+        Assert.NotNull(session.CustomerId);
+    }
+
+    [Fact]
+    public async Task Chatbot_hydrate_validates_shared_session_request()
+    {
+        using var client = factory.CreateClient();
+        var knownSessionId = Guid.NewGuid();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/chatbot/hydrate", new CustomerChatbotHydrateRequest
+        {
+            SessionId = knownSessionId
+        });
+        var body = await response.Content.ReadFromJsonAsync<CustomerChatbotHydrateResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal(knownSessionId, body.SessionId);
+        Assert.False(body.Hydrated);
+        Assert.NotNull(body.ContinuationMessage);
+    }
+
     private async Task<HttpClient> CreateSignedInClientAsync(string email = "customer@example.com")
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
@@ -213,5 +269,63 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
         });
         signIn.EnsureSuccessStatusCode();
         return client;
+    }
+
+    private WebApplicationFactory<Program> CreateChatbotFactory()
+    {
+        return factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddScoped<IChatbotServiceClient, FakeChatbotServiceClient>();
+            });
+        });
+    }
+
+    private sealed class FakeChatbotServiceClient : IChatbotServiceClient
+    {
+        private static readonly Guid SessionId = Guid.Parse("50d1d515-4c9b-4de2-ad10-840a19f4f64a");
+
+        public Task<ChatbotSessionResponse?> InitiateSessionAsync(ChatbotInitiateSessionRequest request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<ChatbotSessionResponse?>(new ChatbotSessionResponse
+            {
+                SessionId = SessionId,
+                Language = request.Language,
+                WelcomeMessage = "Mali is ready.",
+                ExpiresAt = DateTimeOffset.UtcNow.AddHours(1)
+            });
+        }
+
+        public Task<ChatbotMessageResponse?> SendMessageAsync(ChatbotSendMessageRequest request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<ChatbotMessageResponse?>(new ChatbotMessageResponse
+            {
+                MessageId = Guid.Parse("20c5a8da-7a10-46da-bcf3-83f757987846"),
+                Content = "Mali can help with CNC aluminum fixture quotes in Quote Engine.",
+                Role = "assistant",
+                Language = "en",
+                CreatedAt = DateTimeOffset.UtcNow
+            });
+        }
+
+        public Task<ChatbotConversationMessagesResponse?> GetConversationMessagesAsync(Guid sessionId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<ChatbotConversationMessagesResponse?>(new ChatbotConversationMessagesResponse
+            {
+                SessionId = sessionId,
+                Language = "en",
+                Messages =
+                [
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "assistant",
+                        Content = "Hydrated assistant message.",
+                        CreatedAt = DateTimeOffset.UtcNow
+                    }
+                ]
+            });
+        }
     }
 }

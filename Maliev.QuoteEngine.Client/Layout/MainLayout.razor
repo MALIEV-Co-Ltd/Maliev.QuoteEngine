@@ -8,7 +8,7 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<div class="app-shell">
+<div class="@AppShellClass">
     <header class="quote-topbar">
         <a class="quote-brand" href="https://www.maliev.com" aria-label="MALIEV home">
             <span class="quote-brand-mark">M</span>
@@ -27,11 +27,30 @@
         </nav>
 
         <div class="top-actions">
+            <MudTooltip Text="MALIEV assistant" Placement="Placement.Bottom">
+                <MudIconButton Icon="@Icons.Material.Outlined.Chat"
+                               Class="topbar-chat-toggle"
+                               Size="Size.Medium"
+                               aria-label="Open MALIEV assistant"
+                               Color="@(_chatDrawerOpen ? Color.Primary : Color.Default)"
+                               OnClick="ToggleChatDrawerAsync" />
+            </MudTooltip>
             <a class="web-link" href="https://www.maliev.com">www.maliev.com</a>
             <a class="text-button" href="/auth/sign-in">Sign in</a>
             <a class="primary-button" href="/projects/new">Start quote</a>
         </div>
     </header>
+
+    <MudDrawer Open="@_chatDrawerOpen"
+               OpenChanged="SetChatDrawerOpenAsync"
+               Anchor="Anchor.End"
+               ClipMode="DrawerClipMode.Never"
+               Elevation="0"
+               Variant="DrawerVariant.Temporary"
+               Width="min(520px, calc(100vw - 16px))"
+               Class="quote-chat-drawer">
+        <CustomerAssistantDrawer OnClose="CloseChatDrawerAsync" />
+    </MudDrawer>
 
     <main class="@WorkspaceClass">
         @if (IsQuoteWorkspace)
@@ -110,6 +129,8 @@
 
     private bool IsQuoteWorkspace => IsQuoteWorkspacePath(new Uri(Navigation.Uri).AbsolutePath);
     private string WorkspaceClass => IsQuoteWorkspace ? "workspace workspace--quote" : "workspace";
+    private bool _chatDrawerOpen;
+    private string AppShellClass => _chatDrawerOpen ? "app-shell chatbot-open" : "app-shell";
 
     private static bool IsQuoteWorkspacePath(string path)
     {
@@ -135,6 +156,23 @@
     private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
     {
         _ = InvokeAsync(StateHasChanged);
+    }
+
+    private Task ToggleChatDrawerAsync()
+    {
+        return SetChatDrawerOpenAsync(!_chatDrawerOpen);
+    }
+
+    private Task CloseChatDrawerAsync()
+    {
+        return SetChatDrawerOpenAsync(false);
+    }
+
+    private Task SetChatDrawerOpenAsync(bool open)
+    {
+        _chatDrawerOpen = open;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     public void Dispose()

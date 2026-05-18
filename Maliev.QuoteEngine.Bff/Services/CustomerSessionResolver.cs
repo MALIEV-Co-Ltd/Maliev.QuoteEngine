@@ -22,6 +22,6 @@ public sealed class CustomerSessionResolver(IHttpContextAccessor httpContextAcce
                 ? cookieCustomerId
                 : null);
 
-        return Guid.TryParse(rawCustomerId, out customerId);
+        return Guid.TryParse(rawCustomerId, out customerId) && customerId != Guid.Empty;
     }
 }

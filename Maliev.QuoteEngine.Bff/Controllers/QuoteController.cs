@@ -35,7 +35,9 @@ public sealed class QuoteController(
             return ValidationProblem(ModelState);
         }
 
-        sessionResolver.TryResolveCustomerId(out var customerId);
+        var customerId = sessionResolver.TryResolveCustomerId(out var resolvedCustomerId)
+            ? resolvedCustomerId
+            : (Guid?)null;
         var upload = store.InitiateUpload(request, customerId);
         return Ok(new InitiateQuoteUploadResponse(
             upload.UploadId,
@@ -111,7 +113,9 @@ public sealed class QuoteController(
             return ValidationProblem(ModelState);
         }
 
-        sessionResolver.TryResolveCustomerId(out var customerId);
+        var customerId = sessionResolver.TryResolveCustomerId(out var resolvedCustomerId)
+            ? resolvedCustomerId
+            : (Guid?)null;
         return Ok(store.ImportHandoff(request, customerId));
     }
 
