@@ -339,10 +339,17 @@ body.quote-ready .startup-screen {
 }
 
 .quote-topnav {
-    display: flex;
-    gap: 6px;
+    justify-self: center;
+    display: inline-flex;
+    gap: 2px;
     align-items: center;
+    width: max-content;
+    max-width: 100%;
+    padding: 4px;
     min-width: 0;
+    border-radius: var(--maliev-radius-tab);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring-light);
     overflow-x: auto;
     scrollbar-width: none;
 }
@@ -356,19 +363,20 @@ body.quote-ready .startup-screen {
     text-decoration: none;
 }
 
-/* Navigation links: Geist 14px weight 500 default, 600 active (DESIGN.md §4 navigation). */
+/* Top nav uses the segmented-pill pattern from DESIGN.md §4 navigation tabs. */
 .quote-topnav a {
     display: inline-flex;
     align-items: center;
-    min-height: 38px;
-    padding: 0 12px;
+    min-height: 34px;
+    padding: 0 14px;
     color: var(--muted);
-    border-radius: var(--maliev-radius-sm);
+    border-radius: var(--maliev-radius-tab);
     font-size: var(--maliev-font-small);
     font-weight: 500;
+    line-height: 1;
     letter-spacing: 0;
     white-space: nowrap;
-    transition: color 120ms ease, background-color 120ms ease;
+    transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
 }
 
 .quote-topnav a:hover {
@@ -377,11 +385,24 @@ body.quote-ready .startup-screen {
 }
 
 .quote-topnav a.active {
-    color: var(--ink);
+    color: #ffffff;
     font-weight: 600;
-    letter-spacing: var(--maliev-track-body-semi);
-    background: var(--panel-tint);
-    box-shadow: var(--maliev-shadow-ring);
+    letter-spacing: 0;
+    background: var(--primary);
+    box-shadow: rgba(0, 0, 0, 0.12) 0 1px 2px, rgba(255, 255, 255, 0.12) 0 1px 0 inset;
+}
+
+.quote-topnav a:focus-visible {
+    color: var(--ink);
+    outline: 2px solid var(--focus-blue);
+    outline-offset: 2px;
+    background: var(--panel);
+    box-shadow: var(--maliev-focus-ring);
+}
+
+.quote-topnav a.active:focus-visible {
+    color: #ffffff;
+    background: var(--primary);
 }
 
 .workspace {
@@ -1079,7 +1100,9 @@ textarea::placeholder {
     .quote-topnav {
         order: 3;
         grid-column: 1 / -1;
-        padding-bottom: 10px;
+        justify-self: stretch;
+        width: 100%;
+        border-radius: var(--maliev-radius-md);
     }
 
     .quote-summary {

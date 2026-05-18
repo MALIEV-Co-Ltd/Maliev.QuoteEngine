@@ -55,6 +55,11 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("class=\"web-link\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain(".web-link", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".quote-brand-mark", styles, StringComparison.Ordinal);
+        Assert.Contains("justify-self: center;", styles, StringComparison.Ordinal);
+        Assert.Contains("border-radius: var(--maliev-radius-tab);", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-topnav a.active", styles, StringComparison.Ordinal);
+        Assert.Contains("background: var(--primary);", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-topnav a:focus-visible", styles, StringComparison.Ordinal);
         Assert.Contains("IsQuoteWorkspacePath", layout, StringComparison.Ordinal);
         Assert.Contains("\"/projects/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("\"/quotes/new\"", layout, StringComparison.Ordinal);
