@@ -359,7 +359,6 @@ body.quote-ready .startup-screen {
 }
 
 .quote-topnav a,
-.web-link,
 .text-button {
     text-decoration: none;
 }
@@ -390,17 +389,6 @@ body.quote-ready .startup-screen {
     letter-spacing: var(--maliev-track-body-semi);
     background: var(--panel-tint);
     box-shadow: var(--maliev-shadow-ring);
-}
-
-.web-link {
-    color: var(--muted);
-    font-size: var(--maliev-font-small);
-    font-weight: 500;
-    white-space: nowrap;
-}
-
-.web-link:hover {
-    color: var(--ink);
 }
 
 .workspace {
@@ -1130,10 +1118,6 @@ textarea::placeholder {
 
     .top-actions {
         justify-items: end;
-    }
-
-    .top-actions .web-link {
-        display: none;
     }
 
     .page-surface,
