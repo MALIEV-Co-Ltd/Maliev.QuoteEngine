@@ -312,28 +312,21 @@ body.quote-ready .startup-screen {
 }
 
 .quote-brand {
-    display: grid;
-    grid-template-columns: 44px minmax(0, 1fr);
-    gap: 12px;
+    display: inline-flex;
     align-items: center;
+    width: 124px;
     text-decoration: none;
 }
 
-.quote-brand-mark {
-    display: grid;
-    place-items: center;
-    width: 44px;
-    height: 44px;
-    color: #ffffff;
-    background: var(--primary);
-    border-radius: var(--maliev-radius-sm);
-    font-weight: 600;
+.quote-brand-logo {
+    display: block;
+    width: 100%;
+    height: auto;
 }
 
 /* Mono-style technical labels per DESIGN.md §3 (Mono Small / micro badges).
    DESIGN.md §7 forbids weight 700 on body text; eyebrows use weight 500 and
    Geist Mono to read as a "developer console" voice. */
-.quote-brand small,
 .eyebrow {
     display: block;
     color: var(--muted);
@@ -1108,12 +1101,7 @@ textarea::placeholder {
     }
 
     .quote-brand {
-        grid-template-columns: 36px minmax(0, 1fr);
-    }
-
-    .quote-brand-mark {
-        width: 36px;
-        height: 36px;
+        width: 108px;
     }
 
     .top-actions {
