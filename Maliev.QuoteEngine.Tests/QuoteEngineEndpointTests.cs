@@ -36,7 +36,7 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
     }
 
     [Fact]
-    public async Task ResumableUpload_requires_signed_in_customer()
+    public async Task ResumableUpload_allows_anonymous_temporary_workspace_upload()
     {
         using var client = factory.CreateClient();
 
@@ -48,7 +48,43 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
             FileSizeBytes = 12
         });
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        response.EnsureSuccessStatusCode();
+        var upload = await response.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(upload);
+        Assert.StartsWith("quotes/temp/session-unsigned/", upload.StoragePath, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UploadHandoff_imports_web_uploaded_files_into_active_workspace()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/uploads/handoff", new QuoteUploadHandoffRequest
+        {
+            QuoteSessionId = "web-session-1",
+            Files =
+            [
+                new QuoteUploadHandoffFileDto
+                {
+                    UploadId = "web-upload-1",
+                    FileId = Guid.NewGuid(),
+                    FileName = "web-dropped-part.step",
+                    StoragePath = "quotes/temp/web-session-1/123/web-dropped-part.step",
+                    ContentType = "application/step",
+                    FileSizeBytes = 420_000,
+                    Status = "Completed"
+                }
+            ]
+        });
+
+        response.EnsureSuccessStatusCode();
+        var handoff = await response.Content.ReadFromJsonAsync<QuoteUploadHandoffResponse>();
+        Assert.NotNull(handoff);
+        Assert.Equal("web-session-1", handoff.QuoteSessionId);
+        var part = Assert.Single(handoff.Parts);
+        Assert.Equal("web-upload-1", part.UploadId);
+        Assert.Equal("Analyzed", part.Status);
+        Assert.True(part.VolumeCc > 0);
     }
 
     [Fact]

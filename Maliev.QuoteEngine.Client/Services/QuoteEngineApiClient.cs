@@ -26,16 +26,36 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
 
     public Task<InitiateQuoteUploadResponse> InitiateUploadAsync(string quoteSessionId, IBrowserFile file, CancellationToken cancellationToken = default)
     {
+        return InitiateUploadAsync(
+            quoteSessionId,
+            file.Name,
+            string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+            file.Size,
+            cancellationToken);
+    }
+
+    public Task<InitiateQuoteUploadResponse> InitiateUploadAsync(
+        string quoteSessionId,
+        string fileName,
+        string contentType,
+        long fileSizeBytes,
+        CancellationToken cancellationToken = default)
+    {
         return PostAsync<InitiateQuoteUploadRequest, InitiateQuoteUploadResponse>(
             "quote/v1/uploads/resumable",
             new InitiateQuoteUploadRequest
             {
                 QuoteSessionId = quoteSessionId,
-                FileName = file.Name,
-                ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-                FileSizeBytes = file.Size
+                FileName = fileName,
+                ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+                FileSizeBytes = fileSizeBytes
             },
             cancellationToken);
+    }
+
+    public Task<QuoteUploadHandoffResponse> ImportHandoffAsync(QuoteUploadHandoffRequest request, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<QuoteUploadHandoffRequest, QuoteUploadHandoffResponse>("quote/v1/uploads/handoff", request, cancellationToken);
     }
 
     public async Task<CompleteQuoteUploadResponse> CompleteUploadAsync(string uploadId, CancellationToken cancellationToken = default)

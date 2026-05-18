@@ -109,20 +109,63 @@ public sealed class QuoteEnginePrototypeStore
         "/images/generated/sample-part.svg",
         "Demo mode uses MALIEV-owned sample files and does not create customer projects, uploads, quotations, orders, or history.");
 
-    public UploadState InitiateUpload(InitiateQuoteUploadRequest request)
+    public UploadState InitiateUpload(InitiateQuoteUploadRequest request, Guid? customerId)
     {
         var uploadId = Guid.NewGuid().ToString("N");
         var safeName = string.Join("_", request.FileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+        var storagePath = customerId.HasValue
+            ? $"customers/{customerId.Value:N}/quotes/{request.QuoteSessionId}/{uploadId}/{safeName}"
+            : $"quotes/temp/{request.QuoteSessionId}/{uploadId}/{safeName}";
         var state = new UploadState(
             uploadId,
             Guid.NewGuid(),
             safeName,
             request.ContentType,
             request.FileSizeBytes,
-            $"quotes/{request.QuoteSessionId}/{uploadId}/{safeName}");
+            storagePath,
+            customerId,
+            IsTemporary: !customerId.HasValue);
 
         _uploads[uploadId] = state;
         return state;
+    }
+
+    public QuoteUploadHandoffResponse ImportHandoff(QuoteUploadHandoffRequest request, Guid? customerId)
+    {
+        var parts = new List<QuoteUploadHandoffPartDto>();
+        foreach (var file in request.Files.Where(file => !string.IsNullOrWhiteSpace(file.UploadId)))
+        {
+            var safeName = string.Join("_", file.FileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+            var uploadId = file.UploadId.Trim();
+            var state = new UploadState(
+                uploadId,
+                file.FileId ?? Guid.NewGuid(),
+                string.IsNullOrWhiteSpace(safeName) ? "uploaded-part" : safeName,
+                string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+                file.FileSizeBytes,
+                file.StoragePath,
+                customerId,
+                IsTemporary: !customerId.HasValue)
+            {
+                ReceivedBytes = file.FileSizeBytes,
+                Status = "Uploaded"
+            };
+
+            _uploads[uploadId] = state;
+            var analyzed = MarkAnalyzed(uploadId);
+            parts.Add(new QuoteUploadHandoffPartDto(
+                Guid.NewGuid(),
+                analyzed.FileId,
+                analyzed.UploadId,
+                analyzed.FileName,
+                analyzed.StoragePath,
+                analyzed.Status,
+                analyzed.VolumeCc,
+                analyzed.SurfaceAreaCm2,
+                analyzed.Findings));
+        }
+
+        return new QuoteUploadHandoffResponse(request.QuoteSessionId, parts);
     }
 
     public UploadState? GetUpload(string uploadId)
@@ -252,7 +295,9 @@ public sealed record UploadState(
     string FileName,
     string ContentType,
     long ExpectedSizeBytes,
-    string StoragePath)
+    string StoragePath,
+    Guid? CustomerId,
+    bool IsTemporary)
 {
     public string Status { get; init; } = "WaitingForUpload";
 

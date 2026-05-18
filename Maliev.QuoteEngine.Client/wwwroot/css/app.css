@@ -762,7 +762,8 @@ select {
 }
 
 .qe-dropzone:hover,
-.qe-dropzone:focus-visible {
+.qe-dropzone:focus-visible,
+.qe-dropzone.is-dragover {
     background: #fafafa;
     outline: none;
 }
@@ -773,6 +774,11 @@ select {
 
 .qe-dropzone:focus-visible {
     box-shadow: var(--maliev-shadow-card), var(--maliev-focus-ring);
+}
+
+.qe-dropzone.is-dragover {
+    box-shadow: var(--maliev-shadow-card), 0 0 0 4px rgba(0, 112, 243, .15);
+    transform: translateY(-1px);
 }
 
 .qe-dropzone--compact {
@@ -977,6 +983,36 @@ select {
     justify-content: center;
     min-height: 0;
     padding: 24px;
+}
+
+.qe-empty-state-grid {
+    width: min(100%, 960px);
+    display: grid;
+    grid-template-columns: minmax(320px, 1.2fr) minmax(260px, .8fr);
+    gap: 18px;
+    align-items: stretch;
+}
+
+.qe-demo-sample-card {
+    display: grid;
+    align-content: center;
+    gap: 12px;
+    padding: 26px;
+    border-radius: var(--maliev-radius-md);
+    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.qe-demo-sample-card strong {
+    color: var(--maliev-ink);
+    font-size: 19px;
+    letter-spacing: -0.24px;
+}
+
+.qe-demo-sample-card p {
+    margin: 0;
+    color: var(--maliev-muted);
+    line-height: 1.55;
 }
 
 .qe-pn-detail-row {
@@ -1611,6 +1647,10 @@ select {
     .qe-empty-state {
         align-items: flex-start;
         padding: 14px;
+    }
+
+    .qe-empty-state-grid {
+        grid-template-columns: 1fr;
     }
 
     .qe-dropzone--hero {

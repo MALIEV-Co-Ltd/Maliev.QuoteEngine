@@ -30,21 +30,13 @@ public sealed class QuoteController(
     [HttpPost("uploads/resumable")]
     public ActionResult<InitiateQuoteUploadResponse> InitiateUpload([FromBody] InitiateQuoteUploadRequest request)
     {
-        if (!sessionResolver.TryResolveCustomerId(out _))
-        {
-            return Unauthorized(new ProblemDetails
-            {
-                Title = "Sign-in required.",
-                Detail = "Customer-owned uploads create project history and require a signed-in customer account."
-            });
-        }
-
         if (!ModelState.IsValid)
         {
             return ValidationProblem(ModelState);
         }
 
-        var upload = store.InitiateUpload(request);
+        sessionResolver.TryResolveCustomerId(out var customerId);
+        var upload = store.InitiateUpload(request, customerId);
         return Ok(new InitiateQuoteUploadResponse(
             upload.UploadId,
             $"/quote/v1/uploads/resumable/{upload.UploadId}",
@@ -56,11 +48,6 @@ public sealed class QuoteController(
     [DisableRequestSizeLimit]
     public async Task<IActionResult> ResumeUpload(string uploadId, CancellationToken cancellationToken)
     {
-        if (!sessionResolver.TryResolveCustomerId(out _))
-        {
-            return Unauthorized();
-        }
-
         var contentRange = Request.Headers.ContentRange.ToString();
         if (string.IsNullOrWhiteSpace(contentRange))
         {
@@ -75,6 +62,11 @@ public sealed class QuoteController(
         if (upload is null)
         {
             return NotFound();
+        }
+
+        if (!CanAccessUpload(upload))
+        {
+            return Forbid();
         }
 
         var received = 0L;
@@ -92,9 +84,15 @@ public sealed class QuoteController(
     [HttpPost("uploads/resumable/{uploadId}/complete")]
     public async Task<ActionResult<CompleteQuoteUploadResponse>> CompleteUpload(string uploadId, CancellationToken cancellationToken)
     {
-        if (!sessionResolver.TryResolveCustomerId(out _))
+        var existingUpload = store.GetUpload(uploadId);
+        if (existingUpload is null)
         {
-            return Unauthorized();
+            return NotFound();
+        }
+
+        if (!CanAccessUpload(existingUpload))
+        {
+            return Forbid();
         }
 
         var upload = store.MarkAnalyzed(uploadId);
@@ -103,6 +101,18 @@ public sealed class QuoteController(
             .SendAsync("FileAnalysisCompleted", upload.ToAnalysisStatus(), cancellationToken);
 
         return Ok(new CompleteQuoteUploadResponse(upload.UploadId, upload.FileId, upload.FileName, upload.StoragePath, upload.Status));
+    }
+
+    [HttpPost("uploads/handoff")]
+    public ActionResult<QuoteUploadHandoffResponse> ImportHandoff([FromBody] QuoteUploadHandoffRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        sessionResolver.TryResolveCustomerId(out var customerId);
+        return Ok(store.ImportHandoff(request, customerId));
     }
 
     [HttpGet("uploads/{uploadId}/analysis-status")]
@@ -178,5 +188,15 @@ public sealed class QuoteController(
         {
             return NotFound();
         }
+    }
+
+    private bool CanAccessUpload(UploadState upload)
+    {
+        if (upload.IsTemporary)
+        {
+            return true;
+        }
+
+        return sessionResolver.TryResolveCustomerId(out var customerId) && upload.CustomerId == customerId;
     }
 }

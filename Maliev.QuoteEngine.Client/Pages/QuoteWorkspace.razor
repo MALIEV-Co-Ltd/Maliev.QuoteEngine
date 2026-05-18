@@ -1,6 +1,8 @@
 @page "/quotes/new"
 @page "/projects/new"
 @page "/demo"
+@using System.Text
+@using System.Text.Json
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
@@ -24,7 +26,7 @@
             </div>
 
             <div class="qe-plp-upload-section">
-                <button type="button" class="qe-dropzone qe-dropzone--compact" @onclick="OpenFilePickerAsync">
+                <button id="@CompactDropzoneId" type="button" class="qe-dropzone qe-dropzone--compact">
                     <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Medium" />
                     <span>@UploadCompactLabel</span>
                     <small>@UploadCompactHint</small>
@@ -92,11 +94,22 @@
             @if (SelectedPart is null)
             {
                 <section class="qe-empty-state">
-                    <button type="button" class="qe-dropzone qe-dropzone--hero" @onclick="OpenFilePickerAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Large" />
-                        <span>@UploadHeroLabel</span>
-                        <small>@UploadHeroHint</small>
-                    </button>
+                    <div class="qe-empty-state-grid">
+                        <button id="@HeroDropzoneId" type="button" class="qe-dropzone qe-dropzone--hero">
+                            <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Large" />
+                            <span>@UploadHeroLabel</span>
+                            <small>@UploadHeroHint</small>
+                        </button>
+                        @if (!IsDemoMode)
+                        {
+                            <article class="qe-demo-sample-card">
+                                <span class="qe-zone-label">Demo sample</span>
+                                <strong>Try the Quote Engine with a MALIEV sample file.</strong>
+                                <p>Load a known sample part, review DFM feedback, adjust material and lead time, and test pricing without uploading your own CAD.</p>
+                                <button type="button" class="qe-secondary-btn" @onclick="LoadDemoProjectAsync">Use sample file</button>
+                            </article>
+                        }
+                    </div>
                 </section>
             }
             else
@@ -295,7 +308,9 @@
 @code {
     private const string UploadContainerId = "quote-upload-container";
     private const string UploadInputId = "quote-cad-files";
-    private readonly string _quoteSessionId = Guid.NewGuid().ToString("N");
+    private const string CompactDropzoneId = "quote-compact-dropzone";
+    private const string HeroDropzoneId = "quote-hero-dropzone";
+    private string _quoteSessionId = Guid.NewGuid().ToString("N");
     private readonly List<QuotePartViewModel> _parts = [];
     private QuoteReferenceDataResponse? _reference;
     private QuoteAuthStatusResponse _authStatus = new(false, null, null);
@@ -303,6 +318,7 @@
     private GenerateFormalQuoteResponse? _formalQuote;
     private CreateManufacturingOrderResponse? _order;
     private HubConnection? _notificationConnection;
+    private DotNetObjectReference<QuoteWorkspace>? _dotNetRef;
     private readonly List<string> _liveNotifications = [];
     private string _leadTimeCode = "STANDARD";
     private string _title = "Untitled quote";
@@ -312,17 +328,20 @@
     private bool IsDemoMode => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/demo", StringComparison.OrdinalIgnoreCase);
     private bool IsSignedIn => _authStatus.IsSignedIn;
     private bool CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode;
-    private string UploadCompactLabel => IsDemoMode ? "Demo sample only" : IsSignedIn ? "Drop CAD files to quote" : "Sign in to upload";
-    private string UploadCompactHint => IsDemoMode ? "MALIEV-owned sample file" : "STL, STEP, STP, OBJ, 3MF, IGES";
-    private string UploadHeroLabel => IsDemoMode ? "Demo sample is ready" : IsSignedIn ? "Drop files here or click to upload" : "Sign in to upload your own files";
+    [SupplyParameterFromQuery(Name = "handoff")]
+    public string? Handoff { get; set; }
+
+    private string UploadCompactLabel => IsDemoMode ? "Demo sample only" : "Drop CAD files to quote";
+    private string UploadCompactHint => IsDemoMode ? "MALIEV-owned sample file" : IsSignedIn ? "Customer-owned upload storage" : "Temporary upload storage until you sign in";
+    private string UploadHeroLabel => IsDemoMode ? "Demo sample is ready" : "Drop files here or click to upload";
     private string UploadHeroHint => IsDemoMode
         ? "Demo mode cannot create projects, formal quotes, orders, uploads, or history"
-        : IsSignedIn ? "STL, STEP, STP, OBJ, 3MF, IGES · max 10 GB per file" : "Google sign-in is the primary path; email and password is available as a fallback";
-    private string CustomerBoundaryTitle => IsDemoMode ? "Demo mode" : IsSignedIn ? _authStatus.DisplayName ?? "Customer account" : "Sign-in required";
+        : "STL, STEP, STP, OBJ, 3MF, IGES · max 10 GB per file";
+    private string CustomerBoundaryTitle => IsDemoMode ? "Demo mode" : IsSignedIn ? _authStatus.DisplayName ?? "Customer account" : "Anonymous workspace";
     private string CustomerBoundaryHint => IsDemoMode
         ? "No customer data is created"
-        : IsSignedIn ? "Signed-in customer project boundary" : "Required before customer-owned uploads";
-    private string QuoteButtonLabel => IsDemoMode ? "Demo only" : IsSignedIn ? "Quote" : "Sign in";
+        : IsSignedIn ? "Signed-in customer project boundary" : "Upload and estimate now; sign in before formal quote";
+    private string QuoteButtonLabel => IsDemoMode ? "Demo only" : IsSignedIn ? "Quote" : "Sign in to quote";
 
     private QuotePartViewModel? SelectedPart => _parts.Count == 0 ? null : _parts[Math.Min(_selectedPartIndex, _parts.Count - 1)];
 
@@ -335,13 +354,28 @@
         {
             await LoadDemoProjectAsync();
         }
+        else if (!string.IsNullOrWhiteSpace(Handoff))
+        {
+            await ImportHandoffAsync(Handoff);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        _dotNetRef = DotNetObjectReference.Create(this);
+        await Js.InvokeVoidAsync("quoteEngineUploads.registerDropzone", CompactDropzoneId, UploadInputId, _dotNetRef);
+        await Js.InvokeVoidAsync("quoteEngineUploads.registerDropzone", HeroDropzoneId, UploadInputId, _dotNetRef);
     }
 
     private async Task OpenFilePickerAsync()
     {
-        if (IsDemoMode || !IsSignedIn)
+        if (IsDemoMode)
         {
-            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
             return;
         }
 
@@ -350,12 +384,6 @@
 
     private async Task HandleFilesAsync(InputFileChangeEventArgs args)
     {
-        if (!IsSignedIn)
-        {
-            _error = "Sign in before uploading customer-owned manufacturing files.";
-            return;
-        }
-
         _error = null;
         _estimate = null;
         _formalQuote = null;
@@ -376,24 +404,56 @@
                 fileSizeBytes = file.File.Size
             }));
 
-        foreach (var capturedFile in capturedFiles)
+        await ProcessUploadCandidatesAsync(capturedFiles.Select(file => new UploadCandidate(
+            file.ClientFileId,
+            file.File.Name,
+            string.IsNullOrWhiteSpace(file.File.ContentType) ? "application/octet-stream" : file.File.ContentType,
+            file.File.Size)));
+    }
+
+    [JSInvokable]
+    public async Task HandleDroppedFilesAsync(DroppedBrowserFile[] files)
+    {
+        if (IsDemoMode)
         {
-            var file = capturedFile.File;
-            var part = new QuotePartViewModel { FileName = file.Name, Status = "Uploading" };
+            return;
+        }
+
+        _error = null;
+        _estimate = null;
+        _formalQuote = null;
+        _order = null;
+
+        await ProcessUploadCandidatesAsync(files.Select(file => new UploadCandidate(
+            file.ClientFileId,
+            file.FileName,
+            file.ContentType,
+            file.FileSizeBytes)));
+    }
+
+    private async Task ProcessUploadCandidatesAsync(IEnumerable<UploadCandidate> candidates)
+    {
+        foreach (var candidate in candidates)
+        {
+            var part = new QuotePartViewModel { FileName = candidate.FileName, Status = "Uploading" };
             _parts.Add(part);
             _selectedPartIndex = _parts.Count - 1;
             try
             {
-                var initiation = await Api.InitiateUploadAsync(_quoteSessionId, file);
+                var initiation = await Api.InitiateUploadAsync(
+                    _quoteSessionId,
+                    candidate.FileName,
+                    candidate.ContentType,
+                    candidate.FileSizeBytes);
                 part.UploadId = initiation.UploadId;
                 await EnsureNotificationConnectionAsync();
                 await _notificationConnection!.InvokeAsync("JoinFileGroup", initiation.StoragePath);
 
                 await Js.InvokeVoidAsync(
                     "quoteEngineUploads.uploadFile",
-                    capturedFile.ClientFileId,
+                    candidate.ClientFileId,
                     initiation.ProxyUploadUrl,
-                    string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
+                    candidate.ContentType);
 
                 var upload = await Api.CompleteUploadAsync(initiation.UploadId);
                 var status = await Api.GetAnalysisStatusAsync(upload.UploadId);
@@ -410,6 +470,50 @@
                 part.Status = "Upload failed";
                 _error = ex.Message;
             }
+        }
+    }
+
+    private async Task ImportHandoffAsync(string encodedHandoff)
+    {
+        try
+        {
+            var json = Encoding.UTF8.GetString(DecodeBase64Url(encodedHandoff));
+            var request = JsonSerializer.Deserialize<QuoteUploadHandoffRequest>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            if (request is null || request.Files.Count == 0)
+            {
+                return;
+            }
+
+            _quoteSessionId = string.IsNullOrWhiteSpace(request.QuoteSessionId) ? _quoteSessionId : request.QuoteSessionId;
+            var response = await Api.ImportHandoffAsync(request);
+            _parts.Clear();
+            foreach (var part in response.Parts)
+            {
+                _parts.Add(new QuotePartViewModel
+                {
+                    PartId = part.PartId,
+                    FileId = part.FileId,
+                    UploadId = part.UploadId,
+                    FileName = part.FileName,
+                    Status = part.Status,
+                    VolumeCc = part.VolumeCc,
+                    SurfaceAreaCm2 = part.SurfaceAreaCm2,
+                    Findings = part.Findings
+                });
+            }
+
+            if (_parts.Count > 0)
+            {
+                _selectedPartIndex = 0;
+                await CalculateAsync();
+            }
+        }
+        catch (Exception ex) when (ex is FormatException or JsonException or InvalidOperationException)
+        {
+            _error = "We could not import the files from the website upload. Please drop them here again.";
         }
     }
 
@@ -615,6 +719,16 @@
 
     public async ValueTask DisposeAsync()
     {
+        try
+        {
+            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", CompactDropzoneId);
+            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", HeroDropzoneId);
+        }
+        catch (JSDisconnectedException)
+        {
+        }
+
+        _dotNetRef?.Dispose();
         if (_notificationConnection is not null)
         {
             await _notificationConnection.DisposeAsync();
@@ -622,6 +736,19 @@
     }
 
     private sealed record CapturedFile(string ClientFileId, IBrowserFile File);
+
+    private sealed record UploadCandidate(string ClientFileId, string FileName, string ContentType, long FileSizeBytes);
+
+    public sealed class DroppedBrowserFile
+    {
+        public string ClientFileId { get; set; } = string.Empty;
+
+        public string FileName { get; set; } = string.Empty;
+
+        public string ContentType { get; set; } = "application/octet-stream";
+
+        public long FileSizeBytes { get; set; }
+    }
 
     private sealed class QuotePartViewModel
     {
@@ -651,5 +778,12 @@
             SurfaceAreaCm2 = SurfaceAreaCm2,
             DfmAcknowledged = DfmAcknowledged
         };
+    }
+
+    private static byte[] DecodeBase64Url(string value)
+    {
+        var padded = value.Replace('-', '+').Replace('_', '/');
+        padded = padded.PadRight(padded.Length + (4 - padded.Length % 4) % 4, '=');
+        return Convert.FromBase64String(padded);
     }
 }

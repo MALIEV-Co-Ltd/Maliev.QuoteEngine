@@ -55,6 +55,56 @@ public sealed record CompleteQuoteUploadResponse(
     string StoragePath,
     string Status);
 
+public sealed class QuoteUploadHandoffRequest
+{
+    [Required]
+    [MaxLength(80)]
+    public string QuoteSessionId { get; set; } = string.Empty;
+
+    [MinLength(1)]
+    public List<QuoteUploadHandoffFileDto> Files { get; set; } = [];
+}
+
+public sealed class QuoteUploadHandoffFileDto
+{
+    [Required]
+    [MaxLength(120)]
+    public string UploadId { get; set; } = string.Empty;
+
+    public Guid? FileId { get; set; }
+
+    [Required]
+    [MaxLength(260)]
+    public string FileName { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(500)]
+    public string StoragePath { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(100)]
+    public string ContentType { get; set; } = "application/octet-stream";
+
+    [Range(1, 10_737_418_240L)]
+    public long FileSizeBytes { get; set; }
+
+    [MaxLength(40)]
+    public string Status { get; set; } = "Completed";
+}
+
+public sealed record QuoteUploadHandoffPartDto(
+    Guid PartId,
+    Guid FileId,
+    string UploadId,
+    string FileName,
+    string StoragePath,
+    string Status,
+    decimal VolumeCc,
+    decimal SurfaceAreaCm2,
+    IReadOnlyList<DfmFindingDto> Findings);
+
+public sealed record QuoteUploadHandoffResponse(string QuoteSessionId, IReadOnlyList<QuoteUploadHandoffPartDto> Parts);
+
 public sealed record DfmFindingDto(string Severity, string Code, string Message);
 
 public sealed class QuoteAnalysisStatusResponse

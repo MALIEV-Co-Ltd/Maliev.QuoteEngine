@@ -10,6 +10,22 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("file.name === mapping.fileName", source, StringComparison.Ordinal);
         Assert.Contains("file.size === mapping.fileSizeBytes", source, StringComparison.Ordinal);
         Assert.Contains("Content-Range", source, StringComparison.Ordinal);
+        Assert.Contains("event.dataTransfer.files", source, StringComparison.Ordinal);
+        Assert.Contains("registerDropzone", source, StringComparison.Ordinal);
+        Assert.Contains("HandleDroppedFilesAsync", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void New_quote_workspace_supports_demo_sample_and_anonymous_upload_state()
+    {
+        var source = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor"));
+
+        Assert.Contains("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
+        Assert.Contains("Use sample file", source, StringComparison.Ordinal);
+        Assert.Contains("\"Sign in to quote\"", source, StringComparison.Ordinal);
+        Assert.Contains("Temporary upload storage until you sign in", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadHandoffRequest", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sign in before uploading customer-owned manufacturing files.", source, StringComparison.Ordinal);
     }
 
     [Fact]
