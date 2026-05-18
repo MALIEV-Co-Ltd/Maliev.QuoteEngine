@@ -1,53 +1,114 @@
 :root {
     color-scheme: light;
-    --ink: #171717;
-    --muted: #4d4d4d;
-    --line: #ebebeb;
-    --paper: #ffffff;
-    --panel: #ffffff;
-    --primary: #171717;
-    --primary-strong: #000000;
-    --accent: #0a72ef;
-    --danger: #ff5b4f;
-    --blue: #0a72ef;
-    --preview: #de1d8d;
-    --ship: #ff5b4f;
+
+    /* ─── Core palette (DESIGN.md §2) ──────────────────────────────────── */
+    --ink: #171717;                 /* Vercel Black: primary text */
+    --ink-strong: #000000;          /* True Black: console/code only */
+    --muted: #4d4d4d;               /* Gray 600: secondary text */
+    --muted-2: #666666;             /* Gray 500: tertiary text */
+    --muted-3: #808080;             /* Gray 400: placeholder, disabled */
+    --line: #ebebeb;                /* Gray 100: borders, image rings */
+    --paper: #ffffff;               /* Pure White: page background */
+    --panel: #ffffff;               /* Pure White: card surface */
+    --panel-tint: #fafafa;          /* Gray 50: subtle surface tint, inner shadow highlight */
+
+    --primary: #171717;             /* Vercel Black, primary CTA */
+    --primary-strong: #000000;      /* Hover/press for dark CTA */
+
+    /* Workflow accents (DESIGN.md §2 — pipeline use only) */
+    --develop: #0a72ef;             /* Develop Blue */
+    --preview: #de1d8d;             /* Preview Pink */
+    --ship: #ff5b4f;                /* Ship Red */
+
+    /* Console/code accents */
+    --console-blue: #0070f3;
+    --console-purple: #7928ca;
+    --console-pink: #eb367f;
+
+    /* Interactive */
+    --link: #0072f5;                /* Link Blue */
+    --accent: #0a72ef;              /* Develop Blue used as generic accent */
     --focus-blue: hsla(212, 100%, 48%, 1);
-    --maliev-bg: #ffffff;
-    --maliev-panel: #ffffff;
-    --maliev-panel-2: #fafafa;
-    --maliev-panel-3: #fafafa;
-    --maliev-border: #ebebeb;
-    --maliev-border-subtle: #ebebeb;
-    --maliev-ink: #171717;
-    --maliev-ink-2: #4d4d4d;
-    --maliev-muted: #666666;
-    --maliev-muted-2: #808080;
+    --ring-blue: rgba(147, 197, 253, 0.5);
+
+    /* Badges */
+    --badge-blue-bg: #ebf5ff;
+    --badge-blue-text: #0068d6;
+    --danger: #ff5b4f;
+
+    /* Legacy `--maliev-*` aliases — kept so existing markup keeps working. */
+    --maliev-bg: var(--paper);
+    --maliev-panel: var(--panel);
+    --maliev-panel-2: var(--panel-tint);
+    --maliev-panel-3: var(--panel-tint);
+    --maliev-border: var(--line);
+    --maliev-border-subtle: var(--line);
+    --maliev-ink: var(--ink);
+    --maliev-ink-2: var(--muted);
+    --maliev-muted: var(--muted-2);
+    --maliev-muted-2: var(--muted-3);
     --maliev-muted-3: #a3a3a3;
-    --maliev-accent-soft: #ebf5ff;
-    --maliev-accent-softer: #fafafa;
-    --maliev-ok: #0068d6;
-    --maliev-ok-bg: #ebf5ff;
-    --maliev-warn: #de1d8d;
+    --maliev-accent-soft: var(--badge-blue-bg);
+    --maliev-accent-softer: var(--panel-tint);
+    --maliev-ok: var(--badge-blue-text);
+    --maliev-ok-bg: var(--badge-blue-bg);
+    --maliev-warn: var(--preview);
     --maliev-warn-bg: #fff0f8;
-    --maliev-danger: #ff5b4f;
+    --maliev-danger: var(--ship);
     --maliev-danger-bg: #fff1f0;
-    --maliev-radius-xs: 2px;
-    --maliev-radius-sm: 6px;
-    --maliev-radius-md: 8px;
-    --maliev-radius-pill: 9999px;
+
+    /* ─── Radius scale (DESIGN.md §5) ──────────────────────────────────── */
+    --maliev-radius-xs: 2px;        /* Inline code, micro chips */
+    --maliev-radius-sm: 6px;        /* Buttons, links, functional */
+    --maliev-radius-md: 8px;        /* Cards, list items */
+    --maliev-radius-lg: 12px;       /* Featured image cards (top) */
+    --maliev-radius-tab: 64px;      /* Tab navigation pills */
+    --maliev-radius-xl: 100px;      /* Large nav links */
+    --maliev-radius-pill: 9999px;   /* Badges, status, tags */
+
+    /* ─── Shadow system (DESIGN.md §6) ─────────────────────────────────── */
     --maliev-shadow-ring: rgba(0, 0, 0, 0.08) 0 0 0 1px;
-    --maliev-shadow-card: rgba(0, 0, 0, 0.08) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 2px, rgba(0, 0, 0, 0.04) 0 8px 8px -8px, #fafafa 0 0 0 1px inset;
+    --maliev-shadow-ring-light: rgb(235, 235, 235) 0 0 0 1px;
     --maliev-shadow-sm: rgba(0, 0, 0, 0.08) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 2px;
-    --maliev-focus-ring: 0 0 0 2px var(--focus-blue), 0 0 0 4px rgba(147, 197, 253, 0.5);
-    --maliev-font-nano: 10px;
-    --maliev-font-micro: 10.5px;
-    --maliev-font-small: 12px;
-    --maliev-font-base: 13px;
-    --maliev-font-large: 18px;
+    --maliev-shadow-card: rgba(0, 0, 0, 0.08) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 2px, rgba(0, 0, 0, 0.04) 0 8px 8px -8px, #fafafa 0 0 0 1px inset;
+    --maliev-focus-ring: 0 0 0 2px var(--focus-blue), 0 0 0 4px var(--ring-blue);
+
+    /* ─── Typography scale (DESIGN.md §3) ──────────────────────────────── */
+    --maliev-font-sans: Geist, "Inter", "Noto Sans Thai", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
     --maliev-font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Monaco, "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace;
+    --maliev-font-nano: 10px;       /* Tiny chips */
+    --maliev-font-micro: 12px;      /* Caption (was 10.5px — DESIGN.md says 12px) */
+    --maliev-font-small: 14px;      /* Button / link (was 12px — DESIGN.md says 14px) */
+    --maliev-font-base: 14px;       /* UI text (was 13px) */
+    --maliev-font-body: 16px;       /* Body Small / standard reading */
+    --maliev-font-body-lg: 18px;    /* Body */
+    --maliev-font-body-xl: 20px;    /* Body Large */
+    --maliev-font-card: 24px;       /* Card title */
+    --maliev-font-sub: 32px;        /* Sub-heading */
+    --maliev-font-section: 40px;    /* Section heading */
+    --maliev-font-display: 48px;    /* Display hero */
+    --maliev-font-large: 18px;      /* Legacy alias — kept for back-compat */
+
+    /* Letter-spacing scale (DESIGN.md §3) */
+    --maliev-track-display: -2.4px;     /* 48px display */
+    --maliev-track-section: -2.4px;     /* 40px section heading */
+    --maliev-track-sub: -1.28px;        /* 32px sub-heading */
+    --maliev-track-card: -0.96px;       /* 24px card title */
+    --maliev-track-body-semi: -0.32px;  /* 16px Body Semibold */
+    --maliev-track-tight: -0.24px;      /* General mild tightening */
+
+    /* MudBlazor palette overrides (consumed by MudThemeProvider) */
     --mud-palette-primary: var(--primary);
     --mud-palette-primary-text: #ffffff;
+    --mud-palette-action-default: var(--ink);
+    --mud-palette-text-primary: var(--ink);
+    --mud-palette-text-secondary: var(--muted);
+    --mud-palette-divider: var(--line);
+    --mud-palette-background-grey: var(--panel-tint);
+    --mud-palette-background-default: var(--paper);
+    --mud-default-borderradius: var(--maliev-radius-sm);
+
+    /* WASM loader vars (unchanged) */
     --blazor-load-percentage: 0%;
     --blazor-load-percentage-text: "0%";
     --wasm-logo-progress: 0%;
@@ -73,19 +134,65 @@ body,
 body {
     background: var(--paper);
     color: var(--ink);
-    font-family: Geist, "Noto Sans Thai", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+    font-family: var(--maliev-font-sans);
+    font-size: var(--maliev-font-body); /* 16px Body Small per DESIGN.md §3 */
+    font-weight: 400;
+    line-height: 1.5;
     font-feature-settings: "liga";
     letter-spacing: 0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular numbers wherever monospace is used (DESIGN.md §3 — `"tnum"` on captions). */
+code,
+kbd,
+samp,
+pre,
+.qe-plp-info small,
+.qe-plp-meta,
+.qe-plp-price,
+.qe-plp-footer strong,
+.qe-pdc-footer strong,
+.qe-qsb-total > strong {
+    font-family: var(--maliev-font-mono);
+    font-feature-settings: "liga", "tnum";
 }
 
 a {
     color: inherit;
+    text-decoration: none;
+}
+
+a.link,
+.text-link {
+    color: var(--link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
 }
 
 button,
 input,
-select {
+select,
+textarea {
     font: inherit;
+    letter-spacing: inherit;
+}
+
+/* Geist's three-weight system (DESIGN.md §3 / §7) */
+strong,
+b {
+    font-weight: 600;
+}
+
+::selection {
+    background: hsla(0, 0%, 95%, 1);
+    color: var(--ink);
+}
+
+:focus-visible {
+    outline: 2px solid var(--focus-blue);
+    outline-offset: 2px;
 }
 
 .startup-screen {
@@ -175,8 +282,10 @@ body.quote-ready .startup-screen {
 .startup-status {
     margin: 0;
     color: var(--ink);
-    font-size: 16px;
-    line-height: 1.4;
+    font-size: var(--maliev-font-body);
+    line-height: 1.5;
+    font-weight: 500;
+    letter-spacing: 0;
 }
 
 .app-shell {
@@ -194,10 +303,11 @@ body.quote-ready .startup-screen {
     grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 20px;
     align-items: center;
-    min-height: 68px;
+    min-height: 64px;
     padding: 0 28px;
     background: rgba(255, 255, 255, 0.96);
-    border-bottom: 1px solid var(--line);
+    /* Shadow-as-border per DESIGN.md §1 / §7 — replaces border-bottom */
+    box-shadow: rgba(0, 0, 0, 0.08) 0 1px 0 0;
     backdrop-filter: blur(12px);
 }
 
@@ -220,13 +330,19 @@ body.quote-ready .startup-screen {
     font-weight: 600;
 }
 
+/* Mono-style technical labels per DESIGN.md §3 (Mono Small / micro badges).
+   DESIGN.md §7 forbids weight 700 on body text; eyebrows use weight 500 and
+   Geist Mono to read as a "developer console" voice. */
 .quote-brand small,
 .eyebrow {
     display: block;
     color: var(--muted);
-    font-size: 12px;
-    font-weight: 700;
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    letter-spacing: 0;
     text-transform: uppercase;
+    font-feature-settings: "liga", "tnum";
 }
 
 .quote-topnav {
@@ -248,6 +364,7 @@ body.quote-ready .startup-screen {
     text-decoration: none;
 }
 
+/* Navigation links: Geist 14px weight 500 default, 600 active (DESIGN.md §4 navigation). */
 .quote-topnav a {
     display: inline-flex;
     align-items: center;
@@ -255,21 +372,35 @@ body.quote-ready .startup-screen {
     padding: 0 12px;
     color: var(--muted);
     border-radius: var(--maliev-radius-sm);
-    font-size: var(--maliev-font-base);
-    font-weight: 600;
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+    letter-spacing: 0;
     white-space: nowrap;
+    transition: color 120ms ease, background-color 120ms ease;
 }
 
-.quote-topnav a:hover,
+.quote-topnav a:hover {
+    color: var(--ink);
+    background: var(--panel-tint);
+}
+
 .quote-topnav a.active {
     color: var(--ink);
-    background: #fafafa;
+    font-weight: 600;
+    letter-spacing: var(--maliev-track-body-semi);
+    background: var(--panel-tint);
     box-shadow: var(--maliev-shadow-ring);
 }
 
 .web-link {
     color: var(--muted);
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
     white-space: nowrap;
+}
+
+.web-link:hover {
+    color: var(--ink);
 }
 
 .workspace {
@@ -290,14 +421,29 @@ body.quote-ready .startup-screen {
     align-items: center;
 }
 
+/* DESIGN.md §4 Buttons:
+   - Primary Dark: #171717 background, white text, 6px radius, 8px 16px padding
+   - Primary White (Shadow-bordered): white background, #171717 text, ring shadow
+   - All buttons: Geist 14px weight 500, no border, focus ring 2px focus-blue
+   DESIGN.md §7 forbids pill radius on primary actions. */
 .primary-button,
 .secondary-button,
 .text-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 8px 16px;
     border: 0;
-    padding: 10px 16px;
     border-radius: var(--maliev-radius-sm);
-    cursor: pointer;
+    font-family: inherit;
+    font-size: var(--maliev-font-small);
     font-weight: 500;
+    line-height: 1.43;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
 }
 
 .primary-button {
@@ -309,20 +455,29 @@ body.quote-ready .startup-screen {
     background: var(--primary-strong);
 }
 
-.secondary-button {
-    color: var(--ink);
-    background: var(--panel);
-    box-shadow: var(--maliev-shadow-ring);
+.primary-button:active {
+    transform: translateY(1px);
 }
 
-.secondary-button:hover {
-    background: #f7f8fb;
-}
-
+.secondary-button,
 .text-button {
     color: var(--ink);
-    background: #ffffff;
+    background: var(--panel);
+    /* Ring-border per DESIGN.md §4 Primary White */
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.secondary-button:hover,
+.text-button:hover {
+    background: var(--panel-tint);
     box-shadow: var(--maliev-shadow-ring);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled,
+.text-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .topbar-chat-toggle {
@@ -340,9 +495,10 @@ body.quote-ready .startup-screen {
     background: var(--accent);
 }
 
+/* Shadow-as-border per DESIGN.md §1 — replaces border-left. */
 .quote-chat-drawer {
     background: #ffffff;
-    border-left: 1px solid var(--line);
+    box-shadow: rgba(0, 0, 0, 0.08) -1px 0 0 0;
 }
 
 .customer-chatbot-panel {
@@ -361,7 +517,8 @@ body.quote-ready .startup-screen {
     align-items: center;
     justify-content: space-between;
     padding: 18px;
-    border-bottom: 1px solid var(--line);
+    /* Shadow-as-border per DESIGN.md §1 */
+    box-shadow: rgba(0, 0, 0, 0.08) 0 1px 0 0;
 }
 
 .customer-chatbot-profile {
@@ -388,9 +545,12 @@ body.quote-ready .startup-screen {
     min-width: 0;
 }
 
+/* Chatbot title behaves as Body Semibold per DESIGN.md §3. */
 .customer-chatbot-title strong {
-    font-size: 16px;
+    font-size: var(--maliev-font-body);
     line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: var(--maliev-track-body-semi);
 }
 
 .customer-chatbot-title small,
@@ -409,8 +569,8 @@ body.quote-ready .startup-screen {
     align-items: center;
     justify-content: space-between;
     padding: 10px 18px;
-    border-bottom: 1px solid var(--line);
-    background: #fafafa;
+    box-shadow: rgba(0, 0, 0, 0.08) 0 1px 0 0;
+    background: var(--panel-tint);
 }
 
 .customer-chatbot-status strong {
@@ -533,8 +693,8 @@ body.quote-ready .startup-screen {
 
 .customer-chatbot-prompts {
     padding: 12px 18px;
-    border-top: 1px solid var(--line);
-    background: #fafafa;
+    box-shadow: rgba(0, 0, 0, 0.08) 0 -1px 0 0;
+    background: var(--panel-tint);
 }
 
 .customer-chatbot-composer {
@@ -543,7 +703,7 @@ body.quote-ready .startup-screen {
     gap: 10px;
     align-items: end;
     padding: 14px 18px 18px;
-    border-top: 1px solid var(--line);
+    box-shadow: rgba(0, 0, 0, 0.08) 0 -1px 0 0;
 }
 
 .customer-chatbot-composer textarea {
@@ -584,13 +744,27 @@ body.quote-ready .startup-screen {
         transform: translateY(-2px);
     }
 }
-
+/* DESIGN.md §7 forbids weight 700 on body text — auth divider uses mono 500. */
 .auth-divider {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 12px;
     color: var(--muted);
-    font-size: 0.82rem;
-    font-weight: 700;
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    letter-spacing: 0;
     text-align: center;
     text-transform: uppercase;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--line);
 }
 
 .full {
@@ -598,17 +772,22 @@ body.quote-ready .startup-screen {
 }
 
 .page-surface {
-    padding: 28px;
+    /* Generous whitespace per DESIGN.md §5 (gallery emptiness, 80px+ between sections). */
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 64px 28px;
 }
 
 .hero-grid,
 .quote-workspace {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 360px;
-    gap: 24px;
+    gap: 32px; /* DESIGN.md §5 spacing scale jumps 16 → 32 */
     align-items: start;
 }
 
+/* Cards use the full multi-layer shadow stack from DESIGN.md §2 / §6
+   (border ring + soft elevation + ambient depth + inner #fafafa highlight). */
 .hero-copy,
 .quote-main,
 .quote-summary,
@@ -617,6 +796,7 @@ body.quote-ready .startup-screen {
 .profile-grid,
 .data-row {
     background: var(--panel);
+    border-radius: var(--maliev-radius-md);
     box-shadow: var(--maliev-shadow-card);
 }
 
@@ -625,28 +805,69 @@ body.quote-ready .startup-screen {
 .quote-summary,
 .auth-panel,
 .empty-state {
-    padding: 28px;
+    padding: 32px;
 }
 
 h1,
 h2,
+h3,
+h4,
 p {
     margin-top: 0;
 }
 
+/* Display Hero per DESIGN.md §3:
+   48px Geist weight 600, line-height 1.00–1.17, letter-spacing -2.4px to -2.88px.
+   Scales down on mobile but keeps proportional negative tracking. */
 h1 {
     max-width: 760px;
-    font-size: clamp(32px, 4vw, 58px);
-    line-height: 1;
+    color: var(--ink);
+    font-size: clamp(36px, 5vw, var(--maliev-font-display));
+    line-height: 1.05;
     font-weight: 600;
-    letter-spacing: clamp(-2.88px, -0.2vw, -1.28px);
+    letter-spacing: clamp(var(--maliev-track-sub), -0.2vw, var(--maliev-track-display));
 }
 
+/* Section heading: 40px Geist weight 600, tracking -2.4px. */
+h2 {
+    color: var(--ink);
+    font-size: var(--maliev-font-section);
+    line-height: 1.2;
+    font-weight: 600;
+    letter-spacing: var(--maliev-track-section);
+}
+
+/* Sub-heading: 32px weight 400 or 600. Default to 600 for emphasis. */
+h3 {
+    color: var(--ink);
+    font-size: var(--maliev-font-sub);
+    line-height: 1.25;
+    font-weight: 600;
+    letter-spacing: var(--maliev-track-sub);
+}
+
+/* Card title: 24px weight 600, tracking -0.96px. */
+h4 {
+    color: var(--ink);
+    font-size: var(--maliev-font-card);
+    line-height: 1.33;
+    font-weight: 600;
+    letter-spacing: var(--maliev-track-card);
+}
+
+/* Body Large: 20px weight 400, line-height 1.80, normal tracking — for hero subtitles. */
 .hero-copy p,
 .section-heading p {
     max-width: 680px;
     color: var(--muted);
-    font-size: 18px;
+    font-size: var(--maliev-font-body-xl);
+    line-height: 1.8;
+    letter-spacing: 0;
+}
+
+p {
+    color: var(--muted);
+    line-height: 1.56;
 }
 
 .hero-media {
@@ -732,24 +953,52 @@ h1 {
     margin-top: 12px;
 }
 
+/* Labels: caption-sized (12px) Geist Mono technical voice per DESIGN.md §3.
+   DESIGN.md §7 forbids weight 700 on body text — labels use weight 500 in mono. */
 label {
     display: grid;
     gap: 6px;
     color: var(--muted);
-    font-size: 13px;
-    font-weight: 700;
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: uppercase;
 }
 
+/* Inputs use the shadow-as-border technique with focus ring per DESIGN.md §4 / §6. */
 input,
-select {
+select,
+textarea {
     width: 100%;
-    min-height: 42px;
-    padding: 8px 10px;
+    min-height: 40px;
+    padding: 8px 12px;
     color: var(--ink);
     background: #ffffff;
     border: 0;
     border-radius: var(--maliev-radius-sm);
     box-shadow: var(--maliev-shadow-ring);
+    font-size: var(--maliev-font-small);
+    line-height: 1.43;
+    transition: box-shadow 120ms ease;
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+    box-shadow: rgba(0, 0, 0, 0.16) 0 0 0 1px;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    box-shadow: var(--maliev-shadow-ring), var(--maliev-focus-ring);
+}
+
+input::placeholder,
+textarea::placeholder {
+    color: var(--muted-3);
 }
 
 .check-row {
@@ -769,14 +1018,20 @@ select {
     margin-top: 12px;
 }
 
+/* Pill Badge per DESIGN.md §4: 9999px radius, 0px 10px padding, 12px Geist weight 500. */
 .dfm-strip span,
 .part-title span,
 .success-panel span {
-    padding: 4px 8px;
-    color: #0068d6;
-    background: #ebf5ff;
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 10px;
+    color: var(--badge-blue-text);
+    background: var(--badge-blue-bg);
     border-radius: var(--maliev-radius-pill);
-    font-size: 12px;
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    letter-spacing: 0;
 }
 
 .quote-summary {
@@ -797,7 +1052,7 @@ select {
 
 .estimate-box .total {
     padding-top: 10px;
-    border-top: 1px solid var(--line);
+    box-shadow: rgba(0, 0, 0, 0.08) 0 -1px 0 0;
 }
 
 .data-row {
@@ -895,8 +1150,11 @@ select {
         grid-template-columns: 1fr;
     }
 
+    /* Display Hero compresses to Sub-heading scale on mobile per DESIGN.md §8
+       (hero scales but keeps proportional negative tracking). */
     h1 {
-        font-size: 34px;
+        font-size: var(--maliev-font-sub);
+        letter-spacing: var(--maliev-track-sub);
     }
 }
 
@@ -959,22 +1217,32 @@ select {
     display: flex;
     gap: 6px;
     align-items: center;
-    padding: 6px 10px 6px 8px;
+    padding: 8px 10px 8px 12px;
+    /* Shadow-as-border per DESIGN.md §1 */
     box-shadow: var(--maliev-shadow-ring);
 }
 
+/* Title input behaves as Body Semibold per DESIGN.md §3:
+   16px Geist weight 600, tracking -0.32px. */
 .qe-plp-title-input {
     flex: 1;
     min-width: 0;
-    padding: 2px 4px;
+    min-height: auto;
+    padding: 4px 6px;
     border: 0;
     border-radius: var(--maliev-radius-xs);
-    color: var(--maliev-ink);
+    color: var(--ink);
     background: transparent;
-    font-size: var(--maliev-font-base);
+    box-shadow: none;
+    font-size: var(--maliev-font-body);
     font-weight: 600;
-    letter-spacing: -0.32px;
+    letter-spacing: var(--maliev-track-body-semi);
     outline: none;
+}
+
+.qe-plp-title-input:hover {
+    background: var(--panel-tint);
+    box-shadow: none;
 }
 
 .qe-plp-title-input:focus {
@@ -1041,23 +1309,27 @@ select {
     transform: translateY(-1px);
 }
 
+/* Compact dropzone reads as Body Semibold (16px → DESIGN.md §3). */
 .qe-dropzone--compact {
     display: grid;
-    gap: 5px;
+    gap: 6px;
     place-items: center;
     min-height: 106px;
-    padding: 14px;
+    padding: 16px;
+    font-size: var(--maliev-font-body);
     font-weight: 600;
-    font-size: var(--maliev-font-small);
+    letter-spacing: var(--maliev-track-body-semi);
 }
 
 .qe-dropzone--compact small,
 .qe-dropzone--hero small {
-    color: var(--maliev-muted);
-    font-size: var(--maliev-font-micro);
-    font-weight: 500;
+    color: var(--muted);
+    font-size: var(--maliev-font-small);
+    font-weight: 400;
+    letter-spacing: 0;
 }
 
+/* Hero dropzone reads as Card Title (24px Geist weight 600, -0.96px tracking). */
 .qe-dropzone--hero {
     display: grid;
     gap: 12px;
@@ -1065,24 +1337,27 @@ select {
     max-width: 600px;
     min-height: 280px;
     padding: 60px 40px;
-    font-size: 18px;
+    font-size: var(--maliev-font-card);
+    line-height: 1.33;
     font-weight: 600;
-    letter-spacing: -0.32px;
+    letter-spacing: var(--maliev-track-card);
 }
 
+/* Header row in the parts list — mono technical label. */
 .qe-plp-headers {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 14px;
+    padding: 10px 14px;
     box-shadow: var(--maliev-shadow-ring);
-    color: var(--maliev-muted);
-    background: var(--maliev-panel-3);
-    font-size: var(--maliev-font-micro);
+    color: var(--muted);
+    background: var(--panel-tint);
     font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
     font-weight: 500;
-    text-transform: uppercase;
     letter-spacing: 0;
+    text-transform: uppercase;
+    font-feature-settings: "liga", "tnum";
 }
 
 .qe-plp-list {
@@ -1226,14 +1501,18 @@ select {
     margin: 8px 8px 0;
 }
 
+/* Use shadow-as-border instead of traditional border per DESIGN.md §1.
+   Notifications stay achromatic — DESIGN.md §7 forbids decorative warm colors,
+   so we use the badge blue surface for the success state. */
 .qe-live-notifications span {
-    border: 1px solid rgba(22, 101, 52, 0.22);
-    border-radius: 6px;
-    padding: 8px 10px;
-    background: #ecfdf3;
-    color: #166534;
+    padding: 8px 12px;
+    color: var(--badge-blue-text);
+    background: var(--badge-blue-bg);
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    box-shadow: rgba(0, 0, 0, 0.08) 0 0 0 1px;
     font-size: var(--maliev-font-small);
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .qe-empty-state {
@@ -1253,26 +1532,30 @@ select {
     align-items: stretch;
 }
 
+/* Demo sample card uses the full Geist card shadow stack and Sub-heading typography. */
 .qe-demo-sample-card {
     display: grid;
     align-content: center;
     gap: 12px;
-    padding: 26px;
+    padding: 28px;
     border-radius: var(--maliev-radius-md);
-    background: linear-gradient(180deg, #ffffff 0%, #f7fbff 100%);
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
 }
 
 .qe-demo-sample-card strong {
-    color: var(--maliev-ink);
-    font-size: 19px;
-    letter-spacing: -0.24px;
+    color: var(--ink);
+    font-size: var(--maliev-font-body-xl);
+    line-height: 1.4;
+    font-weight: 600;
+    letter-spacing: var(--maliev-track-tight);
 }
 
 .qe-demo-sample-card p {
     margin: 0;
-    color: var(--maliev-muted);
-    line-height: 1.55;
+    color: var(--muted);
+    font-size: var(--maliev-font-body);
+    line-height: 1.56;
 }
 
 .qe-pn-detail-row {
@@ -1315,28 +1598,35 @@ select {
     min-width: 0;
 }
 
+/* Header strong = Body Semibold per DESIGN.md §3 (16px weight 600, -0.32px). */
 .qe-pdc-header-name-row strong {
-    letter-spacing: -0.32px;
+    font-size: var(--maliev-font-body);
+    font-weight: 600;
+    letter-spacing: var(--maliev-track-body-semi);
 }
 
 .qe-pdc-header-subline {
-    color: var(--maliev-muted);
+    color: var(--muted);
     font-size: var(--maliev-font-micro);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
+/* Status pill — full-pill radius 9999px per DESIGN.md §4, weight 500. */
 .qe-status-pill {
     display: inline-flex;
     align-items: center;
-    gap: 3px;
-    padding: 2px 6px;
+    gap: 4px;
+    height: 20px;
+    padding: 0 10px;
     border-radius: var(--maliev-radius-pill);
-    box-shadow: var(--maliev-shadow-ring);
-    font-size: var(--maliev-font-nano);
+    box-shadow: var(--maliev-shadow-ring-light);
+    font-size: var(--maliev-font-micro);
     font-weight: 500;
+    letter-spacing: 0;
     white-space: nowrap;
+    text-transform: none;
 }
 
 .qe-status--ok { color: var(--maliev-ok); background: var(--maliev-ok-bg); }
@@ -1344,47 +1634,61 @@ select {
 .qe-status--error { color: var(--maliev-danger); background: var(--maliev-danger-bg); }
 .qe-status--muted { color: var(--maliev-muted); background: var(--maliev-panel-3); }
 
+/* Tabs use the segmented-pill pattern per DESIGN.md §4 (Pill / Tab navigation).
+   Inactive tabs are weight 500, active tabs are weight 600. */
 .qe-pdc-tabs {
     display: flex;
     gap: 2px;
-    padding: 2px;
-    border-radius: var(--maliev-radius-sm);
-    background: #ffffff;
-    box-shadow: var(--maliev-shadow-ring);
+    padding: 3px;
+    border-radius: var(--maliev-radius-md);
+    background: var(--panel-tint);
+    box-shadow: var(--maliev-shadow-ring-light);
 }
 
 .qe-pdc-tab {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    min-height: 30px;
-    padding: 4px 10px;
+    gap: 6px;
+    min-height: 32px;
+    padding: 4px 12px;
     border: 0;
-    border-radius: 4px;
-    color: var(--maliev-muted);
+    border-radius: var(--maliev-radius-sm);
+    color: var(--muted);
     background: transparent;
+    font-family: inherit;
     font-size: var(--maliev-font-small);
+    font-weight: 500;
     cursor: pointer;
+    transition: color 120ms ease, background-color 120ms ease;
+}
+
+.qe-pdc-tab:hover {
+    color: var(--ink);
 }
 
 .qe-pdc-tab--active {
-    color: var(--maliev-ink);
-    background: var(--maliev-panel);
-    box-shadow: var(--maliev-shadow-ring);
-    font-weight: 500;
+    color: var(--ink);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring-light);
+    font-weight: 600;
+    letter-spacing: var(--maliev-track-body-semi);
 }
 
+/* DFM count chip — pill badge per DESIGN.md §4 (12px Geist weight 500).
+   DESIGN.md §7 forbids weight 700/800 — was 800, now 500. Color is the
+   tinted-blue badge unless the workflow surfaces a warning severity. */
 .qe-pdc-tab span {
     display: inline-grid;
     place-items: center;
-    min-width: 14px;
-    height: 14px;
-    padding: 0 4px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
     border-radius: var(--maliev-radius-pill);
-    color: #fff;
-    background: var(--ship);
-    font-size: var(--maliev-font-nano);
-    font-weight: 800;
+    color: var(--badge-blue-text);
+    background: var(--badge-blue-bg);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    letter-spacing: 0;
 }
 
 .qe-pdc-container,
@@ -1461,11 +1765,13 @@ select {
     display: flex;
     align-items: center;
     gap: 6px;
-    color: var(--maliev-muted);
-    font-size: var(--maliev-font-small);
+    color: var(--muted);
     font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
     font-weight: 500;
+    letter-spacing: 0;
     text-transform: uppercase;
+    font-feature-settings: "liga", "tnum";
 }
 
 .qe-dfm-issue {
@@ -1517,11 +1823,14 @@ select {
     box-shadow: var(--maliev-shadow-ring);
 }
 
+/* Footer total — monospace 18px Body, weight 500 ("tnum" on body covers numerals). */
 .qe-pdc-footer strong {
     margin-left: auto;
     font-family: var(--maliev-font-mono);
-    font-size: var(--maliev-font-large);
+    font-size: var(--maliev-font-body-lg);
     font-weight: 500;
+    letter-spacing: 0;
+    font-feature-settings: "liga", "tnum";
 }
 
 .qe-pcs-sidebar {
@@ -1543,15 +1852,19 @@ select {
     box-shadow: var(--maliev-shadow-ring);
 }
 
+/* Mono technical labels per DESIGN.md §3 (Mono Small):
+   12px Geist Mono weight 500, tracking 0, uppercase, "tnum" enabled. */
 .qe-pcs-header span,
 .qe-pcs-section-header,
 .qe-zone-label {
-    color: var(--maliev-muted);
-    font-size: var(--maliev-font-micro);
+    color: var(--muted);
     font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
     font-weight: 500;
     letter-spacing: 0;
+    line-height: 1.33;
     text-transform: uppercase;
+    font-feature-settings: "liga", "tnum";
 }
 
 .qe-pcs-scroll {
@@ -1763,10 +2076,15 @@ select {
     gap: 6px;
 }
 
+/* Quote total reads as Card Title (24px Geist Mono weight 500) per DESIGN.md §3.
+   Tracking stays at 0 — tightness comes from the mono glyphs. */
 .qe-qsb-total > strong {
     font-family: var(--maliev-font-mono);
-    font-size: 24px;
+    font-size: var(--maliev-font-card);
+    line-height: 1.33;
     font-weight: 500;
+    letter-spacing: 0;
+    font-feature-settings: "liga", "tnum";
 }
 
 .qe-qsb-actions {
@@ -1913,11 +2231,13 @@ select {
         grid-template-columns: 1fr;
     }
 
+    /* Hero dropzone steps down to Body Semibold on small screens. */
     .qe-dropzone--hero {
         width: 100%;
         min-height: 210px;
         padding: 28px 18px;
-        font-size: 16px;
+        font-size: var(--maliev-font-body);
+        letter-spacing: var(--maliev-track-body-semi);
     }
 
     .qe-dropzone--compact {
@@ -2006,5 +2326,249 @@ select {
 
     .qe-qsb-actions {
         flex-direction: column;
+    }
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   MudBlazor overrides — apply Geist tokens to MudBlazor primitives.
+   We keep MudBlazor for icons, dialogs, drawer, snackbar, and progress
+   indicators (per user direction), but its Material Design colors,
+   borders, and shadows are replaced with Geist values from DESIGN.md.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* Theme provider root carries MudBlazor's base font. Override to Geist. */
+.mud-theme-provider,
+body.mud-blazor {
+    font-family: var(--maliev-font-sans);
+    color: var(--ink);
+}
+
+/* MudButton family — strip Material Design shadow + uppercase + ripple chrome. */
+.mud-button-root {
+    font-family: inherit;
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    border-radius: var(--maliev-radius-sm);
+    min-height: 40px;
+    padding: 8px 16px;
+    box-shadow: none !important;
+    transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+}
+
+.mud-button-root:hover {
+    box-shadow: var(--maliev-shadow-ring-light) !important;
+}
+
+.mud-button-filled.mud-button-filled-primary {
+    background-color: var(--primary);
+    color: #ffffff;
+}
+
+.mud-button-filled.mud-button-filled-primary:hover {
+    background-color: var(--primary-strong);
+}
+
+.mud-button-outlined {
+    background-color: var(--panel);
+    color: var(--ink);
+    border: 0;
+    box-shadow: var(--maliev-shadow-ring-light) !important;
+}
+
+.mud-button-outlined:hover {
+    background-color: var(--panel-tint);
+    box-shadow: var(--maliev-shadow-ring) !important;
+}
+
+.mud-button-text {
+    color: var(--ink);
+    background-color: transparent;
+}
+
+.mud-button-text:hover {
+    background-color: var(--panel-tint);
+}
+
+/* Icon buttons remain compact 40×40 circles with the Geist ring shadow. */
+.mud-icon-button {
+    color: var(--muted);
+    background-color: transparent;
+    border-radius: var(--maliev-radius-sm);
+    transition: color 120ms ease, background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.mud-icon-button:hover {
+    color: var(--ink);
+    background-color: var(--panel-tint);
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+/* MudDialog / MudDrawer surfaces — use the multi-layer card shadow. */
+.mud-dialog,
+.mud-drawer {
+    background-color: var(--panel) !important;
+    box-shadow: var(--maliev-shadow-card) !important;
+    border: 0 !important;
+    border-radius: var(--maliev-radius-md);
+}
+
+.mud-dialog-title {
+    color: var(--ink);
+    font-family: inherit;
+    font-size: var(--maliev-font-card);
+    font-weight: 600;
+    letter-spacing: var(--maliev-track-card);
+    padding: 20px 24px 8px;
+}
+
+.mud-dialog-content {
+    color: var(--muted);
+    font-size: var(--maliev-font-body);
+    line-height: 1.56;
+    padding: 12px 24px;
+}
+
+/* MudInputControl / MudTextField surfaces — strip MD floating-label ink, use Geist tokens.
+   We keep the input visually similar to native inputs styled above. */
+.mud-input-root,
+.mud-input-control {
+    font-family: inherit;
+    color: var(--ink);
+}
+
+.mud-input-outlined .mud-input-outlined-border {
+    border-color: transparent;
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.mud-input-outlined:hover .mud-input-outlined-border {
+    border-color: transparent;
+    box-shadow: rgba(0, 0, 0, 0.16) 0 0 0 1px;
+}
+
+.mud-input-outlined.mud-focused .mud-input-outlined-border {
+    border-color: transparent;
+    box-shadow: var(--maliev-shadow-ring), var(--maliev-focus-ring);
+}
+
+/* MudSelect / MudCheckbox / MudRadio — keep the focus blue from DESIGN.md §2. */
+.mud-checkbox .mud-icon-root,
+.mud-radio .mud-icon-root {
+    color: var(--muted);
+}
+
+.mud-checkbox-checked .mud-icon-root,
+.mud-radio-checked .mud-icon-root {
+    color: var(--primary);
+}
+
+/* Snackbar / alerts — use achromatic surfaces (DESIGN.md §7 forbids decorative warm colors). */
+.mud-snackbar {
+    border-radius: var(--maliev-radius-md) !important;
+    box-shadow: var(--maliev-shadow-card) !important;
+    background-color: var(--panel) !important;
+    color: var(--ink) !important;
+    font-family: inherit;
+    font-size: var(--maliev-font-small);
+}
+
+.mud-alert {
+    border: 0 !important;
+    border-radius: var(--maliev-radius-md);
+    box-shadow: var(--maliev-shadow-ring);
+    font-family: inherit;
+    font-size: var(--maliev-font-small);
+    color: var(--ink);
+}
+
+.mud-alert.mud-alert-text-info {
+    color: var(--badge-blue-text);
+    background-color: var(--badge-blue-bg);
+}
+
+.mud-alert.mud-alert-text-error,
+.mud-alert.mud-alert-filled-error {
+    color: var(--ship);
+    background-color: var(--maliev-danger-bg);
+}
+
+/* Progress indicators — match the achromatic palette. */
+.mud-progress-circular .mud-progress-circular-circle {
+    stroke: var(--primary);
+}
+
+.mud-progress-linear .mud-progress-linear-bar {
+    background-color: var(--primary);
+}
+
+/* MudList / MudListItem in dialogs and drawers stay flat with the ring shadow on hover. */
+.mud-list-item {
+    color: var(--ink);
+    font-family: inherit;
+    border-radius: var(--maliev-radius-sm);
+    margin: 2px 6px;
+}
+
+.mud-list-item:hover {
+    background-color: var(--panel-tint);
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+/* Tooltip styled as a compact Geist pill. */
+.mud-tooltip {
+    background-color: var(--ink) !important;
+    color: #ffffff;
+    border-radius: var(--maliev-radius-sm);
+    box-shadow: var(--maliev-shadow-card);
+    font-family: inherit;
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    padding: 6px 10px;
+}
+
+/* Pure-white CSS-icons inside MudIconButton/MudIcon should keep the achromatic palette. */
+.mud-icon-root,
+.mud-icon-default {
+    color: inherit;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Geist font face wiring.
+   Geist binaries aren't shipped in /wwwroot/lib by this app, so we
+   declare the font family with Inter as a near-identical fallback.
+   When/if Geist OTF files are added to /wwwroot/lib/fonts/geist/, the
+   @font-face rules above the fallback take precedence automatically.
+   DESIGN.md §3 mandates "liga" globally; that is set on body above.
+   ──────────────────────────────────────────────────────────────────── */
+@font-face {
+    font-family: "Geist";
+    src: local("Geist"), local("Geist Sans");
+    font-display: swap;
+    font-weight: 100 900;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: "Geist Mono";
+    src: local("Geist Mono"), local("GeistMono-Regular");
+    font-display: swap;
+    font-weight: 100 900;
+    font-style: normal;
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   Reduced-motion preference (DESIGN.md doesn't prescribe but Vercel
+   ships motion-safe defaults).
+   ──────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.001ms !important;
+        transition-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
     }
 }
