@@ -1,0 +1,106 @@
+@* Maliev.QuoteEngine.Client/Components/QuoteEngine/QePartViewer.razor *@
+@implements IAsyncDisposable
+@inject IJSRuntime JSRuntime
+
+<div class="qe-viewer-wrap" style="position:relative;width:100%;height:100%;min-height:280px;">
+    <canvas id="@_canvasId"
+            style="width:100%;height:100%;touch-action:none;outline:none;display:block;"></canvas>
+
+    @if (!string.IsNullOrEmpty(GlbUrl))
+    {
+        @* ── Bottom toolbar ── *@
+        <div class="qe-viewer-toolbar">
+            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("front")' title="Front">Fr</button>
+            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("top")'   title="Top">Tp</button>
+            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("right")' title="Right">Rt</button>
+            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("iso")'   title="Isometric">Iso</button>
+            <span class="qe-vt-sep"></span>
+            <button class="qe-vt-btn @(_ortho ? "qe-vt-active" : "")"
+                    @onclick="ToggleProjectionAsync" title="Orthographic / Perspective">Orth</button>
+            <button class="qe-vt-btn @(_edgesOn ? "qe-vt-active" : "")"
+                    @onclick="ToggleEdgesAsync" title="Edges">Edg</button>
+            <button class="qe-vt-btn" @onclick="ResetCameraAsync" title="Reset camera">&#8635;</button>
+        </div>
+    }
+    else
+    {
+        <div class="qe-viewer-placeholder">
+            <span>Loading 3D model&hellip;</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string? GlbUrl { get; set; }
+    [Parameter] public bool IsDarkMode { get; set; }
+    [Parameter] public EventCallback<string> OnViewerError { get; set; }
+
+    private string _canvasId = $"qe-canvas-{Guid.NewGuid():N}";
+    private IJSObjectReference? _module;
+    private string? _lastGlbUrl;
+    private bool _ortho;
+    private bool _edgesOn = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrEmpty(GlbUrl) && GlbUrl != _lastGlbUrl)
+        {
+            _lastGlbUrl = GlbUrl;
+            await InitializeViewerAsync();
+        }
+    }
+
+    private async Task InitializeViewerAsync()
+    {
+        try
+        {
+            _module ??= await JSRuntime.InvokeAsync<IJSObjectReference>(
+                "import", "./js/quote-part-viewer.js");
+
+            await _module.InvokeVoidAsync("initialize",
+                _canvasId, GlbUrl, "glb", IsDarkMode,
+                null,   // no known bounding-box dims
+                null,   // no dotNetRef
+                new { });
+        }
+        catch (Exception ex)
+        {
+            await OnViewerError.InvokeAsync(ex.Message);
+        }
+    }
+
+    private async Task SetPresetAsync(string preset)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setCameraPreset", _canvasId, preset);
+    }
+
+    private async Task ToggleProjectionAsync()
+    {
+        if (_module is null) return;
+        _ortho = !_ortho;
+        await _module.InvokeVoidAsync("setCameraProjection", _canvasId, _ortho ? "ortho" : "perspective");
+    }
+
+    private async Task ToggleEdgesAsync()
+    {
+        if (_module is null) return;
+        _edgesOn = !_edgesOn;
+        await _module.InvokeVoidAsync("toggleEdges", _canvasId, _edgesOn);
+    }
+
+    private async Task ResetCameraAsync()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("resetCamera", _canvasId);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_module is not null)
+        {
+            try { await _module.InvokeVoidAsync("dispose", _canvasId); } catch { /* ignore */ }
+            await _module.DisposeAsync();
+        }
+    }
+}

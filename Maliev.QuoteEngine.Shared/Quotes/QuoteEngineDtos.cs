@@ -124,6 +124,22 @@ public sealed class QuoteAnalysisStatusResponse
     public string? ThumbnailUrl { get; set; }
 
     public IReadOnlyList<DfmFindingDto> Findings { get; set; } = [];
+
+    public bool IsManifold { get; set; } = true;
+
+    public int BodyCount { get; set; } = 1;
+
+    public string? NonManifoldReason { get; set; }
+
+    public string? AnalysisErrorCode { get; set; }
+
+    public QeFdmDfmReport? FdmReport { get; set; }
+
+    public QeSlaDfmReport? SlaReport { get; set; }
+
+    public QeCncDfmReport? CncReport { get; set; }
+
+    public IReadOnlyList<string> OverlayGlbUrls { get; set; } = [];
 }
 
 public sealed class QuotePartDraftDto

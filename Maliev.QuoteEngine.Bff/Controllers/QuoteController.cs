@@ -1,9 +1,13 @@
 using Asp.Versioning;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Hubs;
+using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
+
 
 namespace Maliev.QuoteEngine.Bff.Controllers;
 
@@ -13,7 +17,11 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 public sealed class QuoteController(
     QuoteEnginePrototypeStore store,
     CustomerSessionResolver sessionResolver,
-    IHubContext<QuoteNotificationsHub> hubContext) : ControllerBase
+    IHubContext<QuoteNotificationsHub> hubContext,
+    QuoteUploadServiceClient uploadClient,
+    IQuoteFileAnalysisStatusService statusService,
+    IOptions<DemoModeOptions> demoOptions,
+    ILogger<QuoteController> logger) : ControllerBase
 {
     [HttpGet("reference-data")]
     public ActionResult<QuoteReferenceDataResponse> GetReferenceData()
@@ -61,48 +69,58 @@ public sealed class QuoteController(
         }
 
         var upload = store.GetUpload(uploadId);
-        if (upload is null)
+        if (upload is null) return NotFound();
+        if (!CanAccessUpload(upload)) return Forbid();
+
+        // Stream body bytes to UploadService (GCS-backed)
+        try
         {
-            return NotFound();
+            await uploadClient.StreamUploadAsync(
+                Request.Body, upload.ContentType,
+                Request.ContentLength ?? 0, contentRange,
+                upload.StoragePath, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to stream upload chunk for {UploadId}", uploadId);
+            return StatusCode(502, new ProblemDetails { Title = "Upload forwarding failed." });
         }
 
-        if (!CanAccessUpload(upload))
-        {
-            return Forbid();
-        }
-
-        var received = 0L;
-        var buffer = new byte[64 * 1024];
-        int read;
-        while ((read = await Request.Body.ReadAsync(buffer, cancellationToken)) > 0)
-        {
-            received += read;
-        }
-
-        store.MarkUploaded(uploadId, received);
+        store.MarkUploaded(uploadId, Request.ContentLength ?? 0);
         return NoContent();
     }
 
     [HttpPost("uploads/resumable/{uploadId}/complete")]
-    public async Task<ActionResult<CompleteQuoteUploadResponse>> CompleteUpload(string uploadId, CancellationToken cancellationToken)
+    public async Task<ActionResult<CompleteQuoteUploadResponse>> CompleteUpload(
+        string uploadId, CancellationToken cancellationToken)
     {
         var existingUpload = store.GetUpload(uploadId);
-        if (existingUpload is null)
+        if (existingUpload is null) return NotFound();
+        if (!CanAccessUpload(existingUpload)) return Forbid();
+
+        // Demo short-circuit: sample bracket returns a pre-computed result immediately
+        var demo = demoOptions.Value;
+        if (demo.IsConfigured &&
+            string.Equals(existingUpload.FileName, demo.SampleFileName, StringComparison.OrdinalIgnoreCase))
         {
-            return NotFound();
+            var demoUpload = store.MarkDemoAnalyzed(uploadId, demo);
+            await hubContext.Clients
+                .Group(QuoteNotificationsHub.FileGroup(demoUpload.StoragePath))
+                .SendAsync("GlbReady", new QeGlbReadyPayload(
+                    demoUpload.StoragePath, demo.GlbUrl!, demo.ThumbnailUrl,
+                    1, true, false, null), cancellationToken);
+            return Ok(new CompleteQuoteUploadResponse(
+                demoUpload.UploadId, demoUpload.FileId, demoUpload.FileName,
+                demoUpload.StoragePath, demoUpload.Status));
         }
 
-        if (!CanAccessUpload(existingUpload))
-        {
-            return Forbid();
-        }
+        // Real pipeline: mark as Processing and wait for geometry events via MassTransit
+        var upload = store.MarkProcessing(uploadId);
+        await statusService.SetProcessingAsync(upload.StoragePath, cancellationToken);
 
-        var upload = store.MarkAnalyzed(uploadId);
-        await hubContext.Clients
-            .Group(QuoteNotificationsHub.FileGroup(upload.StoragePath))
-            .SendAsync("FileAnalysisCompleted", upload.ToAnalysisStatus(), cancellationToken);
-
-        return Ok(new CompleteQuoteUploadResponse(upload.UploadId, upload.FileId, upload.FileName, upload.StoragePath, upload.Status));
+        return Ok(new CompleteQuoteUploadResponse(
+            upload.UploadId, upload.FileId, upload.FileName,
+            upload.StoragePath, upload.Status));   // Status = "Processing"
     }
 
     [HttpPost("uploads/handoff")]

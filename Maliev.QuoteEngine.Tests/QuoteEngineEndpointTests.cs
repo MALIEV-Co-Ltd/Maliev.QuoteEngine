@@ -5,14 +5,54 @@ using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Chatbot;
 using Maliev.QuoteEngine.Shared.Quotes;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Maliev.QuoteEngine.Tests;
 
-public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+/// <summary>
+/// Custom factory that sets environment to "Testing" so that:
+/// - MassTransit:UseInMemory=true takes effect (no RabbitMQ required)
+/// - appsettings.Testing.json is loaded (DemoMode.GlbUrl configured)
+/// - QuoteUploadServiceClient is replaced with a no-op for stream tests
+/// </summary>
+public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Program>
+{
+    protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
+    {
+        builder.UseEnvironment("Testing");
+        builder.ConfigureTestServices(services =>
+        {
+            // Replace the real UploadService HTTP client with a no-op test double.
+            // This keeps the ResumeUpload endpoint returning 204 in tests without
+            // a live UploadService instance.
+            services.RemoveAll<QuoteUploadServiceClient>();
+            services.AddSingleton<QuoteUploadServiceClient>(
+                new NoOpQuoteUploadServiceClient());
+        });
+    }
+
+    /// <summary>
+    /// A test double that accepts stream uploads and returns predictable signed URLs.
+    /// </summary>
+    private sealed class NoOpQuoteUploadServiceClient()
+        : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
+    {
+        public override Task StreamUploadAsync(Stream body, string contentType, long contentLength,
+            string contentRange, string storagePath, CancellationToken ct) => Task.CompletedTask;
+
+        public override Task<string> GetDownloadUrlByPathAsync(string storagePath,
+            int expirationMinutes = 60, CancellationToken ct = default)
+            => Task.FromResult($"https://test-cdn.example.com/{Uri.EscapeDataString(storagePath)}");
+    }
+}
+
+public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory factory)
+    : IClassFixture<QuoteEngineWebApplicationFactory>
 {
     [Fact]
     public async Task ReferenceData_exposes_customer_visible_processes_and_materials()
@@ -93,8 +133,9 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
     }
 
     [Fact]
-    public async Task ResumableUpload_requires_content_range_and_returns_analysis_metrics()
+    public async Task ResumeUpload_validates_content_range_and_streams_chunk()
     {
+        // Content-Range validation: missing header → 400
         using var client = await CreateSignedInClientAsync();
         var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
@@ -111,20 +152,74 @@ public sealed class QuoteEngineEndpointTests(WebApplicationFactory<Program> fact
         var badPut = await client.PutAsync(upload.ProxyUploadUrl, badContent);
         Assert.Equal(HttpStatusCode.BadRequest, badPut.StatusCode);
 
+        // Valid Content-Range → 204 (stream forwarded successfully via test double)
         using var goodContent = new ByteArrayContent([1, 2, 3, 4]);
         goodContent.Headers.ContentType = MediaTypeHeaderValue.Parse("model/stl");
         goodContent.Headers.ContentRange = new ContentRangeHeaderValue(0, 3, 4);
         var goodPut = await client.PutAsync(upload.ProxyUploadUrl, goodContent);
         Assert.Equal(HttpStatusCode.NoContent, goodPut.StatusCode);
+    }
 
-        var complete = await client.PostAsJsonAsync($"/quote/v1/uploads/resumable/{upload.UploadId}/complete", new { });
-        complete.EnsureSuccessStatusCode();
+    [Fact]
+    public async Task CompleteUpload_demo_filename_returns_analyzed_status()
+    {
+        // Demo short-circuit: maliev-sample-bracket.step returns Analyzed immediately
+        using var client = factory.CreateClient();
 
-        var status = await client.GetFromJsonAsync<QuoteAnalysisStatusResponse>($"/quote/v1/uploads/{upload.UploadId}/analysis-status");
-        Assert.NotNull(status);
-        Assert.Equal("Analyzed", status.Status);
-        Assert.True(status.VolumeCc > 0);
-        Assert.NotEmpty(status.Findings);
+        var initResp = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            FileName = "maliev-sample-bracket.step",
+            ContentType = "application/octet-stream",
+            FileSizeBytes = 1024,
+            QuoteSessionId = "test-session-demo"
+        });
+        initResp.EnsureSuccessStatusCode();
+        var initiated = await initResp.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(initiated);
+
+        // PUT chunk — accepted or not; demo path doesn't depend on upload completion
+        var chunkContent = new ByteArrayContent(new byte[1024]);
+        chunkContent.Headers.TryAddWithoutValidation("Content-Range", "bytes 0-1023/1024");
+        chunkContent.Headers.TryAddWithoutValidation("Content-Type", "application/octet-stream");
+        await client.PutAsync(initiated.ProxyUploadUrl, chunkContent);
+
+        // Complete → demo path returns Analyzed immediately (no geometry pipeline)
+        var completeResp = await client.PostAsync(
+            $"/quote/v1/uploads/resumable/{initiated.UploadId}/complete", null);
+        completeResp.EnsureSuccessStatusCode();
+        var completed = await completeResp.Content.ReadFromJsonAsync<CompleteQuoteUploadResponse>();
+
+        Assert.NotNull(completed);
+        Assert.Equal("Analyzed", completed.Status);
+        Assert.Equal("maliev-sample-bracket.step", completed.FileName);
+    }
+
+    [Fact]
+    public async Task CompleteUpload_non_demo_file_returns_processing_status()
+    {
+        // Non-demo file: completes into "Processing" (real pipeline picks up via MassTransit)
+        using var client = factory.CreateClient();
+
+        var initResp = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            FileName = "my-custom-bracket.step",
+            ContentType = "application/octet-stream",
+            FileSizeBytes = 512,
+            QuoteSessionId = "test-session-live"
+        });
+        initResp.EnsureSuccessStatusCode();
+        var initiated = await initResp.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(initiated);
+
+        // Complete without uploading a chunk — MarkProcessing doesn't require MarkUploaded
+        var completeResp = await client.PostAsync(
+            $"/quote/v1/uploads/resumable/{initiated.UploadId}/complete", null);
+        completeResp.EnsureSuccessStatusCode();
+        var completed = await completeResp.Content.ReadFromJsonAsync<CompleteQuoteUploadResponse>();
+
+        Assert.NotNull(completed);
+        Assert.Equal("Processing", completed.Status);
+        Assert.Equal("my-custom-bracket.step", completed.FileName);
     }
 
     [Fact]

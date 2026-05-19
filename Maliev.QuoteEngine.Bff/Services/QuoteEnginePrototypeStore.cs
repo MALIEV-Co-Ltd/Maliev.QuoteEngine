@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
+using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Quotes;
 
@@ -180,6 +181,32 @@ public sealed class QuoteEnginePrototypeStore
         {
             ReceivedBytes = receivedBytes,
             Status = "Uploaded"
+        };
+        _uploads[uploadId] = updated;
+        return updated;
+    }
+
+    /// <summary>Transitions an upload to "Processing" status (real pipeline path).</summary>
+    public UploadState MarkProcessing(string uploadId)
+    {
+        var current = GetRequiredUpload(uploadId);
+        var updated = current with { Status = "Processing" };
+        _uploads[uploadId] = updated;
+        return updated;
+    }
+
+    /// <summary>Returns a pre-computed demo result without running real geometry analysis.</summary>
+    public UploadState MarkDemoAnalyzed(string uploadId, DemoModeOptions options)
+    {
+        var current = GetRequiredUpload(uploadId);
+        var updated = current with
+        {
+            Status = "Analyzed",
+            ViewerGlbUrl = options.GlbUrl ?? "/images/generated/sample-part.svg",
+            ThumbnailUrl = options.ThumbnailUrl ?? "/images/generated/sample-part.svg",
+            VolumeCc = 12.4m,
+            SurfaceAreaCm2 = 78.2m,
+            Findings = []
         };
         _uploads[uploadId] = updated;
         return updated;

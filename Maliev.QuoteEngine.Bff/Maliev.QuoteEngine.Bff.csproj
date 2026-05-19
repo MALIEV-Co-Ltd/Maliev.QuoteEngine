@@ -6,13 +6,17 @@
 
   <ItemGroup Condition="'$(GITHUB_ACTIONS)' != 'true'">
     <ProjectReference Include="..\..\Maliev.Aspire\Maliev.Aspire.ServiceDefaults\Maliev.Aspire.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\Maliev.MessagingContracts\generated\csharp\Maliev.MessagingContracts.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
-    <PackageReference Include="Maliev.Aspire.ServiceDefaults" Version="1.0.*-alpha*" />
+    <PackageReference Include="Maliev.Aspire.ServiceDefaults" Version="$(SharedLibraryVersion)" />
+    <PackageReference Include="Maliev.MessagingContracts" Version="$(SharedLibraryVersion)" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="MassTransit" Version="8.5.8" />
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.8" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.7" />
   </ItemGroup>
 </Project>

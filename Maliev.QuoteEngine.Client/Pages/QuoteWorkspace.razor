@@ -114,16 +114,17 @@
             }
             else
             {
+                var _sp = SelectedPart!;
                 <div class="qe-pn-detail-row">
                     <section class="qe-pdc-root">
                         <header class="qe-pdc-header">
                             <div class="qe-pdc-header-left">
                                 <div class="qe-pdc-header-name-row">
-                                    <strong title="@SelectedPart.FileName">@Path.GetFileNameWithoutExtension(SelectedPart.FileName)</strong>
-                                    <span class="qe-status-pill qe-status--@StatusClass(SelectedPart)">@SelectedPart.Status.ToUpperInvariant()</span>
+                                    <strong title="@_sp.FileName">@Path.GetFileNameWithoutExtension(_sp.FileName)</strong>
+                                    <span class="qe-status-pill qe-status--@StatusClass(_sp)">@_sp.Status.ToUpperInvariant()</span>
                                 </div>
                                 <div class="qe-pdc-header-subline">
-                                    Uploaded just now · @SelectedPart.FileName · @SelectedPart.VolumeCc.ToString("0.##") cc
+                                    Uploaded just now · @_sp.FileName · @_sp.VolumeCc.ToString("0.##") cc
                                 </div>
                             </div>
                             <div class="qe-pdc-tabs">
@@ -138,49 +139,59 @@
                                 <button type="button" class="qe-pdc-tab">
                                     <MudIcon Icon="@Icons.Material.Outlined.Science" Size="Size.Small" />
                                     DFM
-                                    <span>@SelectedPart.Findings.Count</span>
+                                    <span>@_sp.Findings.Count</span>
                                 </button>
                             </div>
                         </header>
 
+                        @* _sp is non-null: outer @if(SelectedPart is null)/else guarantees it *@
                         <div class="qe-pdc-container">
-                            <div class="qe-pdc-viewer-wrap qe-pdc-polkadot">
-                                <div class="qe-pdc-thumb-area">
-                                    <img src="/images/generated/sample-part.svg" alt="Preview for @SelectedPart.FileName" />
-                                    <div class="qe-viewer-caption">
-                                        <strong>Prototype viewer</strong>
-                                        <span>Babylon GLB viewer slot</span>
-                                    </div>
-                                </div>
-                                <aside class="qe-dfm-panel">
-                                    <div class="qe-dfm-panel-title">
-                                        <MudIcon Icon="@Icons.Material.Outlined.Science" Size="Size.Small" />
-                                        DFM checks
-                                    </div>
-                                    @foreach (var finding in SelectedPart.Findings)
-                                    {
-                                        <div class="qe-dfm-issue qe-dfm-issue--@finding.Severity.ToLowerInvariant()">
-                                            <strong>@finding.Severity</strong>
-                                            <span>@finding.Message</span>
-                                        </div>
-                                    }
-                                </aside>
+                            @* 3D viewer — top portion of center pane *@
+                            <div class="qe-center-viewer">
+                                <QePartViewer GlbUrl="@_sp.GlbUrl"
+                                              IsDarkMode="@IsDarkMode"
+                                              OnViewerError="@(msg => Console.Error.WriteLine($"Viewer error: {msg}"))" />
                             </div>
-                        </div>
 
+                            @* Tab switcher — DFM / Bulk *@
+                            <div class="qe-center-tabs">
+                                <button class="@(_centerTab == "dfm" ? "qe-tab-active" : "")"
+                                        @onclick='() => _centerTab = "dfm"'>DFM Analysis</button>
+                                <button class="@(_centerTab == "bulk" ? "qe-tab-active" : "")"
+                                        @onclick='() => _centerTab = "bulk"'>All Parts</button>
+                            </div>
+
+                            @if (_centerTab == "dfm")
+                            {
+                                <QeDfmTab IsManifold="@_sp.IsManifold"
+                                          NonManifoldReason="@_sp.NonManifoldReason"
+                                          FdmReport="@_sp.FdmDfmReport"
+                                          SlaReport="@_sp.SlaDfmReport"
+                                          CncReport="@_sp.CncDfmReport" />
+                            }
+                            else
+                            {
+                                <QeBulkTable Parts="@_parts"
+                                             Processes="@(_reference?.Processes ?? [])"
+                                             Materials="@(_reference?.Materials ?? [])"
+                                             OnPartChanged="@(p => StateHasChanged())"
+                                             OnSelectPart="@(p => { _selectedPartIndex = _parts.IndexOf(p); _centerTab = "dfm"; })"
+                                             OnAddFilesRequested="@OpenFilePickerAsync" />
+                            }
+                        </div>
                         <footer class="qe-pdc-footer">
-                            <span class="qe-chip qe-chip--process">@ProcessName(SelectedPart.ProcessId)</span>
-                            <span class="qe-chip">@MaterialName(SelectedPart.MaterialId)</span>
+                            <span class="qe-chip qe-chip--process">@ProcessName(_sp.ProcessId)</span>
+                            <span class="qe-chip">@MaterialName(_sp.MaterialId)</span>
                             <span class="qe-footer-sep"></span>
-                            <span>@SelectedPart.Quantity pcs</span>
-                            <strong>@PartTotal(SelectedPart).ToString("N2") THB</strong>
+                            <span>@_sp.Quantity pcs</span>
+                            <strong>@PartTotal(_sp).ToString("N2") THB</strong>
                         </footer>
                     </section>
 
                     <aside class="qe-pcs-sidebar">
                         <header class="qe-pcs-header">
                             <span>Configure</span>
-                            <strong title="@SelectedPart.FileName">@SelectedPart.FileName</strong>
+                            <strong title="@_sp.FileName">@_sp.FileName</strong>
                         </header>
                         <div class="qe-pcs-scroll">
                             <section class="qe-pcs-section">
@@ -190,8 +201,8 @@
                                 <div class="qe-pcs-process-grid">
                                     @foreach (var process in _reference?.Processes ?? [])
                                     {
-                                        var active = SelectedPart.ProcessId == process.Id;
-                                        <button type="button" class="qe-pcs-process-card @(active ? "qe-pcs-process-card--active" : "")" @onclick="@(() => SelectProcess(SelectedPart, process))">
+                                        var active = _sp.ProcessId == process.Id;
+                                        <button type="button" class="qe-pcs-process-card @(active ? "qe-pcs-process-card--active" : "")" @onclick="@(() => SelectProcess(_sp, process))">
                                             <MudIcon Icon="@ProcessIcon(process.Id)" Size="Size.Small" />
                                             <strong>@process.Name</strong>
                                             @if (active)
@@ -206,13 +217,13 @@
                             <section class="qe-pcs-section">
                                 <div class="qe-pcs-section-header">
                                     <span>Material</span>
-                                    <small>@MaterialsFor(SelectedPart.ProcessId).Count() options</small>
+                                    <small>@MaterialsFor(_sp.ProcessId).Count() options</small>
                                 </div>
                                 <div class="qe-pcs-cards">
-                                    @foreach (var material in MaterialsFor(SelectedPart.ProcessId))
+                                    @foreach (var material in MaterialsFor(_sp.ProcessId))
                                     {
-                                        var active = SelectedPart.MaterialId == material.Id;
-                                        <button type="button" class="qe-pcs-mat-card @(active ? "qe-pcs-mat-card--active" : "")" @onclick="@(() => SelectMaterial(SelectedPart, material))">
+                                        var active = _sp.MaterialId == material.Id;
+                                        <button type="button" class="qe-pcs-mat-card @(active ? "qe-pcs-mat-card--active" : "")" @onclick="@(() => SelectMaterial(_sp, material))">
                                             <span class="qe-mat-swatch" style="background:@MaterialSwatch(material.Id)"></span>
                                             <span>
                                                 <strong>@material.Name</strong>
@@ -234,10 +245,10 @@
                                 <div class="qe-pcs-qty-row">
                                     <label>
                                         Quantity
-                                        <input type="number" min="1" @bind="SelectedPart.Quantity" @bind:after="ClearEstimate" />
+                                        <input type="number" min="1" @bind="_sp.Quantity" @bind:after="ClearEstimate" />
                                     </label>
-                                    <label class="qe-check-btn @(SelectedPart.DfmAcknowledged ? "checked" : "")">
-                                        <input type="checkbox" @bind="SelectedPart.DfmAcknowledged" />
+                                    <label class="qe-check-btn @(_sp.DfmAcknowledged ? "checked" : "")">
+                                        <input type="checkbox" @bind="_sp.DfmAcknowledged" />
                                         DFM reviewed
                                     </label>
                                 </div>
@@ -326,7 +337,9 @@
     private string _leadTimeCode = "STANDARD";
     private string _title = "Untitled quote";
     private int _selectedPartIndex;
+    private string _centerTab = "dfm";
     private string? _error;
+    private bool IsDarkMode => false;  // wire to ThemeService if added later
 
     private bool IsDemoMode => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/demo", StringComparison.OrdinalIgnoreCase);
     private bool IsSignedIn => _authStatus.IsSignedIn;
@@ -347,6 +360,10 @@
     private string QuoteButtonLabel => IsDemoMode ? "Demo only" : IsSignedIn ? "Quote" : "Sign in to quote";
 
     private QuotePartViewModel? SelectedPart => _parts.Count == 0 ? null : _parts[Math.Min(_selectedPartIndex, _parts.Count - 1)];
+
+    private QuotePartViewModel? FindPartByStoragePath(string storagePath)
+        => _parts.FirstOrDefault(p =>
+            string.Equals(p.StoragePath, storagePath, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
@@ -464,6 +481,7 @@
                 part.PartId = Guid.NewGuid();
                 part.FileId = upload.FileId;
                 part.UploadId = upload.UploadId;
+                part.StoragePath = upload.StoragePath;
                 part.Status = status.Status;
                 part.VolumeCc = status.VolumeCc;
                 part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
@@ -622,6 +640,39 @@
 
                     StateHasChanged();
                 });
+            });
+
+            _notificationConnection.On<QeGlbReadyPayload>("GlbReady", async payload =>
+            {
+                var part = FindPartByStoragePath(payload.StoragePath);
+                if (part is null) return;
+
+                part.GlbUrl = payload.Failed ? null : payload.GlbUrl;
+                part.ThumbnailUrl = payload.ThumbnailUrl;
+                part.IsManifold = payload.IsManifold;
+                part.BodyCount = payload.BodyCount;
+                if (payload.Failed)
+                    part.Status = "Failed";
+                else if (part.Status is "Processing" or "WaitingForUpload")
+                    part.Status = "GlbReady";
+
+                await InvokeAsync(StateHasChanged);
+            });
+
+            _notificationConnection.On<QeDfmAnalysisReadyPayload>("DfmAnalysisReady", async payload =>
+            {
+                var part = FindPartByStoragePath(payload.StoragePath);
+                if (part is null) return;
+
+                part.FdmDfmReport = payload.FdmReport;
+                part.SlaDfmReport = payload.SlaReport;
+                part.CncDfmReport = payload.CncReport;
+                part.OverlayGlbUrls = payload.OverlayGlbUrls;
+                part.IsManifold = payload.IsManifold;
+                part.NonManifoldReason = payload.NonManifoldReason;
+                part.Status = "DfmAnalysisReady";
+
+                await InvokeAsync(StateHasChanged);
             });
         }
 
@@ -798,36 +849,6 @@
         public string ContentType { get; set; } = "application/octet-stream";
 
         public long FileSizeBytes { get; set; }
-    }
-
-    private sealed class QuotePartViewModel
-    {
-        public Guid PartId { get; set; } = Guid.NewGuid();
-        public Guid FileId { get; set; }
-        public string UploadId { get; set; } = string.Empty;
-        public string FileName { get; set; } = string.Empty;
-        public string ProcessId { get; set; } = "fdm";
-        public string MaterialId { get; set; } = "pla-black";
-        public int Quantity { get; set; } = 1;
-        public decimal VolumeCc { get; set; }
-        public decimal SurfaceAreaCm2 { get; set; }
-        public bool DfmAcknowledged { get; set; }
-        public string Status { get; set; } = "Waiting";
-        public IReadOnlyList<DfmFindingDto> Findings { get; set; } = [];
-
-        public QuotePartDraftDto ToDraft() => new()
-        {
-            PartId = PartId,
-            FileId = FileId,
-            UploadId = UploadId,
-            FileName = FileName,
-            ProcessId = ProcessId,
-            MaterialId = MaterialId,
-            Quantity = Quantity,
-            VolumeCc = Math.Max(VolumeCc, 1m),
-            SurfaceAreaCm2 = SurfaceAreaCm2,
-            DfmAcknowledged = DfmAcknowledged
-        };
     }
 
     private static byte[] DecodeBase64Url(string value)

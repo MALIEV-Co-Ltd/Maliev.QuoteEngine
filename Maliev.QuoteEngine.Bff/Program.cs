@@ -1,7 +1,9 @@
 using Maliev.Aspire.ServiceDefaults;
 using Maliev.Aspire.ServiceDefaults.IAM;
 using Maliev.QuoteEngine.Bff.Clients;
+using Maliev.QuoteEngine.Bff.Consumers;
 using Maliev.QuoteEngine.Bff.Hubs;
+using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
@@ -23,6 +25,24 @@ builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
 builder.Services.AddScoped<ICustomerChatbotService, CustomerChatbotService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(45));
+
+// DemoMode options (short-circuit for sample bracket in dev/demo)
+builder.Services.Configure<DemoModeOptions>(
+    builder.Configuration.GetSection(DemoModeOptions.Section));
+
+// In-memory file analysis status cache (keyed by storagePath; Redis-upgradable)
+builder.Services.AddSingleton<IQuoteFileAnalysisStatusService, QuoteFileAnalysisStatusService>();
+
+// UploadService HTTP client (Aspire service discovery)
+builder.Services.AddHttpClient<QuoteUploadServiceClient>(client =>
+    client.BaseAddress = new Uri("https+http://UploadService"));
+
+// MassTransit consumers — FileAnalyzedEvent → GlbReady, DfmAnalysisReadyEvent → DfmAnalysisReady
+builder.AddMassTransitWithRabbitMq(cfg =>
+{
+    cfg.AddConsumer<QuoteFileAnalyzedConsumer>();
+    cfg.AddConsumer<QuoteDfmAnalysisReadyConsumer>();
+});
 
 var app = builder.Build();
 

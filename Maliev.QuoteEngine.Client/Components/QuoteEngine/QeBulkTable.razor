@@ -1,0 +1,190 @@
+@* Maliev.QuoteEngine.Client/Components/QuoteEngine/QeBulkTable.razor *@
+@using Maliev.QuoteEngine.Shared.Quotes
+
+<div class="qe-bulk-table-wrap">
+
+    @* ── Header bar ── *@
+    <div class="qe-bulk-header">
+        <span class="qe-bulk-count">@Parts.Count part(s)</span>
+        <button class="qe-btn qe-btn--ghost" @onclick="OnAddFilesRequested">+ Add files</button>
+    </div>
+
+    @* ── Table ── *@
+    <table class="qe-bulk-table">
+        <thead>
+            <tr>
+                <th><input type="checkbox" @onchange="ToggleSelectAll"
+                           checked="@(_selected.Count == Parts.Count && Parts.Count > 0)" /></th>
+                <th>Part</th>
+                <th>Status</th>
+                <th>Process / Material</th>
+                <th class="qe-col-num">Qty</th>
+                <th class="qe-col-num">DFM</th>
+                <th class="qe-col-num">Unit (THB)</th>
+                <th class="qe-col-num qe-col-LineTotal">Line total</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var part in Parts)
+            {
+                var isSelected = _selected.Contains(part.UploadId);
+                <tr class="@(isSelected ? "qe-bulk-row--selected" : "")">
+                    <td>
+                        <input type="checkbox" checked="@isSelected"
+                               @onchange="() => ToggleRow(part.UploadId)" />
+                    </td>
+                    <td class="qe-bulk-filename" title="@part.FileName">@TruncateName(part.FileName)</td>
+                    <td>@RenderStatus(part.Status)</td>
+                    <td>
+                        @if (_editing == part.UploadId)
+                        {
+                            @* BulkProcess inline edit *@
+                            <select @bind="part.ProcessId" @bind:after="() => OnPartChanged.InvokeAsync(part)">
+                                @foreach (var proc in Processes)
+                                {
+                                    <option value="@proc.Id">@proc.Name</option>
+                                }
+                            </select>
+                            @* BulkMaterial inline edit *@
+                            <select @bind="part.MaterialId" @bind:after="() => OnPartChanged.InvokeAsync(part)">
+                                @foreach (var mat in Materials.Where(m => m.ProcessId == part.ProcessId))
+                                {
+                                    <option value="@mat.Id">@mat.Name</option>
+                                }
+                            </select>
+                        }
+                        else
+                        {
+                            <span class="qe-bulk-proc" @onclick="() => _editing = part.UploadId">
+                                @ProcessName(part.ProcessId) · @MaterialName(part.MaterialId)
+                            </span>
+                        }
+                    </td>
+                    <td class="qe-col-num">
+                        <input class="qe-bulk-qty" type="number" min="1" max="100000"
+                               @bind="part.Quantity" @bind:after="() => OnPartChanged.InvokeAsync(part)" />
+                    </td>
+                    <td class="qe-col-num">@RenderDfmReport(part)</td>
+                    <td class="qe-col-num">@(part.UnitPriceTHB.HasValue ? part.UnitPriceTHB.Value.ToString("N0") : "—")</td>
+                    <td class="qe-col-num qe-bulk-total">
+                        @(part.UnitPriceTHB.HasValue ? (part.UnitPriceTHB.Value * part.Quantity).ToString("N0") : "—")
+                    </td>
+                    <td>
+                        <button class="qe-btn-icon" title="View in 3D" @onclick="() => OnSelectPart.InvokeAsync(part)">&#x2299;</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @* ── Bulk action bar (appears when rows selected) ── *@
+    @if (_selected.Count > 0)
+    {
+        <div class="qe-bulk-bar">
+            <span class="qe-bulk-bar-count">@_selected.Count selected</span>
+            @* BulkProcess selector *@
+            <select @onchange="ApplyBulkProcess">
+                <option value="">Bulk process&hellip;</option>
+                @foreach (var proc in Processes)
+                {
+                    <option value="@proc.Id">@proc.Name</option>
+                }
+            </select>
+            @* BulkMaterial selector *@
+            <select @onchange="ApplyBulkMaterial">
+                <option value="">Bulk material&hellip;</option>
+                @foreach (var mat in Materials)
+                {
+                    <option value="@mat.Id">@mat.Name</option>
+                }
+            </select>
+            <span class="qe-bulk-bar-total">
+                Total @(GrandTotal.ToString("N0")) THB
+            </span>
+        </div>
+    }
+    else
+    {
+        <div class="qe-bulk-footer">
+            <span class="qe-bulk-bar-total">Total @(GrandTotal.ToString("N0")) THB</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public List<QuotePartViewModel> Parts { get; set; } = [];
+    [Parameter] public IReadOnlyList<ProcessOptionDto> Processes { get; set; } = [];
+    [Parameter] public IReadOnlyList<MaterialOptionDto> Materials { get; set; } = [];
+    [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
+    [Parameter] public EventCallback<QuotePartViewModel> OnSelectPart { get; set; }
+    [Parameter] public EventCallback OnAddFilesRequested { get; set; }
+
+    private readonly HashSet<string> _selected = [];
+    private string? _editing;
+
+    private decimal GrandTotal => Parts
+        .Where(p => p.UnitPriceTHB.HasValue)
+        .Sum(p => p.UnitPriceTHB!.Value * p.Quantity);
+
+    private void ToggleRow(string uploadId)
+    {
+        if (!_selected.Remove(uploadId)) _selected.Add(uploadId);
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        _selected.Clear();
+        if (e.Value is true)
+            foreach (var p in Parts) _selected.Add(p.UploadId);
+    }
+
+    private async Task ApplyBulkProcess(ChangeEventArgs e)
+    {
+        var processId = e.Value?.ToString();
+        if (string.IsNullOrEmpty(processId)) return;
+        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+        {
+            part.ProcessId = processId;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private async Task ApplyBulkMaterial(ChangeEventArgs e)
+    {
+        var materialId = e.Value?.ToString();
+        if (string.IsNullOrEmpty(materialId)) return;
+        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+        {
+            part.MaterialId = materialId;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private string ProcessName(string id)
+        => Processes.FirstOrDefault(p => p.Id == id)?.Name ?? id;
+
+    private string MaterialName(string id)
+        => Materials.FirstOrDefault(m => m.Id == id)?.Name ?? id;
+
+    private static string TruncateName(string name)
+        => name.Length > 28 ? name[..25] + "…" : name;
+
+    private RenderFragment RenderStatus(string status) =>
+        @<span class="qe-status qe-status--@status.ToLowerInvariant()">@status</span>;
+
+    // RenderDfmReport — DFM indicator combining all three report types (FDM/SLA/CNC)
+    private RenderFragment RenderDfmReport(QuotePartViewModel part)
+    {
+        if (part.FdmDfmReport is null && part.SlaDfmReport is null && part.CncDfmReport is null)
+            return @<span class="qe-dfm-ind qe-dfm-ind--pending">—</span>;
+
+        var issueCount = (part.FdmDfmReport?.Issues.Count ?? 0)
+                       + (part.SlaDfmReport?.Issues.Count ?? 0)
+                       + (part.CncDfmReport?.Issues.Count ?? 0);
+
+        return issueCount > 0
+            ? @<span class="qe-dfm-ind qe-dfm-ind--warn">&#x26A0; @issueCount</span>
+            : @<span class="qe-dfm-ind qe-dfm-ind--ok">&#x2713;</span>;
+    }
+}

@@ -1,0 +1,166 @@
+@* Maliev.QuoteEngine.Client/Components/QuoteEngine/QeDfmTab.razor *@
+@using Maliev.QuoteEngine.Shared.Quotes
+
+<div class="qe-dfm-tab">
+
+    @if (!IsManifold)
+    {
+        <div class="qe-dfm-banner qe-dfm-banner--warn">
+            <strong>Non-manifold geometry detected.</strong>
+            @if (!string.IsNullOrEmpty(NonManifoldReason))
+            {
+                <span> @NonManifoldReason</span>
+            }
+            <span> Pricing and DFM results may be incomplete.</span>
+        </div>
+    }
+
+    @* ── Process selector ── *@
+    <div class="qe-dfm-tabs">
+        @foreach (var tab in AvailableTabs)
+        {
+            <button class="qe-dfm-tab-btn @(tab == _activeTab ? "qe-dfm-tab-btn--active" : "")"
+                    @onclick="() => _activeTab = tab">@tab</button>
+        }
+    </div>
+
+    @* ── FDM panel ── *@
+    @if (_activeTab == "FDM" && FdmReport is not null)
+    {
+        <div class="qe-dfm-panel">
+            @RenderCheck("Thin walls", FdmReport.ThinWallCount == 0,
+                $"{FdmReport.ThinWallCount} thin wall(s) detected — minimum 1.2 mm recommended",
+                "No thin walls detected")
+            @RenderCheck("Overhangs", !FdmReport.SupportRequired,
+                $"{FdmReport.OverhangFaceCount} overhanging faces ({FdmReport.OverhangAreaCm2:F1} cm²) — support material required",
+                "No support material required")
+            @RenderCheck("Small details", FdmReport.SmallDetailCount == 0,
+                $"{FdmReport.SmallDetailCount} small feature(s) may not print at this scale",
+                "All features are printable at scale")
+            @foreach (var issue in FdmReport.Issues)
+            {
+                @RenderIssue(issue)
+            }
+        </div>
+    }
+    else if (_activeTab == "FDM" && FdmReport is null)
+    {
+        @RenderPending("FDM")
+    }
+
+    @* ── SLA panel ── *@
+    @if (_activeTab == "SLA" && SlaReport is not null)
+    {
+        <div class="qe-dfm-panel">
+            @RenderCheck("Thin walls", SlaReport.ThinWallCount == 0,
+                $"{SlaReport.ThinWallCount} thin wall(s) detected — minimum 0.6 mm recommended for SLA",
+                "No thin walls detected")
+            @RenderCheck("Resin trapping", !SlaReport.ResinTrappingRisk,
+                "Internal cavities may trap uncured resin — add drain holes or design open channels",
+                "No resin trapping risk")
+            @RenderCheck("Suction effect", !SlaReport.SuctionRisk,
+                "Flat surfaces parallel to the build platform create suction — consider tilting or adding holes",
+                "No suction risk detected")
+            @RenderCheck("Hollow regions", !SlaReport.HollowRegions,
+                "Enclosed hollow regions detected — ensure drain holes are present",
+                "No enclosed hollow regions")
+            @foreach (var issue in SlaReport.Issues)
+            {
+                @RenderIssue(issue)
+            }
+        </div>
+    }
+    else if (_activeTab == "SLA" && SlaReport is null)
+    {
+        @RenderPending("SLA")
+    }
+
+    @* ── CNC panel ── *@
+    @if (_activeTab == "CNC" && CncReport is not null)
+    {
+        <div class="qe-dfm-panel">
+            @RenderCheck("Sharp internal corners", CncReport.SharpCornerCount == 0,
+                $"{CncReport.SharpCornerCount} sharp internal corner(s) — add fillets ≥ R0.5 mm",
+                "All internal corners are filletted")
+            @RenderCheck("Undercuts", !CncReport.HasUndercuts,
+                "Undercut feature(s) detected — may require 5-axis machining or additional setups",
+                "No undercuts detected")
+            @if (CncReport.HasDrillHoles)
+            {
+                @RenderCheck("Drill holes", true,
+                    "", $"{CncReport.DrillHoleCount} drill hole(s) — standard diameters available")
+            }
+            @RenderCheck("EDM required", !CncReport.RequiresEdm,
+                "Electrical discharge machining required — additional lead time applies",
+                "No EDM required")
+            @RenderCheck("Grinding required", !CncReport.RequiresGrinding,
+                "Surface grinding required — additional lead time applies",
+                "No grinding required")
+            @if (CncReport.IsTurnable)
+            {
+                <div class="qe-dfm-check qe-dfm-check--info">
+                    <span class="qe-dfm-icon">&#x2139;</span>
+                    <span>Part is turnable — can be produced on a CNC lathe for lower cost</span>
+                </div>
+            }
+            @foreach (var issue in CncReport.Issues)
+            {
+                @RenderIssue(issue)
+            }
+        </div>
+    }
+    else if (_activeTab == "CNC" && CncReport is null)
+    {
+        @RenderPending("CNC")
+    }
+
+    @if (FdmReport is null && SlaReport is null && CncReport is null && IsManifold)
+    {
+        <div class="qe-dfm-empty">
+            <span>DFM analysis is running&hellip;</span>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public bool IsManifold { get; set; } = true;
+    [Parameter] public string? NonManifoldReason { get; set; }
+    [Parameter] public QeFdmDfmReport? FdmReport { get; set; }
+    [Parameter] public QeSlaDfmReport? SlaReport { get; set; }
+    [Parameter] public QeCncDfmReport? CncReport { get; set; }
+
+    private string _activeTab = "FDM";
+
+    private IEnumerable<string> AvailableTabs
+    {
+        get
+        {
+            yield return "FDM";
+            yield return "SLA";
+            yield return "CNC";
+        }
+    }
+
+    private RenderFragment RenderCheck(string label, bool passed, string failText, string passText) =>
+        @<div class="qe-dfm-check @(passed ? "qe-dfm-check--pass" : "qe-dfm-check--fail")">
+            <span class="qe-dfm-icon">@(passed ? "✓" : "⚠")</span>
+            <div>
+                <span class="qe-dfm-label">@label</span>
+                <span class="qe-dfm-detail">@(passed ? passText : failText)</span>
+            </div>
+        </div>;
+
+    private RenderFragment RenderIssue(QeDfmIssueItem issue) =>
+        @<div class="qe-dfm-check @(issue.Severity == "error" ? "qe-dfm-check--fail" : "qe-dfm-check--warn")">
+            <span class="qe-dfm-icon">@(issue.Severity == "error" ? "✕" : "⚠")</span>
+            <div>
+                <span class="qe-dfm-label">@issue.Code</span>
+                <span class="qe-dfm-detail">@issue.Message</span>
+            </div>
+        </div>;
+
+    private RenderFragment RenderPending(string process) =>
+        @<div class="qe-dfm-empty">
+            <span>@process DFM analysis pending&hellip;</span>
+        </div>;
+}
