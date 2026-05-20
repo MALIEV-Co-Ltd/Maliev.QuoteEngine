@@ -250,6 +250,8 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("CustomerAssistantDrawer", layout, StringComparison.Ordinal);
         Assert.Contains("topbar-chat-toggle", layout, StringComparison.Ordinal);
+        Assert.Contains("Icon=\"@Icons.Material.Filled.SupportAgent\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("Icon=\"@Icons.Material.Outlined.Chat\"", layout, StringComparison.Ordinal);
         Assert.Contains("MudDrawer", layout, StringComparison.Ordinal);
         Assert.Contains("chatbot-open", styles, StringComparison.Ordinal);
         Assert.Contains("js/maliev-chatbot.js", index, StringComparison.Ordinal);
