@@ -832,6 +832,7 @@ body.quote-ready .startup-screen {
     font-weight: 500;
     line-height: 20px;
     cursor: pointer;
+    text-decoration: none;
 }
 
 .auth-google:hover {

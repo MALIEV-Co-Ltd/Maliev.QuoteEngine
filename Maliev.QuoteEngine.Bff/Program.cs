@@ -6,6 +6,8 @@ using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using System.Text.Json;
 
@@ -19,6 +21,47 @@ builder.AddIAMServiceClient("QuoteEngineBff");
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
+var authentication = builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
+        options.DefaultSignInScheme = "MalievQuoteExternal";
+    })
+    .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+    {
+        options.Cookie.Name = "__Host-Maliev.QuoteEngine";
+        options.LoginPath = "/auth/sign-in";
+        options.LogoutPath = "/quote/v1/auth/sign-out";
+        options.AccessDeniedPath = "/auth/sign-in";
+        options.SlidingExpiration = true;
+        options.ExpireTimeSpan = TimeSpan.FromDays(14);
+    })
+    .AddCookie("MalievQuoteExternal", options =>
+    {
+        options.Cookie.Name = "__Host-Maliev.QuoteEngine.External";
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+    });
+
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
+{
+    authentication.AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
+    {
+        options.SignInScheme = "MalievQuoteExternal";
+        options.ClientId = googleClientId;
+        options.ClientSecret = googleClientSecret;
+        options.CallbackPath = "/auth/google/signin";
+        options.Scope.Add("profile");
+        options.Scope.Add("email");
+        options.SaveTokens = true;
+        options.Events.OnRedirectToAuthorizationEndpoint = context =>
+        {
+            context.Response.Redirect(context.RedirectUri + "&prompt=select_account");
+            return Task.CompletedTask;
+        };
+    });
+}
+builder.Services.AddAuthorization();
 builder.Services.AddSingleton<QuoteEnginePrototypeStore>();
 builder.Services.AddScoped<CustomerSessionResolver>();
 builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
@@ -49,6 +92,9 @@ var app = builder.Build();
 app.MapDefaultEndpoints("quote");
 app.UseStaticFiles();
 app.MapStaticAssets().ShortCircuit();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<QuoteNotificationsHub>("/hubs/quote-notifications");

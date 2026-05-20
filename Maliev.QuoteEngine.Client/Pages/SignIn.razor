@@ -17,7 +17,7 @@
             <div class="auth-error">@_error</div>
         }
 
-        <button type="button" class="auth-google" aria-label="Continue with Google" @onclick="SignInWithGoogleAsync">
+        <a class="auth-google" href="@GoogleHref" aria-label="Continue with Google">
             <span class="auth-google-icon" aria-hidden="true">
                 <svg viewBox="0 0 18 18" focusable="false">
                     <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.08-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.87 2.69-6.62z" />
@@ -27,7 +27,7 @@
                 </svg>
             </span>
             <span>Continue with Google</span>
-        </button>
+        </a>
 
         <details class="auth-email-panel" open="@EmailPanelOpen">
             <summary>Use email instead</summary>
@@ -65,21 +65,8 @@
         : ReturnUrl;
 
     private string SignUpHref => $"/auth/sign-up?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}";
+    private string GoogleHref => $"/auth/google?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}";
     private bool EmailPanelOpen => !string.IsNullOrWhiteSpace(_error);
-
-    private async Task SignInWithGoogleAsync()
-    {
-        try
-        {
-            _error = null;
-            await Api.ExchangeGoogleAsync();
-            Navigation.NavigateTo(SafeReturnUrl);
-        }
-        catch (Exception)
-        {
-            _error = "Google sign-in could not be completed. Try again or use email.";
-        }
-    }
 
     private async Task SignInAsync()
     {
