@@ -237,9 +237,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"quote-topbar\"", layout, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Customer quote navigation\"", layout, StringComparison.Ordinal);
         Assert.Contains("href=\"/projects/new\"", layout, StringComparison.Ordinal);
+        Assert.Contains("class=\"quote-brand\" href=\"/projects/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"quote-brand-logo\"", layout, StringComparison.Ordinal);
         Assert.Contains("src=\"/images/logo.svg\"", layout, StringComparison.Ordinal);
         Assert.Contains("alt=\"MALIEV\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("https://www.maliev.com", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("quote-brand-mark", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("Quote Engine", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"web-link\"", layout, StringComparison.Ordinal);
