@@ -153,13 +153,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@if (IsWorkspaceReady)", source, StringComparison.Ordinal);
         Assert.Contains("RegisterActiveDropzoneAsync", source, StringComparison.Ordinal);
         Assert.Contains("quoteEngineUploads.unregisterDropzone", source, StringComparison.Ordinal);
-        Assert.Contains("async function loadSampleFile", script, StringComparison.Ordinal);
-        Assert.Contains("fetch(sampleUrl", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("loadSampleFile", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("fetch(sampleUrl", script, StringComparison.Ordinal);
         Assert.Contains("HandleDroppedFilesAsync", script, StringComparison.Ordinal);
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         Assert.Contains(".qe-dropzone::before", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon .mud-icon-root", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pdc-container {\n    position: relative;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-center-tabs {\n    position: absolute;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-dfm-tab {\n    position: absolute;", styles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 332px;", styles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: repeat(3, minmax(0, 1fr));", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pn-root.is-launch-screen", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pn-root.is-workspace-ready .qe-plp-root", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pn-root.is-workspace-ready .qe-qsb-root", styles, StringComparison.Ordinal);
@@ -232,7 +237,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".quote-chat-drawer.mud-drawer--closed", styles, StringComparison.Ordinal);
         Assert.Contains("display: none !important;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-qsb-root", styles, StringComparison.Ordinal);
-        Assert.Contains("max-height: 128px;", styles, StringComparison.Ordinal);
+        Assert.Contains("max-height: 112px;", styles, StringComparison.Ordinal);
     }
 
     [Fact]

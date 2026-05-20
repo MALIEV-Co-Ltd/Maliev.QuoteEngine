@@ -10,73 +10,75 @@
     </div>
 
     @* ── Table ── *@
-    <table class="qe-bulk-table">
-        <thead>
-            <tr>
-                <th><input type="checkbox" @onchange="ToggleSelectAll"
-                           checked="@(_selected.Count == Parts.Count && Parts.Count > 0)" /></th>
-                <th>Part</th>
-                <th>Status</th>
-                <th>Process / Material</th>
-                <th class="qe-col-num">Qty</th>
-                <th class="qe-col-num">DFM</th>
-                <th class="qe-col-num">Unit (THB)</th>
-                <th class="qe-col-num qe-col-LineTotal">Line total</th>
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var part in Parts)
-            {
-                var isSelected = _selected.Contains(part.UploadId);
-                <tr class="@(isSelected ? "qe-bulk-row--selected" : "")">
-                    <td>
-                        <input type="checkbox" checked="@isSelected"
-                               @onchange="() => ToggleRow(part.UploadId)" />
-                    </td>
-                    <td class="qe-bulk-filename" title="@part.FileName">@TruncateName(part.FileName)</td>
-                    <td>@RenderStatus(part.Status)</td>
-                    <td>
-                        @if (_editing == part.UploadId)
-                        {
-                            @* BulkProcess inline edit *@
-                            <select @bind="part.ProcessId" @bind:after="() => OnPartChanged.InvokeAsync(part)">
-                                @foreach (var proc in Processes)
-                                {
-                                    <option value="@proc.Id">@proc.Name</option>
-                                }
-                            </select>
-                            @* BulkMaterial inline edit *@
-                            <select @bind="part.MaterialId" @bind:after="() => OnPartChanged.InvokeAsync(part)">
-                                @foreach (var mat in Materials.Where(m => m.ProcessId == part.ProcessId))
-                                {
-                                    <option value="@mat.Id">@mat.Name</option>
-                                }
-                            </select>
-                        }
-                        else
-                        {
-                            <span class="qe-bulk-proc" @onclick="() => _editing = part.UploadId">
-                                @ProcessName(part.ProcessId) · @MaterialName(part.MaterialId)
-                            </span>
-                        }
-                    </td>
-                    <td class="qe-col-num">
-                        <input class="qe-bulk-qty" type="number" min="1" max="100000"
-                               @bind="part.Quantity" @bind:after="() => OnPartChanged.InvokeAsync(part)" />
-                    </td>
-                    <td class="qe-col-num">@RenderDfmReport(part)</td>
-                    <td class="qe-col-num">@(part.UnitPriceTHB.HasValue ? part.UnitPriceTHB.Value.ToString("N0") : "—")</td>
-                    <td class="qe-col-num qe-bulk-total">
-                        @(part.UnitPriceTHB.HasValue ? (part.UnitPriceTHB.Value * part.Quantity).ToString("N0") : "—")
-                    </td>
-                    <td>
-                        <button class="qe-btn-icon" title="View in 3D" @onclick="() => OnSelectPart.InvokeAsync(part)">&#x2299;</button>
-                    </td>
+    <div class="qe-bulk-table-scroll">
+        <table class="qe-bulk-table">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" @onchange="ToggleSelectAll"
+                               checked="@(_selected.Count == Parts.Count && Parts.Count > 0)" /></th>
+                    <th>Part</th>
+                    <th>Status</th>
+                    <th>Process / Material</th>
+                    <th class="qe-col-num">Qty</th>
+                    <th class="qe-col-num">DFM</th>
+                    <th class="qe-col-num">Unit (THB)</th>
+                    <th class="qe-col-num qe-col-LineTotal">Line total</th>
+                    <th></th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var part in Parts)
+                {
+                    var isSelected = _selected.Contains(part.UploadId);
+                    <tr class="@(isSelected ? "qe-bulk-row--selected" : "")">
+                        <td>
+                            <input type="checkbox" checked="@isSelected"
+                                   @onchange="() => ToggleRow(part.UploadId)" />
+                        </td>
+                        <td class="qe-bulk-filename" title="@part.FileName">@TruncateName(part.FileName)</td>
+                        <td>@RenderStatus(part.Status)</td>
+                        <td>
+                            @if (_editing == part.UploadId)
+                            {
+                                @* BulkProcess inline edit *@
+                                <select @bind="part.ProcessId" @bind:after="() => OnPartChanged.InvokeAsync(part)">
+                                    @foreach (var proc in Processes)
+                                    {
+                                        <option value="@proc.Id">@proc.Name</option>
+                                    }
+                                </select>
+                                @* BulkMaterial inline edit *@
+                                <select @bind="part.MaterialId" @bind:after="() => OnPartChanged.InvokeAsync(part)">
+                                    @foreach (var mat in Materials.Where(m => m.ProcessId == part.ProcessId))
+                                    {
+                                        <option value="@mat.Id">@mat.Name</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <span class="qe-bulk-proc" @onclick="() => _editing = part.UploadId">
+                                    @ProcessName(part.ProcessId) · @MaterialName(part.MaterialId)
+                                </span>
+                            }
+                        </td>
+                        <td class="qe-col-num">
+                            <input class="qe-bulk-qty" type="number" min="1" max="100000"
+                                   @bind="part.Quantity" @bind:after="() => OnPartChanged.InvokeAsync(part)" />
+                        </td>
+                        <td class="qe-col-num">@RenderDfmReport(part)</td>
+                        <td class="qe-col-num">@(part.UnitPriceTHB.HasValue ? part.UnitPriceTHB.Value.ToString("N0") : "—")</td>
+                        <td class="qe-col-num qe-bulk-total">
+                            @(part.UnitPriceTHB.HasValue ? (part.UnitPriceTHB.Value * part.Quantity).ToString("N0") : "—")
+                        </td>
+                        <td>
+                            <button class="qe-btn-icon" title="View in 3D" @onclick="() => OnSelectPart.InvokeAsync(part)">&#x2299;</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 
     @* ── Bulk action bar (appears when rows selected) ── *@
     @if (_selected.Count > 0)

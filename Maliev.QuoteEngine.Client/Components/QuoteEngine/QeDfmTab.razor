@@ -24,8 +24,13 @@
         }
     </div>
 
-    @* ── FDM panel ── *@
-    @if (_activeTab == "FDM" && FdmReport is not null)
+    @if (!HasAnyReport && IsManifold)
+    {
+        <div class="qe-dfm-empty">
+            <span>DFM analysis is running&hellip;</span>
+        </div>
+    }
+    else if (_activeTab == "FDM" && FdmReport is not null)
     {
         <div class="qe-dfm-panel">
             @RenderCheck("Thin walls", FdmReport.ThinWallCount == 0,
@@ -113,13 +118,6 @@
     {
         @RenderPending("CNC")
     }
-
-    @if (FdmReport is null && SlaReport is null && CncReport is null && IsManifold)
-    {
-        <div class="qe-dfm-empty">
-            <span>DFM analysis is running&hellip;</span>
-        </div>
-    }
 </div>
 
 @code {
@@ -130,6 +128,7 @@
     [Parameter] public QeCncDfmReport? CncReport { get; set; }
 
     private string _activeTab = "FDM";
+    private bool HasAnyReport => FdmReport is not null || SlaReport is not null || CncReport is not null;
 
     private IEnumerable<string> AvailableTabs
     {
