@@ -25,9 +25,9 @@ public sealed class QuoteEnginePrototypeStore
 
     public QuoteReferenceDataResponse ReferenceData { get; } = new(
         [
-            new("fdm", "FDM 3D Printing", "Fast polymer prototypes and fixtures.", ["stl", "3mf", "obj"]),
-            new("sla", "SLA 3D Printing", "High-detail resin parts for presentation models.", ["stl", "obj"]),
-            new("cnc", "CNC Machining", "Aluminum and engineering plastic machining.", ["step", "stp", "iges", "igs"])
+            new("fdm", "FDM 3D Printing", "Fast polymer prototypes and fixtures.", QuoteUploadConstraints.MeshFileExtensions),
+            new("sla", "SLA 3D Printing", "High-detail resin parts for presentation models.", QuoteUploadConstraints.MeshFileExtensions),
+            new("cnc", "CNC Machining", "Aluminum and engineering plastic machining.", QuoteUploadConstraints.MachiningFileExtensions)
         ],
         [
             new("pla-black", "fdm", "PLA Black", "General prototype", 1.24m, "Matte black"),
@@ -40,7 +40,7 @@ public sealed class QuoteEnginePrototypeStore
             new("STANDARD", "Standard", 6, 1.00m),
             new("EXPRESS", "Express", 3, 1.35m)
         ],
-        ["stl", "step", "stp", "obj", "3mf", "iges", "igs"]);
+        QuoteUploadConstraints.SupportedCadExtensions);
 
     public IReadOnlyList<CustomerNdaDto> Ndas { get; } =
     [

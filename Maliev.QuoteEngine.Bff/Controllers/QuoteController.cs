@@ -43,6 +43,24 @@ public sealed class QuoteController(
             return ValidationProblem(ModelState);
         }
 
+        if (!QuoteUploadConstraints.IsSupportedCadFileName(request.FileName))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Unsupported CAD file type.",
+                Detail = $"Upload {QuoteUploadConstraints.SupportedCadExtensionLabel} files."
+            });
+        }
+
+        if (request.FileSizeBytes > QuoteUploadConstraints.MaxFileSizeBytes)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "File too large.",
+                Detail = $"Quote Engine accepts files up to {QuoteUploadConstraints.MaxFileSizeMegabytes} MB."
+            });
+        }
+
         var customerId = sessionResolver.TryResolveCustomerId(out var resolvedCustomerId)
             ? resolvedCustomerId
             : (Guid?)null;

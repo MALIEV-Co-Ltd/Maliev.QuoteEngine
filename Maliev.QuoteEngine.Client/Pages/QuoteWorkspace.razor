@@ -13,7 +13,7 @@
 
 <div class="qe-pn-root">
     <div id="@UploadContainerId">
-        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple />
+        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@QuoteUploadConstraints.SupportedCadAccept" />
     </div>
 
     <div class="qe-pn-body">
@@ -27,7 +27,9 @@
 
             <div class="qe-plp-upload-section">
                 <button id="@CompactDropzoneId" type="button" class="qe-dropzone qe-dropzone--compact">
-                    <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Medium" />
+                    <span class="qe-dropzone-icon" aria-hidden="true">
+                        <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
+                    </span>
                     <span>@UploadCompactLabel</span>
                     <small>@UploadCompactHint</small>
                 </button>
@@ -96,7 +98,9 @@
                 <section class="qe-empty-state">
                     <div class="qe-empty-state-grid">
                         <button id="@HeroDropzoneId" type="button" class="qe-dropzone qe-dropzone--hero">
-                            <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Large" />
+                            <span class="qe-dropzone-icon" aria-hidden="true">
+                                <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
+                            </span>
                             <span>@UploadHeroLabel</span>
                             <small>@UploadHeroHint</small>
                         </button>
@@ -348,11 +352,11 @@
     public string? Handoff { get; set; }
 
     private string UploadCompactLabel => IsDemoMode ? "Demo sample only" : "Drop CAD files to quote";
-    private string UploadCompactHint => IsDemoMode ? "MALIEV-owned sample file" : IsSignedIn ? "Customer-owned upload storage" : "Temporary upload storage until you sign in";
+    private string UploadCompactHint => IsDemoMode ? "MALIEV-owned sample file" : IsSignedIn ? "Customer-owned upload storage" : "Saved temporarily";
     private string UploadHeroLabel => IsDemoMode ? "Demo sample is ready" : "Drop files here or click to upload";
     private string UploadHeroHint => IsDemoMode
         ? "Demo mode cannot create projects, formal quotes, orders, uploads, or history"
-        : "STL, STEP, STP, OBJ, 3MF, IGES · max 10 GB per file";
+        : $"{QuoteUploadConstraints.SupportedCadExtensionLabel} · max {QuoteUploadConstraints.MaxFileSizeMegabytes} MB per file";
     private string CustomerBoundaryTitle => IsDemoMode ? "Demo mode" : IsSignedIn ? _authStatus.DisplayName ?? "Customer account" : "Anonymous workspace";
     private string CustomerBoundaryHint => IsDemoMode
         ? "No customer data is created"
@@ -455,6 +459,11 @@
     {
         foreach (var candidate in candidates)
         {
+            if (!ValidateUploadCandidate(candidate))
+            {
+                continue;
+            }
+
             var part = new QuotePartViewModel { FileName = candidate.FileName, Status = "Uploading" };
             ApplyDefaultRouting(part, candidate.FileName);
             _parts.Add(part);
@@ -493,6 +502,29 @@
                 _error = ex.Message;
             }
         }
+    }
+
+    private bool ValidateUploadCandidate(UploadCandidate candidate)
+    {
+        if (!QuoteUploadConstraints.IsSupportedCadFileName(candidate.FileName))
+        {
+            _error = $"{candidate.FileName} is not a supported CAD format. Upload {QuoteUploadConstraints.SupportedCadExtensionLabel}.";
+            return false;
+        }
+
+        if (candidate.FileSizeBytes < 1)
+        {
+            _error = $"{candidate.FileName} is empty.";
+            return false;
+        }
+
+        if (candidate.FileSizeBytes > QuoteUploadConstraints.MaxFileSizeBytes)
+        {
+            _error = $"{candidate.FileName} is larger than {QuoteUploadConstraints.MaxFileSizeMegabytes} MB.";
+            return false;
+        }
+
+        return true;
     }
 
     private async Task ImportHandoffAsync(string encodedHandoff)

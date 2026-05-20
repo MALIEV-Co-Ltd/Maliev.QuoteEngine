@@ -1291,12 +1291,11 @@ textarea::placeholder {
     border-radius: var(--maliev-radius-md);
     color: var(--maliev-ink);
     background:
-        radial-gradient(circle at 50% 0%, rgba(10, 114, 239, .08), transparent 36%),
-        linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+        linear-gradient(180deg, #ffffff 0%, #fbfbfb 100%);
     box-shadow: var(--maliev-shadow-card);
     cursor: pointer;
     text-align: center;
-    transition: transform 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+    transition: transform 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
 
 .qe-dropzone::before {
@@ -1304,9 +1303,9 @@ textarea::placeholder {
     position: absolute;
     inset: 10px;
     z-index: 0;
-    border: 1px dashed rgba(23, 23, 23, .18);
+    border: 1px dashed rgba(23, 23, 23, .20);
     border-radius: calc(var(--maliev-radius-md) - 2px);
-    background: rgba(255, 255, 255, .72);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(248, 248, 248, .72));
 }
 
 .qe-dropzone > * {
@@ -1314,22 +1313,29 @@ textarea::placeholder {
     z-index: 1;
 }
 
-.qe-dropzone .mud-icon-root {
-    display: grid;
+.qe-dropzone-icon {
+    display: inline-grid;
     place-items: center;
-    width: 34px;
-    height: 34px;
+    width: 36px;
+    height: 36px;
     border-radius: var(--maliev-radius-pill);
-    background: #ffffff;
-    box-shadow: var(--maliev-shadow-ring-light);
+    color: var(--maliev-ink);
+    background: linear-gradient(180deg, #ffffff 0%, #f7f7f7 100%);
+    box-shadow: var(--maliev-shadow-ring-light), rgba(0, 0, 0, .06) 0 8px 18px -14px;
+}
+
+.qe-dropzone-icon .mud-icon-root {
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
+    line-height: 1;
 }
 
 .qe-dropzone:hover,
 .qe-dropzone:focus-visible,
 .qe-dropzone.is-dragover {
     background:
-        radial-gradient(circle at 50% 0%, rgba(10, 114, 239, .12), transparent 40%),
-        linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+        linear-gradient(180deg, #ffffff 0%, #f7f7f7 100%);
     outline: none;
 }
 
@@ -1343,13 +1349,13 @@ textarea::placeholder {
 }
 
 .qe-dropzone.is-dragover {
-    box-shadow: var(--maliev-shadow-card), 0 0 0 4px rgba(0, 112, 243, .15);
+    box-shadow: var(--maliev-shadow-card), 0 0 0 4px rgba(23, 23, 23, .08);
     transform: translateY(-2px);
 }
 
 .qe-dropzone.is-dragover::before {
-    border-color: var(--develop);
-    background: rgba(235, 245, 255, .72);
+    border-color: rgba(23, 23, 23, .45);
+    background: rgba(255, 255, 255, .88);
 }
 
 /* Compact dropzone reads as Body Semibold (16px → DESIGN.md §3). */
@@ -1386,9 +1392,15 @@ textarea::placeholder {
     letter-spacing: var(--maliev-track-card);
 }
 
-.qe-dropzone--hero .mud-icon-root {
-    width: 44px;
-    height: 44px;
+.qe-dropzone--hero .qe-dropzone-icon {
+    width: 46px;
+    height: 46px;
+}
+
+.qe-dropzone--hero .qe-dropzone-icon .mud-icon-root {
+    width: 24px;
+    height: 24px;
+    font-size: 24px;
 }
 
 /* Header row in the parts list — mono technical label. */

@@ -34,7 +34,7 @@ public sealed class InitiateQuoteUploadRequest
     [MaxLength(100)]
     public string ContentType { get; set; } = "application/octet-stream";
 
-    [Range(1, 10_737_418_240L)]
+    [Range(1, QuoteUploadConstraints.MaxFileSizeBytes)]
     public long FileSizeBytes { get; set; }
 
     [Required]

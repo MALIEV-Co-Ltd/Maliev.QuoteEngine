@@ -151,12 +151,21 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("async function loadSampleFile", script, StringComparison.Ordinal);
         Assert.Contains("fetch(sampleUrl", script, StringComparison.Ordinal);
         Assert.Contains("HandleDroppedFilesAsync", script, StringComparison.Ordinal);
-        Assert.Contains(".qe-dropzone::before", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css"), StringComparison.Ordinal);
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        Assert.Contains(".qe-dropzone::before", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-dropzone-icon", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-dropzone-icon .mud-icon-root", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".qe-dropzone .mud-icon-root {", styles, StringComparison.Ordinal);
         Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "samples", "maliev-sample-bracket.step")));
         Assert.False(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "sample-file.step")));
         Assert.Contains("\"Sign in to quote\"", source, StringComparison.Ordinal);
-        Assert.Contains("Temporary upload storage until you sign in", source, StringComparison.Ordinal);
+        Assert.Contains("Saved temporarily", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedCadAccept", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedCadExtensionLabel", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.MaxFileSizeMegabytes", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadHandoffRequest", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Temporary upload storage until you sign in", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("max 10 GB per file", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Sign in before uploading customer-owned manufacturing files.", source, StringComparison.Ordinal);
     }
 
