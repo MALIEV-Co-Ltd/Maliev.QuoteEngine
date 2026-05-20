@@ -195,6 +195,35 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Customer_auth_pages_follow_maliev_web_sign_in_pattern()
+    {
+        var signIn = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignIn.razor");
+        var signUp = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignUp.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("class=\"auth-shell\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-title\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-title-logo\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("src=\"/images/logo.svg\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-google\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-email-panel\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("Use email instead", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("<span class=\"eyebrow\">Customer account</span>", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("<div class=\"auth-divider\">or use email</div>", signIn, StringComparison.Ordinal);
+
+        Assert.Contains("class=\"auth-shell\"", signUp, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-title-logo\"", signUp, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-google\"", signUp, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-email-panel\"", signUp, StringComparison.Ordinal);
+
+        Assert.Contains(".auth-shell", styles, StringComparison.Ordinal);
+        Assert.Contains(".auth-title-logo", styles, StringComparison.Ordinal);
+        Assert.Contains(".auth-google", styles, StringComparison.Ordinal);
+        Assert.Contains(".auth-email-panel", styles, StringComparison.Ordinal);
+        Assert.Contains(".auth-field-help", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Customer_layout_uses_top_navigation_without_left_rail()
     {
         var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");

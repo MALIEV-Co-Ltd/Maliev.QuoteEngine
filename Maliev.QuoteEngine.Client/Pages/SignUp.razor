@@ -4,24 +4,111 @@
 
 <PageTitle>Sign up - MALIEV Quote Engine</PageTitle>
 
-<div class="auth-panel">
-    <span class="eyebrow">Customer account</span>
-    <h1>Create account</h1>
-    <label>First name <input @bind="_request.FirstName" /></label>
-    <label>Last name <input @bind="_request.LastName" /></label>
-    <label>Email <input type="email" @bind="_request.Email" /></label>
-    <label>Password <input type="password" @bind="_request.Password" /></label>
-    <label>Phone <input @bind="_request.Phone" /></label>
-    <label>Company <input @bind="_request.CompanyName" /></label>
-    <button class="primary-button full" @onclick="SignUpAsync">Create account</button>
-</div>
+<section class="auth-shell">
+    <div class="auth-panel">
+        <h1 class="auth-title">
+            <span>Create account</span>
+            <img class="auth-title-logo" src="/images/logo.svg" width="154" height="35" alt="MALIEV" />
+        </h1>
+        <p>Google is the fastest path. Email and password is available when your team needs a separate login.</p>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="auth-error">@_error</div>
+        }
+
+        <button type="button" class="auth-google" aria-label="Continue with Google" @onclick="SignUpWithGoogleAsync">
+            <span class="auth-google-icon" aria-hidden="true">
+                <svg viewBox="0 0 18 18" focusable="false">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.08-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.87 2.69-6.62z" />
+                    <path fill="#34A853" d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33C2.44 15.98 5.48 18 9 18z" />
+                    <path fill="#FBBC05" d="M3.96 10.71A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.17.28-1.71V4.96H.96A8.96 8.96 0 0 0 0 9c0 1.45.35 2.83.96 4.04l3-2.33z" />
+                    <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z" />
+                </svg>
+            </span>
+            <span>Continue with Google</span>
+        </button>
+
+        <details class="auth-email-panel" open="@EmailPanelOpen">
+            <summary>Create with email</summary>
+            <div class="auth-form">
+                <div class="form-grid two">
+                    <label>
+                        First name
+                        <input autocomplete="given-name" @bind="_request.FirstName" required />
+                    </label>
+                    <label>
+                        Last name
+                        <input autocomplete="family-name" @bind="_request.LastName" required />
+                    </label>
+                </div>
+                <label>
+                    Email
+                    <input type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="sign-up-email-requirements" @bind="_request.Email" required />
+                    <small id="sign-up-email-requirements" class="auth-field-help">Use a full email address, for example name@company.com.</small>
+                </label>
+                <label>
+                    Password
+                    <input type="password" autocomplete="new-password" minlength="6" aria-describedby="sign-up-password-requirements" @bind="_request.Password" required />
+                    <small id="sign-up-password-requirements" class="auth-field-help">Password must be at least 6 characters.</small>
+                </label>
+                <label>
+                    Phone
+                    <input autocomplete="tel" @bind="_request.Phone" />
+                </label>
+                <label>
+                    Company
+                    <input autocomplete="organization" @bind="_request.CompanyName" />
+                </label>
+                <button type="button" class="primary-button full" @onclick="SignUpAsync">Create account</button>
+            </div>
+        </details>
+
+        <div class="auth-links">
+            <a href="@SignInHref">Already have an account?</a>
+        </div>
+    </div>
+</section>
 
 @code {
     private readonly SignUpRequest _request = new();
+    private string? _error;
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    public string? ReturnUrl { get; set; }
+
+    private string SafeReturnUrl => string.IsNullOrWhiteSpace(ReturnUrl) || !ReturnUrl.StartsWith("/", StringComparison.Ordinal)
+        ? "/projects/new"
+        : ReturnUrl;
+
+    private string SignInHref => $"/auth/sign-in?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}";
+    private bool EmailPanelOpen => !string.IsNullOrWhiteSpace(_error);
+
+    private async Task SignUpWithGoogleAsync()
+    {
+        try
+        {
+            _error = null;
+            await Api.ExchangeGoogleAsync();
+            Navigation.NavigateTo(SafeReturnUrl);
+        }
+        catch (Exception)
+        {
+            _error = "Google sign-in could not be completed. Try again or create with email.";
+        }
+    }
 
     private async Task SignUpAsync()
     {
-        await Api.SignUpAsync(_request);
-        Navigation.NavigateTo("/quotes/new");
+        try
+        {
+            _error = null;
+            await Api.SignUpAsync(_request);
+            Navigation.NavigateTo(SafeReturnUrl);
+        }
+        catch (Exception)
+        {
+            _error = "Account creation could not be completed.";
+        }
     }
 }

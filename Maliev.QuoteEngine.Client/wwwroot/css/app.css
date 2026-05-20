@@ -777,6 +777,208 @@ body.quote-ready .startup-screen {
     background: var(--line);
 }
 
+.auth-shell {
+    min-height: calc(100vh - 64px);
+    display: grid;
+    place-items: center;
+    padding: clamp(48px, 8vw, 96px) 28px;
+}
+
+.auth-shell .auth-panel {
+    width: min(100%, 560px);
+    display: grid;
+    gap: 18px;
+    padding: clamp(24px, 5vw, 38px);
+}
+
+.auth-shell .auth-panel h1,
+.auth-shell .auth-panel p {
+    margin: 0;
+}
+
+.auth-shell .auth-panel h1 {
+    max-width: none;
+    font-size: clamp(2rem, 5vw, 3.35rem);
+    line-height: 0.98;
+}
+
+.auth-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: 0.32em;
+    row-gap: 8px;
+}
+
+.auth-title-logo {
+    width: clamp(118px, 28vw, 154px);
+    height: auto;
+}
+
+.auth-google {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 12px;
+    color: #1f1f1f;
+    background: #ffffff;
+    border: 1px solid #747775;
+    border-radius: 4px;
+    box-shadow: none;
+    font-family: Roboto, var(--maliev-font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 20px;
+    cursor: pointer;
+}
+
+.auth-google:hover {
+    background: #f8fafd;
+}
+
+.auth-google:focus-visible {
+    outline: 2px solid var(--focus-blue);
+    outline-offset: 2px;
+}
+
+.auth-google-icon {
+    width: 18px;
+    height: 18px;
+    display: inline-grid;
+    place-items: center;
+    flex: 0 0 18px;
+    background: #ffffff;
+}
+
+.auth-google-icon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+.auth-email-panel {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel-tint);
+}
+
+.auth-email-panel summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 14px;
+    color: var(--ink);
+    cursor: pointer;
+    font-size: var(--maliev-font-small);
+    font-weight: 600;
+    list-style: none;
+}
+
+.auth-email-panel summary::-webkit-details-marker {
+    display: none;
+}
+
+.auth-email-panel summary::after {
+    content: "+";
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 22px;
+    border-radius: var(--maliev-radius-pill);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring-light);
+    color: var(--muted);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-small);
+    line-height: 1;
+}
+
+.auth-email-panel[open] summary {
+    border-bottom: 1px solid var(--line);
+}
+
+.auth-email-panel[open] summary::after {
+    content: "-";
+}
+
+.auth-email-panel .auth-form {
+    padding: 14px;
+    background: var(--panel);
+}
+
+.auth-form,
+.form-grid {
+    display: grid;
+    gap: 14px;
+}
+
+.form-grid.two {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.auth-form label {
+    display: grid;
+    gap: 8px;
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.auth-form input {
+    width: 100%;
+    min-height: 42px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel-tint);
+    box-shadow: var(--maliev-shadow-ring-light);
+    padding: 10px 12px;
+    color: var(--ink);
+    font: inherit;
+}
+
+.auth-form input:focus {
+    outline: 2px solid var(--focus-blue);
+    outline-offset: 2px;
+}
+
+.auth-field-help {
+    color: var(--muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+}
+
+.auth-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.auth-links a {
+    color: var(--link);
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.auth-links a:hover {
+    text-decoration: underline;
+}
+
+.auth-error {
+    padding: 12px 14px;
+    border-radius: var(--maliev-radius-sm);
+    color: #8a1f17;
+    background: #fff1f0;
+    font-size: var(--maliev-font-small);
+}
+
 .full {
     width: 100%;
 }
@@ -1146,6 +1348,15 @@ textarea::placeholder {
     .auth-panel,
     .empty-state {
         padding: 18px;
+    }
+
+    .auth-shell {
+        min-height: calc(100vh - 64px);
+        padding: 28px 18px;
+    }
+
+    .form-grid.two {
+        grid-template-columns: 1fr;
     }
 
     .config-grid,
