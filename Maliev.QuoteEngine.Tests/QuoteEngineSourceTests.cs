@@ -175,6 +175,10 @@ public sealed class QuoteEngineSourceTests
         Assert.False(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "sample-file.step")));
         Assert.Contains("\"Sign in to quote\"", source, StringComparison.Ordinal);
         Assert.Contains("Saved temporarily", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-qsb-customer", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CustomerBoundaryTitle", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CustomerBoundaryHint", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("<span class=\"qe-zone-label\">Bill To</span>", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadConstraints.SupportedCadAccept", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadConstraints.SupportedCadExtensionLabel", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadConstraints.MaxFileSizeMegabytes", source, StringComparison.Ordinal);
@@ -259,6 +263,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@if (_authStatus.IsSignedIn)", layout, StringComparison.Ordinal);
         Assert.Contains("<NavLink href=\"/profile\" Match=\"NavLinkMatch.Prefix\">Profile</NavLink>", layout, StringComparison.Ordinal);
         Assert.Contains("<a class=\"text-button\" href=\"/auth/sign-in\">Sign in</a>", layout, StringComparison.Ordinal);
+        Assert.Contains("class=\"billing-account-menu\"", layout, StringComparison.Ordinal);
+        Assert.Contains("class=\"billing-account-trigger\" aria-label=\"Select billing account\"", layout, StringComparison.Ordinal);
+        Assert.Contains("class=\"billing-account-options\" role=\"listbox\" aria-label=\"Billing account\"", layout, StringComparison.Ordinal);
+        Assert.Contains("Personal account", layout, StringComparison.Ordinal);
+        Assert.Contains("Company account", layout, StringComparison.Ordinal);
+        Assert.Contains("Manage account", layout, StringComparison.Ordinal);
+        Assert.Contains("_profile = await Api.GetProfileAsync();", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("Start quote", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"primary-button\" href=\"/projects/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("_authStatus = await Api.GetAuthStatusAsync();", layout, StringComparison.Ordinal);
@@ -292,6 +303,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("display: none !important;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-qsb-root", styles, StringComparison.Ordinal);
         Assert.Contains("max-height: 112px;", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".qe-qsb-customer", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-qsb-lead {\n    flex: 1 1 auto;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-qsb-divider {\n    flex: 0 0 1px;\n    width: 1px;\n    background: var(--maliev-border);\n}", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-qsb-divider {\n    width: 1px;\n    box-shadow: var(--maliev-shadow-ring);\n}", styles, StringComparison.Ordinal);
     }

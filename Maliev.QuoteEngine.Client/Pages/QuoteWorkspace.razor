@@ -270,12 +270,6 @@
     @if (IsWorkspaceReady)
     {
         <footer class="qe-qsb-root">
-            <div class="qe-qsb-zone qe-qsb-customer">
-                <span class="qe-zone-label">Bill To</span>
-                <strong>@CustomerBoundaryTitle</strong>
-                <small>@CustomerBoundaryHint</small>
-            </div>
-            <div class="qe-qsb-divider"></div>
             <div class="qe-qsb-zone qe-qsb-lead">
                 <span class="qe-zone-label">
                     <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
@@ -363,10 +357,6 @@
     private string UploadHeroHint => IsDemoMode
         ? "Demo mode cannot create projects, formal quotes, orders, uploads, or history"
         : $"{QuoteUploadConstraints.SupportedCadExtensionLabel} · max {QuoteUploadConstraints.MaxFileSizeMegabytes} MB per file";
-    private string CustomerBoundaryTitle => IsDemoMode ? "Demo mode" : IsSignedIn ? _authStatus.DisplayName ?? "Customer account" : "Anonymous workspace";
-    private string CustomerBoundaryHint => IsDemoMode
-        ? "No customer data is created"
-        : IsSignedIn ? "Signed-in customer project boundary" : "Upload and estimate now; sign in before formal quote";
     private string QuoteButtonLabel => IsDemoMode ? "Demo only" : IsSignedIn ? "Quote" : "Sign in to quote";
 
     private QuotePartViewModel? SelectedPart => _parts.Count == 0 ? null : _parts[Math.Min(_selectedPartIndex, _parts.Count - 1)];

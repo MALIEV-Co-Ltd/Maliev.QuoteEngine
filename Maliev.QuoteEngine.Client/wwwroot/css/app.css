@@ -479,6 +479,116 @@ body.quote-ready .startup-screen {
     box-shadow: var(--maliev-shadow-ring);
 }
 
+.billing-account-menu {
+    position: relative;
+    min-width: 196px;
+}
+
+.billing-account-trigger {
+    display: grid;
+    min-height: 42px;
+    padding: 6px 34px 6px 12px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring-light);
+    cursor: pointer;
+    list-style: none;
+}
+
+.billing-account-trigger::-webkit-details-marker {
+    display: none;
+}
+
+.billing-account-trigger::after {
+    content: "";
+    position: absolute;
+    top: 18px;
+    right: 13px;
+    width: 7px;
+    height: 7px;
+    border-right: 1px solid var(--muted);
+    border-bottom: 1px solid var(--muted);
+    transform: rotate(45deg);
+    transition: transform 120ms ease;
+}
+
+.billing-account-menu[open] .billing-account-trigger::after {
+    transform: translateY(3px) rotate(225deg);
+}
+
+.billing-account-trigger span,
+.billing-account-option span {
+    color: var(--muted);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-nano);
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.billing-account-trigger strong,
+.billing-account-option strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink);
+    font-size: var(--maliev-font-small);
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.billing-account-trigger small,
+.billing-account-option small {
+    color: var(--muted);
+    font-size: var(--maliev-font-nano);
+    line-height: 1.2;
+}
+
+.billing-account-options {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 60;
+    display: grid;
+    gap: 6px;
+    width: min(320px, calc(100vw - 24px));
+    padding: 8px;
+    border-radius: var(--maliev-radius-md);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring), rgba(0, 0, 0, .12) 0 16px 34px -22px;
+}
+
+.billing-account-option {
+    display: grid;
+    gap: 2px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
+.billing-account-option:hover,
+.billing-account-option.is-selected {
+    background: var(--panel-tint);
+}
+
+.billing-account-option.is-selected {
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.billing-account-manage {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    border-radius: var(--maliev-radius-sm);
+    color: var(--link);
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+}
+
 .primary-button:disabled,
 .secondary-button:disabled,
 .text-button:disabled {
@@ -2653,19 +2763,6 @@ textarea::placeholder {
     padding: 10px 16px;
 }
 
-.qe-qsb-customer {
-    flex: 1 1 220px;
-    max-width: 270px;
-    display: grid;
-    align-content: center;
-    gap: 2px;
-}
-
-.qe-qsb-customer small {
-    color: var(--maliev-muted);
-    font-size: var(--maliev-font-small);
-}
-
 .qe-qsb-divider {
     flex: 0 0 1px;
     width: 1px;
@@ -2673,7 +2770,7 @@ textarea::placeholder {
 }
 
 .qe-qsb-lead {
-    flex: 2 1 460px;
+    flex: 1 1 auto;
     min-width: 0;
 }
 
@@ -2898,7 +2995,6 @@ textarea::placeholder {
         max-height: none;
     }
 
-    .qe-qsb-customer,
     .qe-qsb-total {
         flex: 1 1 320px;
         max-width: none;

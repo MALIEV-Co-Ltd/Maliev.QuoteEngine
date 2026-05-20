@@ -37,7 +37,37 @@
             </MudTooltip>
             @if (_authStatus.IsSignedIn)
             {
-                <a class="text-button" href="/profile">@(_authStatus.DisplayName ?? "Profile")</a>
+                <details class="billing-account-menu">
+                    <summary class="billing-account-trigger" aria-label="Select billing account">
+                        <span>Bill to</span>
+                        <strong>@BillingAccountTitle</strong>
+                        <small>@BillingAccountHint</small>
+                    </summary>
+                    <div class="billing-account-options" role="listbox" aria-label="Billing account">
+                        <button type="button"
+                                class="@BillingAccountOptionClass("personal")"
+                                role="option"
+                                aria-selected="@IsBillingAccountSelected("personal")"
+                                @onclick="@(() => SelectBillingAccount("personal"))">
+                            <span>Personal account</span>
+                            <strong>@PersonalBillingName</strong>
+                            <small>Place order privately</small>
+                        </button>
+                        @if (HasCompanyBillingAccount)
+                        {
+                            <button type="button"
+                                    class="@BillingAccountOptionClass("company")"
+                                    role="option"
+                                    aria-selected="@IsBillingAccountSelected("company")"
+                                    @onclick="@(() => SelectBillingAccount("company"))">
+                                <span>Company account</span>
+                                <strong>@_profile!.CompanyName</strong>
+                                <small>Use company billing details</small>
+                            </button>
+                        }
+                        <a class="billing-account-manage" href="/profile">Manage account</a>
+                    </div>
+                </details>
             }
             else
             {
@@ -136,7 +166,17 @@
     private string WorkspaceClass => IsQuoteWorkspace ? "workspace workspace--quote" : "workspace";
     private bool _chatDrawerOpen;
     private QuoteAuthStatusResponse _authStatus = new(false, null, null);
+    private CustomerProfileResponse? _profile;
+    private string _selectedBillingAccountId = "personal";
     private string AppShellClass => _chatDrawerOpen ? "app-shell chatbot-open" : "app-shell";
+    private bool HasCompanyBillingAccount => !string.IsNullOrWhiteSpace(_profile?.CompanyName);
+    private string PersonalBillingName => _profile?.DisplayName ?? _authStatus.DisplayName ?? "Customer account";
+    private string BillingAccountTitle => _selectedBillingAccountId == "company" && HasCompanyBillingAccount
+        ? _profile!.CompanyName
+        : PersonalBillingName;
+    private string BillingAccountHint => _selectedBillingAccountId == "company" && HasCompanyBillingAccount
+        ? "Company billing"
+        : "Private order";
 
     private static bool IsQuoteWorkspacePath(string path)
     {
@@ -174,11 +214,43 @@
         try
         {
             _authStatus = await Api.GetAuthStatusAsync();
+            if (_authStatus.IsSignedIn)
+            {
+                _profile = await Api.GetProfileAsync();
+                if (!HasCompanyBillingAccount && string.Equals(_selectedBillingAccountId, "company", StringComparison.Ordinal))
+                {
+                    _selectedBillingAccountId = "personal";
+                }
+            }
+            else
+            {
+                _profile = null;
+                _selectedBillingAccountId = "personal";
+            }
         }
         catch (HttpRequestException)
         {
             _authStatus = new QuoteAuthStatusResponse(false, null, null);
+            _profile = null;
+            _selectedBillingAccountId = "personal";
         }
+    }
+
+    private void SelectBillingAccount(string accountId)
+    {
+        _selectedBillingAccountId = HasCompanyBillingAccount && string.Equals(accountId, "company", StringComparison.Ordinal)
+            ? "company"
+            : "personal";
+    }
+
+    private bool IsBillingAccountSelected(string accountId)
+    {
+        return string.Equals(_selectedBillingAccountId, accountId, StringComparison.Ordinal);
+    }
+
+    private string BillingAccountOptionClass(string accountId)
+    {
+        return IsBillingAccountSelected(accountId) ? "billing-account-option is-selected" : "billing-account-option";
     }
 
     private Task ToggleChatDrawerAsync()
