@@ -142,7 +142,9 @@ public sealed class QuoteEngineSourceTests
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var script = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
 
-        Assert.Contains("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-demo-sample-title\"", source, StringComparison.Ordinal);
+        Assert.Contains("<img src=\"/images/logo.svg\" alt=\"MALIEV\" />", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
         Assert.Contains("Use sample file", source, StringComparison.Ordinal);
         Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
         Assert.Contains("await LoadDemoProjectAsync();", source, StringComparison.Ordinal);
