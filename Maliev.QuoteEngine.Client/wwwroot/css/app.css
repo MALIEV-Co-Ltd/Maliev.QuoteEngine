@@ -1189,11 +1189,20 @@ textarea::placeholder {
     box-shadow: var(--maliev-shadow-ring);
 }
 
+.qe-pn-root.is-launch-screen {
+    box-shadow: none;
+}
+
 .qe-pn-body {
     flex: 1 1 0;
     display: flex;
     min-height: 0;
     overflow: hidden;
+}
+
+.qe-pn-root.is-launch-screen .qe-pn-body {
+    justify-content: center;
+    background: var(--maliev-bg);
 }
 
 .qe-plp-root {
@@ -1205,6 +1214,10 @@ textarea::placeholder {
     overflow: hidden;
     background: var(--maliev-panel);
     box-shadow: var(--maliev-shadow-ring);
+}
+
+.qe-pn-root.is-workspace-ready .qe-plp-root {
+    animation: qe-panel-enter-left 220ms cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .qe-plp-page-header,
@@ -1549,6 +1562,10 @@ textarea::placeholder {
     overflow: hidden;
 }
 
+.qe-pn-root.is-launch-screen .qe-pn-center {
+    flex: 1 1 auto;
+}
+
 .qe-error-alert {
     flex-shrink: 0;
     margin: 8px;
@@ -1584,12 +1601,20 @@ textarea::placeholder {
     padding: 24px;
 }
 
+.qe-pn-root.is-launch-screen .qe-empty-state {
+    padding: clamp(28px, 7vh, 76px) clamp(18px, 5vw, 64px);
+}
+
 .qe-empty-state-grid {
     width: min(100%, 960px);
     display: grid;
     grid-template-columns: minmax(320px, 1.2fr) minmax(260px, .8fr);
     gap: 18px;
     align-items: stretch;
+}
+
+.qe-pn-root.is-launch-screen .qe-empty-state-grid {
+    width: min(100%, 980px);
 }
 
 /* Demo sample card uses the full Geist card shadow stack and Sub-heading typography. */
@@ -1623,6 +1648,10 @@ textarea::placeholder {
     display: flex;
     min-height: 0;
     overflow: hidden;
+}
+
+.qe-pn-root.is-workspace-ready .qe-pn-detail-row {
+    animation: qe-workspace-fade-in 180ms ease both;
 }
 
 .qe-pdc-root {
@@ -2079,6 +2108,10 @@ textarea::placeholder {
     box-shadow: var(--maliev-shadow-ring);
 }
 
+.qe-pn-root.is-workspace-ready .qe-qsb-root {
+    animation: qe-panel-enter-bottom 220ms cubic-bezier(.2, .8, .2, 1) both;
+}
+
 .qe-qsb-zone {
     min-width: 0;
     padding: 10px 16px;
@@ -2214,6 +2247,45 @@ textarea::placeholder {
     background: transparent;
     font-weight: 500;
     cursor: pointer;
+}
+
+@keyframes qe-panel-enter-left {
+    from {
+        opacity: 0;
+        transform: translateX(-18px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes qe-panel-enter-bottom {
+    from {
+        opacity: 0;
+        transform: translateY(18px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes qe-workspace-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .qe-pn-root.is-workspace-ready .qe-plp-root,
+    .qe-pn-root.is-workspace-ready .qe-pn-detail-row,
+    .qe-pn-root.is-workspace-ready .qe-qsb-root {
+        animation: none;
+    }
 }
 
 @media (max-width: 1200px) {

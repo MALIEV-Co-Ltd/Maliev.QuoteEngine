@@ -145,9 +145,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
         Assert.Contains("Use sample file", source, StringComparison.Ordinal);
         Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
-        Assert.Contains("SampleFilePath = \"/samples/maliev-sample-bracket.step\"", source, StringComparison.Ordinal);
-        Assert.Contains("quoteEngineUploads.loadSampleFile", source, StringComparison.Ordinal);
+        Assert.Contains("await LoadDemoProjectAsync();", source, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
+        Assert.Contains("private bool IsWorkspaceReady => _parts.Count > 0;", source, StringComparison.Ordinal);
+        Assert.Contains("qe-pn-root is-launch-screen", source, StringComparison.Ordinal);
+        Assert.Contains("qe-pn-root is-workspace-ready", source, StringComparison.Ordinal);
+        Assert.Contains("@if (IsWorkspaceReady)", source, StringComparison.Ordinal);
+        Assert.Contains("RegisterActiveDropzoneAsync", source, StringComparison.Ordinal);
+        Assert.Contains("quoteEngineUploads.unregisterDropzone", source, StringComparison.Ordinal);
         Assert.Contains("async function loadSampleFile", script, StringComparison.Ordinal);
         Assert.Contains("fetch(sampleUrl", script, StringComparison.Ordinal);
         Assert.Contains("HandleDroppedFilesAsync", script, StringComparison.Ordinal);
@@ -155,6 +160,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-dropzone::before", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon .mud-icon-root", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pn-root.is-launch-screen", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pn-root.is-workspace-ready .qe-plp-root", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pn-root.is-workspace-ready .qe-qsb-root", styles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes qe-panel-enter-left", styles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes qe-panel-enter-bottom", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-dropzone .mud-icon-root {", styles, StringComparison.Ordinal);
         Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "samples", "maliev-sample-bracket.step")));
         Assert.False(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "sample-file.step")));
