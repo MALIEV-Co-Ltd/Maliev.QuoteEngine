@@ -253,9 +253,25 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("IsQuoteWorkspacePath", layout, StringComparison.Ordinal);
         Assert.Contains("\"/projects/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("\"/quotes/new\"", layout, StringComparison.Ordinal);
+        Assert.Contains("@inject QuoteEngineApiClient Api", layout, StringComparison.Ordinal);
+        Assert.Contains("@if (_authStatus.IsSignedIn)", layout, StringComparison.Ordinal);
+        Assert.Contains("<NavLink href=\"/profile\" Match=\"NavLinkMatch.Prefix\">Profile</NavLink>", layout, StringComparison.Ordinal);
+        Assert.Contains("<a class=\"text-button\" href=\"/auth/sign-in\">Sign in</a>", layout, StringComparison.Ordinal);
+        Assert.Contains("_authStatus = await Api.GetAuthStatusAsync();", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"app-rail\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain(".app-rail", styles, StringComparison.Ordinal);
         Assert.Contains(".workspace--quote", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Profile_page_requires_signed_in_customer_session()
+    {
+        var profile = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Profile.razor");
+
+        Assert.Contains("_authStatus = await Api.GetAuthStatusAsync();", profile, StringComparison.Ordinal);
+        Assert.Contains("if (!_authStatus.IsSignedIn)", profile, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/auth/sign-in?returnUrl=/profile\"", profile, StringComparison.Ordinal);
+        Assert.Contains("_profile = await Api.GetProfileAsync();", profile, StringComparison.Ordinal);
     }
 
     [Fact]

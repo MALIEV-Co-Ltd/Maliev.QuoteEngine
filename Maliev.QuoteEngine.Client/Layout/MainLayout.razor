@@ -1,4 +1,5 @@
 @inherits LayoutComponentBase
+@inject QuoteEngineApiClient Api
 @inject IJSRuntime Js
 @inject NavigationManager Navigation
 @implements IDisposable
@@ -19,7 +20,10 @@
             <NavLink href="/orders" Match="NavLinkMatch.Prefix">Orders</NavLink>
             <NavLink href="/ndas" Match="NavLinkMatch.Prefix">NDAs</NavLink>
             <NavLink href="/documents" Match="NavLinkMatch.Prefix">Documents</NavLink>
-            <NavLink href="/profile" Match="NavLinkMatch.Prefix">Profile</NavLink>
+            @if (_authStatus.IsSignedIn)
+            {
+                <NavLink href="/profile" Match="NavLinkMatch.Prefix">Profile</NavLink>
+            }
         </nav>
 
         <div class="top-actions">
@@ -31,7 +35,14 @@
                                Color="@(_chatDrawerOpen ? Color.Primary : Color.Default)"
                                OnClick="ToggleChatDrawerAsync" />
             </MudTooltip>
-            <a class="text-button" href="/auth/sign-in">Sign in</a>
+            @if (_authStatus.IsSignedIn)
+            {
+                <a class="text-button" href="/profile">@(_authStatus.DisplayName ?? "Profile")</a>
+            }
+            else
+            {
+                <a class="text-button" href="/auth/sign-in">Sign in</a>
+            }
             <a class="primary-button" href="/projects/new">Start quote</a>
         </div>
     </header>
@@ -125,6 +136,7 @@
     private bool IsQuoteWorkspace => IsQuoteWorkspacePath(new Uri(Navigation.Uri).AbsolutePath);
     private string WorkspaceClass => IsQuoteWorkspace ? "workspace workspace--quote" : "workspace";
     private bool _chatDrawerOpen;
+    private QuoteAuthStatusResponse _authStatus = new(false, null, null);
     private string AppShellClass => _chatDrawerOpen ? "app-shell chatbot-open" : "app-shell";
 
     private static bool IsQuoteWorkspacePath(string path)
@@ -135,9 +147,10 @@
             || normalized.Equals("/demo", StringComparison.OrdinalIgnoreCase);
     }
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         Navigation.LocationChanged += OnLocationChanged;
+        await RefreshAuthStatusAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -150,7 +163,23 @@
 
     private void OnLocationChanged(object? sender, LocationChangedEventArgs args)
     {
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshAuthStatusAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task RefreshAuthStatusAsync()
+    {
+        try
+        {
+            _authStatus = await Api.GetAuthStatusAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _authStatus = new QuoteAuthStatusResponse(false, null, null);
+        }
     }
 
     private Task ToggleChatDrawerAsync()

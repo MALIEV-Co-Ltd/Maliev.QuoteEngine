@@ -12,35 +12,55 @@ public sealed class AccountController(QuoteEnginePrototypeStore store, CustomerS
     [HttpGet("profile")]
     public IActionResult GetProfile()
     {
-        var customerId = sessionResolver.ResolveCustomerId();
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
         return Ok(store.GetProfile(customerId));
     }
 
     [HttpGet("quotes")]
     public IActionResult GetQuotes()
     {
-        var customerId = sessionResolver.ResolveCustomerId();
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
         return Ok(store.GetQuotes(customerId));
     }
 
     [HttpGet("orders")]
     public IActionResult GetOrders()
     {
-        var customerId = sessionResolver.ResolveCustomerId();
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
         return Ok(store.GetOrders(customerId));
     }
 
     [HttpGet("ndas")]
     public IActionResult GetNdas()
     {
-        _ = sessionResolver.ResolveCustomerId();
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized();
+        }
+
         return Ok(store.Ndas);
     }
 
     [HttpGet("documents")]
     public IActionResult GetDocuments()
     {
-        _ = sessionResolver.ResolveCustomerId();
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized();
+        }
+
         return Ok(store.Documents);
     }
 }

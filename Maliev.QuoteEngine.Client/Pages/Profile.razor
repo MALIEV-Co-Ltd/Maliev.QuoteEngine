@@ -1,5 +1,6 @@
 @page "/profile"
 @inject QuoteEngineApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>Profile - MALIEV Quote Engine</PageTitle>
 
@@ -36,9 +37,17 @@ else
 
 @code {
     private CustomerProfileResponse? _profile;
+    private QuoteAuthStatusResponse _authStatus = new(false, null, null);
 
     protected override async Task OnInitializedAsync()
     {
+        _authStatus = await Api.GetAuthStatusAsync();
+        if (!_authStatus.IsSignedIn)
+        {
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/profile", replace: true);
+            return;
+        }
+
         _profile = await Api.GetProfileAsync();
     }
 }
