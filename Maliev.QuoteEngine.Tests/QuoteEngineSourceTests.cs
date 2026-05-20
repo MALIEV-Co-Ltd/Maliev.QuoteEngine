@@ -292,6 +292,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("display: none !important;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-qsb-root", styles, StringComparison.Ordinal);
         Assert.Contains("max-height: 112px;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-qsb-divider {\n    flex: 0 0 1px;\n    width: 1px;\n    background: var(--maliev-border);\n}", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".qe-qsb-divider {\n    width: 1px;\n    box-shadow: var(--maliev-shadow-ring);\n}", styles, StringComparison.Ordinal);
     }
 
     [Fact]

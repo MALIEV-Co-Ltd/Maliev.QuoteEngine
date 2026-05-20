@@ -2667,8 +2667,9 @@ textarea::placeholder {
 }
 
 .qe-qsb-divider {
+    flex: 0 0 1px;
     width: 1px;
-    box-shadow: var(--maliev-shadow-ring);
+    background: var(--maliev-border);
 }
 
 .qe-qsb-lead {
@@ -3004,6 +3005,7 @@ textarea::placeholder {
 
     .qe-qsb-divider {
         width: auto;
+        flex-basis: 1px;
         height: 1px;
     }
 
