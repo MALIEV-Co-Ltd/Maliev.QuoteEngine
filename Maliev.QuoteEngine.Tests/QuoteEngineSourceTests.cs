@@ -259,6 +259,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@if (_authStatus.IsSignedIn)", layout, StringComparison.Ordinal);
         Assert.Contains("<NavLink href=\"/profile\" Match=\"NavLinkMatch.Prefix\">Profile</NavLink>", layout, StringComparison.Ordinal);
         Assert.Contains("<a class=\"text-button\" href=\"/auth/sign-in\">Sign in</a>", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("Start quote", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"primary-button\" href=\"/projects/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("_authStatus = await Api.GetAuthStatusAsync();", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"app-rail\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain(".app-rail", styles, StringComparison.Ordinal);
