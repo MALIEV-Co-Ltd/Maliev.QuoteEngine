@@ -23,8 +23,6 @@ public static class QuoteUploadConstraints
         "stl",
         "3mf",
         "obj",
-        "blend",
-        "fbx",
         "gltf",
         "glb"
     ];
@@ -52,8 +50,6 @@ public static class QuoteUploadConstraints
         "obj",
         "igs",
         "iges",
-        "blend",
-        "fbx",
         "gltf",
         "glb"
     ];

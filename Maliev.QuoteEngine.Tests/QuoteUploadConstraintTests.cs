@@ -17,8 +17,8 @@ public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory 
         Assert.NotNull(response);
         Assert.Contains("glb", response.SupportedExtensions);
         Assert.Contains("gltf", response.SupportedExtensions);
-        Assert.Contains("fbx", response.SupportedExtensions);
-        Assert.Contains("blend", response.SupportedExtensions);
+        Assert.DoesNotContain("fbx", response.SupportedExtensions);
+        Assert.DoesNotContain("blend", response.SupportedExtensions);
         Assert.Contains(response.Processes, process => process.Id == "fdm" && process.SupportedFileTypes.Contains("glb"));
         Assert.Contains(response.Processes, process => process.Id == "cnc" && process.SupportedFileTypes.Contains("igs"));
     }
