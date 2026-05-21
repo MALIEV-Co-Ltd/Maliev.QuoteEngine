@@ -33,11 +33,180 @@ else
             <strong>@_profile.CompanyName</strong>
         </div>
     </div>
+
+    <section class="profile-address-book">
+        <div class="profile-address-heading">
+            <div>
+                <span class="eyebrow">Address book</span>
+                <h2>Billing and shipping addresses</h2>
+            </div>
+            <button type="button" class="secondary-button" @onclick="ResetAddressForm">New address</button>
+        </div>
+
+        <div class="profile-address-layout">
+            <form class="profile-address-form" @onsubmit="SaveAddressAsync" @onsubmit:preventDefault="true">
+                <GoogleAddressPicker Latitude="@_addressForm.Latitude"
+                                     Longitude="@_addressForm.Longitude"
+                                     FormattedAddress="@_addressForm.FormattedAddress"
+                                     SelectionChanged="ApplyGoogleAddressSelection" />
+
+                @if (!string.IsNullOrWhiteSpace(_addressWarning))
+                {
+                    <p class="profile-address-warning">@_addressWarning</p>
+                }
+
+                <div class="profile-form-grid">
+                    <label>
+                        Address role
+                        <select @bind="_addressForm.Type">
+                            <option value="Shipping">Shipping</option>
+                            <option value="Billing">Billing</option>
+                        </select>
+                    </label>
+                    <label>
+                        Place name
+                        <select @bind="CurrentPlaceLabel">
+                            <option value="Home">Home</option>
+                            <option value="Work">Work</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </label>
+                    @if (CurrentPlaceLabel == "Other")
+                    {
+                        <label>
+                            Other place name
+                            <input @bind="_addressForm.PlaceLabelOther" maxlength="100" />
+                        </label>
+                    }
+                </div>
+
+                <div class="profile-form-grid">
+                    <label class="profile-form-wide">
+                        Address No./Moo/Soi/Road
+                        <input @bind="_addressForm.AddressLine1" required maxlength="255" />
+                    </label>
+                    <label>
+                        Sub District
+                        <input @bind="_addressForm.District" maxlength="100" />
+                    </label>
+                    <label>
+                        District
+                        <input @bind="_addressForm.City" required maxlength="100" />
+                    </label>
+                    <label>
+                        Province
+                        <input @bind="_addressForm.StateProvince" required maxlength="100" disabled="@ProvinceLocked" />
+                    </label>
+                    <label>
+                        Postal code
+                        <input @bind="_addressForm.PostalCode" required maxlength="20" disabled="@PostalCodeLocked" />
+                    </label>
+                </div>
+
+                <div class="profile-address-contact">
+                    <span class="eyebrow">Contact Information</span>
+                    <div class="profile-form-grid">
+                        <label>
+                            Recipient Name
+                            <input @bind="_addressForm.RecipientName" maxlength="200" />
+                        </label>
+                        <label>
+                            Mobile Number
+                            <input @bind="_addressForm.RecipientPhone" maxlength="20" />
+                        </label>
+                        <label class="profile-form-wide">
+                            Note to driver
+                            <textarea @bind="_addressForm.DriverNote" maxlength="500"></textarea>
+                        </label>
+                    </div>
+                </div>
+
+                <label class="profile-check-row">
+                    <input type="checkbox" @bind="_addressForm.IsDefault" />
+                    <span>Set as a default address</span>
+                </label>
+
+                @if (!string.IsNullOrWhiteSpace(_addressError))
+                {
+                    <p class="auth-error">@_addressError</p>
+                }
+
+                <div class="profile-address-actions">
+                    <button type="submit" class="primary-button" disabled="@_addressSaving">@(_editingAddressId.HasValue ? "Update address" : "Add address")</button>
+                    @if (_editingAddressId.HasValue)
+                    {
+                        <button type="button" class="secondary-button" @onclick="ResetAddressForm">Cancel</button>
+                    }
+                </div>
+            </form>
+
+            <div class="profile-address-list">
+                @if (_addressesLoading)
+                {
+                    <MudSkeleton Height="96px" />
+                    <MudSkeleton Height="96px" />
+                }
+                else if (_addresses.Count == 0)
+                {
+                    <div class="empty-state">
+                        <strong>No addresses yet</strong>
+                        <p>Add a billing or shipping address before placing a manufacturing order.</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var address in _addresses)
+                    {
+                        <article class="profile-address-card">
+                            <div>
+                                <span>@AddressTitle(address)</span>
+                                <strong>@address.Type</strong>
+                            </div>
+                            <p>@AddressLines(address)</p>
+                            <small>@ContactLine(address)</small>
+                            <div class="profile-address-card-actions">
+                                @if (address.IsDefault)
+                                {
+                                    <span class="profile-address-default">Default @address.Type</span>
+                                }
+                                <button type="button" class="text-button" @onclick="() => EditAddress(address)">Edit</button>
+                                <button type="button" class="text-button" @onclick="() => DeleteAddressAsync(address)">Delete</button>
+                            </div>
+                        </article>
+                    }
+                }
+            </div>
+        </div>
+    </section>
 }
 
 @code {
     private CustomerProfileResponse? _profile;
     private QuoteAuthStatusResponse _authStatus = new(false, null, null);
+    private List<CustomerAddressDto> _addresses = [];
+    private CustomerAddressUpsertRequest _addressForm = new();
+    private Guid? _editingAddressId;
+    private bool _addressesLoading;
+    private bool _addressSaving;
+    private string? _addressError;
+    private string? _addressWarning;
+
+    private string CurrentPlaceLabel
+    {
+        get => string.IsNullOrWhiteSpace(_addressForm.PlaceLabel) ? "Home" : _addressForm.PlaceLabel;
+        set
+        {
+            _addressForm.PlaceLabel = value;
+            if (!string.Equals(value, "Other", StringComparison.OrdinalIgnoreCase))
+            {
+                _addressForm.PlaceLabelOther = null;
+            }
+        }
+    }
+
+    private bool ProvinceLocked => IsGoogleAddress(_addressForm) && !string.IsNullOrWhiteSpace(_addressForm.StateProvince);
+
+    private bool PostalCodeLocked => IsGoogleAddress(_addressForm) && !string.IsNullOrWhiteSpace(_addressForm.PostalCode);
 
     protected override async Task OnInitializedAsync()
     {
@@ -49,5 +218,169 @@ else
         }
 
         _profile = await Api.GetProfileAsync();
+        ResetAddressForm();
+        await LoadAddressesAsync();
+    }
+
+    private async Task LoadAddressesAsync()
+    {
+        _addressesLoading = true;
+        _addressError = null;
+        try
+        {
+            _addresses = [.. await Api.GetAddressesAsync()];
+        }
+        catch
+        {
+            _addressError = "Address book is temporarily unavailable.";
+            _addresses = [];
+        }
+        finally
+        {
+            _addressesLoading = false;
+        }
+    }
+
+    private async Task SaveAddressAsync()
+    {
+        _addressSaving = true;
+        _addressError = null;
+        try
+        {
+            if (_editingAddressId.HasValue)
+            {
+                await Api.UpdateAddressAsync(_editingAddressId.Value, _addressForm);
+            }
+            else
+            {
+                await Api.CreateAddressAsync(_addressForm);
+            }
+
+            ResetAddressForm();
+            await LoadAddressesAsync();
+        }
+        catch
+        {
+            _addressError = "MALIEV could not save this address. Please check the required fields and try again.";
+        }
+        finally
+        {
+            _addressSaving = false;
+        }
+    }
+
+    private async Task DeleteAddressAsync(CustomerAddressDto address)
+    {
+        _addressError = null;
+        try
+        {
+            await Api.DeleteAddressAsync(address.Id, address.Version);
+            if (_editingAddressId == address.Id)
+            {
+                ResetAddressForm();
+            }
+            await LoadAddressesAsync();
+        }
+        catch
+        {
+            _addressError = "MALIEV could not delete this address.";
+        }
+    }
+
+    private void EditAddress(CustomerAddressDto address)
+    {
+        _editingAddressId = address.Id;
+        _addressWarning = null;
+        _addressForm = new CustomerAddressUpsertRequest
+        {
+            Type = string.IsNullOrWhiteSpace(address.Type) ? "Shipping" : address.Type,
+            IsDefault = address.IsDefault,
+            PlaceLabel = string.IsNullOrWhiteSpace(address.PlaceLabel) ? "Home" : address.PlaceLabel,
+            PlaceLabelOther = address.PlaceLabelOther,
+            AddressLine1 = address.AddressLine1,
+            AddressLine2 = address.AddressLine2,
+            AddressLine3 = address.AddressLine3,
+            District = address.District,
+            City = address.City,
+            StateProvince = address.StateProvince,
+            PostalCode = address.PostalCode,
+            CountryId = address.CountryId,
+            RecipientName = address.RecipientName,
+            RecipientPhone = address.RecipientPhone,
+            DriverNote = address.DriverNote,
+            AddressSource = string.IsNullOrWhiteSpace(address.AddressSource) ? "Manual" : address.AddressSource,
+            GooglePlaceId = address.GooglePlaceId,
+            FormattedAddress = address.FormattedAddress,
+            Latitude = address.Latitude,
+            Longitude = address.Longitude,
+            Version = address.Version
+        };
+    }
+
+    private void ResetAddressForm()
+    {
+        _editingAddressId = null;
+        _addressWarning = null;
+        _addressForm = new CustomerAddressUpsertRequest
+        {
+            Type = "Shipping",
+            PlaceLabel = "Home",
+            AddressSource = "Manual",
+            RecipientName = _profile?.DisplayName,
+            RecipientPhone = _profile?.Phone
+        };
+    }
+
+    private void ApplyGoogleAddressSelection(GoogleAddressSelection selection)
+    {
+        _addressForm.AddressSource = string.IsNullOrWhiteSpace(selection.Source) ? "GooglePlace" : selection.Source;
+        _addressForm.GooglePlaceId = selection.PlaceId;
+        _addressForm.FormattedAddress = selection.FormattedAddress;
+        _addressForm.Latitude = selection.Latitude;
+        _addressForm.Longitude = selection.Longitude;
+
+        if (!string.IsNullOrWhiteSpace(selection.AddressLine1)) _addressForm.AddressLine1 = selection.AddressLine1;
+        if (!string.IsNullOrWhiteSpace(selection.District)) _addressForm.District = selection.District;
+        if (!string.IsNullOrWhiteSpace(selection.City)) _addressForm.City = selection.City;
+        if (!string.IsNullOrWhiteSpace(selection.StateProvince)) _addressForm.StateProvince = selection.StateProvince;
+        if (!string.IsNullOrWhiteSpace(selection.PostalCode)) _addressForm.PostalCode = selection.PostalCode;
+
+        _addressWarning = string.IsNullOrWhiteSpace(_addressForm.StateProvince) || string.IsNullOrWhiteSpace(_addressForm.PostalCode)
+            ? "Google did not return complete province or postal code data. Please complete the missing fields manually."
+            : null;
+    }
+
+    private static bool IsGoogleAddress(CustomerAddressUpsertRequest address) =>
+        string.Equals(address.AddressSource, "GooglePlace", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(address.AddressSource, "GoogleMapPin", StringComparison.OrdinalIgnoreCase);
+
+    private static string AddressTitle(CustomerAddressDto address)
+    {
+        if (string.Equals(address.PlaceLabel, "Other", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(address.PlaceLabelOther))
+        {
+            return address.PlaceLabelOther;
+        }
+
+        return string.IsNullOrWhiteSpace(address.PlaceLabel) ? "Address" : address.PlaceLabel;
+    }
+
+    private static string AddressLines(CustomerAddressDto address)
+    {
+        var parts = new[]
+        {
+            address.AddressLine1,
+            address.District,
+            address.City,
+            address.StateProvince,
+            address.PostalCode
+        };
+        return string.Join(", ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private static string ContactLine(CustomerAddressDto address)
+    {
+        var parts = new[] { address.RecipientName, address.RecipientPhone };
+        return string.Join(" · ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
     }
 }

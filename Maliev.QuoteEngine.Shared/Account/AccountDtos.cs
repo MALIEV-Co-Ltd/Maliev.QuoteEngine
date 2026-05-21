@@ -52,6 +52,98 @@ public sealed record CustomerNdaDto(Guid NdaId, string Title, string Status, Dat
 
 public sealed record CustomerDocumentDto(Guid DocumentId, string FileName, string Kind, DateTimeOffset UploadedAt);
 
+public sealed class CustomerAddressDto
+{
+    public Guid Id { get; set; }
+
+    public string Type { get; set; } = string.Empty;
+
+    public bool IsDefault { get; set; }
+
+    public string? PlaceLabel { get; set; }
+
+    public string? PlaceLabelOther { get; set; }
+
+    public string AddressLine1 { get; set; } = string.Empty;
+
+    public string? AddressLine2 { get; set; }
+
+    public string? AddressLine3 { get; set; }
+
+    public string? District { get; set; }
+
+    public string City { get; set; } = string.Empty;
+
+    public string StateProvince { get; set; } = string.Empty;
+
+    public string PostalCode { get; set; } = string.Empty;
+
+    public Guid CountryId { get; set; }
+
+    public string? RecipientName { get; set; }
+
+    public string? RecipientPhone { get; set; }
+
+    public string? DriverNote { get; set; }
+
+    public string AddressSource { get; set; } = "Manual";
+
+    public string? GooglePlaceId { get; set; }
+
+    public string? FormattedAddress { get; set; }
+
+    public decimal? Latitude { get; set; }
+
+    public decimal? Longitude { get; set; }
+
+    public uint Version { get; set; }
+}
+
+public sealed class CustomerAddressUpsertRequest
+{
+    public string Type { get; set; } = "Shipping";
+
+    public bool IsDefault { get; set; }
+
+    public string? PlaceLabel { get; set; }
+
+    public string? PlaceLabelOther { get; set; }
+
+    public string AddressLine1 { get; set; } = string.Empty;
+
+    public string? AddressLine2 { get; set; }
+
+    public string? AddressLine3 { get; set; }
+
+    public string? District { get; set; }
+
+    public string City { get; set; } = string.Empty;
+
+    public string StateProvince { get; set; } = string.Empty;
+
+    public string PostalCode { get; set; } = string.Empty;
+
+    public Guid CountryId { get; set; }
+
+    public string? RecipientName { get; set; }
+
+    public string? RecipientPhone { get; set; }
+
+    public string? DriverNote { get; set; }
+
+    public string AddressSource { get; set; } = "Manual";
+
+    public string? GooglePlaceId { get; set; }
+
+    public string? FormattedAddress { get; set; }
+
+    public decimal? Latitude { get; set; }
+
+    public decimal? Longitude { get; set; }
+
+    public uint Version { get; set; }
+}
+
 public sealed class SignInRequest
 {
     [Required]

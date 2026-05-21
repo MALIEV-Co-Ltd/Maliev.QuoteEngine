@@ -1,0 +1,132 @@
+@implements IAsyncDisposable
+@inject HttpClient Http
+@inject IJSRuntime JS
+
+<div class="quote-google-address-picker">
+    <label class="quote-google-address-label" for="@_autocompleteElementId">Search for your location</label>
+    <div class="quote-google-address-row">
+        <div id="@_autocompleteElementId" class="quote-google-address-autocomplete" aria-label="Search for your location"></div>
+        <button type="button" class="quote-google-map-button" @onclick="OpenMapAsync" aria-label="Open map">
+            <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
+        </button>
+    </div>
+    @if (!string.IsNullOrWhiteSpace(_selectedSummary))
+    {
+        <p class="quote-google-address-selected">@_selectedSummary</p>
+    }
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <p class="quote-google-address-status">@_statusMessage</p>
+    }
+</div>
+
+@if (_mapOpen)
+{
+    <div class="quote-google-map-backdrop" role="dialog" aria-modal="true" aria-label="Select address on map">
+        <div class="quote-google-map-dialog">
+            <div class="quote-google-map-title">
+                <strong>Select location</strong>
+                <button type="button" @onclick="CloseMapAsync" aria-label="Close map">x</button>
+            </div>
+            <div id="@_mapElementId" class="quote-google-map-canvas"></div>
+            <div class="quote-google-map-footer">
+                <span>Drag the marker or click the map to update the address.</span>
+                <button type="button" class="primary-button" @onclick="CloseMapAsync">Done</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly string _autocompleteElementId = $"quote-google-address-autocomplete-{Guid.NewGuid():N}";
+    private readonly string _mapElementId = $"quote-google-address-map-{Guid.NewGuid():N}";
+    private DotNetObjectReference<GoogleAddressPicker>? _dotNetReference;
+    private GoogleAddressConfigResponse? _config;
+    private bool _searchInitialized;
+    private bool _mapOpen;
+    private string? _selectedSummary;
+    private string? _statusMessage;
+
+    [Parameter] public decimal? Latitude { get; set; }
+
+    [Parameter] public decimal? Longitude { get; set; }
+
+    [Parameter] public string? FormattedAddress { get; set; }
+
+    [Parameter] public EventCallback<GoogleAddressSelection> SelectionChanged { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _searchInitialized)
+        {
+            return;
+        }
+
+        _dotNetReference = DotNetObjectReference.Create(this);
+        _config = await LoadConfigAsync();
+        _selectedSummary = FormattedAddress;
+
+        if (string.IsNullOrWhiteSpace(_config.ApiKey))
+        {
+            _statusMessage = "Google Maps key is not configured. Manual address fields remain available.";
+            StateHasChanged();
+            return;
+        }
+
+        await JS.InvokeVoidAsync("malievQuoteGoogleAddressPicker.initializeSearch", _autocompleteElementId, _dotNetReference, _config);
+        _searchInitialized = true;
+    }
+
+    private async Task<GoogleAddressConfigResponse> LoadConfigAsync()
+    {
+        try
+        {
+            return await Http.GetFromJsonAsync<GoogleAddressConfigResponse>("quote/v1/address/google-config") ?? new GoogleAddressConfigResponse();
+        }
+        catch
+        {
+            return new GoogleAddressConfigResponse();
+        }
+    }
+
+    private async Task OpenMapAsync()
+    {
+        _config ??= await LoadConfigAsync();
+        if (string.IsNullOrWhiteSpace(_config.ApiKey))
+        {
+            _statusMessage = "Google Maps key is not configured. Manual address fields remain available.";
+            return;
+        }
+
+        _mapOpen = true;
+        StateHasChanged();
+        await Task.Yield();
+        await JS.InvokeVoidAsync("malievQuoteGoogleAddressPicker.initializeMap", _mapElementId, _dotNetReference, _config, new
+        {
+            latitude = Latitude,
+            longitude = Longitude
+        });
+    }
+
+    private async Task CloseMapAsync()
+    {
+        _mapOpen = false;
+        await JS.InvokeVoidAsync("malievQuoteGoogleAddressPicker.disposeMap", _mapElementId);
+    }
+
+    [JSInvokable]
+    public async Task NotifyGoogleAddressSelected(GoogleAddressSelection selection)
+    {
+        _selectedSummary = selection.FormattedAddress;
+        _statusMessage = null;
+        await SelectionChanged.InvokeAsync(selection);
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await JS.InvokeVoidAsync("malievQuoteGoogleAddressPicker.disposeSearch", _autocompleteElementId);
+        await JS.InvokeVoidAsync("malievQuoteGoogleAddressPicker.disposeMap", _mapElementId);
+        _dotNetReference?.Dispose();
+    }
+}

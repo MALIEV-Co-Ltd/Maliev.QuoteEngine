@@ -1393,6 +1393,236 @@ textarea::placeholder {
     gap: 6px;
 }
 
+.profile-address-book {
+    display: grid;
+    gap: 20px;
+    margin-top: 32px;
+}
+
+.profile-address-heading {
+    display: flex;
+    gap: 16px;
+    align-items: end;
+    justify-content: space-between;
+}
+
+.profile-address-heading h2 {
+    margin-bottom: 0;
+}
+
+.profile-address-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.35fr) minmax(320px, .8fr);
+    gap: 20px;
+    align-items: start;
+}
+
+.profile-address-form,
+.profile-address-card {
+    display: grid;
+    gap: 16px;
+    padding: 20px;
+    background: var(--panel);
+    border-radius: var(--maliev-radius-md);
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.profile-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.profile-form-wide {
+    grid-column: 1 / -1;
+}
+
+.profile-address-contact {
+    display: grid;
+    gap: 12px;
+    padding-top: 4px;
+}
+
+.profile-check-row {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    align-items: center;
+    color: var(--ink);
+    font-family: inherit;
+    font-size: var(--maliev-font-small);
+    text-transform: none;
+}
+
+.profile-check-row input {
+    width: 16px;
+    min-height: 16px;
+    accent-color: var(--primary);
+}
+
+.profile-address-actions,
+.profile-address-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+}
+
+.profile-address-list {
+    display: grid;
+    gap: 12px;
+}
+
+.profile-address-card div:first-child {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.profile-address-card span,
+.profile-address-default {
+    color: var(--badge-blue-text);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.profile-address-card p,
+.profile-address-card small,
+.profile-address-warning {
+    margin: 0;
+}
+
+.profile-address-card small {
+    color: var(--muted);
+}
+
+.profile-address-default {
+    display: inline-flex;
+    align-items: center;
+    min-height: 22px;
+    padding: 0 10px;
+    background: var(--badge-blue-bg);
+    border-radius: var(--maliev-radius-pill);
+}
+
+.profile-address-warning,
+.quote-google-address-status {
+    padding: 10px 12px;
+    background: #fff7ed;
+    border-radius: var(--maliev-radius-sm);
+    color: var(--ink);
+    font-size: var(--maliev-font-small);
+}
+
+.quote-google-address-picker {
+    display: grid;
+    gap: 8px;
+}
+
+.quote-google-address-label {
+    color: var(--muted);
+}
+
+.quote-google-address-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 46px;
+    gap: 10px;
+}
+
+.quote-google-address-autocomplete {
+    min-height: 42px;
+}
+
+.quote-google-address-autocomplete:empty::before {
+    display: flex;
+    align-items: center;
+    min-height: 42px;
+    padding: 10px 12px;
+    background: var(--panel);
+    border-radius: var(--maliev-radius-sm);
+    box-shadow: var(--maliev-shadow-ring);
+    color: var(--muted);
+    content: "Search for your location";
+    font-size: var(--maliev-font-small);
+}
+
+.quote-google-map-button {
+    display: grid;
+    place-items: center;
+    width: 46px;
+    min-height: 42px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring);
+    color: var(--accent);
+    cursor: pointer;
+}
+
+.quote-google-map-button:hover {
+    background: var(--panel-tint);
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.quote-google-address-selected {
+    margin: 0;
+    padding: 10px 12px;
+    background: var(--badge-blue-bg);
+    border-radius: var(--maliev-radius-sm);
+    color: var(--ink);
+    font-size: var(--maliev-font-small);
+}
+
+.quote-google-map-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, .58);
+}
+
+.quote-google-map-dialog {
+    width: min(920px, 96vw);
+    overflow: hidden;
+    background: var(--panel);
+    border-radius: var(--maliev-radius-md);
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.quote-google-map-title,
+.quote-google-map-footer {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px;
+}
+
+.quote-google-map-title button {
+    border: 0;
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+}
+
+.quote-google-map-canvas {
+    width: 100%;
+    min-height: 360px;
+    aspect-ratio: 16 / 9;
+}
+
+.quote-google-map-footer {
+    color: var(--muted);
+    font-size: var(--maliev-font-small);
+}
+
 .auth-panel {
     display: grid;
     gap: 14px;
@@ -1407,7 +1637,8 @@ textarea::placeholder {
 
 @media (max-width: 980px) {
     .hero-grid,
-    .quote-workspace {
+    .quote-workspace,
+    .profile-address-layout {
         grid-template-columns: 1fr;
     }
 
@@ -3096,6 +3327,7 @@ textarea::placeholder {
     }
 
     .qe-pcs-process-grid,
+    .profile-form-grid,
     .qe-pcs-qty-row,
     .qe-qsb-lead-options {
         grid-template-columns: 1fr;

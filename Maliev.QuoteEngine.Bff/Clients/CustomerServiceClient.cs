@@ -22,6 +22,18 @@ public interface ICustomerServiceClient
         string displayName,
         string phone = "",
         CancellationToken ct = default);
+
+    /// <summary>Gets customer-owned addresses.</summary>
+    Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken);
+
+    /// <summary>Creates a customer-owned address.</summary>
+    Task<HttpResponseMessage> CreateCustomerAddressAsync(object request, CancellationToken cancellationToken);
+
+    /// <summary>Updates a customer-owned address.</summary>
+    Task<HttpResponseMessage> UpdateCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken);
+
+    /// <summary>Deletes a customer-owned address.</summary>
+    Task<HttpResponseMessage> DeleteCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken);
 }
 
 internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerServiceClient> logger) : ICustomerServiceClient
@@ -145,6 +157,24 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
             logger.LogWarning(ex, "CustomerService EnsureCustomer failed for {Email}.", normalizedEmail);
             return null;
         }
+    }
+
+    public Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken) =>
+        http.GetAsync($"/customer/v1/addresses?ownerType=Customer&ownerId={customerId:D}", cancellationToken);
+
+    public Task<HttpResponseMessage> CreateCustomerAddressAsync(object request, CancellationToken cancellationToken) =>
+        http.PostAsJsonAsync("/customer/v1/addresses", request, cancellationToken);
+
+    public Task<HttpResponseMessage> UpdateCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken) =>
+        http.PatchAsJsonAsync($"/customer/v1/addresses/{addressId:D}", request, cancellationToken);
+
+    public Task<HttpResponseMessage> DeleteCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken)
+    {
+        var message = new HttpRequestMessage(HttpMethod.Delete, $"/customer/v1/addresses/{addressId:D}")
+        {
+            Content = JsonContent.Create(request)
+        };
+        return http.SendAsync(message, cancellationToken);
     }
 
     private static CustomerProfileResponse MapCustomer(CsCustomerResponse result)

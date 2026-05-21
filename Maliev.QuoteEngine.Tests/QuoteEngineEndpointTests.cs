@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Chatbot;
@@ -45,6 +46,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             // Returns null → AccountController falls back to PrototypeStore for profile
             services.RemoveAll<ICustomerServiceClient>();
             services.AddSingleton<ICustomerServiceClient>(new FakeCustomerServiceClient());
+
+            services.RemoveAll<ICountryServiceClient>();
+            services.AddSingleton<ICountryServiceClient>(new FakeCountryServiceClient());
 
             // Returns a fixed hosted payment URL
             services.RemoveAll<IPaymentServiceClient>();
@@ -185,6 +189,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     private sealed class FakeCustomerServiceClient : ICustomerServiceClient
     {
+        private readonly ConcurrentDictionary<Guid, List<CustomerAddressDto>> _addressesByCustomer = new();
+        private uint _nextVersion = 1;
+
         public Task<CustomerProfileResponse?> GetByIdAsync(Guid customerId, CancellationToken ct = default) =>
             Task.FromResult<CustomerProfileResponse?>(null);
 
@@ -198,6 +205,115 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             CancellationToken ct = default) =>
             Task.FromResult<CustomerProfileResponse?>(CreateProfile(email, displayName, phone));
 
+        public Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken)
+        {
+            IReadOnlyList<CustomerAddressDto> addresses = _addressesByCustomer.TryGetValue(customerId, out var list)
+                ? [.. list]
+                : [];
+            return Task.FromResult(JsonResponse(addresses));
+        }
+
+        public Task<HttpResponseMessage> CreateCustomerAddressAsync(object request, CancellationToken cancellationToken)
+        {
+            var root = JsonSerializer.SerializeToElement(request, JsonOptions);
+            var ownerId = GetGuid(root, "ownerId", "OwnerId") ?? Guid.Empty;
+            var address = new CustomerAddressDto
+            {
+                Id = Guid.NewGuid(),
+                Type = GetString(root, "type", "Type") ?? "Shipping",
+                IsDefault = GetBool(root, "isDefault", "IsDefault"),
+                PlaceLabel = GetString(root, "placeLabel", "PlaceLabel"),
+                PlaceLabelOther = GetString(root, "placeLabelOther", "PlaceLabelOther"),
+                AddressLine1 = GetString(root, "addressLine1", "AddressLine1") ?? string.Empty,
+                AddressLine2 = GetString(root, "addressLine2", "AddressLine2"),
+                AddressLine3 = GetString(root, "addressLine3", "AddressLine3"),
+                District = GetString(root, "district", "District"),
+                City = GetString(root, "city", "City") ?? string.Empty,
+                StateProvince = GetString(root, "stateProvince", "StateProvince") ?? string.Empty,
+                PostalCode = GetString(root, "postalCode", "PostalCode") ?? string.Empty,
+                CountryId = GetGuid(root, "countryId", "CountryId") ?? FakeCountryServiceClient.ThailandCountryId,
+                RecipientName = GetString(root, "recipientName", "RecipientName"),
+                RecipientPhone = GetString(root, "recipientPhone", "RecipientPhone"),
+                DriverNote = GetString(root, "driverNote", "DriverNote"),
+                AddressSource = GetString(root, "addressSource", "AddressSource") ?? "Manual",
+                GooglePlaceId = GetString(root, "googlePlaceId", "GooglePlaceId"),
+                FormattedAddress = GetString(root, "formattedAddress", "FormattedAddress"),
+                Latitude = GetDecimal(root, "latitude", "Latitude"),
+                Longitude = GetDecimal(root, "longitude", "Longitude"),
+                Version = _nextVersion++
+            };
+
+            var addresses = _addressesByCustomer.GetOrAdd(ownerId, _ => []);
+            lock (addresses)
+            {
+                ResetSameRoleDefault(addresses, address);
+                addresses.Add(address);
+            }
+
+            return Task.FromResult(JsonResponse(address, HttpStatusCode.Created));
+        }
+
+        public Task<HttpResponseMessage> UpdateCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken)
+        {
+            var root = JsonSerializer.SerializeToElement(request, JsonOptions);
+            foreach (var addresses in _addressesByCustomer.Values)
+            {
+                lock (addresses)
+                {
+                    var address = addresses.FirstOrDefault(item => item.Id == addressId);
+                    if (address is null)
+                    {
+                        continue;
+                    }
+
+                    address.Type = GetString(root, "type", "Type") ?? address.Type;
+                    address.IsDefault = GetBool(root, "isDefault", "IsDefault");
+                    address.PlaceLabel = GetString(root, "placeLabel", "PlaceLabel");
+                    address.PlaceLabelOther = GetString(root, "placeLabelOther", "PlaceLabelOther");
+                    address.AddressLine1 = GetString(root, "addressLine1", "AddressLine1") ?? address.AddressLine1;
+                    address.AddressLine2 = GetString(root, "addressLine2", "AddressLine2");
+                    address.AddressLine3 = GetString(root, "addressLine3", "AddressLine3");
+                    address.District = GetString(root, "district", "District");
+                    address.City = GetString(root, "city", "City") ?? address.City;
+                    address.StateProvince = GetString(root, "stateProvince", "StateProvince") ?? address.StateProvince;
+                    address.PostalCode = GetString(root, "postalCode", "PostalCode") ?? address.PostalCode;
+                    address.RecipientName = GetString(root, "recipientName", "RecipientName");
+                    address.RecipientPhone = GetString(root, "recipientPhone", "RecipientPhone");
+                    address.DriverNote = GetString(root, "driverNote", "DriverNote");
+                    address.AddressSource = GetString(root, "addressSource", "AddressSource") ?? address.AddressSource;
+                    address.GooglePlaceId = GetString(root, "googlePlaceId", "GooglePlaceId");
+                    address.FormattedAddress = GetString(root, "formattedAddress", "FormattedAddress");
+                    address.Latitude = GetDecimal(root, "latitude", "Latitude");
+                    address.Longitude = GetDecimal(root, "longitude", "Longitude");
+                    address.Version = _nextVersion++;
+                    ResetSameRoleDefault(addresses, address);
+                    return Task.FromResult(JsonResponse(address));
+                }
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+
+        public Task<HttpResponseMessage> DeleteCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken)
+        {
+            foreach (var addresses in _addressesByCustomer.Values)
+            {
+                lock (addresses)
+                {
+                    var address = addresses.FirstOrDefault(item => item.Id == addressId);
+                    if (address is null)
+                    {
+                        continue;
+                    }
+
+                    addresses.Remove(address);
+                    return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+                }
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+
         private static CustomerProfileResponse CreateProfile(string email, string displayName = "Quote customer", string phone = "")
         {
             var normalizedEmail = string.IsNullOrWhiteSpace(email) ? "customer@example.com" : email.Trim().ToLowerInvariant();
@@ -209,6 +325,98 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 phone,
                 string.Empty,
                 "en");
+        }
+
+        private static void ResetSameRoleDefault(List<CustomerAddressDto> addresses, CustomerAddressDto current)
+        {
+            if (!current.IsDefault)
+            {
+                return;
+            }
+
+            foreach (var address in addresses.Where(item => item.Id != current.Id && string.Equals(item.Type, current.Type, StringComparison.OrdinalIgnoreCase)))
+            {
+                address.IsDefault = false;
+            }
+        }
+
+        private static string? GetString(JsonElement root, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String)
+                {
+                    return value.GetString();
+                }
+            }
+
+            return null;
+        }
+
+        private static Guid? GetGuid(JsonElement root, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (root.TryGetProperty(name, out var value) &&
+                    value.ValueKind == JsonValueKind.String &&
+                    Guid.TryParse(value.GetString(), out var id))
+                {
+                    return id;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool GetBool(JsonElement root, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (root.TryGetProperty(name, out var value) && value.ValueKind is JsonValueKind.True or JsonValueKind.False)
+                {
+                    return value.GetBoolean();
+                }
+            }
+
+            return false;
+        }
+
+        private static decimal? GetDecimal(JsonElement root, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (root.TryGetProperty(name, out var value) &&
+                    value.ValueKind == JsonValueKind.Number &&
+                    value.TryGetDecimal(out var number))
+                {
+                    return number;
+                }
+            }
+
+            return null;
+        }
+
+        private static HttpResponseMessage JsonResponse<T>(T value, HttpStatusCode statusCode = HttpStatusCode.OK)
+        {
+            return new HttpResponseMessage(statusCode)
+            {
+                Content = JsonContent.Create(value, options: JsonOptions)
+            };
+        }
+
+        private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    }
+
+    private sealed class FakeCountryServiceClient : ICountryServiceClient
+    {
+        internal static readonly Guid ThailandCountryId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+        public Task<HttpResponseMessage> GetCountryByIso2Async(string iso2, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new { id = ThailandCountryId }, options: new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            });
         }
     }
 
@@ -438,6 +646,134 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(profile);
         Assert.NotEqual(Guid.Empty, profile.CustomerId);
         Assert.Equal("profile-owner@example.com", profile.Email);
+    }
+
+    [Fact]
+    public async Task Account_addresses_round_trip_google_metadata_and_default_per_role()
+    {
+        using var client = await CreateSignedInClientAsync("address-owner@example.com");
+
+        var firstShippingResponse = await client.PostAsJsonAsync("/quote/v1/account/addresses", new CustomerAddressUpsertRequest
+        {
+            Type = "Shipping",
+            IsDefault = true,
+            PlaceLabel = "Home",
+            AddressLine1 = "12 Moo 3 MALIEV Road",
+            District = "Bang Kaeo",
+            City = "Bang Phli",
+            StateProvince = "Samut Prakan",
+            PostalCode = "10540",
+            RecipientName = "Quote Customer",
+            RecipientPhone = "0800000000",
+            DriverNote = "Call before delivery",
+            AddressSource = "GooglePlace",
+            GooglePlaceId = "place-maliev",
+            FormattedAddress = "MALIEV Co., Ltd., Samut Prakan, Thailand",
+            Latitude = 13.6485m,
+            Longitude = 100.6807m
+        });
+        firstShippingResponse.EnsureSuccessStatusCode();
+        var firstShipping = await firstShippingResponse.Content.ReadFromJsonAsync<CustomerAddressDto>();
+        Assert.NotNull(firstShipping);
+
+        var secondShippingResponse = await client.PostAsJsonAsync("/quote/v1/account/addresses", new CustomerAddressUpsertRequest
+        {
+            Type = "Shipping",
+            IsDefault = true,
+            PlaceLabel = "Work",
+            AddressLine1 = "99 Industrial Road",
+            District = "Bang Kaeo",
+            City = "Bang Phli",
+            StateProvince = "Samut Prakan",
+            PostalCode = "10540",
+            RecipientName = "Quote Customer",
+            RecipientPhone = "0800000000",
+            AddressSource = "GoogleMapPin",
+            Latitude = 13.65m,
+            Longitude = 100.68m
+        });
+        secondShippingResponse.EnsureSuccessStatusCode();
+        var secondShipping = await secondShippingResponse.Content.ReadFromJsonAsync<CustomerAddressDto>();
+        Assert.NotNull(secondShipping);
+
+        var billingResponse = await client.PostAsJsonAsync("/quote/v1/account/addresses", new CustomerAddressUpsertRequest
+        {
+            Type = "Billing",
+            IsDefault = true,
+            PlaceLabel = "Other",
+            PlaceLabelOther = "Head office",
+            AddressLine1 = "88 Finance Road",
+            District = "Bang Kaeo",
+            City = "Bang Phli",
+            StateProvince = "Samut Prakan",
+            PostalCode = "10540",
+            RecipientName = "Finance Team",
+            RecipientPhone = "0811111111"
+        });
+        billingResponse.EnsureSuccessStatusCode();
+
+        var addresses = await client.GetFromJsonAsync<CustomerAddressDto[]>("/quote/v1/account/addresses");
+
+        Assert.NotNull(addresses);
+        Assert.Equal(3, addresses.Length);
+        var storedFirstShipping = Assert.Single(addresses, item => item.Id == firstShipping.Id);
+        var storedSecondShipping = Assert.Single(addresses, item => item.Id == secondShipping.Id);
+        var storedBilling = Assert.Single(addresses, item => item.Type == "Billing");
+
+        Assert.False(storedFirstShipping.IsDefault);
+        Assert.True(storedSecondShipping.IsDefault);
+        Assert.True(storedBilling.IsDefault);
+        Assert.Equal("GooglePlace", storedFirstShipping.AddressSource);
+        Assert.Equal("place-maliev", storedFirstShipping.GooglePlaceId);
+        Assert.Equal("MALIEV Co., Ltd., Samut Prakan, Thailand", storedFirstShipping.FormattedAddress);
+        Assert.Equal(13.6485m, storedFirstShipping.Latitude);
+        Assert.Equal(100.6807m, storedFirstShipping.Longitude);
+        Assert.Equal("Call before delivery", storedFirstShipping.DriverNote);
+    }
+
+    [Fact]
+    public async Task Account_address_update_is_scoped_to_signed_in_customer()
+    {
+        using var owner = await CreateSignedInClientAsync("address-scope-owner@example.com");
+        var createResponse = await owner.PostAsJsonAsync("/quote/v1/account/addresses", new CustomerAddressUpsertRequest
+        {
+            Type = "Shipping",
+            IsDefault = true,
+            PlaceLabel = "Home",
+            AddressLine1 = "12 Owner Road",
+            City = "Bang Phli",
+            StateProvince = "Samut Prakan",
+            PostalCode = "10540"
+        });
+        createResponse.EnsureSuccessStatusCode();
+        var created = await createResponse.Content.ReadFromJsonAsync<CustomerAddressDto>();
+        Assert.NotNull(created);
+
+        using var other = await CreateSignedInClientAsync("address-scope-other@example.com");
+        var crossCustomerUpdate = await other.PatchAsJsonAsync($"/quote/v1/account/addresses/{created.Id:D}", new CustomerAddressUpsertRequest
+        {
+            Type = "Shipping",
+            AddressLine1 = "99 Other Road",
+            City = "Bang Phli",
+            StateProvince = "Samut Prakan",
+            PostalCode = "10540",
+            Version = created.Version
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, crossCustomerUpdate.StatusCode);
+    }
+
+    [Fact]
+    public async Task Address_google_config_is_available_for_signed_in_customer()
+    {
+        using var client = await CreateSignedInClientAsync("address-config@example.com");
+
+        var config = await client.GetFromJsonAsync<GoogleAddressConfigResponse>("/quote/v1/address/google-config");
+
+        Assert.NotNull(config);
+        Assert.Equal(13.7563, config.DefaultLatitude);
+        Assert.Equal(100.5018, config.DefaultLongitude);
+        Assert.Contains("th", config.IncludedRegionCodes);
     }
 
     [Fact]

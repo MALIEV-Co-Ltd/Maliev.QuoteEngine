@@ -8,6 +8,8 @@ public sealed class AccountAuthBoundaryTests(QuoteEngineWebApplicationFactory fa
 {
     [Theory]
     [InlineData("/quote/v1/account/profile")]
+    [InlineData("/quote/v1/account/addresses")]
+    [InlineData("/quote/v1/address/google-config")]
     [InlineData("/quote/v1/account/ndas")]
     [InlineData("/quote/v1/account/documents")]
     public async Task Account_routes_return_unauthorized_for_anonymous_users(string path)

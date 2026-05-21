@@ -98,6 +98,30 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return await httpClient.GetFromJsonAsync<CustomerProfileResponse>("quote/v1/account/profile", cancellationToken);
     }
 
+    public async Task<IReadOnlyList<CustomerAddressDto>> GetAddressesAsync(CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerAddressDto>>("quote/v1/account/addresses", cancellationToken) ?? [];
+    }
+
+    public Task<CustomerAddressDto> CreateAddressAsync(CustomerAddressUpsertRequest request, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<CustomerAddressUpsertRequest, CustomerAddressDto>("quote/v1/account/addresses", request, cancellationToken);
+    }
+
+    public async Task<CustomerAddressDto> UpdateAddressAsync(Guid addressId, CustomerAddressUpsertRequest request, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PatchAsJsonAsync($"quote/v1/account/addresses/{addressId:D}", request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<CustomerAddressDto>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("The QuoteEngine API returned an empty address response.");
+    }
+
+    public async Task DeleteAddressAsync(Guid addressId, uint version, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.DeleteAsync($"quote/v1/account/addresses/{addressId:D}?version={version}", cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
     public async Task<IReadOnlyList<CustomerQuoteSummaryDto>> GetQuotesAsync(CancellationToken cancellationToken = default)
     {
         return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerQuoteSummaryDto>>("quote/v1/account/quotes", cancellationToken) ?? [];
