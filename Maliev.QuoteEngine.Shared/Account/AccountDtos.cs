@@ -26,6 +26,28 @@ public sealed record CustomerOrderSummaryDto(
     DateTimeOffset UpdatedAt,
     string TrackingLabel);
 
+/// <summary>A single entry in the customer-visible status timeline of an order.</summary>
+public sealed record OrderStatusEntryDto(
+    string Status,
+    string? CustomerNote,
+    DateTimeOffset Timestamp);
+
+/// <summary>Full detail view of a manufacturing order for the customer portal.</summary>
+public sealed record CustomerOrderDetailDto(
+    Guid OrderId,
+    string OrderNumber,
+    string CurrentStatus,
+    string PaymentStatus,
+    decimal? QuotedAmount,
+    string? QuoteCurrency,
+    DateTimeOffset? PromisedDeliveryDate,
+    DateTimeOffset? ActualDeliveryDate,
+    string? CustomerPoNumber,
+    string? Requirements,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<OrderStatusEntryDto> StatusHistory);
+
 public sealed record CustomerNdaDto(Guid NdaId, string Title, string Status, DateTimeOffset UpdatedAt);
 
 public sealed record CustomerDocumentDto(Guid DocumentId, string FileName, string Kind, DateTimeOffset UploadedAt);

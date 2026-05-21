@@ -21,6 +21,7 @@ builder.AddIAMServiceClient("QuoteEngineBff");
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 var authentication = builder.Services.AddAuthentication(options =>
     {
         options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
@@ -69,6 +70,13 @@ builder.Services.AddScoped<ICustomerChatbotService, CustomerChatbotService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(45));
 
+// ── Real downstream service clients ──────────────────────────────────────────
+builder.AddAuthenticatedServiceClient<IMaterialCatalogClient, MaterialCatalogClient>("MaterialService");
+builder.AddAuthenticatedServiceClient<IQuotationServiceClient, QuotationServiceClient>("QuotationService");
+builder.AddAuthenticatedServiceClient<IOrderServiceClient, OrderServiceClient>("OrderService");
+builder.AddAuthenticatedServiceClient<ICustomerServiceClient, CustomerServiceClient>("CustomerService");
+builder.AddAuthenticatedServiceClient<IPaymentServiceClient, PaymentServiceClient>("PaymentService");
+
 // DemoMode options (short-circuit for sample bracket in dev/demo)
 builder.Services.Configure<DemoModeOptions>(
     builder.Configuration.GetSection(DemoModeOptions.Section));
@@ -78,13 +86,20 @@ builder.Services.AddSingleton<IQuoteFileAnalysisStatusService, QuoteFileAnalysis
 
 // UploadService HTTP client (Aspire service discovery)
 builder.Services.AddHttpClient<QuoteUploadServiceClient>(client =>
-    client.BaseAddress = new Uri("https+http://UploadService"));
+    {
+        client.BaseAddress = new Uri("https+http://UploadService");
+        client.Timeout = TimeSpan.FromSeconds(90);
+    })
+    .AddServiceDiscovery()
+    .AddHttpMessageHandler<ServiceAccountAuthenticationHandler>();
 
 // MassTransit consumers — FileAnalyzedEvent → GlbReady, DfmAnalysisReadyEvent → DfmAnalysisReady
 builder.AddMassTransitWithRabbitMq(cfg =>
 {
     cfg.AddConsumer<QuoteFileAnalyzedConsumer>();
     cfg.AddConsumer<QuoteDfmAnalysisReadyConsumer>();
+    cfg.AddConsumer<QuotePaymentCompletedConsumer>();
+    cfg.AddConsumer<QuoteOrderStatusChangedConsumer>();
 });
 
 var app = builder.Build();

@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Quotes;
@@ -9,7 +10,7 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 [ApiController]
 [ApiVersion("1.0")]
 [Route("quote/v{version:apiVersion}/auth")]
-public sealed class AuthController(QuoteEnginePrototypeStore store) : ControllerBase
+public sealed class AuthController(QuoteEnginePrototypeStore store, ICustomerServiceClient customerClient) : ControllerBase
 {
     [HttpGet("session")]
     public ActionResult<QuoteAuthStatusResponse> Session()
@@ -30,20 +31,32 @@ public sealed class AuthController(QuoteEnginePrototypeStore store) : Controller
     }
 
     [HttpPost("sign-in")]
-    public ActionResult<AuthSessionResponse> SignIn([FromBody] SignInRequest request)
+    public async Task<ActionResult<AuthSessionResponse>> SignIn(
+        [FromBody] SignInRequest request,
+        CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
             return ValidationProblem(ModelState);
         }
 
-        var profile = store.GetOrCreateCustomer(request.Email, DisplayNameFromEmail(request.Email));
+        var profile = await EnsureCustomerProfileAsync(
+            request.Email,
+            DisplayNameFromEmail(request.Email),
+            cancellationToken: cancellationToken);
+        if (profile is null)
+        {
+            return CustomerServiceUnavailable();
+        }
+
         AppendCustomerCookie(profile.CustomerId);
         return Ok(new AuthSessionResponse(profile.CustomerId, profile.DisplayName, profile.Email, true));
     }
 
     [HttpPost("sign-up")]
-    public ActionResult<AuthSessionResponse> SignUp([FromBody] SignUpRequest request)
+    public async Task<ActionResult<AuthSessionResponse>> SignUp(
+        [FromBody] SignUpRequest request,
+        CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
@@ -51,15 +64,35 @@ public sealed class AuthController(QuoteEnginePrototypeStore store) : Controller
         }
 
         var displayName = $"{request.FirstName} {request.LastName}".Trim();
-        var profile = store.GetOrCreateCustomer(request.Email, displayName, request.Phone, request.CompanyName);
+        var profile = await EnsureCustomerProfileAsync(
+            request.Email,
+            displayName,
+            request.Phone,
+            request.CompanyName,
+            cancellationToken);
+        if (profile is null)
+        {
+            return CustomerServiceUnavailable();
+        }
+
         AppendCustomerCookie(profile.CustomerId);
         return Ok(new AuthSessionResponse(profile.CustomerId, profile.DisplayName, profile.Email, true));
     }
 
     [HttpPost("google/exchange")]
-    public ActionResult<AuthSessionResponse> ExchangeGoogle()
+    public async Task<ActionResult<AuthSessionResponse>> ExchangeGoogle(CancellationToken cancellationToken)
     {
-        var profile = store.GetOrCreateCustomer(store.PrototypeCustomer.Email, store.PrototypeCustomer.DisplayName, store.PrototypeCustomer.Phone, store.PrototypeCustomer.CompanyName);
+        var profile = await EnsureCustomerProfileAsync(
+            store.PrototypeCustomer.Email,
+            store.PrototypeCustomer.DisplayName,
+            store.PrototypeCustomer.Phone,
+            store.PrototypeCustomer.CompanyName,
+            cancellationToken);
+        if (profile is null)
+        {
+            return CustomerServiceUnavailable();
+        }
+
         AppendCustomerCookie(profile.CustomerId);
         return Ok(new AuthSessionResponse(profile.CustomerId, profile.DisplayName, profile.Email, true));
     }
@@ -81,6 +114,32 @@ public sealed class AuthController(QuoteEnginePrototypeStore store) : Controller
             Secure = Request.IsHttps
         });
     }
+
+    private async Task<CustomerProfileResponse?> EnsureCustomerProfileAsync(
+        string email,
+        string displayName,
+        string phone = "",
+        string companyName = "",
+        CancellationToken cancellationToken = default)
+    {
+        var customer = await customerClient.EnsureCustomerAsync(email, displayName, phone, cancellationToken);
+        return customer is null
+            ? null
+            : store.UpsertCustomer(
+                customer.CustomerId,
+                customer.Email,
+                customer.DisplayName,
+                customer.Phone,
+                string.IsNullOrWhiteSpace(customer.CompanyName) ? companyName : customer.CompanyName,
+                customer.PreferredLanguage);
+    }
+
+    private ObjectResult CustomerServiceUnavailable() =>
+        StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+        {
+            Title = "Customer service unavailable.",
+            Detail = "Quote Engine could not create or load the customer account needed for formal quotes."
+        });
 
     private static string DisplayNameFromEmail(string email)
     {

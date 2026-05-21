@@ -1,4 +1,5 @@
 // Maliev.QuoteEngine.Bff/Clients/QuoteUploadServiceClient.cs
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
 namespace Maliev.QuoteEngine.Bff.Clients;
@@ -10,23 +11,67 @@ namespace Maliev.QuoteEngine.Bff.Clients;
 public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServiceClient> logger)
 {
     /// <summary>
-    /// Streams a chunk of file bytes to UploadService, forwarding the Content-Range header.
+    /// Initiates a downstream UploadService resumable upload session.
     /// </summary>
-    public virtual async Task StreamUploadAsync(Stream body, string contentType, long contentLength,
-        string contentRange, string storagePath, CancellationToken ct)
+    public virtual async Task<string> InitiateResumableUploadAsync(
+        string fileName,
+        string contentType,
+        long totalSize,
+        string storagePath,
+        CancellationToken ct)
     {
-        using var content = new StreamContent(body);
-        content.Headers.TryAddWithoutValidation("Content-Type", contentType);
-        content.Headers.TryAddWithoutValidation("Content-Range", contentRange);
-
-        var response = await http.PutAsync(
-            $"upload/v1/resumable?path={Uri.EscapeDataString(storagePath)}",
-            content, ct);
+        using var response = await http.PostAsJsonAsync("/upload/v1/uploads/resumable", new
+        {
+            path = storagePath,
+            fileName,
+            serviceName = "QuoteEngine",
+            contentType,
+            totalSize,
+            overwrite = true
+        }, ct);
 
         if (!response.IsSuccessStatusCode)
         {
             var responseBody = await response.Content.ReadAsStringAsync(ct);
-            logger.LogError("UploadService stream failed {Status}: {Body}", response.StatusCode, responseBody);
+            logger.LogError("UploadService initiate resumable failed {Status}: {Body}", response.StatusCode, responseBody);
+            response.EnsureSuccessStatusCode();
+        }
+
+        var result = await response.Content.ReadFromJsonAsync<InitiateResumableUploadResponse>(cancellationToken: ct);
+        return result?.UploadId ?? throw new InvalidOperationException("UploadService returned null upload ID.");
+    }
+
+    /// <summary>
+    /// Streams a chunk of file bytes to UploadService, forwarding the Content-Range header.
+    /// </summary>
+    public virtual async Task StreamUploadAsync(Stream body, string contentType, long contentLength,
+        string contentRange, string downstreamUploadId, string storagePath, CancellationToken ct)
+    {
+        using var content = new StreamContent(body);
+        content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
+        content.Headers.ContentRange = ContentRangeHeaderValue.Parse(contentRange);
+        if (contentLength > 0)
+        {
+            content.Headers.ContentLength = contentLength;
+        }
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Put,
+            $"/upload/v1/uploads/resumable/{Uri.EscapeDataString(downstreamUploadId)}")
+        {
+            Content = content
+        };
+
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            logger.LogError(
+                "UploadService stream failed {Status} for {StoragePath}: {Body}",
+                response.StatusCode,
+                storagePath,
+                responseBody);
             response.EnsureSuccessStatusCode();
         }
     }
@@ -56,4 +101,6 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
     }
 
     private sealed record SignedUrlResponse(string Url);
+
+    private sealed record InitiateResumableUploadResponse(string UploadId, string SessionUri, DateTime ExpiresAt, long TotalSize);
 }

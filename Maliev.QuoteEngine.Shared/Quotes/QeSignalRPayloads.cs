@@ -16,6 +16,25 @@ public sealed record QeGlbReadyPayload(
     string? ErrorCode);
 
 /// <summary>
+/// Pushed to the client via SignalR "OrderStatusChanged" when the order transitions to a new lifecycle state.
+/// </summary>
+public sealed record QeOrderStatusChangedPayload(
+    string OrderNumber,
+    string PreviousStatus,
+    string NewStatus,
+    DateTimeOffset ChangedAt,
+    string? Reason);
+
+/// <summary>
+/// Pushed to the client via SignalR "PaymentCompleted" when the payment gateway confirms payment.
+/// </summary>
+public sealed record QePaymentCompletedPayload(
+    string OrderNumber,
+    Guid PaymentId,
+    decimal Amount,
+    string Currency);
+
+/// <summary>
 /// Pushed to the client via SignalR "DfmAnalysisReady" when DFM analysis is ready.
 /// Always reflects the merged state of all process reports received so far.
 /// </summary>

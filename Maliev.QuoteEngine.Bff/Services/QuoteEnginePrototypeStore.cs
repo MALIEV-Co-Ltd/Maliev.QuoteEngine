@@ -88,6 +88,28 @@ public sealed class QuoteEnginePrototypeStore
             "en-US"));
     }
 
+    public CustomerProfileResponse UpsertCustomer(
+        Guid customerId,
+        string email,
+        string displayName,
+        string phone = "",
+        string companyName = "",
+        string preferredLanguage = "en-US")
+    {
+        var normalizedEmail = NormalizeEmail(email);
+        var profile = new CustomerProfileResponse(
+            customerId,
+            string.IsNullOrWhiteSpace(displayName) ? normalizedEmail : displayName,
+            normalizedEmail,
+            phone,
+            companyName,
+            string.IsNullOrWhiteSpace(preferredLanguage) ? "en-US" : preferredLanguage);
+
+        _customerIdsByEmail[normalizedEmail] = customerId;
+        _customers[customerId] = profile;
+        return profile;
+    }
+
     public QuoteEngineDemoProjectResponse DemoProject { get; } = new(
         "demo-sample-bracket",
         "MALIEV sample bracket demo",
@@ -172,6 +194,14 @@ public sealed class QuoteEnginePrototypeStore
     public UploadState? GetUpload(string uploadId)
     {
         return _uploads.TryGetValue(uploadId, out var upload) ? upload : null;
+    }
+
+    public UploadState AttachDownstreamUpload(string uploadId, string downstreamUploadId)
+    {
+        var current = GetRequiredUpload(uploadId);
+        var updated = current with { DownstreamUploadId = downstreamUploadId };
+        _uploads[uploadId] = updated;
+        return updated;
     }
 
     public UploadState MarkUploaded(string uploadId, long receivedBytes)
@@ -327,6 +357,8 @@ public sealed record UploadState(
     bool IsTemporary)
 {
     public string Status { get; init; } = "WaitingForUpload";
+
+    public string? DownstreamUploadId { get; init; }
 
     public long ReceivedBytes { get; init; }
 

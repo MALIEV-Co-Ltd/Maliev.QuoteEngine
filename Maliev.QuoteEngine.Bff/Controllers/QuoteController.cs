@@ -21,6 +21,10 @@ public sealed class QuoteController(
     QuoteUploadServiceClient uploadClient,
     IQuoteFileAnalysisStatusService statusService,
     IOptions<DemoModeOptions> demoOptions,
+    IMaterialCatalogClient materialCatalog,
+    IQuotationServiceClient quotationClient,
+    IOrderServiceClient orderClient,
+    IPaymentServiceClient paymentClient,
     ILogger<QuoteController> logger) : ControllerBase
 {
     [HttpGet("reference-data")]
@@ -36,7 +40,9 @@ public sealed class QuoteController(
     }
 
     [HttpPost("uploads/resumable")]
-    public ActionResult<InitiateQuoteUploadResponse> InitiateUpload([FromBody] InitiateQuoteUploadRequest request)
+    public async Task<ActionResult<InitiateQuoteUploadResponse>> InitiateUpload(
+        [FromBody] InitiateQuoteUploadRequest request,
+        CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
@@ -65,6 +71,22 @@ public sealed class QuoteController(
             ? resolvedCustomerId
             : (Guid?)null;
         var upload = store.InitiateUpload(request, customerId);
+        try
+        {
+            var downstreamUploadId = await uploadClient.InitiateResumableUploadAsync(
+                upload.FileName,
+                upload.ContentType,
+                upload.ExpectedSizeBytes,
+                upload.StoragePath,
+                cancellationToken);
+            upload = store.AttachDownstreamUpload(upload.UploadId, downstreamUploadId);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to initiate UploadService session for quote upload {UploadId}", upload.UploadId);
+            return StatusCode(502, new ProblemDetails { Title = "Upload service unavailable." });
+        }
+
         return Ok(new InitiateQuoteUploadResponse(
             upload.UploadId,
             $"/quote/v1/uploads/resumable/{upload.UploadId}",
@@ -89,6 +111,11 @@ public sealed class QuoteController(
         var upload = store.GetUpload(uploadId);
         if (upload is null) return NotFound();
         if (!CanAccessUpload(upload)) return Forbid();
+        if (string.IsNullOrWhiteSpace(upload.DownstreamUploadId))
+        {
+            logger.LogError("Quote upload {UploadId} has no downstream UploadService session.", uploadId);
+            return StatusCode(502, new ProblemDetails { Title = "Upload session unavailable." });
+        }
 
         // Stream body bytes to UploadService (GCS-backed)
         try
@@ -96,6 +123,7 @@ public sealed class QuoteController(
             await uploadClient.StreamUploadAsync(
                 Request.Body, upload.ContentType,
                 Request.ContentLength ?? 0, contentRange,
+                upload.DownstreamUploadId,
                 upload.StoragePath, cancellationToken);
         }
         catch (Exception ex)
@@ -190,15 +218,128 @@ public sealed class QuoteController(
     }
 
     [HttpPost("quotes/formal")]
-    public ActionResult<GenerateFormalQuoteResponse> GenerateFormalQuote([FromBody] GenerateFormalQuoteRequest request)
+    public async Task<ActionResult<GenerateFormalQuoteResponse>> GenerateFormalQuote(
+        [FromBody] GenerateFormalQuoteRequest request, CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized();
         }
 
-        _ = request;
-        return Ok(store.GenerateQuote(customerId));
+        // Build line items: resolve material Guid via MaterialService, price via store estimate
+        var lineItems = new List<QuotationLineItemCreate>();
+        foreach (var part in request.Parts)
+        {
+            var materialGuid = await materialCatalog.ResolveMaterialIdAsync(
+                part.ProcessId, part.MaterialId, cancellationToken);
+
+            var unitPrice = EstimateUnitPrice(part);
+
+            lineItems.Add(new QuotationLineItemCreate
+            {
+                MaterialServiceId = materialGuid,
+                Quantity = part.Quantity,
+                UnitOfMeasure = "pcs",
+                UnitPrice = unitPrice,
+                ManufacturingProcess = part.ProcessId.ToUpperInvariant(),
+                Notes = part.FileName
+            });
+        }
+
+        // QuotationService requires ≥1 line item; add placeholder when no parts submitted
+        if (lineItems.Count == 0)
+        {
+            var fallbackMaterial = await materialCatalog.ResolveMaterialIdAsync("fdm", "pla-black", cancellationToken);
+            lineItems.Add(new QuotationLineItemCreate
+            {
+                MaterialServiceId = fallbackMaterial,
+                Quantity = 1,
+                UnitOfMeasure = "pcs",
+                UnitPrice = 0m,
+                ManufacturingProcess = "FDM",
+                Notes = "Customer self-service quote"
+            });
+        }
+
+        var createRequest = new QuotationCreateRequest
+        {
+            CustomerId = customerId,
+            BillingIdentityType = 1,
+            ValidityPeriodStart = DateTime.UtcNow,
+            ValidityPeriodEnd = DateTime.UtcNow.AddDays(30),
+            LineItems = lineItems,
+            GeneratedByDisplayName = "Customer Self-Service"
+        };
+
+        var result = await quotationClient.CreateAsync(createRequest, cancellationToken);
+        if (result is null)
+        {
+            logger.LogError("QuotationService returned null for customerId {CustomerId}", customerId);
+            return StatusCode(502, new ProblemDetails { Title = "Quotation service unavailable. Please try again." });
+        }
+
+        return Ok(new GenerateFormalQuoteResponse(result.Id, result.QuotationNumber, string.Empty, result.Status));
+    }
+
+    /// <summary>Returns an estimated unit price using the same rate table as the Estimate endpoint.</summary>
+    private static decimal EstimateUnitPrice(QuotePartDraftDto part)
+    {
+        var baseRate = part.ProcessId.ToLowerInvariant() switch
+        {
+            "cnc" => 520m,
+            "sla" => 180m,
+            _ => 95m
+        };
+        var setup = part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase) ? 850m : 120m;
+        return Math.Round(setup + Math.Max(part.VolumeCc, 1m) * baseRate, 2);
+    }
+
+    [HttpPost("payments")]
+    public async Task<ActionResult<InitiatePaymentResponse>> InitiatePayment(
+        [FromBody] InitiatePaymentRequest request, CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        // Build return/cancel URLs from the current request so the redirect lands back in the SPA.
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var returnUrl = $"{baseUrl}/payment/success?orderId={Uri.EscapeDataString(request.OrderNumber)}";
+        var cancelUrl = $"{baseUrl}/payment/cancel?orderId={Uri.EscapeDataString(request.OrderNumber)}";
+        var idempotencyKey = $"{customerId:D}:{request.OrderId:D}";
+
+        // Advance order to Accepted (customer accepted the quoted price) so that when
+        // PaymentService fires PaymentCompletedEvent, OrderService can apply Accepted → Paid.
+        var accepted = await orderClient.AddStatusAsync(request.OrderNumber, "Accepted", cancellationToken);
+        if (!accepted)
+            logger.LogWarning(
+                "Could not advance order {OrderNumber} to Accepted before payment initiation; PaymentCompletedEvent may fail.",
+                request.OrderNumber);
+
+        var result = await paymentClient.InitiateAsync(
+            customerId.ToString("D"),
+            request.OrderId.ToString("D"),
+            request.OrderNumber,
+            request.Amount,
+            request.Currency,
+            returnUrl,
+            cancelUrl,
+            idempotencyKey,
+            cancellationToken);
+
+        if (result is null)
+        {
+            logger.LogError("PaymentService returned null for orderId {OrderId}", request.OrderId);
+            return StatusCode(502, new ProblemDetails { Title = "Payment service unavailable. Please try again." });
+        }
+
+        return Ok(new InitiatePaymentResponse(result.TransactionId, result.PaymentUrl, result.Status));
     }
 
     [HttpPost("quotes/{quoteId:guid}/approve")]
@@ -213,21 +354,51 @@ public sealed class QuoteController(
     }
 
     [HttpPost("orders")]
-    public ActionResult<CreateManufacturingOrderResponse> CreateOrder([FromBody] CreateManufacturingOrderRequest request)
+    public async Task<ActionResult<CreateManufacturingOrderResponse>> CreateOrder(
+        [FromBody] CreateManufacturingOrderRequest request, CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized();
         }
 
-        try
-        {
-            return Ok(store.CreateOrder(customerId, request.QuoteId));
-        }
-        catch (KeyNotFoundException)
+        // Verify quote exists and belongs to the current customer
+        var quotation = await quotationClient.GetByIdAsync(request.QuoteId, cancellationToken);
+        if (quotation is null || quotation.CustomerId != customerId)
         {
             return NotFound();
         }
+
+        var orderRequest = new OrderCreateRequest
+        {
+            CustomerId = customerId.ToString("D"),
+            OrderedQuantity = 1,
+            CustomerPoNumber = string.IsNullOrWhiteSpace(request.CustomerPoNumber) ? null : request.CustomerPoNumber,
+            Requirements = request.Notes
+        };
+        // Default to 3D Printing (FDM); actual process comes from the quotation line items
+        orderRequest.SetProcessFromCode("fdm");
+
+        var result = await orderClient.CreateAsync(orderRequest, cancellationToken);
+        if (result is null)
+        {
+            logger.LogError("OrderService returned null for customerId {CustomerId} quoteId {QuoteId}", customerId, request.QuoteId);
+            return StatusCode(502, new ProblemDetails { Title = "Order service unavailable. Please try again." });
+        }
+
+        // Self-service fast-track: advance order through internal review states so the customer
+        // can proceed immediately to payment (Quoted → Accepted → PaymentService → Paid).
+        // Failures are logged as warnings — the order still exists and staff can resolve manually.
+        foreach (var status in new[] { "Reviewing", "Reviewed", "Quoted" })
+        {
+            var advanced = await orderClient.AddStatusAsync(result.OrderNumber, status, cancellationToken);
+            if (!advanced)
+                logger.LogWarning(
+                    "Self-service fast-track: could not advance order {OrderNumber} to {Status}. Payment initiation may fail.",
+                    result.OrderNumber, status);
+        }
+
+        return Ok(new CreateManufacturingOrderResponse(result.OrderId, result.OrderNumber, result.Status));
     }
 
     private bool CanAccessUpload(UploadState upload)

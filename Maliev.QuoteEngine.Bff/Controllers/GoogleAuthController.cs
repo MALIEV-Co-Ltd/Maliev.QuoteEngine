@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
+using Maliev.QuoteEngine.Shared.Account;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
@@ -13,7 +15,8 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 [Route("auth")]
 public sealed class GoogleAuthController(
     QuoteEnginePrototypeStore store,
-    IConfiguration configuration) : Controller
+    IConfiguration configuration,
+    ICustomerServiceClient customerClient) : Controller
 {
     private const string ExternalScheme = "MalievQuoteExternal";
 
@@ -58,7 +61,12 @@ public sealed class GoogleAuthController(
             return RedirectWithError("/auth/sign-in", "Google did not return a verified customer identity.");
         }
 
-        var profile = store.GetOrCreateCustomer(email, name ?? DisplayNameFromEmail(email));
+        var profile = await EnsureCustomerProfileAsync(email, name ?? DisplayNameFromEmail(email), HttpContext.RequestAborted);
+        if (profile is null)
+        {
+            return RedirectWithError("/auth/sign-in", "Quote Engine could not create or load your customer account.");
+        }
+
         AppendCustomerCookie(profile.CustomerId);
         return LocalRedirect(NormalizeReturnUrl(returnUrl));
     }
@@ -85,6 +93,23 @@ public sealed class GoogleAuthController(
         return !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
             ? returnUrl
             : "/projects/new";
+    }
+
+    private async Task<CustomerProfileResponse?> EnsureCustomerProfileAsync(
+        string email,
+        string displayName,
+        CancellationToken cancellationToken)
+    {
+        var customer = await customerClient.EnsureCustomerAsync(email, displayName, ct: cancellationToken);
+        return customer is null
+            ? null
+            : store.UpsertCustomer(
+                customer.CustomerId,
+                customer.Email,
+                customer.DisplayName,
+                customer.Phone,
+                customer.CompanyName,
+                customer.PreferredLanguage);
     }
 
     private static string DisplayNameFromEmail(string email)

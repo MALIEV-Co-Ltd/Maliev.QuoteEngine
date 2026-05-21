@@ -87,6 +87,7 @@ public sealed class CustomerAssistantHandoffCookie(IConfiguration configuration,
             HttpOnly = true,
             IsEssential = true,
             MaxAge = TimeSpan.FromDays(30),
+            Path = "/",
             SameSite = SameSiteMode.Lax,
             Secure = request.IsHttps
         });

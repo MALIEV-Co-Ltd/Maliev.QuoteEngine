@@ -216,3 +216,27 @@ public sealed record ApproveQuoteRequest(Guid QuoteId);
 public sealed record CreateManufacturingOrderRequest(Guid QuoteId, string CustomerPoNumber, string Notes);
 
 public sealed record CreateManufacturingOrderResponse(Guid OrderId, string OrderNumber, string Status);
+
+// ── Payment ───────────────────────────────────────────────────────────────────
+
+public sealed class InitiatePaymentRequest
+{
+    [Required]
+    public Guid OrderId { get; set; }
+
+    [Required]
+    [MaxLength(80)]
+    public string OrderNumber { get; set; } = string.Empty;
+
+    [Range(0.01, 999_999_999.99)]
+    public decimal Amount { get; set; }
+
+    [Required]
+    [StringLength(3, MinimumLength = 3)]
+    public string Currency { get; set; } = "THB";
+}
+
+public sealed record InitiatePaymentResponse(
+    Guid TransactionId,
+    string PaymentUrl,
+    string Status);
