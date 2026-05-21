@@ -72,6 +72,10 @@
     --maliev-shadow-sm: rgba(0, 0, 0, 0.08) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 2px;
     --maliev-shadow-card: rgba(0, 0, 0, 0.08) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 2px, rgba(0, 0, 0, 0.04) 0 8px 8px -8px, #fafafa 0 0 0 1px inset;
     --maliev-focus-ring: 0 0 0 2px var(--focus-blue), 0 0 0 4px var(--ring-blue);
+    --maliev-reconnect-button-bg: #0a72ef;
+    --maliev-reconnect-button-hover: #075fc9;
+    --maliev-reconnect-button-text: #ffffff;
+    --maliev-reconnect-button-focus: rgba(10, 114, 239, 0.24);
 
     /* ─── Typography scale (DESIGN.md §3) ──────────────────────────────── */
     --maliev-font-sans: Geist, "Inter", "Noto Sans Thai", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
@@ -287,6 +291,160 @@ body.quote-ready .startup-screen {
     line-height: 1.5;
     font-weight: 500;
     letter-spacing: 0;
+}
+
+#components-reconnect-modal.maliev-reconnect-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: none;
+    place-items: start center;
+    padding: 96px 20px 20px;
+    background: rgba(255, 255, 255, 0.62);
+    backdrop-filter: blur(10px);
+}
+
+:root[data-maliev-theme="dark"] #components-reconnect-modal.maliev-reconnect-modal {
+    background: rgba(5, 7, 10, 0.66);
+}
+
+#components-reconnect-modal.components-reconnect-show,
+#components-reconnect-modal.components-reconnect-failed,
+#components-reconnect-modal.components-reconnect-rejected {
+    display: grid;
+}
+
+.maliev-reconnect-panel {
+    box-sizing: border-box;
+    display: none;
+    width: min(460px, calc(100vw - 40px));
+    padding: 24px;
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--maliev-radius-lg);
+    box-shadow: rgba(17, 24, 39, 0.12) 0 24px 60px -32px, var(--maliev-shadow-ring);
+    font-family: var(--maliev-font-sans);
+    line-height: 1.55;
+}
+
+#components-reconnect-modal.components-reconnect-show .maliev-reconnect-panel--show,
+#components-reconnect-modal.components-reconnect-failed .maliev-reconnect-panel--failed,
+#components-reconnect-modal.components-reconnect-rejected .maliev-reconnect-panel--rejected {
+    display: grid;
+    align-content: start;
+    grid-auto-rows: max-content;
+    gap: 8px;
+}
+
+.maliev-reconnect-logo {
+    width: 104px;
+    height: auto;
+    margin-bottom: 8px;
+}
+
+:root[data-maliev-theme="dark"] .maliev-reconnect-logo {
+    filter: brightness(0) invert(1);
+}
+
+.maliev-reconnect-panel strong {
+    color: var(--ink);
+    font-size: 1rem;
+    font-weight: 650;
+}
+
+.maliev-reconnect-panel p {
+    max-width: 34rem;
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.9rem;
+}
+
+.maliev-reconnect-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 2px;
+    padding-top: 4px;
+}
+
+.maliev-reconnect-panel--failed .maliev-reconnect-actions,
+.maliev-reconnect-panel--rejected .maliev-reconnect-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.maliev-reconnect-timer {
+    color: var(--muted-2);
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.maliev-reconnect-timer time {
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+}
+
+#components-reconnect-modal .maliev-reconnect-panel .maliev-reconnect-actions button {
+    min-height: 30px;
+    min-width: auto;
+    margin: 0 !important;
+    padding: 6px 14px !important;
+    color: var(--maliev-reconnect-button-text) !important;
+    background: var(--maliev-reconnect-button-bg);
+    border: 0;
+    border-radius: 999px;
+    box-shadow: var(--maliev-shadow-ring);
+    font-size: 0.86rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: none !important;
+    transition: background-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+}
+
+#components-reconnect-modal .maliev-reconnect-panel .maliev-reconnect-actions button:is(:hover, :focus-visible) {
+    color: var(--maliev-reconnect-button-text) !important;
+    background: var(--maliev-reconnect-button-hover);
+}
+
+#components-reconnect-modal .maliev-reconnect-panel .maliev-reconnect-actions button:focus-visible {
+    outline: none;
+    box-shadow:
+        0 0 0 3px var(--maliev-reconnect-button-focus),
+        var(--maliev-shadow-ring);
+}
+
+.maliev-reconnect-progress {
+    display: block;
+    width: 160px;
+    height: 3px;
+    margin-top: 10px;
+    overflow: hidden;
+    background: var(--line);
+    border-radius: 999px;
+}
+
+.maliev-reconnect-progress::after {
+    content: "";
+    display: block;
+    width: 42px;
+    height: 100%;
+    background: var(--maliev-reconnect-button-bg);
+    border-radius: inherit;
+    animation: reconnect-progress 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes reconnect-progress {
+    from {
+        transform: translateX(0);
+    }
+
+    to {
+        transform: translateX(220px);
+    }
 }
 
 .app-shell {

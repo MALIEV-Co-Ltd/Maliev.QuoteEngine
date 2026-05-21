@@ -12,6 +12,33 @@
 </head>
 
 <body>
+    <div id="components-reconnect-modal" class="components-reconnect-hide maliev-reconnect-modal" aria-live="polite">
+        <div class="maliev-reconnect-panel maliev-reconnect-panel--show" role="status">
+            <img class="maliev-reconnect-logo" src="/images/logo.svg" width="118" height="27" alt="MALIEV" />
+            <strong>Reconnecting to your workspace</strong>
+            <p>Keeping your page in place. This usually takes a moment.</p>
+            <span class="maliev-reconnect-timer">Attempting for <time data-reconnect-elapsed>0s</time></span>
+            <span class="maliev-reconnect-progress" aria-hidden="true"></span>
+        </div>
+        <div class="maliev-reconnect-panel maliev-reconnect-panel--failed" role="alert">
+            <img class="maliev-reconnect-logo" src="/images/logo.svg" width="118" height="27" alt="MALIEV" />
+            <strong>Still trying to reconnect</strong>
+            <p>The page is safe. Try reconnecting again, or refresh if your network has changed.</p>
+            <div class="maliev-reconnect-actions">
+                <span class="maliev-reconnect-timer">Attempted for <time data-reconnect-elapsed>0s</time></span>
+                <button type="button" onclick="Blazor.reconnect()">Try again</button>
+            </div>
+        </div>
+        <div class="maliev-reconnect-panel maliev-reconnect-panel--rejected" role="alert">
+            <img class="maliev-reconnect-logo" src="/images/logo.svg" width="118" height="27" alt="MALIEV" />
+            <strong>Refresh to continue</strong>
+            <p>This workspace session could not be restored automatically. Refreshing will reconnect you to the latest page state.</p>
+            <div class="maliev-reconnect-actions">
+                <span class="maliev-reconnect-timer">Attempted for <time data-reconnect-elapsed>0s</time></span>
+                <button type="button" onclick="location.reload()">Refresh page</button>
+            </div>
+        </div>
+    </div>
     <div id="quote-startup" class="startup-screen" aria-live="polite">
         <div class="startup-mark">
             <div class="maliev-logo-loader" style="--wasm-logo-progress: 0%" role="img" aria-label="MALIEV"></div>
@@ -27,6 +54,7 @@
     <div id="app"></div>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="js/quote-engine-loader.js"></script>
+    <script src="js/maliev-reconnect.js"></script>
     <script src="js/maliev-chatbot.js"></script>
     <script src="js/quote-upload.js"></script>
     <script src="js/quote-google-address-picker.js"></script>
