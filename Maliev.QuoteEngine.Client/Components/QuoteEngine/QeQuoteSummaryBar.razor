@@ -1,0 +1,104 @@
+@* Customer-facing quote summary bar matching the ProjectNew bottom action surface. *@
+
+<footer class="qe-qsb-root">
+    <div class="qe-qsb-zone qe-qsb-lead">
+        <span class="qe-zone-label">
+            <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
+            Lead Time
+        </span>
+        <div class="qe-qsb-lead-options">
+            @foreach (var leadTime in ReferenceData?.LeadTimes ?? [])
+            {
+                var active = LeadTimeCode == leadTime.Code;
+                <button type="button"
+                        class="qe-qsb-lead-btn @(active ? "qe-qsb-lead-btn--active" : "")"
+                        @onclick="@(() => OnLeadTimeSelected.InvokeAsync(leadTime.Code))">
+                    <span>
+                        <strong>@leadTime.Name</strong>
+                        <small>@leadTime.BusinessDays business days</small>
+                    </span>
+                    <em>@LeadTimeBadge(leadTime)</em>
+                </button>
+            }
+        </div>
+    </div>
+    <div class="qe-qsb-divider"></div>
+    <div class="qe-qsb-zone qe-qsb-total">
+        <span class="qe-zone-label">Quote Total</span>
+        <strong>@(Estimate is null ? "--" : $"{Estimate.Total:N2} {Estimate.Currency}")</strong>
+        @if (Estimate is not null)
+        {
+            <span class="qe-qsb-ships-date">
+                Ships by <strong>@ComputeShipDate()</strong>
+            </span>
+        }
+        <div class="qe-qsb-actions">
+            <button type="button" class="qe-secondary-btn" disabled="@(!Parts.Any())" @onclick="OnCalculateRequested">Estimate</button>
+            <button type="button" class="qe-secondary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="OnQuoteRequested">PDF</button>
+            <button type="button" class="qe-primary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="OnQuoteRequested">
+                @QuoteButtonLabel
+                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+            </button>
+        </div>
+        @if (FormalQuote is not null)
+        {
+            <div class="qe-qsb-result">
+                <span>@FormalQuote.QuoteNumber</span>
+                <button type="button" @onclick="OnOrderRequested">Create order</button>
+            </div>
+        }
+        @if (Order is not null)
+        {
+            <div class="qe-qsb-result">
+                <span>@Order.OrderNumber</span>
+                <strong>@Order.Status</strong>
+            </div>
+        }
+    </div>
+</footer>
+
+@code {
+    [Parameter, EditorRequired] public List<QuotePartViewModel> Parts { get; set; } = [];
+    [Parameter] public QuoteReferenceDataResponse? ReferenceData { get; set; }
+    [Parameter] public QuoteEstimateResponse? Estimate { get; set; }
+    [Parameter] public GenerateFormalQuoteResponse? FormalQuote { get; set; }
+    [Parameter] public CreateManufacturingOrderResponse? Order { get; set; }
+    [Parameter] public string LeadTimeCode { get; set; } = "STANDARD";
+    [Parameter] public bool CanRequestFormalQuote { get; set; }
+    [Parameter] public string QuoteButtonLabel { get; set; } = "Quote";
+    [Parameter] public EventCallback<string> OnLeadTimeSelected { get; set; }
+    [Parameter] public EventCallback OnCalculateRequested { get; set; }
+    [Parameter] public EventCallback OnQuoteRequested { get; set; }
+    [Parameter] public EventCallback OnOrderRequested { get; set; }
+
+    private string ComputeShipDate()
+    {
+        var leadTimeDays = ReferenceData?.LeadTimes
+            .FirstOrDefault(lt => lt.Code == LeadTimeCode)?.BusinessDays ?? 5;
+        var shipDate = AddBusinessDays(DateTime.Today, leadTimeDays);
+        return shipDate.ToString("d MMM yyyy");
+    }
+
+    private static DateTime AddBusinessDays(DateTime start, int businessDays)
+    {
+        var date = start;
+        var remaining = businessDays;
+        while (remaining > 0)
+        {
+            date = date.AddDays(1);
+            if (date.DayOfWeek != DayOfWeek.Saturday && date.DayOfWeek != DayOfWeek.Sunday)
+            {
+                remaining--;
+            }
+        }
+
+        return date;
+    }
+
+    private static string LeadTimeBadge(LeadTimeOptionDto leadTime) => leadTime.PriceMultiplier switch
+    {
+        < 1m => $"-{Math.Round((1m - leadTime.PriceMultiplier) * 100m)}%",
+        > 1m => $"+{Math.Round((leadTime.PriceMultiplier - 1m) * 100m)}%",
+        _ => "base"
+    };
+}

@@ -29,15 +29,20 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             storagePath,
             _ => new QuoteFileAnalysisStatus
             {
-                StoragePath = storagePath, Status = "GlbReady",
-                GlbUrl = glbUrl, ThumbnailUrl = thumbnailUrl,
-                BodyCount = bodyCount, IsManifold = isManifold
+                StoragePath = storagePath,
+                Status = "GlbReady",
+                GlbUrl = glbUrl,
+                ThumbnailUrl = thumbnailUrl,
+                BodyCount = bodyCount,
+                IsManifold = isManifold
             },
             (_, existing) => existing with
             {
                 Status = "GlbReady",
-                GlbUrl = glbUrl, ThumbnailUrl = thumbnailUrl,
-                BodyCount = bodyCount, IsManifold = isManifold
+                GlbUrl = glbUrl,
+                ThumbnailUrl = thumbnailUrl,
+                BodyCount = bodyCount,
+                IsManifold = isManifold
             });
         return Task.CompletedTask;
     }
@@ -51,10 +56,14 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             storagePath,
             _ => new QuoteFileAnalysisStatus
             {
-                StoragePath = storagePath, Status = "DfmAnalysisReady",
-                FdmReport = fdmReport, SlaReport = slaReport, CncReport = cncReport,
+                StoragePath = storagePath,
+                Status = "DfmAnalysisReady",
+                FdmReport = fdmReport,
+                SlaReport = slaReport,
+                CncReport = cncReport,
                 OverlayGlbUrls = overlayGlbUrls,
-                NonManifoldReason = nonManifoldReason, AnalysisErrorCode = analysisErrorCode
+                NonManifoldReason = nonManifoldReason,
+                AnalysisErrorCode = analysisErrorCode
             },
             (_, existing) => existing with
             {
@@ -77,7 +86,12 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
     {
         _store.AddOrUpdate(
             storagePath,
-            _ => new QuoteFileAnalysisStatus { StoragePath = storagePath, Status = "Failed", AnalysisErrorCode = errorCode },
+            _ => new QuoteFileAnalysisStatus
+            {
+                StoragePath = storagePath,
+                Status = "Failed",
+                AnalysisErrorCode = errorCode
+            },
             (_, existing) => existing with { Status = "Failed", AnalysisErrorCode = errorCode });
         return Task.CompletedTask;
     }

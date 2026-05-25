@@ -1,0 +1,133 @@
+@* ProjectNew-style center card: viewer, DFM, drawing, and all-parts table modes. *@
+
+<section class="qe-pdc-root">
+    <header class="qe-pdc-header">
+        <div class="qe-pdc-header-left">
+            <div class="qe-pdc-header-name-row">
+                <strong title="@Part.FileName">@System.IO.Path.GetFileNameWithoutExtension(Part.FileName)</strong>
+                <span class="qe-status-pill qe-status--@StatusClass(Part)">@Part.Status.ToUpperInvariant()</span>
+            </div>
+            <div class="qe-pdc-header-subline">
+                Uploaded just now / @Part.FileName / @Part.VolumeCc.ToString("0.##") cc
+            </div>
+        </div>
+        <div class="qe-pdc-tabs">
+            <button type="button" class="qe-pdc-tab @(CenterMode == "dfm" ? "qe-pdc-tab--active" : "")"
+                    @onclick='() => SetCenterMode("dfm")'>
+                <MudIcon Icon="@Icons.Material.Outlined.Science" Size="Size.Small" />
+                DFM
+                <span>@Part.Findings.Count</span>
+            </button>
+            <button type="button" class="qe-pdc-tab @(CenterMode == "drawing" ? "qe-pdc-tab--active" : "")"
+                    @onclick='() => SetCenterMode("drawing")'>
+                <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
+                Drawing
+                <span>@Part.DrawingFiles.Count</span>
+            </button>
+            <button type="button" class="qe-pdc-tab @(CenterMode == "bulk" ? "qe-pdc-tab--active" : "")"
+                    @onclick='() => SetCenterMode("bulk")'>
+                <MudIcon Icon="@Icons.Material.Outlined.TableRows" Size="Size.Small" />
+                All parts
+            </button>
+        </div>
+    </header>
+
+    <div class="qe-pdc-container">
+        <div class="qe-center-viewer">
+            <QePartViewer GlbUrl="@Part.GlbUrl"
+                          IsDarkMode="@IsDarkMode" />
+        </div>
+
+        <div class="qe-center-tabs">
+            <button class="@(CenterMode == "dfm" ? "qe-tab-active" : "")"
+                    @onclick='() => SetCenterMode("dfm")'>DFM Analysis</button>
+            <button class="@(CenterMode == "drawing" ? "qe-tab-active" : "")"
+                    @onclick='() => SetCenterMode("drawing")'>Drawing</button>
+            <button class="@(CenterMode == "bulk" ? "qe-tab-active" : "")"
+                    @onclick='() => SetCenterMode("bulk")'>All Parts</button>
+        </div>
+
+        @if (CenterMode == "dfm")
+        {
+            <QeDfmTab IsManifold="@Part.IsManifold"
+                      NonManifoldReason="@Part.NonManifoldReason"
+                      FdmReport="@Part.FdmDfmReport"
+                      SlaReport="@Part.SlaDfmReport"
+                      CncReport="@Part.CncDfmReport"
+                      GlbUrl="@Part.GlbUrl"
+                      BodyCount="@Part.BodyCount"
+                      ProcessId="@Part.ProcessId" />
+        }
+        else if (CenterMode == "drawing")
+        {
+            <QeDrawingAttachmentsTab Part="@Part"
+                                     OnPartChanged="@OnPartChanged" />
+        }
+        else
+        {
+            <QeBulkTable Parts="@Parts"
+                         Processes="@(ReferenceData?.Processes ?? [])"
+                         Materials="@(ReferenceData?.Materials ?? [])"
+                         Finishes="@(ReferenceData?.Finishes ?? [])"
+                         Tolerances="@(ReferenceData?.Tolerances ?? [])"
+                         InspectionLevels="@(ReferenceData?.InspectionLevels ?? [])"
+                         RoughnessOptions="@(ReferenceData?.RoughnessOptions ?? [])"
+                         OnPartChanged="@OnPartChanged"
+                         OnSelectPart="@OnSelectPart"
+                         OnAddFilesRequested="@OnAddFilesRequested" />
+        }
+    </div>
+    <footer class="qe-pdc-footer">
+        <span class="qe-chip qe-chip--process">@ProcessName(Part.ProcessId)</span>
+        <span class="qe-chip">@MaterialName(Part.MaterialId)</span>
+        @if (!string.IsNullOrWhiteSpace(Part.FinishCode))
+        {
+            <span class="qe-chip">@Part.FinishCode</span>
+        }
+        <span class="qe-footer-sep"></span>
+        <span>@Part.Quantity pcs</span>
+        <strong>@(Estimate is null ? "--" : $"{PartTotal(Part):N2} THB")</strong>
+    </footer>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public QuotePartViewModel Part { get; set; } = new();
+    [Parameter, EditorRequired] public List<QuotePartViewModel> Parts { get; set; } = [];
+    [Parameter] public QuoteReferenceDataResponse? ReferenceData { get; set; }
+    [Parameter] public QuoteEstimateResponse? Estimate { get; set; }
+    [Parameter] public string CenterMode { get; set; } = "dfm";
+    [Parameter] public EventCallback<string> CenterModeChanged { get; set; }
+    [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
+    [Parameter] public EventCallback<QuotePartViewModel> OnSelectPart { get; set; }
+    [Parameter] public EventCallback OnAddFilesRequested { get; set; }
+    [Parameter] public bool IsDarkMode { get; set; }
+
+    private Task SetCenterMode(string mode)
+    {
+        CenterMode = mode;
+        return CenterModeChanged.InvokeAsync(mode);
+    }
+
+    private decimal PartTotal(QuotePartViewModel part)
+    {
+        return Estimate?.Lines.FirstOrDefault(line => line.PartId == part.PartId)?.LineTotal ?? 0m;
+    }
+
+    private string ProcessName(string processId)
+    {
+        return ReferenceData?.Processes.FirstOrDefault(process => process.Id == processId)?.Name ?? processId;
+    }
+
+    private string MaterialName(string materialId)
+    {
+        return ReferenceData?.Materials.FirstOrDefault(material => material.Id == materialId)?.Name ?? materialId;
+    }
+
+    private static string StatusClass(QuotePartViewModel part) => part.Status switch
+    {
+        "Analyzed" or "DfmAnalysisReady" or "GlbReady" => "ok",
+        "Upload failed" or "Failed" => "error",
+        "Uploading" or "Processing" => "warn",
+        _ => "muted"
+    };
+}

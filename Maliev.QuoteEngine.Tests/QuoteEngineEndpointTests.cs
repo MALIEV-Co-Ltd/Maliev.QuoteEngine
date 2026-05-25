@@ -83,17 +83,17 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     private sealed class FakeMaterialCatalogClient : IMaterialCatalogClient
     {
-        private static readonly Guid FdmProcessId  = Guid.Parse("11111111-0000-0000-0000-000000000001");
-        private static readonly Guid SlaProcessId  = Guid.Parse("11111111-0000-0000-0000-000000000002");
-        private static readonly Guid CncProcessId  = Guid.Parse("11111111-0000-0000-0000-000000000003");
-        private static readonly Guid DefaultMatId  = Guid.Parse("22222222-0000-0000-0000-000000000001");
+        private static readonly Guid FdmProcessId = Guid.Parse("11111111-0000-0000-0000-000000000001");
+        private static readonly Guid SlaProcessId = Guid.Parse("11111111-0000-0000-0000-000000000002");
+        private static readonly Guid CncProcessId = Guid.Parse("11111111-0000-0000-0000-000000000003");
+        private static readonly Guid DefaultMatId = Guid.Parse("22222222-0000-0000-0000-000000000001");
 
         public Task<Guid> ResolveProcessIdAsync(string processCode, CancellationToken ct = default) =>
             Task.FromResult(processCode.ToLowerInvariant() switch
             {
                 "sla" => SlaProcessId,
                 "cnc" => CncProcessId,
-                _     => FdmProcessId
+                _ => FdmProcessId
             });
 
         public Task<Guid> ResolveMaterialIdAsync(string processCode, string materialCode, CancellationToken ct = default) =>
@@ -664,6 +664,96 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.True(body.Total > 0);
         Assert.True(body.RequiresSignIn);
         Assert.Single(body.Lines);
+    }
+
+    [Fact]
+    public async Task Reference_data_and_estimate_support_projectnew_customer_configuration()
+    {
+        using var client = factory.CreateClient();
+
+        var reference = await client.GetFromJsonAsync<QuoteReferenceDataResponse>("/quote/v1/reference-data");
+
+        Assert.NotNull(reference);
+        Assert.NotEmpty(reference.Finishes);
+        Assert.NotEmpty(reference.Tolerances);
+        Assert.NotEmpty(reference.InspectionLevels);
+        Assert.NotEmpty(reference.RoughnessOptions);
+        Assert.NotEmpty(reference.Colors);
+        Assert.Contains(reference.Finishes, item => item.ProcessId == "cnc" && item.Code == "BEAD_BLAST_CLEAR");
+        Assert.Contains(reference.Tolerances, item => item.Code == "ISO2768_M");
+        Assert.Contains(reference.InspectionLevels, item => item.Code == "STANDARD");
+        Assert.Contains(reference.RoughnessOptions, item => item.Code == "RA_1_6");
+
+        var baseEstimateResponse = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
+        {
+            QuoteSessionId = "projectnew-parity-base",
+            LeadTimeCode = "STANDARD",
+            Parts =
+            [
+                new QuotePartDraftDto
+                {
+                    FileId = Guid.NewGuid(),
+                    UploadId = "upload-base",
+                    FileName = "fixture.step",
+                    ProcessId = "cnc",
+                    MaterialId = "al6061",
+                    Quantity = 1,
+                    VolumeCc = 10m,
+                    SurfaceAreaCm2 = 60m
+                }
+            ]
+        });
+        baseEstimateResponse.EnsureSuccessStatusCode();
+        var baseEstimate = await baseEstimateResponse.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
+
+        var configuredEstimateResponse = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
+        {
+            QuoteSessionId = "projectnew-parity-configured",
+            LeadTimeCode = "STANDARD",
+            Parts =
+            [
+                new QuotePartDraftDto
+                {
+                    FileId = Guid.NewGuid(),
+                    UploadId = "upload-configured",
+                    FileName = "fixture.step",
+                    ProcessId = "cnc",
+                    MaterialId = "al6061",
+                    FinishId = "cnc-bead-blast-clear",
+                    FinishCode = "BEAD_BLAST_CLEAR",
+                    ToleranceId = "iso-2768-m",
+                    ToleranceCode = "ISO2768_M",
+                    InspectionLevel = "STANDARD",
+                    RoughnessCode = "RA_1_6",
+                    Color = "Natural",
+                    HasThreadedHoles = true,
+                    ThreadSpecification = "M3x0.5",
+                    ThreadedHoleCount = 4,
+                    InsertType = "HeatSet",
+                    InsertCount = 2,
+                    Quantity = 1,
+                    VolumeCc = 10m,
+                    SurfaceAreaCm2 = 60m,
+                    BodyCount = 2,
+                    SelectedBodyIndex = 1,
+                    DrawingFiles =
+                    [
+                        new QuotePartAttachmentDto("fixture.pdf", "customers/c/q/fixture.pdf", "application/pdf", 2048, "Drawing")
+                    ]
+                }
+            ]
+        });
+        configuredEstimateResponse.EnsureSuccessStatusCode();
+        var configuredEstimate = await configuredEstimateResponse.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
+
+        Assert.NotNull(baseEstimate);
+        Assert.NotNull(configuredEstimate);
+        Assert.True(configuredEstimate.Total > baseEstimate.Total);
+        var line = Assert.Single(configuredEstimate.Lines);
+        Assert.Contains("finish", line.Notes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("tolerance", line.Notes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("inspection", line.Notes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("thread", line.Notes, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

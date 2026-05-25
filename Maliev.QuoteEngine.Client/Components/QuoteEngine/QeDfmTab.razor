@@ -3,6 +3,48 @@
 
 <div class="qe-dfm-tab">
 
+    @* ── Header: title + pass/fail badge ── *@
+    <div class="qe-dfm-header">
+        <div class="qe-dfm-header-top">
+            <span class="qe-dfm-title">Design for Manufacturability</span>
+            @{
+                var allChecks = IntrinsicChecks.Concat(ActiveProcessChecks).ToArray();
+                var totalCount = allChecks.Length;
+                var pendingCount = allChecks.Count(c => GetState(c) == CheckState.Pending);
+                var failedCount = allChecks.Count(c => GetState(c) == CheckState.Failed);
+                var resolvedCount = totalCount - pendingCount;
+                var passedCount = resolvedCount - failedCount;
+            }
+            @if (pendingCount == totalCount)
+            {
+                <div class="qe-dfm-badge qe-dfm-badge--pending">
+                    <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" Size="Size.Small" />
+                    <span>Pending</span>
+                </div>
+            }
+            else if (resolvedCount > 0)
+            {
+                var allPassed = failedCount == 0;
+                <div class="qe-dfm-badge @(allPassed ? "qe-dfm-badge--ok" : "qe-dfm-badge--warn")">
+                    <MudIcon Icon="@(allPassed ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
+                             Size="Size.Small" />
+                    <span>@passedCount/@resolvedCount passed</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* ── Process tab switcher: FDM / SLA / CNC ── *@
+    <div class="qe-dfm-tabs">
+        <button class="qe-dfm-tab-btn @(_activeTab == "FDM" ? "qe-dfm-tab-btn--active" : "")"
+                @onclick='() => _activeTab = "FDM"'>FDM</button>
+        <button class="qe-dfm-tab-btn @(_activeTab == "SLA" ? "qe-dfm-tab-btn--active" : "")"
+                @onclick='() => _activeTab = "SLA"'>SLA</button>
+        <button class="qe-dfm-tab-btn @(_activeTab == "CNC" ? "qe-dfm-tab-btn--active" : "")"
+                @onclick='() => _activeTab = "CNC"'>CNC</button>
+    </div>
+
+    @* ── Non-manifold banner ── *@
     @if (!IsManifold)
     {
         <div class="qe-dfm-banner qe-dfm-banner--warn">
@@ -15,109 +57,78 @@
         </div>
     }
 
-    @* ── Process selector ── *@
-    <div class="qe-dfm-tabs">
-        @foreach (var tab in AvailableTabs)
+    @* ── Check list: skeletons for pending, expansion panels for resolved ── *@
+    <div class="qe-dfm-panel">
+        @{
+            var checks = IntrinsicChecks.Concat(ActiveProcessChecks).ToArray();
+            var pendingChecks = checks.Where(c => GetState(c) == CheckState.Pending).ToArray();
+            var resolvedChecks = checks.Where(c => GetState(c) != CheckState.Pending).ToArray();
+        }
+
+        @foreach (var _ in pendingChecks)
         {
-            <button class="qe-dfm-tab-btn @(tab == _activeTab ? "qe-dfm-tab-btn--active" : "")"
-                    @onclick="() => _activeTab = tab">@tab</button>
+            <div class="qe-dfm-check-skeleton">
+                <MudSkeleton SkeletonType="SkeletonType.Circle" Width="20px" Height="20px" />
+                <div>
+                    <MudSkeleton Width="100px" />
+                    <MudSkeleton Width="160px" />
+                </div>
+            </div>
+        }
+
+        @if (resolvedChecks.Length > 0)
+        {
+            <MudExpansionPanels MultiExpansion="true" Dense="true" Elevation="0" Class="qe-dfm-expansions">
+                @foreach (var check in resolvedChecks)
+                {
+                    var state = GetState(check);
+                    var failed = state == CheckState.Failed;
+                    var fixes = GetFixes(check).ToArray();
+                    var detail = GetDetail(check);
+                    var hasExpandContent = failed && (detail is not null || fixes.Length > 0);
+                    var panelClass = $"qe-dfm-expansion-panel{(failed ? " qe-dfm-expansion-panel--fail" : "")}";
+                    <MudExpansionPanel @key="@check.Category"
+                                       Expanded="@hasExpandContent"
+                                       HideIcon="@(!hasExpandContent)"
+                                       Class="@panelClass">
+                        <TitleContent>
+                            <div class="qe-dfm-expansion-panel-header">
+                                <MudIcon Icon="@(failed ? Icons.Material.Filled.Warning : Icons.Material.Filled.CheckCircle)"
+                                         Color="@(failed ? Color.Warning : Color.Success)"
+                                         Size="Size.Small" />
+                                <div class="qe-dfm-expansion-panel-text">
+                                    <span class="qe-dfm-expansion-panel-title">@check.Label</span>
+                                    <span class="qe-dfm-expansion-panel-summary">@GetSummary(check)</span>
+                                </div>
+                            </div>
+                        </TitleContent>
+                        <ChildContent>
+                            @if (detail is not null)
+                            {
+                                <div class="qe-dfm-expansion-detail">@detail</div>
+                            }
+                            @if (fixes.Length > 0)
+                            {
+                                <ul class="qe-dfm-fix-list">
+                                    @foreach (var fix in fixes)
+                                    {
+                                        <li>@fix</li>
+                                    }
+                                </ul>
+                            }
+                        </ChildContent>
+                    </MudExpansionPanel>
+                }
+            </MudExpansionPanels>
+        }
+
+        @if (pendingChecks.Length == 0 && resolvedChecks.Length == 0)
+        {
+            <div class="qe-dfm-empty">
+                <span>DFM analysis is running&hellip;</span>
+            </div>
         }
     </div>
-
-    @if (!HasAnyReport && IsManifold)
-    {
-        <div class="qe-dfm-empty">
-            <span>DFM analysis is running&hellip;</span>
-        </div>
-    }
-    else if (_activeTab == "FDM" && FdmReport is not null)
-    {
-        <div class="qe-dfm-panel">
-            @RenderCheck("Thin walls", FdmReport.ThinWallCount == 0,
-                $"{FdmReport.ThinWallCount} thin wall(s) detected — minimum 1.2 mm recommended",
-                "No thin walls detected")
-            @RenderCheck("Overhangs", !FdmReport.SupportRequired,
-                $"{FdmReport.OverhangFaceCount} overhanging faces ({FdmReport.OverhangAreaCm2:F1} cm²) — support material required",
-                "No support material required")
-            @RenderCheck("Small details", FdmReport.SmallDetailCount == 0,
-                $"{FdmReport.SmallDetailCount} small feature(s) may not print at this scale",
-                "All features are printable at scale")
-            @foreach (var issue in FdmReport.Issues)
-            {
-                @RenderIssue(issue)
-            }
-        </div>
-    }
-    else if (_activeTab == "FDM" && FdmReport is null)
-    {
-        @RenderPending("FDM")
-    }
-
-    @* ── SLA panel ── *@
-    @if (_activeTab == "SLA" && SlaReport is not null)
-    {
-        <div class="qe-dfm-panel">
-            @RenderCheck("Thin walls", SlaReport.ThinWallCount == 0,
-                $"{SlaReport.ThinWallCount} thin wall(s) detected — minimum 0.6 mm recommended for SLA",
-                "No thin walls detected")
-            @RenderCheck("Resin trapping", !SlaReport.ResinTrappingRisk,
-                "Internal cavities may trap uncured resin — add drain holes or design open channels",
-                "No resin trapping risk")
-            @RenderCheck("Suction effect", !SlaReport.SuctionRisk,
-                "Flat surfaces parallel to the build platform create suction — consider tilting or adding holes",
-                "No suction risk detected")
-            @RenderCheck("Hollow regions", !SlaReport.HollowRegions,
-                "Enclosed hollow regions detected — ensure drain holes are present",
-                "No enclosed hollow regions")
-            @foreach (var issue in SlaReport.Issues)
-            {
-                @RenderIssue(issue)
-            }
-        </div>
-    }
-    else if (_activeTab == "SLA" && SlaReport is null)
-    {
-        @RenderPending("SLA")
-    }
-
-    @* ── CNC panel ── *@
-    @if (_activeTab == "CNC" && CncReport is not null)
-    {
-        <div class="qe-dfm-panel">
-            @RenderCheck("Sharp internal corners", CncReport.SharpCornerCount == 0,
-                $"{CncReport.SharpCornerCount} sharp internal corner(s) — add fillets ≥ R0.5 mm",
-                "All internal corners are filletted")
-            @RenderCheck("Undercuts", !CncReport.HasUndercuts,
-                "Undercut feature(s) detected — may require 5-axis machining or additional setups",
-                "No undercuts detected")
-            @if (CncReport.HasDrillHoles)
-            {
-                @RenderCheck("Drill holes", true,
-                    "", $"{CncReport.DrillHoleCount} drill hole(s) — standard diameters available")
-            }
-            @RenderCheck("EDM required", !CncReport.RequiresEdm,
-                "Electrical discharge machining required — additional lead time applies",
-                "No EDM required")
-            @RenderCheck("Grinding required", !CncReport.RequiresGrinding,
-                "Surface grinding required — additional lead time applies",
-                "No grinding required")
-            @if (CncReport.IsTurnable)
-            {
-                <div class="qe-dfm-check qe-dfm-check--info">
-                    <span class="qe-dfm-icon">&#x2139;</span>
-                    <span>Part is turnable — can be produced on a CNC lathe for lower cost</span>
-                </div>
-            }
-            @foreach (var issue in CncReport.Issues)
-            {
-                @RenderIssue(issue)
-            }
-        </div>
-    }
-    else if (_activeTab == "CNC" && CncReport is null)
-    {
-        @RenderPending("CNC")
-    }
 </div>
 
 @code {
@@ -126,40 +137,245 @@
     [Parameter] public QeFdmDfmReport? FdmReport { get; set; }
     [Parameter] public QeSlaDfmReport? SlaReport { get; set; }
     [Parameter] public QeCncDfmReport? CncReport { get; set; }
+    [Parameter] public string? GlbUrl { get; set; }
+    [Parameter] public int BodyCount { get; set; } = 1;
+    [Parameter] public string ProcessId { get; set; } = "fdm";
 
     private string _activeTab = "FDM";
-    private bool HasAnyReport => FdmReport is not null || SlaReport is not null || CncReport is not null;
+    private string? _lastProcessId;
 
-    private IEnumerable<string> AvailableTabs
+    protected override void OnParametersSet()
     {
-        get
+        if (_lastProcessId != ProcessId)
         {
-            yield return "FDM";
-            yield return "SLA";
-            yield return "CNC";
+            _lastProcessId = ProcessId;
+            _activeTab = ProcessId.ToLowerInvariant() switch
+            {
+                "sla" or "sla_dlp" or "dlp" => "SLA",
+                "cnc" or "cnc_mill" or "cnc_milling" or "cnc_turn" or "cnc_turning" => "CNC",
+                _ => "FDM"
+            };
         }
     }
 
-    private RenderFragment RenderCheck(string label, bool passed, string failText, string passText) =>
-        @<div class="qe-dfm-check @(passed ? "qe-dfm-check--pass" : "qe-dfm-check--fail")">
-            <span class="qe-dfm-icon">@(passed ? "✓" : "⚠")</span>
-            <div>
-                <span class="qe-dfm-label">@label</span>
-                <span class="qe-dfm-detail">@(passed ? passText : failText)</span>
-            </div>
-        </div>;
+    private enum CheckState { Pending, Passed, Failed }
 
-    private RenderFragment RenderIssue(QeDfmIssueItem issue) =>
-        @<div class="qe-dfm-check @(issue.Severity == "error" ? "qe-dfm-check--fail" : "qe-dfm-check--warn")">
-            <span class="qe-dfm-icon">@(issue.Severity == "error" ? "✕" : "⚠")</span>
-            <div>
-                <span class="qe-dfm-label">@issue.Code</span>
-                <span class="qe-dfm-detail">@issue.Message</span>
-            </div>
-        </div>;
+    private sealed record CheckDef(string Category, string Label);
 
-    private RenderFragment RenderPending(string process) =>
-        @<div class="qe-dfm-empty">
-            <span>@process DFM analysis pending&hellip;</span>
-        </div>;
+    private static readonly CheckDef[] IntrinsicChecks =
+    [
+        new("non_manifold", "Mesh integrity"),
+        new("multi_body",   "Single body"),
+    ];
+
+    private static readonly CheckDef[] FdmChecks =
+    [
+        new("thin_wall",     "Thin walls"),
+        new("overhang",      "Overhangs / supports"),
+        new("small_feature", "Small features"),
+    ];
+
+    private static readonly CheckDef[] SlaChecks =
+    [
+        new("thin_wall",    "Thin walls"),
+        new("resin_trap",   "Resin drainage"),
+        new("suction",      "Suction risk"),
+        new("hollow",       "Hollow regions"),
+    ];
+
+    private static readonly CheckDef[] CncChecks =
+    [
+        new("sharp_corner", "Internal radii"),
+        new("undercut",     "Undercuts"),
+        new("edm",          "EDM required"),
+        new("grinding",     "Surface grinding"),
+    ];
+
+    private IReadOnlyList<CheckDef> ActiveProcessChecks => _activeTab switch
+    {
+        "SLA" => SlaChecks,
+        "CNC" => CncChecks,
+        _     => FdmChecks
+    };
+
+    private bool GlbReady => !string.IsNullOrEmpty(GlbUrl);
+
+    private CheckState GetState(CheckDef check) =>
+        Array.IndexOf(IntrinsicChecks, check) >= 0
+            ? GetIntrinsicState(check.Category)
+            : GetProcessState(check.Category);
+
+    private CheckState GetIntrinsicState(string category) => category switch
+    {
+        "non_manifold" => !GlbReady ? CheckState.Pending : IsManifold ? CheckState.Passed : CheckState.Failed,
+        "multi_body"   => !GlbReady ? CheckState.Pending : BodyCount <= 1 ? CheckState.Passed : CheckState.Failed,
+        _ => CheckState.Pending
+    };
+
+    private CheckState GetProcessState(string category) => _activeTab switch
+    {
+        "FDM" => FdmReport is null ? CheckState.Pending : GetFdmState(category),
+        "SLA" => SlaReport is null ? CheckState.Pending : GetSlaState(category),
+        "CNC" => CncReport is null ? CheckState.Pending : GetCncState(category),
+        _ => CheckState.Pending
+    };
+
+    private CheckState GetFdmState(string category) => category switch
+    {
+        "thin_wall"     => FdmReport!.ThinWallCount     >  0   ? CheckState.Failed : CheckState.Passed,
+        "overhang"      => FdmReport!.SupportRequired           ? CheckState.Failed : CheckState.Passed,
+        "small_feature" => FdmReport!.SmallDetailCount  >  0   ? CheckState.Failed : CheckState.Passed,
+        _ => CheckState.Passed
+    };
+
+    private CheckState GetSlaState(string category) => category switch
+    {
+        "thin_wall"  => SlaReport!.ThinWallCount     >  0   ? CheckState.Failed : CheckState.Passed,
+        "resin_trap" => SlaReport!.ResinTrappingRisk         ? CheckState.Failed : CheckState.Passed,
+        "suction"    => SlaReport!.SuctionRisk               ? CheckState.Failed : CheckState.Passed,
+        "hollow"     => SlaReport!.HollowRegions             ? CheckState.Failed : CheckState.Passed,
+        _ => CheckState.Passed
+    };
+
+    private CheckState GetCncState(string category) => category switch
+    {
+        "sharp_corner" => CncReport!.SharpCornerCount > 0   ? CheckState.Failed : CheckState.Passed,
+        "undercut"     => CncReport!.HasUndercuts            ? CheckState.Failed : CheckState.Passed,
+        "edm"          => CncReport!.RequiresEdm             ? CheckState.Failed : CheckState.Passed,
+        "grinding"     => CncReport!.RequiresGrinding        ? CheckState.Failed : CheckState.Passed,
+        _ => CheckState.Passed
+    };
+
+    private string GetSummary(CheckDef check)
+    {
+        var state = GetState(check);
+        if (state == CheckState.Passed) return GetPassSummary(check.Category);
+        return GetFailSummary(check.Category);
+    }
+
+    private string GetPassSummary(string category) => category switch
+    {
+        "non_manifold"  => "Mesh is watertight",
+        "multi_body"    => "Single solid body",
+        "thin_wall"     => "All walls within tolerance",
+        "overhang"      => "No support material required",
+        "small_feature" => "All features are printable",
+        "resin_trap"    => "No resin trapping risk",
+        "suction"       => "No suction risk",
+        "hollow"        => "No enclosed hollow regions",
+        "sharp_corner"  => "All corners are radiused",
+        "undercut"      => "No undercuts detected",
+        "edm"           => "No EDM required",
+        "grinding"      => "No grinding required",
+        _ => "OK"
+    };
+
+    private string GetFailSummary(string category) => category switch
+    {
+        "non_manifold"  => NonManifoldReason ?? "Mesh has open faces or self-intersections",
+        "multi_body"    => $"{BodyCount} bodies — may affect pricing",
+        "thin_wall"     => _activeTab == "FDM"
+                               ? $"{FdmReport?.ThinWallCount} thin wall(s) — min 1.2 mm"
+                               : $"{SlaReport?.ThinWallCount} thin wall(s) — min 0.6 mm",
+        "overhang"      => $"{FdmReport?.OverhangFaceCount} face(s), {FdmReport?.OverhangAreaCm2:F1} cm² — supports needed",
+        "small_feature" => $"{FdmReport?.SmallDetailCount} small feature(s) may not print",
+        "resin_trap"    => "Internal cavities trap uncured resin",
+        "suction"       => "Flat surfaces parallel to build plate",
+        "hollow"        => "Enclosed hollow regions detected",
+        "sharp_corner"  => $"{CncReport?.SharpCornerCount} sharp corner(s) — add fillets ≥ R0.5",
+        "undercut"      => "Requires 5-axis or additional setups",
+        "edm"           => "Electrical discharge machining required",
+        "grinding"      => "Surface grinding required",
+        _ => "Issue detected"
+    };
+
+    private string? GetDetail(CheckDef check)
+    {
+        if (GetState(check) != CheckState.Failed) return null;
+        return check.Category switch
+        {
+            "non_manifold"  => "The mesh contains holes, open faces, or self-intersecting geometry. This must be repaired before printing or machining. Tools like Meshmixer or Netfabb can fix most issues automatically.",
+            "multi_body"    => $"The file contains {BodyCount} separate solid bodies. Multi-body parts are quoted individually. If the bodies should be joined, re-export as a single solid.",
+            "thin_wall"     => _activeTab == "FDM"
+                                   ? $"{FdmReport?.ThinWallCount} wall(s) are thinner than the recommended 1.2 mm minimum for FDM. Very thin sections are prone to warping and breakage."
+                                   : $"{SlaReport?.ThinWallCount} wall(s) are thinner than 0.6 mm. SLA can achieve finer features but very thin walls remain fragile.",
+            "overhang"      => $"{FdmReport?.OverhangFaceCount} overhanging face(s) covering {FdmReport?.OverhangAreaCm2:F1} cm² exceed 45° and require support material, which increases material cost and post-processing time.",
+            "small_feature" => $"{FdmReport?.SmallDetailCount} feature(s) are smaller than the minimum printable size at the selected layer height. They may merge with adjacent surfaces or disappear entirely.",
+            "resin_trap"    => "Internal closed cavities will trap uncured liquid resin during SLA printing. The resin must drain completely before post-cure, or the part may crack or deform.",
+            "suction"       => "Large flat surfaces oriented parallel to the build platform create suction forces during layer separation, increasing the risk of delamination or build failures.",
+            "hollow"        => "Completely enclosed hollow regions were found. These trap resin and are a known failure point for SLA parts. Add drain holes of at least 3–4 mm diameter.",
+            "sharp_corner"  => $"{CncReport?.SharpCornerCount} internal corner(s) have no radius. All CNC-machined internal corners require a minimum tool-radius fillet. Recommended: ≥ R0.5 mm.",
+            "undercut"      => "Undercut features cannot be reached in a standard 3-axis setup. Machining will require 5-axis positioning or multiple fixturing operations, which increases cost and lead time.",
+            "edm"           => "One or more features can only be produced by electrical discharge machining (EDM). This adds significant lead time and cost.",
+            "grinding"      => "The part requires surface grinding to meet the specified finish or tolerance. This is an additional operation after machining.",
+            _ => null
+        };
+    }
+
+    private IEnumerable<string> GetFixes(CheckDef check)
+    {
+        if (GetState(check) != CheckState.Failed) yield break;
+        switch (check.Category)
+        {
+            case "non_manifold":
+                yield return "Run auto-repair in Meshmixer (Analysis → Inspector → Auto Repair All)";
+                yield return "Use Netfabb cloud repair for complex meshes";
+                yield return "Check for duplicate faces or coincident surfaces in your CAD tool";
+                break;
+            case "multi_body":
+                yield return "Union or join all bodies into a single solid before exporting";
+                yield return "If multi-body is intentional, split into separate files for separate quotes";
+                break;
+            case "thin_wall":
+                if (_activeTab == "FDM")
+                {
+                    yield return "Increase wall thickness to at least 1.2 mm";
+                    yield return "Use a finer nozzle size (0.25 mm) for features down to 0.8 mm";
+                }
+                else
+                {
+                    yield return "Increase wall thickness to at least 0.6 mm for SLA";
+                    yield return "For decorative thin features, consider resin type upgrade";
+                }
+                break;
+            case "overhang":
+                yield return "Re-orient the part so overhangs are minimised";
+                yield return "Add chamfers or fillets at 45° to reduce overhang area";
+                yield return "Accept support material — cost impact is included in the estimate";
+                break;
+            case "small_feature":
+                yield return "Scale up features smaller than 0.5 mm if function permits";
+                yield return "Use SLA instead of FDM for fine-detail parts";
+                break;
+            case "resin_trap":
+                yield return "Add drain holes of ≥ 3 mm diameter to all hollow regions";
+                yield return "Design open channels or slots to allow resin flow-out";
+                break;
+            case "suction":
+                yield return "Tilt the part 15–45° on the build platform";
+                yield return "Add small perforations in large flat surfaces";
+                break;
+            case "hollow":
+                yield return "Add drain/vent holes ≥ 3–4 mm diameter to each hollow region";
+                yield return "Make the hollow region open on at least one face";
+                break;
+            case "sharp_corner":
+                yield return "Add fillets of at least R0.5 mm to all internal corners";
+                yield return "Preferred fillet radius: R1.0 mm or half the adjacent wall thickness";
+                break;
+            case "undercut":
+                yield return "Re-orient the feature so it is accessible from above";
+                yield return "Split the part at the undercut parting line into two pieces";
+                yield return "Accept 5-axis machining — quote will include setup surcharge";
+                break;
+            case "edm":
+                yield return "Replace EDM-only features with machinable geometry where possible";
+                yield return "Accept EDM — additional lead time of 3–5 days applies";
+                break;
+            case "grinding":
+                yield return "Specify grinding only for surfaces that require it";
+                yield return "Accept surface grinding — cost and lead time impact included";
+                break;
+        }
+    }
 }

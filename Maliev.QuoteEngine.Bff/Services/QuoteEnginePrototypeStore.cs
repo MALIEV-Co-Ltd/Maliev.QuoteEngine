@@ -36,6 +36,36 @@ public sealed class QuoteEnginePrototypeStore
             new("al6061", "cnc", "Aluminum 6061", "Machining stock", 2.70m, "As machined")
         ],
         [
+            new("fdm-matte", "fdm", "MATTE", "Matte", "Standard printed polymer finish.", 1.00m),
+            new("fdm-vapor-smooth", "fdm", "VAPOR_SMOOTH", "Vapor smooth", "Smoothed polymer surface for customer-facing prototypes.", 1.18m),
+            new("sla-standard-cure", "sla", "STANDARD_CURE", "Standard cure", "Washed, cured, and support marks cleaned.", 1.00m),
+            new("sla-sanded-primer", "sla", "SANDED_PRIMER", "Sanded and primed", "Presentation-ready resin finish.", 1.22m),
+            new("cnc-as-machined", "cnc", "AS_MACHINED", "As machined", "Standard tool marks accepted.", 1.00m),
+            new("cnc-bead-blast-clear", "cnc", "BEAD_BLAST_CLEAR", "Bead blast + clear anodize", "Uniform satin aluminum surface with clear anodize.", 1.16m)
+        ],
+        [
+            new("fdm-standard", "fdm", "FDM_STANDARD", "FDM standard", "General prototype tolerances.", 1.00m),
+            new("sla-standard", "sla", "SLA_STANDARD", "SLA standard", "Fine resin prototype tolerances.", 1.00m),
+            new("iso-2768-m", "cnc", "ISO2768_M", "ISO 2768-m", "General CNC tolerance without individual drawing callouts.", 1.08m),
+            new("iso-2768-f", "cnc", "ISO2768_F", "ISO 2768-f", "Finer CNC tolerance requiring additional setup and inspection.", 1.18m)
+        ],
+        [
+            new("STANDARD", "Standard inspection", "Visual inspection plus critical dimension spot-check.", 1.00m),
+            new("DIMENSIONAL_REPORT", "Dimensional report", "Customer-visible dimensional report for selected features.", 1.10m),
+            new("CMM_REPORT", "CMM report", "Full CMM measurement report for qualified CNC parts.", 1.28m)
+        ],
+        [
+            new("RA_3_2", "cnc", "Ra 3.2", "Standard machined surface roughness.", 1.00m),
+            new("RA_1_6", "cnc", "Ra 1.6", "Finer machined surface for customer-facing parts.", 1.08m),
+            new("RA_0_8", "cnc", "Ra 0.8", "Precision machined surface requiring additional finishing.", 1.18m)
+        ],
+        [
+            new("BLACK", "Black", "#242424", ["pla-black"]),
+            new("CLEAR", "Clear", "#d9eef2", ["petg-clear"]),
+            new("GRAY", "Gray", "#a8adb4", ["resin-gray"]),
+            new("Natural", "Natural", "#b9c2c5", ["al6061"])
+        ],
+        [
             new("ECONOMY", "Economy", 10, 0.90m),
             new("STANDARD", "Standard", 6, 1.00m),
             new("EXPRESS", "Express", 3, 1.35m)
@@ -279,9 +309,10 @@ public sealed class QuoteEnginePrototypeStore
             };
 
             var setup = material?.ProcessId == "cnc" ? 850m : 120m;
-            var unitPrice = Math.Round((setup + (Math.Max(part.VolumeCc, 1m) * baseRate)) * leadTime.PriceMultiplier, 2);
+            var config = EstimateConfiguration(part);
+            var unitPrice = Math.Round(((setup + (Math.Max(part.VolumeCc, 1m) * baseRate)) * config.Multiplier + config.Additive) * leadTime.PriceMultiplier, 2);
             var lineTotal = Math.Round(unitPrice * part.Quantity, 2);
-            return new QuoteLineEstimateDto(part.PartId, part.FileName, unitPrice, lineTotal, "THB", "Prototype estimate from geometry, material, and lead-time inputs.");
+            return new QuoteLineEstimateDto(part.PartId, part.FileName, unitPrice, lineTotal, "THB", config.Notes);
         }).ToArray();
 
         var subtotal = lines.Sum(x => x.LineTotal);
@@ -334,6 +365,75 @@ public sealed class QuoteEnginePrototypeStore
     {
         var hash = SHA256.HashData(Encoding.UTF8.GetBytes($"quote-engine-prototype:{normalizedEmail}"));
         return new Guid(hash[..16]);
+    }
+
+    private (decimal Multiplier, decimal Additive, string Notes) EstimateConfiguration(QuotePartDraftDto part)
+    {
+        var multiplier = 1m;
+        var additive = 0m;
+        var notes = new List<string> { "Prototype estimate from geometry, material, and lead-time inputs" };
+
+        var finish = ReferenceData.Finishes.FirstOrDefault(option =>
+            Matches(option.Id, part.FinishId) || Matches(option.Code, part.FinishCode));
+        if (finish is not null && finish.PriceMultiplier != 1m)
+        {
+            multiplier *= finish.PriceMultiplier;
+            notes.Add($"finish {finish.Name}");
+        }
+
+        var tolerance = ReferenceData.Tolerances.FirstOrDefault(option =>
+            Matches(option.Id, part.ToleranceId) || Matches(option.Code, part.ToleranceCode));
+        if (tolerance is not null && tolerance.PriceMultiplier != 1m)
+        {
+            multiplier *= tolerance.PriceMultiplier;
+            notes.Add($"tolerance {tolerance.Code}");
+        }
+
+        var inspection = ReferenceData.InspectionLevels.FirstOrDefault(option =>
+            Matches(option.Code, part.InspectionLevel));
+        if (inspection is not null)
+        {
+            notes.Add($"inspection {inspection.Name}");
+            if (inspection.PriceMultiplier != 1m)
+            {
+                multiplier *= inspection.PriceMultiplier;
+            }
+        }
+
+        var roughness = ReferenceData.RoughnessOptions.FirstOrDefault(option =>
+            Matches(option.Code, part.RoughnessCode));
+        if (roughness is not null && roughness.PriceMultiplier != 1m)
+        {
+            multiplier *= roughness.PriceMultiplier;
+            notes.Add($"roughness {roughness.Name}");
+        }
+
+        if (part.HasThreadedHoles || part.ThreadedHoleCount > 0)
+        {
+            var count = Math.Max(part.ThreadedHoleCount, 1);
+            additive += count * 85m;
+            notes.Add($"threaded holes {count}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.InsertType) && !part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            var count = Math.Max(part.InsertCount, 1);
+            additive += count * 120m;
+            notes.Add($"thread inserts {count}");
+        }
+
+        if (part.DrawingFiles.Count > 0)
+        {
+            notes.Add("drawing reviewed");
+        }
+
+        return (multiplier, additive, string.Join("; ", notes) + ".");
+    }
+
+    private static bool Matches(string candidate, string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value)
+            && candidate.Equals(value, StringComparison.OrdinalIgnoreCase);
     }
 
     private UploadState GetRequiredUpload(string uploadId)

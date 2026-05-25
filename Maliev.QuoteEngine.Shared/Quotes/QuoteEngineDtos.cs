@@ -6,11 +6,38 @@ public sealed record ProcessOptionDto(string Id, string Name, string Description
 
 public sealed record MaterialOptionDto(string Id, string ProcessId, string Name, string Grade, decimal DensityGPerCc, string Finish);
 
+public sealed record FinishOptionDto(
+    string Id,
+    string ProcessId,
+    string Code,
+    string Name,
+    string Description,
+    decimal PriceMultiplier);
+
+public sealed record ToleranceOptionDto(
+    string Id,
+    string ProcessId,
+    string Code,
+    string Name,
+    string Description,
+    decimal PriceMultiplier);
+
+public sealed record InspectionOptionDto(string Code, string Name, string Description, decimal PriceMultiplier);
+
+public sealed record RoughnessOptionDto(string Code, string ProcessId, string Name, string Description, decimal PriceMultiplier);
+
+public sealed record ColorOptionDto(string Code, string Name, string CssValue, IReadOnlyList<string> MaterialIds);
+
 public sealed record LeadTimeOptionDto(string Code, string Name, int BusinessDays, decimal PriceMultiplier);
 
 public sealed record QuoteReferenceDataResponse(
     IReadOnlyList<ProcessOptionDto> Processes,
     IReadOnlyList<MaterialOptionDto> Materials,
+    IReadOnlyList<FinishOptionDto> Finishes,
+    IReadOnlyList<ToleranceOptionDto> Tolerances,
+    IReadOnlyList<InspectionOptionDto> InspectionLevels,
+    IReadOnlyList<RoughnessOptionDto> RoughnessOptions,
+    IReadOnlyList<ColorOptionDto> Colors,
     IReadOnlyList<LeadTimeOptionDto> LeadTimes,
     IReadOnlyList<string> SupportedExtensions);
 
@@ -107,6 +134,19 @@ public sealed record QuoteUploadHandoffResponse(string QuoteSessionId, IReadOnly
 
 public sealed record DfmFindingDto(string Severity, string Code, string Message);
 
+public sealed record QuotePartAttachmentDto(
+    string FileName,
+    string StoragePath,
+    string ContentType,
+    long FileSizeBytes,
+    string Kind);
+
+public sealed record QuotePartViewerSettingsDto(
+    string CameraPreset,
+    bool EdgesEnabled,
+    bool GridEnabled,
+    bool DfmOverlayEnabled);
+
 public sealed class QuoteAnalysisStatusResponse
 {
     public string UploadId { get; set; } = string.Empty;
@@ -162,6 +202,41 @@ public sealed class QuotePartDraftDto
     [Required]
     public string MaterialId { get; set; } = "pla-black";
 
+    [MaxLength(120)]
+    public string? FinishId { get; set; }
+
+    [MaxLength(80)]
+    public string? FinishCode { get; set; }
+
+    [MaxLength(120)]
+    public string? ToleranceId { get; set; }
+
+    [MaxLength(80)]
+    public string? ToleranceCode { get; set; }
+
+    [MaxLength(80)]
+    public string? InspectionLevel { get; set; } = "STANDARD";
+
+    [MaxLength(80)]
+    public string? RoughnessCode { get; set; }
+
+    [MaxLength(80)]
+    public string? Color { get; set; }
+
+    public bool HasThreadedHoles { get; set; }
+
+    [MaxLength(80)]
+    public string? ThreadSpecification { get; set; }
+
+    [Range(0, 10_000)]
+    public int ThreadedHoleCount { get; set; }
+
+    [MaxLength(80)]
+    public string? InsertType { get; set; }
+
+    [Range(0, 10_000)]
+    public int InsertCount { get; set; }
+
     [Range(1, 100_000)]
     public int Quantity { get; set; } = 1;
 
@@ -172,6 +247,16 @@ public sealed class QuotePartDraftDto
     public decimal SurfaceAreaCm2 { get; set; }
 
     public bool DfmAcknowledged { get; set; }
+
+    [Range(0, 10_000)]
+    public int? BodyCount { get; set; }
+
+    [Range(0, 10_000)]
+    public int? SelectedBodyIndex { get; set; }
+
+    public List<QuotePartAttachmentDto> DrawingFiles { get; set; } = [];
+
+    public QuotePartViewerSettingsDto ViewerSettings { get; set; } = new("iso", true, true, false);
 }
 
 public sealed class QuoteEstimateRequest

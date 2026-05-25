@@ -122,6 +122,76 @@ public sealed class QuoteEngineSourceTests
         Assert.Equal("https://cdn.example.com/overlay1.glb", d2.OverlayGlbUrls[0]);
     }
 
+    [Fact]
+    public void Quote_part_draft_customer_configuration_round_trips_through_json()
+    {
+        var draft = new QuotePartDraftDto
+        {
+            PartId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            FileId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            UploadId = "upload-projectnew-parity",
+            FileName = "customer-fixture.step",
+            ProcessId = "cnc",
+            MaterialId = "al6061",
+            FinishId = "cnc-bead-blast-clear",
+            FinishCode = "BEAD_BLAST_CLEAR",
+            ToleranceId = "iso-2768-m",
+            ToleranceCode = "ISO2768_M",
+            InspectionLevel = "Standard",
+            RoughnessCode = "RA_1_6",
+            Color = "Natural",
+            HasThreadedHoles = true,
+            ThreadSpecification = "M3x0.5",
+            ThreadedHoleCount = 4,
+            InsertType = "HeatSet",
+            InsertCount = 2,
+            BodyCount = 2,
+            SelectedBodyIndex = 1,
+            DrawingFiles =
+            [
+                new QuotePartAttachmentDto(
+                    FileName: "customer-fixture-drawing.pdf",
+                    StoragePath: "customers/c/quotes/q/drawing.pdf",
+                    ContentType: "application/pdf",
+                    FileSizeBytes: 123_456,
+                    Kind: "Drawing")
+            ],
+            ViewerSettings = new QuotePartViewerSettingsDto(
+                CameraPreset: "iso",
+                EdgesEnabled: true,
+                GridEnabled: false,
+                DfmOverlayEnabled: true)
+        };
+
+        var json = JsonSerializer.Serialize(draft, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var deserialized = JsonSerializer.Deserialize<QuotePartDraftDto>(json, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        Assert.NotNull(deserialized);
+        Assert.Equal("cnc-bead-blast-clear", deserialized.FinishId);
+        Assert.Equal("BEAD_BLAST_CLEAR", deserialized.FinishCode);
+        Assert.Equal("iso-2768-m", deserialized.ToleranceId);
+        Assert.Equal("ISO2768_M", deserialized.ToleranceCode);
+        Assert.Equal("Standard", deserialized.InspectionLevel);
+        Assert.Equal("RA_1_6", deserialized.RoughnessCode);
+        Assert.Equal("Natural", deserialized.Color);
+        Assert.True(deserialized.HasThreadedHoles);
+        Assert.Equal("M3x0.5", deserialized.ThreadSpecification);
+        Assert.Equal(4, deserialized.ThreadedHoleCount);
+        Assert.Equal("HeatSet", deserialized.InsertType);
+        Assert.Equal(2, deserialized.InsertCount);
+        Assert.Equal(2, deserialized.BodyCount);
+        Assert.Equal(1, deserialized.SelectedBodyIndex);
+        Assert.Single(deserialized.DrawingFiles);
+        Assert.Equal("Drawing", deserialized.DrawingFiles[0].Kind);
+        Assert.Equal("iso", deserialized.ViewerSettings.CameraPreset);
+        Assert.True(deserialized.ViewerSettings.EdgesEnabled);
+        Assert.False(deserialized.ViewerSettings.GridEnabled);
+        Assert.True(deserialized.ViewerSettings.DfmOverlayEnabled);
+        Assert.Contains("\"finishId\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"selectedBodyIndex\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"drawingFiles\"", json, StringComparison.Ordinal);
+    }
+
 
     [Fact]
     public void Upload_script_matches_browser_files_by_name_and_size()
@@ -165,7 +235,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-pdc-container {\n    position: relative;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-center-tabs {\n    position: absolute;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dfm-tab {\n    position: absolute;", styles, StringComparison.Ordinal);
-        Assert.Contains("flex: 0 0 332px;", styles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 380px;", styles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: repeat(3, minmax(0, 1fr));", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pn-root.is-launch-screen", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pn-root.is-workspace-ready .qe-plp-root", styles, StringComparison.Ordinal);
@@ -309,6 +379,32 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-qsb-lead {\n    flex: 1 1 auto;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-qsb-divider {\n    flex: 0 0 1px;\n    width: 1px;\n    background: var(--maliev-border);\n}", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-qsb-divider {\n    width: 1px;\n    box-shadow: var(--maliev-shadow-ring);\n}", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Quote_workspace_uses_projectnew_parity_component_shell()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var detailCard = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("<QePartsListPanel", workspace, StringComparison.Ordinal);
+        Assert.Contains("<QePartDetailCard", workspace, StringComparison.Ordinal);
+        Assert.Contains("<QePartConfigSidebar", workspace, StringComparison.Ordinal);
+        Assert.Contains("<QeQuoteSummaryBar", workspace, StringComparison.Ordinal);
+        Assert.Contains("QeDrawingAttachmentsTab", detailCard, StringComparison.Ordinal);
+        Assert.Contains("qe-pn-mobile-toolbar", workspace, StringComparison.Ordinal);
+        Assert.Contains("_isPartsDrawerOpen", workspace, StringComparison.Ordinal);
+        Assert.Contains("_centerMode", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("<span class=\"qe-zone-label\">Bill To</span>", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("CustomerPicker", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("internal pricing override", workspace, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("flex: 0 0 270px;", styles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 380px;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pn-mobile-toolbar", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pn-parts-drawer", styles, StringComparison.Ordinal);
+        Assert.Contains("@media (max-width: 1200px)", styles, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -638,12 +734,13 @@ public sealed class QuoteEngineSourceTests
     public void QuoteWorkspaceRazor_registers_GlbReady_and_DfmAnalysisReady_handlers()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
         Assert.Contains("\"GlbReady\"", src);
         Assert.Contains("\"DfmAnalysisReady\"", src);
         Assert.Contains("FindPartByStoragePath", src);
-        Assert.Contains("QePartViewer", src);
-        Assert.Contains("QeDfmTab", src);
-        Assert.Contains("QeBulkTable", src);
+        Assert.Contains("QePartViewer", detail);
+        Assert.Contains("QeDfmTab", detail);
+        Assert.Contains("QeBulkTable", detail);
     }
 
     [Fact]
@@ -664,6 +761,20 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("QeSlaDfmReport", src);
         Assert.Contains("QeCncDfmReport", src);
         Assert.Contains("IsManifold", src);
+    }
+
+    [Fact]
+    public void Quote_viewer_and_part_thumbnail_have_customer_safe_fallbacks()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
+        var partsList = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartsListPanel.razor");
+
+        Assert.Contains("DotNetObjectReference<QePartViewer>", viewer, StringComparison.Ordinal);
+        Assert.Contains("OnLoadError", viewer, StringComparison.Ordinal);
+        Assert.Contains("qe-viewer-fallback", viewer, StringComparison.Ordinal);
+        Assert.Contains("/images/generated/sample-part.svg", viewer, StringComparison.Ordinal);
+        Assert.Contains("onerror=", partsList, StringComparison.Ordinal);
+        Assert.Contains("FallbackPartImage", partsList, StringComparison.Ordinal);
     }
 
     [Fact]

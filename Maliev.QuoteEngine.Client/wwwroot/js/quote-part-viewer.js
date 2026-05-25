@@ -2133,9 +2133,8 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                     return;
                 }
                 modelLoadState[canvasId] = 'error';
-                // Detailed error logging for debugging viewer flash issue
                 const sanitizedUrl = fileUrl ? (fileUrl.includes('?') ? fileUrl.substring(0, fileUrl.indexOf('?')) + '?[SIGNED_URL]' : fileUrl) : '(none)';
-                console.error('[BabylonViewer] Load error details:', {
+                console.warn('[BabylonViewer] Model preview unavailable, showing fallback:', {
                     url: sanitizedUrl,
                     message: message,
                     exception: exception?.message || exception?.toString() || '(no exception)',

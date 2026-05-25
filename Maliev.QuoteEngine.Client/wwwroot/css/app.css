@@ -28,6 +28,7 @@
     /* Interactive */
     --link: #0072f5;                /* Link Blue */
     --accent: #0a72ef;              /* Develop Blue used as generic accent */
+    --accent-strong: #0858c4;       /* Hover/press for accent CTA */
     --focus-blue: hsla(212, 100%, 48%, 1);
     --ring-blue: rgba(147, 197, 253, 0.5);
 
@@ -2218,7 +2219,7 @@ textarea::placeholder {
 
 .qe-plp-part--selected {
     background: #fafafa;
-    box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--ink) inset;
+    box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--accent) inset;
 }
 
 .qe-plp-part:focus-visible {
@@ -3011,8 +3012,8 @@ textarea::placeholder {
 }
 
 .qe-pcs-sidebar {
-    flex: 0 0 332px;
-    width: 332px;
+    flex: 0 0 380px;
+    width: 380px;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -3112,7 +3113,7 @@ textarea::placeholder {
 .qe-qsb-lead-btn--active {
     color: var(--ink);
     background: #fafafa;
-    box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--ink) inset;
+    box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--accent) inset;
 }
 
 .qe-card-check {
@@ -3183,7 +3184,7 @@ textarea::placeholder {
 .qe-check-btn.checked {
     color: var(--ink) !important;
     background: #fafafa;
-    box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--ink) inset;
+    box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--accent) inset;
 }
 
 .qe-check-btn input {
@@ -3251,7 +3252,7 @@ textarea::placeholder {
 }
 
 .qe-qsb-total {
-    flex: 0 0 332px;
+    flex: 0 0 380px;
     display: grid;
     gap: 6px;
 }
@@ -3290,11 +3291,11 @@ textarea::placeholder {
 
 .qe-primary-btn {
     color: #fff;
-    background: var(--primary);
+    background: var(--accent);
 }
 
 .qe-primary-btn:hover:not(:disabled) {
-    background: var(--primary-strong);
+    background: var(--accent-strong);
 }
 
 .qe-secondary-btn {
@@ -3802,4 +3803,696 @@ body.mud-blazor {
         animation-iteration-count: 1 !important;
         scroll-behavior: auto !important;
     }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   QuoteEngine UI Redesign — Phase 2 component additions
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─── Parts list: hover actions overlay ─── */
+.qe-plp-actions {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    gap: 4px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms;
+    z-index: 1;
+}
+
+.qe-plp-part:hover .qe-plp-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.qe-plp-action-btn {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--maliev-border);
+    border-radius: var(--maliev-radius-xs);
+    background: var(--maliev-bg);
+    color: var(--maliev-muted);
+    cursor: pointer;
+    transition: color 120ms, border-color 120ms, background 120ms;
+}
+
+.qe-plp-action-btn:hover {
+    background: var(--maliev-panel-3);
+    border-color: #e5e5e5;
+}
+
+.qe-plp-action-btn--danger:hover {
+    color: var(--maliev-danger);
+    border-color: var(--maliev-danger);
+    background: var(--maliev-danger-bg);
+}
+
+/* ─── Parts list: price row (replaces plain qe-plp-price) ─── */
+.qe-plp-price-row {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-top: 6px;
+    margin-top: 2px;
+    border-top: 1px dashed var(--maliev-border);
+}
+
+.qe-plp-unit-ea {
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-micro);
+}
+
+.qe-plp-total {
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+    color: var(--maliev-ink);
+}
+
+/* ─── Quantity stepper (+/− control) ─── */
+.qe-qty-stepper {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--maliev-border);
+    border-radius: var(--maliev-radius-sm);
+    overflow: hidden;
+    background: var(--maliev-bg);
+}
+
+.qe-qty-stepper-btn {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--maliev-ink);
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 400;
+    flex-shrink: 0;
+    transition: background 100ms;
+}
+
+.qe-qty-stepper-btn:hover:not(:disabled) {
+    background: var(--maliev-panel-3);
+}
+
+.qe-qty-stepper-btn:disabled {
+    color: var(--maliev-muted);
+    cursor: default;
+}
+
+.qe-qty-stepper-display {
+    min-width: 40px;
+    text-align: center;
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+    line-height: 32px;
+    padding: 0 6px;
+    border-left: 1px solid var(--maliev-border);
+    border-right: 1px solid var(--maliev-border);
+}
+
+.qe-qty-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.qe-qty-preset-btn {
+    padding: 3px 9px;
+    border: 1px solid var(--maliev-border);
+    border-radius: var(--maliev-radius-xs);
+    background: transparent;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    cursor: pointer;
+    transition: color 100ms, background 100ms, border-color 100ms;
+}
+
+.qe-qty-preset-btn:hover,
+.qe-qty-preset-btn--active {
+    color: var(--maliev-ink);
+    background: var(--maliev-panel-3);
+    border-color: var(--maliev-ink);
+}
+
+/* ─── ProjectNew parity: mobile shell and customer configuration controls ─── */
+.qe-pn-mobile-toolbar,
+.qe-pn-parts-drawer,
+.qe-pn-parts-drawer-backdrop {
+    display: none;
+}
+
+.qe-field,
+.qe-inline-fields {
+    display: grid;
+    gap: 6px;
+}
+
+.qe-field {
+    margin-bottom: 8px;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+}
+
+.qe-field-label {
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-micro);
+    margin-bottom: 6px;
+}
+
+.qe-field input,
+.qe-field select,
+.qe-bulk-table select,
+.qe-bulk-table input {
+    min-height: 32px;
+    width: 100%;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    color: var(--maliev-ink);
+    background: var(--maliev-panel);
+    box-shadow: var(--maliev-shadow-ring);
+    font-size: var(--maliev-font-small);
+}
+
+.qe-inline-fields {
+    grid-template-columns: minmax(0, 1fr) 82px;
+    align-items: end;
+}
+
+.qe-pcs-qty-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 0 2px;
+}
+
+.qe-color-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.qe-color-swatch {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    box-shadow: var(--maliev-shadow-ring);
+    cursor: pointer;
+}
+
+.qe-color-swatch span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+.qe-color-swatch--active {
+    box-shadow: var(--maliev-shadow-card), 0 0 0 2px var(--accent) inset;
+}
+
+.qe-drawing-tab {
+    position: absolute;
+    top: 49%;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    overflow: auto;
+    border-radius: var(--maliev-radius-md);
+    background: var(--maliev-panel);
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.qe-drawing-header,
+.qe-drawing-item,
+.qe-drawing-empty {
+    display: flex;
+    align-items: center;
+}
+
+.qe-drawing-header {
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.qe-drawing-header strong {
+    display: block;
+    margin-top: 2px;
+    font-size: var(--maliev-font-small);
+}
+
+.qe-drawing-empty {
+    gap: 8px;
+    min-height: 112px;
+    padding: 16px;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-small);
+}
+
+.qe-drawing-list {
+    display: grid;
+    gap: 6px;
+    padding: 10px;
+}
+
+.qe-drawing-item {
+    gap: 10px;
+    min-height: 44px;
+    padding: 8px 10px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--maliev-bg);
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.qe-drawing-item div {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.qe-drawing-item strong,
+.qe-drawing-item span {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-drawing-item span {
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-micro);
+}
+
+.qe-viewer-fallback {
+    position: absolute;
+    inset: 16px min(360px, 46%) 16px 16px;
+    z-index: 4;
+    display: grid;
+    place-items: center;
+    align-content: center;
+    gap: 8px;
+    border-radius: var(--maliev-radius-md);
+    color: var(--maliev-ink);
+    background: rgba(255, 255, 255, .88);
+    box-shadow: var(--maliev-shadow-ring);
+    text-align: center;
+    pointer-events: none;
+}
+
+.qe-viewer-fallback img {
+    width: min(220px, 46%);
+    max-height: 150px;
+    object-fit: contain;
+}
+
+.qe-viewer-fallback strong {
+    font-size: var(--maliev-font-body);
+    font-weight: 600;
+}
+
+.qe-viewer-fallback span {
+    max-width: 320px;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-small);
+}
+
+@media (max-width: 1200px) {
+    .qe-viewer-fallback {
+        inset: 12px;
+    }
+
+    .qe-pn-body {
+        position: relative;
+    }
+
+    .qe-pn-body > .qe-plp-root {
+        display: none;
+    }
+
+    .qe-pn-mobile-toolbar {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        min-height: 44px;
+        padding: 6px 10px;
+        background: var(--maliev-panel);
+        box-shadow: var(--maliev-shadow-ring);
+        z-index: 6;
+    }
+
+    .qe-mobile-tool-btn,
+    .qe-mobile-mode-switch button {
+        border: 0;
+        border-radius: var(--maliev-radius-sm);
+        color: var(--maliev-ink);
+        background: var(--maliev-panel);
+        box-shadow: var(--maliev-shadow-ring);
+        font-size: var(--maliev-font-small);
+        font-weight: 500;
+    }
+
+    .qe-mobile-tool-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-height: 32px;
+        padding: 0 10px;
+    }
+
+    .qe-mobile-mode-switch {
+        display: inline-flex;
+        gap: 4px;
+    }
+
+    .qe-mobile-mode-switch button {
+        min-height: 32px;
+        padding: 0 10px;
+    }
+
+    .qe-mobile-mode-switch button.active {
+        color: #fff;
+        background: var(--accent);
+    }
+
+    .qe-pn-parts-drawer {
+        display: block;
+        position: fixed;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 30;
+        width: min(270px, 100vw);
+        transform: translateX(-100%);
+        transition: transform 160ms ease;
+        background: var(--maliev-panel);
+        box-shadow: var(--maliev-shadow-card);
+    }
+
+    .qe-pn-parts-drawer--open {
+        transform: translateX(0);
+    }
+
+    .qe-pn-parts-drawer .qe-plp-root {
+        display: flex;
+        width: min(270px, 100vw);
+        height: 100%;
+        box-shadow: none;
+    }
+
+    .qe-pn-parts-drawer-backdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        border: 0;
+        background: rgba(23, 23, 23, .24);
+    }
+
+    .qe-pn-detail-row {
+        flex: 1 1 0;
+        flex-direction: column;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .qe-pdc-root,
+    .qe-pdc-container,
+    .qe-center-viewer {
+        flex: 1 1 0;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    .qe-pcs-sidebar {
+        flex: 0 0 220px;
+        width: 100%;
+        max-height: 42vh;
+    }
+
+    .qe-qsb-root {
+        flex-wrap: nowrap;
+        min-height: 132px;
+        max-height: 156px;
+    }
+
+    .qe-qsb-total {
+        flex: 0 0 300px;
+    }
+}
+
+@media (max-width: 640px) {
+    .qe-pcs-sidebar {
+        flex-basis: 190px;
+    }
+
+    .qe-qsb-root {
+        flex-direction: column;
+        min-height: 212px;
+        max-height: 212px;
+        overflow: hidden;
+    }
+
+    .qe-qsb-zone {
+        padding: 8px 14px;
+    }
+
+    .qe-qsb-lead {
+        flex: 0 0 auto;
+    }
+
+    .qe-qsb-lead-options {
+        display: flex;
+        flex-direction: row;
+        gap: 6px;
+        overflow-x: auto;
+        padding-bottom: 1px;
+    }
+
+    .qe-qsb-lead-btn {
+        flex: 1 0 112px;
+        align-items: center;
+        min-height: 52px;
+        padding: 7px 8px;
+    }
+
+    .qe-qsb-lead-btn strong,
+    .qe-qsb-lead-btn small {
+        white-space: nowrap;
+    }
+
+    .qe-qsb-lead-btn small {
+        margin-top: 2px;
+    }
+
+    .qe-qsb-lead-btn em {
+        white-space: nowrap;
+    }
+
+    .qe-qsb-total {
+        flex: 1 1 auto;
+        width: 100%;
+        gap: 6px;
+    }
+
+    .qe-qsb-total > strong {
+        font-size: var(--maliev-font-body-lg);
+        line-height: 1.25;
+    }
+
+    .qe-qsb-actions {
+        flex-direction: row;
+    }
+
+    .qe-secondary-btn,
+    .qe-primary-btn {
+        flex: 1 1 0;
+        min-width: 0;
+        padding-inline: 8px;
+    }
+}
+
+/* ─── DFM tab: header + badge ─── */
+.qe-dfm-header {
+    padding: 10px 12px 6px;
+    border-bottom: 1px solid var(--maliev-border);
+}
+
+.qe-dfm-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.qe-dfm-title {
+    font-size: var(--maliev-font-small);
+    font-weight: 600;
+    color: var(--maliev-ink);
+}
+
+.qe-dfm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 7px 2px 5px;
+    border-radius: 999px;
+    font-size: var(--maliev-font-micro);
+    font-weight: 600;
+}
+
+.qe-dfm-badge--ok {
+    color: #18794e;
+    background: #e9f9ee;
+}
+
+.qe-dfm-badge--warn {
+    color: #9e6c00;
+    background: #fef9c3;
+}
+
+.qe-dfm-badge--pending {
+    color: var(--maliev-muted);
+    background: var(--maliev-panel-3);
+}
+
+/* ─── DFM tab: skeleton loading rows ─── */
+.qe-dfm-check-skeleton {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--maliev-border);
+}
+
+.qe-dfm-check-skeleton > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+}
+
+/* ─── DFM tab: MudExpansionPanels overrides ─── */
+.qe-dfm-expansions.mud-expansion-panels {
+    box-shadow: none;
+    border-radius: 0;
+}
+
+.qe-dfm-expansions .mud-expansion-panel {
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--maliev-border);
+    background: var(--maliev-bg);
+}
+
+.qe-dfm-expansions .mud-expansion-panel:last-child {
+    border-bottom: 0;
+}
+
+.qe-dfm-expansion-panel--fail .mud-expansion-panel-header {
+    background: #fffbeb;
+}
+
+.qe-dfm-expansions .mud-expansion-panel-header {
+    min-height: 44px;
+    padding: 6px 12px;
+}
+
+.qe-dfm-expansions .mud-expansion-panel-text {
+    padding: 0 12px 10px;
+}
+
+.qe-dfm-expansion-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.qe-dfm-expansion-panel-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.qe-dfm-expansion-panel-title {
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+    color: var(--maliev-ink);
+    line-height: 1.3;
+}
+
+.qe-dfm-expansion-panel-summary {
+    font-size: var(--maliev-font-micro);
+    color: var(--maliev-muted);
+    line-height: 1.4;
+}
+
+.qe-dfm-expansion-detail {
+    font-size: var(--maliev-font-small);
+    color: var(--maliev-ink);
+    line-height: 1.5;
+    padding-top: 2px;
+}
+
+.qe-dfm-fix-list {
+    margin: 8px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.qe-dfm-fix-list li {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    font-size: var(--maliev-font-micro);
+    color: var(--maliev-muted);
+}
+
+.qe-dfm-fix-list li::before {
+    content: "→";
+    flex-shrink: 0;
+    font-weight: 500;
+    color: var(--maliev-ink);
+}
+
+/* ─── Footer: ships-by date display ─── */
+.qe-qsb-ships-date {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    font-size: var(--maliev-font-micro);
+    color: var(--maliev-muted);
+    margin-top: 2px;
+}
+
+.qe-qsb-ships-date strong {
+    color: var(--maliev-ink);
+    font-family: var(--maliev-font-mono);
+    font-weight: 500;
 }

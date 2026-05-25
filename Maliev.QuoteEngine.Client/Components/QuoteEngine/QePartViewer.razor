@@ -8,18 +8,35 @@
 
     @if (!string.IsNullOrEmpty(GlbUrl))
     {
-        @* ── Bottom toolbar ── *@
+        @if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <div class="qe-viewer-fallback" role="status">
+                <img src="/images/generated/sample-part.svg" alt="" />
+                <strong>3D preview unavailable</strong>
+                <span>The quote configuration is still available while the model preview is refreshed.</span>
+            </div>
+        }
+
+        @* Bottom toolbar *@
         <div class="qe-viewer-toolbar">
             <button class="qe-vt-btn" @onclick='() => SetPresetAsync("front")' title="Front">Fr</button>
             <button class="qe-vt-btn" @onclick='() => SetPresetAsync("top")'   title="Top">Tp</button>
             <button class="qe-vt-btn" @onclick='() => SetPresetAsync("right")' title="Right">Rt</button>
-            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("iso")'   title="Isometric">Iso</button>
+            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("iso")'   title="Isometric">
+                <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+            </button>
             <span class="qe-vt-sep"></span>
             <button class="qe-vt-btn @(_ortho ? "qe-vt-active" : "")"
-                    @onclick="ToggleProjectionAsync" title="Orthographic / Perspective">Orth</button>
+                    @onclick="ToggleProjectionAsync" title="Orthographic / Perspective">
+                <MudIcon Icon="@Icons.Material.Outlined.GridOn" Size="Size.Small" />
+            </button>
             <button class="qe-vt-btn @(_edgesOn ? "qe-vt-active" : "")"
-                    @onclick="ToggleEdgesAsync" title="Edges">Edg</button>
-            <button class="qe-vt-btn" @onclick="ResetCameraAsync" title="Reset camera">&#8635;</button>
+                    @onclick="ToggleEdgesAsync" title="Edges">
+                <MudIcon Icon="@Icons.Material.Outlined.BorderAll" Size="Size.Small" />
+            </button>
+            <button class="qe-vt-btn" @onclick="ResetCameraAsync" title="Reset camera">
+                <MudIcon Icon="@Icons.Material.Outlined.RestartAlt" Size="Size.Small" />
+            </button>
         </div>
     }
     else
@@ -37,7 +54,9 @@
 
     private string _canvasId = $"qe-canvas-{Guid.NewGuid():N}";
     private IJSObjectReference? _module;
+    private DotNetObjectReference<QePartViewer>? _dotNetRef;
     private string? _lastGlbUrl;
+    private string? _loadError;
     private bool _ortho;
     private bool _edgesOn = true;
 
@@ -46,6 +65,7 @@
         if (!string.IsNullOrEmpty(GlbUrl) && GlbUrl != _lastGlbUrl)
         {
             _lastGlbUrl = GlbUrl;
+            _loadError = null;
             await InitializeViewerAsync();
         }
     }
@@ -56,17 +76,26 @@
         {
             _module ??= await JSRuntime.InvokeAsync<IJSObjectReference>(
                 "import", "./js/quote-part-viewer.js");
+            _dotNetRef ??= DotNetObjectReference.Create(this);
 
             await _module.InvokeVoidAsync("initialize",
                 _canvasId, GlbUrl, "glb", IsDarkMode,
                 null,   // no known bounding-box dims
-                null,   // no dotNetRef
+                _dotNetRef,
                 new { });
         }
         catch (Exception ex)
         {
-            await OnViewerError.InvokeAsync(ex.Message);
+            await OnLoadError(ex.Message);
         }
+    }
+
+    [JSInvokable]
+    public async Task OnLoadError(string message)
+    {
+        _loadError = string.IsNullOrWhiteSpace(message) ? "Failed to load 3D model." : message;
+        await OnViewerError.InvokeAsync(_loadError);
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task SetPresetAsync(string preset)
@@ -102,5 +131,7 @@
             try { await _module.InvokeVoidAsync("dispose", _canvasId); } catch { /* ignore */ }
             await _module.DisposeAsync();
         }
+
+        _dotNetRef?.Dispose();
     }
 }

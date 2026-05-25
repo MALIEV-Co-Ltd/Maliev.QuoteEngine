@@ -19,6 +19,8 @@
                     <th>Part</th>
                     <th>Status</th>
                     <th>Process / Material</th>
+                    <th>Finish / Tolerance</th>
+                    <th>Inspection</th>
                     <th class="qe-col-num">Qty</th>
                     <th class="qe-col-num">DFM</th>
                     <th class="qe-col-num">Unit (THB)</th>
@@ -62,6 +64,55 @@
                                 </span>
                             }
                         </td>
+                        <td>
+                            @if (_editing == part.UploadId)
+                            {
+                                <select value="@(part.FinishId ?? string.Empty)" @onchange="args => SetRowFinish(part, args)">
+                                    <option value="">Default finish</option>
+                                    @foreach (var finish in Finishes.Where(f => f.ProcessId == part.ProcessId))
+                                    {
+                                        <option value="@finish.Id">@finish.Name</option>
+                                    }
+                                </select>
+                                <select value="@(part.ToleranceId ?? string.Empty)" @onchange="args => SetRowTolerance(part, args)">
+                                    <option value="">Default tolerance</option>
+                                    @foreach (var tolerance in Tolerances.Where(t => t.ProcessId == part.ProcessId))
+                                    {
+                                        <option value="@tolerance.Id">@tolerance.Name</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <span class="qe-bulk-proc" @onclick="() => _editing = part.UploadId">
+                                    @DisplayOrDefault(part.FinishCode) · @DisplayOrDefault(part.ToleranceCode)
+                                </span>
+                            }
+                        </td>
+                        <td>
+                            @if (_editing == part.UploadId)
+                            {
+                                <select value="@(part.InspectionLevel ?? "STANDARD")" @onchange="args => SetRowInspection(part, args)">
+                                    @foreach (var inspection in InspectionLevels)
+                                    {
+                                        <option value="@inspection.Code">@inspection.Name</option>
+                                    }
+                                </select>
+                                <select value="@(part.RoughnessCode ?? string.Empty)" @onchange="args => SetRowRoughness(part, args)">
+                                    <option value="">Default roughness</option>
+                                    @foreach (var roughness in RoughnessOptions.Where(r => r.ProcessId == part.ProcessId))
+                                    {
+                                        <option value="@roughness.Code">@roughness.Name</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <span class="qe-bulk-proc" @onclick="() => _editing = part.UploadId">
+                                    @DisplayOrDefault(part.InspectionLevel) / @DisplayOrDefault(part.RoughnessCode)
+                                </span>
+                            }
+                        </td>
                         <td class="qe-col-num">
                             <input class="qe-bulk-qty" type="number" min="1" max="100000"
                                    @bind="part.Quantity" @bind:after="() => OnPartChanged.InvokeAsync(part)" />
@@ -101,6 +152,27 @@
                     <option value="@mat.Id">@mat.Name</option>
                 }
             </select>
+            <select @onchange="ApplyBulkFinish">
+                <option value="">Bulk finish&hellip;</option>
+                @foreach (var finish in Finishes)
+                {
+                    <option value="@finish.Id">@finish.Name</option>
+                }
+            </select>
+            <select @onchange="ApplyBulkTolerance">
+                <option value="">Bulk tolerance&hellip;</option>
+                @foreach (var tolerance in Tolerances)
+                {
+                    <option value="@tolerance.Id">@tolerance.Name</option>
+                }
+            </select>
+            <select @onchange="ApplyBulkInspection">
+                <option value="">Bulk inspection&hellip;</option>
+                @foreach (var inspection in InspectionLevels)
+                {
+                    <option value="@inspection.Code">@inspection.Name</option>
+                }
+            </select>
             <span class="qe-bulk-bar-total">
                 Total @(GrandTotal.ToString("N0")) THB
             </span>
@@ -118,6 +190,10 @@
     [Parameter, EditorRequired] public List<QuotePartViewModel> Parts { get; set; } = [];
     [Parameter] public IReadOnlyList<ProcessOptionDto> Processes { get; set; } = [];
     [Parameter] public IReadOnlyList<MaterialOptionDto> Materials { get; set; } = [];
+    [Parameter] public IReadOnlyList<FinishOptionDto> Finishes { get; set; } = [];
+    [Parameter] public IReadOnlyList<ToleranceOptionDto> Tolerances { get; set; } = [];
+    [Parameter] public IReadOnlyList<InspectionOptionDto> InspectionLevels { get; set; } = [];
+    [Parameter] public IReadOnlyList<RoughnessOptionDto> RoughnessOptions { get; set; } = [];
     [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
     [Parameter] public EventCallback<QuotePartViewModel> OnSelectPart { get; set; }
     [Parameter] public EventCallback OnAddFilesRequested { get; set; }
@@ -163,6 +239,73 @@
         }
     }
 
+    private async Task ApplyBulkFinish(ChangeEventArgs e)
+    {
+        var finishId = e.Value?.ToString();
+        if (string.IsNullOrEmpty(finishId)) return;
+        var finish = Finishes.FirstOrDefault(f => f.Id == finishId);
+        if (finish is null) return;
+        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+        {
+            part.FinishId = finish.Id;
+            part.FinishCode = finish.Code;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private async Task ApplyBulkTolerance(ChangeEventArgs e)
+    {
+        var toleranceId = e.Value?.ToString();
+        if (string.IsNullOrEmpty(toleranceId)) return;
+        var tolerance = Tolerances.FirstOrDefault(t => t.Id == toleranceId);
+        if (tolerance is null) return;
+        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+        {
+            part.ToleranceId = tolerance.Id;
+            part.ToleranceCode = tolerance.Code;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private async Task ApplyBulkInspection(ChangeEventArgs e)
+    {
+        var inspection = e.Value?.ToString();
+        if (string.IsNullOrEmpty(inspection)) return;
+        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+        {
+            part.InspectionLevel = inspection;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private async Task SetRowFinish(QuotePartViewModel part, ChangeEventArgs e)
+    {
+        var finish = Finishes.FirstOrDefault(f => f.Id == e.Value?.ToString());
+        part.FinishId = finish?.Id;
+        part.FinishCode = finish?.Code;
+        await OnPartChanged.InvokeAsync(part);
+    }
+
+    private async Task SetRowTolerance(QuotePartViewModel part, ChangeEventArgs e)
+    {
+        var tolerance = Tolerances.FirstOrDefault(t => t.Id == e.Value?.ToString());
+        part.ToleranceId = tolerance?.Id;
+        part.ToleranceCode = tolerance?.Code;
+        await OnPartChanged.InvokeAsync(part);
+    }
+
+    private async Task SetRowInspection(QuotePartViewModel part, ChangeEventArgs e)
+    {
+        part.InspectionLevel = e.Value?.ToString() ?? "STANDARD";
+        await OnPartChanged.InvokeAsync(part);
+    }
+
+    private async Task SetRowRoughness(QuotePartViewModel part, ChangeEventArgs e)
+    {
+        part.RoughnessCode = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value?.ToString();
+        await OnPartChanged.InvokeAsync(part);
+    }
+
     private string ProcessName(string id)
         => Processes.FirstOrDefault(p => p.Id == id)?.Name ?? id;
 
@@ -171,6 +314,9 @@
 
     private static string TruncateName(string name)
         => name.Length > 28 ? name[..25] + "…" : name;
+
+    private static string DisplayOrDefault(string? value)
+        => string.IsNullOrWhiteSpace(value) ? "Default" : value;
 
     private RenderFragment RenderStatus(string status) =>
         @<span class="qe-status qe-status--@status.ToLowerInvariant()">@status</span>;

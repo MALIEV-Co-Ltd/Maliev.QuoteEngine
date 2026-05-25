@@ -1,0 +1,116 @@
+@* Customer-safe ProjectNew-style parts list for QuoteEngine. *@
+
+<aside class="qe-plp-root @(IsDrawer ? "qe-plp-root--drawer" : "")">
+    <div class="qe-plp-page-header">
+        <input type="text"
+               value="@Title"
+               @oninput="HandleTitleInput"
+               class="qe-plp-title-input"
+               title="Project title" />
+        <button type="button" class="qe-icon-btn" title="Duplicate project" disabled="@(!Parts.Any())">
+            <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" />
+        </button>
+    </div>
+
+    <div class="qe-plp-upload-section">
+        <button id="@DropzoneId" type="button" class="qe-dropzone qe-dropzone--compact">
+            <span class="qe-dropzone-icon" aria-hidden="true">
+                <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
+            </span>
+            <span>@UploadLabel</span>
+            <small>@UploadHint</small>
+        </button>
+    </div>
+
+    <div class="qe-plp-headers">
+        <span>Parts</span>
+        <span>@Parts.Count part(s)</span>
+    </div>
+
+    <div class="qe-plp-list">
+        @foreach (var part in Parts)
+        {
+            var index = Parts.IndexOf(part);
+            var total = Estimate?.Lines.FirstOrDefault(line => line.PartId == part.PartId)?.LineTotal;
+            <button type="button"
+                    class="qe-plp-part @(index == SelectedPartIndex ? "qe-plp-part--selected" : "")"
+                    @onclick="@(() => OnSelectPart.InvokeAsync(index))">
+                <span class="qe-plp-thumb">
+                    @if (!string.IsNullOrEmpty(part.ThumbnailUrl))
+                    {
+                        <img src="@part.ThumbnailUrl"
+                             alt=""
+                             onerror="@($"this.onerror=null;this.src='{FallbackPartImage}';")" />
+                    }
+                    else if (part.Status is "Uploading" or "Processing" or "WaitingForUpload" or "GlbReady")
+                    {
+                        <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small"
+                                 Style="color:var(--maliev-muted)" />
+                    }
+                </span>
+                <span class="qe-plp-info">
+                    <strong>@part.FileName</strong>
+                    <small>@part.VolumeCc.ToString("0.##") cc / @part.SurfaceAreaCm2.ToString("0.##") cm2</small>
+                    <span class="qe-plp-meta">
+                        <span>@ProcessName(part.ProcessId)</span>
+                        <span>x @part.Quantity</span>
+                    </span>
+                </span>
+                <span class="qe-plp-actions">
+                    <span role="button"
+                          tabindex="-1"
+                          class="qe-plp-action-btn qe-plp-action-btn--danger"
+                          title="Remove part"
+                          @onclick:stopPropagation="true"
+                          @onclick="@(() => OnRemovePart.InvokeAsync(part))">
+                        <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
+                    </span>
+                </span>
+                @if (total.HasValue)
+                {
+                    <span class="qe-plp-price-row">
+                        <span class="qe-plp-unit-ea">@part.Quantity x unit</span>
+                        <span class="qe-plp-total">@total.Value.ToString("N2") THB</span>
+                    </span>
+                }
+            </button>
+        }
+    </div>
+
+    <div class="qe-plp-footer">
+        <span>Total parts</span>
+        <strong>@Parts.Sum(part => part.Quantity) pcs</strong>
+    </div>
+</aside>
+
+@code {
+    private const string FallbackPartImage = "/images/generated/sample-part.svg";
+
+    [Parameter] public string Title { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> TitleChanged { get; set; }
+    [Parameter, EditorRequired] public List<QuotePartViewModel> Parts { get; set; } = [];
+    [Parameter] public int SelectedPartIndex { get; set; }
+    [Parameter] public QuoteReferenceDataResponse? ReferenceData { get; set; }
+    [Parameter] public QuoteEstimateResponse? Estimate { get; set; }
+    [Parameter] public string DropzoneId { get; set; } = string.Empty;
+    [Parameter] public string UploadLabel { get; set; } = string.Empty;
+    [Parameter] public string UploadHint { get; set; } = string.Empty;
+    [Parameter] public bool IsDrawer { get; set; }
+    [Parameter] public EventCallback<int> OnSelectPart { get; set; }
+    [Parameter] public EventCallback<QuotePartViewModel> OnRemovePart { get; set; }
+
+    private Task HandleTitleInput(ChangeEventArgs args)
+    {
+        Title = args.Value?.ToString() ?? string.Empty;
+        return TitleChanged.InvokeAsync(Title);
+    }
+
+    private string ProcessName(string processId)
+    {
+        return ReferenceData?.Processes.FirstOrDefault(process => process.Id == processId)?.Name ?? processId;
+    }
+}

@@ -36,7 +36,16 @@ public sealed class QuoteController(
     [HttpGet("demo/project")]
     public ActionResult<QuoteEngineDemoProjectResponse> GetDemoProject()
     {
-        return Ok(store.DemoProject);
+        var demo = demoOptions.Value;
+        if (!demo.IsConfigured)
+            return Ok(store.DemoProject);
+
+        var project = store.DemoProject;
+        return Ok(project with
+        {
+            ViewerUrl = demo.GlbUrl!,
+            ThumbnailUrl = demo.ThumbnailUrl ?? project.ThumbnailUrl
+        });
     }
 
     [HttpPost("uploads/resumable")]
@@ -242,7 +251,7 @@ public sealed class QuoteController(
                 UnitOfMeasure = "pcs",
                 UnitPrice = unitPrice,
                 ManufacturingProcess = part.ProcessId.ToUpperInvariant(),
-                Notes = part.FileName
+                Notes = BuildLineItemNotes(part)
             });
         }
 
@@ -291,7 +300,60 @@ public sealed class QuoteController(
             _ => 95m
         };
         var setup = part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase) ? 850m : 120m;
-        return Math.Round(setup + Math.Max(part.VolumeCc, 1m) * baseRate, 2);
+        var multiplier = 1m;
+        var additive = 0m;
+
+        if (!string.IsNullOrWhiteSpace(part.FinishId) || !string.IsNullOrWhiteSpace(part.FinishCode))
+        {
+            multiplier *= 1.08m;
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.ToleranceId) || !string.IsNullOrWhiteSpace(part.ToleranceCode))
+        {
+            multiplier *= 1.08m;
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.InspectionLevel)
+            && !part.InspectionLevel.Equals("STANDARD", StringComparison.OrdinalIgnoreCase))
+        {
+            multiplier *= 1.10m;
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.RoughnessCode))
+        {
+            multiplier *= 1.06m;
+        }
+
+        if (part.HasThreadedHoles || part.ThreadedHoleCount > 0)
+        {
+            additive += Math.Max(part.ThreadedHoleCount, 1) * 85m;
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.InsertType) && !part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            additive += Math.Max(part.InsertCount, 1) * 120m;
+        }
+
+        return Math.Round((setup + Math.Max(part.VolumeCc, 1m) * baseRate) * multiplier + additive, 2);
+    }
+
+    private static string BuildLineItemNotes(QuotePartDraftDto part)
+    {
+        var notes = new List<string> { part.FileName };
+        if (!string.IsNullOrWhiteSpace(part.FinishCode)) notes.Add($"finish {part.FinishCode}");
+        if (!string.IsNullOrWhiteSpace(part.ToleranceCode)) notes.Add($"tolerance {part.ToleranceCode}");
+        if (!string.IsNullOrWhiteSpace(part.InspectionLevel)) notes.Add($"inspection {part.InspectionLevel}");
+        if (!string.IsNullOrWhiteSpace(part.RoughnessCode)) notes.Add($"roughness {part.RoughnessCode}");
+        if (part.HasThreadedHoles || part.ThreadedHoleCount > 0) notes.Add($"threaded holes {Math.Max(part.ThreadedHoleCount, 1)}");
+        if (!string.IsNullOrWhiteSpace(part.InsertType) && !part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            notes.Add($"inserts {Math.Max(part.InsertCount, 1)}");
+        }
+
+        if (part.DrawingFiles.Count > 0) notes.Add("customer drawing supplied");
+        if (part.BodyCount.HasValue) notes.Add($"body count {part.BodyCount.Value}");
+        if (part.SelectedBodyIndex.HasValue) notes.Add($"selected body {part.SelectedBodyIndex.Value}");
+        return string.Join("; ", notes);
     }
 
     [HttpPost("payments")]

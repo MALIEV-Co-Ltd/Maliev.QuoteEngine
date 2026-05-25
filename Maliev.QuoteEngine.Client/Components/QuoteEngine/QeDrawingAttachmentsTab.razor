@@ -1,0 +1,80 @@
+@* Customer-facing drawing and attachment surface. Files are represented in the quote draft DTO. *@
+
+<div class="qe-drawing-tab">
+    <div class="qe-drawing-header">
+        <div>
+            <span class="qe-zone-label">Drawings</span>
+            <strong>Customer manufacturing documents</strong>
+        </div>
+        <button type="button" class="qe-secondary-btn" @onclick="AddPlaceholderDrawing">
+            <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
+            Attach drawing
+        </button>
+    </div>
+
+    @if (Part.DrawingFiles.Count == 0)
+    {
+        <div class="qe-drawing-empty">
+            <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
+            <span>Add a 2D drawing when tolerances, threads, inserts, or inspection notes matter.</span>
+        </div>
+    }
+    else
+    {
+        <div class="qe-drawing-list">
+            @foreach (var file in Part.DrawingFiles)
+            {
+                <article class="qe-drawing-item">
+                    <MudIcon Icon="@Icons.Material.Outlined.PictureAsPdf" Size="Size.Small" />
+                    <div>
+                        <strong>@file.FileName</strong>
+                        <span>@file.Kind / @FormatBytes(file.FileSizeBytes)</span>
+                    </div>
+                    <button type="button" class="qe-btn-icon" title="Remove drawing" @onclick="@(() => RemoveDrawing(file))">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
+                </article>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public QuotePartViewModel Part { get; set; } = new();
+    [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
+
+    private async Task AddPlaceholderDrawing()
+    {
+        var safeBaseName = string.IsNullOrWhiteSpace(Part.FileName)
+            ? "part"
+            : System.IO.Path.GetFileNameWithoutExtension(Part.FileName);
+        Part.DrawingFiles.Add(new QuotePartAttachmentDto(
+            $"{safeBaseName}-drawing.pdf",
+            $"draft://quote-engine/{Part.PartId:N}/drawing.pdf",
+            "application/pdf",
+            0,
+            "Drawing"));
+        await OnPartChanged.InvokeAsync(Part);
+    }
+
+    private async Task RemoveDrawing(QuotePartAttachmentDto file)
+    {
+        Part.DrawingFiles.Remove(file);
+        await OnPartChanged.InvokeAsync(Part);
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "pending upload";
+        }
+
+        if (bytes < 1024 * 1024)
+        {
+            return $"{Math.Max(1, bytes / 1024)} KB";
+        }
+
+        return $"{bytes / 1024m / 1024m:0.0} MB";
+    }
+}

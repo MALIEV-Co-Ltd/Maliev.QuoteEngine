@@ -19,69 +19,53 @@
     <div class="qe-pn-body">
         @if (IsWorkspaceReady)
         {
-            <aside class="qe-plp-root">
-                <div class="qe-plp-page-header">
-                    <input type="text" value="@_title" @oninput="e => _title = e.Value?.ToString() ?? string.Empty" class="qe-plp-title-input" title="Project title" />
-                    <button type="button" class="qe-icon-btn" title="Duplicate project" disabled="@(!_parts.Any())">
-                        <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" />
-                    </button>
-                </div>
-
-                <div class="qe-plp-upload-section">
-                    <button id="@CompactDropzoneId" type="button" class="qe-dropzone qe-dropzone--compact">
-                        <span class="qe-dropzone-icon" aria-hidden="true">
-                            <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
-                        </span>
-                        <span>@UploadCompactLabel</span>
-                        <small>@UploadCompactHint</small>
-                    </button>
-                </div>
-
-                <div class="qe-plp-headers">
-                    <span>Parts</span>
-                    <span>@_parts.Count part(s)</span>
-                </div>
-
-                <div class="qe-plp-list">
-                    @foreach (var part in _parts)
-                    {
-                        var index = _parts.IndexOf(part);
-                        var total = _estimate?.Lines.FirstOrDefault(line => line.PartId == part.PartId)?.LineTotal;
-                        <button type="button" class="qe-plp-part @(index == _selectedPartIndex ? "qe-plp-part--selected" : "")" @onclick="@(() => SelectPart(index))">
-                            <span class="qe-plp-thumb">
-                                @if (part.Status == "Uploading")
-                                {
-                                    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
-                                }
-                                else
-                                {
-                                    <img src="/images/generated/sample-part.svg" alt="" />
-                                }
-                            </span>
-                            <span class="qe-plp-info">
-                                <strong>@part.FileName</strong>
-                                <small>@part.VolumeCc.ToString("0.##") cc · @part.SurfaceAreaCm2.ToString("0.##") cm²</small>
-                                <span class="qe-plp-meta">
-                                    <span>@ProcessName(part.ProcessId)</span>
-                                    <span>x @part.Quantity</span>
-                                </span>
-                            </span>
-                            @if (total.HasValue)
-                            {
-                                <span class="qe-plp-price">@total.Value.ToString("N2") THB</span>
-                            }
-                        </button>
-                    }
-                </div>
-
-                <div class="qe-plp-footer">
-                    <span>Total parts</span>
-                    <strong>@_parts.Sum(part => part.Quantity) pcs</strong>
-                </div>
-            </aside>
+            <QePartsListPanel @bind-Title="_title"
+                              Parts="@_parts"
+                              SelectedPartIndex="@_selectedPartIndex"
+                              ReferenceData="@_reference"
+                              Estimate="@_estimate"
+                              DropzoneId="@CompactDropzoneId"
+                              UploadLabel="@UploadCompactLabel"
+                              UploadHint="@UploadCompactHint"
+                              OnSelectPart="@SelectPart"
+                              OnRemovePart="@RemovePart" />
+            <div class="qe-pn-parts-drawer @(_isPartsDrawerOpen ? "qe-pn-parts-drawer--open" : "")">
+                <QePartsListPanel @bind-Title="_title"
+                                  Parts="@_parts"
+                                  SelectedPartIndex="@_selectedPartIndex"
+                                  ReferenceData="@_reference"
+                                  Estimate="@_estimate"
+                                  DropzoneId="@MobileDropzoneId"
+                                  UploadLabel="@UploadCompactLabel"
+                                  UploadHint="@UploadCompactHint"
+                                  IsDrawer="true"
+                                  OnSelectPart="@SelectPart"
+                                  OnRemovePart="@RemovePart" />
+            </div>
+            @if (_isPartsDrawerOpen)
+            {
+                <button type="button" class="qe-pn-parts-drawer-backdrop" @onclick="ClosePartsDrawer" aria-label="Close parts drawer"></button>
+            }
         }
 
         <main class="qe-pn-center">
+            @if (IsWorkspaceReady)
+            {
+                <div class="qe-pn-mobile-toolbar">
+                    <button type="button" class="qe-mobile-tool-btn" @onclick="TogglePartsDrawer">
+                        <MudIcon Icon="@Icons.Material.Outlined.List" Size="Size.Small" />
+                        Parts
+                    </button>
+                    <div class="qe-mobile-mode-switch" role="tablist" aria-label="Workspace mode">
+                        <button type="button"
+                                class="@(_centerMode == "bulk" ? "" : "active")"
+                                @onclick="@(() => SetCenterMode("dfm"))">Config</button>
+                        <button type="button"
+                                class="@(_centerMode == "bulk" ? "active" : "")"
+                                @onclick="@(() => SetCenterMode("bulk"))">Table</button>
+                    </div>
+                </div>
+            }
             @if (!string.IsNullOrWhiteSpace(_error))
             {
                 <MudAlert Severity="Severity.Error" Class="qe-error-alert">@_error</MudAlert>
@@ -127,145 +111,20 @@
             {
                 var _sp = SelectedPart!;
                 <div class="qe-pn-detail-row">
-                    <section class="qe-pdc-root">
-                        <header class="qe-pdc-header">
-                            <div class="qe-pdc-header-left">
-                                <div class="qe-pdc-header-name-row">
-                                    <strong title="@_sp.FileName">@Path.GetFileNameWithoutExtension(_sp.FileName)</strong>
-                                    <span class="qe-status-pill qe-status--@StatusClass(_sp)">@_sp.Status.ToUpperInvariant()</span>
-                                </div>
-                                <div class="qe-pdc-header-subline">
-                                    Uploaded just now · @_sp.FileName · @_sp.VolumeCc.ToString("0.##") cc
-                                </div>
-                            </div>
-                            <div class="qe-pdc-tabs">
-                                <button type="button" class="qe-pdc-tab qe-pdc-tab--active">
-                                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
-                                    3D Model
-                                </button>
-                                <button type="button" class="qe-pdc-tab">
-                                    <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
-                                    Drawing
-                                </button>
-                                <button type="button" class="qe-pdc-tab">
-                                    <MudIcon Icon="@Icons.Material.Outlined.Science" Size="Size.Small" />
-                                    DFM
-                                    <span>@_sp.Findings.Count</span>
-                                </button>
-                            </div>
-                        </header>
+                    <QePartDetailCard Part="@_sp"
+                                      Parts="@_parts"
+                                      ReferenceData="@_reference"
+                                      Estimate="@_estimate"
+                                      CenterMode="@_centerMode"
+                                      CenterModeChanged="@SetCenterMode"
+                                      OnPartChanged="@OnPartConfigurationChanged"
+                                      OnSelectPart="@SelectPartFromTable"
+                                      OnAddFilesRequested="@OpenFilePickerAsync"
+                                      IsDarkMode="@IsDarkMode" />
 
-                        @* _sp is non-null: outer @if(SelectedPart is null)/else guarantees it *@
-                        <div class="qe-pdc-container">
-                            @* 3D viewer — top portion of center pane *@
-                            <div class="qe-center-viewer">
-                                <QePartViewer GlbUrl="@_sp.GlbUrl"
-                                              IsDarkMode="@IsDarkMode"
-                                              OnViewerError="@(msg => Console.Error.WriteLine($"Viewer error: {msg}"))" />
-                            </div>
-
-                            @* Tab switcher — DFM / Bulk *@
-                            <div class="qe-center-tabs">
-                                <button class="@(_centerTab == "dfm" ? "qe-tab-active" : "")"
-                                        @onclick='() => _centerTab = "dfm"'>DFM Analysis</button>
-                                <button class="@(_centerTab == "bulk" ? "qe-tab-active" : "")"
-                                        @onclick='() => _centerTab = "bulk"'>All Parts</button>
-                            </div>
-
-                            @if (_centerTab == "dfm")
-                            {
-                                <QeDfmTab IsManifold="@_sp.IsManifold"
-                                          NonManifoldReason="@_sp.NonManifoldReason"
-                                          FdmReport="@_sp.FdmDfmReport"
-                                          SlaReport="@_sp.SlaDfmReport"
-                                          CncReport="@_sp.CncDfmReport" />
-                            }
-                            else
-                            {
-                                <QeBulkTable Parts="@_parts"
-                                             Processes="@(_reference?.Processes ?? [])"
-                                             Materials="@(_reference?.Materials ?? [])"
-                                             OnPartChanged="@(p => StateHasChanged())"
-                                             OnSelectPart="@(p => { _selectedPartIndex = _parts.IndexOf(p); _centerTab = "dfm"; })"
-                                             OnAddFilesRequested="@OpenFilePickerAsync" />
-                            }
-                        </div>
-                        <footer class="qe-pdc-footer">
-                            <span class="qe-chip qe-chip--process">@ProcessName(_sp.ProcessId)</span>
-                            <span class="qe-chip">@MaterialName(_sp.MaterialId)</span>
-                            <span class="qe-footer-sep"></span>
-                            <span>@_sp.Quantity pcs</span>
-                            <strong>@PartTotal(_sp).ToString("N2") THB</strong>
-                        </footer>
-                    </section>
-
-                    <aside class="qe-pcs-sidebar">
-                        <header class="qe-pcs-header">
-                            <span>Configure</span>
-                            <strong title="@_sp.FileName">@_sp.FileName</strong>
-                        </header>
-                        <div class="qe-pcs-scroll">
-                            <section class="qe-pcs-section">
-                                <div class="qe-pcs-section-header">
-                                    <span>Manufacturing Process</span>
-                                </div>
-                                <div class="qe-pcs-process-grid">
-                                    @foreach (var process in _reference?.Processes ?? [])
-                                    {
-                                        var active = _sp.ProcessId == process.Id;
-                                        <button type="button" class="qe-pcs-process-card @(active ? "qe-pcs-process-card--active" : "")" @onclick="@(() => SelectProcess(_sp, process))">
-                                            <MudIcon Icon="@ProcessIcon(process.Id)" Size="Size.Small" />
-                                            <strong>@process.Name</strong>
-                                            @if (active)
-                                            {
-                                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Class="qe-card-check" />
-                                            }
-                                        </button>
-                                    }
-                                </div>
-                            </section>
-
-                            <section class="qe-pcs-section">
-                                <div class="qe-pcs-section-header">
-                                    <span>Material</span>
-                                    <small>@MaterialsFor(_sp.ProcessId).Count() options</small>
-                                </div>
-                                <div class="qe-pcs-cards">
-                                    @foreach (var material in MaterialsFor(_sp.ProcessId))
-                                    {
-                                        var active = _sp.MaterialId == material.Id;
-                                        <button type="button" class="qe-pcs-mat-card @(active ? "qe-pcs-mat-card--active" : "")" @onclick="@(() => SelectMaterial(_sp, material))">
-                                            <span class="qe-mat-swatch" style="background:@MaterialSwatch(material.Id)"></span>
-                                            <span>
-                                                <strong>@material.Name</strong>
-                                                <small>@material.Grade · @material.Finish</small>
-                                            </span>
-                                            @if (active)
-                                            {
-                                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Class="qe-card-check" />
-                                            }
-                                        </button>
-                                    }
-                                </div>
-                            </section>
-
-                            <section class="qe-pcs-section">
-                                <div class="qe-pcs-section-header">
-                                    <span>Quantity and review</span>
-                                </div>
-                                <div class="qe-pcs-qty-row">
-                                    <label>
-                                        Quantity
-                                        <input type="number" min="1" @bind="_sp.Quantity" @bind:after="ClearEstimate" />
-                                    </label>
-                                    <label class="qe-check-btn @(_sp.DfmAcknowledged ? "checked" : "")">
-                                        <input type="checkbox" @bind="_sp.DfmAcknowledged" />
-                                        DFM reviewed
-                                    </label>
-                                </div>
-                            </section>
-                        </div>
-                    </aside>
+                    <QePartConfigSidebar Part="@_sp"
+                                         ReferenceData="@_reference"
+                                         OnPartChanged="@OnPartConfigurationChanged" />
                 </div>
             }
         </main>
@@ -273,54 +132,18 @@
 
     @if (IsWorkspaceReady)
     {
-        <footer class="qe-qsb-root">
-            <div class="qe-qsb-zone qe-qsb-lead">
-                <span class="qe-zone-label">
-                    <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
-                    Lead Time
-                </span>
-                <div class="qe-qsb-lead-options">
-                    @foreach (var leadTime in _reference?.LeadTimes ?? [])
-                    {
-                        var active = _leadTimeCode == leadTime.Code;
-                        <button type="button" class="qe-qsb-lead-btn @(active ? "qe-qsb-lead-btn--active" : "")" @onclick="@(() => SelectLeadTime(leadTime.Code))">
-                            <span>
-                                <strong>@leadTime.Name</strong>
-                                <small>@leadTime.BusinessDays business days</small>
-                            </span>
-                            <em>@LeadTimeBadge(leadTime)</em>
-                        </button>
-                    }
-                </div>
-            </div>
-            <div class="qe-qsb-divider"></div>
-            <div class="qe-qsb-zone qe-qsb-total">
-                <span class="qe-zone-label">Quote Total</span>
-                <strong>@(_estimate is null ? "—" : $"{_estimate.Total:N2} {_estimate.Currency}")</strong>
-                <div class="qe-qsb-actions">
-                    <button type="button" class="qe-secondary-btn" disabled="@(!_parts.Any())" @onclick="CalculateAsync">Estimate</button>
-                    <button type="button" class="qe-secondary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="SubmitQuoteAsync">PDF</button>
-                    <button type="button" class="qe-primary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="SubmitQuoteAsync">
-                        @QuoteButtonLabel
-                        <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
-                    </button>
-                </div>
-                @if (_formalQuote is not null)
-                {
-                    <div class="qe-qsb-result">
-                        <span>@_formalQuote.QuoteNumber</span>
-                        <button type="button" @onclick="CreateOrderAsync">Create order</button>
-                    </div>
-                }
-                @if (_order is not null)
-                {
-                    <div class="qe-qsb-result">
-                        <span>@_order.OrderNumber</span>
-                        <strong>@_order.Status</strong>
-                    </div>
-                }
-            </div>
-        </footer>
+        <QeQuoteSummaryBar Parts="@_parts"
+                           ReferenceData="@_reference"
+                           Estimate="@_estimate"
+                           FormalQuote="@_formalQuote"
+                           Order="@_order"
+                           LeadTimeCode="@_leadTimeCode"
+                           CanRequestFormalQuote="@CanRequestFormalQuote"
+                           QuoteButtonLabel="@QuoteButtonLabel"
+                           OnLeadTimeSelected="@SelectLeadTime"
+                           OnCalculateRequested="@CalculateAsync"
+                           OnQuoteRequested="@SubmitQuoteAsync"
+                           OnOrderRequested="@CreateOrderAsync" />
     }
 </div>
 
@@ -328,6 +151,7 @@
     private const string UploadContainerId = "quote-upload-container";
     private const string UploadInputId = "quote-cad-files";
     private const string CompactDropzoneId = "quote-compact-dropzone";
+    private const string MobileDropzoneId = "quote-mobile-dropzone";
     private const string HeroDropzoneId = "quote-hero-dropzone";
     private string _quoteSessionId = Guid.NewGuid().ToString("N");
     private readonly List<QuotePartViewModel> _parts = [];
@@ -339,11 +163,12 @@
     private HubConnection? _notificationConnection;
     private DotNetObjectReference<QuoteWorkspace>? _dotNetRef;
     private readonly List<string> _liveNotifications = [];
-    private string? _registeredDropzoneId;
+    private readonly HashSet<string> _registeredDropzoneIds = [];
     private string _leadTimeCode = "STANDARD";
     private string _title = "Untitled quote";
     private int _selectedPartIndex;
-    private string _centerTab = "dfm";
+    private string _centerMode = "dfm";
+    private bool _isPartsDrawerOpen;
     private string? _error;
     private bool IsDarkMode => false;  // wire to ThemeService if added later
 
@@ -360,7 +185,7 @@
     private string UploadHeroLabel => IsDemoMode ? "Demo sample is ready" : "Drop files here or click to upload";
     private string UploadHeroHint => IsDemoMode
         ? "Demo mode cannot create projects, formal quotes, orders, uploads, or history"
-        : $"{QuoteUploadConstraints.SupportedCadExtensionLabel} · max {QuoteUploadConstraints.MaxFileSizeMegabytes} MB per file";
+        : $"{QuoteUploadConstraints.SupportedCadExtensionLabel} / max {QuoteUploadConstraints.MaxFileSizeMegabytes} MB per file";
     private string QuoteButtonLabel => IsDemoMode ? "Demo only" : IsSignedIn ? "Quote" : "Sign in to quote";
 
     private QuotePartViewModel? SelectedPart => _parts.Count == 0 ? null : _parts[Math.Min(_selectedPartIndex, _parts.Count - 1)];
@@ -401,19 +226,28 @@
             return;
         }
 
-        var activeDropzoneId = IsWorkspaceReady ? CompactDropzoneId : HeroDropzoneId;
-        if (string.Equals(_registeredDropzoneId, activeDropzoneId, StringComparison.Ordinal))
+        var activeDropzoneIds = IsWorkspaceReady
+            ? new[] { CompactDropzoneId, MobileDropzoneId }
+            : [HeroDropzoneId];
+
+        if (_registeredDropzoneIds.SetEquals(activeDropzoneIds))
         {
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(_registeredDropzoneId))
+        foreach (var registered in _registeredDropzoneIds.Except(activeDropzoneIds, StringComparer.Ordinal).ToArray())
         {
-            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", _registeredDropzoneId);
+            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", registered);
+            _registeredDropzoneIds.Remove(registered);
         }
 
-        await Js.InvokeVoidAsync("quoteEngineUploads.registerDropzone", activeDropzoneId, UploadInputId, _dotNetRef);
-        _registeredDropzoneId = activeDropzoneId;
+        foreach (var activeDropzoneId in activeDropzoneIds)
+        {
+            if (_registeredDropzoneIds.Add(activeDropzoneId))
+            {
+                await Js.InvokeVoidAsync("quoteEngineUploads.registerDropzone", activeDropzoneId, UploadInputId, _dotNetRef);
+            }
+        }
     }
 
     private async Task OpenFilePickerAsync()
@@ -573,6 +407,7 @@
                     UploadId = part.UploadId,
                     FileName = part.FileName,
                     Status = part.Status,
+                    StoragePath = part.StoragePath,
                     VolumeCc = part.VolumeCc,
                     SurfaceAreaCm2 = part.SurfaceAreaCm2,
                     Findings = part.Findings
@@ -594,24 +429,50 @@
     private void SelectPart(int index)
     {
         _selectedPartIndex = Math.Clamp(index, 0, Math.Max(_parts.Count - 1, 0));
+        _isPartsDrawerOpen = false;
     }
 
-    private void SelectProcess(QuotePartViewModel part, ProcessOptionDto process)
+    private Task SelectPartFromTable(QuotePartViewModel part)
     {
-        part.ProcessId = process.Id;
-        var firstMaterial = MaterialsFor(process.Id).FirstOrDefault();
-        if (firstMaterial is not null)
+        _selectedPartIndex = Math.Clamp(_parts.IndexOf(part), 0, Math.Max(_parts.Count - 1, 0));
+        _centerMode = "dfm";
+        return Task.CompletedTask;
+    }
+
+    private void RemovePart(QuotePartViewModel part)
+    {
+        var idx = _parts.IndexOf(part);
+        _parts.Remove(part);
+        if (_parts.Count > 0)
         {
-            part.MaterialId = firstMaterial.Id;
+            _selectedPartIndex = Math.Clamp(idx, 0, _parts.Count - 1);
         }
 
         ClearEstimate();
     }
 
-    private void SelectMaterial(QuotePartViewModel part, MaterialOptionDto material)
+    private void TogglePartsDrawer()
     {
-        part.MaterialId = material.Id;
+        _isPartsDrawerOpen = !_isPartsDrawerOpen;
+    }
+
+    private void ClosePartsDrawer()
+    {
+        _isPartsDrawerOpen = false;
+    }
+
+    private Task SetCenterMode(string mode)
+    {
+        _centerMode = mode;
+        return Task.CompletedTask;
+    }
+
+    private Task OnPartConfigurationChanged(QuotePartViewModel part)
+    {
+        _ = part;
         ClearEstimate();
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     private void SelectLeadTime(string code)
@@ -635,6 +496,11 @@
             LeadTimeCode = _leadTimeCode,
             Parts = _parts.Select(x => x.ToDraft()).ToList()
         });
+
+        foreach (var part in _parts)
+        {
+            part.UnitPriceTHB = _estimate.Lines.FirstOrDefault(line => line.PartId == part.PartId)?.UnitPrice;
+        }
     }
 
     private async Task SubmitQuoteAsync()
@@ -754,11 +620,29 @@
                 FileName = part.FileName,
                 ProcessId = part.ProcessId,
                 MaterialId = part.MaterialId,
+                FinishId = part.FinishId,
+                FinishCode = part.FinishCode,
+                ToleranceId = part.ToleranceId,
+                ToleranceCode = part.ToleranceCode,
+                InspectionLevel = part.InspectionLevel,
+                RoughnessCode = part.RoughnessCode,
+                Color = part.Color,
+                HasThreadedHoles = part.HasThreadedHoles,
+                ThreadSpecification = part.ThreadSpecification,
+                ThreadedHoleCount = part.ThreadedHoleCount,
+                InsertType = part.InsertType,
+                InsertCount = part.InsertCount,
                 Quantity = part.Quantity,
                 VolumeCc = part.VolumeCc,
                 SurfaceAreaCm2 = part.SurfaceAreaCm2,
                 DfmAcknowledged = part.DfmAcknowledged,
+                BodyCount = part.BodyCount ?? 1,
+                SelectedBodyIndex = part.SelectedBodyIndex,
+                DrawingFiles = [.. part.DrawingFiles],
+                ViewerSettings = part.ViewerSettings,
                 Status = "Analyzed",
+                GlbUrl = string.IsNullOrWhiteSpace(demo.ViewerUrl) ? null : demo.ViewerUrl,
+                ThumbnailUrl = string.IsNullOrWhiteSpace(demo.ThumbnailUrl) ? null : demo.ThumbnailUrl,
                 Findings =
                 [
                     new("Info", "DEMO_SAMPLE", demo.Notice),
@@ -770,7 +654,6 @@
         if (_parts.Count > 0)
         {
             _selectedPartIndex = 0;
-            await CalculateAsync();
         }
     }
 
@@ -796,6 +679,24 @@
         {
             part.MaterialId = material.Id;
         }
+
+        ApplyCatalogDefaults(part);
+    }
+
+    private void ApplyCatalogDefaults(QuotePartViewModel part)
+    {
+        var finish = _reference?.Finishes.FirstOrDefault(item => item.ProcessId == part.ProcessId);
+        part.FinishId = finish?.Id;
+        part.FinishCode = finish?.Code;
+
+        var tolerance = _reference?.Tolerances.FirstOrDefault(item => item.ProcessId == part.ProcessId);
+        part.ToleranceId = tolerance?.Id;
+        part.ToleranceCode = tolerance?.Code;
+
+        part.InspectionLevel = _reference?.InspectionLevels.FirstOrDefault()?.Code ?? "STANDARD";
+        part.RoughnessCode = _reference?.RoughnessOptions.FirstOrDefault(item => item.ProcessId == part.ProcessId)?.Code;
+        part.Color = _reference?.Colors.FirstOrDefault(item =>
+            item.MaterialIds.Count == 0 || item.MaterialIds.Contains(part.MaterialId, StringComparer.OrdinalIgnoreCase))?.Code;
     }
 
     private IEnumerable<MaterialOptionDto> MaterialsFor(string processId)
@@ -853,6 +754,7 @@
         try
         {
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", CompactDropzoneId);
+            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", MobileDropzoneId);
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", HeroDropzoneId);
         }
         catch (JSDisconnectedException)
