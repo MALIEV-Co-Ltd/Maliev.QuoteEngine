@@ -59,7 +59,7 @@
                     <div class="qe-mobile-mode-switch" role="tablist" aria-label="Workspace mode">
                         <button type="button"
                                 class="@(_centerMode == "bulk" ? "" : "active")"
-                                @onclick="@(() => SetCenterMode("dfm"))">Config</button>
+                                @onclick="@(() => SetCenterMode("model"))">Config</button>
                         <button type="button"
                                 class="@(_centerMode == "bulk" ? "active" : "")"
                                 @onclick="@(() => SetCenterMode("bulk"))">Table</button>
@@ -167,7 +167,7 @@
     private string _leadTimeCode = "STANDARD";
     private string _title = "Untitled quote";
     private int _selectedPartIndex;
-    private string _centerMode = "dfm";
+    private string _centerMode = "model";
     private bool _isPartsDrawerOpen;
     private string? _error;
     private bool IsDarkMode => false;  // wire to ThemeService if added later
@@ -435,7 +435,7 @@
     private Task SelectPartFromTable(QuotePartViewModel part)
     {
         _selectedPartIndex = Math.Clamp(_parts.IndexOf(part), 0, Math.Max(_parts.Count - 1, 0));
-        _centerMode = "dfm";
+        _centerMode = "model";
         return Task.CompletedTask;
     }
 

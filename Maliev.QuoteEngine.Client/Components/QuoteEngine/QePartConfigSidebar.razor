@@ -168,7 +168,12 @@
                         <button type="button" class="qe-qty-stepper-btn"
                                 disabled="@(Part.Quantity <= 1)"
                                 @onclick="DecrementQuantity">-</button>
-                        <span class="qe-qty-stepper-display">@Part.Quantity</span>
+                        <input type="number"
+                               class="qe-qty-stepper-input"
+                               aria-label="Quantity"
+                               min="1"
+                               value="@Part.Quantity"
+                               @oninput="SetQuantityInput" />
                         <button type="button" class="qe-qty-stepper-btn"
                                 @onclick="IncrementQuantity">+</button>
                     </div>
@@ -344,6 +349,14 @@
     private async Task SetQuantityPreset(int quantity)
     {
         Part.Quantity = Math.Max(1, quantity);
+        await NotifyChanged();
+    }
+
+    private async Task SetQuantityInput(ChangeEventArgs args)
+    {
+        Part.Quantity = int.TryParse(args.Value?.ToString(), out var quantity)
+            ? Math.Max(1, quantity)
+            : 1;
         await NotifyChanged();
     }
 

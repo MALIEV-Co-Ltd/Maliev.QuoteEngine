@@ -233,8 +233,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-dropzone-icon", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon .mud-icon-root", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pdc-container {\n    position: relative;", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-center-tabs {\n    position: absolute;", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-dfm-tab {\n    position: absolute;", styles, StringComparison.Ordinal);
+        Assert.Contains("3D Model", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor"), StringComparison.Ordinal);
+        Assert.Contains(".qe-dfm-tab {\n    flex: 1 1 0;", styles, StringComparison.Ordinal);
         Assert.Contains("flex: 0 0 380px;", styles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: repeat(3, minmax(0, 1fr));", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pn-root.is-launch-screen", styles, StringComparison.Ordinal);
@@ -393,9 +393,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("<QePartConfigSidebar", workspace, StringComparison.Ordinal);
         Assert.Contains("<QeQuoteSummaryBar", workspace, StringComparison.Ordinal);
         Assert.Contains("QeDrawingAttachmentsTab", detailCard, StringComparison.Ordinal);
+        Assert.Contains("3D Model", detailCard, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"DFM Analysis\"", detailCard, StringComparison.Ordinal);
         Assert.Contains("qe-pn-mobile-toolbar", workspace, StringComparison.Ordinal);
         Assert.Contains("_isPartsDrawerOpen", workspace, StringComparison.Ordinal);
         Assert.Contains("_centerMode", workspace, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Quantity\"", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor"), StringComparison.Ordinal);
         Assert.DoesNotContain("<span class=\"qe-zone-label\">Bill To</span>", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("CustomerPicker", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("internal pricing override", workspace, StringComparison.OrdinalIgnoreCase);

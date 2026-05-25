@@ -2561,8 +2561,8 @@ textarea::placeholder {
 
 .qe-pdc-container {
     position: relative;
-    display: grid;
-    grid-template-rows: minmax(0, 1fr);
+    display: flex;
+    min-height: 0;
     background-color: var(--maliev-panel-2);
     background-image: radial-gradient(circle, rgba(23, 23, 23, .08) 1px, transparent 1px);
     background-size: 20px 20px;
@@ -2574,6 +2574,7 @@ textarea::placeholder {
 }
 
 .qe-center-viewer {
+    flex: 1 1 0;
     position: relative;
     z-index: 1;
     min-width: 0;
@@ -2635,42 +2636,6 @@ textarea::placeholder {
     background: var(--maliev-border);
 }
 
-.qe-center-tabs {
-    position: absolute;
-    top: 8px;
-    right: 10px;
-    z-index: 5;
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 3px;
-    border-radius: var(--maliev-radius-md);
-    background: rgba(255, 255, 255, .96);
-    box-shadow: var(--maliev-shadow-card);
-}
-
-.qe-center-tabs button {
-    min-height: 30px;
-    padding: 4px 11px;
-    border: 0;
-    border-radius: var(--maliev-radius-sm);
-    color: var(--maliev-muted);
-    background: transparent;
-    font: inherit;
-    font-size: var(--maliev-font-small);
-    font-weight: 500;
-    line-height: 1;
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.qe-center-tabs button:hover,
-.qe-center-tabs .qe-tab-active {
-    color: var(--maliev-ink);
-    background: var(--maliev-panel-3);
-    box-shadow: var(--maliev-shadow-ring-light);
-}
-
 .qe-pdc-polkadot {
     background-color: var(--maliev-panel-2);
     background-image: radial-gradient(circle, var(--maliev-border) 1px, transparent 1px);
@@ -2713,13 +2678,14 @@ textarea::placeholder {
 }
 
 .qe-dfm-tab {
-    position: absolute;
-    top: 50px;
-    right: 10px;
-    z-index: 4;
-    width: min(332px, calc(100% - 20px));
+    flex: 1 1 0;
     display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
     gap: 8px;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--maliev-panel);
 }
 
 .qe-dfm-banner {
@@ -2739,6 +2705,7 @@ textarea::placeholder {
     width: max-content;
     max-width: 100%;
     gap: 2px;
+    margin: 0 12px;
     padding: 3px;
     border-radius: var(--maliev-radius-md);
     background: rgba(255, 255, 255, .96);
@@ -2771,10 +2738,11 @@ textarea::placeholder {
     display: grid;
     gap: 8px;
     padding: 10px;
-    border-radius: var(--maliev-radius-md);
-    background: rgba(255, 255, 255, .94);
-    box-shadow: var(--maliev-shadow-card);
-    max-height: min(46vh, 420px);
+    border-radius: 0;
+    background: var(--maliev-panel);
+    box-shadow: var(--maliev-shadow-ring);
+    max-height: none;
+    min-height: 0;
     overflow: auto;
 }
 
@@ -2848,15 +2816,17 @@ textarea::placeholder {
 }
 
 .qe-bulk-table-wrap {
-    position: absolute;
-    inset: 50px 10px 10px;
-    z-index: 4;
+    flex: 1 1 0;
+    position: relative;
+    z-index: 1;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
+    min-width: 0;
+    min-height: 0;
     overflow: hidden;
-    border-radius: var(--maliev-radius-md);
+    border-radius: 0;
     background: rgba(255, 255, 255, .96);
-    box-shadow: var(--maliev-shadow-card);
+    box-shadow: none;
     font-size: var(--maliev-font-small);
 }
 
@@ -3910,16 +3880,27 @@ body.mud-blazor {
     cursor: default;
 }
 
-.qe-qty-stepper-display {
+.qe-qty-stepper-input {
     min-width: 40px;
+    width: 56px;
     text-align: center;
     font-family: var(--maliev-font-mono);
     font-size: var(--maliev-font-small);
     font-weight: 500;
     line-height: 32px;
+    min-height: 32px;
     padding: 0 6px;
+    border: 0;
     border-left: 1px solid var(--maliev-border);
     border-right: 1px solid var(--maliev-border);
+    color: var(--maliev-ink);
+    background: transparent;
+    outline: none;
+}
+
+.qe-qty-stepper-input:focus {
+    background: var(--maliev-panel);
+    box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .qe-qty-presets {
@@ -4030,15 +4011,14 @@ body.mud-blazor {
 }
 
 .qe-drawing-tab {
-    position: absolute;
-    top: 49%;
-    right: 10px;
-    bottom: 10px;
-    left: 10px;
+    flex: 1 1 0;
+    position: relative;
+    min-width: 0;
+    min-height: 0;
     overflow: auto;
-    border-radius: var(--maliev-radius-md);
+    border-radius: 0;
     background: var(--maliev-panel);
-    box-shadow: var(--maliev-shadow-ring);
+    box-shadow: none;
 }
 
 .qe-drawing-header,
@@ -4104,7 +4084,7 @@ body.mud-blazor {
 
 .qe-viewer-fallback {
     position: absolute;
-    inset: 16px min(360px, 46%) 16px 16px;
+    inset: 16px;
     z-index: 4;
     display: grid;
     place-items: center;
@@ -4136,10 +4116,6 @@ body.mud-blazor {
 }
 
 @media (max-width: 1200px) {
-    .qe-viewer-fallback {
-        inset: 12px;
-    }
-
     .qe-pn-body {
         position: relative;
     }
