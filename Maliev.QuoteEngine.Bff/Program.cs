@@ -66,6 +66,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddSingleton<QuoteEnginePrototypeStore>();
 builder.Services.AddScoped<CustomerSessionResolver>();
 builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
+builder.Services.AddScoped<CustomerSessionHandoffToken>();
 builder.Services.AddScoped<ICustomerChatbotService, CustomerChatbotService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(45));
