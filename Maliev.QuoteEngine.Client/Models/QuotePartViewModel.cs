@@ -31,6 +31,7 @@ public sealed class QuotePartViewModel
     public decimal VolumeCc { get; set; }
     public decimal SurfaceAreaCm2 { get; set; }
     public bool DfmAcknowledged { get; set; }
+    public string? PartNotes { get; set; }
     public string Status { get; set; } = "Waiting";
     public IReadOnlyList<DfmFindingDto> Findings { get; set; } = [];
 
@@ -74,6 +75,7 @@ public sealed class QuotePartViewModel
         VolumeCc = Math.Max(VolumeCc, 1m),
         SurfaceAreaCm2 = SurfaceAreaCm2,
         DfmAcknowledged = DfmAcknowledged,
+        PartNotes = PartNotes,
         BodyCount = BodyCount,
         SelectedBodyIndex = SelectedBodyIndex,
         DrawingFiles = [.. DrawingFiles],

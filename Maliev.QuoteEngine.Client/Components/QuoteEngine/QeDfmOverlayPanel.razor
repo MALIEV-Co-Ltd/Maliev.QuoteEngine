@@ -1,0 +1,158 @@
+@if (TimedOut)
+{
+    <div class="qe-dfm-overlay qe-dfm-overlay--timed-out">
+        <div class="qe-dfm-overlay-header">
+            <div class="qe-dfm-overlay-left">
+                <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" />
+                <span>@(string.IsNullOrWhiteSpace(ErrorMessage) ? "DFM analysis unavailable" : ErrorMessage)</span>
+            </div>
+        </div>
+    </div>
+}
+else if (Analyzing)
+{
+    <div class="qe-dfm-overlay qe-dfm-overlay--analyzing">
+        <div class="qe-dfm-overlay-header">
+            <div class="qe-dfm-overlay-left">
+                <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                <span>Analyzing your model...</span>
+            </div>
+        </div>
+    </div>
+}
+else if (_allClearShown)
+{
+    <div class="qe-dfm-overlay qe-dfm-overlay--all-clear @(_allClearFading ? "qe-dfm-overlay--fade-out" : "")">
+        <div class="qe-dfm-overlay-header">
+            <div class="qe-dfm-overlay-left">
+                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" />
+                <span>All clear - no issues found</span>
+            </div>
+        </div>
+    </div>
+}
+else if (IsVisible && DfmIssues.Count > 0)
+{
+    <div class="qe-dfm-overlay @(_acknowledged ? "qe-dfm-overlay--success" : "")">
+        <button type="button" class="qe-dfm-overlay-header" @onclick="ToggleExpanded">
+            <div class="qe-dfm-overlay-left">
+                <MudIcon Icon="@(_acknowledged ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.WarningAmber)"
+                         Size="Size.Small"
+                         Color="@(_acknowledged ? Color.Success : Color.Warning)" />
+                <span>@(_acknowledged ? "Issues acknowledged" : $"{DfmIssues.Count} DFM issue{(DfmIssues.Count == 1 ? "" : "s")}")</span>
+            </div>
+            <MudIcon Icon="@(_expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+        </button>
+        @if (_expanded && !_acknowledged)
+        {
+            <div class="qe-dfm-overlay-issues">
+                @foreach (var issue in DfmIssues)
+                {
+                    var active = issue.OverlayKey is not null && _activeOverlays.Contains(issue.OverlayKey);
+                    var canToggle = issue.OverlayKey is not null && issue.OverlayUrl is not null && OnToggleOverlay.HasDelegate;
+                    <button type="button"
+                            class="qe-dfm-issue-row @(active ? "qe-dfm-issue-row--active" : "")"
+                            disabled="@(!canToggle)"
+                            @onclick="@(() => ToggleOverlay(issue))">
+                        <MudIcon Icon="@issue.Icon" Size="Size.Small" Color="@(issue.Severity.Equals("error", StringComparison.OrdinalIgnoreCase) ? Color.Error : Color.Warning)" />
+                        <span>
+                            <strong>@issue.Title</strong>
+                            <small>@issue.Description</small>
+                        </span>
+                    </button>
+                }
+            </div>
+            <button type="button" class="qe-dfm-ack-btn" @onclick="Acknowledge">Acknowledge issues</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<QeDfmOverlayIssue> DfmIssues { get; set; } = [];
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public bool Analyzing { get; set; }
+    [Parameter] public bool TimedOut { get; set; }
+    [Parameter] public string? ErrorMessage { get; set; }
+    [Parameter] public bool AllClear { get; set; }
+    [Parameter] public EventCallback OnAcknowledged { get; set; }
+    [Parameter] public EventCallback<QeDfmOverlayIssue> OnToggleOverlay { get; set; }
+    [Parameter] public EventCallback OnAllClearDismissed { get; set; }
+
+    private readonly HashSet<string> _activeOverlays = [];
+    private bool _acknowledged;
+    private bool _expanded = true;
+    private bool _allClearShown;
+    private bool _allClearFading;
+    private int _previousIssueCount = -1;
+    private CancellationTokenSource? _allClearCts;
+
+    protected override void OnParametersSet()
+    {
+        if (DfmIssues.Count > 0)
+        {
+            _previousIssueCount = DfmIssues.Count;
+            _allClearShown = false;
+            _allClearFading = false;
+        }
+        else if (AllClear && _previousIssueCount != 0 && !_allClearShown)
+        {
+            _previousIssueCount = 0;
+            _allClearShown = true;
+            _allClearFading = false;
+            _ = TriggerAllClearAutoDismiss();
+        }
+
+        if (!IsVisible)
+        {
+            _acknowledged = false;
+        }
+    }
+
+    private void ToggleExpanded()
+    {
+        _expanded = !_expanded;
+    }
+
+    private async Task ToggleOverlay(QeDfmOverlayIssue issue)
+    {
+        if (issue.OverlayKey is null)
+        {
+            return;
+        }
+
+        if (!_activeOverlays.Add(issue.OverlayKey))
+        {
+            _activeOverlays.Remove(issue.OverlayKey);
+        }
+
+        await OnToggleOverlay.InvokeAsync(issue);
+    }
+
+    private async Task Acknowledge()
+    {
+        _acknowledged = true;
+        _activeOverlays.Clear();
+        await OnAcknowledged.InvokeAsync();
+    }
+
+    private async Task TriggerAllClearAutoDismiss()
+    {
+        _allClearCts?.Cancel();
+        _allClearCts = new CancellationTokenSource();
+        var token = _allClearCts.Token;
+
+        try
+        {
+            await Task.Delay(3000, token);
+            _allClearFading = true;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(500, token);
+            _allClearShown = false;
+            await OnAllClearDismissed.InvokeAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+}

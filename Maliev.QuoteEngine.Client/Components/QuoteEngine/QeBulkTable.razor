@@ -1,129 +1,257 @@
-@* Maliev.QuoteEngine.Client/Components/QuoteEngine/QeBulkTable.razor *@
-@using Maliev.QuoteEngine.Shared.Quotes
+@* Customer-safe ProjectNew dense all-parts table. *@
 
-<div class="qe-bulk-table-wrap">
-
-    @* ── Header bar ── *@
-    <div class="qe-bulk-header">
-        <span class="qe-bulk-count">@Parts.Count part(s)</span>
-        <button class="qe-btn qe-btn--ghost" @onclick="OnAddFilesRequested">+ Add files</button>
+<div class="qe-pbt-root">
+    <div class="qe-pbt-header">
+        <div class="qe-pbt-heading">
+            <div class="qe-pbt-title-row">
+                <div class="qe-pbt-kicker">Table edit</div>
+                <button type="button"
+                        class="qe-pbt-configurator-button"
+                        title="Configurator"
+                        aria-label="Switch to configurator"
+                        @onclick="OnConfiguratorRequested">
+                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+                </button>
+            </div>
+            <div class="qe-pbt-title">@Parts.Count part@(Parts.Count == 1 ? "" : "s")</div>
+        </div>
+        <div class="qe-pbt-actions">
+            <button type="button" class="qe-dropzone qe-dropzone--compact qe-pbt-upload-zone" @onclick="OnAddFilesRequested">
+                <span class="qe-dropzone-icon" aria-hidden="true">
+                    <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
+                </span>
+                <span>Add CAD files</span>
+                <small>STEP, STL, 3MF, IGES</small>
+            </button>
+            <button type="button" class="qe-pbt-action-button" @onclick="ToggleAll">
+                <MudIcon Icon="@(AreAllSelected ? Icons.Material.Outlined.Deselect : Icons.Material.Outlined.SelectAll)" Size="Size.Small" />
+                <span>@(AreAllSelected ? "Clear" : "Select all")</span>
+            </button>
+        </div>
     </div>
 
-    @* ── Table ── *@
-    <div class="qe-bulk-table-scroll">
-        <table class="qe-bulk-table">
+    @if (SelectedCount > 0)
+    {
+        <div class="qe-pbt-bulk-panel">
+            <div class="qe-pbt-bulk-summary">
+                <strong>@SelectedCount selected</strong>
+                <span>Auto-applies compatible fields.</span>
+            </div>
+
+            <div class="qe-pbt-bulk-grid">
+                <span class="qe-pbt-bulk-field">Process</span>
+                <select class="qe-pbt-input" @onchange="ApplyBulkProcess">
+                    <option value="">BulkProcess...</option>
+                    @foreach (var process in Processes)
+                    {
+                        <option value="@process.Id">@process.Name</option>
+                    }
+                </select>
+
+                <span class="qe-pbt-bulk-field">Material</span>
+                <select class="qe-pbt-input" @onchange="ApplyBulkMaterial">
+                    <option value="">BulkMaterial...</option>
+                    @foreach (var material in Materials)
+                    {
+                        <option value="@material.Id">@material.Name</option>
+                    }
+                </select>
+
+                <span class="qe-pbt-bulk-field">Finish</span>
+                <select class="qe-pbt-input" @onchange="ApplyBulkFinish">
+                    <option value="">Select finish</option>
+                    @foreach (var finish in Finishes)
+                    {
+                        <option value="@finish.Id">@finish.Name</option>
+                    }
+                </select>
+
+                <span class="qe-pbt-bulk-field">Tolerance</span>
+                <select class="qe-pbt-input" @onchange="ApplyBulkTolerance">
+                    <option value="">Select tolerance</option>
+                    @foreach (var tolerance in Tolerances)
+                    {
+                        <option value="@tolerance.Id">@tolerance.Name</option>
+                    }
+                </select>
+
+                <span class="qe-pbt-bulk-field">Quantity</span>
+                <input class="qe-pbt-input" type="number" min="1" value="@_bulkQuantity" @oninput="ApplyBulkQuantity" />
+
+                <span class="qe-pbt-bulk-field">Inspection</span>
+                <select class="qe-pbt-input" @onchange="ApplyBulkInspection">
+                    <option value="">Select inspection</option>
+                    @foreach (var inspection in InspectionLevels)
+                    {
+                        <option value="@inspection.Code">@inspection.Name</option>
+                    }
+                </select>
+
+                <span class="qe-pbt-bulk-field">Roughness</span>
+                <select class="qe-pbt-input" @onchange="ApplyBulkRoughness">
+                    <option value="">Select roughness</option>
+                    @foreach (var roughness in RoughnessOptions)
+                    {
+                        <option value="@roughness.Code">@roughness.Name</option>
+                    }
+                </select>
+
+                <span class="qe-pbt-bulk-field">Threaded holes</span>
+                <label class="qe-pbt-inline-check">
+                    <input type="checkbox" @onchange="ApplyBulkThreadedHoles" />
+                    <span>Required</span>
+                </label>
+
+                <span class="qe-pbt-bulk-field">Inserts</span>
+                <label class="qe-pbt-inline-check">
+                    <input type="checkbox" @onchange="ApplyBulkInserts" />
+                    <span>Required</span>
+                </label>
+
+                <span class="qe-pbt-bulk-field">Notes</span>
+                <textarea class="qe-pbt-input qe-pbt-input--notes"
+                          rows="3"
+                          placeholder="Part note"
+                          @oninput="ApplyBulkNotes"></textarea>
+            </div>
+        </div>
+    }
+
+    <div class="qe-pbt-table-surface">
+        <table class="qe-pbt-table">
             <thead>
                 <tr>
-                    <th><input type="checkbox" @onchange="ToggleSelectAll"
-                               checked="@(_selected.Count == Parts.Count && Parts.Count > 0)" /></th>
+                    <th class="qe-pbt-col-check">
+                        <input type="checkbox"
+                               checked="@AreAllSelected"
+                               @onchange="@((ChangeEventArgs _) => ToggleAll())"
+                               aria-label="Select all parts" />
+                    </th>
                     <th>Part</th>
-                    <th>Status</th>
-                    <th>Process / Material</th>
-                    <th>Finish / Tolerance</th>
+                    <th>Process</th>
+                    <th>Material</th>
+                    <th>Finish</th>
+                    <th>Tolerance</th>
+                    <th>Qty</th>
                     <th>Inspection</th>
-                    <th class="qe-col-num">Qty</th>
-                    <th class="qe-col-num">DFM</th>
-                    <th class="qe-col-num">Unit (THB)</th>
-                    <th class="qe-col-num qe-col-LineTotal">Line total</th>
-                    <th></th>
+                    <th>Price</th>
+                    <th>DFM</th>
+                    <th class="qe-pbt-col-actions">Actions</th>
                 </tr>
             </thead>
             <tbody>
                 @foreach (var part in Parts)
                 {
-                    var isSelected = _selected.Contains(part.UploadId);
-                    <tr class="@(isSelected ? "qe-bulk-row--selected" : "")">
-                        <td>
-                            <input type="checkbox" checked="@isSelected"
-                                   @onchange="() => ToggleRow(part.UploadId)" />
-                        </td>
-                        <td class="qe-bulk-filename" title="@part.FileName">@TruncateName(part.FileName)</td>
-                        <td>@RenderStatus(part.Status)</td>
-                        <td>
-                            @if (_editing == part.UploadId)
-                            {
-                                @* BulkProcess inline edit *@
-                                <select @bind="part.ProcessId" @bind:after="() => OnPartChanged.InvokeAsync(part)">
-                                    @foreach (var proc in Processes)
-                                    {
-                                        <option value="@proc.Id">@proc.Name</option>
-                                    }
-                                </select>
-                                @* BulkMaterial inline edit *@
-                                <select @bind="part.MaterialId" @bind:after="() => OnPartChanged.InvokeAsync(part)">
-                                    @foreach (var mat in Materials.Where(m => m.ProcessId == part.ProcessId))
-                                    {
-                                        <option value="@mat.Id">@mat.Name</option>
-                                    }
-                                </select>
-                            }
-                            else
-                            {
-                                <span class="qe-bulk-proc" @onclick="() => _editing = part.UploadId">
-                                    @ProcessName(part.ProcessId) · @MaterialName(part.MaterialId)
-                                </span>
-                            }
+                    var selected = IsPartSelected(part);
+                    <tr class="qe-pbt-table-row @(selected ? "qe-pbt-table-row--selected" : "")">
+                        <td class="qe-pbt-col-check">
+                            <input type="checkbox"
+                                   checked="@selected"
+                                   @onchange="@((ChangeEventArgs args) => TogglePart(part, IsChecked(args)))"
+                                   aria-label="@($"Select {part.FileName}")" />
                         </td>
                         <td>
-                            @if (_editing == part.UploadId)
-                            {
-                                <select value="@(part.FinishId ?? string.Empty)" @onchange="args => SetRowFinish(part, args)">
-                                    <option value="">Default finish</option>
-                                    @foreach (var finish in Finishes.Where(f => f.ProcessId == part.ProcessId))
+                            <div class="qe-pbt-part-cell">
+                                <div class="qe-pbt-part-thumb">
+                                    @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
                                     {
-                                        <option value="@finish.Id">@finish.Name</option>
+                                        <img src="@part.ThumbnailUrl" alt="" class="qe-pbt-part-thumb-img" onerror="this.style.display='none'" />
                                     }
-                                </select>
-                                <select value="@(part.ToleranceId ?? string.Empty)" @onchange="args => SetRowTolerance(part, args)">
-                                    <option value="">Default tolerance</option>
-                                    @foreach (var tolerance in Tolerances.Where(t => t.ProcessId == part.ProcessId))
+                                    else
                                     {
-                                        <option value="@tolerance.Id">@tolerance.Name</option>
+                                        <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
                                     }
-                                </select>
-                            }
-                            else
-                            {
-                                <span class="qe-bulk-proc" @onclick="() => _editing = part.UploadId">
-                                    @DisplayOrDefault(part.FinishCode) · @DisplayOrDefault(part.ToleranceCode)
-                                </span>
-                            }
+                                </div>
+                                <div class="qe-pbt-part-copy">
+                                    <div class="qe-pbt-part-name" title="@part.FileName">@part.FileName</div>
+                                    <div class="qe-pbt-part-meta">@ResolvePartMeta(part)</div>
+                                </div>
+                            </div>
                         </td>
                         <td>
-                            @if (_editing == part.UploadId)
-                            {
-                                <select value="@(part.InspectionLevel ?? "STANDARD")" @onchange="args => SetRowInspection(part, args)">
-                                    @foreach (var inspection in InspectionLevels)
-                                    {
-                                        <option value="@inspection.Code">@inspection.Name</option>
-                                    }
-                                </select>
-                                <select value="@(part.RoughnessCode ?? string.Empty)" @onchange="args => SetRowRoughness(part, args)">
-                                    <option value="">Default roughness</option>
-                                    @foreach (var roughness in RoughnessOptions.Where(r => r.ProcessId == part.ProcessId))
-                                    {
-                                        <option value="@roughness.Code">@roughness.Name</option>
-                                    }
-                                </select>
-                            }
-                            else
-                            {
-                                <span class="qe-bulk-proc" @onclick="() => _editing = part.UploadId">
-                                    @DisplayOrDefault(part.InspectionLevel) / @DisplayOrDefault(part.RoughnessCode)
-                                </span>
-                            }
-                        </td>
-                        <td class="qe-col-num">
-                            <input class="qe-bulk-qty" type="number" min="1" max="100000"
-                                   @bind="part.Quantity" @bind:after="() => OnPartChanged.InvokeAsync(part)" />
-                        </td>
-                        <td class="qe-col-num">@RenderDfmReport(part)</td>
-                        <td class="qe-col-num">@(part.UnitPriceTHB.HasValue ? part.UnitPriceTHB.Value.ToString("N0") : "—")</td>
-                        <td class="qe-col-num qe-bulk-total">
-                            @(part.UnitPriceTHB.HasValue ? (part.UnitPriceTHB.Value * part.Quantity).ToString("N0") : "—")
+                            <select class="qe-pbt-input"
+                                    value="@part.ProcessId"
+                                    @onchange="@((ChangeEventArgs args) => ChangeProcessAsync(part, args.Value?.ToString()))">
+                                @foreach (var process in Processes)
+                                {
+                                    <option value="@process.Id">@process.Name</option>
+                                }
+                            </select>
                         </td>
                         <td>
-                            <button class="qe-btn-icon" title="View in 3D" @onclick="() => OnSelectPart.InvokeAsync(part)">&#x2299;</button>
+                            <select class="qe-pbt-input"
+                                    value="@part.MaterialId"
+                                    @onchange="@((ChangeEventArgs args) => ChangeMaterialAsync(part, args.Value?.ToString()))">
+                                @foreach (var material in Materials.Where(material => material.ProcessId == part.ProcessId))
+                                {
+                                    <option value="@material.Id">@material.Name</option>
+                                }
+                            </select>
+                        </td>
+                        <td>
+                            <select class="qe-pbt-input"
+                                    value="@(part.FinishId ?? string.Empty)"
+                                    @onchange="@((ChangeEventArgs args) => ChangeFinishAsync(part, args.Value?.ToString()))">
+                                <option value="">Finish</option>
+                                @foreach (var finish in Finishes.Where(finish => finish.ProcessId == part.ProcessId))
+                                {
+                                    <option value="@finish.Id">@finish.Name</option>
+                                }
+                            </select>
+                        </td>
+                        <td>
+                            <select class="qe-pbt-input"
+                                    value="@(part.ToleranceId ?? string.Empty)"
+                                    @onchange="@((ChangeEventArgs args) => ChangeToleranceAsync(part, args.Value?.ToString()))">
+                                <option value="">Tolerance</option>
+                                @foreach (var tolerance in Tolerances.Where(tolerance => tolerance.ProcessId == part.ProcessId))
+                                {
+                                    <option value="@tolerance.Id">@tolerance.Name</option>
+                                }
+                            </select>
+                        </td>
+                        <td>
+                            <input class="qe-pbt-input qe-pbt-input--qty"
+                                   type="number"
+                                   min="1"
+                                   value="@part.Quantity"
+                                   @oninput="@((ChangeEventArgs args) => ChangeQuantityAsync(part, args.Value?.ToString()))" />
+                        </td>
+                        <td>
+                            <select class="qe-pbt-input"
+                                    value="@(part.InspectionLevel ?? "STANDARD")"
+                                    @onchange="@((ChangeEventArgs args) => ChangeInspectionAsync(part, args.Value?.ToString()))">
+                                @foreach (var inspection in InspectionLevels)
+                                {
+                                    <option value="@inspection.Code">@inspection.Name</option>
+                                }
+                            </select>
+                        </td>
+                        <td>
+                            <div class="qe-pbt-price">
+                                <span>@ResolveLineTotal(part)</span>
+                                @if (part.UnitPriceTHB.HasValue)
+                                {
+                                    <span>@part.UnitPriceTHB.Value.ToString("N0") ea</span>
+                                }
+                            </div>
+                        </td>
+                        <td>
+                            <button type="button"
+                                    class="@ResolveDfmClass(part)"
+                                    disabled="@(!CanUseDfmBadge(part))">
+                                @ResolveDfmText(part)
+                            </button>
+                        </td>
+                        <td class="qe-pbt-col-actions">
+                            <div class="qe-pbt-row-actions">
+                                <button type="button"
+                                        class="qe-pbt-icon-button"
+                                        title="Open viewer"
+                                        @onclick="@(() => OnSelectPart.InvokeAsync(part))">
+                                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 }
@@ -131,59 +259,30 @@
         </table>
     </div>
 
-    @* ── Bulk action bar (appears when rows selected) ── *@
-    @if (_selected.Count > 0)
-    {
-        <div class="qe-bulk-bar">
-            <span class="qe-bulk-bar-count">@_selected.Count selected</span>
-            @* BulkProcess selector *@
-            <select @onchange="ApplyBulkProcess">
-                <option value="">Bulk process&hellip;</option>
-                @foreach (var proc in Processes)
-                {
-                    <option value="@proc.Id">@proc.Name</option>
-                }
-            </select>
-            @* BulkMaterial selector *@
-            <select @onchange="ApplyBulkMaterial">
-                <option value="">Bulk material&hellip;</option>
-                @foreach (var mat in Materials)
-                {
-                    <option value="@mat.Id">@mat.Name</option>
-                }
-            </select>
-            <select @onchange="ApplyBulkFinish">
-                <option value="">Bulk finish&hellip;</option>
-                @foreach (var finish in Finishes)
-                {
-                    <option value="@finish.Id">@finish.Name</option>
-                }
-            </select>
-            <select @onchange="ApplyBulkTolerance">
-                <option value="">Bulk tolerance&hellip;</option>
-                @foreach (var tolerance in Tolerances)
-                {
-                    <option value="@tolerance.Id">@tolerance.Name</option>
-                }
-            </select>
-            <select @onchange="ApplyBulkInspection">
-                <option value="">Bulk inspection&hellip;</option>
-                @foreach (var inspection in InspectionLevels)
-                {
-                    <option value="@inspection.Code">@inspection.Name</option>
-                }
-            </select>
-            <span class="qe-bulk-bar-total">
-                Total @(GrandTotal.ToString("N0")) THB
-            </span>
-        </div>
-    }
-    else
-    {
-        <div class="qe-bulk-footer">
-            <span class="qe-bulk-bar-total">Total @(GrandTotal.ToString("N0")) THB</span>
-        </div>
-    }
+    <div class="qe-pbt-card-stack">
+        @foreach (var part in Parts)
+        {
+            var selected = IsPartSelected(part);
+            <article class="qe-pbt-part-card @(selected ? "qe-pbt-part-card--selected" : "")">
+                <div class="qe-pbt-card-head">
+                    <input type="checkbox"
+                           checked="@selected"
+                           @onchange="@((ChangeEventArgs args) => TogglePart(part, IsChecked(args)))"
+                           aria-label="@($"Select {part.FileName}")" />
+                    <strong>@part.FileName</strong>
+                    <button type="button" class="qe-pbt-icon-button" @onclick="@(() => OnSelectPart.InvokeAsync(part))">
+                        <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+                    </button>
+                </div>
+                <div class="qe-pbt-card-grid">
+                    <span>@ProcessName(part.ProcessId)</span>
+                    <span>@MaterialName(part.MaterialId)</span>
+                    <span>@DisplayOrDefault(part.FinishCode)</span>
+                    <span>@part.Quantity pcs</span>
+                </div>
+            </article>
+        }
+    </div>
 </div>
 
 @code {
@@ -197,55 +296,77 @@
     [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
     [Parameter] public EventCallback<QuotePartViewModel> OnSelectPart { get; set; }
     [Parameter] public EventCallback OnAddFilesRequested { get; set; }
+    [Parameter] public EventCallback OnConfiguratorRequested { get; set; }
 
     private readonly HashSet<string> _selected = [];
-    private string? _editing;
+    private int _bulkQuantity = 1;
 
-    private decimal GrandTotal => Parts
-        .Where(p => p.UnitPriceTHB.HasValue)
-        .Sum(p => p.UnitPriceTHB!.Value * p.Quantity);
+    private int SelectedCount => Parts.Count(IsPartSelected);
+    private bool AreAllSelected => Parts.Count > 0 && Parts.All(IsPartSelected);
 
-    private void ToggleRow(string uploadId)
+    private bool IsPartSelected(QuotePartViewModel part) => _selected.Contains(part.UploadId);
+
+    private void ToggleAll()
     {
-        if (!_selected.Remove(uploadId)) _selected.Add(uploadId);
-    }
-
-    private void ToggleSelectAll(ChangeEventArgs e)
-    {
+        var allSelected = AreAllSelected;
         _selected.Clear();
-        if (e.Value is true)
-            foreach (var p in Parts) _selected.Add(p.UploadId);
+        if (!allSelected)
+        {
+            foreach (var part in Parts)
+            {
+                _selected.Add(part.UploadId);
+            }
+        }
     }
 
-    private async Task ApplyBulkProcess(ChangeEventArgs e)
+    private void TogglePart(QuotePartViewModel part, bool selected)
     {
-        var processId = e.Value?.ToString();
-        if (string.IsNullOrEmpty(processId)) return;
-        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+        if (selected)
+        {
+            _selected.Add(part.UploadId);
+        }
+        else
+        {
+            _selected.Remove(part.UploadId);
+        }
+    }
+
+    private async Task ApplyBulkProcess(ChangeEventArgs args)
+    {
+        var processId = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(processId)) return;
+
+        foreach (var part in SelectedParts())
         {
             part.ProcessId = processId;
+            var material = Materials.FirstOrDefault(item => item.ProcessId == processId);
+            if (material is not null)
+            {
+                part.MaterialId = material.Id;
+            }
+
             await OnPartChanged.InvokeAsync(part);
         }
     }
 
-    private async Task ApplyBulkMaterial(ChangeEventArgs e)
+    private async Task ApplyBulkMaterial(ChangeEventArgs args)
     {
-        var materialId = e.Value?.ToString();
-        if (string.IsNullOrEmpty(materialId)) return;
-        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+        var materialId = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(materialId)) return;
+
+        foreach (var part in SelectedParts())
         {
             part.MaterialId = materialId;
             await OnPartChanged.InvokeAsync(part);
         }
     }
 
-    private async Task ApplyBulkFinish(ChangeEventArgs e)
+    private async Task ApplyBulkFinish(ChangeEventArgs args)
     {
-        var finishId = e.Value?.ToString();
-        if (string.IsNullOrEmpty(finishId)) return;
-        var finish = Finishes.FirstOrDefault(f => f.Id == finishId);
+        var finish = Finishes.FirstOrDefault(item => item.Id == args.Value?.ToString());
         if (finish is null) return;
-        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+
+        foreach (var part in SelectedParts())
         {
             part.FinishId = finish.Id;
             part.FinishCode = finish.Code;
@@ -253,13 +374,12 @@
         }
     }
 
-    private async Task ApplyBulkTolerance(ChangeEventArgs e)
+    private async Task ApplyBulkTolerance(ChangeEventArgs args)
     {
-        var toleranceId = e.Value?.ToString();
-        if (string.IsNullOrEmpty(toleranceId)) return;
-        var tolerance = Tolerances.FirstOrDefault(t => t.Id == toleranceId);
+        var tolerance = Tolerances.FirstOrDefault(item => item.Id == args.Value?.ToString());
         if (tolerance is null) return;
-        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+
+        foreach (var part in SelectedParts())
         {
             part.ToleranceId = tolerance.Id;
             part.ToleranceCode = tolerance.Code;
@@ -267,72 +387,151 @@
         }
     }
 
-    private async Task ApplyBulkInspection(ChangeEventArgs e)
+    private async Task ApplyBulkQuantity(ChangeEventArgs args)
     {
-        var inspection = e.Value?.ToString();
-        if (string.IsNullOrEmpty(inspection)) return;
-        foreach (var part in Parts.Where(p => _selected.Contains(p.UploadId)))
+        _bulkQuantity = ParsePositiveInt(args.Value, _bulkQuantity);
+        foreach (var part in SelectedParts())
+        {
+            part.Quantity = _bulkQuantity;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private async Task ApplyBulkInspection(ChangeEventArgs args)
+    {
+        var inspection = args.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(inspection)) return;
+
+        foreach (var part in SelectedParts())
         {
             part.InspectionLevel = inspection;
             await OnPartChanged.InvokeAsync(part);
         }
     }
 
-    private async Task SetRowFinish(QuotePartViewModel part, ChangeEventArgs e)
+    private async Task ApplyBulkRoughness(ChangeEventArgs args)
     {
-        var finish = Finishes.FirstOrDefault(f => f.Id == e.Value?.ToString());
+        var roughness = args.Value?.ToString();
+        foreach (var part in SelectedParts())
+        {
+            part.RoughnessCode = string.IsNullOrWhiteSpace(roughness) ? null : roughness;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private async Task ApplyBulkThreadedHoles(ChangeEventArgs args)
+    {
+        var enabled = IsChecked(args);
+        foreach (var part in SelectedParts())
+        {
+            part.HasThreadedHoles = enabled;
+            part.ThreadedHoleCount = enabled ? Math.Max(part.ThreadedHoleCount, 1) : 0;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private async Task ApplyBulkInserts(ChangeEventArgs args)
+    {
+        var enabled = IsChecked(args);
+        foreach (var part in SelectedParts())
+        {
+            part.InsertType = enabled ? "HeatSet" : "None";
+            part.InsertCount = enabled ? Math.Max(part.InsertCount, 1) : 0;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private async Task ApplyBulkNotes(ChangeEventArgs args)
+    {
+        var notes = args.Value?.ToString();
+        foreach (var part in SelectedParts())
+        {
+            part.PartNotes = notes;
+            await OnPartChanged.InvokeAsync(part);
+        }
+    }
+
+    private async Task ChangeProcessAsync(QuotePartViewModel part, string? processId)
+    {
+        if (string.IsNullOrWhiteSpace(processId)) return;
+        part.ProcessId = processId;
+        var material = Materials.FirstOrDefault(item => item.ProcessId == processId);
+        if (material is not null)
+        {
+            part.MaterialId = material.Id;
+        }
+
+        await OnPartChanged.InvokeAsync(part);
+    }
+
+    private async Task ChangeMaterialAsync(QuotePartViewModel part, string? materialId)
+    {
+        if (string.IsNullOrWhiteSpace(materialId)) return;
+        part.MaterialId = materialId;
+        await OnPartChanged.InvokeAsync(part);
+    }
+
+    private async Task ChangeFinishAsync(QuotePartViewModel part, string? finishId)
+    {
+        var finish = Finishes.FirstOrDefault(item => item.Id == finishId);
         part.FinishId = finish?.Id;
         part.FinishCode = finish?.Code;
         await OnPartChanged.InvokeAsync(part);
     }
 
-    private async Task SetRowTolerance(QuotePartViewModel part, ChangeEventArgs e)
+    private async Task ChangeToleranceAsync(QuotePartViewModel part, string? toleranceId)
     {
-        var tolerance = Tolerances.FirstOrDefault(t => t.Id == e.Value?.ToString());
+        var tolerance = Tolerances.FirstOrDefault(item => item.Id == toleranceId);
         part.ToleranceId = tolerance?.Id;
         part.ToleranceCode = tolerance?.Code;
         await OnPartChanged.InvokeAsync(part);
     }
 
-    private async Task SetRowInspection(QuotePartViewModel part, ChangeEventArgs e)
+    private async Task ChangeQuantityAsync(QuotePartViewModel part, string? value)
     {
-        part.InspectionLevel = e.Value?.ToString() ?? "STANDARD";
+        part.Quantity = ParsePositiveInt(value, part.Quantity);
         await OnPartChanged.InvokeAsync(part);
     }
 
-    private async Task SetRowRoughness(QuotePartViewModel part, ChangeEventArgs e)
+    private async Task ChangeInspectionAsync(QuotePartViewModel part, string? inspection)
     {
-        part.RoughnessCode = string.IsNullOrWhiteSpace(e.Value?.ToString()) ? null : e.Value?.ToString();
+        part.InspectionLevel = string.IsNullOrWhiteSpace(inspection) ? "STANDARD" : inspection;
         await OnPartChanged.InvokeAsync(part);
     }
 
-    private string ProcessName(string id)
-        => Processes.FirstOrDefault(p => p.Id == id)?.Name ?? id;
+    private IEnumerable<QuotePartViewModel> SelectedParts() => Parts.Where(IsPartSelected).ToArray();
 
-    private string MaterialName(string id)
-        => Materials.FirstOrDefault(m => m.Id == id)?.Name ?? id;
+    private string ProcessName(string id) => Processes.FirstOrDefault(item => item.Id == id)?.Name ?? id;
 
-    private static string TruncateName(string name)
-        => name.Length > 28 ? name[..25] + "…" : name;
+    private string MaterialName(string id) => Materials.FirstOrDefault(item => item.Id == id)?.Name ?? id;
 
-    private static string DisplayOrDefault(string? value)
-        => string.IsNullOrWhiteSpace(value) ? "Default" : value;
+    private static bool IsChecked(ChangeEventArgs args) => args.Value is bool checkedValue && checkedValue;
 
-    private RenderFragment RenderStatus(string status) =>
-        @<span class="qe-status qe-status--@status.ToLowerInvariant()">@status</span>;
+    private static int ParsePositiveInt(object? value, int fallback)
+        => int.TryParse(value?.ToString(), out var parsed) ? Math.Max(1, parsed) : Math.Max(1, fallback);
 
-    // RenderDfmReport — DFM indicator combining all three report types (FDM/SLA/CNC)
-    private RenderFragment RenderDfmReport(QuotePartViewModel part)
+    private static string DisplayOrDefault(string? value) => string.IsNullOrWhiteSpace(value) ? "Default" : value;
+
+    private static string ResolvePartMeta(QuotePartViewModel part)
+        => part.VolumeCc > 0 ? $"{part.VolumeCc:N1} cc / {part.SurfaceAreaCm2:N1} cm2" : part.Status;
+
+    private static string ResolveLineTotal(QuotePartViewModel part)
+        => part.UnitPriceTHB.HasValue ? $"{(part.UnitPriceTHB.Value * part.Quantity):N0} THB" : "Not priced";
+
+    private static bool CanUseDfmBadge(QuotePartViewModel part)
+        => part.FdmDfmReport is not null || part.SlaDfmReport is not null || part.CncDfmReport is not null || part.Findings.Count > 0;
+
+    private static string ResolveDfmText(QuotePartViewModel part)
     {
-        if (part.FdmDfmReport is null && part.SlaDfmReport is null && part.CncDfmReport is null)
-            return @<span class="qe-dfm-ind qe-dfm-ind--pending">—</span>;
+        if (part.DfmAcknowledged) return "Ack";
+        if (CanUseDfmBadge(part)) return "Review";
+        return "Pending";
+    }
 
-        var issueCount = (part.FdmDfmReport?.Issues.Count ?? 0)
-                       + (part.SlaDfmReport?.Issues.Count ?? 0)
-                       + (part.CncDfmReport?.Issues.Count ?? 0);
-
-        return issueCount > 0
-            ? @<span class="qe-dfm-ind qe-dfm-ind--warn">&#x26A0; @issueCount</span>
-            : @<span class="qe-dfm-ind qe-dfm-ind--ok">&#x2713;</span>;
+    private static string ResolveDfmClass(QuotePartViewModel part)
+    {
+        if (part.DfmAcknowledged) return "qe-pbt-dfm qe-pbt-dfm--ok";
+        if (CanUseDfmBadge(part)) return "qe-pbt-dfm qe-pbt-dfm--warn";
+        return "qe-pbt-dfm qe-pbt-dfm--pending";
     }
 }

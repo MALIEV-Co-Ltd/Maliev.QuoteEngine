@@ -5,32 +5,50 @@
         <div class="qe-pdc-header-left">
             <div class="qe-pdc-header-name-row">
                 <strong title="@Part.FileName">@System.IO.Path.GetFileNameWithoutExtension(Part.FileName)</strong>
-                <span class="qe-status-pill qe-status--@StatusClass(Part)">@Part.Status.ToUpperInvariant()</span>
+                <span class="qe-status-pill qe-status--@StatusClass(Part)">
+                    @if (StatusClass(Part) == "ok")
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" />
+                    }
+                    @StatusLabel(Part)
+                </span>
             </div>
             <div class="qe-pdc-header-subline">
-                Uploaded just now / @Part.FileName / @Part.VolumeCc.ToString("0.##") cc
+                Uploaded just now <span class="qe-pdc-subline-sep">.</span> @FormatLabel(Part.FileName)
+                @if (Part.VolumeCc > 0)
+                {
+                    <span class="qe-pdc-subline-sep">.</span>
+                    <span>@Part.VolumeCc.ToString("0.##") cc</span>
+                }
             </div>
         </div>
         <div class="qe-pdc-tabs">
-            <button type="button" class="qe-pdc-tab @(CenterMode == "model" ? "qe-pdc-tab--active" : "")"
-                    @onclick='() => SetCenterMode("model")'>
-                <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+            <button type="button"
+                    class="qe-pdc-tab @(CenterMode == "model" ? "qe-pdc-tab--active" : "")"
+                    @onclick="ShowModelAsync">
+                <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" Class="qe-pdc-tab-icon" />
                 3D Model
             </button>
-            <button type="button" class="qe-pdc-tab @(CenterMode == "drawing" ? "qe-pdc-tab--active" : "")"
+            <button type="button"
+                    class="qe-pdc-tab @(CenterMode == "drawing" ? "qe-pdc-tab--active" : "")"
                     @onclick='() => SetCenterMode("drawing")'>
-                <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
+                <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" Class="qe-pdc-tab-icon" />
                 Drawing
                 <span>@Part.DrawingFiles.Count</span>
             </button>
-            <button type="button" class="qe-pdc-tab @(CenterMode == "dfm" ? "qe-pdc-tab--active" : "")"
+            <button type="button"
+                    class="qe-pdc-tab @(CenterMode == "dfm" ? "qe-pdc-tab--active" : "")"
                     aria-label="DFM Analysis"
                     @onclick='() => SetCenterMode("dfm")'>
-                <MudIcon Icon="@Icons.Material.Outlined.Science" Size="Size.Small" />
+                <MudIcon Icon="@Icons.Material.Outlined.Science" Size="Size.Small" Class="qe-pdc-tab-icon" />
                 DFM
-                <span>@Part.Findings.Count</span>
+                @if (DfmOverlayIssues.Count > 0)
+                {
+                    <span>@DfmOverlayIssues.Count</span>
+                }
             </button>
-            <button type="button" class="qe-pdc-tab @(CenterMode == "bulk" ? "qe-pdc-tab--active" : "")"
+            <button type="button"
+                    class="qe-pdc-tab @(CenterMode == "bulk" ? "qe-pdc-tab--active" : "")"
                     @onclick='() => SetCenterMode("bulk")'>
                 <MudIcon Icon="@Icons.Material.Outlined.TableRows" Size="Size.Small" />
                 All parts
@@ -53,6 +71,7 @@
         else if (CenterMode == "drawing")
         {
             <QeDrawingAttachmentsTab Part="@Part"
+                                     CanAttachDocuments="@CanAttachDocuments"
                                      OnPartChanged="@OnPartChanged" />
         }
         else if (CenterMode == "bulk")
@@ -66,16 +85,70 @@
                          RoughnessOptions="@(ReferenceData?.RoughnessOptions ?? [])"
                          OnPartChanged="@OnPartChanged"
                          OnSelectPart="@OnSelectPart"
-                         OnAddFilesRequested="@OnAddFilesRequested" />
+                         OnAddFilesRequested="@OnAddFilesRequested"
+                         OnConfiguratorRequested='@(() => SetCenterMode("model"))' />
         }
-        else
-        {
-            <div class="qe-center-viewer">
-                <QePartViewer GlbUrl="@Part.GlbUrl"
-                              IsDarkMode="@IsDarkMode" />
+
+        @* Retain-and-hide: keep the Babylon engine alive across tab switches so GLB is not reloaded. *@
+        <div class="qe-pdc-viewer-wrap qe-pdc-polkadot" style="@(CenterMode == "model" ? "" : "display:none")" aria-hidden="@(CenterMode == "model" ? null : "true")">
+            <div class="qe-pdc-thumb-area">
+                <QePartViewer @ref="_viewer"
+                              GlbUrl="@Part.GlbUrl"
+                              IsDarkMode="@IsDarkMode"
+                              OnViewerError="@HandleViewerError" />
+
+                @if (Part.BodyCount > 1)
+                {
+                    <div class="qe-pdc-body-tree @(_bodyTreeExpanded ? "qe-pdc-body-tree--open" : "")">
+                        <button type="button" class="qe-pdc-body-tree-header" @onclick="@(() => _bodyTreeExpanded = !_bodyTreeExpanded)">
+                            <MudIcon Icon="@Icons.Material.Outlined.AccountTree" Size="Size.Small" />
+                            <span class="qe-pdc-body-tree-title">Bodies (@Part.BodyCount)</span>
+                            <MudIcon Icon="@(_bodyTreeExpanded ? Icons.Material.Outlined.ExpandLess : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                        </button>
+                        @if (_bodyTreeExpanded)
+                        {
+                            <div class="qe-pdc-body-tree-list">
+                                <button type="button"
+                                        class="qe-pdc-body-tree-row @(Part.SelectedBodyIndex is null ? "qe-pdc-body-tree-row--active" : "")"
+                                        @onclick="ClearBodySelectionAsync">
+                                    <span class="qe-pdc-body-swatch qe-pdc-body-swatch--all"></span>
+                                    <span class="qe-pdc-body-tree-name">All bodies</span>
+                                    @if (Part.SelectedBodyIndex is null)
+                                    {
+                                        <span class="qe-pdc-body-tree-check">✓</span>
+                                    }
+                                </button>
+                                @foreach (var bodyIndex in Enumerable.Range(0, Math.Max(0, Part.BodyCount)))
+                                {
+                                    var index = bodyIndex;
+                                    <button type="button"
+                                            class="qe-pdc-body-tree-row @(Part.SelectedBodyIndex == index ? "qe-pdc-body-tree-row--active" : "")"
+                                            @onclick="@(() => SelectBodyAsync(index))">
+                                        <span class="qe-pdc-body-swatch" style="background-color:@BodyColor(index)"></span>
+                                        <span class="qe-pdc-body-tree-name">Body @(index + 1)</span>
+                                        @if (Part.SelectedBodyIndex == index)
+                                        {
+                                            <span class="qe-pdc-body-tree-check">✓</span>
+                                        }
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                <QeDfmOverlayPanel DfmIssues="@DfmOverlayIssues"
+                                   IsVisible="@(DfmOverlayIssues.Count > 0 && !Part.DfmAcknowledged)"
+                                   Analyzing="@IsDfmAnalyzing"
+                                   TimedOut="@IsDfmUnavailable"
+                                   ErrorMessage="@Part.NonManifoldReason"
+                                   AllClear="@ShouldShowAllClearOverlay"
+                                   OnAcknowledged="@AcknowledgeDfmAsync"
+                                   OnToggleOverlay="@ToggleDfmOverlayAsync" />
             </div>
-        }
+        </div>
     </div>
+
     <footer class="qe-pdc-footer">
         <span class="qe-chip qe-chip--process">@ProcessName(Part.ProcessId)</span>
         <span class="qe-chip">@MaterialName(Part.MaterialId)</span>
@@ -90,6 +163,18 @@
 </section>
 
 @code {
+    private static readonly string[] BodyPalette =
+    [
+        "#597fbb",
+        "#bf5959",
+        "#59bf59",
+        "#bfbf59",
+        "#bf59bf",
+        "#5959bf",
+        "#99734d",
+        "#737380"
+    ];
+
     [Parameter, EditorRequired] public QuotePartViewModel Part { get; set; } = new();
     [Parameter, EditorRequired] public List<QuotePartViewModel> Parts { get; set; } = [];
     [Parameter] public QuoteReferenceDataResponse? ReferenceData { get; set; }
@@ -99,12 +184,146 @@
     [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
     [Parameter] public EventCallback<QuotePartViewModel> OnSelectPart { get; set; }
     [Parameter] public EventCallback OnAddFilesRequested { get; set; }
+    [Parameter] public EventCallback<string> OnRequestFreshViewerUrl { get; set; }
     [Parameter] public bool IsDarkMode { get; set; }
+    [Parameter] public bool CanAttachDocuments { get; set; } = true;
+
+    private QePartViewer? _viewer;
+    private readonly HashSet<string> _activeDfmOverlays = [];
+    private bool _bodyTreeExpanded;
+
+    private IReadOnlyList<QeDfmOverlayIssue> DfmOverlayIssues => BuildDfmOverlayIssues();
+    private bool HasAnyDfmReport => Part.FdmDfmReport is not null || Part.SlaDfmReport is not null || Part.CncDfmReport is not null;
+    private bool IsDfmAnalyzing => !HasAnyDfmReport && !string.IsNullOrWhiteSpace(Part.GlbUrl) && !string.IsNullOrWhiteSpace(Part.ProcessId);
+    private bool IsDfmUnavailable => Part.Status.Equals("Failed", StringComparison.OrdinalIgnoreCase);
+    private bool ShouldShowAllClearOverlay => HasAnyDfmReport && DfmOverlayIssues.Count == 0 && !Part.DfmAcknowledged;
+
+    private async Task ShowModelAsync()
+    {
+        await SetCenterMode("model");
+        if (_viewer is not null)
+        {
+            await _viewer.NotifyVisibleAsync();
+        }
+    }
 
     private Task SetCenterMode(string mode)
     {
         CenterMode = mode;
         return CenterModeChanged.InvokeAsync(mode);
+    }
+
+    private async Task HandleViewerError(string message)
+    {
+        var retryable = !message.Contains("TypeError", StringComparison.OrdinalIgnoreCase)
+            && !message.Contains("backbuffer", StringComparison.OrdinalIgnoreCase)
+            && !message.Contains("WebGL", StringComparison.OrdinalIgnoreCase);
+
+        if (retryable && !string.IsNullOrWhiteSpace(Part.StoragePath))
+        {
+            await OnRequestFreshViewerUrl.InvokeAsync(Part.StoragePath);
+        }
+    }
+
+    private async Task SelectBodyAsync(int bodyIndex)
+    {
+        Part.SelectedBodyIndex = Part.SelectedBodyIndex == bodyIndex ? null : bodyIndex;
+        if (_viewer is not null)
+        {
+            await _viewer.SelectBodyAsync(Part.SelectedBodyIndex);
+        }
+
+        await OnPartChanged.InvokeAsync(Part);
+    }
+
+    private async Task ClearBodySelectionAsync()
+    {
+        Part.SelectedBodyIndex = null;
+        if (_viewer is not null)
+        {
+            await _viewer.SelectBodyAsync(null);
+        }
+
+        await OnPartChanged.InvokeAsync(Part);
+    }
+
+    private async Task AcknowledgeDfmAsync()
+    {
+        Part.DfmAcknowledged = true;
+        _activeDfmOverlays.Clear();
+        if (_viewer is not null)
+        {
+            await _viewer.ClearDfmOverlaysAsync(Part.PartId.ToString("N"));
+        }
+
+        await OnPartChanged.InvokeAsync(Part);
+    }
+
+    private async Task ToggleDfmOverlayAsync(QeDfmOverlayIssue issue)
+    {
+        if (_viewer is null || issue.OverlayKey is null || issue.OverlayUrl is null)
+        {
+            return;
+        }
+
+        var visible = _activeDfmOverlays.Add(issue.OverlayKey);
+        if (!visible)
+        {
+            _activeDfmOverlays.Remove(issue.OverlayKey);
+        }
+
+        await _viewer.ToggleDfmOverlayAsync(Part.PartId.ToString("N"), issue.OverlayKey, issue.OverlayUrl, visible);
+    }
+
+    private List<QeDfmOverlayIssue> BuildDfmOverlayIssues()
+    {
+        var result = new List<QeDfmOverlayIssue>();
+        var overlayIndex = 0;
+
+        if (!Part.IsManifold)
+        {
+            result.Add(CreateIssue(Icons.Material.Filled.WarningAmber, "Non-manifold mesh", Part.NonManifoldReason ?? "Mesh has open faces or self-intersections.", "warning", "non_manifold", ref overlayIndex));
+        }
+
+        if (Part.BodyCount > 1)
+        {
+            result.Add(CreateIssue(Icons.Material.Filled.CallSplit, $"Multiple bodies detected ({Part.BodyCount})", "Please confirm whether this file should be quoted as one assembly or split into separate parts.", "warning", "multi_body", ref overlayIndex));
+        }
+
+        foreach (var issue in ActiveTypedIssues())
+        {
+            result.Add(CreateIssue(IconForIssue(issue.Code), issue.Code.Replace('_', ' '), issue.Message, issue.Severity, issue.Code, ref overlayIndex));
+        }
+
+        return result;
+    }
+
+    private IEnumerable<QeDfmIssueItem> ActiveTypedIssues()
+    {
+        if (Part.ProcessId.Equals("sla", StringComparison.OrdinalIgnoreCase) && Part.SlaDfmReport is not null)
+        {
+            return Part.SlaDfmReport.Issues;
+        }
+
+        if (Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase) && Part.CncDfmReport is not null)
+        {
+            return Part.CncDfmReport.Issues;
+        }
+
+        return Part.FdmDfmReport?.Issues ?? [];
+    }
+
+    private QeDfmOverlayIssue CreateIssue(string icon, string title, string description, string severity, string category, ref int overlayIndex)
+    {
+        var process = Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase)
+            ? "CNC"
+            : Part.ProcessId.Equals("sla", StringComparison.OrdinalIgnoreCase) ? "SLA" : "FDM";
+        var overlayKey = category.Equals("multi_body", StringComparison.OrdinalIgnoreCase)
+            ? "GENERAL__multi_body"
+            : $"{process}__{category.ToLowerInvariant()}";
+        var overlayUrl = Part.OverlayGlbUrls.ElementAtOrDefault(overlayIndex);
+        overlayIndex++;
+        return new QeDfmOverlayIssue(icon, title, description, severity, category, overlayKey, overlayUrl);
     }
 
     private decimal PartTotal(QuotePartViewModel part)
@@ -128,5 +347,34 @@
         "Upload failed" or "Failed" => "error",
         "Uploading" or "Processing" => "warn",
         _ => "muted"
+    };
+
+    private static string StatusLabel(QuotePartViewModel part) => part.Status switch
+    {
+        "Analyzed" or "DfmAnalysisReady" => "ANALYZED",
+        "GlbReady" => "READY",
+        "Upload failed" or "Failed" => "ERROR",
+        "Uploading" => "UPLOADING",
+        "Processing" => "PROCESSING",
+        _ => "PENDING"
+    };
+
+    private static string FormatLabel(string fileName)
+    {
+        var ext = System.IO.Path.GetExtension(fileName).TrimStart('.').ToUpperInvariant();
+        return string.IsNullOrWhiteSpace(ext) ? "CAD" : ext;
+    }
+
+    private static string BodyColor(int index) => BodyPalette[Math.Abs(index) % BodyPalette.Length];
+
+    private static string IconForIssue(string code) => code.ToLowerInvariant() switch
+    {
+        "thin_wall" => Icons.Material.Filled.Rectangle,
+        "overhang" => Icons.Material.Filled.Layers,
+        "small_feature" => Icons.Material.Filled.ZoomOutMap,
+        "resin_trap" => Icons.Material.Filled.Water,
+        "undercut" => Icons.Material.Filled.ContentCut,
+        "sharp_corner" => Icons.Material.Filled.BugReport,
+        _ => Icons.Material.Filled.WarningAmber
     };
 }

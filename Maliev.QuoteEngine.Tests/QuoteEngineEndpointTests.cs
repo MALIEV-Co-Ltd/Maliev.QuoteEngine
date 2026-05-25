@@ -495,6 +495,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Contains("sample", demo.Title, StringComparison.OrdinalIgnoreCase);
         Assert.Single(demo.Parts);
         Assert.Contains("does not create", demo.Notice, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("/models/sample-bracket.glb", demo.ViewerUrl);
+        Assert.StartsWith("/", demo.ViewerUrl, StringComparison.Ordinal);
     }
 
     [Fact]

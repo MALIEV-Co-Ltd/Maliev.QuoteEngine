@@ -351,6 +351,7 @@ public sealed class QuoteController(
         }
 
         if (part.DrawingFiles.Count > 0) notes.Add("customer drawing supplied");
+        if (!string.IsNullOrWhiteSpace(part.PartNotes)) notes.Add($"customer notes {part.PartNotes.Trim()}");
         if (part.BodyCount.HasValue) notes.Add($"body count {part.BodyCount.Value}");
         if (part.SelectedBodyIndex.HasValue) notes.Add($"selected body {part.SelectedBodyIndex.Value}");
         return string.Join("; ", notes);

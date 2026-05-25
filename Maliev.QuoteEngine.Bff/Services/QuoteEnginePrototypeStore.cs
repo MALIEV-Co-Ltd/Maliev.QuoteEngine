@@ -427,6 +427,11 @@ public sealed class QuoteEnginePrototypeStore
             notes.Add("drawing reviewed");
         }
 
+        if (!string.IsNullOrWhiteSpace(part.PartNotes))
+        {
+            notes.Add("customer notes supplied");
+        }
+
         return (multiplier, additive, string.Join("; ", notes) + ".");
     }
 

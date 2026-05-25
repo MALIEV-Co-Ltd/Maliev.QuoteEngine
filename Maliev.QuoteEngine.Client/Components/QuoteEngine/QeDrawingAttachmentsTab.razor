@@ -1,65 +1,144 @@
-@* Customer-facing drawing and attachment surface. Files are represented in the quote draft DTO. *@
+@* Customer-facing drawing and attachment surface. Files remain quote-session scoped until a signed-in customer creates a formal project. *@
 
-<div class="qe-drawing-tab">
-    <div class="qe-drawing-header">
-        <div>
-            <span class="qe-zone-label">Drawings</span>
-            <strong>Customer manufacturing documents</strong>
+<div class="qe-dat-root">
+    <div class="qe-dat-list-col">
+        <div class="qe-dat-dropzone-wrap">
+            <label class="qe-dropzone qe-dropzone--compact qe-dat-dropzone @(CanAttachDocuments ? "" : "qe-dat-dropzone--disabled")">
+                <span class="qe-dropzone-icon" aria-hidden="true">
+                    <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
+                </span>
+                <span>@(CanAttachDocuments ? "Drop drawings here or click to upload" : "Drawing upload disabled in demo")</span>
+                <small>PDF, DWG, DXF, PNG, JPG / max 25 MB</small>
+                @if (CanAttachDocuments)
+                {
+                    <InputFile OnChange="HandleFilesSelected" multiple accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.webp" class="qe-dat-file-input" />
+                }
+            </label>
         </div>
-        <button type="button" class="qe-secondary-btn" @onclick="AddPlaceholderDrawing">
-            <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
-            Attach drawing
-        </button>
+
+        @if (Part.DrawingFiles.Count > 0)
+        {
+            <div class="qe-dat-list">
+                @foreach (var file in Part.DrawingFiles)
+                {
+                    var selected = ReferenceEquals(file, _selectedFile);
+                    <article class="qe-dat-row @(selected ? "qe-dat-row--active" : "")"
+                             @onclick="@(() => SelectDrawing(file))"
+                             @onmouseenter="@(() => _hoveredFile = file)"
+                             @onmouseleave="@(() => _hoveredFile = null)">
+                        <MudIcon Icon="@GetFileIcon(file.FileName)" Size="Size.Small" Class="qe-dat-row-icon" />
+                        <div class="qe-dat-row-info">
+                            <strong class="qe-dat-row-name" title="@file.FileName">@file.FileName</strong>
+                            <span class="qe-dat-row-meta">
+                                <span>@System.IO.Path.GetExtension(file.FileName).TrimStart('.').ToUpperInvariant()</span>
+                                <span>·</span>
+                                <span>@FormatBytes(file.FileSizeBytes)</span>
+                                <span>·</span>
+                                <span>@file.Kind</span>
+                            </span>
+                        </div>
+                        @if (ReferenceEquals(_hoveredFile, file))
+                        {
+                            <button type="button"
+                                    class="qe-dat-row-delete"
+                                    title="Remove"
+                                    @onclick:stopPropagation="true"
+                                    @onclick="@(() => RemoveDrawing(file))">
+                                <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                            </button>
+                        }
+                    </article>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="qe-dat-empty">
+                <MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Large" />
+                <span>No drawings uploaded yet</span>
+            </div>
+        }
     </div>
 
-    @if (Part.DrawingFiles.Count == 0)
-    {
-        <div class="qe-drawing-empty">
-            <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
-            <span>Add a 2D drawing when tolerances, threads, inserts, or inspection notes matter.</span>
-        </div>
-    }
-    else
-    {
-        <div class="qe-drawing-list">
-            @foreach (var file in Part.DrawingFiles)
-            {
-                <article class="qe-drawing-item">
-                    <MudIcon Icon="@Icons.Material.Outlined.PictureAsPdf" Size="Size.Small" />
-                    <div>
-                        <strong>@file.FileName</strong>
-                        <span>@file.Kind / @FormatBytes(file.FileSizeBytes)</span>
-                    </div>
-                    <button type="button" class="qe-btn-icon" title="Remove drawing" @onclick="@(() => RemoveDrawing(file))">
-                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
-                    </button>
-                </article>
-            }
-        </div>
-    }
+    <div class="qe-dat-preview-col">
+        @if (PreviewUrl is { Length: > 0 } previewUrl)
+        {
+            <iframe src="@previewUrl" class="qe-dat-preview-iframe" title="Drawing preview"></iframe>
+        }
+        else if (_selectedFile is not null)
+        {
+            <div class="qe-dat-preview-placeholder">
+                <MudIcon Icon="@GetFileIcon(_selectedFile.FileName)" Size="Size.Large" />
+                <strong>@_selectedFile.FileName</strong>
+                <span>Preview will be available after the file is uploaded to the customer project.</span>
+            </div>
+        }
+        else
+        {
+            <div class="qe-dat-preview-placeholder">
+                <MudIcon Icon="@Icons.Material.Outlined.Preview" Size="Size.Large" />
+                <span>Select a file to preview</span>
+            </div>
+        }
+    </div>
 </div>
 
 @code {
     [Parameter, EditorRequired] public QuotePartViewModel Part { get; set; } = new();
+    [Parameter] public bool CanAttachDocuments { get; set; } = true;
     [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
 
-    private async Task AddPlaceholderDrawing()
+    private QuotePartAttachmentDto? _selectedFile;
+    private QuotePartAttachmentDto? _hoveredFile;
+
+    private string? PreviewUrl =>
+        _selectedFile?.StoragePath is { Length: > 0 } path
+        && (path.StartsWith("/", StringComparison.Ordinal) || path.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            ? path
+            : null;
+
+    protected override void OnParametersSet()
     {
-        var safeBaseName = string.IsNullOrWhiteSpace(Part.FileName)
-            ? "part"
-            : System.IO.Path.GetFileNameWithoutExtension(Part.FileName);
-        Part.DrawingFiles.Add(new QuotePartAttachmentDto(
-            $"{safeBaseName}-drawing.pdf",
-            $"draft://quote-engine/{Part.PartId:N}/drawing.pdf",
-            "application/pdf",
-            0,
-            "Drawing"));
+        if (_selectedFile is not null && !Part.DrawingFiles.Contains(_selectedFile))
+        {
+            _selectedFile = null;
+        }
+    }
+
+    private async Task HandleFilesSelected(InputFileChangeEventArgs args)
+    {
+        if (!CanAttachDocuments)
+        {
+            return;
+        }
+
+        foreach (var file in args.GetMultipleFiles(10))
+        {
+            Part.DrawingFiles.Add(new QuotePartAttachmentDto(
+                file.Name,
+                $"session://quote-engine/{Part.PartId:N}/{Uri.EscapeDataString(file.Name)}",
+                string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+                file.Size,
+                "Drawing"));
+        }
+
+        _selectedFile = Part.DrawingFiles.LastOrDefault();
         await OnPartChanged.InvokeAsync(Part);
+    }
+
+    private void SelectDrawing(QuotePartAttachmentDto file)
+    {
+        _selectedFile = ReferenceEquals(_selectedFile, file) ? null : file;
     }
 
     private async Task RemoveDrawing(QuotePartAttachmentDto file)
     {
         Part.DrawingFiles.Remove(file);
+        if (ReferenceEquals(_selectedFile, file))
+        {
+            _selectedFile = null;
+        }
+
         await OnPartChanged.InvokeAsync(Part);
     }
 
@@ -77,4 +156,13 @@
 
         return $"{bytes / 1024m / 1024m:0.0} MB";
     }
+
+    private static string GetFileIcon(string name) =>
+        System.IO.Path.GetExtension(name).ToLowerInvariant() switch
+        {
+            ".pdf" => Icons.Material.Outlined.PictureAsPdf,
+            ".dwg" or ".dxf" => Icons.Material.Outlined.Architecture,
+            ".png" or ".jpg" or ".jpeg" or ".webp" => Icons.Material.Outlined.Image,
+            _ => Icons.Material.Outlined.InsertDriveFile
+        };
 }

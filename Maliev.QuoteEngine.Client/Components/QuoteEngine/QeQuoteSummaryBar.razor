@@ -22,7 +22,9 @@
             }
         </div>
     </div>
+
     <div class="qe-qsb-divider"></div>
+
     <div class="qe-qsb-zone qe-qsb-total">
         <span class="qe-zone-label">Quote Total</span>
         <strong>@(Estimate is null ? "--" : $"{Estimate.Total:N2} {Estimate.Currency}")</strong>
@@ -32,19 +34,86 @@
                 Ships by <strong>@ComputeShipDate()</strong>
             </span>
         }
+
         <div class="qe-qsb-actions">
-            <button type="button" class="qe-secondary-btn" disabled="@(!Parts.Any())" @onclick="OnCalculateRequested">Estimate</button>
-            <button type="button" class="qe-secondary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="OnQuoteRequested">PDF</button>
-            <button type="button" class="qe-primary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="OnQuoteRequested">
-                @QuoteButtonLabel
-                <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+            <button type="button" class="qe-secondary-btn" disabled="@(!Parts.Any())" @onclick="OnCalculateRequested">
+                <MudIcon Icon="@Icons.Material.Outlined.Calculate" Size="Size.Small" />
+                Estimate
             </button>
+            <button type="button" class="qe-secondary-btn" disabled="@(Estimate is null)" @onclick="@(() => _detailsOpen = !_detailsOpen)">
+                <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Small" />
+                Details
+            </button>
+            <button type="button" class="qe-secondary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="OnQuoteRequested">
+                <MudIcon Icon="@Icons.Material.Outlined.PictureAsPdf" Size="Size.Small" />
+                PDF
+            </button>
+            @if (FormalQuote is null)
+            {
+                <button type="button" class="qe-primary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="OnQuoteRequested">
+                    @QuoteButtonLabel
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+                </button>
+            }
+            else if (!IsQuoteApproved)
+            {
+                <button type="button" class="qe-secondary-btn" disabled="@(!CanCreateOrder)" @onclick="OnOrderRequested">
+                    Create order
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+                </button>
+                <button type="button" class="qe-primary-btn" disabled="@(!CanApproveQuote)" @onclick="OnApproveQuoteRequested">
+                    Approve quote
+                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                </button>
+            }
+            else if (Order is null)
+            {
+                <button type="button" class="qe-primary-btn" disabled="@(!CanCreateOrder)" @onclick="OnOrderRequested">
+                    Create order
+                    <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
+                </button>
+            }
+            else
+            {
+                <button type="button" class="qe-primary-btn" disabled="@(!CanPay)" @onclick="OnPaymentRequested">
+                    Pay now
+                    <MudIcon Icon="@Icons.Material.Outlined.Payments" Size="Size.Small" />
+                </button>
+            }
         </div>
+
+        @if (_detailsOpen && Estimate is not null)
+        {
+            <div class="qe-qsb-details-popover">
+                <div class="qe-qsb-details-head">
+                    <strong>Quote details</strong>
+                    <button type="button" class="qe-btn-icon" title="Close details" @onclick="@(() => _detailsOpen = false)">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
+                </div>
+                <div class="qe-qsb-detail-lines">
+                    @foreach (var line in Estimate.Lines)
+                    {
+                        <div class="qe-qsb-detail-line">
+                            <span title="@line.FileName">@line.FileName</span>
+                            <strong>@line.LineTotal.ToString("N2") @line.Currency</strong>
+                            <small>@line.Notes</small>
+                        </div>
+                    }
+                </div>
+                <div class="qe-qsb-detail-links">
+                    <a href="/documents">Customer documents</a>
+                    <a href="/ndas">NDA</a>
+                    <a href="/profile">Account</a>
+                </div>
+            </div>
+        }
+
         @if (FormalQuote is not null)
         {
             <div class="qe-qsb-result">
                 <span>@FormalQuote.QuoteNumber</span>
-                <button type="button" @onclick="OnOrderRequested">Create order</button>
+                <strong>@FormalQuote.Status</strong>
             </div>
         }
         @if (Order is not null)
@@ -52,6 +121,13 @@
             <div class="qe-qsb-result">
                 <span>@Order.OrderNumber</span>
                 <strong>@Order.Status</strong>
+            </div>
+        }
+        @if (Payment is not null)
+        {
+            <div class="qe-qsb-result">
+                <span>Payment ready</span>
+                <a href="@Payment.PaymentUrl">Open payment</a>
             </div>
         }
     </div>
@@ -63,13 +139,22 @@
     [Parameter] public QuoteEstimateResponse? Estimate { get; set; }
     [Parameter] public GenerateFormalQuoteResponse? FormalQuote { get; set; }
     [Parameter] public CreateManufacturingOrderResponse? Order { get; set; }
+    [Parameter] public InitiatePaymentResponse? Payment { get; set; }
     [Parameter] public string LeadTimeCode { get; set; } = "STANDARD";
     [Parameter] public bool CanRequestFormalQuote { get; set; }
+    [Parameter] public bool CanApproveQuote { get; set; }
+    [Parameter] public bool CanCreateOrder { get; set; }
+    [Parameter] public bool CanPay { get; set; }
     [Parameter] public string QuoteButtonLabel { get; set; } = "Quote";
     [Parameter] public EventCallback<string> OnLeadTimeSelected { get; set; }
     [Parameter] public EventCallback OnCalculateRequested { get; set; }
     [Parameter] public EventCallback OnQuoteRequested { get; set; }
+    [Parameter] public EventCallback OnApproveQuoteRequested { get; set; }
     [Parameter] public EventCallback OnOrderRequested { get; set; }
+    [Parameter] public EventCallback OnPaymentRequested { get; set; }
+
+    private bool _detailsOpen;
+    private bool IsQuoteApproved => FormalQuote?.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase) == true;
 
     private string ComputeShipDate()
     {

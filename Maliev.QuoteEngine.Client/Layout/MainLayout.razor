@@ -76,16 +76,13 @@
         </div>
     </header>
 
-    <MudDrawer Open="@_chatDrawerOpen"
-               OpenChanged="SetChatDrawerOpenAsync"
-               Anchor="Anchor.End"
-               ClipMode="DrawerClipMode.Never"
-               Elevation="0"
-               Variant="DrawerVariant.Temporary"
-               Width="min(520px, calc(100vw - 16px))"
-               Class="quote-chat-drawer">
-        <CustomerAssistantDrawer OnClose="CloseChatDrawerAsync" />
-    </MudDrawer>
+    @if (_chatDrawerOpen)
+    {
+        <button type="button" class="quote-chat-backdrop" aria-label="Close assistant" @onclick="CloseChatDrawerAsync"></button>
+        <aside class="quote-chat-drawer customer-chatbot" role="dialog" aria-modal="true" aria-label="MALIEV customer assistant">
+            <CustomerAssistantDrawer OnClose="CloseChatDrawerAsync" />
+        </aside>
+    }
 
     <main class="@WorkspaceClass">
         @if (IsQuoteWorkspace)

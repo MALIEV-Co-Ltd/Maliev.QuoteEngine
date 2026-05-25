@@ -88,9 +88,19 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return PostAsync<GenerateFormalQuoteRequest, GenerateFormalQuoteResponse>("quote/v1/quotes/formal", request, cancellationToken);
     }
 
+    public Task<GenerateFormalQuoteResponse> ApproveQuoteAsync(Guid quoteId, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<object, GenerateFormalQuoteResponse>($"quote/v1/quotes/{quoteId:D}/approve", new { }, cancellationToken);
+    }
+
     public Task<CreateManufacturingOrderResponse> CreateOrderAsync(CreateManufacturingOrderRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<CreateManufacturingOrderRequest, CreateManufacturingOrderResponse>("quote/v1/orders", request, cancellationToken);
+    }
+
+    public Task<InitiatePaymentResponse> InitiatePaymentAsync(InitiatePaymentRequest request, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<InitiatePaymentRequest, InitiatePaymentResponse>("quote/v1/payments", request, cancellationToken);
     }
 
     public async Task<CustomerProfileResponse?> GetProfileAsync(CancellationToken cancellationToken = default)

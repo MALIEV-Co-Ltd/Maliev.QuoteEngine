@@ -248,6 +248,9 @@ public sealed class QuotePartDraftDto
 
     public bool DfmAcknowledged { get; set; }
 
+    [MaxLength(2_000)]
+    public string? PartNotes { get; set; }
+
     [Range(0, 10_000)]
     public int? BodyCount { get; set; }
 

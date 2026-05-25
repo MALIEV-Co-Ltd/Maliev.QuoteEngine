@@ -244,6 +244,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@keyframes qe-panel-enter-bottom", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-dropzone .mud-icon-root {", styles, StringComparison.Ordinal);
         Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "samples", "maliev-sample-bracket.step")));
+        Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "models", "sample-bracket.glb")));
         Assert.False(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "sample-file.step")));
         Assert.Contains("\"Sign in to quote\"", source, StringComparison.Ordinal);
         Assert.Contains("Saved temporarily", source, StringComparison.Ordinal);
@@ -371,8 +372,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".workspace--quote {\n    flex: 1 1 0;\n    height: 100%;", styles, StringComparison.Ordinal);
         Assert.Contains(".quote-workspace-host {\n    flex: 1 1 0;\n    height: 100%;", styles, StringComparison.Ordinal);
         Assert.DoesNotContain("height: 100vh;", styles, StringComparison.Ordinal);
-        Assert.Contains(".quote-chat-drawer.mud-drawer--closed", styles, StringComparison.Ordinal);
-        Assert.Contains("display: none !important;", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-chat-backdrop", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-chat-drawer", styles, StringComparison.Ordinal);
+        Assert.Contains("position: fixed;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-qsb-root", styles, StringComparison.Ordinal);
         Assert.Contains("max-height: 112px;", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-qsb-customer", styles, StringComparison.Ordinal);
@@ -422,7 +424,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("topbar-chat-toggle", layout, StringComparison.Ordinal);
         Assert.Contains("Icon=\"@Icons.Material.Filled.SupportAgent\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("Icon=\"@Icons.Material.Outlined.Chat\"", layout, StringComparison.Ordinal);
-        Assert.Contains("MudDrawer", layout, StringComparison.Ordinal);
+        Assert.Contains("quote-chat-backdrop", layout, StringComparison.Ordinal);
+        Assert.Contains("role=\"dialog\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("MudDrawer", layout, StringComparison.Ordinal);
         Assert.Contains("chatbot-open", styles, StringComparison.Ordinal);
         Assert.Contains("js/maliev-chatbot.js", index, StringComparison.Ordinal);
         Assert.Contains("@page \"/auth/chatbot-complete\"", authComplete, StringComparison.Ordinal);
@@ -754,6 +758,143 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("BulkMaterial", src);
         Assert.Contains("LineTotal", src);
         Assert.Contains("DfmReport", src);  // DFM indicator column
+    }
+
+    [Fact]
+    public void Quote_workspace_scopes_ProjectNew_density_tokens()
+    {
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains(".qe-pn-root {\n    --maliev-font-nano: 10px;", styles, StringComparison.Ordinal);
+        Assert.Contains("--maliev-font-micro: 11px;", styles, StringComparison.Ordinal);
+        Assert.Contains("--maliev-font-small: 12px;", styles, StringComparison.Ordinal);
+        Assert.Contains("--maliev-font-base: 13px;", styles, StringComparison.Ordinal);
+        Assert.Contains("--maliev-font-body: 13px;", styles, StringComparison.Ordinal);
+        Assert.Contains("--maliev-font-large: 14px;", styles, StringComparison.Ordinal);
+        Assert.Contains("--mud-typography-body1-size: 13px;", styles, StringComparison.Ordinal);
+        Assert.Contains("--maliev-track-display: 0;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pn-root .mud-input,", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Quote_workspace_matches_ProjectNew_tablet_layout_contract()
+    {
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("@media (max-width: 1200px)", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pn-root.is-workspace-ready {\n        height: auto;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pdc-thumb-area {\n        position: sticky;", styles, StringComparison.Ordinal);
+        Assert.Contains("height: 45dvh;", styles, StringComparison.Ordinal);
+        Assert.Contains("max-height: 520px;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-sidebar {\n        flex: 0 0 auto;", styles, StringComparison.Ordinal);
+        Assert.Contains("max-height: none;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-qsb-root {\n        position: sticky;", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QeConfigSidebar_uses_ProjectNew_card_controls_not_native_selects()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("Surface Finish", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-fin-card", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-tol-card", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-choice-card", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-feature-card", src, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"DFM reviewed\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-notes-input\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-bulk-badge\"", src, StringComparison.Ordinal);
+        Assert.Contains("SetPartNotes", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("<select", src, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains(".qe-pcs-fin-card", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-tol-card", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-choice-card", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-notes-input", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QeDetailCard_retains_viewer_and_exposes_body_tree_and_dfm_overlay()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("QePartViewer @ref", src, StringComparison.Ordinal);
+        Assert.Contains("style=\"@(CenterMode == \"model\" ? \"\" : \"display:none\")\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pdc-body-tree", src, StringComparison.Ordinal);
+        Assert.Contains("QeDfmOverlayPanel", src, StringComparison.Ordinal);
+        Assert.Contains("OnRequestFreshViewerUrl", src, StringComparison.Ordinal);
+        Assert.Contains("SelectBodyAsync", src, StringComparison.Ordinal);
+        Assert.Contains("ToggleDfmOverlayAsync", src, StringComparison.Ordinal);
+        Assert.Contains("NotifyVisibleAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("SelectBodyAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("ToggleDfmOverlayAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains(".qe-pdc-body-tree", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-dfm-overlay", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QeBulkTable_uses_ProjectNew_dense_table_shell()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeBulkTable.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("class=\"qe-pbt-root\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pbt-header\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pbt-bulk-panel\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pbt-table-surface\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pbt-input", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pbt-configurator-button\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pbt-card-stack\"", src, StringComparison.Ordinal);
+        Assert.Contains("Threaded holes", src, StringComparison.Ordinal);
+        Assert.Contains("Inserts", src, StringComparison.Ordinal);
+        Assert.Contains("Notes", src, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-pbt-bulk-panel", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pbt-input", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pbt-card-stack", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QeDrawingAttachmentsTab_uses_ProjectNew_two_column_surface()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeDrawingAttachmentsTab.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("class=\"qe-dat-root\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-dat-list-col\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-dat-preview-col\"", src, StringComparison.Ordinal);
+        Assert.Contains("InputFile", src, StringComparison.Ordinal);
+        Assert.Contains("SelectDrawing", src, StringComparison.Ordinal);
+        Assert.Contains("RemoveDrawing", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddPlaceholderDrawing", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("draft://quote-engine", src, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-dat-root", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-dat-preview-iframe", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Quote_summary_bar_exposes_customer_quote_approval_order_and_payment_actions()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeQuoteSummaryBar.razor");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+
+        Assert.Contains("class=\"qe-qsb-details-popover\"", src, StringComparison.Ordinal);
+        Assert.Contains("Approve quote", src, StringComparison.Ordinal);
+        Assert.Contains("Create order", src, StringComparison.Ordinal);
+        Assert.Contains("Pay now", src, StringComparison.Ordinal);
+        Assert.Contains("Customer documents", src, StringComparison.Ordinal);
+        Assert.Contains("OnApproveQuoteRequested", src, StringComparison.Ordinal);
+        Assert.Contains("OnPaymentRequested", src, StringComparison.Ordinal);
+
+        Assert.Contains("ApproveQuoteAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("InitiatePaymentAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("ApproveQuoteAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("InitiatePaymentAsync", apiClient, StringComparison.Ordinal);
     }
 
     [Fact]

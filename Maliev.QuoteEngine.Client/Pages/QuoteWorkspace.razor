@@ -120,6 +120,8 @@
                                       OnPartChanged="@OnPartConfigurationChanged"
                                       OnSelectPart="@SelectPartFromTable"
                                       OnAddFilesRequested="@OpenFilePickerAsync"
+                                      OnRequestFreshViewerUrl="@RequestFreshViewerUrlAsync"
+                                      CanAttachDocuments="@(!IsDemoMode)"
                                       IsDarkMode="@IsDarkMode" />
 
                     <QePartConfigSidebar Part="@_sp"
@@ -137,13 +139,19 @@
                            Estimate="@_estimate"
                            FormalQuote="@_formalQuote"
                            Order="@_order"
+                           Payment="@_payment"
                            LeadTimeCode="@_leadTimeCode"
                            CanRequestFormalQuote="@CanRequestFormalQuote"
+                           CanApproveQuote="@CanApproveQuote"
+                           CanCreateOrder="@CanCreateOrder"
+                           CanPay="@CanPay"
                            QuoteButtonLabel="@QuoteButtonLabel"
                            OnLeadTimeSelected="@SelectLeadTime"
                            OnCalculateRequested="@CalculateAsync"
                            OnQuoteRequested="@SubmitQuoteAsync"
-                           OnOrderRequested="@CreateOrderAsync" />
+                           OnApproveQuoteRequested="@ApproveQuoteAsync"
+                           OnOrderRequested="@CreateOrderAsync"
+                           OnPaymentRequested="@InitiatePaymentAsync" />
     }
 </div>
 
@@ -160,6 +168,7 @@
     private QuoteEstimateResponse? _estimate;
     private GenerateFormalQuoteResponse? _formalQuote;
     private CreateManufacturingOrderResponse? _order;
+    private InitiatePaymentResponse? _payment;
     private HubConnection? _notificationConnection;
     private DotNetObjectReference<QuoteWorkspace>? _dotNetRef;
     private readonly List<string> _liveNotifications = [];
@@ -177,6 +186,9 @@
     private bool IsWorkspaceReady => _parts.Count > 0;
     private string WorkspaceRootClass => IsWorkspaceReady ? "qe-pn-root is-workspace-ready" : "qe-pn-root is-launch-screen";
     private bool CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode;
+    private bool CanApproveQuote => _formalQuote is not null && IsSignedIn && !IsDemoMode && !_formalQuote.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase);
+    private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode;
+    private bool CanPay => _order is not null && _estimate is not null && IsSignedIn && !IsDemoMode;
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
@@ -266,6 +278,7 @@
         _estimate = null;
         _formalQuote = null;
         _order = null;
+        _payment = null;
 
         var selectedFiles = args.GetMultipleFiles(12).ToArray();
         var capturedFiles = selectedFiles
@@ -301,6 +314,7 @@
         _estimate = null;
         _formalQuote = null;
         _order = null;
+        _payment = null;
 
         await ProcessUploadCandidatesAsync(files.Select(file => new UploadCandidate(
             file.ClientFileId,
@@ -349,6 +363,7 @@
                 part.VolumeCc = status.VolumeCc;
                 part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
                 part.Findings = status.Findings;
+                ApplyAnalysisStatus(part, status);
             }
             catch (Exception ex)
             {
@@ -486,6 +501,7 @@
         _estimate = null;
         _formalQuote = null;
         _order = null;
+        _payment = null;
     }
 
     private async Task CalculateAsync()
@@ -513,6 +529,24 @@
 
         var draft = await Api.CreateDraftProjectAsync(new CreateDraftProjectRequest(_quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Customer quote engine prototype"));
         _formalQuote = await Api.GenerateFormalQuoteAsync(new GenerateFormalQuoteRequest(draft.ProjectId, _quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Formal quote requested by customer."));
+        _order = null;
+        _payment = null;
+    }
+
+    private async Task ApproveQuoteAsync()
+    {
+        if (_formalQuote is null)
+        {
+            return;
+        }
+
+        if (!IsSignedIn || IsDemoMode)
+        {
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            return;
+        }
+
+        _formalQuote = await Api.ApproveQuoteAsync(_formalQuote.QuoteId);
     }
 
     private async Task CreateOrderAsync()
@@ -529,6 +563,63 @@
         }
 
         _order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_formalQuote.QuoteId, string.Empty, "Customer accepted quote."));
+        _payment = null;
+    }
+
+    private async Task InitiatePaymentAsync()
+    {
+        if (_order is null || _estimate is null)
+        {
+            return;
+        }
+
+        if (!IsSignedIn || IsDemoMode)
+        {
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            return;
+        }
+
+        _payment = await Api.InitiatePaymentAsync(new InitiatePaymentRequest
+        {
+            OrderId = _order.OrderId,
+            OrderNumber = _order.OrderNumber,
+            Amount = _estimate.Total,
+            Currency = _estimate.Currency
+        });
+
+        if (!string.IsNullOrWhiteSpace(_payment.PaymentUrl))
+        {
+            Navigation.NavigateTo(_payment.PaymentUrl, forceLoad: true);
+        }
+    }
+
+    private async Task RequestFreshViewerUrlAsync(string storagePath)
+    {
+        var part = FindPartByStoragePath(storagePath);
+        if (part is null || string.IsNullOrWhiteSpace(part.UploadId))
+        {
+            return;
+        }
+
+        var status = await Api.GetAnalysisStatusAsync(part.UploadId);
+        ApplyAnalysisStatus(part, status);
+    }
+
+    private static void ApplyAnalysisStatus(QuotePartViewModel part, QuoteAnalysisStatusResponse status)
+    {
+        part.Status = status.Status;
+        part.VolumeCc = status.VolumeCc;
+        part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
+        part.GlbUrl = status.ViewerGlbUrl ?? part.GlbUrl;
+        part.ThumbnailUrl = status.ThumbnailUrl ?? part.ThumbnailUrl;
+        part.Findings = status.Findings;
+        part.IsManifold = status.IsManifold;
+        part.BodyCount = status.BodyCount;
+        part.NonManifoldReason = status.NonManifoldReason;
+        part.FdmDfmReport = status.FdmReport;
+        part.SlaDfmReport = status.SlaReport;
+        part.CncDfmReport = status.CncReport;
+        part.OverlayGlbUrls = status.OverlayGlbUrls;
     }
 
     private async Task EnsureNotificationConnectionAsync()

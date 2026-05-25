@@ -104,6 +104,30 @@
         await _module.InvokeVoidAsync("setCameraPreset", _canvasId, preset);
     }
 
+    public async Task NotifyVisibleAsync()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("notifyViewerVisible", _canvasId);
+    }
+
+    public async Task SelectBodyAsync(int? bodyIndex)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("selectBody", _canvasId, bodyIndex);
+    }
+
+    public async Task ToggleDfmOverlayAsync(string partKey, string overlayKey, string glbUrl, bool visible)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("toggleDfmOverlay", _canvasId, partKey, overlayKey, glbUrl, visible);
+    }
+
+    public async Task ClearDfmOverlaysAsync(string partKey)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("clearDfmOverlays", _canvasId, partKey);
+    }
+
     private async Task ToggleProjectionAsync()
     {
         if (_module is null) return;

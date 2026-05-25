@@ -5,23 +5,29 @@
         <span>Configure</span>
         <strong title="@Part.FileName">@Part.FileName</strong>
     </header>
+
     <div class="qe-pcs-scroll">
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span>Manufacturing Process</span>
+                <span class="qe-pcs-section-title">Manufacturing Process</span>
             </div>
             <div class="qe-pcs-process-grid">
                 @foreach (var process in ReferenceData?.Processes ?? [])
                 {
                     var active = Part.ProcessId == process.Id;
-                    <button type="button" class="qe-pcs-process-card @(active ? "qe-pcs-process-card--active" : "")"
+                    <button type="button"
+                            class="qe-pcs-process-card @(active ? "qe-pcs-process-card--active" : "")"
                             @onclick="@(() => SetProcess(process))">
-                        <MudIcon Icon="@ProcessIcon(process.Id)" Size="Size.Small" />
-                        <strong>@process.Name</strong>
                         @if (active)
                         {
-                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Class="qe-card-check" />
+                            <span class="qe-pcs-process-check">
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            </span>
                         }
+                        <span class="qe-pcs-process-icon">
+                            <MudIcon Icon="@ProcessIcon(process.Id)" Size="Size.Small" />
+                        </span>
+                        <span class="qe-pcs-process-name">@process.Name</span>
                     </button>
                 }
             </div>
@@ -29,23 +35,26 @@
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span>Material</span>
-                <small>@MaterialsFor(Part.ProcessId).Count() options</small>
+                <span class="qe-pcs-section-title">Material</span>
+                <span class="qe-pcs-section-count">@FormatOptionCount(MaterialsFor(Part.ProcessId).Count())</span>
             </div>
             <div class="qe-pcs-cards">
                 @foreach (var material in MaterialsFor(Part.ProcessId))
                 {
                     var active = Part.MaterialId == material.Id;
-                    <button type="button" class="qe-pcs-mat-card @(active ? "qe-pcs-mat-card--active" : "")"
+                    <button type="button"
+                            class="qe-pcs-mat-card @(active ? "qe-pcs-mat-card--active" : "")"
                             @onclick="@(() => SetMaterial(material))">
-                        <span class="qe-mat-swatch" style="background:@MaterialSwatch(material.Id)"></span>
-                        <span>
-                            <strong>@material.Name</strong>
-                            <small>@material.Grade / @material.Finish</small>
+                        <span class="qe-pcs-mat-swatch" style="background:@MaterialSwatch(material.Id)"></span>
+                        <span class="qe-pcs-mat-info">
+                            <span class="qe-pcs-mat-name">@material.Name</span>
+                            <span class="qe-pcs-mat-sub">@material.Grade / @material.Finish</span>
                         </span>
                         @if (active)
                         {
-                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Class="qe-card-check" />
+                            <span class="qe-pcs-card-check">
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            </span>
                         }
                     </button>
                 }
@@ -53,28 +62,173 @@
         </section>
 
         <section class="qe-pcs-section">
+            @{
+                var finishes = FinishesFor(Part.ProcessId).ToArray();
+            }
             <div class="qe-pcs-section-header">
-                <span>Finish and color</span>
+                <span class="qe-pcs-section-title">Surface Finish</span>
+                <span class="qe-pcs-section-count">@FormatOptionCount(finishes.Length + 1)</span>
             </div>
-            <label class="qe-field">
-                Finish
-                <select value="@(Part.FinishId ?? string.Empty)" @onchange="SetFinish">
-                    <option value="">Default finish</option>
-                    @foreach (var finish in FinishesFor(Part.ProcessId))
-                    {
-                        <option value="@finish.Id">@finish.Name</option>
-                    }
-                </select>
-            </label>
-            <div class="qe-color-swatches">
+            <div class="qe-pcs-cards">
+                <button type="button"
+                        class="qe-pcs-fin-card @(Part.FinishId is null ? "qe-pcs-fin-card--active" : "")"
+                        @onclick="@(() => SetFinish((FinishOptionDto?)null))">
+                    <span class="qe-pcs-fin-swatch" style="background:@FinishSwatch(null)"></span>
+                    <span class="qe-pcs-fin-info">
+                        <span class="qe-pcs-fin-name">Default finish</span>
+                        <span class="qe-pcs-fin-sub">Use the standard finish for the selected process.</span>
+                    </span>
+                    <span class="qe-pcs-fin-price">Base</span>
+                </button>
+                @foreach (var finish in finishes)
+                {
+                    var active = Part.FinishId == finish.Id || Part.FinishCode == finish.Code;
+                    <button type="button"
+                            class="qe-pcs-fin-card @(active ? "qe-pcs-fin-card--active" : "")"
+                            @onclick="@(() => SetFinish(finish))">
+                        <span class="qe-pcs-fin-swatch" style="background:@FinishSwatch(finish.Code)"></span>
+                        <span class="qe-pcs-fin-info">
+                            <span class="qe-pcs-fin-name">@finish.Name</span>
+                            <span class="qe-pcs-fin-sub">@finish.Description</span>
+                        </span>
+                        <span class="qe-pcs-fin-price">@FormatMultiplier(finish.PriceMultiplier)</span>
+                        @if (active)
+                        {
+                            <span class="qe-pcs-card-check">
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            </span>
+                        }
+                    </button>
+                }
+            </div>
+
+            <div class="qe-pcs-color-choice-grid">
                 @foreach (var color in ColorsFor(Part.MaterialId))
                 {
+                    var active = Part.Color == color.Code;
                     <button type="button"
                             title="@color.Name"
-                            class="qe-color-swatch @(Part.Color == color.Code ? "qe-color-swatch--active" : "")"
-                            style="background:@color.CssValue"
+                            class="qe-pcs-color-choice @(active ? "qe-pcs-color-choice--active" : "")"
                             @onclick="@(() => SetColor(color.Code))">
+                        <span class="qe-pcs-color-chip" style="background:@color.CssValue"></span>
                         <span>@color.Name</span>
+                        @if (active)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                        }
+                    </button>
+                }
+            </div>
+        </section>
+
+        <section class="qe-pcs-section">
+            @{
+                var tolerances = TolerancesFor(Part.ProcessId).ToArray();
+            }
+            <div class="qe-pcs-section-header">
+                <span class="qe-pcs-section-title">Tolerance</span>
+                <span class="qe-pcs-section-count">@FormatOptionCount(tolerances.Length + 1)</span>
+            </div>
+            <div class="qe-pcs-tol-grid">
+                <button type="button"
+                        class="qe-pcs-tol-card @(Part.ToleranceId is null ? "qe-pcs-tol-card--active" : "")"
+                        @onclick="@(() => SetTolerance((ToleranceOptionDto?)null))">
+                    <span class="qe-pcs-tol-name">Default</span>
+                    <span class="qe-pcs-tol-grade">Process</span>
+                    <span class="qe-pcs-tol-range">Base</span>
+                </button>
+                @foreach (var tolerance in tolerances)
+                {
+                    var active = Part.ToleranceId == tolerance.Id || Part.ToleranceCode == tolerance.Code;
+                    <button type="button"
+                            class="qe-pcs-tol-card @(active ? "qe-pcs-tol-card--active" : "")"
+                            @onclick="@(() => SetTolerance(tolerance))">
+                        <span class="qe-pcs-tol-name">@tolerance.Name</span>
+                        <span class="qe-pcs-tol-grade">@tolerance.Code</span>
+                        <span class="qe-pcs-tol-range">@FormatMultiplier(tolerance.PriceMultiplier)</span>
+                        @if (active)
+                        {
+                            <span class="qe-pcs-tol-check">
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            </span>
+                        }
+                    </button>
+                }
+            </div>
+        </section>
+
+        @if (IsCnc)
+        {
+            <section class="qe-pcs-section">
+                @{
+                    var roughnessOptions = RoughnessFor(Part.ProcessId).ToArray();
+                }
+                <div class="qe-pcs-section-header">
+                    <span class="qe-pcs-section-title">Surface Roughness</span>
+                    <span class="qe-pcs-section-count">@FormatOptionCount(roughnessOptions.Length + 1)</span>
+                </div>
+                <div class="qe-pcs-cards">
+                    <button type="button"
+                            class="qe-pcs-choice-card @(Part.RoughnessCode is null ? "qe-pcs-choice-card--active" : "")"
+                            @onclick="@(() => SetRoughness(null))">
+                        <span class="qe-pcs-choice-swatch qe-pcs-choice-swatch--metal">
+                            <MudIcon Icon="@Icons.Material.Outlined.Grain" Size="Size.Small" />
+                        </span>
+                        <span class="qe-pcs-choice-info">
+                            <span class="qe-pcs-choice-name">Default roughness</span>
+                            <span class="qe-pcs-choice-sub">Use the standard machined surface.</span>
+                        </span>
+                    </button>
+                    @foreach (var roughness in roughnessOptions)
+                    {
+                        var active = Part.RoughnessCode == roughness.Code;
+                        <button type="button"
+                                class="qe-pcs-choice-card @(active ? "qe-pcs-choice-card--active" : "")"
+                                @onclick="@(() => SetRoughness(roughness.Code))">
+                            <span class="qe-pcs-choice-swatch qe-pcs-choice-swatch--metal">
+                                <MudIcon Icon="@Icons.Material.Outlined.Grain" Size="Size.Small" />
+                            </span>
+                            <span class="qe-pcs-choice-info">
+                                <span class="qe-pcs-choice-name">@roughness.Name</span>
+                                <span class="qe-pcs-choice-sub">@roughness.Description</span>
+                            </span>
+                            @if (active)
+                            {
+                                <span class="qe-pcs-card-check">
+                                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                </span>
+                            }
+                        </button>
+                    }
+                </div>
+            </section>
+        }
+
+        <section class="qe-pcs-section">
+            <div class="qe-pcs-section-header">
+                <span class="qe-pcs-section-title">Inspection</span>
+                <span class="qe-pcs-section-count">@FormatOptionCount((ReferenceData?.InspectionLevels.Count ?? 0))</span>
+            </div>
+            <div class="qe-pcs-cards">
+                @foreach (var inspection in ReferenceData?.InspectionLevels ?? [])
+                {
+                    var active = string.Equals(Part.InspectionLevel, inspection.Code, StringComparison.OrdinalIgnoreCase);
+                    <button type="button"
+                            class="qe-pcs-choice-card @(active ? "qe-pcs-choice-card--active" : "")"
+                            @onclick="@(() => SetInspection(inspection.Code))">
+                        <span class="qe-pcs-choice-swatch">
+                            <MudIcon Icon="@Icons.Material.Outlined.FactCheck" Size="Size.Small" />
+                        </span>
+                        <span class="qe-pcs-choice-info">
+                            <span class="qe-pcs-choice-name">@inspection.Name</span>
+                            <span class="qe-pcs-choice-sub">@inspection.Description</span>
+                        </span>
+                        @if (active)
+                        {
+                            <span class="qe-pcs-card-check">
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            </span>
+                        }
                     </button>
                 }
             </div>
@@ -82,90 +236,88 @@
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span>Tolerance and inspection</span>
+                <span class="qe-pcs-section-title">Part Features</span>
+                <span class="qe-pcs-section-count">2 options</span>
             </div>
-            <label class="qe-field">
-                Tolerance
-                <select value="@(Part.ToleranceId ?? string.Empty)" @onchange="SetTolerance">
-                    <option value="">Default tolerance</option>
-                    @foreach (var tolerance in TolerancesFor(Part.ProcessId))
+            <div class="qe-pcs-feature-toggle-grid">
+                <button type="button"
+                        class="qe-pcs-feature-card qe-pcs-choice-card @(Part.HasThreadedHoles ? "qe-pcs-choice-card--active" : "")"
+                        @onclick="ToggleThreadedHoles">
+                    <span class="qe-pcs-choice-swatch">
+                        <MudIcon Icon="@Icons.Material.Outlined.Construction" Size="Size.Small" />
+                    </span>
+                    <span class="qe-pcs-choice-info">
+                        <span class="qe-pcs-choice-name">Tapped holes</span>
+                        <span class="qe-pcs-choice-sub">Internal threads cut into the part.</span>
+                    </span>
+                    @if (Part.HasThreadedHoles)
                     {
-                        <option value="@tolerance.Id">@tolerance.Name</option>
+                        <span class="qe-pcs-card-check">
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                        </span>
                     }
-                </select>
-            </label>
-            <label class="qe-field">
-                Inspection
-                <select value="@(Part.InspectionLevel ?? "STANDARD")" @onchange="SetInspection">
-                    @foreach (var inspection in ReferenceData?.InspectionLevels ?? [])
+                </button>
+                <button type="button"
+                        class="qe-pcs-feature-card qe-pcs-choice-card @(HasInserts ? "qe-pcs-choice-card--active" : "")"
+                        @onclick="ToggleInserts">
+                    <span class="qe-pcs-choice-swatch">
+                        <MudIcon Icon="@Icons.Material.Outlined.Hardware" Size="Size.Small" />
+                    </span>
+                    <span class="qe-pcs-choice-info">
+                        <span class="qe-pcs-choice-name">Thread inserts</span>
+                        <span class="qe-pcs-choice-sub">Installed threaded hardware such as heat-set inserts.</span>
+                    </span>
+                    @if (HasInserts)
                     {
-                        <option value="@inspection.Code">@inspection.Name</option>
+                        <span class="qe-pcs-card-check">
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                        </span>
                     }
-                </select>
-            </label>
-            @if (IsCnc)
-            {
-                <label class="qe-field">
-                    Surface roughness
-                    <select value="@(Part.RoughnessCode ?? string.Empty)" @onchange="SetRoughness">
-                        <option value="">Default roughness</option>
-                        @foreach (var roughness in RoughnessFor(Part.ProcessId))
-                        {
-                            <option value="@roughness.Code">@roughness.Name</option>
-                        }
-                    </select>
-                </label>
-            }
-        </section>
+                </button>
+            </div>
 
-        <section class="qe-pcs-section">
-            <div class="qe-pcs-section-header">
-                <span>Threads and inserts</span>
-            </div>
-            <label class="qe-check-btn @(Part.HasThreadedHoles ? "checked" : "")">
-                <input type="checkbox" checked="@Part.HasThreadedHoles" @onchange="SetHasThreadedHoles" />
-                Threaded holes
-            </label>
             @if (Part.HasThreadedHoles)
             {
-                <div class="qe-inline-fields">
+                <div class="qe-inline-fields qe-pcs-feature-fields">
                     <label class="qe-field">
                         Spec
-                        <input value="@Part.ThreadSpecification" @onchange="SetThreadSpecification" placeholder="M3x0.5" />
+                        <input value="@Part.ThreadSpecification" @oninput="SetThreadSpecification" placeholder="M3x0.5" />
                     </label>
                     <label class="qe-field">
                         Count
-                        <input type="number" min="0" value="@Part.ThreadedHoleCount" @onchange="SetThreadedHoleCount" />
+                        <input type="number" min="0" value="@Part.ThreadedHoleCount" @oninput="SetThreadedHoleCount" />
                     </label>
                 </div>
             }
-            <label class="qe-field">
-                Insert type
-                <select value="@(Part.InsertType ?? "None")" @onchange="SetInsertType">
-                    <option value="None">No inserts</option>
-                    <option value="HeatSet">Heat-set</option>
-                    <option value="PressFit">Press-fit</option>
-                    <option value="Ultrasonic">Ultrasonic</option>
-                </select>
-            </label>
-            @if (!string.Equals(Part.InsertType, "None", StringComparison.OrdinalIgnoreCase))
+
+            @if (HasInserts)
             {
-                <label class="qe-field">
+                <div class="qe-pcs-insert-type-grid">
+                    @foreach (var option in InsertOptions)
+                    {
+                        var active = string.Equals(Part.InsertType, option, StringComparison.OrdinalIgnoreCase);
+                        <button type="button"
+                                class="qe-pcs-insert-type @(active ? "qe-pcs-insert-type--active" : "")"
+                                @onclick="@(() => SetInsertType(option))">@option</button>
+                    }
+                </div>
+                <label class="qe-field qe-pcs-feature-count">
                     Insert count
-                    <input type="number" min="0" value="@Part.InsertCount" @onchange="SetInsertCount" />
+                    <input type="number" min="0" value="@Part.InsertCount" @oninput="SetInsertCount" />
                 </label>
             }
         </section>
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span>Quantity and review</span>
+                <span class="qe-pcs-section-title">Quantity</span>
+                <span class="qe-pcs-bulk-badge">@ComputeBulkDiscount()% bulk off</span>
             </div>
             <div class="qe-pcs-qty-stack">
                 <div>
-                    <div class="qe-field-label">Quantity</div>
                     <div class="qe-qty-stepper">
-                        <button type="button" class="qe-qty-stepper-btn"
+                        <button type="button"
+                                class="qe-qty-stepper-btn"
                                 disabled="@(Part.Quantity <= 1)"
                                 @onclick="DecrementQuantity">-</button>
                         <input type="number"
@@ -174,53 +326,76 @@
                                min="1"
                                value="@Part.Quantity"
                                @oninput="SetQuantityInput" />
-                        <button type="button" class="qe-qty-stepper-btn"
-                                @onclick="IncrementQuantity">+</button>
+                        <button type="button" class="qe-qty-stepper-btn" @onclick="IncrementQuantity">+</button>
                     </div>
                     <div class="qe-qty-presets">
                         @foreach (var preset in QuantityPresets)
                         {
-                            var p = preset;
+                            var value = preset;
                             <button type="button"
-                                    class="qe-qty-preset-btn @(Part.Quantity == p ? "qe-qty-preset-btn--active" : "")"
-                                    @onclick="@(() => SetQuantityPreset(p))">@p</button>
+                                    class="qe-qty-preset-btn @(Part.Quantity == value ? "qe-qty-preset-btn--active" : "")"
+                                    @onclick="@(() => SetQuantityPreset(value))">@value</button>
                         }
                     </div>
                 </div>
-                <label class="qe-check-btn @(Part.DfmAcknowledged ? "checked" : "")">
-                    <input type="checkbox" checked="@Part.DfmAcknowledged" @onchange="SetDfmAcknowledged" />
-                    DFM reviewed
+                <label class="qe-pcs-choice-card qe-pcs-dfm-review-card @(Part.DfmAcknowledged ? "qe-pcs-choice-card--active" : "")">
+                    <input type="checkbox"
+                           class="qe-pcs-choice-input"
+                           aria-label="DFM reviewed"
+                           checked="@Part.DfmAcknowledged"
+                           @onchange="SetDfmAcknowledged" />
+                    <span class="qe-pcs-choice-swatch">
+                        <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
+                    </span>
+                    <span class="qe-pcs-choice-info">
+                        <span class="qe-pcs-choice-name">DFM reviewed</span>
+                        <span class="qe-pcs-choice-sub">I understand the highlighted manufacturing notes.</span>
+                    </span>
                 </label>
             </div>
+        </section>
+
+        <section class="qe-pcs-section">
+            <div class="qe-pcs-section-header">
+                <span class="qe-pcs-section-title">Production notes</span>
+            </div>
+            <textarea class="qe-pcs-notes-input"
+                      rows="4"
+                      value="@Part.PartNotes"
+                      placeholder="Customer-visible notes for tolerances, fit, cosmetic faces, packaging, or inspection."
+                      @oninput="SetPartNotes"></textarea>
         </section>
     </div>
 </aside>
 
 @code {
     private static readonly int[] QuantityPresets = [1, 5, 10, 25, 50];
+    private static readonly string[] InsertOptions = ["HeatSet", "PressFit", "Ultrasonic"];
 
     [Parameter, EditorRequired] public QuotePartViewModel Part { get; set; } = new();
     [Parameter] public QuoteReferenceDataResponse? ReferenceData { get; set; }
     [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
 
     private bool IsCnc => Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase);
+    private bool HasInserts => !string.IsNullOrWhiteSpace(Part.InsertType)
+        && !Part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase);
 
     private IEnumerable<MaterialOptionDto> MaterialsFor(string processId) =>
-        (ReferenceData?.Materials ?? []).Where(x => x.ProcessId == processId);
+        (ReferenceData?.Materials ?? []).Where(item => item.ProcessId == processId);
 
     private IEnumerable<FinishOptionDto> FinishesFor(string processId) =>
-        (ReferenceData?.Finishes ?? []).Where(x => x.ProcessId == processId);
+        (ReferenceData?.Finishes ?? []).Where(item => item.ProcessId == processId);
 
     private IEnumerable<ToleranceOptionDto> TolerancesFor(string processId) =>
-        (ReferenceData?.Tolerances ?? []).Where(x => x.ProcessId == processId);
+        (ReferenceData?.Tolerances ?? []).Where(item => item.ProcessId == processId);
 
     private IEnumerable<RoughnessOptionDto> RoughnessFor(string processId) =>
-        (ReferenceData?.RoughnessOptions ?? []).Where(x => x.ProcessId == processId);
+        (ReferenceData?.RoughnessOptions ?? []).Where(item => item.ProcessId == processId);
 
     private IEnumerable<ColorOptionDto> ColorsFor(string materialId)
     {
         var colors = (ReferenceData?.Colors ?? [])
-            .Where(x => x.MaterialIds.Count == 0 || x.MaterialIds.Contains(materialId, StringComparer.OrdinalIgnoreCase))
+            .Where(item => item.MaterialIds.Count == 0 || item.MaterialIds.Contains(materialId, StringComparer.OrdinalIgnoreCase))
             .ToArray();
         return colors.Length == 0
             ? [new ColorOptionDto("Default", "Default", MaterialSwatch(materialId), [materialId])]
@@ -243,36 +418,33 @@
     private async Task SetMaterial(MaterialOptionDto material)
     {
         Part.MaterialId = material.Id;
+        Part.Color = ColorsFor(Part.MaterialId).FirstOrDefault()?.Code;
         await NotifyChanged();
     }
 
-    private async Task SetFinish(ChangeEventArgs args)
+    private async Task SetFinish(FinishOptionDto? finish)
     {
-        var id = args.Value?.ToString();
-        var finish = FinishesFor(Part.ProcessId).FirstOrDefault(item => item.Id == id);
         Part.FinishId = finish?.Id;
         Part.FinishCode = finish?.Code;
         await NotifyChanged();
     }
 
-    private async Task SetTolerance(ChangeEventArgs args)
+    private async Task SetTolerance(ToleranceOptionDto? tolerance)
     {
-        var id = args.Value?.ToString();
-        var tolerance = TolerancesFor(Part.ProcessId).FirstOrDefault(item => item.Id == id);
         Part.ToleranceId = tolerance?.Id;
         Part.ToleranceCode = tolerance?.Code;
         await NotifyChanged();
     }
 
-    private async Task SetInspection(ChangeEventArgs args)
+    private async Task SetInspection(string code)
     {
-        Part.InspectionLevel = args.Value?.ToString() ?? "STANDARD";
+        Part.InspectionLevel = code;
         await NotifyChanged();
     }
 
-    private async Task SetRoughness(ChangeEventArgs args)
+    private async Task SetRoughness(string? code)
     {
-        Part.RoughnessCode = string.IsNullOrWhiteSpace(args.Value?.ToString()) ? null : args.Value?.ToString();
+        Part.RoughnessCode = string.IsNullOrWhiteSpace(code) ? null : code;
         await NotifyChanged();
     }
 
@@ -282,9 +454,9 @@
         await NotifyChanged();
     }
 
-    private async Task SetHasThreadedHoles(ChangeEventArgs args)
+    private async Task ToggleThreadedHoles()
     {
-        Part.HasThreadedHoles = args.Value is true;
+        Part.HasThreadedHoles = !Part.HasThreadedHoles;
         if (!Part.HasThreadedHoles)
         {
             Part.ThreadSpecification = null;
@@ -293,6 +465,22 @@
         else if (Part.ThreadedHoleCount == 0)
         {
             Part.ThreadedHoleCount = 1;
+        }
+
+        await NotifyChanged();
+    }
+
+    private async Task ToggleInserts()
+    {
+        if (HasInserts)
+        {
+            Part.InsertType = "None";
+            Part.InsertCount = 0;
+        }
+        else
+        {
+            Part.InsertType = InsertOptions[0];
+            Part.InsertCount = Math.Max(Part.InsertCount, 1);
         }
 
         await NotifyChanged();
@@ -310,18 +498,10 @@
         await NotifyChanged();
     }
 
-    private async Task SetInsertType(ChangeEventArgs args)
+    private async Task SetInsertType(string type)
     {
-        Part.InsertType = args.Value?.ToString() ?? "None";
-        if (string.Equals(Part.InsertType, "None", StringComparison.OrdinalIgnoreCase))
-        {
-            Part.InsertCount = 0;
-        }
-        else if (Part.InsertCount == 0)
-        {
-            Part.InsertCount = 1;
-        }
-
+        Part.InsertType = type;
+        Part.InsertCount = Math.Max(Part.InsertCount, 1);
         await NotifyChanged();
     }
 
@@ -362,7 +542,13 @@
 
     private async Task SetDfmAcknowledged(ChangeEventArgs args)
     {
-        Part.DfmAcknowledged = args.Value is true;
+        Part.DfmAcknowledged = args.Value is bool value && value;
+        await NotifyChanged();
+    }
+
+    private async Task SetPartNotes(ChangeEventArgs args)
+    {
+        Part.PartNotes = args.Value?.ToString();
         await NotifyChanged();
     }
 
@@ -376,6 +562,7 @@
         Part.ToleranceId = tolerance?.Id;
         Part.ToleranceCode = tolerance?.Code;
 
+        Part.InspectionLevel = ReferenceData?.InspectionLevels.FirstOrDefault()?.Code ?? "STANDARD";
         Part.RoughnessCode = RoughnessFor(Part.ProcessId).FirstOrDefault()?.Code;
         Part.Color = ColorsFor(Part.MaterialId).FirstOrDefault()?.Code;
     }
@@ -385,10 +572,27 @@
         await OnPartChanged.InvokeAsync(Part);
     }
 
+    private int ComputeBulkDiscount() => Part.Quantity switch
+    {
+        >= 50 => 15,
+        >= 25 => 10,
+        >= 10 => 5,
+        _ => 0
+    };
+
     private static int ParseNonNegativeInt(object? value, int fallback)
     {
         return int.TryParse(value?.ToString(), out var parsed) ? Math.Max(0, parsed) : fallback;
     }
+
+    private static string FormatOptionCount(int count) => count == 1 ? "1 option" : $"{count} options";
+
+    private static string FormatMultiplier(decimal multiplier) => multiplier switch
+    {
+        1m => "Base",
+        > 1m => $"+{Math.Round((multiplier - 1m) * 100m)}%",
+        < 1m => $"-{Math.Round((1m - multiplier) * 100m)}%"
+    };
 
     private static string ProcessIcon(string processId) => processId switch
     {
@@ -404,5 +608,15 @@
         "al6061" or "aluminum-6061" => "linear-gradient(135deg, #b9c2c5 0%, #f4f6f7 48%, #8d989d 100%)",
         "resin-gray" => "linear-gradient(135deg, #8f949b 0%, #c4c8ce 100%)",
         _ => "linear-gradient(135deg, #fafafa 0%, #ebebeb 100%)"
+    };
+
+    private static string FinishSwatch(string? finishCode) => finishCode?.ToLowerInvariant() switch
+    {
+        "vapor_smooth" => "linear-gradient(135deg, #e8f0f8, #b8cad8)",
+        "sanded_primer" => "linear-gradient(135deg, #d8dbe0, #aeb4bd)",
+        "bead_blast_clear" => "linear-gradient(135deg, #d4d8e0, #aeb5bf)",
+        "as_machined" => "repeating-linear-gradient(90deg, #d4d8e0, #d4d8e0 1px, #b8bcc4 1px, #b8bcc4 2px)",
+        "matte" => "repeating-linear-gradient(0deg, #d4d8e0, #d4d8e0 2px, #c4c8d0 2px, #c4c8d0 3px)",
+        _ => "linear-gradient(135deg, #e8ecf2, #c0c6d0)"
     };
 }
