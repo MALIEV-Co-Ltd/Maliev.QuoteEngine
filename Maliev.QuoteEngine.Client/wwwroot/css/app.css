@@ -1734,6 +1734,53 @@ textarea::placeholder {
     font-size: var(--maliev-font-small);
 }
 
+.quote-registry-lookup {
+    display: grid;
+    gap: 8px;
+}
+
+.quote-registry-suggestions {
+    display: grid;
+    gap: 6px;
+    max-height: 260px;
+    overflow: auto;
+    padding: 6px;
+    background: var(--panel);
+    border-radius: var(--maliev-radius-sm);
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.quote-registry-suggestion {
+    display: grid;
+    gap: 3px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.quote-registry-suggestion:hover,
+.quote-registry-suggestion:focus-visible {
+    background: var(--panel-tint);
+    outline: none;
+}
+
+.quote-registry-suggestion span {
+    font-weight: 650;
+    line-height: 1.35;
+}
+
+.quote-registry-suggestion small {
+    color: var(--muted);
+    font-size: var(--maliev-font-small);
+    line-height: 1.35;
+}
+
 .quote-google-map-backdrop {
     position: fixed;
     inset: 0;

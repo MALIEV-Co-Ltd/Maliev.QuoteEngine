@@ -76,6 +76,7 @@ builder.AddAuthenticatedServiceClient<IQuotationServiceClient, QuotationServiceC
 builder.AddAuthenticatedServiceClient<IOrderServiceClient, OrderServiceClient>("OrderService");
 builder.AddAuthenticatedServiceClient<ICustomerServiceClient, CustomerServiceClient>("CustomerService");
 builder.AddAuthenticatedServiceClient<ICountryServiceClient, CountryServiceClient>("CountryService");
+builder.AddAuthenticatedServiceClient<IRegistryServiceClient, RegistryServiceClient>("RegistryService");
 builder.AddAuthenticatedServiceClient<IPaymentServiceClient, PaymentServiceClient>("PaymentService");
 
 // DemoMode options (short-circuit for sample bracket in dev/demo)

@@ -50,6 +50,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             services.RemoveAll<ICountryServiceClient>();
             services.AddSingleton<ICountryServiceClient>(new FakeCountryServiceClient());
 
+            services.RemoveAll<IRegistryServiceClient>();
+            services.AddSingleton<IRegistryServiceClient>(new FakeRegistryServiceClient());
+
             // Returns a fixed hosted payment URL
             services.RemoveAll<IPaymentServiceClient>();
             services.AddSingleton<IPaymentServiceClient>(new FakePaymentServiceClient());
@@ -416,6 +419,33 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = JsonContent.Create(new { id = ThailandCountryId }, options: new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            });
+        }
+    }
+
+    private sealed class FakeRegistryServiceClient : IRegistryServiceClient
+    {
+        public Task<HttpResponseMessage> SearchThaiLocationsAsync(string query, int limit, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    data = new[]
+                    {
+                        new
+                        {
+                            id = Guid.Parse("1f54cb83-cfa2-4e4c-baa8-e902e458019b"),
+                            postalCode = "11120",
+                            subDistrictTh = "คลองข่อย",
+                            districtTh = "ปากเกร็ด",
+                            provinceTh = "นนทบุรี",
+                            subDistrictEn = "Khlong Khoi",
+                            districtEn = "Pak Kret",
+                            provinceEn = "Nonthaburi"
+                        }
+                    }
+                }, options: new JsonSerializerOptions(JsonSerializerDefaults.Web))
             });
         }
     }

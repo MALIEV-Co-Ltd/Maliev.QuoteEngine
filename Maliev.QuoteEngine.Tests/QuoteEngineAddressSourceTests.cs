@@ -19,10 +19,16 @@ public sealed class QuoteEngineAddressSourceTests
         Assert.Contains("ProvinceLocked", profile, StringComparison.Ordinal);
         Assert.Contains("PostalCodeLocked", profile, StringComparison.Ordinal);
         Assert.Contains("ApplyGoogleAddressSelection", profile, StringComparison.Ordinal);
+        Assert.Contains("Thai address registry", profile, StringComparison.Ordinal);
+        Assert.Contains("SearchRegistryLocationsAsync", profile, StringComparison.Ordinal);
+        Assert.Contains("ApplyRegistryLocation", profile, StringComparison.Ordinal);
+        Assert.Contains("AddressSource = \"RegistryThaiLocation\"", profile, StringComparison.Ordinal);
         Assert.Contains("RecipientName = _profile?.DisplayName", profile, StringComparison.Ordinal);
         Assert.Contains("RecipientPhone = _profile?.Phone", profile, StringComparison.Ordinal);
 
         Assert.Contains("quote/v1/account/addresses", apiClient, StringComparison.Ordinal);
+        Assert.Contains("GetThaiAddressLocationsAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/address/thai-locations", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/address/google-config", picker, StringComparison.Ordinal);
         Assert.Contains("malievQuoteGoogleAddressPicker.initializeSearch", picker, StringComparison.Ordinal);
         Assert.Contains("js/quote-google-address-picker.js", index, StringComparison.Ordinal);
@@ -34,7 +40,10 @@ public sealed class QuoteEngineAddressSourceTests
         var accountController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "AccountController.cs");
         var addressController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "AddressController.cs");
         var customerClient = ReadRepoFile("Maliev.QuoteEngine.Bff", "Clients", "CustomerServiceClient.cs");
+        var registryClient = ReadRepoFile("Maliev.QuoteEngine.Bff", "Clients", "RegistryServiceClient.cs");
+        var program = ReadRepoFile("Maliev.QuoteEngine.Bff", "Program.cs");
         var dto = ReadRepoFile("Maliev.QuoteEngine.Shared", "Account", "AccountDtos.cs");
+        var googleDto = ReadRepoFile("Maliev.QuoteEngine.Shared", "Account", "GoogleAddressDtos.cs");
 
         Assert.Contains("[HttpGet(\"addresses\")]", accountController, StringComparison.Ordinal);
         Assert.Contains("[HttpPost(\"addresses\")]", accountController, StringComparison.Ordinal);
@@ -50,11 +59,15 @@ public sealed class QuoteEngineAddressSourceTests
 
         Assert.Contains("[Route(\"quote/v{version:apiVersion}/address\")]", addressController, StringComparison.Ordinal);
         Assert.Contains("[HttpGet(\"google-config\")]", addressController, StringComparison.Ordinal);
+        Assert.Contains("[HttpGet(\"thai-locations\")]", addressController, StringComparison.Ordinal);
+        Assert.Contains("SearchThaiLocationsAsync", addressController, StringComparison.Ordinal);
         Assert.Contains("GoogleMaps", addressController, StringComparison.Ordinal);
 
         Assert.Contains("/customer/v1/addresses?ownerType=Customer&ownerId=", customerClient, StringComparison.Ordinal);
         Assert.Contains("PostAsJsonAsync(\"/customer/v1/addresses\"", customerClient, StringComparison.Ordinal);
         Assert.Contains("PatchAsJsonAsync($\"/customer/v1/addresses/{addressId:D}\"", customerClient, StringComparison.Ordinal);
+        Assert.Contains("/registry/v1/thai/addresses/autocomplete", registryClient, StringComparison.Ordinal);
+        Assert.Contains("AddAuthenticatedServiceClient<IRegistryServiceClient, RegistryServiceClient>(\"RegistryService\")", program, StringComparison.Ordinal);
 
         Assert.Contains("public string? PlaceLabel", dto, StringComparison.Ordinal);
         Assert.Contains("public string? DriverNote", dto, StringComparison.Ordinal);
@@ -62,6 +75,7 @@ public sealed class QuoteEngineAddressSourceTests
         Assert.Contains("public string? GooglePlaceId", dto, StringComparison.Ordinal);
         Assert.Contains("public decimal? Latitude", dto, StringComparison.Ordinal);
         Assert.Contains("public decimal? Longitude", dto, StringComparison.Ordinal);
+        Assert.Contains("ThaiAddressRegistryLocationDto", googleDto, StringComparison.Ordinal);
     }
 
     [Fact]

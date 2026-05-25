@@ -103,6 +103,15 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerAddressDto>>("quote/v1/account/addresses", cancellationToken) ?? [];
     }
 
+    public async Task<IReadOnlyList<ThaiAddressRegistryLocationDto>> GetThaiAddressLocationsAsync(
+        string query,
+        int limit = 8,
+        CancellationToken cancellationToken = default)
+    {
+        var path = $"quote/v1/address/thai-locations?query={Uri.EscapeDataString(query)}&limit={limit}";
+        return await httpClient.GetFromJsonAsync<IReadOnlyList<ThaiAddressRegistryLocationDto>>(path, cancellationToken) ?? [];
+    }
+
     public Task<CustomerAddressDto> CreateAddressAsync(CustomerAddressUpsertRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<CustomerAddressUpsertRequest, CustomerAddressDto>("quote/v1/account/addresses", request, cancellationToken);

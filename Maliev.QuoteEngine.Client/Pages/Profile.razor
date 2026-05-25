@@ -50,6 +50,33 @@ else
                                      FormattedAddress="@_addressForm.FormattedAddress"
                                      SelectionChanged="ApplyGoogleAddressSelection" />
 
+                <div class="quote-registry-lookup">
+                    <label class="profile-form-wide">
+                        Thai address registry
+                        <input value="@_registryQuery"
+                               @oninput="SearchRegistryLocationsAsync"
+                               autocomplete="off"
+                               aria-label="Thai address registry"
+                               placeholder="Search sub district, district, province, or postal code" />
+                    </label>
+                    @if (_registryLoading)
+                    {
+                        <p class="profile-address-warning">Searching RegistryService...</p>
+                    }
+                    else if (_registryLocations.Count > 0)
+                    {
+                        <div class="quote-registry-suggestions" role="listbox" aria-label="Thai address registry suggestions">
+                            @foreach (var location in _registryLocations)
+                            {
+                                <button type="button" class="quote-registry-suggestion" role="option" @onclick="() => ApplyRegistryLocation(location)">
+                                    <span>@FormatRegistryLocationPrimary(location)</span>
+                                    <small>@FormatRegistryLocationSecondary(location)</small>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+
                 @if (!string.IsNullOrWhiteSpace(_addressWarning))
                 {
                     <p class="profile-address-warning">@_addressWarning</p>
@@ -184,10 +211,14 @@ else
     private CustomerProfileResponse? _profile;
     private QuoteAuthStatusResponse _authStatus = new(false, null, null);
     private List<CustomerAddressDto> _addresses = [];
+    private List<ThaiAddressRegistryLocationDto> _registryLocations = [];
     private CustomerAddressUpsertRequest _addressForm = new();
     private Guid? _editingAddressId;
     private bool _addressesLoading;
     private bool _addressSaving;
+    private bool _registryLoading;
+    private int _registrySearchVersion;
+    private string _registryQuery = string.Empty;
     private string? _addressError;
     private string? _addressWarning;
 
@@ -315,6 +346,8 @@ else
             Longitude = address.Longitude,
             Version = address.Version
         };
+        _registryQuery = string.Empty;
+        _registryLocations = [];
     }
 
     private void ResetAddressForm()
@@ -329,6 +362,9 @@ else
             RecipientName = _profile?.DisplayName,
             RecipientPhone = _profile?.Phone
         };
+        _registryQuery = string.Empty;
+        _registryLocations = [];
+        _registryLoading = false;
     }
 
     private void ApplyGoogleAddressSelection(GoogleAddressSelection selection)
@@ -350,9 +386,105 @@ else
             : null;
     }
 
+    private async Task SearchRegistryLocationsAsync(ChangeEventArgs args)
+    {
+        _registryQuery = args.Value?.ToString() ?? string.Empty;
+        var query = _registryQuery.Trim();
+        var searchVersion = ++_registrySearchVersion;
+
+        if (query.Length < 2)
+        {
+            _registryLocations = [];
+            _registryLoading = false;
+            return;
+        }
+
+        _registryLoading = true;
+        try
+        {
+            var locations = await Api.GetThaiAddressLocationsAsync(query, 8);
+            if (searchVersion == _registrySearchVersion)
+            {
+                _registryLocations = locations.ToList();
+            }
+        }
+        catch
+        {
+            if (searchVersion == _registrySearchVersion)
+            {
+                _registryLocations = [];
+            }
+        }
+        finally
+        {
+            if (searchVersion == _registrySearchVersion)
+            {
+                _registryLoading = false;
+            }
+        }
+    }
+
+    private void ApplyRegistryLocation(ThaiAddressRegistryLocationDto location)
+    {
+        var useThai = UseThaiRegistryLabels();
+        _addressForm.District = RegistryText(useThai ? location.SubDistrictTh : location.SubDistrictEn, useThai ? location.SubDistrictEn : location.SubDistrictTh);
+        _addressForm.City = RegistryText(useThai ? location.DistrictTh : location.DistrictEn, useThai ? location.DistrictEn : location.DistrictTh);
+        _addressForm.StateProvince = RegistryText(useThai ? location.ProvinceTh : location.ProvinceEn, useThai ? location.ProvinceEn : location.ProvinceTh);
+        _addressForm.PostalCode = location.PostalCode;
+        _addressForm.AddressSource = "RegistryThaiLocation";
+        _addressForm.GooglePlaceId = null;
+        _addressForm.FormattedAddress = null;
+        _addressForm.Latitude = null;
+        _addressForm.Longitude = null;
+        _addressWarning = null;
+        _registryQuery = FormatRegistryLocationPrimary(location);
+        _registryLocations = [];
+        _registryLoading = false;
+        _registrySearchVersion++;
+    }
+
     private static bool IsGoogleAddress(CustomerAddressUpsertRequest address) =>
         string.Equals(address.AddressSource, "GooglePlace", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(address.AddressSource, "GoogleMapPin", StringComparison.OrdinalIgnoreCase);
+
+    private bool UseThaiRegistryLabels()
+    {
+        return ContainsThai(_registryQuery)
+            || ContainsThai(_addressForm.AddressLine1)
+            || ContainsThai(_addressForm.District)
+            || ContainsThai(_addressForm.City)
+            || ContainsThai(_addressForm.StateProvince);
+    }
+
+    private string FormatRegistryLocationPrimary(ThaiAddressRegistryLocationDto location)
+    {
+        var useThai = UseThaiRegistryLabels();
+        var subDistrict = RegistryText(useThai ? location.SubDistrictTh : location.SubDistrictEn, useThai ? location.SubDistrictEn : location.SubDistrictTh);
+        var district = RegistryText(useThai ? location.DistrictTh : location.DistrictEn, useThai ? location.DistrictEn : location.DistrictTh);
+        var province = RegistryText(useThai ? location.ProvinceTh : location.ProvinceEn, useThai ? location.ProvinceEn : location.ProvinceTh);
+        var separator = useThai ? " " : ", ";
+        return string.Join(separator, new[] { subDistrict, district, province, location.PostalCode }.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private string FormatRegistryLocationSecondary(ThaiAddressRegistryLocationDto location)
+    {
+        var useThai = UseThaiRegistryLabels();
+        var subDistrict = RegistryText(useThai ? location.SubDistrictEn : location.SubDistrictTh, useThai ? location.SubDistrictTh : location.SubDistrictEn);
+        var district = RegistryText(useThai ? location.DistrictEn : location.DistrictTh, useThai ? location.DistrictTh : location.DistrictEn);
+        var province = RegistryText(useThai ? location.ProvinceEn : location.ProvinceTh, useThai ? location.ProvinceTh : location.ProvinceEn);
+        var separator = useThai ? ", " : " ";
+        return string.Join(separator, new[] { subDistrict, district, province, location.PostalCode }.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private static string RegistryText(string? preferred, string? fallback)
+    {
+        return !string.IsNullOrWhiteSpace(preferred) ? preferred : fallback ?? string.Empty;
+    }
+
+    private static bool ContainsThai(string? value)
+    {
+        return value?.Any(character => character is >= '\u0E00' and <= '\u0E7F') == true;
+    }
 
     private static string AddressTitle(CustomerAddressDto address)
     {
