@@ -134,6 +134,48 @@ def safe_box(page: Page, selector: str) -> dict[str, float] | None:
     return {key: round(float(value), 2) for key, value in box.items()}
 
 
+def safe_styles(page: Page) -> dict[str, Any]:
+    return page.evaluate(
+        """() => {
+            const read = (selector, properties) => {
+                const element = document.querySelector(selector);
+                if (!element) {
+                    return null;
+                }
+
+                const styles = getComputedStyle(element);
+                return Object.fromEntries(properties.map(property => [property, styles.getPropertyValue(property)]));
+            };
+
+            return {
+                logo: read('.quote-brand-logo', ['filter', 'opacity']),
+                activeTab: read('.quote-topnav a.active', ['color', 'background-color', 'box-shadow']),
+                themeToggle: read('.quote-theme-toggle', [
+                    'width',
+                    'height',
+                    'padding-top',
+                    'padding-right',
+                    'padding-bottom',
+                    'padding-left',
+                    'background-color',
+                    'box-shadow'
+                ]),
+                topActions: read('.top-actions', ['gap', 'align-items']),
+                topActionItems: Array.from(document.querySelectorAll('.top-actions > *')).map(element => {
+                    const box = element.getBoundingClientRect();
+                    return {
+                        className: element.className,
+                        tagName: element.tagName,
+                        text: element.textContent.trim(),
+                        x: Math.round(box.x),
+                        width: Math.round(box.width)
+                    };
+                })
+            };
+        }"""
+    )
+
+
 def capture(page: Page, output: Path, app: str, label: str, viewport: tuple[int, int], records: list[dict[str, Any]]) -> None:
     output.mkdir(parents=True, exist_ok=True)
     screenshot = output / f"{app}-{label}-{viewport[0]}x{viewport[1]}.png"
@@ -145,6 +187,7 @@ def capture(page: Page, output: Path, app: str, label: str, viewport: tuple[int,
         "documentWidth": page.evaluate("Math.max(document.documentElement.scrollWidth, document.body.scrollWidth)"),
         "bodyHeight": page.evaluate("Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)"),
         "boxes": {name: safe_box(page, selector) for name, selector in SELECTORS.items()},
+        "styles": safe_styles(page),
     }
     metrics["horizontalOverflow"] = metrics["documentWidth"] > viewport[0] + 2
     records.append({"app": app, "label": label, "screenshot": str(screenshot), "metrics": metrics})
@@ -239,6 +282,43 @@ def width(record: dict[str, Any], key: str) -> float | None:
     return None if box is None else float(box["width"])
 
 
+def px(value: Any) -> float | None:
+    if value is None:
+        return None
+
+    match = re.match(r"^\s*(-?\d+(?:\.\d+)?)", str(value))
+    return None if match is None else float(match.group(1))
+
+
+def rgb_tuple(value: Any) -> tuple[int, int, int] | None:
+    if value is None:
+        return None
+
+    numbers = re.findall(r"[\d.]+", str(value))
+    if len(numbers) < 3:
+        return None
+
+    return tuple(max(0, min(255, int(float(number)))) for number in numbers[:3])  # type: ignore[return-value]
+
+
+def contrast_ratio(foreground: Any, background: Any) -> float | None:
+    fg = rgb_tuple(foreground)
+    bg = rgb_tuple(background)
+    if fg is None or bg is None:
+        return None
+
+    def luminance(rgb: tuple[int, int, int]) -> float:
+        channels = []
+        for channel in rgb:
+            value = channel / 255
+            channels.append(value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4)
+
+        return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
+
+    darker, lighter = sorted((luminance(fg), luminance(bg)))
+    return (lighter + 0.05) / (darker + 0.05)
+
+
 def assert_quoteengine(records: list[dict[str, Any]], failures: list[str]) -> None:
     for record in [item for item in records if item["app"] == "quoteengine"]:
         if record["metrics"]["horizontalOverflow"]:
@@ -259,6 +339,45 @@ def assert_quoteengine(records: list[dict[str, Any]], failures: list[str]) -> No
         topbar_height = height(empty_mobile, "topbar")
         if topbar_height is not None and topbar_height > 130:
             failures.append(f"empty mobile: topbar is too tall ({topbar_height}px)")
+
+    empty_dark_desktop = record_by(records, "quoteengine", "empty-dark-desktop")
+    if empty_dark_desktop:
+        styles = empty_dark_desktop["metrics"].get("styles", {})
+
+        logo_styles = styles.get("logo") or {}
+        logo_filter = str(logo_styles.get("filter", "")).strip().lower()
+        if logo_filter in {"", "none"}:
+            failures.append("empty dark desktop: MALIEV logo has no dark-mode contrast filter")
+
+        active_styles = styles.get("activeTab") or {}
+        active_contrast = contrast_ratio(active_styles.get("color"), active_styles.get("background-color"))
+        if active_contrast is not None and active_contrast < 4.5:
+            failures.append(f"empty dark desktop: active Quote tab contrast is too low ({active_contrast:.2f}:1)")
+
+        theme_styles = styles.get("themeToggle") or {}
+        theme_width = px(theme_styles.get("width"))
+        theme_height = px(theme_styles.get("height"))
+        theme_shadow = str(theme_styles.get("box-shadow", "")).strip().lower()
+        if theme_width is not None and theme_width != 40:
+            failures.append(f"empty dark desktop: theme toggle width drifted ({theme_width}px)")
+        if theme_height is not None and theme_height != 40:
+            failures.append(f"empty dark desktop: theme toggle height drifted ({theme_height}px)")
+        if theme_shadow not in {"none", ""}:
+            failures.append("empty dark desktop: theme toggle shows a default border/ring")
+
+        top_action_styles = styles.get("topActions") or {}
+        top_action_gap = px(top_action_styles.get("gap"))
+        if top_action_gap is not None and not 6 <= top_action_gap <= 10:
+            failures.append(f"empty dark desktop: topbar action gap drifted ({top_action_gap}px)")
+
+        viewport_width = int(empty_dark_desktop["metrics"]["viewport"]["width"])
+        for item in styles.get("topActionItems") or []:
+            right_edge = int(item.get("x", 0)) + int(item.get("width", 0))
+            if right_edge > viewport_width:
+                failures.append(f"empty dark desktop: topbar action overflows viewport ({item.get('className', '')})")
+
+            if "quote-currency-select" in str(item.get("className", "")) and int(item.get("width", 0)) > 120:
+                failures.append(f"empty dark desktop: currency select is too wide ({item.get('width')}px)")
 
     uploaded = record_by(records, "quoteengine", "uploaded-model-light-desktop")
     if uploaded:

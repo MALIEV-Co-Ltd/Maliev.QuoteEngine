@@ -370,6 +370,17 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".quote-theme-toggle", styles, StringComparison.Ordinal);
         Assert.Contains(".quote-currency-select", styles, StringComparison.Ordinal);
         Assert.Contains(":root[data-maliev-theme=\"dark\"]", styles, StringComparison.Ordinal);
+        Assert.Contains("--primary-contrast: #111111;", styles, StringComparison.Ordinal);
+        Assert.Contains(":root[data-maliev-theme=\"dark\"] .quote-brand-logo", styles, StringComparison.Ordinal);
+        Assert.Contains("filter: invert(1) brightness(1.08) contrast(0.96);", styles, StringComparison.Ordinal);
+        Assert.Contains("color: var(--primary-contrast);", styles, StringComparison.Ordinal);
+        Assert.Contains("--topbar-icon-ring: none;", styles, StringComparison.Ordinal);
+        Assert.Contains("box-shadow: var(--topbar-icon-ring);", styles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 40px;", styles, StringComparison.Ordinal);
+        Assert.Contains("min-width: 40px;", styles, StringComparison.Ordinal);
+        Assert.Contains("height: 40px;", styles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 104px;", styles, StringComparison.Ordinal);
+        Assert.Contains("max-width: 104px;", styles, StringComparison.Ordinal);
         Assert.Contains(".workspace--quote", styles, StringComparison.Ordinal);
     }
 
