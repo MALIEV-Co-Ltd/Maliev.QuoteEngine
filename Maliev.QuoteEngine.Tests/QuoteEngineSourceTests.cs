@@ -208,7 +208,7 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void New_quote_workspace_supports_direct_upload_without_demo_card()
+    public void New_quote_workspace_gives_anonymous_users_demo_and_help_actions()
     {
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var script = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
@@ -219,7 +219,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Use sample file", source, StringComparison.Ordinal);
         Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
         Assert.Contains("await LoadDemoProjectAsync();", source, StringComparison.Ordinal);
-        Assert.Contains("private bool ShowDemoSampleCard => false;", source, StringComparison.Ordinal);
+        Assert.Contains("private bool ShowDemoSampleCard => !IsSignedIn && !IsDemoMode;", source, StringComparison.Ordinal);
+        Assert.Contains("private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;", source, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-launch-account-card\"", source, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-primary-btn qe-launch-signin\"", source, StringComparison.Ordinal);
+        Assert.Contains("href=\"/auth/sign-in?returnUrl=/projects/new\"", source, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-secondary-btn qe-launch-assistant\"", source, StringComparison.Ordinal);
+        Assert.Contains("OpenAssistantAsync", source, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
         Assert.Contains("private bool IsWorkspaceReady => _parts.Count > 0;", source, StringComparison.Ordinal);
         Assert.Contains("qe-pn-root is-launch-screen", source, StringComparison.Ordinal);
@@ -234,6 +240,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-dropzone::before", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon .mud-icon-root", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-launch-account-card", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-launch-actions", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-launch-assistant .mud-icon-root", styles, StringComparison.Ordinal);
+        Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-demo-sample-title img", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pdc-container {\n    position: relative;", styles, StringComparison.Ordinal);
         Assert.Contains("3D Model", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor"), StringComparison.Ordinal);
         Assert.Contains(".qe-dfm-tab {\n    flex: 1 1 0;", styles, StringComparison.Ordinal);
@@ -352,6 +362,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("href=\"/preferences\"", layout, StringComparison.Ordinal);
         Assert.Contains("ToggleThemeAsync", layout, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Toggle light or dark mode\"", layout, StringComparison.Ordinal);
+        Assert.Contains("<CascadingValue Value=\"OpenAssistantCallback\" Name=\"OpenAssistant\">", layout, StringComparison.Ordinal);
+        Assert.Contains("private Func<Task> OpenAssistantCallback => OpenAssistantDrawerAsync;", layout, StringComparison.Ordinal);
+        Assert.Contains("private Task OpenAssistantDrawerAsync()", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"quote-currency-select\"", layout, StringComparison.Ordinal);
         Assert.Contains("PersistCurrencyAsync", layout, StringComparison.Ordinal);
         Assert.Contains("<CascadingValue Value=\"_isDarkMode\" Name=\"IsDarkMode\">", layout, StringComparison.Ordinal);
@@ -828,7 +841,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SynchronizeRouteStateAsync", src, StringComparison.Ordinal);
         Assert.Contains("HasDemoWorkspace", src, StringComparison.Ordinal);
         Assert.Contains("ResetWorkspaceState", src, StringComparison.Ordinal);
-        Assert.Contains("ShowDemoSampleCard => false", src, StringComparison.Ordinal);
+        Assert.Contains("ShowDemoSampleCard => !IsSignedIn && !IsDemoMode", src, StringComparison.Ordinal);
+        Assert.Contains("ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode", src, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(\"/demo\")", src, StringComparison.Ordinal);
     }
 

@@ -107,18 +107,20 @@
 
     <main class="@WorkspaceClass">
         <CascadingValue Value="_isDarkMode" Name="IsDarkMode">
-            @if (IsQuoteWorkspace)
-            {
-                <div class="quote-workspace-host">
-                    @Body
-                </div>
-            }
-            else
-            {
-                <section class="page-surface">
-                    @Body
-                </section>
-            }
+            <CascadingValue Value="OpenAssistantCallback" Name="OpenAssistant">
+                @if (IsQuoteWorkspace)
+                {
+                    <div class="quote-workspace-host">
+                        @Body
+                    </div>
+                }
+                else
+                {
+                    <section class="page-surface">
+                        @Body
+                    </section>
+                }
+            </CascadingValue>
         </CascadingValue>
     </main>
 </div>
@@ -226,6 +228,7 @@
         : "Private order";
     private string ThemeToggleIcon => _isDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
     private string ThemeToggleTitle => _isDarkMode ? "Use light mode" : "Use dark mode";
+    private Func<Task> OpenAssistantCallback => OpenAssistantDrawerAsync;
     private string AvatarInitials => GetInitials(_profile?.DisplayName ?? _authStatus.DisplayName ?? "Customer");
     private MarkupString CustomerAvatarMarkup => !string.IsNullOrWhiteSpace(_profile?.ProfileImageUrl)
         ? new MarkupString($"<img class=\"customer-avatar customer-avatar--image\" src=\"{System.Net.WebUtility.HtmlEncode(_profile.ProfileImageUrl)}\" alt=\"\" />")
@@ -389,6 +392,11 @@
     private Task ToggleChatDrawerAsync()
     {
         return SetChatDrawerOpenAsync(!_chatDrawerOpen);
+    }
+
+    private Task OpenAssistantDrawerAsync()
+    {
+        return SetChatDrawerOpenAsync(true);
     }
 
     private Task CloseChatDrawerAsync()

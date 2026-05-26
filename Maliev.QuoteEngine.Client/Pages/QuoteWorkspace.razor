@@ -85,7 +85,7 @@
             @if (SelectedPart is null)
             {
                 <section class="qe-empty-state">
-                    <div class="qe-empty-state-grid @(ShowDemoSampleCard ? "" : "qe-empty-state-grid--solo")">
+                    <div class="@EmptyStateGridClass">
                         <button id="@HeroDropzoneId" type="button" class="qe-dropzone qe-dropzone--hero">
                             <span class="qe-dropzone-icon" aria-hidden="true">
                                 <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
@@ -104,6 +104,21 @@
                                 </strong>
                                 <p>Load a known sample part, review DFM feedback, adjust material and lead time, and test pricing without uploading your own CAD.</p>
                                 <button type="button" class="qe-secondary-btn" @onclick="LoadSampleFileAsync">Use sample file</button>
+                            </article>
+                        }
+                        @if (ShowLaunchAccountCard)
+                        {
+                            <article class="qe-launch-account-card">
+                                <span class="qe-zone-label">Customer workspace</span>
+                                <strong>Sign in to save quotes and orders.</strong>
+                                <p>Keep projects, uploaded files, NDA status, documents, quote history, and order handoff under your customer account.</p>
+                                <div class="qe-launch-actions">
+                                    <a class="qe-primary-btn qe-launch-signin" href="/auth/sign-in?returnUrl=/projects/new">Sign in</a>
+                                    <button type="button" class="qe-secondary-btn qe-launch-assistant" @onclick="OpenAssistantAsync">
+                                        <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Size="Size.Small" />
+                                        Ask assistant
+                                    </button>
+                                </div>
                             </article>
                         }
                     </div>
@@ -191,6 +206,9 @@
     [CascadingParameter(Name = "IsDarkMode")]
     private bool IsDarkMode { get; set; }
 
+    [CascadingParameter(Name = "OpenAssistant")]
+    private Func<Task>? OpenAssistant { get; set; }
+
     private bool IsDemoMode => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/demo", StringComparison.OrdinalIgnoreCase);
     private bool IsSignedIn => _authStatus.IsSignedIn;
     private bool IsWorkspaceReady => _parts.Count > 0;
@@ -199,7 +217,10 @@
     private bool CanApproveQuote => _formalQuote is not null && IsSignedIn && !IsDemoMode && !_formalQuote.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase);
     private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode;
     private bool CanPay => _order is not null && _estimate is not null && IsSignedIn && !IsDemoMode;
-    private bool ShowDemoSampleCard => false;
+    private bool ShowDemoSampleCard => !IsSignedIn && !IsDemoMode;
+    private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;
+    private bool HasLaunchActionCards => ShowDemoSampleCard || ShowLaunchAccountCard;
+    private string EmptyStateGridClass => HasLaunchActionCards ? "qe-empty-state-grid" : "qe-empty-state-grid qe-empty-state-grid--solo";
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
@@ -929,6 +950,14 @@
         }
 
         await LoadDemoProjectAsync();
+    }
+
+    private async Task OpenAssistantAsync()
+    {
+        if (OpenAssistant is not null)
+        {
+            await OpenAssistant();
+        }
     }
 
     private void ApplyDefaultRouting(QuotePartViewModel part, string fileName)

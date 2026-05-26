@@ -40,6 +40,9 @@ SELECTORS: dict[str, str] = {
     "dfmPanel": ".qe-dfm-tab, .dfm-tab",
     "bulkTable": ".qe-pbt-root, .pbt-root",
     "demoCard": ".qe-demo-sample-card",
+    "launchAccountCard": ".qe-launch-account-card",
+    "launchSignIn": ".qe-launch-signin",
+    "launchAssistant": ".qe-launch-assistant",
 }
 
 
@@ -326,16 +329,24 @@ def assert_quoteengine(records: list[dict[str, Any]], failures: list[str]) -> No
 
     empty_desktop = record_by(records, "quoteengine", "empty-light-desktop")
     if empty_desktop:
-        if empty_desktop["metrics"]["boxes"].get("demoCard") is not None:
-            failures.append("empty desktop: demo sample card is visible on ProjectNew")
+        if empty_desktop["metrics"]["boxes"].get("demoCard") is None:
+            failures.append("empty desktop: demo sample card missing for anonymous ProjectNew")
+        if empty_desktop["metrics"]["boxes"].get("launchAccountCard") is None:
+            failures.append("empty desktop: sign-in/help card missing for anonymous ProjectNew")
+        if empty_desktop["metrics"]["boxes"].get("launchSignIn") is None:
+            failures.append("empty desktop: launch sign-in CTA missing")
+        if empty_desktop["metrics"]["boxes"].get("launchAssistant") is None:
+            failures.append("empty desktop: launch assistant CTA missing")
         dropzone_height = height(empty_desktop, "dropzone")
-        if dropzone_height is not None and dropzone_height > 190:
-            failures.append(f"empty desktop: hero dropzone is too tall ({dropzone_height}px)")
+        if dropzone_height is not None and not 210 <= dropzone_height <= 320:
+            failures.append(f"empty desktop: hero dropzone height is outside launch-card range ({dropzone_height}px)")
 
     empty_mobile = record_by(records, "quoteengine", "empty-light-mobile")
     if empty_mobile:
-        if empty_mobile["metrics"]["boxes"].get("demoCard") is not None:
-            failures.append("empty mobile: demo sample card is visible on ProjectNew")
+        if empty_mobile["metrics"]["boxes"].get("demoCard") is None:
+            failures.append("empty mobile: demo sample card missing for anonymous ProjectNew")
+        if empty_mobile["metrics"]["boxes"].get("launchAccountCard") is None:
+            failures.append("empty mobile: sign-in/help card missing for anonymous ProjectNew")
         topbar_height = height(empty_mobile, "topbar")
         if topbar_height is not None and topbar_height > 130:
             failures.append(f"empty mobile: topbar is too tall ({topbar_height}px)")

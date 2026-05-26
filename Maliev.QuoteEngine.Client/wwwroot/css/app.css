@@ -2180,6 +2180,15 @@ textarea::placeholder {
     .quote-summary {
         position: static;
     }
+
+    .qe-empty-state-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .qe-dropzone--hero {
+        grid-column: 1 / -1;
+        max-width: none;
+    }
 }
 
 @media (max-width: 640px) {
@@ -2758,15 +2767,15 @@ textarea::placeholder {
 }
 
 .qe-empty-state-grid {
-    width: min(100%, 960px);
+    width: min(100%, 1180px);
     display: grid;
-    grid-template-columns: minmax(320px, 1.2fr) minmax(260px, .8fr);
+    grid-template-columns: minmax(400px, 1.24fr) minmax(260px, .76fr) minmax(260px, .76fr);
     gap: 18px;
     align-items: stretch;
 }
 
 .qe-pn-root.is-launch-screen .qe-empty-state-grid {
-    width: min(100%, 980px);
+    width: min(100%, 1180px);
 }
 
 .qe-empty-state-grid--solo {
@@ -2775,7 +2784,8 @@ textarea::placeholder {
 }
 
 /* Demo sample card uses the full Geist card shadow stack and Sub-heading typography. */
-.qe-demo-sample-card {
+.qe-demo-sample-card,
+.qe-launch-account-card {
     display: grid;
     align-content: center;
     gap: 12px;
@@ -2785,7 +2795,8 @@ textarea::placeholder {
     box-shadow: var(--maliev-shadow-card);
 }
 
-.qe-demo-sample-card strong {
+.qe-demo-sample-card strong,
+.qe-launch-account-card strong {
     color: var(--ink);
     font-size: var(--maliev-font-body-xl);
     line-height: 1.4;
@@ -2806,11 +2817,37 @@ textarea::placeholder {
     transform: translateY(2px);
 }
 
-.qe-demo-sample-card p {
+:root[data-maliev-theme="dark"] .qe-demo-sample-title img {
+    filter: invert(1) brightness(1.08) contrast(0.96);
+    opacity: 0.94;
+}
+
+.qe-demo-sample-card p,
+.qe-launch-account-card p {
     margin: 0;
     color: var(--muted);
     font-size: var(--maliev-font-body);
     line-height: 1.56;
+}
+
+.qe-launch-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.qe-launch-actions .qe-primary-btn,
+.qe-launch-actions .qe-secondary-btn {
+    min-height: 38px;
+    padding: 0 14px;
+    text-decoration: none;
+}
+
+.qe-launch-assistant .mud-icon-root {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
 }
 
 .qe-pn-detail-row {
@@ -3980,6 +4017,10 @@ textarea::placeholder {
 
     .qe-empty-state-grid {
         grid-template-columns: 1fr;
+    }
+
+    .qe-dropzone--hero {
+        grid-column: auto;
     }
 
     /* Hero dropzone steps down to Body Semibold on small screens. */
