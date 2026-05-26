@@ -8,6 +8,7 @@ using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 
 namespace Maliev.QuoteEngine.Tests;
@@ -369,6 +370,31 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".quote-currency-select", styles, StringComparison.Ordinal);
         Assert.Contains(":root[data-maliev-theme=\"dark\"]", styles, StringComparison.Ordinal);
         Assert.Contains(".workspace--quote", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Currency_selectors_load_options_from_currency_service()
+    {
+        var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");
+        var preferences = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Preferences.razor");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+        var program = ReadRepoFile("Maliev.QuoteEngine.Bff", "Program.cs");
+        var currencyClient = ReadRepoFile("Maliev.QuoteEngine.Bff", "Clients", "CurrencyServiceClient.cs");
+        var referenceController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "ReferenceDataController.cs");
+        var referenceDtos = ReadRepoFile("Maliev.QuoteEngine.Shared", "ReferenceData", "ReferenceDataDtos.cs");
+
+        Assert.DoesNotContain("SupportedCurrencies", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("SupportedCurrencies", preferences, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var currency in _currencyOptions)", layout, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var currency in _currencyOptions)", preferences, StringComparison.Ordinal);
+        Assert.Contains("await LoadCurrencyOptionsAsync()", layout, StringComparison.Ordinal);
+        Assert.Contains("await LoadCurrencyOptionsAsync()", preferences, StringComparison.Ordinal);
+        Assert.Contains("GetCurrenciesAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/reference-data/currencies", apiClient, StringComparison.Ordinal);
+        Assert.Contains("AddAuthenticatedServiceClient<ICurrencyServiceClient, CurrencyServiceClient>(\"CurrencyService\")", program, StringComparison.Ordinal);
+        Assert.Contains("/currency/v1/currencies?pageSize=1000&isActive=true", currencyClient, StringComparison.Ordinal);
+        Assert.Contains("[HttpGet(\"currencies\")]", referenceController, StringComparison.Ordinal);
+        Assert.Contains("CurrencyOptionDto", referenceDtos, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1078,20 +1104,36 @@ public sealed class QuoteEngineSourceTests
 
     private static string FindRepoRoot()
     {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
+        var startDirectories = new List<string>();
+        var configuredRoot = Environment.GetEnvironmentVariable("MALIEV_QUOTEENGINE_REPO_ROOT");
+        if (!string.IsNullOrWhiteSpace(configuredRoot))
         {
-            if (File.Exists(Path.Combine(directory.FullName, "Maliev.QuoteEngine.slnx"))
-                && Directory.Exists(Path.Combine(directory.FullName, "Maliev.QuoteEngine.Client")))
-            {
-                return directory.FullName;
-            }
+            startDirectories.Add(configuredRoot);
+        }
 
-            directory = directory.Parent;
+        startDirectories.Add(GetSourceDirectory());
+        startDirectories.Add(AppContext.BaseDirectory);
+        startDirectories.Add(Directory.GetCurrentDirectory());
+
+        foreach (var startDirectory in startDirectories.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            var directory = new DirectoryInfo(startDirectory);
+            while (directory is not null)
+            {
+                if (File.Exists(Path.Combine(directory.FullName, "Maliev.QuoteEngine.slnx"))
+                    && Directory.Exists(Path.Combine(directory.FullName, "Maliev.QuoteEngine.Client")))
+                {
+                    return directory.FullName;
+                }
+
+                directory = directory.Parent;
+            }
         }
 
         throw new DirectoryNotFoundException("Could not locate the Maliev.QuoteEngine repository root.");
     }
+
+    private static string GetSourceDirectory([CallerFilePath] string sourceFile = "") => Path.GetDirectoryName(sourceFile) ?? Directory.GetCurrentDirectory();
 }
 
 // ── Test helpers for consumer tests ─────────────────────────────────────────

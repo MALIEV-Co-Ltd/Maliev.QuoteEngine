@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Chatbot;
 using Maliev.QuoteEngine.Shared.Quotes;
+using Maliev.QuoteEngine.Shared.ReferenceData;
 using Microsoft.AspNetCore.Components.Forms;
 
 namespace Maliev.QuoteEngine.Client.Services;
@@ -12,6 +13,11 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     {
         return await httpClient.GetFromJsonAsync<QuoteReferenceDataResponse>("quote/v1/reference-data", cancellationToken)
             ?? new QuoteReferenceDataResponse([], [], [], [], [], [], [], [], []);
+    }
+
+    public async Task<IReadOnlyList<CurrencyOptionDto>> GetCurrenciesAsync(CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<IReadOnlyList<CurrencyOptionDto>>("quote/v1/reference-data/currencies", cancellationToken) ?? [];
     }
 
     public async Task<QuoteEngineDemoProjectResponse?> GetDemoProjectAsync(CancellationToken cancellationToken = default)

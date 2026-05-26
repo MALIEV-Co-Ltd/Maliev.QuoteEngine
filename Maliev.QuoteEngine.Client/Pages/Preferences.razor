@@ -1,4 +1,6 @@
 @page "/preferences"
+@using Maliev.QuoteEngine.Shared.ReferenceData
+@inject QuoteEngineApiClient Api
 @inject IJSRuntime Js
 
 <PageTitle>Preferences - MALIEV Quote Engine</PageTitle>
@@ -30,18 +32,24 @@
                 value="@_selectedCurrency"
                 @onchange="HandleCurrencyChanged"
                 aria-label="Quote currency">
-            @foreach (var currency in SupportedCurrencies)
+            @foreach (var currency in _currencyOptions)
             {
-                <option value="@currency">@currency</option>
+                <option value="@currency.Code">@CurrencyOptionLabel(currency)</option>
             }
         </select>
     </div>
 </section>
 
 @code {
-    private static readonly string[] SupportedCurrencies = ["THB", "USD", "EUR", "JPY", "SGD"];
+    private static readonly CurrencyOptionDto FallbackCurrency = new("THB", "฿", "Thai Baht", true, true);
     private bool _isDarkMode;
+    private List<CurrencyOptionDto> _currencyOptions = [FallbackCurrency];
     private string _selectedCurrency = "THB";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrencyOptionsAsync();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -70,15 +78,48 @@
         await Js.InvokeVoidAsync("quoteEnginePreferences.setPreference", "maliev.quote.currency", _selectedCurrency);
     }
 
+    private async Task LoadCurrencyOptionsAsync()
+    {
+        try
+        {
+            var currencies = await Api.GetCurrenciesAsync();
+            _currencyOptions = currencies
+                .Where(currency => currency.IsActive && !string.IsNullOrWhiteSpace(currency.Code))
+                .OrderByDescending(currency => currency.IsPrimary)
+                .ThenBy(currency => currency.Code, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (_currencyOptions.Count == 0)
+            {
+                _currencyOptions = [FallbackCurrency];
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _currencyOptions = [FallbackCurrency];
+        }
+
+        _selectedCurrency = NormalizeCurrency(_selectedCurrency);
+    }
+
     private string ThemeButtonClass(bool dark)
     {
         return _isDarkMode == dark ? "preferences-segment is-active" : "preferences-segment";
     }
 
-    private static string NormalizeCurrency(string? currency)
+    private string NormalizeCurrency(string? currency)
     {
-        return SupportedCurrencies.Contains(currency, StringComparer.OrdinalIgnoreCase)
-            ? SupportedCurrencies.First(candidate => candidate.Equals(currency, StringComparison.OrdinalIgnoreCase))
-            : "THB";
+        return _currencyOptions.FirstOrDefault(candidate => candidate.Code.Equals(currency, StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _currencyOptions.FirstOrDefault(candidate => candidate.IsPrimary)?.Code
+            ?? _currencyOptions.FirstOrDefault(candidate => candidate.Code.Equals("THB", StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _currencyOptions.FirstOrDefault()?.Code
+            ?? "THB";
+    }
+
+    private static string CurrencyOptionLabel(CurrencyOptionDto currency)
+    {
+        return string.IsNullOrWhiteSpace(currency.Name)
+            ? currency.Code
+            : $"{currency.Code} - {currency.Name}";
     }
 }
