@@ -693,6 +693,48 @@ body.quote-ready .startup-screen {
     letter-spacing: 0;
 }
 
+.quote-language-toggle {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+    min-height: 40px;
+    padding: 3px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.quote-language-button {
+    min-width: 34px;
+    height: 32px;
+    border: 0;
+    border-radius: calc(var(--maliev-radius-sm) - 2px);
+    color: var(--muted);
+    background: transparent;
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.quote-language-button:hover {
+    color: var(--ink);
+    background: var(--panel-tint);
+}
+
+.quote-language-button.is-active {
+    color: var(--primary-contrast);
+    background: var(--primary);
+    box-shadow: rgba(0, 0, 0, 0.1) 0 1px 2px;
+}
+
+.quote-language-button:focus-visible {
+    outline: 2px solid var(--focus-blue);
+    outline-offset: 2px;
+}
+
 /* DESIGN.md §4 Buttons:
    - Primary Dark: #171717 background, white text, 6px radius, 8px 16px padding
    - Primary White (Shadow-bordered): white background, #171717 text, ring shadow
@@ -2219,6 +2261,7 @@ textarea::placeholder {
     }
 
     .quote-theme-toggle,
+    .quote-language-toggle,
     .quote-currency-select,
     .topbar-chat-toggle,
     .text-button {
@@ -2233,6 +2276,15 @@ textarea::placeholder {
         min-width: 34px;
         max-width: 34px;
         max-height: 34px;
+    }
+
+    .quote-language-toggle {
+        padding: 2px;
+    }
+
+    .quote-language-button {
+        min-width: 30px;
+        height: 30px;
     }
 
     .quote-currency-select {

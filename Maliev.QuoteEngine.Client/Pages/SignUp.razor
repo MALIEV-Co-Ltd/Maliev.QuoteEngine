@@ -2,22 +2,22 @@
 @inject QuoteEngineApiClient Api
 @inject NavigationManager Navigation
 
-<PageTitle>Sign up - MALIEV Quote Engine</PageTitle>
+<PageTitle>@Text("Sign up - MALIEV Quote Engine", "สมัครสมาชิก - MALIEV Quote Engine")</PageTitle>
 
 <section class="auth-shell">
     <div class="auth-panel">
         <h1 class="auth-title">
-            <span>Create account</span>
+            <span>@Text("Create account", "สร้างบัญชี")</span>
             <img class="auth-title-logo" src="/images/logo.svg" width="154" height="35" alt="MALIEV" />
         </h1>
-        <p>Google is the fastest path. Email and password is available when your team needs a separate login.</p>
+        <p>@Text("Google is the fastest path. Email and password is available when your team needs a separate login.", "Google เป็นวิธีที่เร็วที่สุด และสามารถใช้อีเมลกับรหัสผ่านได้เมื่อทีมของคุณต้องการบัญชีแยก")</p>
 
         @if (!string.IsNullOrWhiteSpace(_error))
         {
             <div class="auth-error">@_error</div>
         }
 
-        <a class="auth-google" href="@GoogleHref" aria-label="Continue with Google">
+        <a class="auth-google" href="@GoogleHref" aria-label="@Text("Continue with Google", "ดำเนินการต่อด้วย Google")">
             <span class="auth-google-icon" aria-hidden="true">
                 <svg viewBox="0 0 18 18" focusable="false">
                     <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.08-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.87 2.69-6.62z" />
@@ -26,46 +26,46 @@
                     <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z" />
                 </svg>
             </span>
-            <span>Continue with Google</span>
+            <span>@Text("Continue with Google", "ดำเนินการต่อด้วย Google")</span>
         </a>
 
         <details class="auth-email-panel" open="@EmailPanelOpen">
-            <summary>Create with email</summary>
+            <summary>@Text("Create with email", "สร้างด้วยอีเมล")</summary>
             <div class="auth-form">
                 <div class="form-grid two">
                     <label>
-                        First name
+                        @Text("First name", "ชื่อ")
                         <input autocomplete="given-name" @bind="_request.FirstName" required />
                     </label>
                     <label>
-                        Last name
+                        @Text("Last name", "นามสกุล")
                         <input autocomplete="family-name" @bind="_request.LastName" required />
                     </label>
                 </div>
                 <label>
-                    Email
+                    @Text("Email", "อีเมล")
                     <input type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="sign-up-email-requirements" @bind="_request.Email" required />
-                    <small id="sign-up-email-requirements" class="auth-field-help">Use a full email address, for example name@company.com.</small>
+                    <small id="sign-up-email-requirements" class="auth-field-help">@Text("Use a full email address, for example name@company.com.", "ใช้อีเมลแบบเต็ม เช่น name@company.com")</small>
                 </label>
                 <label>
-                    Password
+                    @Text("Password", "รหัสผ่าน")
                     <input type="password" autocomplete="new-password" minlength="6" aria-describedby="sign-up-password-requirements" @bind="_request.Password" required />
-                    <small id="sign-up-password-requirements" class="auth-field-help">Password must be at least 6 characters.</small>
+                    <small id="sign-up-password-requirements" class="auth-field-help">@Text("Password must be at least 6 characters.", "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร")</small>
                 </label>
                 <label>
-                    Phone
+                    @Text("Phone", "โทรศัพท์")
                     <input autocomplete="tel" @bind="_request.Phone" />
                 </label>
                 <label>
-                    Company
+                    @Text("Company", "บริษัท")
                     <input autocomplete="organization" @bind="_request.CompanyName" />
                 </label>
-                <button type="button" class="primary-button full" @onclick="SignUpAsync">Create account</button>
+                <button type="button" class="primary-button full" @onclick="SignUpAsync">@Text("Create account", "สร้างบัญชี")</button>
             </div>
         </details>
 
         <div class="auth-links">
-            <a href="@SignInHref">Already have an account?</a>
+            <a href="@SignInHref">@Text("Already have an account?", "มีบัญชีอยู่แล้ว?")</a>
         </div>
     </div>
 </section>
@@ -73,6 +73,9 @@
 @code {
     private readonly SignUpRequest _request = new();
     private string? _error;
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
@@ -95,7 +98,12 @@
         }
         catch (Exception)
         {
-            _error = "Account creation could not be completed.";
+            _error = Text("Account creation could not be completed.", "ไม่สามารถสร้างบัญชีได้");
         }
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

@@ -1,8 +1,9 @@
 @* Customer-facing quote summary bar matching the ProjectNew bottom action surface. *@
+@using System.Globalization
 
 <footer class="qe-qsb-root">
     <div class="qe-qsb-zone qe-qsb-customer">
-        <span class="qe-zone-label">Bill To</span>
+        <span class="qe-zone-label">@Text("Bill To", "เรียกเก็บเงินที่")</span>
         <strong>@BillingName</strong>
         <small>@BillingHint</small>
     </div>
@@ -12,7 +13,7 @@
     <div class="qe-qsb-zone qe-qsb-lead">
         <span class="qe-zone-label">
             <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
-            Lead Time
+            @Text("Lead Time", "ระยะเวลาผลิต")
         </span>
         <div class="qe-qsb-lead-options">
             @foreach (var leadTime in ReferenceData?.LeadTimes ?? [])
@@ -20,10 +21,10 @@
                 var active = LeadTimeCode == leadTime.Code;
                 <button type="button"
                         class="qe-qsb-lead-btn @(active ? "qe-qsb-lead-btn--active" : "")"
-                        @onclick="@(() => OnLeadTimeSelected.InvokeAsync(leadTime.Code))">
+                    @onclick="@(() => OnLeadTimeSelected.InvokeAsync(leadTime.Code))">
                     <span>
                         <strong>@leadTime.Name</strong>
-                        <small>@leadTime.BusinessDays business days</small>
+                        <small>@leadTime.BusinessDays @Text("business days", "วันทำการ")</small>
                     </span>
                     <em>@LeadTimeBadge(leadTime)</em>
                 </button>
@@ -34,23 +35,23 @@
     <div class="qe-qsb-divider"></div>
 
     <div class="qe-qsb-zone qe-qsb-total">
-        <span class="qe-zone-label">Quote Total</span>
+        <span class="qe-zone-label">@Text("Quote Total", "ยอดรวมใบเสนอราคา")</span>
         <strong>@(Estimate is null ? "--" : $"{Estimate.Total:N2} {Estimate.Currency}")</strong>
         @if (Estimate is not null)
         {
             <span class="qe-qsb-ships-date">
-                Ships by <strong>@ComputeShipDate()</strong>
+                @Text("Ships by", "จัดส่งภายใน") <strong>@ComputeShipDate()</strong>
             </span>
         }
 
         <div class="qe-qsb-actions">
             <button type="button" class="qe-secondary-btn" disabled="@(!Parts.Any())" @onclick="OnCalculateRequested">
                 <MudIcon Icon="@Icons.Material.Outlined.Calculate" Size="Size.Small" />
-                Estimate
+                @Text("Estimate", "ประเมินราคา")
             </button>
             <button type="button" class="qe-secondary-btn" disabled="@(Estimate is null)" @onclick="@(() => _detailsOpen = !_detailsOpen)">
                 <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Small" />
-                Details
+                @Text("Details", "รายละเอียด")
             </button>
             <button type="button" class="qe-secondary-btn" disabled="@(!CanRequestFormalQuote)" @onclick="OnQuoteRequested">
                 <MudIcon Icon="@Icons.Material.Outlined.PictureAsPdf" Size="Size.Small" />
@@ -66,25 +67,25 @@
             else if (!IsQuoteApproved)
             {
                 <button type="button" class="qe-secondary-btn" disabled="@(!CanCreateOrder)" @onclick="OnOrderRequested">
-                    Create order
+                    @Text("Create order", "สร้างคำสั่งซื้อ")
                     <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
                 </button>
                 <button type="button" class="qe-primary-btn" disabled="@(!CanApproveQuote)" @onclick="OnApproveQuoteRequested">
-                    Approve quote
+                    @Text("Approve quote", "อนุมัติใบเสนอราคา")
                     <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
                 </button>
             }
             else if (Order is null)
             {
                 <button type="button" class="qe-primary-btn" disabled="@(!CanCreateOrder)" @onclick="OnOrderRequested">
-                    Create order
+                    @Text("Create order", "สร้างคำสั่งซื้อ")
                     <MudIcon Icon="@Icons.Material.Filled.ChevronRight" Size="Size.Small" />
                 </button>
             }
             else
             {
                 <button type="button" class="qe-primary-btn" disabled="@(!CanPay)" @onclick="OnPaymentRequested">
-                    Pay now
+                    @Text("Pay now", "ชำระเงินตอนนี้")
                     <MudIcon Icon="@Icons.Material.Outlined.Payments" Size="Size.Small" />
                 </button>
             }
@@ -94,8 +95,8 @@
         {
             <div class="qe-qsb-details-popover">
                 <div class="qe-qsb-details-head">
-                    <strong>Quote details</strong>
-                    <button type="button" class="qe-btn-icon" title="Close details" @onclick="@(() => _detailsOpen = false)">
+                    <strong>@Text("Quote details", "รายละเอียดใบเสนอราคา")</strong>
+                    <button type="button" class="qe-btn-icon" title="@Text("Close details", "ปิดรายละเอียด")" @onclick="@(() => _detailsOpen = false)">
                         <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
                     </button>
                 </div>
@@ -110,9 +111,9 @@
                     }
                 </div>
                 <div class="qe-qsb-detail-links">
-                    <a href="/documents">Customer documents</a>
+                    <a href="/documents">@Text("Customer documents", "เอกสารลูกค้า")</a>
                     <a href="/ndas">NDA</a>
-                    <a href="/profile">Account</a>
+                    <a href="/profile">@Text("Account", "บัญชี")</a>
                 </div>
             </div>
         }
@@ -134,8 +135,8 @@
         @if (Payment is not null)
         {
             <div class="qe-qsb-result">
-                <span>Payment ready</span>
-                <a href="@Payment.PaymentUrl">Open payment</a>
+                <span>@Text("Payment ready", "พร้อมชำระเงิน")</span>
+                <a href="@Payment.PaymentUrl">@Text("Open payment", "เปิดหน้าชำระเงิน")</a>
             </div>
         }
     </div>
@@ -163,6 +164,9 @@
     [Parameter] public EventCallback OnOrderRequested { get; set; }
     [Parameter] public EventCallback OnPaymentRequested { get; set; }
 
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
     private bool _detailsOpen;
     private bool IsQuoteApproved => FormalQuote?.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase) == true;
 
@@ -171,7 +175,7 @@
         var leadTimeDays = ReferenceData?.LeadTimes
             .FirstOrDefault(lt => lt.Code == LeadTimeCode)?.BusinessDays ?? 5;
         var shipDate = AddBusinessDays(DateTime.Today, leadTimeDays);
-        return shipDate.ToString("d MMM yyyy");
+        return shipDate.ToString("d MMM yyyy", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)));
     }
 
     private static DateTime AddBusinessDays(DateTime start, int businessDays)
@@ -196,4 +200,9 @@
         > 1m => $"+{Math.Round((leadTime.PriceMultiplier - 1m) * 100m)}%",
         _ => "base"
     };
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
 }

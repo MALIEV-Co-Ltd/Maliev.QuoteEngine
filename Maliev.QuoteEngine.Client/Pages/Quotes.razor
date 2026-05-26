@@ -1,14 +1,22 @@
 @page "/quotes/{QuoteId:guid}"
 
-<PageTitle>Quote detail - MALIEV</PageTitle>
+<PageTitle>@Text("Quote detail - MALIEV", "รายละเอียดใบเสนอราคา - MALIEV")</PageTitle>
 
 <div class="empty-state">
-    <h1>Quote detail</h1>
-    <p>Quote @QuoteId is ready to connect to QuotationService detail and PDF history.</p>
-    <a class="primary-button" href="/quotes/new">Start another quote</a>
+    <h1>@Text("Quote detail", "รายละเอียดใบเสนอราคา")</h1>
+    <p>@Text($"Quote {QuoteId} is ready to connect to QuotationService detail and PDF history.", $"ใบเสนอราคา {QuoteId} พร้อมเชื่อมต่อรายละเอียดจาก QuotationService และประวัติ PDF")</p>
+    <a class="primary-button" href="/quotes/new">@Text("Start another quote", "เริ่มขอราคาใหม่")</a>
 </div>
 
 @code {
     [Parameter]
     public Guid QuoteId { get; set; }
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
 }

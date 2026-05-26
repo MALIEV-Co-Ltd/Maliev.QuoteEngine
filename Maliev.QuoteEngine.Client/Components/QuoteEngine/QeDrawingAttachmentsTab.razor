@@ -7,8 +7,8 @@
                 <span class="qe-dropzone-icon" aria-hidden="true">
                     <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
                 </span>
-                <span>@(CanAttachDocuments ? "Drop drawings here or click to upload" : "Drawing upload disabled in demo")</span>
-                <small>PDF, DWG, DXF, PNG, JPG / max 25 MB</small>
+                <span>@(CanAttachDocuments ? Text("Drop drawings here or click to upload", "ลากแบบ Drawing มาวางหรือคลิกเพื่ออัปโหลด") : Text("Drawing upload disabled in demo", "ปิดการอัปโหลด Drawing ในโหมดตัวอย่าง"))</span>
+                <small>PDF, DWG, DXF, PNG, JPG / @Text("max", "สูงสุด") 25 MB</small>
                 @if (CanAttachDocuments)
                 {
                     <InputFile OnChange="HandleFilesSelected" multiple accept=".pdf,.dwg,.dxf,.png,.jpg,.jpeg,.webp" class="qe-dat-file-input" />
@@ -41,7 +41,7 @@
                         {
                             <button type="button"
                                     class="qe-dat-row-delete"
-                                    title="Remove"
+                                    title="@Text("Remove", "ลบ")"
                                     @onclick:stopPropagation="true"
                                     @onclick="@(() => RemoveDrawing(file))">
                                 <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
@@ -55,7 +55,7 @@
         {
             <div class="qe-dat-empty">
                 <MudIcon Icon="@Icons.Material.Outlined.Image" Size="Size.Large" />
-                <span>No drawings uploaded yet</span>
+                <span>@Text("No drawings uploaded yet", "ยังไม่มี Drawing ที่อัปโหลด")</span>
             </div>
         }
     </div>
@@ -63,21 +63,21 @@
     <div class="qe-dat-preview-col">
         @if (PreviewUrl is { Length: > 0 } previewUrl)
         {
-            <iframe src="@previewUrl" class="qe-dat-preview-iframe" title="Drawing preview"></iframe>
+            <iframe src="@previewUrl" class="qe-dat-preview-iframe" title="@Text("Drawing preview", "ตัวอย่าง Drawing")"></iframe>
         }
         else if (_selectedFile is not null)
         {
             <div class="qe-dat-preview-placeholder">
                 <MudIcon Icon="@GetFileIcon(_selectedFile.FileName)" Size="Size.Large" />
                 <strong>@_selectedFile.FileName</strong>
-                <span>Preview will be available after the file is uploaded to the customer project.</span>
+                <span>@Text("Preview will be available after the file is uploaded to the customer project.", "จะแสดงตัวอย่างหลังจากอัปโหลดไฟล์เข้าโปรเจกต์ของลูกค้าแล้ว")</span>
             </div>
         }
         else
         {
             <div class="qe-dat-preview-placeholder">
                 <MudIcon Icon="@Icons.Material.Outlined.Preview" Size="Size.Large" />
-                <span>Select a file to preview</span>
+                <span>@Text("Select a file to preview", "เลือกไฟล์เพื่อดูตัวอย่าง")</span>
             </div>
         }
     </div>
@@ -87,6 +87,9 @@
     [Parameter, EditorRequired] public QuotePartViewModel Part { get; set; } = new();
     [Parameter] public bool CanAttachDocuments { get; set; } = true;
     [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     private QuotePartAttachmentDto? _selectedFile;
     private QuotePartAttachmentDto? _hoveredFile;
@@ -142,11 +145,11 @@
         await OnPartChanged.InvokeAsync(Part);
     }
 
-    private static string FormatBytes(long bytes)
+    private string FormatBytes(long bytes)
     {
         if (bytes <= 0)
         {
-            return "pending upload";
+            return Text("pending upload", "รออัปโหลด");
         }
 
         if (bytes < 1024 * 1024)
@@ -165,4 +168,9 @@
             ".png" or ".jpg" or ".jpeg" or ".webp" => Icons.Material.Outlined.Image,
             _ => Icons.Material.Outlined.InsertDriveFile
         };
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
 }

@@ -14,7 +14,7 @@
                 </span>
             </div>
             <div class="qe-pdc-header-subline">
-                Uploaded just now <span class="qe-pdc-subline-sep">.</span> @FormatLabel(Part.FileName)
+                @Text("Uploaded just now", "อัปโหลดเมื่อสักครู่") <span class="qe-pdc-subline-sep">.</span> @FormatLabel(Part.FileName)
                 @if (Part.VolumeCc > 0)
                 {
                     <span class="qe-pdc-subline-sep">.</span>
@@ -27,13 +27,13 @@
                     class="qe-pdc-tab @(CenterMode == "model" ? "qe-pdc-tab--active" : "")"
                     @onclick="ShowModelAsync">
                 <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" Class="qe-pdc-tab-icon" />
-                3D Model
+                @Text("3D Model", "โมเดล 3D")
             </button>
             <button type="button"
                     class="qe-pdc-tab @(CenterMode == "drawing" ? "qe-pdc-tab--active" : "")"
                     @onclick='() => SetCenterMode("drawing")'>
                 <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" Class="qe-pdc-tab-icon" />
-                Drawing
+                @Text("Drawing", "แบบ Drawing")
                 <span>@Part.DrawingFiles.Count</span>
             </button>
             <button type="button"
@@ -41,7 +41,7 @@
                     aria-label="DFM Analysis"
                     @onclick='() => SetCenterMode("dfm")'>
                 <MudIcon Icon="@Icons.Material.Outlined.Science" Size="Size.Small" Class="qe-pdc-tab-icon" />
-                DFM
+                @Text("DFM", "DFM")
                 @if (DfmOverlayIssues.Count > 0)
                 {
                     <span>@DfmOverlayIssues.Count</span>
@@ -51,7 +51,7 @@
                     class="qe-pdc-tab @(CenterMode == "bulk" ? "qe-pdc-tab--active" : "")"
                     @onclick='() => SetCenterMode("bulk")'>
                 <MudIcon Icon="@Icons.Material.Outlined.TableRows" Size="Size.Small" />
-                All parts
+                @Text("All parts", "ชิ้นงานทั้งหมด")
             </button>
         </div>
     </header>
@@ -102,7 +102,7 @@
                     <div class="qe-pdc-body-tree @(_bodyTreeExpanded ? "qe-pdc-body-tree--open" : "")">
                         <button type="button" class="qe-pdc-body-tree-header" @onclick="@(() => _bodyTreeExpanded = !_bodyTreeExpanded)">
                             <MudIcon Icon="@Icons.Material.Outlined.AccountTree" Size="Size.Small" />
-                            <span class="qe-pdc-body-tree-title">Bodies (@Part.BodyCount)</span>
+                            <span class="qe-pdc-body-tree-title">@Text("Bodies", "บอดี้") (@Part.BodyCount)</span>
                             <MudIcon Icon="@(_bodyTreeExpanded ? Icons.Material.Outlined.ExpandLess : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
                         </button>
                         @if (_bodyTreeExpanded)
@@ -112,7 +112,7 @@
                                         class="qe-pdc-body-tree-row @(Part.SelectedBodyIndex is null ? "qe-pdc-body-tree-row--active" : "")"
                                         @onclick="ClearBodySelectionAsync">
                                     <span class="qe-pdc-body-swatch qe-pdc-body-swatch--all"></span>
-                                    <span class="qe-pdc-body-tree-name">All bodies</span>
+                                    <span class="qe-pdc-body-tree-name">@Text("All bodies", "ทุกบอดี้")</span>
                                     @if (Part.SelectedBodyIndex is null)
                                     {
                                         <span class="qe-pdc-body-tree-check">✓</span>
@@ -125,7 +125,7 @@
                                             class="qe-pdc-body-tree-row @(Part.SelectedBodyIndex == index ? "qe-pdc-body-tree-row--active" : "")"
                                             @onclick="@(() => SelectBodyAsync(index))">
                                         <span class="qe-pdc-body-swatch" style="background-color:@BodyColor(index)"></span>
-                                        <span class="qe-pdc-body-tree-name">Body @(index + 1)</span>
+                                        <span class="qe-pdc-body-tree-name">@Text("Body", "บอดี้") @(index + 1)</span>
                                         @if (Part.SelectedBodyIndex == index)
                                         {
                                             <span class="qe-pdc-body-tree-check">✓</span>
@@ -157,7 +157,7 @@
             <span class="qe-chip">@Part.FinishCode</span>
         }
         <span class="qe-footer-sep"></span>
-        <span>@Part.Quantity pcs</span>
+        <span>@Part.Quantity @Text("pcs", "ชิ้น")</span>
         <strong>@(Estimate is null ? "--" : $"{PartTotal(Part):N2} THB")</strong>
     </footer>
 </section>
@@ -187,6 +187,9 @@
     [Parameter] public EventCallback<string> OnRequestFreshViewerUrl { get; set; }
     [Parameter] public bool IsDarkMode { get; set; }
     [Parameter] public bool CanAttachDocuments { get; set; } = true;
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     private QePartViewer? _viewer;
     private readonly HashSet<string> _activeDfmOverlays = [];
@@ -282,12 +285,24 @@
 
         if (!Part.IsManifold)
         {
-            result.Add(CreateIssue(Icons.Material.Filled.WarningAmber, "Non-manifold mesh", Part.NonManifoldReason ?? "Mesh has open faces or self-intersections.", "warning", "non_manifold", ref overlayIndex));
+            result.Add(CreateIssue(
+                Icons.Material.Filled.WarningAmber,
+                Text("Non-manifold mesh", "เมชไม่ปิดสนิท"),
+                Part.NonManifoldReason ?? Text("Mesh has open faces or self-intersections.", "เมชมีผิวเปิดหรือจุดตัดซ้อน"),
+                "warning",
+                "non_manifold",
+                ref overlayIndex));
         }
 
         if (Part.BodyCount > 1)
         {
-            result.Add(CreateIssue(Icons.Material.Filled.CallSplit, $"Multiple bodies detected ({Part.BodyCount})", "Please confirm whether this file should be quoted as one assembly or split into separate parts.", "warning", "multi_body", ref overlayIndex));
+            result.Add(CreateIssue(
+                Icons.Material.Filled.CallSplit,
+                $"{Text("Multiple bodies detected", "พบหลายบอดี้")} ({Part.BodyCount})",
+                Text("Please confirm whether this file should be quoted as one assembly or split into separate parts.", "กรุณายืนยันว่าไฟล์นี้ควรตีราคาเป็นชุดประกอบเดียวหรือแยกเป็นชิ้นงาน"),
+                "warning",
+                "multi_body",
+                ref overlayIndex));
         }
 
         foreach (var issue in ActiveTypedIssues())
@@ -349,15 +364,20 @@
         _ => "muted"
     };
 
-    private static string StatusLabel(QuotePartViewModel part) => part.Status switch
+    private string StatusLabel(QuotePartViewModel part) => part.Status switch
     {
-        "Analyzed" or "DfmAnalysisReady" => "ANALYZED",
-        "GlbReady" => "READY",
-        "Upload failed" or "Failed" => "ERROR",
-        "Uploading" => "UPLOADING",
-        "Processing" => "PROCESSING",
-        _ => "PENDING"
+        "Analyzed" or "DfmAnalysisReady" => Text("ANALYZED", "วิเคราะห์แล้ว"),
+        "GlbReady" => Text("READY", "พร้อม"),
+        "Upload failed" or "Failed" => Text("ERROR", "ผิดพลาด"),
+        "Uploading" => Text("UPLOADING", "กำลังอัปโหลด"),
+        "Processing" => Text("PROCESSING", "กำลังประมวลผล"),
+        _ => Text("PENDING", "รอดำเนินการ")
     };
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
 
     private static string FormatLabel(string fileName)
     {

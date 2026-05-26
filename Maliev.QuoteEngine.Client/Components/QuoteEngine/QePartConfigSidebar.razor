@@ -2,14 +2,14 @@
 
 <aside class="qe-pcs-sidebar">
     <header class="qe-pcs-header">
-        <span>Configure</span>
+        <span>@Text("Configure", "ตั้งค่า")</span>
         <strong title="@Part.FileName">@Part.FileName</strong>
     </header>
 
     <div class="qe-pcs-scroll">
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">Manufacturing Process</span>
+                <span class="qe-pcs-section-title">@Text("Manufacturing Process", "กระบวนการผลิต")</span>
             </div>
             <div class="qe-pcs-process-grid">
                 @foreach (var process in ReferenceData?.Processes ?? [])
@@ -35,7 +35,7 @@
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">Material</span>
+                <span class="qe-pcs-section-title">@Text("Material", "วัสดุ")</span>
                 <span class="qe-pcs-section-count">@FormatOptionCount(MaterialsFor(Part.ProcessId).Count())</span>
             </div>
             <div class="qe-pcs-cards">
@@ -66,7 +66,7 @@
                 var finishes = FinishesFor(Part.ProcessId).ToArray();
             }
             <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">Surface Finish</span>
+                <span class="qe-pcs-section-title">@Text("Surface Finish", "ผิวสำเร็จ")</span>
                 <span class="qe-pcs-section-count">@FormatOptionCount(finishes.Length + 1)</span>
             </div>
             <div class="qe-pcs-cards">
@@ -75,10 +75,10 @@
                         @onclick="@(() => SetFinish((FinishOptionDto?)null))">
                     <span class="qe-pcs-fin-swatch" style="background:@FinishSwatch(null)"></span>
                     <span class="qe-pcs-fin-info">
-                        <span class="qe-pcs-fin-name">Default finish</span>
-                        <span class="qe-pcs-fin-sub">Use the standard finish for the selected process.</span>
+                        <span class="qe-pcs-fin-name">@Text("Default finish", "ผิวมาตรฐาน")</span>
+                        <span class="qe-pcs-fin-sub">@Text("Use the standard finish for the selected process.", "ใช้ผิวมาตรฐานสำหรับกระบวนการที่เลือก")</span>
                     </span>
-                    <span class="qe-pcs-fin-price">Base</span>
+                    <span class="qe-pcs-fin-price">@Text("Base", "พื้นฐาน")</span>
                 </button>
                 @foreach (var finish in finishes)
                 {
@@ -126,16 +126,16 @@
                 var tolerances = TolerancesFor(Part.ProcessId).ToArray();
             }
             <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">Tolerance</span>
+                <span class="qe-pcs-section-title">@Text("Tolerance", "ค่าความคลาดเคลื่อน")</span>
                 <span class="qe-pcs-section-count">@FormatOptionCount(tolerances.Length + 1)</span>
             </div>
             <div class="qe-pcs-tol-grid">
                 <button type="button"
                         class="qe-pcs-tol-card @(Part.ToleranceId is null ? "qe-pcs-tol-card--active" : "")"
                         @onclick="@(() => SetTolerance((ToleranceOptionDto?)null))">
-                    <span class="qe-pcs-tol-name">Default</span>
-                    <span class="qe-pcs-tol-grade">Process</span>
-                    <span class="qe-pcs-tol-range">Base</span>
+                    <span class="qe-pcs-tol-name">@Text("Default", "มาตรฐาน")</span>
+                    <span class="qe-pcs-tol-grade">@Text("Process", "กระบวนการ")</span>
+                    <span class="qe-pcs-tol-range">@Text("Base", "พื้นฐาน")</span>
                 </button>
                 @foreach (var tolerance in tolerances)
                 {
@@ -164,7 +164,7 @@
                     var roughnessOptions = RoughnessFor(Part.ProcessId).ToArray();
                 }
                 <div class="qe-pcs-section-header">
-                    <span class="qe-pcs-section-title">Surface Roughness</span>
+                    <span class="qe-pcs-section-title">@Text("Surface Roughness", "ความหยาบผิว")</span>
                     <span class="qe-pcs-section-count">@FormatOptionCount(roughnessOptions.Length + 1)</span>
                 </div>
                 <div class="qe-pcs-cards">
@@ -175,8 +175,8 @@
                             <MudIcon Icon="@Icons.Material.Outlined.Grain" Size="Size.Small" />
                         </span>
                         <span class="qe-pcs-choice-info">
-                            <span class="qe-pcs-choice-name">Default roughness</span>
-                            <span class="qe-pcs-choice-sub">Use the standard machined surface.</span>
+                            <span class="qe-pcs-choice-name">@Text("Default roughness", "ความหยาบผิวมาตรฐาน")</span>
+                            <span class="qe-pcs-choice-sub">@Text("Use the standard machined surface.", "ใช้ผิวงานกลึงกัดมาตรฐาน")</span>
                         </span>
                     </button>
                     @foreach (var roughness in roughnessOptions)
@@ -206,7 +206,7 @@
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">Inspection</span>
+                <span class="qe-pcs-section-title">@Text("Inspection", "การตรวจสอบ")</span>
                 <span class="qe-pcs-section-count">@FormatOptionCount((ReferenceData?.InspectionLevels.Count ?? 0))</span>
             </div>
             <div class="qe-pcs-cards">
@@ -236,8 +236,8 @@
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">Part Features</span>
-                <span class="qe-pcs-section-count">2 options</span>
+                <span class="qe-pcs-section-title">@Text("Part Features", "ฟีเจอร์ชิ้นงาน")</span>
+                <span class="qe-pcs-section-count">@Text("2 options", "2 ตัวเลือก")</span>
             </div>
             <div class="qe-pcs-feature-toggle-grid">
                 <button type="button"
@@ -247,8 +247,8 @@
                         <MudIcon Icon="@Icons.Material.Outlined.Construction" Size="Size.Small" />
                     </span>
                     <span class="qe-pcs-choice-info">
-                        <span class="qe-pcs-choice-name">Tapped holes</span>
-                        <span class="qe-pcs-choice-sub">Internal threads cut into the part.</span>
+                        <span class="qe-pcs-choice-name">@Text("Tapped holes", "รูเกลียว")</span>
+                        <span class="qe-pcs-choice-sub">@Text("Internal threads cut into the part.", "เกลียวภายในที่ตัดลงบนชิ้นงาน")</span>
                     </span>
                     @if (Part.HasThreadedHoles)
                     {
@@ -264,8 +264,8 @@
                         <MudIcon Icon="@Icons.Material.Outlined.Hardware" Size="Size.Small" />
                     </span>
                     <span class="qe-pcs-choice-info">
-                        <span class="qe-pcs-choice-name">Thread inserts</span>
-                        <span class="qe-pcs-choice-sub">Installed threaded hardware such as heat-set inserts.</span>
+                        <span class="qe-pcs-choice-name">@Text("Thread inserts", "อินเสิร์ตเกลียว")</span>
+                        <span class="qe-pcs-choice-sub">@Text("Installed threaded hardware such as heat-set inserts.", "ฮาร์ดแวร์เกลียวที่ติดตั้ง เช่น heat-set inserts")</span>
                     </span>
                     @if (HasInserts)
                     {
@@ -280,11 +280,11 @@
             {
                 <div class="qe-inline-fields qe-pcs-feature-fields">
                     <label class="qe-field">
-                        Spec
+                        @Text("Spec", "สเปก")
                         <input value="@Part.ThreadSpecification" @oninput="SetThreadSpecification" placeholder="M3x0.5" />
                     </label>
                     <label class="qe-field">
-                        Count
+                        @Text("Count", "จำนวน")
                         <input type="number" min="0" value="@Part.ThreadedHoleCount" @oninput="SetThreadedHoleCount" />
                     </label>
                 </div>
@@ -302,7 +302,7 @@
                     }
                 </div>
                 <label class="qe-field qe-pcs-feature-count">
-                    Insert count
+                    @Text("Insert count", "จำนวนอินเสิร์ต")
                     <input type="number" min="0" value="@Part.InsertCount" @oninput="SetInsertCount" />
                 </label>
             }
@@ -310,8 +310,8 @@
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">Quantity</span>
-                <span class="qe-pcs-bulk-badge">@ComputeBulkDiscount()% bulk off</span>
+                <span class="qe-pcs-section-title">@Text("Quantity", "จำนวน")</span>
+                <span class="qe-pcs-bulk-badge">@ComputeBulkDiscount()% @Text("bulk off", "ส่วนลดจำนวน")</span>
             </div>
             <div class="qe-pcs-qty-stack">
                 <div>
@@ -322,7 +322,7 @@
                                 @onclick="DecrementQuantity">-</button>
                         <input type="number"
                                class="qe-qty-stepper-input"
-                               aria-label="Quantity"
+                               aria-label="@Text("Quantity", "จำนวน")"
                                min="1"
                                value="@Part.Quantity"
                                @oninput="SetQuantityInput" />
@@ -341,15 +341,15 @@
                 <label class="qe-pcs-choice-card qe-pcs-dfm-review-card @(Part.DfmAcknowledged ? "qe-pcs-choice-card--active" : "")">
                     <input type="checkbox"
                            class="qe-pcs-choice-input"
-                           aria-label="DFM reviewed"
+                           aria-label="@Text("DFM reviewed", "ตรวจ DFM แล้ว")"
                            checked="@Part.DfmAcknowledged"
                            @onchange="SetDfmAcknowledged" />
                     <span class="qe-pcs-choice-swatch">
                         <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
                     </span>
                     <span class="qe-pcs-choice-info">
-                        <span class="qe-pcs-choice-name">DFM reviewed</span>
-                        <span class="qe-pcs-choice-sub">I understand the highlighted manufacturing notes.</span>
+                        <span class="qe-pcs-choice-name">@Text("DFM reviewed", "ตรวจ DFM แล้ว")</span>
+                        <span class="qe-pcs-choice-sub">@Text("I understand the highlighted manufacturing notes.", "ฉันเข้าใจหมายเหตุการผลิตที่เน้นไว้")</span>
                     </span>
                 </label>
             </div>
@@ -357,12 +357,12 @@
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">Production notes</span>
+                <span class="qe-pcs-section-title">@Text("Production notes", "หมายเหตุการผลิต")</span>
             </div>
             <textarea class="qe-pcs-notes-input"
                       rows="4"
                       value="@Part.PartNotes"
-                      placeholder="Customer-visible notes for tolerances, fit, cosmetic faces, packaging, or inspection."
+                      placeholder="@Text("Customer-visible notes for tolerances, fit, cosmetic faces, packaging, or inspection.", "หมายเหตุที่ลูกค้าเห็นได้ เช่น tolerance, fit, ผิวที่ต้องการความสวยงาม, บรรจุภัณฑ์ หรือการตรวจสอบ")"
                       @oninput="SetPartNotes"></textarea>
         </section>
     </div>
@@ -375,6 +375,9 @@
     [Parameter, EditorRequired] public QuotePartViewModel Part { get; set; } = new();
     [Parameter] public QuoteReferenceDataResponse? ReferenceData { get; set; }
     [Parameter] public EventCallback<QuotePartViewModel> OnPartChanged { get; set; }
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     private bool IsCnc => Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase);
     private bool HasInserts => !string.IsNullOrWhiteSpace(Part.InsertType)
@@ -585,14 +588,24 @@
         return int.TryParse(value?.ToString(), out var parsed) ? Math.Max(0, parsed) : fallback;
     }
 
-    private static string FormatOptionCount(int count) => count == 1 ? "1 option" : $"{count} options";
-
-    private static string FormatMultiplier(decimal multiplier) => multiplier switch
+    private string FormatOptionCount(int count)
     {
-        1m => "Base",
+        return count == 1
+            ? Text("1 option", "1 ตัวเลือก")
+            : $"{count} {Text("options", "ตัวเลือก")}";
+    }
+
+    private string FormatMultiplier(decimal multiplier) => multiplier switch
+    {
+        1m => Text("Base", "พื้นฐาน"),
         > 1m => $"+{Math.Round((multiplier - 1m) * 100m)}%",
         < 1m => $"-{Math.Round((1m - multiplier) * 100m)}%"
     };
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
 
     private static string ProcessIcon(string processId) => processId switch
     {

@@ -2,11 +2,11 @@
 @inject QuoteEngineApiClient Api
 @inject NavigationManager Navigation
 
-<PageTitle>Profile - MALIEV Quote Engine</PageTitle>
+<PageTitle>@Text("Profile - MALIEV Quote Engine", "โปรไฟล์ - MALIEV Quote Engine")</PageTitle>
 
 <div class="section-heading">
-    <span class="eyebrow">Account</span>
-    <h1>Profile</h1>
+    <span class="eyebrow">@Text("Account", "บัญชี")</span>
+    <h1>@Text("Profile", "โปรไฟล์")</h1>
 </div>
 
 @if (_profile is null)
@@ -45,18 +45,18 @@ else
             </div>
         </article>
 
-        <div class="account-action-grid" aria-label="Customer data">
+        <div class="account-action-grid" aria-label="@Text("Customer data", "ข้อมูลลูกค้า")">
             <a href="/profile">
                 <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
-                <span>Profile</span>
+                <span>@Text("Profile", "โปรไฟล์")</span>
             </a>
             <a href="/profile#addresses">
                 <MudIcon Icon="@Icons.Material.Outlined.LocationOn" Size="Size.Small" />
-                <span>Addresses</span>
+                <span>@Text("Addresses", "ที่อยู่")</span>
             </a>
             <a href="/orders">
                 <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Small" />
-                <span>Orders</span>
+                <span>@Text("Orders", "คำสั่งซื้อ")</span>
             </a>
             <a href="/ndas">
                 <MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" />
@@ -64,11 +64,11 @@ else
             </a>
             <a href="/documents">
                 <MudIcon Icon="@Icons.Material.Outlined.Folder" Size="Size.Small" />
-                <span>Documents</span>
+                <span>@Text("Documents", "เอกสาร")</span>
             </a>
             <a href="/preferences">
                 <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
-                <span>Preferences</span>
+                <span>@Text("Preferences", "การตั้งค่า")</span>
             </a>
         </div>
     </section>
@@ -76,10 +76,10 @@ else
     <section id="addresses" class="profile-address-book">
         <div class="profile-address-heading">
             <div>
-                <span class="eyebrow">Address book</span>
-                <h2>Billing and shipping addresses</h2>
+                <span class="eyebrow">@Text("Address book", "สมุดที่อยู่")</span>
+                <h2>@Text("Billing and shipping addresses", "ที่อยู่เรียกเก็บเงินและจัดส่ง")</h2>
             </div>
-            <button type="button" class="secondary-button" @onclick="ResetAddressForm">New address</button>
+            <button type="button" class="secondary-button" @onclick="ResetAddressForm">@Text("New address", "เพิ่มที่อยู่")</button>
         </div>
 
         <div class="profile-address-layout">
@@ -91,20 +91,20 @@ else
 
                 <div class="quote-registry-lookup">
                     <label class="profile-form-wide">
-                        Thai address registry
+                        @Text("Thai address registry", "ทะเบียนที่อยู่ไทย")
                         <input value="@_registryQuery"
                                @oninput="SearchRegistryLocationsAsync"
                                autocomplete="off"
-                               aria-label="Thai address registry"
-                               placeholder="Search sub district, district, province, or postal code" />
+                               aria-label="@Text("Thai address registry", "ทะเบียนที่อยู่ไทย")"
+                               placeholder="@Text("Search sub district, district, province, or postal code", "ค้นหาแขวง/ตำบล เขต/อำเภอ จังหวัด หรือรหัสไปรษณีย์")" />
                     </label>
                     @if (_registryLoading)
                     {
-                        <p class="profile-address-warning">Searching RegistryService...</p>
+                        <p class="profile-address-warning">@Text("Searching RegistryService...", "กำลังค้นหา RegistryService...")</p>
                     }
                     else if (_registryLocations.Count > 0)
                     {
-                        <div class="quote-registry-suggestions" role="listbox" aria-label="Thai address registry suggestions">
+                        <div class="quote-registry-suggestions" role="listbox" aria-label="@Text("Thai address registry suggestions", "คำแนะนำจากทะเบียนที่อยู่ไทย")">
                             @foreach (var location in _registryLocations)
                             {
                                 <button type="button" class="quote-registry-suggestion" role="option" @onclick="() => ApplyRegistryLocation(location)">
@@ -123,24 +123,24 @@ else
 
                 <div class="profile-form-grid">
                     <label>
-                        Address role
+                        @Text("Address role", "ประเภทที่อยู่")
                         <select @bind="_addressForm.Type">
-                            <option value="Shipping">Shipping</option>
-                            <option value="Billing">Billing</option>
+                            <option value="Shipping">@Text("Shipping", "จัดส่ง")</option>
+                            <option value="Billing">@Text("Billing", "เรียกเก็บเงิน")</option>
                         </select>
                     </label>
                     <label>
-                        Place name
+                        @Text("Place name", "ชื่อสถานที่")
                         <select @bind="CurrentPlaceLabel">
-                            <option value="Home">Home</option>
-                            <option value="Work">Work</option>
-                            <option value="Other">Other</option>
+                            <option value="Home">@Text("Home", "บ้าน")</option>
+                            <option value="Work">@Text("Work", "ที่ทำงาน")</option>
+                            <option value="Other">@Text("Other", "อื่นๆ")</option>
                         </select>
                     </label>
                     @if (CurrentPlaceLabel == "Other")
                     {
                         <label>
-                            Other place name
+                            @Text("Other place name", "ชื่อสถานที่อื่น")
                             <input @bind="_addressForm.PlaceLabelOther" maxlength="100" />
                         </label>
                     }
@@ -148,40 +148,40 @@ else
 
                 <div class="profile-form-grid">
                     <label class="profile-form-wide">
-                        Address No./Moo/Soi/Road
+                        @Text("Address No./Moo/Soi/Road", "บ้านเลขที่/หมู่/ซอย/ถนน")
                         <input @bind="_addressForm.AddressLine1" required maxlength="255" />
                     </label>
                     <label>
-                        Sub District
+                        @Text("Sub District", "แขวง/ตำบล")
                         <input @bind="_addressForm.District" maxlength="100" />
                     </label>
                     <label>
-                        District
+                        @Text("District", "เขต/อำเภอ")
                         <input @bind="_addressForm.City" required maxlength="100" />
                     </label>
                     <label>
-                        Province
+                        @Text("Province", "จังหวัด")
                         <input @bind="_addressForm.StateProvince" required maxlength="100" disabled="@ProvinceLocked" />
                     </label>
                     <label>
-                        Postal code
+                        @Text("Postal code", "รหัสไปรษณีย์")
                         <input @bind="_addressForm.PostalCode" required maxlength="20" disabled="@PostalCodeLocked" />
                     </label>
                 </div>
 
                 <div class="profile-address-contact">
-                    <span class="eyebrow">Contact Information</span>
+                    <span class="eyebrow">@Text("Contact Information", "ข้อมูลติดต่อ")</span>
                     <div class="profile-form-grid">
                         <label>
-                            Recipient Name
+                            @Text("Recipient Name", "ชื่อผู้รับ")
                             <input @bind="_addressForm.RecipientName" maxlength="200" />
                         </label>
                         <label>
-                            Mobile Number
+                            @Text("Mobile Number", "เบอร์มือถือ")
                             <input @bind="_addressForm.RecipientPhone" maxlength="20" />
                         </label>
                         <label class="profile-form-wide">
-                            Note to driver
+                            @Text("Note to driver", "หมายเหตุถึงพนักงานส่งของ")
                             <textarea @bind="_addressForm.DriverNote" maxlength="500"></textarea>
                         </label>
                     </div>
@@ -189,7 +189,7 @@ else
 
                 <label class="profile-check-row">
                     <input type="checkbox" @bind="_addressForm.IsDefault" />
-                    <span>Set as a default address</span>
+                    <span>@Text("Set as a default address", "ตั้งเป็นที่อยู่เริ่มต้น")</span>
                 </label>
 
                 @if (!string.IsNullOrWhiteSpace(_addressError))
@@ -198,10 +198,10 @@ else
                 }
 
                 <div class="profile-address-actions">
-                    <button type="submit" class="primary-button" disabled="@_addressSaving">@(_editingAddressId.HasValue ? "Update address" : "Add address")</button>
+                    <button type="submit" class="primary-button" disabled="@_addressSaving">@(_editingAddressId.HasValue ? Text("Update address", "อัปเดตที่อยู่") : Text("Add address", "เพิ่มที่อยู่"))</button>
                     @if (_editingAddressId.HasValue)
                     {
-                        <button type="button" class="secondary-button" @onclick="ResetAddressForm">Cancel</button>
+                        <button type="button" class="secondary-button" @onclick="ResetAddressForm">@Text("Cancel", "ยกเลิก")</button>
                     }
                 </div>
             </form>
@@ -215,8 +215,8 @@ else
                 else if (_addresses.Count == 0)
                 {
                     <div class="empty-state">
-                        <strong>No addresses yet</strong>
-                        <p>Add a billing or shipping address before placing a manufacturing order.</p>
+                        <strong>@Text("No addresses yet", "ยังไม่มีที่อยู่")</strong>
+                        <p>@Text("Add a billing or shipping address before placing a manufacturing order.", "เพิ่มที่อยู่เรียกเก็บเงินหรือจัดส่งก่อนสั่งผลิต")</p>
                     </div>
                 }
                 else
@@ -226,17 +226,17 @@ else
                         <article class="profile-address-card">
                             <div>
                                 <span>@AddressTitle(address)</span>
-                                <strong>@address.Type</strong>
+                                <strong>@DisplayAddressType(address.Type)</strong>
                             </div>
                             <p>@AddressLines(address)</p>
                             <small>@ContactLine(address)</small>
                             <div class="profile-address-card-actions">
                                 @if (address.IsDefault)
                                 {
-                                    <span class="profile-address-default">Default @address.Type</span>
+                                    <span class="profile-address-default">@Text("Default", "ค่าเริ่มต้น") @DisplayAddressType(address.Type)</span>
                                 }
-                                <button type="button" class="text-button" @onclick="() => EditAddress(address)">Edit</button>
-                                <button type="button" class="text-button" @onclick="() => DeleteAddressAsync(address)">Delete</button>
+                                <button type="button" class="text-button" @onclick="() => EditAddress(address)">@Text("Edit", "แก้ไข")</button>
+                                <button type="button" class="text-button" @onclick="() => DeleteAddressAsync(address)">@Text("Delete", "ลบ")</button>
                             </div>
                         </article>
                     }
@@ -262,6 +262,11 @@ else
     private string? _addressError;
     private string? _addressWarning;
 
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
+    private bool IsThai => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture;
+
     private string CurrentPlaceLabel
     {
         get => string.IsNullOrWhiteSpace(_addressForm.PlaceLabel) ? "Home" : _addressForm.PlaceLabel;
@@ -278,9 +283,9 @@ else
     private bool ProvinceLocked => IsGoogleAddress(_addressForm) && !string.IsNullOrWhiteSpace(_addressForm.StateProvince);
 
     private bool PostalCodeLocked => IsGoogleAddress(_addressForm) && !string.IsNullOrWhiteSpace(_addressForm.PostalCode);
-    private string ProfileInitials => GetInitials(_profile?.DisplayName ?? "Customer");
+    private string ProfileInitials => GetInitials(_profile?.DisplayName ?? Text("Customer", "ลูกค้า"));
     private CustomerNdaDto? ActiveNda => _ndas.FirstOrDefault(nda => nda.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
-    private string NdaStatus => ActiveNda?.Status ?? _profile?.NdaStatus ?? "Not active";
+    private string NdaStatus => DisplayNdaStatus(ActiveNda?.Status ?? _profile?.NdaStatus);
     private string NdaExpiryNotice
     {
         get
@@ -288,16 +293,16 @@ else
             var expiry = ActiveNda?.ExpiresAt ?? _profile?.NdaExpiresAt;
             if (!expiry.HasValue)
             {
-                return "No expiry date on file.";
+                return Text("No expiry date on file.", "ไม่มีวันหมดอายุในระบบ");
             }
 
             var days = (expiry.Value.Date - DateTimeOffset.UtcNow.Date).Days;
             return days switch
             {
-                < 0 => $"Expired {Math.Abs(days)} days ago.",
-                0 => "Expires today.",
-                <= 30 => $"Expires in {days} days.",
-                _ => $"Expires {expiry.Value:dd MMM yyyy}."
+                < 0 => $"{Text("Expired", "หมดอายุแล้ว")} {Math.Abs(days)} {Text("days ago.", "วันที่ผ่านมา")}",
+                0 => Text("Expires today.", "หมดอายุวันนี้"),
+                <= 30 => $"{Text("Expires in", "หมดอายุใน")} {days} {Text("days.", "วัน")}",
+                _ => $"{Text("Expires", "หมดอายุ")} {expiry.Value.ToString("dd MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)))}."
             };
         }
     }
@@ -327,7 +332,7 @@ else
         }
         catch
         {
-            _addressError = "Address book is temporarily unavailable.";
+            _addressError = Text("Address book is temporarily unavailable.", "สมุดที่อยู่ไม่พร้อมใช้งานชั่วคราว");
             _addresses = [];
         }
         finally
@@ -356,7 +361,7 @@ else
         }
         catch
         {
-            _addressError = "MALIEV could not save this address. Please check the required fields and try again.";
+            _addressError = Text("MALIEV could not save this address. Please check the required fields and try again.", "MALIEV ไม่สามารถบันทึกที่อยู่นี้ได้ กรุณาตรวจสอบฟิลด์ที่จำเป็นและลองอีกครั้ง");
         }
         finally
         {
@@ -378,7 +383,7 @@ else
         }
         catch
         {
-            _addressError = "MALIEV could not delete this address.";
+            _addressError = Text("MALIEV could not delete this address.", "MALIEV ไม่สามารถลบที่อยู่นี้ได้");
         }
     }
 
@@ -446,7 +451,7 @@ else
         if (!string.IsNullOrWhiteSpace(selection.PostalCode)) _addressForm.PostalCode = selection.PostalCode;
 
         _addressWarning = string.IsNullOrWhiteSpace(_addressForm.StateProvince) || string.IsNullOrWhiteSpace(_addressForm.PostalCode)
-            ? "Google did not return complete province or postal code data. Please complete the missing fields manually."
+            ? Text("Google did not return complete province or postal code data. Please complete the missing fields manually.", "Google ไม่ได้ส่งข้อมูลจังหวัดหรือรหัสไปรษณีย์ครบถ้วน กรุณากรอกข้อมูลที่ขาดด้วยตนเอง")
             : null;
     }
 
@@ -530,7 +535,8 @@ else
 
     private bool UseThaiRegistryLabels()
     {
-        return ContainsThai(_registryQuery)
+        return IsThai
+            || ContainsThai(_registryQuery)
             || ContainsThai(_addressForm.AddressLine1)
             || ContainsThai(_addressForm.District)
             || ContainsThai(_addressForm.City)
@@ -567,7 +573,7 @@ else
         return value?.Any(character => character is >= '\u0E00' and <= '\u0E7F') == true;
     }
 
-    private static string AddressTitle(CustomerAddressDto address)
+    private string AddressTitle(CustomerAddressDto address)
     {
         if (string.Equals(address.PlaceLabel, "Other", StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(address.PlaceLabelOther))
@@ -575,7 +581,12 @@ else
             return address.PlaceLabelOther;
         }
 
-        return string.IsNullOrWhiteSpace(address.PlaceLabel) ? "Address" : address.PlaceLabel;
+        if (string.IsNullOrWhiteSpace(address.PlaceLabel))
+        {
+            return Text("Address", "ที่อยู่");
+        }
+
+        return DisplayPlaceLabel(address.PlaceLabel);
     }
 
     private static string AddressLines(CustomerAddressDto address)
@@ -595,5 +606,33 @@ else
     {
         var parts = new[] { address.RecipientName, address.RecipientPhone };
         return string.Join(" · ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private string DisplayAddressType(string? type) => type switch
+    {
+        "Billing" => Text("Billing", "เรียกเก็บเงิน"),
+        "Shipping" => Text("Shipping", "จัดส่ง"),
+        _ => DisplayOrDash(type)
+    };
+
+    private string DisplayPlaceLabel(string? label) => label switch
+    {
+        "Home" => Text("Home", "บ้าน"),
+        "Work" => Text("Work", "ที่ทำงาน"),
+        "Other" => Text("Other", "อื่นๆ"),
+        _ => DisplayOrDash(label)
+    };
+
+    private string DisplayNdaStatus(string? status) => status switch
+    {
+        "Active" => Text("Active", "ใช้งานอยู่"),
+        "Expired" => Text("Expired", "หมดอายุ"),
+        "Pending" => Text("Pending", "รอดำเนินการ"),
+        _ => Text("Not active", "ยังไม่เปิดใช้งาน")
+    };
+
+    private string Text(string en, string th)
+    {
+        return IsThai ? th : en;
     }
 }

@@ -3,6 +3,7 @@
 @inject QuoteEngineApiClient Api
 @inject IJSRuntime Js
 @inject NavigationManager Navigation
+@inject PreferenceService Preferences
 @implements IDisposable
 
 <MudThemeProvider Theme="@_malievTheme" IsDarkMode="@_isDarkMode" />
@@ -16,21 +17,29 @@
             <img class="quote-brand-logo" src="/images/logo.svg" alt="MALIEV" />
         </a>
 
-        <nav class="quote-topnav" aria-label="Customer quote navigation">
-            <NavLink href="/projects/new" Match="NavLinkMatch.Prefix">Quote</NavLink>
-            <NavLink href="/orders" Match="NavLinkMatch.Prefix">Orders</NavLink>
+        <nav class="quote-topnav" aria-label="@Text("Customer quote navigation", "เมนูลูกค้าสำหรับใบเสนอราคา")">
+            <NavLink href="/projects/new" Match="NavLinkMatch.Prefix">@Text("Quote", "ขอราคา")</NavLink>
+            <NavLink href="/orders" Match="NavLinkMatch.Prefix">@Text("Orders", "คำสั่งซื้อ")</NavLink>
         </nav>
 
         <div class="top-actions">
             <button type="button"
                     class="quote-theme-toggle"
-                    aria-label="Toggle light or dark mode"
+                    aria-label="@Text("Toggle light or dark mode", "สลับโหมดสว่างหรือมืด")"
                     title="@ThemeToggleTitle"
                     @onclick="ToggleThemeAsync">
                 <MudIcon Icon="@ThemeToggleIcon" Size="Size.Small" />
             </button>
+            <div class="quote-language-toggle" role="group" aria-label="@Text("Language", "ภาษา")">
+                <button type="button"
+                        class="@LanguageButtonClass(SupportedCultures.DefaultCulture)"
+                        @onclick="() => ChangeCultureAsync(SupportedCultures.DefaultCulture)">EN</button>
+                <button type="button"
+                        class="@LanguageButtonClass(SupportedCultures.ThaiCulture)"
+                        @onclick="() => ChangeCultureAsync(SupportedCultures.ThaiCulture)">TH</button>
+            </div>
             <select class="quote-currency-select"
-                    aria-label="Currency"
+                    aria-label="@Text("Currency", "สกุลเงิน")"
                     value="@_selectedCurrency"
                     @onchange="HandleCurrencyChanged">
                 @foreach (var currency in _currencyOptions)
@@ -38,35 +47,35 @@
                     <option value="@currency.Code">@currency.Code</option>
                 }
             </select>
-            <MudTooltip Text="MALIEV assistant" Placement="Placement.Bottom">
+            <MudTooltip Text="@Text("MALIEV assistant", "ผู้ช่วย MALIEV")" Placement="Placement.Bottom">
                 <MudIconButton Icon="@Icons.Material.Filled.SupportAgent"
                                Class="topbar-chat-toggle"
                                Size="Size.Medium"
-                               aria-label="Open MALIEV assistant"
+                               aria-label="@Text("Open MALIEV assistant", "เปิดผู้ช่วย MALIEV")"
                                Color="@(_chatDrawerOpen ? Color.Primary : Color.Default)"
                                OnClick="ToggleChatDrawerAsync" />
             </MudTooltip>
             @if (_authStatus.IsSignedIn)
             {
                 <details class="billing-account-menu">
-                    <summary class="billing-account-trigger" aria-label="Customer account and billing">
+                    <summary class="billing-account-trigger" aria-label="@Text("Customer account and billing", "บัญชีลูกค้าและการเรียกเก็บเงิน")">
                         @CustomerAvatarMarkup
                         <span class="billing-account-copy">
-                            <span>Bill to</span>
+                            <span>@Text("Bill to", "เรียกเก็บเงินที่")</span>
                             <strong>@BillingAccountTitle</strong>
                             <small>@BillingAccountHint</small>
                         </span>
                     </summary>
-                    <div class="billing-account-options" role="listbox" aria-label="Billing account">
+                    <div class="billing-account-options" role="listbox" aria-label="@Text("Billing account", "บัญชีเรียกเก็บเงิน")">
                         <div class="billing-account-list">
                             <button type="button"
                                     class="@BillingAccountOptionClass("personal")"
                                     role="option"
                                     aria-selected="@IsBillingAccountSelected("personal")"
                                     @onclick="@(() => SelectBillingAccount("personal"))">
-                                <span>Personal account</span>
+                                <span>@Text("Personal account", "บัญชีส่วนตัว")</span>
                                 <strong>@PersonalBillingName</strong>
-                                <small>Place order privately</small>
+                                <small>@Text("Place order privately", "สั่งซื้อในนามส่วนตัว")</small>
                             </button>
                             @if (HasCompanyBillingAccount)
                             {
@@ -75,51 +84,53 @@
                                         role="option"
                                         aria-selected="@IsBillingAccountSelected("company")"
                                         @onclick="@(() => SelectBillingAccount("company"))">
-                                    <span>Company account</span>
+                                    <span>@Text("Company account", "บัญชีบริษัท")</span>
                                     <strong>@_profile!.CompanyName</strong>
-                                    <small>Use company billing details</small>
+                                    <small>@Text("Use company billing details", "ใช้ข้อมูลเรียกเก็บเงินของบริษัท")</small>
                                 </button>
                             }
                         </div>
-                        <div class="customer-data-section" aria-label="Customer data">
-                            <a class="billing-account-manage" href="/profile">Manage account</a>
-                            <a class="billing-account-manage" href="/ndas">NDAs</a>
-                            <a class="billing-account-manage" href="/documents">Documents</a>
-                            <a class="billing-account-manage" href="/preferences">Preferences</a>
+                        <div class="customer-data-section" aria-label="@Text("Customer data", "ข้อมูลลูกค้า")">
+                            <a class="billing-account-manage" href="/profile">@Text("Manage account", "จัดการบัญชี")</a>
+                            <a class="billing-account-manage" href="/ndas">@Text("NDAs", "NDA")</a>
+                            <a class="billing-account-manage" href="/documents">@Text("Documents", "เอกสาร")</a>
+                            <a class="billing-account-manage" href="/preferences">@Text("Preferences", "การตั้งค่า")</a>
                         </div>
                     </div>
                 </details>
             }
             else
             {
-                <a class="text-button" href="/auth/sign-in">Sign in</a>
+                <a class="text-button" href="/auth/sign-in">@Text("Sign in", "เข้าสู่ระบบ")</a>
             }
         </div>
     </header>
 
     @if (_chatDrawerOpen)
     {
-        <button type="button" class="quote-chat-backdrop" aria-label="Close assistant" @onclick="CloseChatDrawerAsync"></button>
-        <aside class="quote-chat-drawer customer-chatbot" role="dialog" aria-modal="true" aria-label="MALIEV customer assistant">
+        <button type="button" class="quote-chat-backdrop" aria-label="@Text("Close assistant", "ปิดผู้ช่วย")" @onclick="CloseChatDrawerAsync"></button>
+        <aside class="quote-chat-drawer customer-chatbot" role="dialog" aria-modal="true" aria-label="@Text("MALIEV customer assistant", "ผู้ช่วยลูกค้า MALIEV")">
             <CustomerAssistantDrawer OnClose="CloseChatDrawerAsync" />
         </aside>
     }
 
     <main class="@WorkspaceClass">
         <CascadingValue Value="_isDarkMode" Name="IsDarkMode">
-            <CascadingValue Value="OpenAssistantCallback" Name="OpenAssistant">
-                @if (IsQuoteWorkspace)
-                {
-                    <div class="quote-workspace-host">
-                        @Body
-                    </div>
-                }
-                else
-                {
-                    <section class="page-surface">
-                        @Body
-                    </section>
-                }
+            <CascadingValue Value="_selectedCulture" Name="Culture">
+                <CascadingValue Value="OpenAssistantCallback" Name="OpenAssistant">
+                    @if (IsQuoteWorkspace)
+                    {
+                        <div class="quote-workspace-host">
+                            @Body
+                        </div>
+                    }
+                    else
+                    {
+                        <section class="page-surface">
+                            @Body
+                        </section>
+                    }
+                </CascadingValue>
             </CascadingValue>
         </CascadingValue>
     </main>
@@ -214,20 +225,21 @@
     private List<CurrencyOptionDto> _currencyOptions = [FallbackCurrency];
     private string _selectedCurrency = "THB";
     private bool _preferencesLoaded;
+    private string _selectedCulture = SupportedCultures.DefaultCulture;
     private QuoteAuthStatusResponse _authStatus = new(false, null, null);
     private CustomerProfileResponse? _profile;
     private string _selectedBillingAccountId = "personal";
     private string AppShellClass => _chatDrawerOpen ? "app-shell chatbot-open" : "app-shell";
     private bool HasCompanyBillingAccount => !string.IsNullOrWhiteSpace(_profile?.CompanyName);
-    private string PersonalBillingName => _profile?.DisplayName ?? _authStatus.DisplayName ?? "Customer account";
+    private string PersonalBillingName => _profile?.DisplayName ?? _authStatus.DisplayName ?? Text("Customer account", "บัญชีลูกค้า");
     private string BillingAccountTitle => _selectedBillingAccountId == "company" && HasCompanyBillingAccount
         ? _profile!.CompanyName
         : PersonalBillingName;
     private string BillingAccountHint => _selectedBillingAccountId == "company" && HasCompanyBillingAccount
-        ? "Company billing"
-        : "Private order";
+        ? Text("Company billing", "เรียกเก็บเงินบริษัท")
+        : Text("Private order", "คำสั่งซื้อส่วนตัว");
     private string ThemeToggleIcon => _isDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
-    private string ThemeToggleTitle => _isDarkMode ? "Use light mode" : "Use dark mode";
+    private string ThemeToggleTitle => _isDarkMode ? Text("Use light mode", "ใช้โหมดสว่าง") : Text("Use dark mode", "ใช้โหมดมืด");
     private Func<Task> OpenAssistantCallback => OpenAssistantDrawerAsync;
     private string AvatarInitials => GetInitials(_profile?.DisplayName ?? _authStatus.DisplayName ?? "Customer");
     private MarkupString CustomerAvatarMarkup => !string.IsNullOrWhiteSpace(_profile?.ProfileImageUrl)
@@ -244,6 +256,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Preferences.Changed += OnPreferencesChanged;
         Navigation.LocationChanged += OnLocationChanged;
         await LoadCurrencyOptionsAsync();
         await RefreshAuthStatusAsync();
@@ -301,9 +314,9 @@
 
     private async Task LoadPreferencesAsync()
     {
-        var theme = await Js.InvokeAsync<string?>("quoteEnginePreferences.getPreference", "maliev.quote.theme");
-        _isDarkMode = string.Equals(theme, "dark", StringComparison.OrdinalIgnoreCase);
-        await Js.InvokeVoidAsync("quoteEnginePreferences.setTheme", _isDarkMode ? "dark" : "light");
+        await Preferences.InitializeAsync();
+        _isDarkMode = Preferences.IsDarkMode;
+        _selectedCulture = Preferences.Culture;
 
         var currency = await Js.InvokeAsync<string?>("quoteEnginePreferences.getPreference", "maliev.quote.currency");
         _selectedCurrency = NormalizeCurrency(currency ?? _profile?.PreferredCurrency ?? _selectedCurrency);
@@ -336,8 +349,12 @@
 
     private async Task ToggleThemeAsync()
     {
-        _isDarkMode = !_isDarkMode;
-        await Js.InvokeVoidAsync("quoteEnginePreferences.setTheme", _isDarkMode ? "dark" : "light");
+        await Preferences.SetThemeAsync(_isDarkMode ? PreferenceService.LightTheme : PreferenceService.DarkTheme);
+    }
+
+    private Task ChangeCultureAsync(string culture)
+    {
+        return Preferences.SetCultureAsync(culture);
     }
 
     private async Task HandleCurrencyChanged(ChangeEventArgs args)
@@ -348,6 +365,7 @@
 
     private async Task PersistCurrencyAsync()
     {
+        await Preferences.SetCurrencyAsync(_selectedCurrency);
         await Js.InvokeVoidAsync("quoteEnginePreferences.setPreference", "maliev.quote.currency", _selectedCurrency);
     }
 
@@ -389,6 +407,25 @@
         return IsBillingAccountSelected(accountId) ? "billing-account-option is-selected" : "billing-account-option";
     }
 
+    private string LanguageButtonClass(string culture)
+    {
+        return string.Equals(SupportedCultures.Normalize(_selectedCulture), SupportedCultures.Normalize(culture), StringComparison.Ordinal)
+            ? "quote-language-button is-active"
+            : "quote-language-button";
+    }
+
+    private string Text(string en, string th)
+    {
+        return Preferences.Text(en, th);
+    }
+
+    private void OnPreferencesChanged()
+    {
+        _isDarkMode = Preferences.IsDarkMode;
+        _selectedCulture = Preferences.Culture;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
     private Task ToggleChatDrawerAsync()
     {
         return SetChatDrawerOpenAsync(!_chatDrawerOpen);
@@ -413,6 +450,7 @@
 
     public void Dispose()
     {
+        Preferences.Changed -= OnPreferencesChanged;
         Navigation.LocationChanged -= OnLocationChanged;
     }
 }

@@ -1,11 +1,11 @@
 @page "/documents"
 @inject QuoteEngineApiClient Api
 
-<PageTitle>Documents - MALIEV Quote Engine</PageTitle>
+<PageTitle>@Text("Documents - MALIEV Quote Engine", "เอกสาร - MALIEV Quote Engine")</PageTitle>
 
 <div class="section-heading">
-    <span class="eyebrow">Customer files</span>
-    <h1>Documents</h1>
+    <span class="eyebrow">@Text("Customer files", "ไฟล์ลูกค้า")</span>
+    <h1>@Text("Documents", "เอกสาร")</h1>
 </div>
 
 <div class="data-list">
@@ -14,7 +14,7 @@
         <div class="data-row">
             <span>@document.FileName</span>
             <strong>@document.Kind</strong>
-            <small>@document.UploadedAt.ToLocalTime().ToString("d MMM yyyy")</small>
+            <small>@document.UploadedAt.ToLocalTime().ToString("d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)))</small>
         </div>
     }
 </div>
@@ -22,8 +22,16 @@
 @code {
     private IReadOnlyList<CustomerDocumentDto> _documents = [];
 
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
     protected override async Task OnInitializedAsync()
     {
         _documents = await Api.GetDocumentsAsync();
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

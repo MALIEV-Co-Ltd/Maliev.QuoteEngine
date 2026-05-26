@@ -110,11 +110,63 @@
     }
   }
 
+  function getCookie(name) {
+    const prefix = `${name}=`;
+    const parts = document.cookie ? document.cookie.split(";") : [];
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (trimmed.startsWith(prefix)) {
+        return decodeURIComponent(trimmed.substring(prefix.length));
+      }
+    }
+
+    return null;
+  }
+
+  function setCookie(name, value, maxAgeSeconds) {
+    const secure = window.location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
+  }
+
+  function normalizeCulture(culture) {
+    return culture && culture.toLowerCase().startsWith("th") ? "th-TH" : "en-US";
+  }
+
+  function applyDocumentCulture(culture) {
+    const normalizedCulture = normalizeCulture(culture);
+    root.lang = normalizedCulture === "th-TH" ? "th" : "en";
+    root.setAttribute("data-culture", normalizedCulture);
+    return normalizedCulture;
+  }
+
+  function resolveCulture(fallback) {
+    const storedCulture =
+      getPreference("maliev.quote.culture") ||
+      getPreference("maliev.culture") ||
+      getCookie("maliev.culture") ||
+      (navigator.languages && navigator.languages.length > 0 ? navigator.languages[0] : navigator.language) ||
+      fallback;
+
+    return applyDocumentCulture(storedCulture);
+  }
+
+  function setCulture(culture) {
+    const normalizedCulture = applyDocumentCulture(culture);
+    setPreference("maliev.quote.culture", normalizedCulture);
+    setPreference("maliev.culture", normalizedCulture);
+    setCookie("maliev.culture", normalizedCulture, 60 * 60 * 24 * 365);
+  }
+
+  function resolveTheme(fallback) {
+    return getPreference("maliev.quote.theme") || getPreference("maliev.theme") || fallback || "light";
+  }
+
   function setTheme(theme) {
     const normalizedTheme = theme === "dark" ? "dark" : "light";
     root.setAttribute("data-maliev-theme", normalizedTheme);
     root.style.colorScheme = normalizedTheme;
     setPreference("maliev.quote.theme", normalizedTheme);
+    setPreference("maliev.theme", normalizedTheme);
   }
 
   function startBlazor() {
@@ -136,7 +188,8 @@
   }
 
   setProgress(0, true);
-  setTheme(getPreference("maliev.quote.theme") || "light");
+  setCulture(resolveCulture("en-US"));
+  setTheme(resolveTheme("light"));
 
   window.quoteEngineLoader = {
     loadBootResource,
@@ -150,6 +203,9 @@
   window.quoteEnginePreferences = {
     getPreference,
     setPreference,
+    resolveCulture,
+    setCulture,
+    resolveTheme,
     setTheme
   };
 })();

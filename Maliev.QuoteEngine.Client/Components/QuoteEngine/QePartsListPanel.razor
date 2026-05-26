@@ -6,10 +6,10 @@
                value="@Title"
                @oninput="HandleTitleInput"
                class="qe-plp-title-input"
-               title="Project title" />
+               title="@Text("Project title", "ชื่อโปรเจกต์")" />
         <button type="button"
                 class="qe-icon-btn"
-                title="Duplicate project"
+                title="@Text("Duplicate project", "ทำสำเนาโปรเจกต์")"
                 disabled="@(!Parts.Any())"
                 @onclick="OnDuplicateProject">
             <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" />
@@ -27,8 +27,8 @@
     </div>
 
     <div class="qe-plp-headers">
-        <span>Parts</span>
-        <span>@Parts.Count part(s)</span>
+        <span>@Text("Parts", "ชิ้นงาน")</span>
+        <span>@Parts.Count @Text("part(s)", "รายการ")</span>
     </div>
 
     <div class="qe-plp-list">
@@ -68,7 +68,7 @@
                     <span role="button"
                           tabindex="-1"
                           class="qe-plp-action-btn qe-plp-action-btn--danger"
-                          title="Remove part"
+                          title="@Text("Remove part", "ลบชิ้นงาน")"
                           @onclick:stopPropagation="true"
                           @onclick="@(() => OnRemovePart.InvokeAsync(part))">
                         <MudIcon Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" />
@@ -77,7 +77,7 @@
                 @if (total.HasValue)
                 {
                     <span class="qe-plp-price-row">
-                        <span class="qe-plp-unit-ea">@part.Quantity x unit</span>
+                        <span class="qe-plp-unit-ea">@part.Quantity x @Text("unit", "หน่วย")</span>
                         <span class="qe-plp-total">@total.Value.ToString("N2") THB</span>
                     </span>
                 }
@@ -86,8 +86,8 @@
     </div>
 
     <div class="qe-plp-footer">
-        <span>Total parts</span>
-        <strong>@Parts.Sum(part => part.Quantity) pcs</strong>
+        <span>@Text("Total parts", "จำนวนชิ้นงานรวม")</span>
+        <strong>@Parts.Sum(part => part.Quantity) @Text("pcs", "ชิ้น")</strong>
     </div>
 </aside>
 
@@ -108,6 +108,9 @@
     [Parameter] public EventCallback OnDuplicateProject { get; set; }
     [Parameter] public EventCallback<QuotePartViewModel> OnRemovePart { get; set; }
 
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
     private Task HandleTitleInput(ChangeEventArgs args)
     {
         Title = args.Value?.ToString() ?? string.Empty;
@@ -117,5 +120,10 @@
     private string ProcessName(string processId)
     {
         return ReferenceData?.Processes.FirstOrDefault(process => process.Id == processId)?.Name ?? processId;
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

@@ -1,15 +1,18 @@
 @page "/auth/chatbot-complete"
 @inject IJSRuntime JS
 
-<PageTitle>Authentication complete - MALIEV Quote Engine</PageTitle>
+<PageTitle>@Text("Authentication complete - MALIEV Quote Engine", "ยืนยันตัวตนสำเร็จ - MALIEV Quote Engine")</PageTitle>
 
 <section class="auth-panel">
-    <span class="eyebrow">Customer assistant</span>
-    <h1>Authentication complete</h1>
-    <p>You can return to the assistant window and continue your MALIEV conversation.</p>
+    <span class="eyebrow">@Text("Customer assistant", "ผู้ช่วยลูกค้า")</span>
+    <h1>@Text("Authentication complete", "ยืนยันตัวตนสำเร็จ")</h1>
+    <p>@Text("You can return to the assistant window and continue your MALIEV conversation.", "คุณสามารถกลับไปที่หน้าต่างผู้ช่วยและสนทนากับ MALIEV ต่อได้")</p>
 </section>
 
 @code {
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender)
@@ -24,5 +27,10 @@
         catch (JSException)
         {
         }
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

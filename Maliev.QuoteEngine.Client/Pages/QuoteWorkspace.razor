@@ -9,7 +9,7 @@
 @inject IJSRuntime Js
 @inject NavigationManager Navigation
 
-<PageTitle>New manufacturing quote - MALIEV</PageTitle>
+<PageTitle>@Text("New manufacturing quote - MALIEV", "ขอราคาการผลิตใหม่ - MALIEV")</PageTitle>
 
 <div class="@WorkspaceRootClass">
     <div id="@UploadContainerId">
@@ -56,15 +56,15 @@
                 <div class="qe-pn-mobile-toolbar">
                     <button type="button" class="qe-mobile-tool-btn" @onclick="TogglePartsDrawer">
                         <MudIcon Icon="@Icons.Material.Outlined.List" Size="Size.Small" />
-                        Parts
+                        @Text("Parts", "ชิ้นงาน")
                     </button>
-                    <div class="qe-mobile-mode-switch" role="tablist" aria-label="Workspace mode">
+                    <div class="qe-mobile-mode-switch" role="tablist" aria-label="@Text("Workspace mode", "โหมดพื้นที่ทำงาน")">
                         <button type="button"
                                 class="@(_centerMode == "bulk" ? "" : "active")"
-                                @onclick="@(() => SetCenterMode("model"))">Config</button>
+                                @onclick="@(() => SetCenterMode("model"))">@Text("Config", "ตั้งค่า")</button>
                         <button type="button"
                                 class="@(_centerMode == "bulk" ? "active" : "")"
-                                @onclick="@(() => SetCenterMode("bulk"))">Table</button>
+                                @onclick="@(() => SetCenterMode("bulk"))">@Text("Table", "ตาราง")</button>
                     </div>
                 </div>
             }
@@ -90,9 +90,9 @@
                         {
                             <div class="qe-launch-hero">
                                 <div class="qe-launch-copy">
-                                    <span class="qe-zone-label">Manufacturing quotes</span>
-                                    <h1>Get manufacturing quotes, <span>faster and easier.</span></h1>
-                                    <p>Upload your CAD files and project details. We'll get back with feedback and pricing.</p>
+                                    <span class="qe-zone-label">@Text("Manufacturing quotes", "ใบเสนอราคาการผลิต")</span>
+                                    <h1>@Text("Get manufacturing quotes,", "ขอใบเสนอราคาการผลิต") <span>@Text("faster and easier.", "ได้เร็วและง่ายขึ้น")</span></h1>
+                                    <p>@Text("Upload your CAD files and project details. We'll get back with feedback and pricing.", "อัปโหลดไฟล์ CAD และรายละเอียดโปรเจกต์ แล้วเราจะส่งข้อเสนอแนะและราคาให้คุณ")</p>
                                 </div>
                                 <div class="qe-launch-visual" aria-hidden="true">
                                     <span class="qe-launch-grid"></span>
@@ -107,14 +107,14 @@
                             <span>@UploadHeroLabel</span>
                             @if (HasLaunchActionCards)
                             {
-                                <em>Upload CAD files or any relevant documents</em>
+                                <em>@Text("Upload CAD files or any relevant documents", "อัปโหลดไฟล์ CAD หรือเอกสารที่เกี่ยวข้อง")</em>
                                 <span class="qe-launch-format-chips" aria-label="@UploadHeroHint">
                                     @foreach (var format in LaunchFormatChips)
                                     {
                                         <span>@format</span>
                                     }
                                 </span>
-                                <small>/ max @QuoteUploadConstraints.MaxFileSizeMegabytes MB per file</small>
+                                <small>@Text("/ max", "/ สูงสุด") @QuoteUploadConstraints.MaxFileSizeMegabytes MB @Text("per file", "ต่อไฟล์")</small>
                             }
                             else
                             {
@@ -128,10 +128,10 @@
                                     <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
                                 </span>
                                 <div class="qe-launch-card-body">
-                                    <strong>Try the Quote Engine</strong>
-                                    <p>Use our sample file to see how it works.</p>
+                                    <strong>@Text("Try the Quote Engine", "ทดลองใช้ Quote Engine")</strong>
+                                    <p>@Text("Use our sample file to see how it works.", "ใช้ไฟล์ตัวอย่างของเราเพื่อดูขั้นตอนการทำงาน")</p>
                                     <button type="button" class="qe-secondary-btn" @onclick="LoadSampleFileAsync">
-                                        <span>Use sample file</span>
+                                        <span>@Text("Use sample file", "ใช้ไฟล์ตัวอย่าง")</span>
                                         <MudIcon Icon="@Icons.Material.Outlined.ArrowForward" Size="Size.Small" />
                                     </button>
                                 </div>
@@ -144,13 +144,13 @@
                                     <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Small" />
                                 </span>
                                 <div class="qe-launch-card-body">
-                                    <strong>Already have an account?</strong>
-                                    <p>Sign in to save quotes, track orders, and manage your projects.</p>
+                                    <strong>@Text("Already have an account?", "มีบัญชีอยู่แล้ว?")</strong>
+                                    <p>@Text("Sign in to save quotes, track orders, and manage your projects.", "เข้าสู่ระบบเพื่อบันทึกราคา ติดตามคำสั่งซื้อ และจัดการโปรเจกต์")</p>
                                     <div class="qe-launch-actions">
-                                        <a class="qe-primary-btn qe-launch-signin" href="/auth/sign-in?returnUrl=/projects/new">Sign in</a>
+                                        <a class="qe-primary-btn qe-launch-signin" href="/auth/sign-in?returnUrl=/projects/new">@Text("Sign in", "เข้าสู่ระบบ")</a>
                                         <button type="button" class="qe-secondary-btn qe-launch-assistant" @onclick="OpenAssistantAsync">
                                             <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Size="Size.Small" />
-                                            Ask assistant
+                                            @Text("Ask assistant", "ถามผู้ช่วย")
                                         </button>
                                     </div>
                                 </div>
@@ -158,26 +158,26 @@
                         }
                         @if (HasLaunchActionCards)
                         {
-                            <div class="qe-launch-benefits" aria-label="Quote Engine benefits">
+                            <div class="qe-launch-benefits" aria-label="@Text("Quote Engine benefits", "ประโยชน์ของ Quote Engine")">
                                 <article>
                                     <span aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.FactCheck" Size="Size.Small" /></span>
                                     <div>
-                                        <strong>DFM Feedback</strong>
-                                        <small>Get expert manufacturability analysis and recommendations.</small>
+                                        <strong>@Text("DFM Feedback", "ข้อเสนอแนะ DFM")</strong>
+                                        <small>@Text("Get expert manufacturability analysis and recommendations.", "รับการวิเคราะห์และคำแนะนำด้านการผลิตจากผู้เชี่ยวชาญ")</small>
                                     </div>
                                 </article>
                                 <article>
                                     <span aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.Calculate" Size="Size.Small" /></span>
                                     <div>
-                                        <strong>Accurate Pricing</strong>
-                                        <small>Receive transparent and competitive pricing.</small>
+                                        <strong>@Text("Accurate Pricing", "ราคาที่แม่นยำ")</strong>
+                                        <small>@Text("Receive transparent and competitive pricing.", "รับราคาที่โปร่งใสและแข่งขันได้")</small>
                                     </div>
                                 </article>
                                 <article>
                                     <span aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Small" /></span>
                                     <div>
-                                        <strong>Secure &amp; Private</strong>
-                                        <small>Your files and data are protected with industry-standard security.</small>
+                                        <strong>@Text("Secure & Private", "ปลอดภัยและเป็นส่วนตัว")</strong>
+                                        <small>@Text("Your files and data are protected with industry-standard security.", "ไฟล์และข้อมูลของคุณได้รับการปกป้องด้วยมาตรฐานความปลอดภัยระดับอุตสาหกรรม")</small>
                                     </div>
                                 </article>
                             </div>
@@ -270,6 +270,9 @@
     [CascadingParameter(Name = "OpenAssistant")]
     private Func<Task>? OpenAssistant { get; set; }
 
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
     private bool IsDemoMode => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/demo", StringComparison.OrdinalIgnoreCase);
     private bool IsSignedIn => _authStatus.IsSignedIn;
     private bool IsWorkspaceReady => _parts.Count > 0;
@@ -316,17 +319,17 @@
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
-    private string UploadCompactLabel => IsDemoMode ? "Demo sample only" : "Drop CAD files to quote";
-    private string UploadCompactHint => IsDemoMode ? "MALIEV-owned sample file" : IsSignedIn ? "Customer-owned upload storage" : "Saved temporarily";
-    private string UploadHeroLabel => IsDemoMode ? "Demo sample is ready" : "Drop files here or click to upload";
+    private string UploadCompactLabel => IsDemoMode ? Text("Demo sample only", "ไฟล์ตัวอย่างเท่านั้น") : Text("Drop CAD files to quote", "วางไฟล์ CAD เพื่อขอราคา");
+    private string UploadCompactHint => IsDemoMode ? Text("MALIEV-owned sample file", "ไฟล์ตัวอย่างของ MALIEV") : IsSignedIn ? Text("Customer-owned upload storage", "พื้นที่อัปโหลดของลูกค้า") : Text("Saved temporarily", "บันทึกชั่วคราว");
+    private string UploadHeroLabel => IsDemoMode ? Text("Demo sample is ready", "ไฟล์ตัวอย่างพร้อมใช้งาน") : Text("Drop files here or click to upload", "ลากไฟล์มาวางหรือคลิกเพื่ออัปโหลด");
     private string UploadHeroHint => IsDemoMode
-        ? "Demo mode cannot create projects, formal quotes, orders, uploads, or history"
-        : $"{QuoteUploadConstraints.SupportedCadExtensionLabel} / max {QuoteUploadConstraints.MaxFileSizeMegabytes} MB per file";
-    private string QuoteButtonLabel => IsDemoMode ? "Demo only" : IsSignedIn ? "Quote" : "Sign in to quote";
+        ? Text("Demo mode cannot create projects, formal quotes, orders, uploads, or history", "โหมดตัวอย่างไม่สามารถสร้างโปรเจกต์ ใบเสนอราคาทางการ คำสั่งซื้อ การอัปโหลด หรือประวัติได้")
+        : $"{QuoteUploadConstraints.SupportedCadExtensionLabel} / {Text("max", "สูงสุด")} {QuoteUploadConstraints.MaxFileSizeMegabytes} MB {Text("per file", "ต่อไฟล์")}";
+    private string QuoteButtonLabel => IsDemoMode ? Text("Demo only", "ตัวอย่างเท่านั้น") : IsSignedIn ? Text("Quote", "ขอราคา") : Text("Sign in to quote", "เข้าสู่ระบบเพื่อขอราคา");
     private string BillingSummaryName => IsSignedIn
-        ? _authStatus.DisplayName ?? "Customer account"
-        : "Guest checkout";
-    private string BillingSummaryHint => IsSignedIn ? "Private order" : "Sign in to save projects";
+        ? _authStatus.DisplayName ?? Text("Customer account", "บัญชีลูกค้า")
+        : Text("Guest checkout", "ขอราคาแบบผู้เยี่ยมชม");
+    private string BillingSummaryHint => IsSignedIn ? Text("Private order", "คำสั่งซื้อส่วนตัว") : Text("Sign in to save projects", "เข้าสู่ระบบเพื่อบันทึกโปรเจกต์");
 
     private QuotePartViewModel? SelectedPart => _parts.Count == 0 ? null : _parts[Math.Min(_selectedPartIndex, _parts.Count - 1)];
 
@@ -633,7 +636,7 @@
         }
         catch (Exception ex) when (ex is FormatException or JsonException or InvalidOperationException)
         {
-            _error = "We could not import the files from the website upload. Please drop them here again.";
+            _error = Text("We could not import the files from the website upload. Please drop them here again.", "เราไม่สามารถนำเข้าไฟล์จากการอัปโหลดบนเว็บไซต์ได้ กรุณาลากไฟล์มาวางอีกครั้ง");
         }
     }
 
@@ -919,7 +922,7 @@
                 _ = InvokeAsync(() =>
                 {
                     var fileName = Path.GetFileName(status.StoragePath);
-                    _liveNotifications.Insert(0, $"Analysis complete for {fileName}");
+                    _liveNotifications.Insert(0, $"{Text("Analysis complete for", "วิเคราะห์เสร็จแล้วสำหรับ")} {fileName}");
 
                     var part = _parts.FirstOrDefault(candidate => string.Equals(candidate.UploadId, status.UploadId, StringComparison.OrdinalIgnoreCase));
                     if (part is not null)
@@ -1021,7 +1024,7 @@
                 Findings =
                 [
                     new("Info", "DEMO_SAMPLE", demo.Notice),
-                    new("Info", "DFM_SAMPLE", "Sample geometry is suitable for demo pricing.")
+                    new("Info", "DFM_SAMPLE", Text("Sample geometry is suitable for demo pricing.", "รูปทรงตัวอย่างเหมาะสำหรับการคำนวณราคาสาธิต"))
                 ]
             });
         }
@@ -1137,6 +1140,11 @@
         > 1m => $"+{Math.Round((leadTime.PriceMultiplier - 1m) * 100m)}%",
         _ => "base"
     };
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
 
     public async ValueTask DisposeAsync()
     {

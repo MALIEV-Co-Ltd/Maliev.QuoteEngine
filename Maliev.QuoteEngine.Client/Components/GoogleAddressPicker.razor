@@ -3,10 +3,10 @@
 @inject IJSRuntime JS
 
 <div class="quote-google-address-picker">
-    <label class="quote-google-address-label" for="@_autocompleteElementId">Search for your location</label>
+    <label class="quote-google-address-label" for="@_autocompleteElementId">@Text("Search for your location", "ค้นหาตำแหน่งของคุณ")</label>
     <div class="quote-google-address-row">
-        <div id="@_autocompleteElementId" class="quote-google-address-autocomplete" aria-label="Search for your location"></div>
-        <button type="button" class="quote-google-map-button" @onclick="OpenMapAsync" aria-label="Open map">
+        <div id="@_autocompleteElementId" class="quote-google-address-autocomplete" aria-label="@Text("Search for your location", "ค้นหาตำแหน่งของคุณ")"></div>
+        <button type="button" class="quote-google-map-button" @onclick="OpenMapAsync" aria-label="@Text("Open map", "เปิดแผนที่")">
             <MudIcon Icon="@Icons.Material.Filled.LocationOn" Size="Size.Small" />
         </button>
     </div>
@@ -22,16 +22,16 @@
 
 @if (_mapOpen)
 {
-    <div class="quote-google-map-backdrop" role="dialog" aria-modal="true" aria-label="Select address on map">
+    <div class="quote-google-map-backdrop" role="dialog" aria-modal="true" aria-label="@Text("Select address on map", "เลือกที่อยู่บนแผนที่")">
         <div class="quote-google-map-dialog">
             <div class="quote-google-map-title">
-                <strong>Select location</strong>
-                <button type="button" @onclick="CloseMapAsync" aria-label="Close map">x</button>
+                <strong>@Text("Select location", "เลือกตำแหน่ง")</strong>
+                <button type="button" @onclick="CloseMapAsync" aria-label="@Text("Close map", "ปิดแผนที่")">x</button>
             </div>
             <div id="@_mapElementId" class="quote-google-map-canvas"></div>
             <div class="quote-google-map-footer">
-                <span>Drag the marker or click the map to update the address.</span>
-                <button type="button" class="primary-button" @onclick="CloseMapAsync">Done</button>
+                <span>@Text("Drag the marker or click the map to update the address.", "ลากหมุดหรือคลิกแผนที่เพื่ออัปเดตที่อยู่")</span>
+                <button type="button" class="primary-button" @onclick="CloseMapAsync">@Text("Done", "เสร็จสิ้น")</button>
             </div>
         </div>
     </div>
@@ -55,6 +55,9 @@
 
     [Parameter] public EventCallback<GoogleAddressSelection> SelectionChanged { get; set; }
 
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender || _searchInitialized)
@@ -68,7 +71,7 @@
 
         if (string.IsNullOrWhiteSpace(_config.ApiKey))
         {
-            _statusMessage = "Google Maps key is not configured. Manual address fields remain available.";
+            _statusMessage = Text("Google Maps key is not configured. Manual address fields remain available.", "ยังไม่ได้ตั้งค่า Google Maps key สามารถกรอกที่อยู่ด้วยตนเองได้");
             StateHasChanged();
             return;
         }
@@ -94,7 +97,7 @@
         _config ??= await LoadConfigAsync();
         if (string.IsNullOrWhiteSpace(_config.ApiKey))
         {
-            _statusMessage = "Google Maps key is not configured. Manual address fields remain available.";
+            _statusMessage = Text("Google Maps key is not configured. Manual address fields remain available.", "ยังไม่ได้ตั้งค่า Google Maps key สามารถกรอกที่อยู่ด้วยตนเองได้");
             return;
         }
 
@@ -128,5 +131,10 @@
         await JS.InvokeVoidAsync("malievQuoteGoogleAddressPicker.disposeSearch", _autocompleteElementId);
         await JS.InvokeVoidAsync("malievQuoteGoogleAddressPicker.disposeMap", _mapElementId);
         _dotNetReference?.Dispose();
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

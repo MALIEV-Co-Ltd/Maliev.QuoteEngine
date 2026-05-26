@@ -6,7 +6,7 @@
     @* ── Header: title + pass/fail badge ── *@
     <div class="qe-dfm-header">
         <div class="qe-dfm-header-top">
-            <span class="qe-dfm-title">Design for Manufacturability</span>
+            <span class="qe-dfm-title">@Text("Design for Manufacturability", "การออกแบบเพื่อการผลิต")</span>
             @{
                 var allChecks = IntrinsicChecks.Concat(ActiveProcessChecks).ToArray();
                 var totalCount = allChecks.Length;
@@ -19,7 +19,7 @@
             {
                 <div class="qe-dfm-badge qe-dfm-badge--pending">
                     <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" Size="Size.Small" />
-                    <span>Pending</span>
+                    <span>@Text("Pending", "รอดำเนินการ")</span>
                 </div>
             }
             else if (resolvedCount > 0)
@@ -28,7 +28,7 @@
                 <div class="qe-dfm-badge @(allPassed ? "qe-dfm-badge--ok" : "qe-dfm-badge--warn")">
                     <MudIcon Icon="@(allPassed ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.Warning)"
                              Size="Size.Small" />
-                    <span>@passedCount/@resolvedCount passed</span>
+                    <span>@passedCount/@resolvedCount @Text("passed", "ผ่าน")</span>
                 </div>
             }
         </div>
@@ -48,12 +48,12 @@
     @if (!IsManifold)
     {
         <div class="qe-dfm-banner qe-dfm-banner--warn">
-            <strong>Non-manifold geometry detected.</strong>
+            <strong>@Text("Non-manifold geometry detected.", "พบรูปทรงที่ไม่ปิดสนิท")</strong>
             @if (!string.IsNullOrEmpty(NonManifoldReason))
             {
                 <span> @NonManifoldReason</span>
             }
-            <span> Pricing and DFM results may be incomplete.</span>
+            <span> @Text("Pricing and DFM results may be incomplete.", "ราคาและผล DFM อาจยังไม่สมบูรณ์")</span>
         </div>
     }
 
@@ -97,7 +97,7 @@
                                          Color="@(failed ? Color.Warning : Color.Success)"
                                          Size="Size.Small" />
                                 <div class="qe-dfm-expansion-panel-text">
-                                    <span class="qe-dfm-expansion-panel-title">@check.Label</span>
+                                    <span class="qe-dfm-expansion-panel-title">@GetLabel(check)</span>
                                     <span class="qe-dfm-expansion-panel-summary">@GetSummary(check)</span>
                                 </div>
                             </div>
@@ -125,7 +125,7 @@
         @if (pendingChecks.Length == 0 && resolvedChecks.Length == 0)
         {
             <div class="qe-dfm-empty">
-                <span>DFM analysis is running&hellip;</span>
+                <span>@Text("DFM analysis is running...", "กำลังวิเคราะห์ DFM...")</span>
             </div>
         }
     </div>
@@ -140,6 +140,9 @@
     [Parameter] public string? GlbUrl { get; set; }
     [Parameter] public int BodyCount { get; set; } = 1;
     [Parameter] public string ProcessId { get; set; } = "fdm";
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     private string _activeTab = "FDM";
     private string? _lastProcessId;
@@ -196,6 +199,23 @@
         "SLA" => SlaChecks,
         "CNC" => CncChecks,
         _     => FdmChecks
+    };
+
+    private string GetLabel(CheckDef check) => check.Category switch
+    {
+        "non_manifold" => Text("Mesh integrity", "ความสมบูรณ์ของเมช"),
+        "multi_body" => Text("Single body", "บอดี้เดียว"),
+        "thin_wall" => Text("Thin walls", "ผนังบาง"),
+        "overhang" => Text("Overhangs / supports", "ส่วนยื่น / ซัพพอร์ต"),
+        "small_feature" => Text("Small features", "รายละเอียดขนาดเล็ก"),
+        "resin_trap" => Text("Resin drainage", "การระบายเรซิน"),
+        "suction" => Text("Suction risk", "ความเสี่ยงแรงดูด"),
+        "hollow" => Text("Hollow regions", "โพรงภายใน"),
+        "sharp_corner" => Text("Internal radii", "รัศมีมุมใน"),
+        "undercut" => Text("Undercuts", "อันเดอร์คัต"),
+        "edm" => Text("EDM required", "ต้องใช้ EDM"),
+        "grinding" => Text("Surface grinding", "เจียรผิว"),
+        _ => check.Label
     };
 
     private bool GlbReady => !string.IsNullOrEmpty(GlbUrl);
@@ -255,38 +275,38 @@
 
     private string GetPassSummary(string category) => category switch
     {
-        "non_manifold"  => "Mesh is watertight",
-        "multi_body"    => "Single solid body",
-        "thin_wall"     => "All walls within tolerance",
-        "overhang"      => "No support material required",
-        "small_feature" => "All features are printable",
-        "resin_trap"    => "No resin trapping risk",
-        "suction"       => "No suction risk",
-        "hollow"        => "No enclosed hollow regions",
-        "sharp_corner"  => "All corners are radiused",
-        "undercut"      => "No undercuts detected",
-        "edm"           => "No EDM required",
-        "grinding"      => "No grinding required",
+        "non_manifold"  => Text("Mesh is watertight", "เมชปิดสนิท"),
+        "multi_body"    => Text("Single solid body", "ชิ้นงานเป็นบอดี้เดียว"),
+        "thin_wall"     => Text("All walls within tolerance", "ความหนาผนังอยู่ในเกณฑ์"),
+        "overhang"      => Text("No support material required", "ไม่ต้องใช้ซัพพอร์ต"),
+        "small_feature" => Text("All features are printable", "รายละเอียดทั้งหมดผลิตได้"),
+        "resin_trap"    => Text("No resin trapping risk", "ไม่มีความเสี่ยงเรซินค้าง"),
+        "suction"       => Text("No suction risk", "ไม่มีความเสี่ยงแรงดูด"),
+        "hollow"        => Text("No enclosed hollow regions", "ไม่พบโพรงปิดภายใน"),
+        "sharp_corner"  => Text("All corners are radiused", "มุมทั้งหมดมีรัศมีเหมาะสม"),
+        "undercut"      => Text("No undercuts detected", "ไม่พบอันเดอร์คัต"),
+        "edm"           => Text("No EDM required", "ไม่ต้องใช้ EDM"),
+        "grinding"      => Text("No grinding required", "ไม่ต้องเจียรผิว"),
         _ => "OK"
     };
 
     private string GetFailSummary(string category) => category switch
     {
-        "non_manifold"  => NonManifoldReason ?? "Mesh has open faces or self-intersections",
-        "multi_body"    => $"{BodyCount} bodies — may affect pricing",
+        "non_manifold"  => NonManifoldReason ?? Text("Mesh has open faces or self-intersections", "เมชมีผิวเปิดหรือจุดตัดซ้อน"),
+        "multi_body"    => $"{BodyCount} {Text("bodies", "บอดี้")} - {Text("may affect pricing", "อาจมีผลต่อราคา")}",
         "thin_wall"     => _activeTab == "FDM"
-                               ? $"{FdmReport?.ThinWallCount} thin wall(s) — min 1.2 mm"
-                               : $"{SlaReport?.ThinWallCount} thin wall(s) — min 0.6 mm",
-        "overhang"      => $"{FdmReport?.OverhangFaceCount} face(s), {FdmReport?.OverhangAreaCm2:F1} cm² — supports needed",
-        "small_feature" => $"{FdmReport?.SmallDetailCount} small feature(s) may not print",
-        "resin_trap"    => "Internal cavities trap uncured resin",
-        "suction"       => "Flat surfaces parallel to build plate",
-        "hollow"        => "Enclosed hollow regions detected",
-        "sharp_corner"  => $"{CncReport?.SharpCornerCount} sharp corner(s) — add fillets ≥ R0.5",
-        "undercut"      => "Requires 5-axis or additional setups",
-        "edm"           => "Electrical discharge machining required",
-        "grinding"      => "Surface grinding required",
-        _ => "Issue detected"
+                               ? $"{FdmReport?.ThinWallCount} {Text("thin wall(s)", "ผนังบาง")} - min 1.2 mm"
+                               : $"{SlaReport?.ThinWallCount} {Text("thin wall(s)", "ผนังบาง")} - min 0.6 mm",
+        "overhang"      => $"{FdmReport?.OverhangFaceCount} {Text("face(s)", "ผิว")}, {FdmReport?.OverhangAreaCm2:F1} cm2 - {Text("supports needed", "ต้องใช้ซัพพอร์ต")}",
+        "small_feature" => $"{FdmReport?.SmallDetailCount} {Text("small feature(s) may not print", "รายละเอียดขนาดเล็กอาจผลิตไม่ได้")}",
+        "resin_trap"    => Text("Internal cavities trap uncured resin", "โพรงภายในอาจกักเรซินที่ยังไม่แข็งตัว"),
+        "suction"       => Text("Flat surfaces parallel to build plate", "ผิวเรียบขนานกับฐานพิมพ์"),
+        "hollow"        => Text("Enclosed hollow regions detected", "พบโพรงปิดภายใน"),
+        "sharp_corner"  => $"{CncReport?.SharpCornerCount} {Text("sharp corner(s)", "มุมคม")} - add fillets >= R0.5",
+        "undercut"      => Text("Requires 5-axis or additional setups", "ต้องใช้ 5-axis หรือการเซ็ตอัพเพิ่ม"),
+        "edm"           => Text("Electrical discharge machining required", "ต้องใช้การกัด EDM"),
+        "grinding"      => Text("Surface grinding required", "ต้องเจียรผิว"),
+        _ => Text("Issue detected", "พบประเด็นที่ต้องตรวจสอบ")
     };
 
     private string? GetDetail(CheckDef check)
@@ -294,20 +314,20 @@
         if (GetState(check) != CheckState.Failed) return null;
         return check.Category switch
         {
-            "non_manifold"  => "The mesh contains holes, open faces, or self-intersecting geometry. This must be repaired before printing or machining. Tools like Meshmixer or Netfabb can fix most issues automatically.",
-            "multi_body"    => $"The file contains {BodyCount} separate solid bodies. Multi-body parts are quoted individually. If the bodies should be joined, re-export as a single solid.",
+            "non_manifold"  => Text("The mesh contains holes, open faces, or self-intersecting geometry. This must be repaired before printing or machining. Tools like Meshmixer or Netfabb can fix most issues automatically.", "เมชมีรู ผิวเปิด หรือจุดตัดซ้อน ต้องซ่อมก่อนพิมพ์หรือกัด เครื่องมืออย่าง Meshmixer หรือ Netfabb มักแก้ไขได้อัตโนมัติ"),
+            "multi_body"    => Text($"The file contains {BodyCount} separate solid bodies. Multi-body parts are quoted individually. If the bodies should be joined, re-export as a single solid.", $"ไฟล์มีบอดี้แยกกัน {BodyCount} บอดี้ ชิ้นงานหลายบอดี้จะตีราคาแยกกัน หากต้องการรวมเป็นชิ้นเดียวให้ export เป็น solid เดียว"),
             "thin_wall"     => _activeTab == "FDM"
-                                   ? $"{FdmReport?.ThinWallCount} wall(s) are thinner than the recommended 1.2 mm minimum for FDM. Very thin sections are prone to warping and breakage."
-                                   : $"{SlaReport?.ThinWallCount} wall(s) are thinner than 0.6 mm. SLA can achieve finer features but very thin walls remain fragile.",
-            "overhang"      => $"{FdmReport?.OverhangFaceCount} overhanging face(s) covering {FdmReport?.OverhangAreaCm2:F1} cm² exceed 45° and require support material, which increases material cost and post-processing time.",
-            "small_feature" => $"{FdmReport?.SmallDetailCount} feature(s) are smaller than the minimum printable size at the selected layer height. They may merge with adjacent surfaces or disappear entirely.",
-            "resin_trap"    => "Internal closed cavities will trap uncured liquid resin during SLA printing. The resin must drain completely before post-cure, or the part may crack or deform.",
-            "suction"       => "Large flat surfaces oriented parallel to the build platform create suction forces during layer separation, increasing the risk of delamination or build failures.",
-            "hollow"        => "Completely enclosed hollow regions were found. These trap resin and are a known failure point for SLA parts. Add drain holes of at least 3–4 mm diameter.",
-            "sharp_corner"  => $"{CncReport?.SharpCornerCount} internal corner(s) have no radius. All CNC-machined internal corners require a minimum tool-radius fillet. Recommended: ≥ R0.5 mm.",
-            "undercut"      => "Undercut features cannot be reached in a standard 3-axis setup. Machining will require 5-axis positioning or multiple fixturing operations, which increases cost and lead time.",
-            "edm"           => "One or more features can only be produced by electrical discharge machining (EDM). This adds significant lead time and cost.",
-            "grinding"      => "The part requires surface grinding to meet the specified finish or tolerance. This is an additional operation after machining.",
+                                   ? Text($"{FdmReport?.ThinWallCount} wall(s) are thinner than the recommended 1.2 mm minimum for FDM. Very thin sections are prone to warping and breakage.", $"{FdmReport?.ThinWallCount} ผนังบางกว่าค่าขั้นต่ำ 1.2 mm สำหรับ FDM และมีความเสี่ยงบิดงอหรือแตก")
+                                   : Text($"{SlaReport?.ThinWallCount} wall(s) are thinner than 0.6 mm. SLA can achieve finer features but very thin walls remain fragile.", $"{SlaReport?.ThinWallCount} ผนังบางกว่า 0.6 mm แม้ SLA ทำรายละเอียดได้ดี แต่ผนังบางมากยังเปราะ"),
+            "overhang"      => Text($"{FdmReport?.OverhangFaceCount} overhanging face(s) covering {FdmReport?.OverhangAreaCm2:F1} cm2 exceed 45 degrees and require support material, which increases material cost and post-processing time.", $"{FdmReport?.OverhangFaceCount} ผิวส่วนยื่นพื้นที่ {FdmReport?.OverhangAreaCm2:F1} cm2 เกิน 45 องศาและต้องใช้ซัพพอร์ต ทำให้ต้นทุนวัสดุและเวลาเก็บงานเพิ่มขึ้น"),
+            "small_feature" => Text($"{FdmReport?.SmallDetailCount} feature(s) are smaller than the minimum printable size at the selected layer height. They may merge with adjacent surfaces or disappear entirely.", $"{FdmReport?.SmallDetailCount} รายละเอียดเล็กกว่าขนาดขั้นต่ำที่ผลิตได้ อาจรวมกับผิวข้างเคียงหรือหายไป"),
+            "resin_trap"    => Text("Internal closed cavities will trap uncured liquid resin during SLA printing. The resin must drain completely before post-cure, or the part may crack or deform.", "โพรงปิดภายในจะกักเรซินเหลวระหว่างพิมพ์ SLA ต้องระบายออกหมดก่อน post-cure ไม่เช่นนั้นชิ้นงานอาจแตกหรือเสียรูป"),
+            "suction"       => Text("Large flat surfaces oriented parallel to the build platform create suction forces during layer separation, increasing the risk of delamination or build failures.", "ผิวเรียบขนาดใหญ่ที่ขนานกับฐานพิมพ์ทำให้เกิดแรงดูดระหว่างแยกชั้น เพิ่มความเสี่ยงงานหลุดหรือพิมพ์ล้มเหลว"),
+            "hollow"        => Text("Completely enclosed hollow regions were found. These trap resin and are a known failure point for SLA parts. Add drain holes of at least 3-4 mm diameter.", "พบโพรงปิดที่กักเรซินและเป็นจุดเสี่ยงของงาน SLA ควรเพิ่มรูระบายเส้นผ่านศูนย์กลางอย่างน้อย 3-4 mm"),
+            "sharp_corner"  => Text($"{CncReport?.SharpCornerCount} internal corner(s) have no radius. All CNC-machined internal corners require a minimum tool-radius fillet. Recommended: >= R0.5 mm.", $"{CncReport?.SharpCornerCount} มุมในไม่มีรัศมี งาน CNC ต้องมี fillet ตามรัศมีดอกกัด แนะนำ >= R0.5 mm"),
+            "undercut"      => Text("Undercut features cannot be reached in a standard 3-axis setup. Machining will require 5-axis positioning or multiple fixturing operations, which increases cost and lead time.", "ฟีเจอร์อันเดอร์คัตเข้าถึงไม่ได้ด้วย 3-axis ปกติ ต้องใช้ 5-axis หรือจับงานหลายครั้ง ทำให้ต้นทุนและ lead time เพิ่มขึ้น"),
+            "edm"           => Text("One or more features can only be produced by electrical discharge machining (EDM). This adds significant lead time and cost.", "มีฟีเจอร์ที่ผลิตได้ด้วย EDM เท่านั้น ซึ่งเพิ่ม lead time และต้นทุนอย่างมาก"),
+            "grinding"      => Text("The part requires surface grinding to meet the specified finish or tolerance. This is an additional operation after machining.", "ชิ้นงานต้องเจียรผิวเพื่อให้ได้ผิวหรือ tolerance ที่กำหนด เป็นขั้นตอนเพิ่มเติมหลัง machining"),
             _ => null
         };
     }
@@ -318,64 +338,69 @@
         switch (check.Category)
         {
             case "non_manifold":
-                yield return "Run auto-repair in Meshmixer (Analysis → Inspector → Auto Repair All)";
-                yield return "Use Netfabb cloud repair for complex meshes";
-                yield return "Check for duplicate faces or coincident surfaces in your CAD tool";
+                yield return Text("Run auto-repair in Meshmixer (Analysis > Inspector > Auto Repair All)", "ใช้ auto-repair ใน Meshmixer (Analysis > Inspector > Auto Repair All)");
+                yield return Text("Use Netfabb cloud repair for complex meshes", "ใช้ Netfabb cloud repair สำหรับเมชซับซ้อน");
+                yield return Text("Check for duplicate faces or coincident surfaces in your CAD tool", "ตรวจสอบผิวซ้ำหรือผิวซ้อนใน CAD");
                 break;
             case "multi_body":
-                yield return "Union or join all bodies into a single solid before exporting";
-                yield return "If multi-body is intentional, split into separate files for separate quotes";
+                yield return Text("Union or join all bodies into a single solid before exporting", "รวมทุกบอดี้เป็น solid เดียวก่อน export");
+                yield return Text("If multi-body is intentional, split into separate files for separate quotes", "หากต้องการหลายบอดี้ ให้แยกเป็นหลายไฟล์เพื่อขอราคาแยก");
                 break;
             case "thin_wall":
                 if (_activeTab == "FDM")
                 {
-                    yield return "Increase wall thickness to at least 1.2 mm";
-                    yield return "Use a finer nozzle size (0.25 mm) for features down to 0.8 mm";
+                    yield return Text("Increase wall thickness to at least 1.2 mm", "เพิ่มความหนาผนังอย่างน้อย 1.2 mm");
+                    yield return Text("Use a finer nozzle size (0.25 mm) for features down to 0.8 mm", "ใช้หัวฉีดละเอียดขึ้น (0.25 mm) สำหรับฟีเจอร์เล็กถึง 0.8 mm");
                 }
                 else
                 {
-                    yield return "Increase wall thickness to at least 0.6 mm for SLA";
-                    yield return "For decorative thin features, consider resin type upgrade";
+                    yield return Text("Increase wall thickness to at least 0.6 mm for SLA", "เพิ่มความหนาผนังอย่างน้อย 0.6 mm สำหรับ SLA");
+                    yield return Text("For decorative thin features, consider resin type upgrade", "สำหรับฟีเจอร์บางเชิงตกแต่ง พิจารณาอัปเกรดชนิดเรซิน");
                 }
                 break;
             case "overhang":
-                yield return "Re-orient the part so overhangs are minimised";
-                yield return "Add chamfers or fillets at 45° to reduce overhang area";
-                yield return "Accept support material — cost impact is included in the estimate";
+                yield return Text("Re-orient the part so overhangs are minimised", "ปรับทิศทางชิ้นงานเพื่อลดส่วนยื่น");
+                yield return Text("Add chamfers or fillets at 45 degrees to reduce overhang area", "เพิ่ม chamfer หรือ fillet ที่ 45 องศาเพื่อลดพื้นที่ส่วนยื่น");
+                yield return Text("Accept support material - cost impact is included in the estimate", "ยอมรับการใช้ซัพพอร์ต โดยรวมผลกระทบด้านต้นทุนในราคาแล้ว");
                 break;
             case "small_feature":
-                yield return "Scale up features smaller than 0.5 mm if function permits";
-                yield return "Use SLA instead of FDM for fine-detail parts";
+                yield return Text("Scale up features smaller than 0.5 mm if function permits", "ขยายฟีเจอร์ที่เล็กกว่า 0.5 mm หากหน้าที่การใช้งานอนุญาต");
+                yield return Text("Use SLA instead of FDM for fine-detail parts", "ใช้ SLA แทน FDM สำหรับงานรายละเอียดสูง");
                 break;
             case "resin_trap":
-                yield return "Add drain holes of ≥ 3 mm diameter to all hollow regions";
-                yield return "Design open channels or slots to allow resin flow-out";
+                yield return Text("Add drain holes of >= 3 mm diameter to all hollow regions", "เพิ่มรูระบายเส้นผ่านศูนย์กลาง >= 3 mm ในโพรงทั้งหมด");
+                yield return Text("Design open channels or slots to allow resin flow-out", "ออกแบบช่องหรือร่องเปิดให้เรซินไหลออกได้");
                 break;
             case "suction":
-                yield return "Tilt the part 15–45° on the build platform";
-                yield return "Add small perforations in large flat surfaces";
+                yield return Text("Tilt the part 15-45 degrees on the build platform", "เอียงชิ้นงาน 15-45 องศาบนฐานพิมพ์");
+                yield return Text("Add small perforations in large flat surfaces", "เพิ่มรูเล็กบนผิวเรียบขนาดใหญ่");
                 break;
             case "hollow":
-                yield return "Add drain/vent holes ≥ 3–4 mm diameter to each hollow region";
-                yield return "Make the hollow region open on at least one face";
+                yield return Text("Add drain/vent holes >= 3-4 mm diameter to each hollow region", "เพิ่มรูระบาย/ระบายอากาศเส้นผ่านศูนย์กลาง >= 3-4 mm ในแต่ละโพรง");
+                yield return Text("Make the hollow region open on at least one face", "เปิดโพรงอย่างน้อยหนึ่งด้าน");
                 break;
             case "sharp_corner":
-                yield return "Add fillets of at least R0.5 mm to all internal corners";
-                yield return "Preferred fillet radius: R1.0 mm or half the adjacent wall thickness";
+                yield return Text("Add fillets of at least R0.5 mm to all internal corners", "เพิ่ม fillet อย่างน้อย R0.5 mm ที่มุมในทั้งหมด");
+                yield return Text("Preferred fillet radius: R1.0 mm or half the adjacent wall thickness", "รัศมีที่แนะนำ: R1.0 mm หรือครึ่งหนึ่งของความหนาผนังข้างเคียง");
                 break;
             case "undercut":
-                yield return "Re-orient the feature so it is accessible from above";
-                yield return "Split the part at the undercut parting line into two pieces";
-                yield return "Accept 5-axis machining — quote will include setup surcharge";
+                yield return Text("Re-orient the feature so it is accessible from above", "ปรับทิศทางฟีเจอร์ให้เข้าถึงจากด้านบนได้");
+                yield return Text("Split the part at the undercut parting line into two pieces", "แยกชิ้นงานตามแนวอันเดอร์คัตเป็นสองชิ้น");
+                yield return Text("Accept 5-axis machining - quote will include setup surcharge", "ยอมรับ 5-axis machining โดยใบเสนอราคาจะรวมค่าเซ็ตอัพเพิ่ม");
                 break;
             case "edm":
-                yield return "Replace EDM-only features with machinable geometry where possible";
-                yield return "Accept EDM — additional lead time of 3–5 days applies";
+                yield return Text("Replace EDM-only features with machinable geometry where possible", "ปรับฟีเจอร์ที่ต้องใช้ EDM ให้ผลิตด้วยเครื่องกัดได้หากทำได้");
+                yield return Text("Accept EDM - additional lead time of 3-5 days applies", "ยอมรับ EDM โดยมี lead time เพิ่ม 3-5 วัน");
                 break;
             case "grinding":
-                yield return "Specify grinding only for surfaces that require it";
-                yield return "Accept surface grinding — cost and lead time impact included";
+                yield return Text("Specify grinding only for surfaces that require it", "ระบุการเจียรเฉพาะผิวที่จำเป็น");
+                yield return Text("Accept surface grinding - cost and lead time impact included", "ยอมรับการเจียรผิว โดยรวมผลกระทบด้านต้นทุนและเวลาแล้ว");
                 break;
         }
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

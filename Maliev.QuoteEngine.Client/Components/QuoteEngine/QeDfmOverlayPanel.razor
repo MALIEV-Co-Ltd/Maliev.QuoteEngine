@@ -4,7 +4,7 @@
         <div class="qe-dfm-overlay-header">
             <div class="qe-dfm-overlay-left">
                 <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" />
-                <span>@(string.IsNullOrWhiteSpace(ErrorMessage) ? "DFM analysis unavailable" : ErrorMessage)</span>
+                <span>@(string.IsNullOrWhiteSpace(ErrorMessage) ? Text("DFM analysis unavailable", "ไม่สามารถวิเคราะห์ DFM ได้") : ErrorMessage)</span>
             </div>
         </div>
     </div>
@@ -15,7 +15,7 @@ else if (Analyzing)
         <div class="qe-dfm-overlay-header">
             <div class="qe-dfm-overlay-left">
                 <MudProgressCircular Indeterminate="true" Size="Size.Small" />
-                <span>Analyzing your model...</span>
+                <span>@Text("Analyzing your model...", "กำลังวิเคราะห์โมเดลของคุณ...")</span>
             </div>
         </div>
     </div>
@@ -26,7 +26,7 @@ else if (_allClearShown)
         <div class="qe-dfm-overlay-header">
             <div class="qe-dfm-overlay-left">
                 <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Color="Color.Success" />
-                <span>All clear - no issues found</span>
+                <span>@Text("All clear - no issues found", "ผ่านทั้งหมด - ไม่พบประเด็น")</span>
             </div>
         </div>
     </div>
@@ -39,7 +39,7 @@ else if (IsVisible && DfmIssues.Count > 0)
                 <MudIcon Icon="@(_acknowledged ? Icons.Material.Filled.CheckCircle : Icons.Material.Filled.WarningAmber)"
                          Size="Size.Small"
                          Color="@(_acknowledged ? Color.Success : Color.Warning)" />
-                <span>@(_acknowledged ? "Issues acknowledged" : $"{DfmIssues.Count} DFM issue{(DfmIssues.Count == 1 ? "" : "s")}")</span>
+                <span>@(_acknowledged ? Text("Issues acknowledged", "รับทราบประเด็นแล้ว") : $"{DfmIssues.Count} {Text(DfmIssues.Count == 1 ? "DFM issue" : "DFM issues", "ประเด็น DFM")}")</span>
             </div>
             <MudIcon Icon="@(_expanded ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
         </button>
@@ -62,7 +62,7 @@ else if (IsVisible && DfmIssues.Count > 0)
                     </button>
                 }
             </div>
-            <button type="button" class="qe-dfm-ack-btn" @onclick="Acknowledge">Acknowledge issues</button>
+            <button type="button" class="qe-dfm-ack-btn" @onclick="Acknowledge">@Text("Acknowledge issues", "รับทราบประเด็น")</button>
         }
     </div>
 }
@@ -77,6 +77,9 @@ else if (IsVisible && DfmIssues.Count > 0)
     [Parameter] public EventCallback OnAcknowledged { get; set; }
     [Parameter] public EventCallback<QeDfmOverlayIssue> OnToggleOverlay { get; set; }
     [Parameter] public EventCallback OnAllClearDismissed { get; set; }
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     private readonly HashSet<string> _activeOverlays = [];
     private bool _acknowledged;
@@ -154,5 +157,10 @@ else if (IsVisible && DfmIssues.Count > 0)
         catch (OperationCanceledException)
         {
         }
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

@@ -1,10 +1,10 @@
 @page "/ndas"
 @inject QuoteEngineApiClient Api
 
-<PageTitle>NDAs - MALIEV Quote Engine</PageTitle>
+<PageTitle>@Text("NDAs - MALIEV Quote Engine", "NDA - MALIEV Quote Engine")</PageTitle>
 
 <div class="section-heading">
-    <span class="eyebrow">Confidentiality</span>
+    <span class="eyebrow">@Text("Confidentiality", "การรักษาความลับ")</span>
     <h1>NDAs</h1>
 </div>
 
@@ -22,15 +22,24 @@
 @code {
     private IReadOnlyList<CustomerNdaDto> _ndas = [];
 
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
     protected override async Task OnInitializedAsync()
     {
         _ndas = await Api.GetNdasAsync();
     }
 
-    private static string NdaDateLine(CustomerNdaDto nda)
+    private string NdaDateLine(CustomerNdaDto nda)
     {
+        var culture = System.Globalization.CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture));
         return nda.ExpiresAt.HasValue
-            ? $"Expires {nda.ExpiresAt.Value.ToLocalTime():d MMM yyyy}"
-            : $"Updated {nda.UpdatedAt.ToLocalTime():d MMM yyyy}";
+            ? $"{Text("Expires", "หมดอายุ")} {nda.ExpiresAt.Value.ToLocalTime().ToString("d MMM yyyy", culture)}"
+            : $"{Text("Updated", "อัปเดต")} {nda.UpdatedAt.ToLocalTime().ToString("d MMM yyyy", culture)}";
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

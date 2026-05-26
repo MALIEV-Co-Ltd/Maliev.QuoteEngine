@@ -4,28 +4,28 @@
     <div class="qe-pbt-header">
         <div class="qe-pbt-heading">
             <div class="qe-pbt-title-row">
-                <div class="qe-pbt-kicker">Table edit</div>
+                <div class="qe-pbt-kicker">@Text("Table edit", "แก้ไขแบบตาราง")</div>
                 <button type="button"
                         class="qe-pbt-configurator-button"
-                        title="Configurator"
-                        aria-label="Switch to configurator"
+                        title="@Text("Configurator", "ตัวตั้งค่า")"
+                        aria-label="@Text("Switch to configurator", "สลับไปหน้าตั้งค่า")"
                         @onclick="OnConfiguratorRequested">
                     <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
                 </button>
             </div>
-            <div class="qe-pbt-title">@Parts.Count part@(Parts.Count == 1 ? "" : "s")</div>
+            <div class="qe-pbt-title">@Parts.Count @Text(Parts.Count == 1 ? "part" : "parts", "ชิ้นงาน")</div>
         </div>
         <div class="qe-pbt-actions">
             <button type="button" class="qe-dropzone qe-dropzone--compact qe-pbt-upload-zone" @onclick="OnAddFilesRequested">
                 <span class="qe-dropzone-icon" aria-hidden="true">
                     <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
                 </span>
-                <span>Add CAD files</span>
+                <span>@Text("Add CAD files", "เพิ่มไฟล์ CAD")</span>
                 <small>STEP, STL, 3MF, IGES</small>
             </button>
             <button type="button" class="qe-pbt-action-button" @onclick="ToggleAll">
                 <MudIcon Icon="@(AreAllSelected ? Icons.Material.Outlined.Deselect : Icons.Material.Outlined.SelectAll)" Size="Size.Small" />
-                <span>@(AreAllSelected ? "Clear" : "Select all")</span>
+                <span>@(AreAllSelected ? Text("Clear", "ล้าง") : Text("Select all", "เลือกทั้งหมด"))</span>
             </button>
         </div>
     </div>
@@ -34,84 +34,84 @@
     {
         <div class="qe-pbt-bulk-panel">
             <div class="qe-pbt-bulk-summary">
-                <strong>@SelectedCount selected</strong>
-                <span>Auto-applies compatible fields.</span>
+                <strong>@SelectedCount @Text("selected", "รายการที่เลือก")</strong>
+                <span>@Text("Auto-applies compatible fields.", "นำค่าไปใช้กับฟิลด์ที่เข้ากันได้โดยอัตโนมัติ")</span>
             </div>
 
             <div class="qe-pbt-bulk-grid">
-                <span class="qe-pbt-bulk-field">Process</span>
+                <span class="qe-pbt-bulk-field">@Text("Process", "กระบวนการ")</span>
                 <select class="qe-pbt-input" @onchange="ApplyBulkProcess">
-                    <option value="">Select process</option>
+                    <option value="">@Text("Select process", "เลือกกระบวนการ")</option>
                     @foreach (var process in Processes)
                     {
                         <option value="@process.Id">@process.Name</option>
                     }
                 </select>
 
-                <span class="qe-pbt-bulk-field">Material</span>
+                <span class="qe-pbt-bulk-field">@Text("Material", "วัสดุ")</span>
                 <select class="qe-pbt-input" @onchange="ApplyBulkMaterial">
-                    <option value="">Select material</option>
+                    <option value="">@Text("Select material", "เลือกวัสดุ")</option>
                     @foreach (var material in Materials)
                     {
                         <option value="@material.Id">@material.Name</option>
                     }
                 </select>
 
-                <span class="qe-pbt-bulk-field">Finish</span>
+                <span class="qe-pbt-bulk-field">@Text("Finish", "ผิวสำเร็จ")</span>
                 <select class="qe-pbt-input" @onchange="ApplyBulkFinish">
-                    <option value="">Select finish</option>
+                    <option value="">@Text("Select finish", "เลือกผิวสำเร็จ")</option>
                     @foreach (var finish in Finishes)
                     {
                         <option value="@finish.Id">@finish.Name</option>
                     }
                 </select>
 
-                <span class="qe-pbt-bulk-field">Tolerance</span>
+                <span class="qe-pbt-bulk-field">@Text("Tolerance", "ค่าความคลาดเคลื่อน")</span>
                 <select class="qe-pbt-input" @onchange="ApplyBulkTolerance">
-                    <option value="">Select tolerance</option>
+                    <option value="">@Text("Select tolerance", "เลือกค่าความคลาดเคลื่อน")</option>
                     @foreach (var tolerance in Tolerances)
                     {
                         <option value="@tolerance.Id">@tolerance.Name</option>
                     }
                 </select>
 
-                <span class="qe-pbt-bulk-field">Quantity</span>
+                <span class="qe-pbt-bulk-field">@Text("Quantity", "จำนวน")</span>
                 <input class="qe-pbt-input" type="number" min="1" value="@_bulkQuantity" @oninput="ApplyBulkQuantity" />
 
-                <span class="qe-pbt-bulk-field">Inspection</span>
+                <span class="qe-pbt-bulk-field">@Text("Inspection", "การตรวจสอบ")</span>
                 <select class="qe-pbt-input" @onchange="ApplyBulkInspection">
-                    <option value="">Select inspection</option>
+                    <option value="">@Text("Select inspection", "เลือกการตรวจสอบ")</option>
                     @foreach (var inspection in InspectionLevels)
                     {
                         <option value="@inspection.Code">@inspection.Name</option>
                     }
                 </select>
 
-                <span class="qe-pbt-bulk-field">Roughness</span>
+                <span class="qe-pbt-bulk-field">@Text("Roughness", "ความหยาบผิว")</span>
                 <select class="qe-pbt-input" @onchange="ApplyBulkRoughness">
-                    <option value="">Select roughness</option>
+                    <option value="">@Text("Select roughness", "เลือกความหยาบผิว")</option>
                     @foreach (var roughness in RoughnessOptions)
                     {
                         <option value="@roughness.Code">@roughness.Name</option>
                     }
                 </select>
 
-                <span class="qe-pbt-bulk-field">Threaded holes</span>
+                <span class="qe-pbt-bulk-field">@Text("Threaded holes", "รูเกลียว")</span>
                 <label class="qe-pbt-inline-check">
                     <input type="checkbox" @onchange="ApplyBulkThreadedHoles" />
-                    <span>Required</span>
+                    <span>@Text("Required", "ต้องการ")</span>
                 </label>
 
-                <span class="qe-pbt-bulk-field">Inserts</span>
+                <span class="qe-pbt-bulk-field">@Text("Inserts", "อินเสิร์ต")</span>
                 <label class="qe-pbt-inline-check">
                     <input type="checkbox" @onchange="ApplyBulkInserts" />
-                    <span>Required</span>
+                    <span>@Text("Required", "ต้องการ")</span>
                 </label>
 
-                <span class="qe-pbt-bulk-field">Notes</span>
+                <span class="qe-pbt-bulk-field">@Text("Notes", "หมายเหตุ")</span>
                 <textarea class="qe-pbt-input qe-pbt-input--notes"
                           rows="3"
-                          placeholder="Part note"
+                          placeholder="@Text("Part note", "หมายเหตุชิ้นงาน")"
                           @oninput="ApplyBulkNotes"></textarea>
             </div>
         </div>
@@ -125,18 +125,18 @@
                         <input type="checkbox"
                                checked="@AreAllSelected"
                                @onchange="@((ChangeEventArgs _) => ToggleAll())"
-                               aria-label="Select all parts" />
+                               aria-label="@Text("Select all parts", "เลือกชิ้นงานทั้งหมด")" />
                     </th>
-                    <th>Part</th>
-                    <th>Process</th>
-                    <th>Material</th>
-                    <th>Finish</th>
-                    <th>Tolerance</th>
-                    <th>Qty</th>
-                    <th>Inspection</th>
-                    <th>Price</th>
+                    <th>@Text("Part", "ชิ้นงาน")</th>
+                    <th>@Text("Process", "กระบวนการ")</th>
+                    <th>@Text("Material", "วัสดุ")</th>
+                    <th>@Text("Finish", "ผิวสำเร็จ")</th>
+                    <th>@Text("Tolerance", "ค่าคลาดเคลื่อน")</th>
+                    <th>@Text("Qty", "จำนวน")</th>
+                    <th>@Text("Inspection", "การตรวจสอบ")</th>
+                    <th>@Text("Price", "ราคา")</th>
                     <th>DFM</th>
-                    <th class="qe-pbt-col-actions">Actions</th>
+                    <th class="qe-pbt-col-actions">@Text("Actions", "การทำงาน")</th>
                 </tr>
             </thead>
             <tbody>
@@ -148,7 +148,7 @@
                             <input type="checkbox"
                                    checked="@selected"
                                    @onchange="@((ChangeEventArgs args) => TogglePart(part, IsChecked(args)))"
-                                   aria-label="@($"Select {part.FileName}")" />
+                                   aria-label="@($"{Text("Select", "เลือก")} {part.FileName}")" />
                         </td>
                         <td>
                             <div class="qe-pbt-part-cell">
@@ -192,7 +192,7 @@
                             <select class="qe-pbt-input"
                                     value="@(part.FinishId ?? string.Empty)"
                                     @onchange="@((ChangeEventArgs args) => ChangeFinishAsync(part, args.Value?.ToString()))">
-                                <option value="">Finish</option>
+                                <option value="">@Text("Finish", "ผิวสำเร็จ")</option>
                                 @foreach (var finish in Finishes.Where(finish => finish.ProcessId == part.ProcessId))
                                 {
                                     <option value="@finish.Id">@finish.Name</option>
@@ -203,7 +203,7 @@
                             <select class="qe-pbt-input"
                                     value="@(part.ToleranceId ?? string.Empty)"
                                     @onchange="@((ChangeEventArgs args) => ChangeToleranceAsync(part, args.Value?.ToString()))">
-                                <option value="">Tolerance</option>
+                                <option value="">@Text("Tolerance", "ค่าความคลาดเคลื่อน")</option>
                                 @foreach (var tolerance in Tolerances.Where(tolerance => tolerance.ProcessId == part.ProcessId))
                                 {
                                     <option value="@tolerance.Id">@tolerance.Name</option>
@@ -232,7 +232,7 @@
                                 <span>@ResolveLineTotal(part)</span>
                                 @if (part.UnitPriceTHB.HasValue)
                                 {
-                                    <span>@part.UnitPriceTHB.Value.ToString("N0") ea</span>
+                                    <span>@part.UnitPriceTHB.Value.ToString("N0") @Text("ea", "ต่อชิ้น")</span>
                                 }
                             </div>
                         </td>
@@ -247,7 +247,7 @@
                             <div class="qe-pbt-row-actions">
                                 <button type="button"
                                         class="qe-pbt-icon-button"
-                                        title="Open viewer"
+                                        title="@Text("Open viewer", "เปิดตัวดูโมเดล")"
                                         @onclick="@(() => OnSelectPart.InvokeAsync(part))">
                                     <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
                                 </button>
@@ -268,7 +268,7 @@
                     <input type="checkbox"
                            checked="@selected"
                            @onchange="@((ChangeEventArgs args) => TogglePart(part, IsChecked(args)))"
-                           aria-label="@($"Select {part.FileName}")" />
+                           aria-label="@($"{Text("Select", "เลือก")} {part.FileName}")" />
                     <strong>@part.FileName</strong>
                     <button type="button" class="qe-pbt-icon-button" @onclick="@(() => OnSelectPart.InvokeAsync(part))">
                         <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
@@ -278,7 +278,7 @@
                     <span>@ProcessName(part.ProcessId)</span>
                     <span>@MaterialName(part.MaterialId)</span>
                     <span>@DisplayOrDefault(part.FinishCode)</span>
-                    <span>@part.Quantity pcs</span>
+                    <span>@part.Quantity @Text("pcs", "ชิ้น")</span>
                 </div>
             </article>
         }
@@ -297,6 +297,9 @@
     [Parameter] public EventCallback<QuotePartViewModel> OnSelectPart { get; set; }
     [Parameter] public EventCallback OnAddFilesRequested { get; set; }
     [Parameter] public EventCallback OnConfiguratorRequested { get; set; }
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     private readonly HashSet<string> _selected = [];
     private int _bulkQuantity = 1;
@@ -510,22 +513,22 @@
     private static int ParsePositiveInt(object? value, int fallback)
         => int.TryParse(value?.ToString(), out var parsed) ? Math.Max(1, parsed) : Math.Max(1, fallback);
 
-    private static string DisplayOrDefault(string? value) => string.IsNullOrWhiteSpace(value) ? "Default" : value;
+    private string DisplayOrDefault(string? value) => string.IsNullOrWhiteSpace(value) ? Text("Default", "มาตรฐาน") : value;
 
     private static string ResolvePartMeta(QuotePartViewModel part)
         => part.VolumeCc > 0 ? $"{part.VolumeCc:N1} cc / {part.SurfaceAreaCm2:N1} cm2" : part.Status;
 
-    private static string ResolveLineTotal(QuotePartViewModel part)
-        => part.UnitPriceTHB.HasValue ? $"{(part.UnitPriceTHB.Value * part.Quantity):N0} THB" : "Not priced";
+    private string ResolveLineTotal(QuotePartViewModel part)
+        => part.UnitPriceTHB.HasValue ? $"{(part.UnitPriceTHB.Value * part.Quantity):N0} THB" : Text("Not priced", "ยังไม่มีราคา");
 
     private static bool CanUseDfmBadge(QuotePartViewModel part)
         => part.FdmDfmReport is not null || part.SlaDfmReport is not null || part.CncDfmReport is not null || part.Findings.Count > 0;
 
-    private static string ResolveDfmText(QuotePartViewModel part)
+    private string ResolveDfmText(QuotePartViewModel part)
     {
-        if (part.DfmAcknowledged) return "Ack";
-        if (CanUseDfmBadge(part)) return "Review";
-        return "Pending";
+        if (part.DfmAcknowledged) return Text("Ack", "รับทราบ");
+        if (CanUseDfmBadge(part)) return Text("Review", "ตรวจสอบ");
+        return Text("Pending", "รอดำเนินการ");
     }
 
     private static string ResolveDfmClass(QuotePartViewModel part)
@@ -533,5 +536,10 @@
         if (part.DfmAcknowledged) return "qe-pbt-dfm qe-pbt-dfm--ok";
         if (CanUseDfmBadge(part)) return "qe-pbt-dfm qe-pbt-dfm--warn";
         return "qe-pbt-dfm qe-pbt-dfm--pending";
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

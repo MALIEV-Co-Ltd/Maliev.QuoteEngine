@@ -1,11 +1,11 @@
 @page "/orders"
 @inject QuoteEngineApiClient Api
 
-<PageTitle>Orders - MALIEV Quote Engine</PageTitle>
+<PageTitle>@Text("Orders - MALIEV Quote Engine", "คำสั่งซื้อ - MALIEV Quote Engine")</PageTitle>
 
 <div class="section-heading">
-    <span class="eyebrow">Manufacturing orders</span>
-    <h1>Track custom production</h1>
+    <span class="eyebrow">@Text("Manufacturing orders", "คำสั่งผลิต")</span>
+    <h1>@Text("Track custom production", "ติดตามงานผลิตตามสั่ง")</h1>
 </div>
 
 <div class="data-list">
@@ -22,16 +22,24 @@
 @if (!_orders.Any())
 {
     <div class="empty-state">
-        <p>No manufacturing orders yet.</p>
-        <a class="primary-button" href="/quotes/new">Start a quote</a>
+        <p>@Text("No manufacturing orders yet.", "ยังไม่มีคำสั่งผลิต")</p>
+        <a class="primary-button" href="/quotes/new">@Text("Start a quote", "เริ่มขอราคา")</a>
     </div>
 }
 
 @code {
     private IReadOnlyList<CustomerOrderSummaryDto> _orders = [];
 
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
     protected override async Task OnInitializedAsync()
     {
         _orders = await Api.GetOrdersAsync();
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 }

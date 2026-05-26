@@ -1,4 +1,3 @@
-@using System.Globalization
 @implements IDisposable
 @inject QuoteEngineApiClient Api
 @inject IJSRuntime JS
@@ -11,26 +10,26 @@
             </span>
             <div class="customer-chatbot-title">
                 <strong>Mali</strong>
-                <small>Quotes, orders, profile, and documents</small>
+                <small>@Text("Quotes, orders, profile, and documents", "ใบเสนอราคา คำสั่งซื้อ โปรไฟล์ และเอกสาร")</small>
             </div>
         </div>
         <MudIconButton Icon="@Icons.Material.Filled.Close"
                        Class="customer-chatbot-close"
                        Size="Size.Small"
-                       aria-label="Close assistant"
+                       aria-label="@Text("Close assistant", "ปิดผู้ช่วย")"
                        OnClick="CloseAsync" />
     </header>
 
     <div class="customer-chatbot-status">
         @if (_session.IsAuthenticated)
         {
-            <span>Signed in</span>
-            <strong>@(_session.DisplayName ?? _session.Email ?? "Customer")</strong>
+            <span>@Text("Signed in", "เข้าสู่ระบบแล้ว")</span>
+            <strong>@(_session.DisplayName ?? _session.Email ?? Text("Customer", "ลูกค้า"))</strong>
         }
         else
         {
-            <span>Guest session</span>
-            <strong>Sign in inside chat for account help</strong>
+            <span>@Text("Guest session", "เซสชันผู้เยี่ยมชม")</span>
+            <strong>@Text("Sign in inside chat for account help", "เข้าสู่ระบบในแชตเพื่อรับความช่วยเหลือเกี่ยวกับบัญชี")</strong>
         }
     </div>
 
@@ -79,7 +78,7 @@
         {
             <article class="customer-chatbot-message assistant pending">
                 <div class="customer-chatbot-message-body">
-                    <p>Loading shared conversation...</p>
+                    <p>@Text("Loading shared conversation...", "กำลังโหลดบทสนทนาที่แชร์...")</p>
                 </div>
             </article>
         }
@@ -94,7 +93,7 @@
         }
     </div>
 
-    <div class="customer-chatbot-prompts" aria-label="Suggested assistant topics">
+    <div class="customer-chatbot-prompts" aria-label="@Text("Suggested assistant topics", "หัวข้อแนะนำสำหรับผู้ช่วย")">
         @foreach (var prompt in SuggestedPrompts)
         {
             <button type="button" @onclick="() => SendSuggestionAsync(prompt)" disabled="@_isSending">@prompt</button>
@@ -105,11 +104,11 @@
         <textarea @ref="_draftInput"
                   rows="1"
                   maxlength="1000"
-                  placeholder="Ask about a quote, order, receipt, profile, or address"
+                  placeholder="@Text("Ask about a quote, order, receipt, profile, or address", "ถามเกี่ยวกับใบเสนอราคา คำสั่งซื้อ ใบเสร็จ โปรไฟล์ หรือที่อยู่")"
                   value="@_draft"
                   @oninput="OnDraftInputAsync"
                   disabled="@_isSending"></textarea>
-        <button type="button" aria-label="Send message" @onclick="SendDraftAsync" disabled="@(!CanSend)">
+        <button type="button" aria-label="@Text("Send message", "ส่งข้อความ")" @onclick="SendDraftAsync" disabled="@(!CanSend)">
             <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" />
         </button>
     </div>
@@ -119,14 +118,6 @@
     private const string SharedSessionStorageKey = "maliev.customerAssistant.session.v1";
     private const int SignInPollAttempts = 60;
     private static readonly TimeSpan SignInPollInterval = TimeSpan.FromSeconds(2);
-    private static readonly string[] SuggestedPrompts =
-    [
-        "Help me choose a process",
-        "Where is my order?",
-        "Show my receipts",
-        "Update my address"
-    ];
-
     private readonly List<CustomerChatMessage> _messages = [];
     private ElementReference _messagesContainer;
     private ElementReference _draftInput;
@@ -142,7 +133,14 @@
     [Parameter]
     public EventCallback OnClose { get; set; }
 
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
     private bool CanSend => !_isSending && !string.IsNullOrWhiteSpace(_draft);
+    private IReadOnlyList<string> SuggestedPrompts => IsThai
+        ? ["ช่วยเลือกกระบวนการผลิต", "คำสั่งซื้อของฉันอยู่ที่ไหน", "แสดงใบเสร็จของฉัน", "อัปเดตที่อยู่ของฉัน"]
+        : ["Help me choose a process", "Where is my order?", "Show my receipts", "Update my address"];
+    private bool IsThai => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -191,12 +189,12 @@
             }
             else if (_messages.Count == 0)
             {
-                AddAssistant(hydration.ContinuationMessage ?? "Mali is ready in Quote Engine. Ask about CAD files, pricing, quotes, orders, receipts, profile, or documents.");
+                AddAssistant(hydration.ContinuationMessage ?? Text("Mali is ready in Quote Engine. Ask about CAD files, pricing, quotes, orders, receipts, profile, or documents.", "Mali พร้อมช่วยใน Quote Engine ถามเรื่องไฟล์ CAD ราคา ใบเสนอราคา คำสั่งซื้อ ใบเสร็จ โปรไฟล์ หรือเอกสารได้เลย"));
             }
         }
         catch (InvalidOperationException)
         {
-            AddAssistant("Mali is ready in Quote Engine. Ask about CAD files, pricing, quotes, orders, receipts, profile, or documents.");
+            AddAssistant(Text("Mali is ready in Quote Engine. Ask about CAD files, pricing, quotes, orders, receipts, profile, or documents.", "Mali พร้อมช่วยใน Quote Engine ถามเรื่องไฟล์ CAD ราคา ใบเสนอราคา คำสั่งซื้อ ใบเสร็จ โปรไฟล์ หรือเอกสารได้เลย"));
         }
         finally
         {
@@ -236,9 +234,7 @@
             {
                 SessionId = _sessionId,
                 Message = message,
-                Language = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.Equals("th", StringComparison.OrdinalIgnoreCase)
-                    ? "th"
-                    : "en"
+                Language = IsThai ? "th" : "en"
             });
             _sessionId = response.SessionId ?? _sessionId;
             _messages.Add(new CustomerChatMessage(
@@ -250,7 +246,7 @@
         }
         catch (InvalidOperationException)
         {
-            AddAssistant("I could not reach the MALIEV assistant service. Your Quote Engine page is still active, so please try again in a moment.");
+            AddAssistant(Text("I could not reach the MALIEV assistant service. Your Quote Engine page is still active, so please try again in a moment.", "ยังติดต่อบริการผู้ช่วย MALIEV ไม่ได้ หน้า Quote Engine ของคุณยังใช้งานอยู่ กรุณาลองใหม่อีกครั้ง"));
         }
         finally
         {
@@ -268,7 +264,7 @@
         }
 
         _isAwaitingSignIn = true;
-        AddAssistant("Opening sign-in in a separate window. This Quote Engine page will stay open and I will continue here after your identity is verified.");
+        AddAssistant(Text("Opening sign-in in a separate window. This Quote Engine page will stay open and I will continue here after your identity is verified.", "กำลังเปิดหน้าล็อกอินในหน้าต่างแยก หน้า Quote Engine นี้จะยังเปิดอยู่ และฉันจะช่วยต่อหลังยืนยันตัวตน"));
         await InvokeAsync(StateHasChanged);
 
         var signInUrl = string.IsNullOrWhiteSpace(action.Href)
@@ -277,7 +273,7 @@
         var opened = await OpenSignInPopupAsync(signInUrl);
         if (!opened)
         {
-            AddAssistant("The sign-in window was blocked. Use the sign-in link in this message, then return here to continue.", [action]);
+            AddAssistant(Text("The sign-in window was blocked. Use the sign-in link in this message, then return here to continue.", "หน้าต่างเข้าสู่ระบบถูกบล็อก ใช้ลิงก์เข้าสู่ระบบในข้อความนี้ แล้วกลับมาที่นี่เพื่อดำเนินการต่อ"), [action]);
             _isAwaitingSignIn = false;
             return;
         }
@@ -299,12 +295,14 @@
                 }
 
                 _session = session;
-                AddAssistant($"You are signed in as {session.DisplayName ?? session.Email ?? "your MALIEV account"}. I can now help with your quotes, orders, receipts, profile, and address information.");
-                await WriteSharedSessionAsync("en");
+                AddAssistant(Text(
+                    $"You are signed in as {session.DisplayName ?? session.Email ?? "your MALIEV account"}. I can now help with your quotes, orders, receipts, profile, and address information.",
+                    $"คุณเข้าสู่ระบบด้วย {session.DisplayName ?? session.Email ?? "บัญชี MALIEV ของคุณ"} แล้ว ฉันช่วยเรื่องใบเสนอราคา คำสั่งซื้อ ใบเสร็จ โปรไฟล์ และที่อยู่ได้แล้ว"));
+                await WriteSharedSessionAsync(IsThai ? "th" : "en");
                 return;
             }
 
-            AddAssistant("I am still waiting for sign-in to complete. When you finish signing in, send your account question again and I will continue from this chat.");
+            AddAssistant(Text("I am still waiting for sign-in to complete. When you finish signing in, send your account question again and I will continue from this chat.", "ฉันยังรอให้การเข้าสู่ระบบเสร็จสมบูรณ์ เมื่อเข้าสู่ระบบเสร็จแล้ว ส่งคำถามเกี่ยวกับบัญชีอีกครั้งแล้วฉันจะช่วยต่อในแชตนี้"));
         }
         catch (OperationCanceledException)
         {
@@ -443,6 +441,11 @@
     private static string? RelFor(string? href)
     {
         return href?.StartsWith("http", StringComparison.OrdinalIgnoreCase) == true ? "noopener" : null;
+    }
+
+    private string Text(string en, string th)
+    {
+        return IsThai ? th : en;
     }
 
     public void Dispose()
