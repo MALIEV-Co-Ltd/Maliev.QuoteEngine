@@ -213,8 +213,11 @@ public sealed class QuoteEngineSourceTests
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var script = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
 
-        Assert.Contains("class=\"qe-demo-sample-title\"", source, StringComparison.Ordinal);
-        Assert.Contains("<img src=\"/images/logo.svg\" alt=\"MALIEV\" />", source, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-launch-hero\"", source, StringComparison.Ordinal);
+        Assert.Contains("Get manufacturing quotes, <span>faster and easier.</span>", source, StringComparison.Ordinal);
+        Assert.Contains("/images/generated/metal-components-cutout.png", source, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-launch-format-chips\"", source, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-launch-benefits\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
         Assert.Contains("Use sample file", source, StringComparison.Ordinal);
         Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
@@ -240,10 +243,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-dropzone::before", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon .mud-icon-root", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-launch-visual img", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-launch-format-chips span", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-launch-benefits", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-launch-account-card", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-launch-actions", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-launch-assistant .mud-icon-root", styles, StringComparison.Ordinal);
-        Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-demo-sample-title img", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pdc-container {\n    position: relative;", styles, StringComparison.Ordinal);
         Assert.Contains("3D Model", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor"), StringComparison.Ordinal);
         Assert.Contains(".qe-dfm-tab {\n    flex: 1 1 0;", styles, StringComparison.Ordinal);
@@ -257,6 +262,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain(".qe-dropzone .mud-icon-root {", styles, StringComparison.Ordinal);
         Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "samples", "maliev-sample-bracket.step")));
         Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "models", "sample-bracket.glb")));
+        Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "images", "generated", "metal-components-cutout.png")));
         Assert.False(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "sample-file.step")));
         Assert.Contains("\"Sign in to quote\"", source, StringComparison.Ordinal);
         Assert.Contains("Saved temporarily", source, StringComparison.Ordinal);

@@ -86,40 +86,101 @@
             {
                 <section class="qe-empty-state">
                     <div class="@EmptyStateGridClass">
+                        @if (HasLaunchActionCards)
+                        {
+                            <div class="qe-launch-hero">
+                                <div class="qe-launch-copy">
+                                    <span class="qe-zone-label">Manufacturing quotes</span>
+                                    <h1>Get manufacturing quotes, <span>faster and easier.</span></h1>
+                                    <p>Upload your CAD files and project details. We'll get back with feedback and pricing.</p>
+                                </div>
+                                <div class="qe-launch-visual" aria-hidden="true">
+                                    <span class="qe-launch-grid"></span>
+                                    <img src="/images/generated/metal-components-cutout.png" alt="" />
+                                </div>
+                            </div>
+                        }
                         <button id="@HeroDropzoneId" type="button" class="qe-dropzone qe-dropzone--hero">
                             <span class="qe-dropzone-icon" aria-hidden="true">
                                 <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
                             </span>
                             <span>@UploadHeroLabel</span>
-                            <small>@UploadHeroHint</small>
+                            @if (HasLaunchActionCards)
+                            {
+                                <em>Upload CAD files or any relevant documents</em>
+                                <span class="qe-launch-format-chips" aria-label="@UploadHeroHint">
+                                    @foreach (var format in LaunchFormatChips)
+                                    {
+                                        <span>@format</span>
+                                    }
+                                </span>
+                                <small>/ max @QuoteUploadConstraints.MaxFileSizeMegabytes MB per file</small>
+                            }
+                            else
+                            {
+                                <small>@UploadHeroHint</small>
+                            }
                         </button>
                         @if (ShowDemoSampleCard)
                         {
                             <article class="qe-demo-sample-card">
-                                <span class="qe-zone-label">Demo sample</span>
-                                <strong class="qe-demo-sample-title">
-                                    <span>Try the Quote Engine with a</span>
-                                    <img src="/images/logo.svg" alt="MALIEV" />
-                                    <span>sample file.</span>
-                                </strong>
-                                <p>Load a known sample part, review DFM feedback, adjust material and lead time, and test pricing without uploading your own CAD.</p>
-                                <button type="button" class="qe-secondary-btn" @onclick="LoadSampleFileAsync">Use sample file</button>
+                                <span class="qe-launch-card-icon qe-launch-card-icon--file" aria-hidden="true">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
+                                </span>
+                                <div class="qe-launch-card-body">
+                                    <strong>Try the Quote Engine</strong>
+                                    <p>Use our sample file to see how it works.</p>
+                                    <button type="button" class="qe-secondary-btn" @onclick="LoadSampleFileAsync">
+                                        <span>Use sample file</span>
+                                        <MudIcon Icon="@Icons.Material.Outlined.ArrowForward" Size="Size.Small" />
+                                    </button>
+                                </div>
                             </article>
                         }
                         @if (ShowLaunchAccountCard)
                         {
                             <article class="qe-launch-account-card">
-                                <span class="qe-zone-label">Customer workspace</span>
-                                <strong>Sign in to save quotes and orders.</strong>
-                                <p>Keep projects, uploaded files, NDA status, documents, quote history, and order handoff under your customer account.</p>
-                                <div class="qe-launch-actions">
-                                    <a class="qe-primary-btn qe-launch-signin" href="/auth/sign-in?returnUrl=/projects/new">Sign in</a>
-                                    <button type="button" class="qe-secondary-btn qe-launch-assistant" @onclick="OpenAssistantAsync">
-                                        <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Size="Size.Small" />
-                                        Ask assistant
-                                    </button>
+                                <span class="qe-launch-card-icon qe-launch-card-icon--account" aria-hidden="true">
+                                    <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Small" />
+                                </span>
+                                <div class="qe-launch-card-body">
+                                    <strong>Already have an account?</strong>
+                                    <p>Sign in to save quotes, track orders, and manage your projects.</p>
+                                    <div class="qe-launch-actions">
+                                        <a class="qe-primary-btn qe-launch-signin" href="/auth/sign-in?returnUrl=/projects/new">Sign in</a>
+                                        <button type="button" class="qe-secondary-btn qe-launch-assistant" @onclick="OpenAssistantAsync">
+                                            <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Size="Size.Small" />
+                                            Ask assistant
+                                        </button>
+                                    </div>
                                 </div>
                             </article>
+                        }
+                        @if (HasLaunchActionCards)
+                        {
+                            <div class="qe-launch-benefits" aria-label="Quote Engine benefits">
+                                <article>
+                                    <span aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.FactCheck" Size="Size.Small" /></span>
+                                    <div>
+                                        <strong>DFM Feedback</strong>
+                                        <small>Get expert manufacturability analysis and recommendations.</small>
+                                    </div>
+                                </article>
+                                <article>
+                                    <span aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.Calculate" Size="Size.Small" /></span>
+                                    <div>
+                                        <strong>Accurate Pricing</strong>
+                                        <small>Receive transparent and competitive pricing.</small>
+                                    </div>
+                                </article>
+                                <article>
+                                    <span aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Small" /></span>
+                                    <div>
+                                        <strong>Secure &amp; Private</strong>
+                                        <small>Your files and data are protected with industry-standard security.</small>
+                                    </div>
+                                </article>
+                            </div>
                         }
                     </div>
                 </section>
@@ -221,6 +282,37 @@
     private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;
     private bool HasLaunchActionCards => ShowDemoSampleCard || ShowLaunchAccountCard;
     private string EmptyStateGridClass => HasLaunchActionCards ? "qe-empty-state-grid" : "qe-empty-state-grid qe-empty-state-grid--solo";
+    private static readonly string[] LaunchFormatChips =
+    [
+        "STL",
+        "STEP",
+        "STP",
+        "3MF",
+        "OBJ",
+        "IGS",
+        "IGES",
+        "GLTF",
+        "GLB",
+        "PLY",
+        "OFF",
+        "AMF",
+        "WRL",
+        "X3D",
+        "X_T",
+        "X_B",
+        "SAT",
+        "SAB",
+        "SLDPRT",
+        "SLDASM",
+        "PRT",
+        "ASM",
+        "CATPART",
+        "CATPRODUCT",
+        "JT",
+        "3DXML",
+        "3DM",
+        "BREP"
+    ];
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 

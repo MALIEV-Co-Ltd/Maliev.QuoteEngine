@@ -39,10 +39,13 @@ SELECTORS: dict[str, str] = {
     "viewerToolbar": ".qe-viewer-toolbar, .pv-toolbar",
     "dfmPanel": ".qe-dfm-tab, .dfm-tab",
     "bulkTable": ".qe-pbt-root, .pbt-root",
+    "launchHero": ".qe-launch-hero",
+    "launchVisual": ".qe-launch-visual img",
     "demoCard": ".qe-demo-sample-card",
     "launchAccountCard": ".qe-launch-account-card",
     "launchSignIn": ".qe-launch-signin",
     "launchAssistant": ".qe-launch-assistant",
+    "launchBenefits": ".qe-launch-benefits",
 }
 
 
@@ -329,6 +332,10 @@ def assert_quoteengine(records: list[dict[str, Any]], failures: list[str]) -> No
 
     empty_desktop = record_by(records, "quoteengine", "empty-light-desktop")
     if empty_desktop:
+        if empty_desktop["metrics"]["boxes"].get("launchHero") is None:
+            failures.append("empty desktop: manufacturing quote hero missing")
+        if empty_desktop["metrics"]["boxes"].get("launchVisual") is None:
+            failures.append("empty desktop: floating metal component visual missing")
         if empty_desktop["metrics"]["boxes"].get("demoCard") is None:
             failures.append("empty desktop: demo sample card missing for anonymous ProjectNew")
         if empty_desktop["metrics"]["boxes"].get("launchAccountCard") is None:
@@ -337,12 +344,16 @@ def assert_quoteengine(records: list[dict[str, Any]], failures: list[str]) -> No
             failures.append("empty desktop: launch sign-in CTA missing")
         if empty_desktop["metrics"]["boxes"].get("launchAssistant") is None:
             failures.append("empty desktop: launch assistant CTA missing")
+        if empty_desktop["metrics"]["boxes"].get("launchBenefits") is None:
+            failures.append("empty desktop: benefit row missing")
         dropzone_height = height(empty_desktop, "dropzone")
-        if dropzone_height is not None and not 210 <= dropzone_height <= 320:
+        if dropzone_height is not None and not 160 <= dropzone_height <= 240:
             failures.append(f"empty desktop: hero dropzone height is outside launch-card range ({dropzone_height}px)")
 
     empty_mobile = record_by(records, "quoteengine", "empty-light-mobile")
     if empty_mobile:
+        if empty_mobile["metrics"]["boxes"].get("launchHero") is None:
+            failures.append("empty mobile: manufacturing quote hero missing")
         if empty_mobile["metrics"]["boxes"].get("demoCard") is None:
             failures.append("empty mobile: demo sample card missing for anonymous ProjectNew")
         if empty_mobile["metrics"]["boxes"].get("launchAccountCard") is None:
