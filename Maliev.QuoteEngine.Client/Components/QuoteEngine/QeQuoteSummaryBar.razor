@@ -1,6 +1,14 @@
 @* Customer-facing quote summary bar matching the ProjectNew bottom action surface. *@
 
 <footer class="qe-qsb-root">
+    <div class="qe-qsb-zone qe-qsb-customer">
+        <span class="qe-zone-label">Bill To</span>
+        <strong>@BillingName</strong>
+        <small>@BillingHint</small>
+    </div>
+
+    <div class="qe-qsb-divider"></div>
+
     <div class="qe-qsb-zone qe-qsb-lead">
         <span class="qe-zone-label">
             <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
@@ -146,6 +154,8 @@
     [Parameter] public bool CanCreateOrder { get; set; }
     [Parameter] public bool CanPay { get; set; }
     [Parameter] public string QuoteButtonLabel { get; set; } = "Quote";
+    [Parameter] public string BillingName { get; set; } = "Customer account";
+    [Parameter] public string BillingHint { get; set; } = "Private order";
     [Parameter] public EventCallback<string> OnLeadTimeSelected { get; set; }
     [Parameter] public EventCallback OnCalculateRequested { get; set; }
     [Parameter] public EventCallback OnQuoteRequested { get; set; }

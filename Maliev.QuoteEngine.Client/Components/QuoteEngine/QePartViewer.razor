@@ -19,18 +19,15 @@
 
         <div class="qe-viewer-toolbar" aria-label="CAD viewer toolbar">
             <div class="qe-vt-group" aria-label="Camera presets">
-                <button class="@ToolbarButtonClass(_cameraPreset == "front")" @onclick='() => SetPresetAsync("front")' title="Front" aria-label="Front view">
-                    @GetCubeIconSvg("front", _cameraPreset == "front")
-                </button>
-                <button class="@ToolbarButtonClass(_cameraPreset == "top")" @onclick='() => SetPresetAsync("top")' title="Top" aria-label="Top view">
-                    @GetCubeIconSvg("top", _cameraPreset == "top")
-                </button>
-                <button class="@ToolbarButtonClass(_cameraPreset == "right")" @onclick='() => SetPresetAsync("right")' title="Right" aria-label="Right view">
-                    @GetCubeIconSvg("right", _cameraPreset == "right")
-                </button>
-                <button class="@ToolbarButtonClass(_cameraPreset == "iso")" @onclick='() => SetPresetAsync("iso")' title="Isometric" aria-label="Isometric view">
-                    @GetCubeIconSvg("iso", _cameraPreset == "iso")
-                </button>
+                @foreach (var preset in ViewPresets)
+                {
+                    <button class="@ToolbarButtonClass(_cameraPreset == preset.Key)"
+                            @onclick="@(() => SetPresetAsync(preset.Key))"
+                            title="@preset.Label"
+                            aria-label="@preset.Label">
+                        @GetCubeIconSvg(preset.Key, _cameraPreset == preset.Key)
+                    </button>
+                }
             </div>
             <span class="qe-vt-sep"></span>
             <div class="qe-vt-group" aria-label="Display controls">
@@ -40,28 +37,40 @@
                         aria-label="Solid shaded view">
                     @GetModeIconSvg("solid", _renderMode == "solid")
                 </button>
-                <button class="@ToolbarButtonClass(_renderMode == "transparent")"
-                        @onclick='() => SetRenderModeAsync("transparent")'
-                        title="Transparent view"
-                        aria-label="Transparent view">
-                    @GetModeIconSvg("transparent", _renderMode == "transparent")
-                </button>
                 <button class="@ToolbarButtonClass(_renderMode == "wireframe")"
                         @onclick='() => SetRenderModeAsync("wireframe")'
                         title="Wireframe view"
                         aria-label="Wireframe view">
                     @GetModeIconSvg("wireframe", _renderMode == "wireframe")
                 </button>
-                <button class="@ToolbarButtonClass(_ortho)"
-                        @onclick="ToggleProjectionAsync"
-                        title="Orthographic / Perspective"
-                        aria-label="Toggle orthographic projection">
-                    @GetModeIconSvg(_ortho ? "ortho" : "perspective", _ortho)
+                <button class="@ToolbarButtonClass(_renderMode == "transparent")"
+                        @onclick='() => SetRenderModeAsync("transparent")'
+                        title="Transparent view"
+                        aria-label="Transparent view">
+                    @GetModeIconSvg("transparent", _renderMode == "transparent")
                 </button>
+            </div>
+            <span class="qe-vt-sep"></span>
+            <div class="qe-vt-group" aria-label="Projection controls">
+                <button class="@ToolbarButtonClass(!_ortho)"
+                        @onclick='() => SetProjectionAsync("perspective")'
+                        title="Perspective"
+                        aria-label="Perspective camera">
+                    @GetModeIconSvg("perspective", !_ortho)
+                </button>
+                <button class="@ToolbarButtonClass(_ortho)"
+                        @onclick='() => SetProjectionAsync("orthographic")'
+                        title="Orthographic"
+                        aria-label="Orthographic camera">
+                    @GetModeIconSvg("ortho", _ortho)
+                </button>
+            </div>
+            <span class="qe-vt-sep"></span>
+            <div class="qe-vt-group" aria-label="Display toggles">
                 <button class="@ToolbarButtonClass(_gridOn)"
                         @onclick="ToggleGridAsync"
-                        title="Grid"
-                        aria-label="Toggle grid">
+                        title="Grid floor"
+                        aria-label="Toggle grid floor">
                     @GetModeIconSvg("grid", _gridOn)
                 </button>
                 <button class="@ToolbarButtonClass(_edgesOn)"
@@ -97,8 +106,11 @@
                         aria-label="Toggle thickness analysis">
                     <MudIcon Icon="@Icons.Material.Outlined.Layers" Size="Size.Small" />
                 </button>
+                <button class="qe-vt-btn" @onclick="RotateModelAsync" title="Rotate 90 degrees" aria-label="Rotate model 90 degrees">
+                    <MudIcon Icon="@Icons.Material.Filled.RotateRight" Size="Size.Small" />
+                </button>
                 <button class="qe-vt-btn" @onclick="ResetCameraAsync" title="Reset camera" aria-label="Reset camera">
-                    <MudIcon Icon="@Icons.Material.Outlined.RestartAlt" Size="Size.Small" />
+                    <MudIcon Icon="@Icons.Material.Filled.FlipCameraIos" Size="Size.Small" />
                 </button>
             </div>
 
@@ -156,6 +168,19 @@
     private bool _boundingBoxOn;
     private bool _measureOn;
     private bool _thicknessOn;
+
+    private static readonly ViewPreset[] ViewPresets =
+    [
+        new("front", "Front view"),
+        new("left", "Left view"),
+        new("back", "Back view"),
+        new("right", "Right view"),
+        new("top", "Top view"),
+        new("bottom", "Bottom view"),
+        new("iso", "Isometric view")
+    ];
+
+    private sealed record ViewPreset(string Key, string Label);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -252,11 +277,17 @@
         await _module.InvokeVoidAsync("clearDfmOverlays", _canvasId, partKey);
     }
 
-    private async Task ToggleProjectionAsync()
+    private async Task SetProjectionAsync(string projection)
     {
         if (_module is null) return;
-        _ortho = !_ortho;
+        _ortho = projection.Equals("orthographic", StringComparison.OrdinalIgnoreCase);
         await _module.InvokeVoidAsync("setCameraProjection", _canvasId, _ortho ? "orthographic" : "perspective");
+    }
+
+    private async Task RotateModelAsync()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("rotateModel", _canvasId, 90);
     }
 
     private async Task ToggleEdgesAsync()
@@ -348,8 +379,11 @@
     private static readonly Dictionary<string, string> CubeFacePoints = new(StringComparer.OrdinalIgnoreCase)
     {
         ["front"] = "50,86 14,70 14,28 50,44",
+        ["back"] = "86,70 50,54 50,12 86,28",
+        ["left"] = "14,70 50,54 50,12 14,28",
         ["right"] = "50,86 86,70 86,28 50,44",
-        ["top"] = "50,44 14,28 50,12 86,28"
+        ["top"] = "50,44 14,28 50,12 86,28",
+        ["bottom"] = "50,86 14,70 50,54 86,70"
     };
 
     private static MarkupString GetCubeIconSvg(string viewKey, bool isActive)

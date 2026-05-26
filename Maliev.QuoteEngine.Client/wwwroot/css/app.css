@@ -615,6 +615,11 @@ body.quote-ready .startup-screen {
     align-items: center;
 }
 
+.top-actions > .text-button {
+    min-width: 76px;
+    white-space: nowrap;
+}
+
 .quote-theme-toggle,
 .quote-currency-select {
     min-height: 40px;
@@ -2130,7 +2135,6 @@ textarea::placeholder {
 }
 
 @media (max-width: 640px) {
-    .top-actions,
     .part-card,
     .part-title,
     .data-row {
@@ -2138,16 +2142,47 @@ textarea::placeholder {
     }
 
     .quote-topbar {
-        align-items: start;
-        padding-top: 10px;
+        grid-template-columns: auto auto;
+        gap: 8px 12px;
+        align-items: center;
+        min-height: 56px;
+        padding: 8px 14px;
     }
 
     .quote-brand {
-        width: 108px;
+        width: 96px;
     }
 
     .top-actions {
-        justify-items: end;
+        justify-self: end;
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .quote-theme-toggle,
+    .quote-currency-select,
+    .topbar-chat-toggle,
+    .text-button {
+        min-height: 34px;
+        height: 34px;
+    }
+
+    .quote-theme-toggle,
+    .topbar-chat-toggle {
+        width: 34px;
+    }
+
+    .quote-currency-select {
+        min-width: 70px;
+        padding-inline: 9px 24px;
+    }
+
+    .text-button {
+        min-width: 64px;
+        padding-inline: 10px;
+        white-space: nowrap;
     }
 
     .page-surface,
@@ -2456,26 +2491,26 @@ textarea::placeholder {
 /* Hero dropzone reads as Card Title (24px Geist weight 600, -0.96px tracking). */
 .qe-dropzone--hero {
     display: grid;
-    gap: 12px;
+    gap: 8px;
     place-items: center;
     max-width: 600px;
-    min-height: 280px;
-    padding: 60px 40px;
-    font-size: var(--maliev-font-card);
-    line-height: 1.33;
+    min-height: 128px;
+    padding: 28px 40px;
+    font-size: var(--maliev-font-body);
+    line-height: 1.25;
     font-weight: 600;
-    letter-spacing: var(--maliev-track-card);
+    letter-spacing: var(--maliev-track-body-semi);
 }
 
 .qe-dropzone--hero .qe-dropzone-icon {
-    width: 46px;
-    height: 46px;
+    width: 38px;
+    height: 38px;
 }
 
 .qe-dropzone--hero .qe-dropzone-icon .mud-icon-root {
-    width: 24px;
-    height: 24px;
-    font-size: 24px;
+    width: 20px;
+    height: 20px;
+    font-size: 20px;
 }
 
 /* Header row in the parts list — mono technical label. */
@@ -2521,7 +2556,7 @@ textarea::placeholder {
 }
 
 .qe-plp-part--selected {
-    background: #fafafa;
+    background: var(--maliev-panel-3);
     box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--accent) inset;
 }
 
@@ -2942,7 +2977,7 @@ textarea::placeholder {
     bottom: 12px;
     z-index: 4;
     display: inline-flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
     gap: 4px;
@@ -2952,6 +2987,10 @@ textarea::placeholder {
     background: color-mix(in srgb, var(--maliev-panel) 94%, transparent);
     box-shadow: var(--maliev-shadow-card);
     backdrop-filter: blur(8px);
+    overflow-x: auto;
+    overflow-y: visible;
+    white-space: nowrap;
+    scrollbar-width: thin;
     transform: translateX(-50%);
 }
 
@@ -2963,9 +3002,17 @@ textarea::placeholder {
 }
 
 .qe-vt-subtools {
-    flex: 1 0 100%;
+    position: absolute;
+    left: 50%;
+    bottom: calc(100% + 8px);
+    flex: 0 0 auto;
     justify-content: center;
-    padding-top: 3px;
+    padding: 5px;
+    border-radius: var(--maliev-radius-md);
+    background: color-mix(in srgb, var(--maliev-panel) 94%, transparent);
+    box-shadow: var(--maliev-shadow-card);
+    backdrop-filter: blur(8px);
+    transform: translateX(-50%);
 }
 
 .qe-vt-btn {
@@ -3068,7 +3115,7 @@ textarea::placeholder {
     padding: 8px 10px;
     border-radius: var(--maliev-radius-sm);
     color: var(--maliev-ink);
-    background: rgba(255, 255, 255, .92);
+    background: color-mix(in srgb, var(--maliev-panel) 92%, transparent);
     box-shadow: var(--maliev-shadow-ring);
     font-size: var(--maliev-font-small);
 }
@@ -3109,7 +3156,7 @@ textarea::placeholder {
     margin: 0 12px;
     padding: 3px;
     border-radius: var(--maliev-radius-md);
-    background: rgba(255, 255, 255, .96);
+    background: color-mix(in srgb, var(--maliev-panel) 96%, transparent);
     box-shadow: var(--maliev-shadow-card);
 }
 
@@ -3211,7 +3258,7 @@ textarea::placeholder {
     padding: 9px 11px;
     border-radius: var(--maliev-radius-md);
     color: var(--maliev-muted);
-    background: rgba(255, 255, 255, .94);
+    background: color-mix(in srgb, var(--maliev-panel) 94%, transparent);
     box-shadow: var(--maliev-shadow-card);
     font-size: var(--maliev-font-small);
 }
@@ -3226,7 +3273,7 @@ textarea::placeholder {
     min-height: 0;
     overflow: hidden;
     border-radius: 0;
-    background: rgba(255, 255, 255, .96);
+    background: color-mix(in srgb, var(--maliev-panel) 96%, transparent);
     box-shadow: none;
     font-size: var(--maliev-font-small);
 }
@@ -3482,8 +3529,8 @@ textarea::placeholder {
 .qe-pcs-process-card--active,
 .qe-pcs-mat-card--active,
 .qe-qsb-lead-btn--active {
-    color: var(--ink);
-    background: #fafafa;
+    color: var(--maliev-ink);
+    background: var(--maliev-panel-3);
     box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--accent) inset;
 }
 
@@ -3553,8 +3600,8 @@ textarea::placeholder {
 }
 
 .qe-check-btn.checked {
-    color: var(--ink) !important;
-    background: #fafafa;
+    color: var(--maliev-ink) !important;
+    background: var(--maliev-panel-3);
     box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--accent) inset;
 }
 
@@ -3569,8 +3616,8 @@ textarea::placeholder {
     display: flex;
     align-items: stretch;
     min-width: 0;
-    min-height: 90px;
-    max-height: 112px;
+    min-height: 99px;
+    max-height: 99px;
     background: var(--maliev-panel);
     box-shadow: var(--maliev-shadow-ring);
 }
@@ -3582,6 +3629,33 @@ textarea::placeholder {
 .qe-qsb-zone {
     min-width: 0;
     padding: 10px 16px;
+}
+
+.qe-qsb-customer {
+    flex: 0 0 270px;
+    display: grid;
+    align-content: center;
+    gap: 3px;
+}
+
+.qe-qsb-customer strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--maliev-ink);
+    font-size: var(--maliev-font-body);
+    font-weight: 600;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-qsb-customer small {
+    overflow: hidden;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-micro);
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .qe-qsb-divider {
@@ -3597,16 +3671,20 @@ textarea::placeholder {
 
 .qe-qsb-lead-options {
     display: flex;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 6px;
 }
 
 .qe-qsb-lead-btn {
     flex: 1 1 140px;
     display: flex;
+    flex-direction: column;
     justify-content: space-between;
-    gap: 8px;
+    gap: 1px;
     min-height: 52px;
-    padding: 8px 10px;
+    padding: 6px 10px;
+    border: 1px solid var(--maliev-border);
+    box-shadow: none;
 }
 
 .qe-qsb-lead-btn small {
@@ -3620,6 +3698,19 @@ textarea::placeholder {
     color: var(--maliev-muted);
     font-style: normal;
     font-size: var(--maliev-font-nano);
+}
+
+.qe-qsb-lead-btn--active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    border-color: var(--accent);
+    box-shadow: none;
+}
+
+.qe-qsb-lead-btn--active small,
+.qe-qsb-lead-btn--active em {
+    color: var(--maliev-ink);
+    font-weight: 600;
 }
 
 .qe-qsb-total {
@@ -3820,6 +3911,10 @@ textarea::placeholder {
         flex: 1 1 320px;
         max-width: none;
     }
+
+    .qe-qsb-customer {
+        flex: 1 1 240px;
+    }
 }
 
 @media (max-width: 640px) {
@@ -3835,8 +3930,8 @@ textarea::placeholder {
     /* Hero dropzone steps down to Body Semibold on small screens. */
     .qe-dropzone--hero {
         width: 100%;
-        min-height: 210px;
-        padding: 28px 18px;
+        min-height: 142px;
+        padding: 24px 18px;
         font-size: var(--maliev-font-body);
         letter-spacing: var(--maliev-track-body-semi);
     }
@@ -3925,6 +4020,11 @@ textarea::placeholder {
         width: auto;
         flex-basis: 1px;
         height: 1px;
+    }
+
+    .qe-qsb-customer {
+        flex: 0 0 auto;
+        padding-block: 8px;
     }
 
     .qe-qsb-actions {
@@ -4493,7 +4593,7 @@ body.mud-blazor {
     gap: 8px;
     border-radius: var(--maliev-radius-md);
     color: var(--maliev-ink);
-    background: rgba(255, 255, 255, .88);
+    background: color-mix(in srgb, var(--maliev-panel) 88%, transparent);
     box-shadow: var(--maliev-shadow-ring);
     text-align: center;
     pointer-events: none;
@@ -4636,6 +4736,10 @@ body.mud-blazor {
     .qe-qsb-total {
         flex: 0 0 300px;
     }
+
+    .qe-qsb-customer {
+        flex: 0 0 200px;
+    }
 }
 
 @media (max-width: 640px) {
@@ -4645,13 +4749,17 @@ body.mud-blazor {
 
     .qe-qsb-root {
         flex-direction: column;
-        min-height: 212px;
-        max-height: 212px;
+        min-height: 252px;
+        max-height: 252px;
         overflow: hidden;
     }
 
     .qe-qsb-zone {
         padding: 8px 14px;
+    }
+
+    .qe-qsb-customer {
+        flex: 0 0 auto;
     }
 
     .qe-qsb-lead {
@@ -5017,8 +5125,8 @@ body.mud-blazor {
 .qe-pcs-tol-card--active,
 .qe-pcs-color-choice--active,
 .qe-pcs-insert-type--active {
-    color: var(--ink);
-    background: #fafafa;
+    color: var(--maliev-ink);
+    background: var(--maliev-panel-3);
     box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--accent) inset;
 }
 
@@ -5147,7 +5255,7 @@ body.mud-blazor {
     width: min(220px, calc(100% - 24px));
     overflow: hidden;
     border-radius: var(--maliev-radius-md);
-    background: rgba(255, 255, 255, .94);
+    background: color-mix(in srgb, var(--maliev-panel) 94%, transparent);
     box-shadow: var(--maliev-shadow-card);
     backdrop-filter: blur(12px);
 }
@@ -5221,7 +5329,7 @@ body.mud-blazor {
     width: min(340px, calc(100% - 24px));
     overflow: hidden;
     border-radius: var(--maliev-radius-md);
-    background: rgba(255, 255, 255, .96);
+    background: color-mix(in srgb, var(--maliev-panel) 96%, transparent);
     box-shadow: var(--maliev-shadow-card);
     backdrop-filter: blur(12px);
 }
@@ -5477,7 +5585,7 @@ button.qe-dfm-overlay-header {
 .qe-pbt-table-surface {
     min-height: 0;
     overflow: auto;
-    background: rgba(255, 255, 255, .98);
+    background: color-mix(in srgb, var(--maliev-panel) 98%, transparent);
 }
 
 .qe-pbt-table {
@@ -5510,7 +5618,7 @@ button.qe-dfm-overlay-header {
 }
 
 .qe-pbt-table-row--selected td {
-    background: #f6fbff;
+    background: color-mix(in srgb, var(--accent) 7%, var(--maliev-panel));
 }
 
 .qe-pbt-col-check {

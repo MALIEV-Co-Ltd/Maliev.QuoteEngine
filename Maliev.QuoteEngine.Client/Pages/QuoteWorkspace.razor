@@ -148,6 +148,8 @@
                            CanCreateOrder="@CanCreateOrder"
                            CanPay="@CanPay"
                            QuoteButtonLabel="@QuoteButtonLabel"
+                           BillingName="@BillingSummaryName"
+                           BillingHint="@BillingSummaryHint"
                            OnLeadTimeSelected="@SelectLeadTime"
                            OnCalculateRequested="@CalculateAsync"
                            OnQuoteRequested="@SubmitQuoteAsync"
@@ -197,7 +199,7 @@
     private bool CanApproveQuote => _formalQuote is not null && IsSignedIn && !IsDemoMode && !_formalQuote.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase);
     private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode;
     private bool CanPay => _order is not null && _estimate is not null && IsSignedIn && !IsDemoMode;
-    private bool ShowDemoSampleCard => !IsDemoMode && !IsSignedIn;
+    private bool ShowDemoSampleCard => false;
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
@@ -208,6 +210,10 @@
         ? "Demo mode cannot create projects, formal quotes, orders, uploads, or history"
         : $"{QuoteUploadConstraints.SupportedCadExtensionLabel} / max {QuoteUploadConstraints.MaxFileSizeMegabytes} MB per file";
     private string QuoteButtonLabel => IsDemoMode ? "Demo only" : IsSignedIn ? "Quote" : "Sign in to quote";
+    private string BillingSummaryName => IsSignedIn
+        ? _authStatus.DisplayName ?? "Customer account"
+        : "Guest checkout";
+    private string BillingSummaryHint => IsSignedIn ? "Private order" : "Sign in to save projects";
 
     private QuotePartViewModel? SelectedPart => _parts.Count == 0 ? null : _parts[Math.Min(_selectedPartIndex, _parts.Count - 1)];
 

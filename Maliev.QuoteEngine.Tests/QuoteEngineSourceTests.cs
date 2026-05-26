@@ -208,7 +208,7 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void New_quote_workspace_supports_demo_sample_and_anonymous_upload_state()
+    public void New_quote_workspace_supports_direct_upload_without_demo_card()
     {
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var script = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
@@ -219,6 +219,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Use sample file", source, StringComparison.Ordinal);
         Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
         Assert.Contains("await LoadDemoProjectAsync();", source, StringComparison.Ordinal);
+        Assert.Contains("private bool ShowDemoSampleCard => false;", source, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
         Assert.Contains("private bool IsWorkspaceReady => _parts.Count > 0;", source, StringComparison.Ordinal);
         Assert.Contains("qe-pn-root is-launch-screen", source, StringComparison.Ordinal);
@@ -434,8 +435,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".quote-chat-drawer", styles, StringComparison.Ordinal);
         Assert.Contains("position: fixed;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-qsb-root", styles, StringComparison.Ordinal);
-        Assert.Contains("max-height: 112px;", styles, StringComparison.Ordinal);
-        Assert.DoesNotContain(".qe-qsb-customer", styles, StringComparison.Ordinal);
+        Assert.Contains("max-height: 99px;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-qsb-customer", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-qsb-lead {\n    flex: 1 1 auto;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-qsb-divider {\n    flex: 0 0 1px;\n    width: 1px;\n    background: var(--maliev-border);\n}", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-qsb-divider {\n    width: 1px;\n    box-shadow: var(--maliev-shadow-ring);\n}", styles, StringComparison.Ordinal);
@@ -816,7 +817,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SynchronizeRouteStateAsync", src, StringComparison.Ordinal);
         Assert.Contains("HasDemoWorkspace", src, StringComparison.Ordinal);
         Assert.Contains("ResetWorkspaceState", src, StringComparison.Ordinal);
-        Assert.Contains("ShowDemoSampleCard => !IsDemoMode && !IsSignedIn", src, StringComparison.Ordinal);
+        Assert.Contains("ShowDemoSampleCard => false", src, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(\"/demo\")", src, StringComparison.Ordinal);
     }
 
@@ -960,9 +961,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Create order", src, StringComparison.Ordinal);
         Assert.Contains("Pay now", src, StringComparison.Ordinal);
         Assert.Contains("Customer documents", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-qsb-zone qe-qsb-customer\"", src, StringComparison.Ordinal);
+        Assert.Contains("BillingName", src, StringComparison.Ordinal);
+        Assert.Contains("BillingHint", src, StringComparison.Ordinal);
         Assert.Contains("OnApproveQuoteRequested", src, StringComparison.Ordinal);
         Assert.Contains("OnPaymentRequested", src, StringComparison.Ordinal);
 
+        Assert.Contains("BillingName=\"@BillingSummaryName\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("BillingHint=\"@BillingSummaryHint\"", workspace, StringComparison.Ordinal);
         Assert.Contains("ApproveQuoteAsync", workspace, StringComparison.Ordinal);
         Assert.Contains("InitiatePaymentAsync", workspace, StringComparison.Ordinal);
         Assert.Contains("ApproveQuoteAsync", apiClient, StringComparison.Ordinal);
@@ -1006,8 +1012,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ToggleThicknessAsync", viewer, StringComparison.Ordinal);
         Assert.Contains("ToggleSectionAsync", viewer, StringComparison.Ordinal);
         Assert.Contains("SetSectionAxisAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("SetProjectionAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("RotateModelAsync", viewer, StringComparison.Ordinal);
         Assert.Contains("NotifyMeasureResult", viewer, StringComparison.Ordinal);
+        Assert.Contains("new(\"left\", \"Left view\")", viewer, StringComparison.Ordinal);
+        Assert.Contains("new(\"back\", \"Back view\")", viewer, StringComparison.Ordinal);
+        Assert.Contains("new(\"bottom\", \"Bottom view\")", viewer, StringComparison.Ordinal);
         Assert.Contains("\"setRenderMode\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("\"setCameraProjection\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("\"rotateModel\"", viewer, StringComparison.Ordinal);
         Assert.Contains("\"showGrid\"", viewer, StringComparison.Ordinal);
         Assert.Contains("\"hideGrid\"", viewer, StringComparison.Ordinal);
         Assert.Contains("\"toggleBoundingBox\"", viewer, StringComparison.Ordinal);
@@ -1017,7 +1030,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-viewer-loading-orbit", viewer, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Solid shaded view\"", viewer, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Transparent view\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Orthographic camera\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Rotate model 90 degrees\"", viewer, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Toggle section cut\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Filled.FlipCameraIos", viewer, StringComparison.Ordinal);
         Assert.Contains(".qe-viewer-loading-orbit", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-vt-subtools", styles, StringComparison.Ordinal);
     }
