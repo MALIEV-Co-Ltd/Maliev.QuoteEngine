@@ -41,7 +41,7 @@
             <div class="qe-pbt-bulk-grid">
                 <span class="qe-pbt-bulk-field">Process</span>
                 <select class="qe-pbt-input" @onchange="ApplyBulkProcess">
-                    <option value="">BulkProcess...</option>
+                    <option value="">Select process</option>
                     @foreach (var process in Processes)
                     {
                         <option value="@process.Id">@process.Name</option>
@@ -50,7 +50,7 @@
 
                 <span class="qe-pbt-bulk-field">Material</span>
                 <select class="qe-pbt-input" @onchange="ApplyBulkMaterial">
-                    <option value="">BulkMaterial...</option>
+                    <option value="">Select material</option>
                     @foreach (var material in Materials)
                     {
                         <option value="@material.Id">@material.Name</option>

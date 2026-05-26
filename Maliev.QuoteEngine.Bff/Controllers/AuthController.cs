@@ -15,19 +15,18 @@ public sealed class AuthController(QuoteEnginePrototypeStore store, ICustomerSer
     [HttpGet("session")]
     public ActionResult<QuoteAuthStatusResponse> Session()
     {
-        Guid? customerId = null;
-        var signedIn = false;
         if (Request.Cookies.TryGetValue("maliev_quote_customer", out var rawCustomerId)
             && Guid.TryParse(rawCustomerId, out var parsedCustomerId))
         {
-            signedIn = true;
-            customerId = parsedCustomerId;
+            if (store.TryGetProfile(parsedCustomerId, out var profile) && profile is not null)
+            {
+                return Ok(new QuoteAuthStatusResponse(true, parsedCustomerId, profile.DisplayName));
+            }
+
+            Response.Cookies.Delete("maliev_quote_customer");
         }
 
-        var profile = customerId.HasValue ? store.GetProfile(customerId.Value) : null;
-        return Ok(signedIn
-            ? new QuoteAuthStatusResponse(true, customerId, profile?.DisplayName ?? store.PrototypeCustomer.DisplayName)
-            : new QuoteAuthStatusResponse(false, null, null));
+        return Ok(new QuoteAuthStatusResponse(false, null, null));
     }
 
     [HttpPost("sign-in")]

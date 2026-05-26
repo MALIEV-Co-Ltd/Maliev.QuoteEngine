@@ -85,7 +85,7 @@
             @if (SelectedPart is null)
             {
                 <section class="qe-empty-state">
-                    <div class="qe-empty-state-grid">
+                    <div class="qe-empty-state-grid @(ShowDemoSampleCard ? "" : "qe-empty-state-grid--solo")">
                         <button id="@HeroDropzoneId" type="button" class="qe-dropzone qe-dropzone--hero">
                             <span class="qe-dropzone-icon" aria-hidden="true">
                                 <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
@@ -93,7 +93,7 @@
                             <span>@UploadHeroLabel</span>
                             <small>@UploadHeroHint</small>
                         </button>
-                        @if (!IsDemoMode)
+                        @if (ShowDemoSampleCard)
                         {
                             <article class="qe-demo-sample-card">
                                 <span class="qe-zone-label">Demo sample</span>
@@ -181,6 +181,9 @@
     private int _selectedPartIndex;
     private string _centerMode = "model";
     private bool _isPartsDrawerOpen;
+    private bool _routeStateInitialized;
+    private string? _lastWorkspacePath;
+    private string? _lastHandoff;
     private string? _error;
 
     [CascadingParameter(Name = "IsDarkMode")]
@@ -194,6 +197,7 @@
     private bool CanApproveQuote => _formalQuote is not null && IsSignedIn && !IsDemoMode && !_formalQuote.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase);
     private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode;
     private bool CanPay => _order is not null && _estimate is not null && IsSignedIn && !IsDemoMode;
+    private bool ShowDemoSampleCard => !IsDemoMode && !IsSignedIn;
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
@@ -216,13 +220,15 @@
         _reference = await Api.GetReferenceDataAsync();
         _authStatus = await Api.GetAuthStatusAsync();
 
-        if (IsDemoMode)
+        await SynchronizeRouteStateAsync(force: true);
+        _routeStateInitialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_routeStateInitialized)
         {
-            await LoadDemoProjectAsync();
-        }
-        else if (!string.IsNullOrWhiteSpace(Handoff))
-        {
-            await ImportHandoffAsync(Handoff);
+            await SynchronizeRouteStateAsync(force: false);
         }
     }
 
@@ -275,6 +281,70 @@
         }
 
         await Js.InvokeVoidAsync("quoteEngineUploads.openFilePicker", UploadInputId);
+    }
+
+    private async Task SynchronizeRouteStateAsync(bool force)
+    {
+        var path = CurrentWorkspacePath();
+        var pathChanged = !string.Equals(_lastWorkspacePath, path, StringComparison.OrdinalIgnoreCase);
+        var handoffChanged = !string.Equals(_lastHandoff, Handoff, StringComparison.Ordinal);
+
+        if (!force && !pathChanged && !handoffChanged)
+        {
+            return;
+        }
+
+        var isDemoPath = IsDemoPath(path);
+        var wasDemoPath = _lastWorkspacePath is not null && IsDemoPath(_lastWorkspacePath);
+        if (isDemoPath)
+        {
+            if (force || pathChanged || !HasDemoWorkspace)
+            {
+                ResetWorkspaceState();
+                await LoadDemoProjectAsync();
+            }
+        }
+        else
+        {
+            if (force || wasDemoPath || HasDemoWorkspace)
+            {
+                ResetWorkspaceState();
+            }
+
+            if (!string.IsNullOrWhiteSpace(Handoff) && (force || pathChanged || handoffChanged))
+            {
+                await ImportHandoffAsync(Handoff);
+            }
+        }
+
+        _lastWorkspacePath = path;
+        _lastHandoff = Handoff;
+    }
+
+    private string CurrentWorkspacePath() => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+
+    private static bool IsDemoPath(string path) => path.Equals("/demo", StringComparison.OrdinalIgnoreCase);
+
+    private bool HasDemoWorkspace =>
+        _parts.Any(part => part.UploadId.StartsWith("demo-upload-", StringComparison.OrdinalIgnoreCase))
+        || _title.Contains("sample bracket demo", StringComparison.OrdinalIgnoreCase);
+
+    private void ResetWorkspaceState()
+    {
+        _quoteSessionId = Guid.NewGuid().ToString("N");
+        _parts.Clear();
+        _estimate = null;
+        _formalQuote = null;
+        _order = null;
+        _payment = null;
+        _draftProjectId = null;
+        _liveNotifications.Clear();
+        _leadTimeCode = "STANDARD";
+        _title = "Untitled quote";
+        _selectedPartIndex = 0;
+        _centerMode = "model";
+        _isPartsDrawerOpen = false;
+        _error = null;
     }
 
     private async Task HandleFilesAsync(InputFileChangeEventArgs args)
@@ -846,6 +916,12 @@
     private async Task LoadSampleFileAsync()
     {
         _error = null;
+        if (!IsDemoMode)
+        {
+            Navigation.NavigateTo("/demo");
+            return;
+        }
+
         await LoadDemoProjectAsync();
     }
 

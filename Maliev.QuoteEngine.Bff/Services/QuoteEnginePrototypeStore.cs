@@ -19,10 +19,10 @@ public sealed class QuoteEnginePrototypeStore
 
     public CustomerProfileResponse PrototypeCustomer { get; } = new(
         Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
-        "Natt MALIEV",
-        "customer@example.com",
-        "+66 2 000 0000",
-        "MALIEV Prototype Customer",
+        "Demo Customer",
+        "demo.customer@example.com",
+        "",
+        "MALIEV Demo Account",
         "en-US",
         ProfileImageUrl: null,
         PreferredCurrency: "THB",
@@ -117,6 +117,11 @@ public sealed class QuoteEnginePrototypeStore
     public CustomerProfileResponse GetProfile(Guid customerId)
     {
         return _customers.TryGetValue(customerId, out var profile) ? profile : PrototypeCustomer;
+    }
+
+    public bool TryGetProfile(Guid customerId, out CustomerProfileResponse? profile)
+    {
+        return _customers.TryGetValue(customerId, out profile);
     }
 
     public IReadOnlyList<CustomerAddressDto> GetAddresses(Guid customerId)

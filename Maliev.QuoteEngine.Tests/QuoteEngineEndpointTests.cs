@@ -580,6 +580,48 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Upload_uses_local_prototype_fallback_when_upload_service_is_unavailable_in_testing()
+    {
+        await using var fallbackFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(new FailingQuoteUploadServiceClient());
+            });
+        });
+        using var client = fallbackFactory.CreateClient();
+
+        var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = "session-local-fallback",
+            FileName = "local-only-part.step",
+            ContentType = "application/step",
+            FileSizeBytes = 1024
+        });
+        initiation.EnsureSuccessStatusCode();
+        var upload = await initiation.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(upload);
+
+        using var chunk = new ByteArrayContent(new byte[1024]);
+        chunk.Headers.ContentType = MediaTypeHeaderValue.Parse("application/step");
+        chunk.Headers.ContentRange = new ContentRangeHeaderValue(0, 1023, 1024);
+        var put = await client.PutAsync(upload.ProxyUploadUrl, chunk);
+        Assert.Equal(HttpStatusCode.NoContent, put.StatusCode);
+
+        var complete = await client.PostAsync($"/quote/v1/uploads/resumable/{upload.UploadId}/complete", null);
+        complete.EnsureSuccessStatusCode();
+        var completed = await complete.Content.ReadFromJsonAsync<CompleteQuoteUploadResponse>();
+        Assert.NotNull(completed);
+        Assert.Equal("Analyzed", completed.Status);
+
+        var status = await client.GetFromJsonAsync<QuoteAnalysisStatusResponse>($"/quote/v1/uploads/{upload.UploadId}/analysis-status");
+        Assert.NotNull(status);
+        Assert.Equal("Analyzed", status.Status);
+        Assert.True(status.VolumeCc > 0);
+    }
+
+    [Fact]
     public async Task CompleteUpload_demo_filename_returns_analyzed_status()
     {
         using var client = factory.CreateClient();
@@ -772,6 +814,33 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotEmpty(profile.Timezone);
         Assert.Equal("Active", profile.NdaStatus);
         Assert.NotNull(profile.NdaExpiresAt);
+    }
+
+    [Fact]
+    public async Task Unknown_customer_cookie_is_treated_as_signed_out_instead_of_prototype_profile()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+        using var sessionRequest = new HttpRequestMessage(HttpMethod.Get, "/quote/v1/auth/session");
+        sessionRequest.Headers.Add("Cookie", "maliev_quote_customer=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+
+        var sessionResponse = await client.SendAsync(sessionRequest);
+        sessionResponse.EnsureSuccessStatusCode();
+        var session = await sessionResponse.Content.ReadFromJsonAsync<QuoteAuthStatusResponse>();
+
+        Assert.NotNull(session);
+        Assert.False(session.IsSignedIn);
+        Assert.Null(session.CustomerId);
+        Assert.DoesNotContain("Natt", session.DisplayName ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            sessionResponse.Headers.GetValues("Set-Cookie"),
+            value => value.Contains("maliev_quote_customer=", StringComparison.OrdinalIgnoreCase)
+                && value.Contains("expires=", StringComparison.OrdinalIgnoreCase));
+
+        using var profileRequest = new HttpRequestMessage(HttpMethod.Get, "/quote/v1/account/profile");
+        profileRequest.Headers.Add("Cookie", "maliev_quote_customer=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        var profileResponse = await client.SendAsync(profileRequest);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, profileResponse.StatusCode);
     }
 
     [Fact]
@@ -1221,6 +1290,28 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         });
         signIn.EnsureSuccessStatusCode();
         return client;
+    }
+
+    private sealed class FailingQuoteUploadServiceClient()
+        : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
+    {
+        public override Task<string> InitiateResumableUploadAsync(
+            string fileName,
+            string contentType,
+            long totalSize,
+            string storagePath,
+            CancellationToken ct) =>
+            throw new InvalidOperationException("UploadService is intentionally unavailable.");
+
+        public override Task StreamUploadAsync(
+            Stream body,
+            string contentType,
+            long contentLength,
+            string contentRange,
+            string downstreamUploadId,
+            string storagePath,
+            CancellationToken ct) =>
+            throw new InvalidOperationException("UploadService is intentionally unavailable.");
     }
 
     private WebApplicationFactory<Program> CreateChatbotFactory()

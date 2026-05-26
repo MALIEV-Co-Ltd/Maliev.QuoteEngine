@@ -783,11 +783,25 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspaceRazor_resets_demo_workspace_when_leaving_demo_route()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+
+        Assert.Contains("SynchronizeRouteStateAsync", src, StringComparison.Ordinal);
+        Assert.Contains("HasDemoWorkspace", src, StringComparison.Ordinal);
+        Assert.Contains("ResetWorkspaceState", src, StringComparison.Ordinal);
+        Assert.Contains("ShowDemoSampleCard => !IsDemoMode && !IsSignedIn", src, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/demo\")", src, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeBulkTableRazor_exists_and_has_bulk_edit_columns()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeBulkTable.razor");
-        Assert.Contains("BulkProcess", src);
-        Assert.Contains("BulkMaterial", src);
+        Assert.Contains("Select process", src);
+        Assert.Contains("Select material", src);
+        Assert.DoesNotContain("<option value=\"\">BulkProcess", src);
+        Assert.DoesNotContain("<option value=\"\">BulkMaterial", src);
         Assert.Contains("LineTotal", src);
         Assert.Contains("DfmReport", src);  // DFM indicator column
     }

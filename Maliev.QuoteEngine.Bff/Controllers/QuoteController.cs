@@ -6,6 +6,7 @@ using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 
@@ -25,8 +26,11 @@ public sealed class QuoteController(
     IQuotationServiceClient quotationClient,
     IOrderServiceClient orderClient,
     IPaymentServiceClient paymentClient,
+    IHostEnvironment environment,
     ILogger<QuoteController> logger) : ControllerBase
 {
+    private const string PrototypeUploadPrefix = "prototype-local:";
+
     [HttpGet("reference-data")]
     public ActionResult<QuoteReferenceDataResponse> GetReferenceData()
     {
@@ -92,8 +96,17 @@ public sealed class QuoteController(
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to initiate UploadService session for quote upload {UploadId}", upload.UploadId);
-            return StatusCode(502, new ProblemDetails { Title = "Upload service unavailable." });
+            if (!CanUsePrototypeUploadFallback)
+            {
+                logger.LogError(ex, "Failed to initiate UploadService session for quote upload {UploadId}", upload.UploadId);
+                return StatusCode(502, new ProblemDetails { Title = "Upload service unavailable." });
+            }
+
+            upload = store.AttachDownstreamUpload(upload.UploadId, CreatePrototypeUploadId(upload.UploadId));
+            logger.LogWarning(
+                ex,
+                "UploadService unavailable for quote upload {UploadId}; using local prototype upload fallback.",
+                upload.UploadId);
         }
 
         return Ok(new InitiateQuoteUploadResponse(
@@ -126,6 +139,13 @@ public sealed class QuoteController(
             return StatusCode(502, new ProblemDetails { Title = "Upload session unavailable." });
         }
 
+        if (IsPrototypeUpload(upload))
+        {
+            await Request.Body.CopyToAsync(Stream.Null, cancellationToken);
+            store.MarkUploaded(uploadId, Request.ContentLength ?? upload.ExpectedSizeBytes);
+            return NoContent();
+        }
+
         // Stream body bytes to UploadService (GCS-backed)
         try
         {
@@ -137,6 +157,17 @@ public sealed class QuoteController(
         }
         catch (Exception ex)
         {
+            if (CanUsePrototypeUploadFallback)
+            {
+                logger.LogWarning(
+                    ex,
+                    "UploadService stream failed for quote upload {UploadId}; using local prototype upload fallback.",
+                    uploadId);
+                store.AttachDownstreamUpload(uploadId, CreatePrototypeUploadId(uploadId));
+                store.MarkUploaded(uploadId, Request.ContentLength ?? upload.ExpectedSizeBytes);
+                return NoContent();
+            }
+
             logger.LogError(ex, "Failed to stream upload chunk for {UploadId}", uploadId);
             return StatusCode(502, new ProblemDetails { Title = "Upload forwarding failed." });
         }
@@ -167,6 +198,14 @@ public sealed class QuoteController(
             return Ok(new CompleteQuoteUploadResponse(
                 demoUpload.UploadId, demoUpload.FileId, demoUpload.FileName,
                 demoUpload.StoragePath, demoUpload.Status));
+        }
+
+        if (IsPrototypeUpload(existingUpload))
+        {
+            var prototypeUpload = store.MarkAnalyzed(uploadId);
+            return Ok(new CompleteQuoteUploadResponse(
+                prototypeUpload.UploadId, prototypeUpload.FileId, prototypeUpload.FileName,
+                prototypeUpload.StoragePath, prototypeUpload.Status));
         }
 
         // Real pipeline: mark as Processing and wait for geometry events via MassTransit
@@ -490,4 +529,12 @@ public sealed class QuoteController(
 
         return sessionResolver.TryResolveCustomerId(out var customerId) && upload.CustomerId == customerId;
     }
+
+    private bool CanUsePrototypeUploadFallback =>
+        environment.IsDevelopment() || environment.IsEnvironment("Testing");
+
+    private static string CreatePrototypeUploadId(string uploadId) => $"{PrototypeUploadPrefix}{uploadId}";
+
+    private static bool IsPrototypeUpload(UploadState upload) =>
+        upload.DownstreamUploadId?.StartsWith(PrototypeUploadPrefix, StringComparison.Ordinal) == true;
 }

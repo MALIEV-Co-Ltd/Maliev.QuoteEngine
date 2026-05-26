@@ -29,9 +29,20 @@ public sealed class AccountController(
             return Unauthorized();
         }
 
-        // Try real CustomerService first; fall back to prototype store (prototype sign-in path)
+        // Try real CustomerService first; fall back to the local profile created at sign-in or Web handoff.
         var profile = await customerClient.GetByIdAsync(customerId, cancellationToken);
-        return Ok(profile ?? store.GetProfile(customerId));
+        if (profile is not null)
+        {
+            return Ok(profile);
+        }
+
+        if (store.TryGetProfile(customerId, out var storedProfile) && storedProfile is not null)
+        {
+            return Ok(storedProfile);
+        }
+
+        Response.Cookies.Delete("maliev_quote_customer");
+        return Unauthorized();
     }
 
     [HttpGet("addresses")]

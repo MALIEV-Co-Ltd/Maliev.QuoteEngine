@@ -188,7 +188,9 @@ internal sealed class CustomerChatbotService(
         string language)
     {
         var normalized = message.ToLowerInvariant();
-        var profile = identity.CustomerId.HasValue ? store.GetProfile(identity.CustomerId.Value) : null;
+        var profile = identity.CustomerId.HasValue && store.TryGetProfile(identity.CustomerId.Value, out var resolvedProfile)
+            ? resolvedProfile
+            : null;
         var displayName = FirstNonEmpty(profile?.DisplayName, identity.DisplayName, identity.Email, "there");
         var actions = CreateAccountActions(normalized);
 
@@ -299,8 +301,9 @@ internal sealed class CustomerChatbotService(
             return new QuoteChatbotIdentity(false, null, null, null);
         }
 
-        var profile = store.GetProfile(customerId);
-        return new QuoteChatbotIdentity(true, customerId, profile.DisplayName, profile.Email);
+        return store.TryGetProfile(customerId, out var profile) && profile is not null
+            ? new QuoteChatbotIdentity(true, customerId, profile.DisplayName, profile.Email)
+            : new QuoteChatbotIdentity(false, null, null, null);
     }
 
     private CustomerAssistantHandoffPayload? ReadHandoff()
