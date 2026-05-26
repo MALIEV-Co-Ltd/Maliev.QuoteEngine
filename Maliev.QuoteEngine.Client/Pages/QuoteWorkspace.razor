@@ -28,6 +28,7 @@
                               UploadLabel="@UploadCompactLabel"
                               UploadHint="@UploadCompactHint"
                               OnSelectPart="@SelectPart"
+                              OnDuplicateProject="DuplicateProjectAsync"
                               OnRemovePart="@RemovePart" />
             <div class="qe-pn-parts-drawer @(_isPartsDrawerOpen ? "qe-pn-parts-drawer--open" : "")">
                 <QePartsListPanel @bind-Title="_title"
@@ -40,6 +41,7 @@
                                   UploadHint="@UploadCompactHint"
                                   IsDrawer="true"
                                   OnSelectPart="@SelectPart"
+                                  OnDuplicateProject="DuplicateProjectAsync"
                                   OnRemovePart="@RemovePart" />
             </div>
             @if (_isPartsDrawerOpen)
@@ -169,6 +171,7 @@
     private GenerateFormalQuoteResponse? _formalQuote;
     private CreateManufacturingOrderResponse? _order;
     private InitiatePaymentResponse? _payment;
+    private Guid? _draftProjectId;
     private HubConnection? _notificationConnection;
     private DotNetObjectReference<QuoteWorkspace>? _dotNetRef;
     private readonly List<string> _liveNotifications = [];
@@ -179,7 +182,9 @@
     private string _centerMode = "model";
     private bool _isPartsDrawerOpen;
     private string? _error;
-    private bool IsDarkMode => false;  // wire to ThemeService if added later
+
+    [CascadingParameter(Name = "IsDarkMode")]
+    private bool IsDarkMode { get; set; }
 
     private bool IsDemoMode => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/demo", StringComparison.OrdinalIgnoreCase);
     private bool IsSignedIn => _authStatus.IsSignedIn;
@@ -279,6 +284,7 @@
         _formalQuote = null;
         _order = null;
         _payment = null;
+        _draftProjectId = null;
 
         var selectedFiles = args.GetMultipleFiles(12).ToArray();
         var capturedFiles = selectedFiles
@@ -315,6 +321,7 @@
         _formalQuote = null;
         _order = null;
         _payment = null;
+        _draftProjectId = null;
 
         await ProcessUploadCandidatesAsync(files.Select(file => new UploadCandidate(
             file.ClientFileId,
@@ -458,6 +465,7 @@
     {
         var idx = _parts.IndexOf(part);
         _parts.Remove(part);
+        _draftProjectId = null;
         if (_parts.Count > 0)
         {
             _selectedPartIndex = Math.Clamp(idx, 0, _parts.Count - 1);
@@ -502,6 +510,7 @@
         _formalQuote = null;
         _order = null;
         _payment = null;
+        _draftProjectId = null;
     }
 
     private async Task CalculateAsync()
@@ -527,8 +536,58 @@
             return;
         }
 
-        var draft = await Api.CreateDraftProjectAsync(new CreateDraftProjectRequest(_quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Customer quote engine prototype"));
+        var draft = await Api.CreateDraftProjectAsync(new CreateDraftProjectRequest(
+            _quoteSessionId,
+            _parts.Select(x => x.ToDraft()).ToArray(),
+            "Customer quote engine prototype",
+            _title));
+        _draftProjectId = draft.ProjectId;
         _formalQuote = await Api.GenerateFormalQuoteAsync(new GenerateFormalQuoteRequest(draft.ProjectId, _quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Formal quote requested by customer."));
+        _order = null;
+        _payment = null;
+    }
+
+    private async Task DuplicateProjectAsync()
+    {
+        if (!IsSignedIn || IsDemoMode)
+        {
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            return;
+        }
+
+        if (_parts.Count == 0)
+        {
+            return;
+        }
+
+        if (!_draftProjectId.HasValue)
+        {
+            var draft = await Api.CreateDraftProjectAsync(new CreateDraftProjectRequest(
+                _quoteSessionId,
+                _parts.Select(x => x.ToDraft()).ToArray(),
+                "Customer quote engine duplicate source.",
+                _title));
+            _draftProjectId = draft.ProjectId;
+        }
+
+        var duplicate = await Api.DuplicateProjectAsync(_draftProjectId.Value, new DuplicateDraftProjectRequest($"{_title} copy"));
+        ApplyDuplicatedProject(duplicate);
+        await CalculateAsync();
+    }
+
+    private void ApplyDuplicatedProject(DuplicateDraftProjectResponse project)
+    {
+        _draftProjectId = project.ProjectId;
+        _title = project.Title;
+        _quoteSessionId = Guid.NewGuid().ToString("N");
+        _parts.Clear();
+        foreach (var part in project.Parts)
+        {
+            _parts.Add(CreatePartViewModel(part));
+        }
+
+        _selectedPartIndex = _parts.Count > 0 ? 0 : 0;
+        _formalQuote = null;
         _order = null;
         _payment = null;
     }
@@ -620,6 +679,41 @@
         part.SlaDfmReport = status.SlaReport;
         part.CncDfmReport = status.CncReport;
         part.OverlayGlbUrls = status.OverlayGlbUrls;
+    }
+
+    private static QuotePartViewModel CreatePartViewModel(QuotePartDraftDto part)
+    {
+        return new QuotePartViewModel
+        {
+            PartId = part.PartId,
+            FileId = part.FileId,
+            UploadId = part.UploadId,
+            FileName = part.FileName,
+            ProcessId = part.ProcessId,
+            MaterialId = part.MaterialId,
+            FinishId = part.FinishId,
+            FinishCode = part.FinishCode,
+            ToleranceId = part.ToleranceId,
+            ToleranceCode = part.ToleranceCode,
+            InspectionLevel = part.InspectionLevel,
+            RoughnessCode = part.RoughnessCode,
+            Color = part.Color,
+            HasThreadedHoles = part.HasThreadedHoles,
+            ThreadSpecification = part.ThreadSpecification,
+            ThreadedHoleCount = part.ThreadedHoleCount,
+            InsertType = part.InsertType,
+            InsertCount = part.InsertCount,
+            Quantity = part.Quantity,
+            VolumeCc = part.VolumeCc,
+            SurfaceAreaCm2 = part.SurfaceAreaCm2,
+            DfmAcknowledged = part.DfmAcknowledged,
+            PartNotes = part.PartNotes,
+            BodyCount = part.BodyCount ?? 1,
+            SelectedBodyIndex = part.SelectedBodyIndex,
+            DrawingFiles = [.. part.DrawingFiles],
+            ViewerSettings = part.ViewerSettings,
+            Status = "Analyzed"
+        };
     }
 
     private async Task EnsureNotificationConnectionAsync()
@@ -731,9 +825,10 @@
                 SelectedBodyIndex = part.SelectedBodyIndex,
                 DrawingFiles = [.. part.DrawingFiles],
                 ViewerSettings = part.ViewerSettings,
-                Status = "Analyzed",
+                Status = "DfmAnalysisReady",
                 GlbUrl = string.IsNullOrWhiteSpace(demo.ViewerUrl) ? null : demo.ViewerUrl,
                 ThumbnailUrl = string.IsNullOrWhiteSpace(demo.ThumbnailUrl) ? null : demo.ThumbnailUrl,
+                CncDfmReport = new QeCncDfmReport(0, false, true, 2, false, false, false, []),
                 Findings =
                 [
                     new("Info", "DEMO_SAMPLE", demo.Notice),

@@ -48,6 +48,13 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         public string? Mobile { get; set; }
         public string? CompanyName { get; set; }
         public string PreferredLanguage { get; set; } = "en";
+        public string? ProfileImageUrl { get; set; }
+        public string PreferredCurrency { get; set; } = "THB";
+        public string Timezone { get; set; } = "Asia/Bangkok";
+        public string Segment { get; set; } = "Self-service manufacturing";
+        public string Tier { get; set; } = "Customer";
+        public string NdaStatus { get; set; } = "Active";
+        public DateTimeOffset? NdaExpiresAt { get; set; }
     }
 
     private sealed class CsPagedCustomerResponse
@@ -187,7 +194,14 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
             result.Email,
             result.Mobile ?? string.Empty,
             result.CompanyName ?? string.Empty,
-            result.PreferredLanguage);
+            result.PreferredLanguage,
+            result.ProfileImageUrl,
+            string.IsNullOrWhiteSpace(result.PreferredCurrency) ? "THB" : result.PreferredCurrency,
+            string.IsNullOrWhiteSpace(result.Timezone) ? "Asia/Bangkok" : result.Timezone,
+            string.IsNullOrWhiteSpace(result.Segment) ? "Self-service manufacturing" : result.Segment,
+            string.IsNullOrWhiteSpace(result.Tier) ? "Customer" : result.Tier,
+            string.IsNullOrWhiteSpace(result.NdaStatus) ? "Active" : result.NdaStatus,
+            result.NdaExpiresAt ?? DateTimeOffset.UtcNow.AddDays(90));
     }
 
     private static string NormalizeEmail(string email)

@@ -14,6 +14,8 @@ public sealed class QuoteEnginePrototypeStore
     private readonly ConcurrentDictionary<Guid, CustomerProfileResponse> _customers = new();
     private readonly ConcurrentDictionary<Guid, CustomerQuoteRecord> _quotes = new();
     private readonly ConcurrentDictionary<Guid, CustomerOrderRecord> _orders = new();
+    private readonly ConcurrentDictionary<Guid, CustomerProjectRecord> _projects = new();
+    private readonly ConcurrentDictionary<Guid, List<CustomerAddressDto>> _addressesByCustomer = new();
 
     public CustomerProfileResponse PrototypeCustomer { get; } = new(
         Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
@@ -21,7 +23,14 @@ public sealed class QuoteEnginePrototypeStore
         "customer@example.com",
         "+66 2 000 0000",
         "MALIEV Prototype Customer",
-        "en-US");
+        "en-US",
+        ProfileImageUrl: null,
+        PreferredCurrency: "THB",
+        Timezone: "Asia/Bangkok",
+        Segment: "Prototype buyer",
+        Tier: "Customer",
+        NdaStatus: "Active",
+        NdaExpiresAt: DateTimeOffset.UtcNow.AddDays(90));
 
     public QuoteReferenceDataResponse ReferenceData { get; } = new(
         [
@@ -74,7 +83,12 @@ public sealed class QuoteEnginePrototypeStore
 
     public IReadOnlyList<CustomerNdaDto> Ndas { get; } =
     [
-        new(Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"), "Mutual NDA", "Active", DateTimeOffset.UtcNow.AddDays(-12))
+        new(
+            Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+            "Mutual NDA",
+            "Active",
+            DateTimeOffset.UtcNow.AddDays(-12),
+            DateTimeOffset.UtcNow.AddDays(90))
     ];
 
     public IReadOnlyList<CustomerDocumentDto> Documents { get; } =
@@ -105,6 +119,111 @@ public sealed class QuoteEnginePrototypeStore
         return _customers.TryGetValue(customerId, out var profile) ? profile : PrototypeCustomer;
     }
 
+    public IReadOnlyList<CustomerAddressDto> GetAddresses(Guid customerId)
+    {
+        if (!_addressesByCustomer.TryGetValue(customerId, out var addresses))
+        {
+            return [];
+        }
+
+        lock (addresses)
+        {
+            return addresses.Select(CloneAddress).ToArray();
+        }
+    }
+
+    public CustomerAddressDto CreateAddress(Guid customerId, CustomerAddressUpsertRequest request, Guid resolvedCountryId)
+    {
+        var addresses = _addressesByCustomer.GetOrAdd(customerId, _ => []);
+        lock (addresses)
+        {
+            var address = MapAddressRequest(request, resolvedCountryId);
+            address.Id = Guid.NewGuid();
+            address.IsDefault = request.IsDefault || !addresses.Any(item => SameAddressType(item, request.Type));
+            address.Version = 1;
+
+            if (address.IsDefault)
+            {
+                ResetSameRoleDefault(addresses, address);
+            }
+
+            addresses.Add(address);
+            return CloneAddress(address);
+        }
+    }
+
+    public CustomerAddressDto? UpdateAddress(Guid customerId, Guid addressId, CustomerAddressUpsertRequest request)
+    {
+        if (!_addressesByCustomer.TryGetValue(customerId, out var addresses))
+        {
+            return null;
+        }
+
+        lock (addresses)
+        {
+            var index = addresses.FindIndex(item => item.Id == addressId);
+            if (index < 0)
+            {
+                return null;
+            }
+
+            var updated = MapAddressRequest(request, request.CountryId);
+            updated.Id = addressId;
+            updated.Version = addresses[index].Version + 1;
+
+            addresses[index] = updated;
+            if (updated.IsDefault)
+            {
+                ResetSameRoleDefault(addresses, updated);
+            }
+
+            return CloneAddress(updated);
+        }
+    }
+
+    public bool DeleteAddress(Guid customerId, Guid addressId)
+    {
+        if (!_addressesByCustomer.TryGetValue(customerId, out var addresses))
+        {
+            return false;
+        }
+
+        lock (addresses)
+        {
+            var address = addresses.FirstOrDefault(item => item.Id == addressId);
+            if (address is null)
+            {
+                return false;
+            }
+
+            addresses.Remove(address);
+            if (address.IsDefault)
+            {
+                var replacement = addresses.FirstOrDefault(item => SameAddressType(item, address.Type));
+                if (replacement is not null)
+                {
+                    replacement.IsDefault = true;
+                    replacement.Version++;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    public bool CustomerOwnsAddress(Guid customerId, Guid addressId)
+    {
+        if (!_addressesByCustomer.TryGetValue(customerId, out var addresses))
+        {
+            return false;
+        }
+
+        lock (addresses)
+        {
+            return addresses.Any(item => item.Id == addressId);
+        }
+    }
+
     public CustomerProfileResponse GetOrCreateCustomer(string email, string displayName, string phone = "", string companyName = "")
     {
         var normalizedEmail = NormalizeEmail(email);
@@ -115,7 +234,14 @@ public sealed class QuoteEnginePrototypeStore
             normalizedEmail,
             phone,
             companyName,
-            "en-US"));
+            "en-US",
+            ProfileImageUrl: null,
+            PreferredCurrency: "THB",
+            Timezone: "Asia/Bangkok",
+            Segment: string.IsNullOrWhiteSpace(companyName) ? "Self-service manufacturing" : "Company manufacturing",
+            Tier: "Customer",
+            NdaStatus: "Active",
+            NdaExpiresAt: DateTimeOffset.UtcNow.AddDays(90)));
     }
 
     public CustomerProfileResponse UpsertCustomer(
@@ -124,7 +250,14 @@ public sealed class QuoteEnginePrototypeStore
         string displayName,
         string phone = "",
         string companyName = "",
-        string preferredLanguage = "en-US")
+        string preferredLanguage = "en-US",
+        string? profileImageUrl = null,
+        string preferredCurrency = "THB",
+        string timezone = "Asia/Bangkok",
+        string segment = "Self-service manufacturing",
+        string tier = "Customer",
+        string ndaStatus = "Active",
+        DateTimeOffset? ndaExpiresAt = null)
     {
         var normalizedEmail = NormalizeEmail(email);
         var profile = new CustomerProfileResponse(
@@ -133,7 +266,16 @@ public sealed class QuoteEnginePrototypeStore
             normalizedEmail,
             phone,
             companyName,
-            string.IsNullOrWhiteSpace(preferredLanguage) ? "en-US" : preferredLanguage);
+            string.IsNullOrWhiteSpace(preferredLanguage) ? "en-US" : preferredLanguage,
+            ProfileImageUrl: profileImageUrl,
+            PreferredCurrency: string.IsNullOrWhiteSpace(preferredCurrency) ? "THB" : preferredCurrency,
+            Timezone: string.IsNullOrWhiteSpace(timezone) ? "Asia/Bangkok" : timezone,
+            Segment: string.IsNullOrWhiteSpace(segment)
+                ? string.IsNullOrWhiteSpace(companyName) ? "Self-service manufacturing" : "Company manufacturing"
+                : segment,
+            Tier: string.IsNullOrWhiteSpace(tier) ? "Customer" : tier,
+            NdaStatus: string.IsNullOrWhiteSpace(ndaStatus) ? "Active" : ndaStatus,
+            NdaExpiresAt: ndaExpiresAt ?? DateTimeOffset.UtcNow.AddDays(90));
 
         _customerIdsByEmail[normalizedEmail] = customerId;
         _customers[customerId] = profile;
@@ -320,9 +462,56 @@ public sealed class QuoteEnginePrototypeStore
         return new QuoteEstimateResponse(request.QuoteSessionId, subtotal, discount, subtotal - discount, "THB", true, lines);
     }
 
-    public CreateDraftProjectResponse CreateDraftProject()
+    public CreateDraftProjectResponse CreateDraftProject(Guid customerId, CreateDraftProjectRequest request)
     {
-        return new CreateDraftProjectResponse(Guid.NewGuid(), $"QE-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}", "Draft");
+        var project = CreateProjectRecord(
+            customerId,
+            string.IsNullOrWhiteSpace(request.Title) ? "Untitled quote" : request.Title.Trim(),
+            request.Parts,
+            request.Notes);
+
+        _projects[project.ProjectId] = project;
+        return new CreateDraftProjectResponse(project.ProjectId, project.ProjectNumber, project.Status, project.Title, ClonePartsForResponse(project.Parts));
+    }
+
+    public DuplicateDraftProjectResponse? DuplicateDraftProject(Guid customerId, Guid projectId, DuplicateDraftProjectRequest request)
+    {
+        if (!_projects.TryGetValue(projectId, out var source) || source.CustomerId != customerId)
+        {
+            return null;
+        }
+
+        var title = string.IsNullOrWhiteSpace(request.Title)
+            ? $"{source.Title} copy"
+            : request.Title.Trim();
+        var duplicated = CreateProjectRecord(customerId, title, ClonePartsForResponse(source.Parts), source.Notes);
+        _projects[duplicated.ProjectId] = duplicated;
+        return new DuplicateDraftProjectResponse(
+            duplicated.ProjectId,
+            duplicated.ProjectNumber,
+            duplicated.Status,
+            duplicated.Title,
+            ClonePartsForResponse(duplicated.Parts));
+    }
+
+    private static CustomerProjectRecord CreateProjectRecord(
+        Guid customerId,
+        string title,
+        IReadOnlyList<QuotePartDraftDto> parts,
+        string notes)
+    {
+        var projectId = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        return new CustomerProjectRecord(
+            customerId,
+            projectId,
+            $"QE-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
+            "Draft",
+            title,
+            notes,
+            ClonePartsForStorage(parts),
+            now,
+            now);
     }
 
     public GenerateFormalQuoteResponse GenerateQuote(Guid customerId)
@@ -435,6 +624,119 @@ public sealed class QuoteEnginePrototypeStore
         return (multiplier, additive, string.Join("; ", notes) + ".");
     }
 
+    private static IReadOnlyList<QuotePartDraftDto> ClonePartsForStorage(IReadOnlyList<QuotePartDraftDto> parts)
+    {
+        return parts.Select(part => ClonePart(part, Guid.NewGuid())).ToArray();
+    }
+
+    private static IReadOnlyList<QuotePartDraftDto> ClonePartsForResponse(IReadOnlyList<QuotePartDraftDto> parts)
+    {
+        return parts.Select(part => ClonePart(part, part.PartId)).ToArray();
+    }
+
+    private static QuotePartDraftDto ClonePart(QuotePartDraftDto source, Guid partId)
+    {
+        return new QuotePartDraftDto
+        {
+            PartId = partId,
+            FileId = source.FileId,
+            UploadId = source.UploadId,
+            FileName = source.FileName,
+            ProcessId = source.ProcessId,
+            MaterialId = source.MaterialId,
+            FinishId = source.FinishId,
+            FinishCode = source.FinishCode,
+            ToleranceId = source.ToleranceId,
+            ToleranceCode = source.ToleranceCode,
+            InspectionLevel = source.InspectionLevel,
+            RoughnessCode = source.RoughnessCode,
+            Color = source.Color,
+            HasThreadedHoles = source.HasThreadedHoles,
+            ThreadSpecification = source.ThreadSpecification,
+            ThreadedHoleCount = source.ThreadedHoleCount,
+            InsertType = source.InsertType,
+            InsertCount = source.InsertCount,
+            Quantity = source.Quantity,
+            VolumeCc = source.VolumeCc,
+            SurfaceAreaCm2 = source.SurfaceAreaCm2,
+            DfmAcknowledged = source.DfmAcknowledged,
+            PartNotes = source.PartNotes,
+            BodyCount = source.BodyCount,
+            SelectedBodyIndex = source.SelectedBodyIndex,
+            DrawingFiles = source.DrawingFiles.Select(file => file with { }).ToList(),
+            ViewerSettings = source.ViewerSettings with { }
+        };
+    }
+
+    private static CustomerAddressDto MapAddressRequest(CustomerAddressUpsertRequest request, Guid resolvedCountryId)
+    {
+        return new CustomerAddressDto
+        {
+            Type = string.IsNullOrWhiteSpace(request.Type) ? "Shipping" : request.Type,
+            IsDefault = request.IsDefault,
+            PlaceLabel = request.PlaceLabel,
+            PlaceLabelOther = request.PlaceLabelOther,
+            AddressLine1 = request.AddressLine1,
+            AddressLine2 = request.AddressLine2,
+            AddressLine3 = request.AddressLine3,
+            District = request.District,
+            City = request.City,
+            StateProvince = request.StateProvince,
+            PostalCode = request.PostalCode,
+            CountryId = resolvedCountryId == Guid.Empty ? request.CountryId : resolvedCountryId,
+            RecipientName = request.RecipientName,
+            RecipientPhone = request.RecipientPhone,
+            DriverNote = request.DriverNote,
+            AddressSource = string.IsNullOrWhiteSpace(request.AddressSource) ? "Manual" : request.AddressSource,
+            GooglePlaceId = request.GooglePlaceId,
+            FormattedAddress = request.FormattedAddress,
+            Latitude = request.Latitude,
+            Longitude = request.Longitude
+        };
+    }
+
+    private static CustomerAddressDto CloneAddress(CustomerAddressDto source)
+    {
+        return new CustomerAddressDto
+        {
+            Id = source.Id,
+            Type = source.Type,
+            IsDefault = source.IsDefault,
+            PlaceLabel = source.PlaceLabel,
+            PlaceLabelOther = source.PlaceLabelOther,
+            AddressLine1 = source.AddressLine1,
+            AddressLine2 = source.AddressLine2,
+            AddressLine3 = source.AddressLine3,
+            District = source.District,
+            City = source.City,
+            StateProvince = source.StateProvince,
+            PostalCode = source.PostalCode,
+            CountryId = source.CountryId,
+            RecipientName = source.RecipientName,
+            RecipientPhone = source.RecipientPhone,
+            DriverNote = source.DriverNote,
+            AddressSource = source.AddressSource,
+            GooglePlaceId = source.GooglePlaceId,
+            FormattedAddress = source.FormattedAddress,
+            Latitude = source.Latitude,
+            Longitude = source.Longitude,
+            Version = source.Version
+        };
+    }
+
+    private static void ResetSameRoleDefault(List<CustomerAddressDto> addresses, CustomerAddressDto current)
+    {
+        foreach (var address in addresses.Where(item => item.Id != current.Id && SameAddressType(item, current.Type)))
+        {
+            address.IsDefault = false;
+        }
+    }
+
+    private static bool SameAddressType(CustomerAddressDto address, string? type)
+    {
+        return address.Type.Equals(string.IsNullOrWhiteSpace(type) ? "Shipping" : type, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool Matches(string candidate, string? value)
     {
         return !string.IsNullOrWhiteSpace(value)
@@ -450,6 +752,17 @@ public sealed class QuoteEnginePrototypeStore
 internal sealed record CustomerQuoteRecord(Guid CustomerId, CustomerQuoteSummaryDto Quote);
 
 internal sealed record CustomerOrderRecord(Guid CustomerId, CustomerOrderSummaryDto Order);
+
+internal sealed record CustomerProjectRecord(
+    Guid CustomerId,
+    Guid ProjectId,
+    string ProjectNumber,
+    string Status,
+    string Title,
+    string Notes,
+    IReadOnlyList<QuotePartDraftDto> Parts,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
 
 public sealed record UploadState(
     string UploadId,

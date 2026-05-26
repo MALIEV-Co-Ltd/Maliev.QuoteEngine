@@ -213,7 +213,7 @@ public sealed class QuoteController(
     [HttpPost("projects/draft")]
     public ActionResult<CreateDraftProjectResponse> CreateDraftProject([FromBody] CreateDraftProjectRequest request)
     {
-        if (!sessionResolver.TryResolveCustomerId(out _))
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized(new ProblemDetails
             {
@@ -222,8 +222,25 @@ public sealed class QuoteController(
             });
         }
 
-        _ = request;
-        return Ok(store.CreateDraftProject());
+        return Ok(store.CreateDraftProject(customerId, request));
+    }
+
+    [HttpPost("projects/{projectId:guid}/duplicate")]
+    public ActionResult<DuplicateDraftProjectResponse> DuplicateDraftProject(
+        Guid projectId,
+        [FromBody] DuplicateDraftProjectRequest request)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "Project duplication is available only for signed-in customers."
+            });
+        }
+
+        var duplicated = store.DuplicateDraftProject(customerId, projectId, request);
+        return duplicated is null ? NotFound() : Ok(duplicated);
     }
 
     [HttpPost("quotes/formal")]

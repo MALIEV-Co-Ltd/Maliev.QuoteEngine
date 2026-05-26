@@ -291,9 +291,27 @@ public sealed record QuoteEstimateResponse(
     bool RequiresSignIn,
     IReadOnlyList<QuoteLineEstimateDto> Lines);
 
-public sealed record CreateDraftProjectRequest(string QuoteSessionId, IReadOnlyList<QuotePartDraftDto> Parts, string Notes);
+public sealed record CreateDraftProjectRequest(
+    string QuoteSessionId,
+    IReadOnlyList<QuotePartDraftDto> Parts,
+    string Notes,
+    string Title = "Untitled quote");
 
-public sealed record CreateDraftProjectResponse(Guid ProjectId, string ProjectNumber, string Status);
+public sealed record CreateDraftProjectResponse(
+    Guid ProjectId,
+    string ProjectNumber,
+    string Status,
+    string Title = "Untitled quote",
+    IReadOnlyList<QuotePartDraftDto>? Parts = null);
+
+public sealed record DuplicateDraftProjectRequest(string? Title);
+
+public sealed record DuplicateDraftProjectResponse(
+    Guid ProjectId,
+    string ProjectNumber,
+    string Status,
+    string Title,
+    IReadOnlyList<QuotePartDraftDto> Parts);
 
 public sealed record GenerateFormalQuoteRequest(Guid ProjectId, string QuoteSessionId, IReadOnlyList<QuotePartDraftDto> Parts, string Notes);
 

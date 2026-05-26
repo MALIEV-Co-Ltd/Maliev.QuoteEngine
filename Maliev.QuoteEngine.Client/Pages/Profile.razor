@@ -15,26 +15,65 @@
 }
 else
 {
-    <div class="profile-grid">
-        <div>
-            <span>Name</span>
-            <strong>@_profile.DisplayName</strong>
-        </div>
-        <div>
-            <span>Email</span>
-            <strong>@_profile.Email</strong>
-        </div>
-        <div>
-            <span>Phone</span>
-            <strong>@_profile.Phone</strong>
-        </div>
-        <div>
-            <span>Company</span>
-            <strong>@_profile.CompanyName</strong>
-        </div>
-    </div>
+    <section class="account-overview-card">
+        <article class="account-profile-card">
+            @if (!string.IsNullOrWhiteSpace(_profile.ProfileImageUrl))
+            {
+                <img class="account-profile-avatar account-profile-avatar--image" src="@_profile.ProfileImageUrl" alt="" />
+            }
+            else
+            {
+                <span class="account-profile-avatar" aria-hidden="true">@ProfileInitials</span>
+            }
 
-    <section class="profile-address-book">
+            <div class="account-profile-main">
+                <span class="eyebrow">@_profile.Tier</span>
+                <h2>@_profile.DisplayName</h2>
+                <p>@_profile.Email</p>
+                <div class="account-profile-meta">
+                    <span>@DisplayOrDash(_profile.Phone)</span>
+                    <span>@DisplayOrDash(_profile.CompanyName)</span>
+                    <span>@_profile.PreferredLanguage</span>
+                    <span>@_profile.Timezone</span>
+                </div>
+            </div>
+
+            <div class="account-nda-card">
+                <span class="eyebrow">NDA</span>
+                <strong>@NdaStatus</strong>
+                <small>@NdaExpiryNotice</small>
+            </div>
+        </article>
+
+        <div class="account-action-grid" aria-label="Customer data">
+            <a href="/profile">
+                <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
+                <span>Profile</span>
+            </a>
+            <a href="/profile#addresses">
+                <MudIcon Icon="@Icons.Material.Outlined.LocationOn" Size="Size.Small" />
+                <span>Addresses</span>
+            </a>
+            <a href="/orders">
+                <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Small" />
+                <span>Orders</span>
+            </a>
+            <a href="/ndas">
+                <MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" />
+                <span>NDAs</span>
+            </a>
+            <a href="/documents">
+                <MudIcon Icon="@Icons.Material.Outlined.Folder" Size="Size.Small" />
+                <span>Documents</span>
+            </a>
+            <a href="/preferences">
+                <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
+                <span>Preferences</span>
+            </a>
+        </div>
+    </section>
+
+    <section id="addresses" class="profile-address-book">
         <div class="profile-address-heading">
             <div>
                 <span class="eyebrow">Address book</span>
@@ -211,6 +250,7 @@ else
     private CustomerProfileResponse? _profile;
     private QuoteAuthStatusResponse _authStatus = new(false, null, null);
     private List<CustomerAddressDto> _addresses = [];
+    private List<CustomerNdaDto> _ndas = [];
     private List<ThaiAddressRegistryLocationDto> _registryLocations = [];
     private CustomerAddressUpsertRequest _addressForm = new();
     private Guid? _editingAddressId;
@@ -238,6 +278,29 @@ else
     private bool ProvinceLocked => IsGoogleAddress(_addressForm) && !string.IsNullOrWhiteSpace(_addressForm.StateProvince);
 
     private bool PostalCodeLocked => IsGoogleAddress(_addressForm) && !string.IsNullOrWhiteSpace(_addressForm.PostalCode);
+    private string ProfileInitials => GetInitials(_profile?.DisplayName ?? "Customer");
+    private CustomerNdaDto? ActiveNda => _ndas.FirstOrDefault(nda => nda.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
+    private string NdaStatus => ActiveNda?.Status ?? _profile?.NdaStatus ?? "Not active";
+    private string NdaExpiryNotice
+    {
+        get
+        {
+            var expiry = ActiveNda?.ExpiresAt ?? _profile?.NdaExpiresAt;
+            if (!expiry.HasValue)
+            {
+                return "No expiry date on file.";
+            }
+
+            var days = (expiry.Value.Date - DateTimeOffset.UtcNow.Date).Days;
+            return days switch
+            {
+                < 0 => $"Expired {Math.Abs(days)} days ago.",
+                0 => "Expires today.",
+                <= 30 => $"Expires in {days} days.",
+                _ => $"Expires {expiry.Value:dd MMM yyyy}."
+            };
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -249,6 +312,7 @@ else
         }
 
         _profile = await Api.GetProfileAsync();
+        _ndas = [.. await Api.GetNdasAsync()];
         ResetAddressForm();
         await LoadAddressesAsync();
     }
@@ -446,6 +510,23 @@ else
     private static bool IsGoogleAddress(CustomerAddressUpsertRequest address) =>
         string.Equals(address.AddressSource, "GooglePlace", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(address.AddressSource, "GoogleMapPin", StringComparison.OrdinalIgnoreCase);
+
+    private static string DisplayOrDash(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    private static string GetInitials(string value)
+    {
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return "C";
+        }
+
+        var initials = string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+        return string.IsNullOrWhiteSpace(initials) ? "C" : initials;
+    }
 
     private bool UseThaiRegistryLabels()
     {

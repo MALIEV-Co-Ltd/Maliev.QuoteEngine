@@ -8,7 +8,14 @@ public sealed record CustomerProfileResponse(
     string Email,
     string Phone,
     string CompanyName,
-    string PreferredLanguage);
+    string PreferredLanguage,
+    string? ProfileImageUrl = null,
+    string PreferredCurrency = "THB",
+    string Timezone = "Asia/Bangkok",
+    string Segment = "Self-service manufacturing",
+    string Tier = "Customer",
+    string NdaStatus = "Active",
+    DateTimeOffset? NdaExpiresAt = null);
 
 public sealed record CustomerQuoteSummaryDto(
     Guid QuoteId,
@@ -48,7 +55,12 @@ public sealed record CustomerOrderDetailDto(
     DateTimeOffset UpdatedAt,
     IReadOnlyList<OrderStatusEntryDto> StatusHistory);
 
-public sealed record CustomerNdaDto(Guid NdaId, string Title, string Status, DateTimeOffset UpdatedAt);
+public sealed record CustomerNdaDto(
+    Guid NdaId,
+    string Title,
+    string Status,
+    DateTimeOffset UpdatedAt,
+    DateTimeOffset? ExpiresAt = null);
 
 public sealed record CustomerDocumentDto(Guid DocumentId, string FileName, string Kind, DateTimeOffset UploadedAt);
 

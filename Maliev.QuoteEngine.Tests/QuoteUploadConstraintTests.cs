@@ -15,12 +15,21 @@ public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory 
         var response = await client.GetFromJsonAsync<QuoteReferenceDataResponse>("/quote/v1/reference-data");
 
         Assert.NotNull(response);
+        Assert.Contains("step", response.SupportedExtensions);
         Assert.Contains("glb", response.SupportedExtensions);
         Assert.Contains("gltf", response.SupportedExtensions);
+        Assert.Contains("3mf", response.SupportedExtensions);
+        Assert.Contains("obj", response.SupportedExtensions);
+        Assert.Contains("x_t", response.SupportedExtensions);
+        Assert.Contains("sldprt", response.SupportedExtensions);
+        Assert.Contains("catpart", response.SupportedExtensions);
+        Assert.Contains("jt", response.SupportedExtensions);
         Assert.DoesNotContain("fbx", response.SupportedExtensions);
         Assert.DoesNotContain("blend", response.SupportedExtensions);
         Assert.Contains(response.Processes, process => process.Id == "fdm" && process.SupportedFileTypes.Contains("glb"));
         Assert.Contains(response.Processes, process => process.Id == "cnc" && process.SupportedFileTypes.Contains("igs"));
+        Assert.Contains(response.Processes, process => process.Id == "cnc" && process.SupportedFileTypes.Contains("x_t"));
+        Assert.Contains(response.Processes, process => process.Id == "cnc" && process.SupportedFileTypes.Contains("sldprt"));
     }
 
     [Fact]
@@ -62,10 +71,10 @@ public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory 
 
         var response = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
-            FileName = "fixture.glb",
-            ContentType = "model/gltf-binary",
+            FileName = "fixture.x_t",
+            ContentType = "application/octet-stream",
             FileSizeBytes = QuoteUploadConstraints.MaxFileSizeBytes,
-            QuoteSessionId = "upload-glb-test"
+            QuoteSessionId = "upload-parasolid-test"
         });
 
         response.EnsureSuccessStatusCode();

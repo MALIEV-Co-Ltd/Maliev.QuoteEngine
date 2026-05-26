@@ -83,6 +83,17 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return PostAsync<CreateDraftProjectRequest, CreateDraftProjectResponse>("quote/v1/projects/draft", request, cancellationToken);
     }
 
+    public Task<DuplicateDraftProjectResponse> DuplicateProjectAsync(
+        Guid projectId,
+        DuplicateDraftProjectRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return PostAsync<DuplicateDraftProjectRequest, DuplicateDraftProjectResponse>(
+            $"quote/v1/projects/{projectId:D}/duplicate",
+            request,
+            cancellationToken);
+    }
+
     public Task<GenerateFormalQuoteResponse> GenerateFormalQuoteAsync(GenerateFormalQuoteRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<GenerateFormalQuoteRequest, GenerateFormalQuoteResponse>("quote/v1/quotes/formal", request, cancellationToken);

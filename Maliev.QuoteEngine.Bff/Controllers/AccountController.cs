@@ -1,9 +1,11 @@
+using System.Net;
 using System.Text.Json;
 using Asp.Versioning;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Account;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Hosting;
 
 namespace Maliev.QuoteEngine.Bff.Controllers;
 
@@ -16,7 +18,8 @@ public sealed class AccountController(
     ICustomerServiceClient customerClient,
     ICountryServiceClient countryClient,
     IQuotationServiceClient quotationClient,
-    IOrderServiceClient orderClient) : ControllerBase
+    IOrderServiceClient orderClient,
+    IHostEnvironment environment) : ControllerBase
 {
     [HttpGet("profile")]
     public async Task<IActionResult> GetProfile(CancellationToken cancellationToken)
@@ -42,17 +45,29 @@ public sealed class AccountController(
             return Unauthorized();
         }
 
-        using var response = await customerClient.GetCustomerAddressesAsync(customerId, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            return DownstreamProblem(response, "Customer addresses are temporarily unavailable.");
-        }
+            using var response = await customerClient.GetCustomerAddressesAsync(customerId, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                if (CanUsePrototypeAddressFallback(response))
+                {
+                    return Ok(store.GetAddresses(customerId));
+                }
 
-        using var document = await ReadJsonAsync(response, cancellationToken);
-        var addresses = document.RootElement.ValueKind == JsonValueKind.Array
-            ? document.RootElement.EnumerateArray().Select(MapAddress).ToList()
-            : [];
-        return Ok(addresses);
+                return DownstreamProblem(response, "Customer addresses are temporarily unavailable.");
+            }
+
+            using var document = await ReadJsonAsync(response, cancellationToken);
+            var addresses = document.RootElement.ValueKind == JsonValueKind.Array
+                ? document.RootElement.EnumerateArray().Select(MapAddress).ToList()
+                : [];
+            return Ok(addresses);
+        }
+        catch (Exception exception) when (IsDownstreamAddressFallbackException(exception, cancellationToken))
+        {
+            return Ok(store.GetAddresses(customerId));
+        }
     }
 
     [HttpPost("addresses")]
@@ -67,39 +82,51 @@ public sealed class AccountController(
         }
 
         var countryId = await ResolveCountryIdAsync(request.CountryId, cancellationToken);
-        using var response = await customerClient.CreateCustomerAddressAsync(new
+        try
         {
-            ownerType = "Customer",
-            ownerId = customerId,
-            type = request.Type,
-            isDefault = request.IsDefault,
-            placeLabel = request.PlaceLabel,
-            placeLabelOther = request.PlaceLabelOther,
-            addressLine1 = request.AddressLine1,
-            addressLine2 = request.AddressLine2,
-            addressLine3 = request.AddressLine3,
-            district = request.District,
-            city = request.City,
-            stateProvince = request.StateProvince,
-            postalCode = request.PostalCode,
-            countryId,
-            recipientName = request.RecipientName,
-            recipientPhone = request.RecipientPhone,
-            driverNote = request.DriverNote,
-            addressSource = string.IsNullOrWhiteSpace(request.AddressSource) ? "Manual" : request.AddressSource,
-            googlePlaceId = request.GooglePlaceId,
-            formattedAddress = request.FormattedAddress,
-            latitude = request.Latitude,
-            longitude = request.Longitude
-        }, cancellationToken);
+            using var response = await customerClient.CreateCustomerAddressAsync(new
+            {
+                ownerType = "Customer",
+                ownerId = customerId,
+                type = request.Type,
+                isDefault = request.IsDefault,
+                placeLabel = request.PlaceLabel,
+                placeLabelOther = request.PlaceLabelOther,
+                addressLine1 = request.AddressLine1,
+                addressLine2 = request.AddressLine2,
+                addressLine3 = request.AddressLine3,
+                district = request.District,
+                city = request.City,
+                stateProvince = request.StateProvince,
+                postalCode = request.PostalCode,
+                countryId,
+                recipientName = request.RecipientName,
+                recipientPhone = request.RecipientPhone,
+                driverNote = request.DriverNote,
+                addressSource = string.IsNullOrWhiteSpace(request.AddressSource) ? "Manual" : request.AddressSource,
+                googlePlaceId = request.GooglePlaceId,
+                formattedAddress = request.FormattedAddress,
+                latitude = request.Latitude,
+                longitude = request.Longitude
+            }, cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            return DownstreamProblem(response, "Customer address could not be added.");
+            if (!response.IsSuccessStatusCode)
+            {
+                if (CanUsePrototypeAddressFallback(response))
+                {
+                    return Ok(store.CreateAddress(customerId, request, countryId));
+                }
+
+                return DownstreamProblem(response, "Customer address could not be added.");
+            }
+
+            using var document = await ReadJsonAsync(response, cancellationToken);
+            return Ok(MapAddress(document.RootElement));
         }
-
-        using var document = await ReadJsonAsync(response, cancellationToken);
-        return Ok(MapAddress(document.RootElement));
+        catch (Exception exception) when (IsDownstreamAddressFallbackException(exception, cancellationToken))
+        {
+            return Ok(store.CreateAddress(customerId, request, countryId));
+        }
     }
 
     [HttpPatch("addresses/{addressId:guid}")]
@@ -117,6 +144,11 @@ public sealed class AccountController(
         var ownsAddress = await CustomerOwnsAddressAsync(customerId, addressId, cancellationToken);
         if (!ownsAddress.HasValue)
         {
+            if (CanUsePrototypeAddressFallback())
+            {
+                return UpdatePrototypeAddress(customerId, addressId, request);
+            }
+
             return StatusCode(
                 StatusCodes.Status503ServiceUnavailable,
                 AccountProblem("Customer addresses unavailable", "MALIEV could not verify this address belongs to your account.", StatusCodes.Status503ServiceUnavailable));
@@ -127,38 +159,50 @@ public sealed class AccountController(
             return NotFound(AccountProblem("Address not found", "This address is not attached to your customer account.", StatusCodes.Status404NotFound));
         }
 
-        using var response = await customerClient.UpdateCustomerAddressAsync(addressId, new
+        try
         {
-            type = request.Type,
-            isDefault = request.IsDefault,
-            placeLabel = request.PlaceLabel,
-            placeLabelOther = request.PlaceLabelOther,
-            addressLine1 = request.AddressLine1,
-            addressLine2 = request.AddressLine2,
-            addressLine3 = request.AddressLine3,
-            district = request.District,
-            city = request.City,
-            stateProvince = request.StateProvince,
-            postalCode = request.PostalCode,
-            countryId = request.CountryId == Guid.Empty ? (Guid?)null : request.CountryId,
-            recipientName = request.RecipientName,
-            recipientPhone = request.RecipientPhone,
-            driverNote = request.DriverNote,
-            addressSource = request.AddressSource,
-            googlePlaceId = request.GooglePlaceId,
-            formattedAddress = request.FormattedAddress,
-            latitude = request.Latitude,
-            longitude = request.Longitude,
-            xmin = request.Version
-        }, cancellationToken);
+            using var response = await customerClient.UpdateCustomerAddressAsync(addressId, new
+            {
+                type = request.Type,
+                isDefault = request.IsDefault,
+                placeLabel = request.PlaceLabel,
+                placeLabelOther = request.PlaceLabelOther,
+                addressLine1 = request.AddressLine1,
+                addressLine2 = request.AddressLine2,
+                addressLine3 = request.AddressLine3,
+                district = request.District,
+                city = request.City,
+                stateProvince = request.StateProvince,
+                postalCode = request.PostalCode,
+                countryId = request.CountryId == Guid.Empty ? (Guid?)null : request.CountryId,
+                recipientName = request.RecipientName,
+                recipientPhone = request.RecipientPhone,
+                driverNote = request.DriverNote,
+                addressSource = request.AddressSource,
+                googlePlaceId = request.GooglePlaceId,
+                formattedAddress = request.FormattedAddress,
+                latitude = request.Latitude,
+                longitude = request.Longitude,
+                xmin = request.Version
+            }, cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            return DownstreamProblem(response, "Customer address could not be updated.");
+            if (!response.IsSuccessStatusCode)
+            {
+                if (CanUsePrototypeAddressFallback(response))
+                {
+                    return UpdatePrototypeAddress(customerId, addressId, request);
+                }
+
+                return DownstreamProblem(response, "Customer address could not be updated.");
+            }
+
+            using var document = await ReadJsonAsync(response, cancellationToken);
+            return Ok(MapAddress(document.RootElement));
         }
-
-        using var document = await ReadJsonAsync(response, cancellationToken);
-        return Ok(MapAddress(document.RootElement));
+        catch (Exception exception) when (IsDownstreamAddressFallbackException(exception, cancellationToken))
+        {
+            return UpdatePrototypeAddress(customerId, addressId, request);
+        }
     }
 
     [HttpDelete("addresses/{addressId:guid}")]
@@ -176,6 +220,11 @@ public sealed class AccountController(
         var ownsAddress = await CustomerOwnsAddressAsync(customerId, addressId, cancellationToken);
         if (!ownsAddress.HasValue)
         {
+            if (CanUsePrototypeAddressFallback())
+            {
+                return DeletePrototypeAddress(customerId, addressId);
+            }
+
             return StatusCode(
                 StatusCodes.Status503ServiceUnavailable,
                 AccountProblem("Customer addresses unavailable", "MALIEV could not verify this address belongs to your account.", StatusCodes.Status503ServiceUnavailable));
@@ -186,17 +235,29 @@ public sealed class AccountController(
             return NotFound(AccountProblem("Address not found", "This address is not attached to your customer account.", StatusCodes.Status404NotFound));
         }
 
-        using var response = await customerClient.DeleteCustomerAddressAsync(addressId, new
+        try
         {
-            xmin = version
-        }, cancellationToken);
+            using var response = await customerClient.DeleteCustomerAddressAsync(addressId, new
+            {
+                xmin = version
+            }, cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            return DownstreamProblem(response, "Customer address could not be deleted.");
+            if (!response.IsSuccessStatusCode)
+            {
+                if (CanUsePrototypeAddressFallback(response))
+                {
+                    return DeletePrototypeAddress(customerId, addressId);
+                }
+
+                return DownstreamProblem(response, "Customer address could not be deleted.");
+            }
+
+            return NoContent();
         }
-
-        return NoContent();
+        catch (Exception exception) when (IsDownstreamAddressFallbackException(exception, cancellationToken))
+        {
+            return DeletePrototypeAddress(customerId, addressId);
+        }
     }
 
     [HttpGet("quotes")]
@@ -247,16 +308,25 @@ public sealed class AccountController(
 
     private async Task<bool?> CustomerOwnsAddressAsync(Guid customerId, Guid addressId, CancellationToken cancellationToken)
     {
-        using var response = await customerClient.GetCustomerAddressesAsync(customerId, cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
         {
-            return null;
-        }
+            using var response = await customerClient.GetCustomerAddressesAsync(customerId, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return CanUsePrototypeAddressFallback(response)
+                    ? store.CustomerOwnsAddress(customerId, addressId)
+                    : null;
+            }
 
-        using var document = await ReadJsonAsync(response, cancellationToken);
-        return document.RootElement.ValueKind == JsonValueKind.Array &&
-            document.RootElement.EnumerateArray()
-                .Any(item => GetGuid(item, "id", "Id") == addressId);
+            using var document = await ReadJsonAsync(response, cancellationToken);
+            return document.RootElement.ValueKind == JsonValueKind.Array &&
+                document.RootElement.EnumerateArray()
+                    .Any(item => GetGuid(item, "id", "Id") == addressId);
+        }
+        catch (Exception exception) when (IsDownstreamAddressFallbackException(exception, cancellationToken))
+        {
+            return store.CustomerOwnsAddress(customerId, addressId);
+        }
     }
 
     private async Task<Guid> ResolveCountryIdAsync(Guid requestedCountryId, CancellationToken cancellationToken)
@@ -266,14 +336,21 @@ public sealed class AccountController(
             return requestedCountryId;
         }
 
-        using var response = await countryClient.GetCountryByIso2Async("TH", cancellationToken);
-        if (!response.IsSuccessStatusCode)
+        try
+        {
+            using var response = await countryClient.GetCountryByIso2Async("TH", cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return Guid.Empty;
+            }
+
+            using var document = await ReadJsonAsync(response, cancellationToken);
+            return GetGuid(document.RootElement, "id", "Id") ?? Guid.Empty;
+        }
+        catch (Exception exception) when (IsDownstreamAddressFallbackException(exception, cancellationToken))
         {
             return Guid.Empty;
         }
-
-        using var document = await ReadJsonAsync(response, cancellationToken);
-        return GetGuid(document.RootElement, "id", "Id") ?? Guid.Empty;
     }
 
     private static async Task<JsonDocument> ReadJsonAsync(HttpResponseMessage response, CancellationToken cancellationToken)
@@ -284,10 +361,50 @@ public sealed class AccountController(
 
     private ObjectResult DownstreamProblem(HttpResponseMessage response, string detail)
     {
-        var status = response.StatusCode == System.Net.HttpStatusCode.NotFound
+        var status = response.StatusCode == HttpStatusCode.NotFound
             ? StatusCodes.Status404NotFound
             : StatusCodes.Status503ServiceUnavailable;
         return StatusCode(status, AccountProblem("Account service unavailable", detail, status));
+    }
+
+    private IActionResult UpdatePrototypeAddress(Guid customerId, Guid addressId, CustomerAddressUpsertRequest request)
+    {
+        var address = store.UpdateAddress(customerId, addressId, request);
+        return address is null
+            ? NotFound(AccountProblem("Address not found", "This address is not attached to your customer account.", StatusCodes.Status404NotFound))
+            : Ok(address);
+    }
+
+    private IActionResult DeletePrototypeAddress(Guid customerId, Guid addressId)
+    {
+        return store.DeleteAddress(customerId, addressId)
+            ? NoContent()
+            : NotFound(AccountProblem("Address not found", "This address is not attached to your customer account.", StatusCodes.Status404NotFound));
+    }
+
+    private bool IsDownstreamAddressFallbackException(Exception exception, CancellationToken cancellationToken)
+    {
+        return !cancellationToken.IsCancellationRequested
+            && CanUsePrototypeAddressFallback()
+            && exception is HttpRequestException or InvalidOperationException or TaskCanceledException;
+    }
+
+    private bool CanUsePrototypeAddressFallback(HttpResponseMessage response)
+    {
+        if (!CanUsePrototypeAddressFallback())
+        {
+            return false;
+        }
+
+        var status = (int)response.StatusCode;
+        return status >= StatusCodes.Status500InternalServerError ||
+            response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.RequestTimeout or HttpStatusCode.BadGateway
+                or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout;
+    }
+
+    private bool CanUsePrototypeAddressFallback()
+    {
+        return environment.IsDevelopment() || environment.IsEnvironment("Testing");
     }
 
     private static ProblemDetails AccountProblem(string title, string detail, int status)

@@ -125,6 +125,35 @@
         drop-shadow(0 0 28px rgba(10, 20, 40, 0.1));
 }
 
+:root[data-maliev-theme="dark"] {
+    color-scheme: dark;
+    --ink: #f5f5f5;
+    --ink-strong: #ffffff;
+    --muted: #c7c7c7;
+    --muted-2: #a6a6a6;
+    --muted-3: #7a7a7a;
+    --line: #2d2d30;
+    --paper: #0f0f10;
+    --panel: #161616;
+    --panel-tint: #1f1f22;
+    --primary: #f5f5f5;
+    --primary-strong: #ffffff;
+    --link: #6fb1ff;
+    --accent: #4f9cff;
+    --accent-strong: #86c4ff;
+    --badge-blue-bg: #0d2b4a;
+    --badge-blue-text: #8fc5ff;
+    --maliev-shadow-ring: rgba(255, 255, 255, 0.12) 0 0 0 1px;
+    --maliev-shadow-ring-light: rgba(255, 255, 255, 0.12) 0 0 0 1px;
+    --maliev-shadow-sm: rgba(255, 255, 255, 0.1) 0 0 0 1px, rgba(0, 0, 0, 0.28) 0 2px 8px;
+    --maliev-shadow-card: rgba(255, 255, 255, 0.12) 0 0 0 1px, rgba(0, 0, 0, 0.36) 0 16px 34px -24px;
+    --mud-palette-background-default: var(--paper);
+    --mud-palette-background-grey: var(--panel-tint);
+    --mud-palette-text-primary: var(--ink);
+    --mud-palette-text-secondary: var(--muted);
+    --mud-palette-divider: var(--line);
+}
+
 * {
     box-sizing: border-box;
 }
@@ -467,7 +496,7 @@ body.quote-ready .startup-screen {
     align-items: center;
     min-height: 64px;
     padding: 0 28px;
-    background: rgba(255, 255, 255, 0.96);
+    background: var(--panel);
     /* Shadow-as-border per DESIGN.md §1 / §7 — replaces border-bottom */
     box-shadow: rgba(0, 0, 0, 0.08) 0 1px 0 0;
     backdrop-filter: blur(12px);
@@ -586,6 +615,37 @@ body.quote-ready .startup-screen {
     align-items: center;
 }
 
+.quote-theme-toggle,
+.quote-currency-select {
+    min-height: 40px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    color: var(--ink);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.quote-theme-toggle {
+    display: inline-grid;
+    width: 40px;
+    place-items: center;
+    cursor: pointer;
+}
+
+.quote-theme-toggle:hover,
+.quote-currency-select:hover {
+    background: var(--panel-tint);
+}
+
+.quote-currency-select {
+    min-width: 76px;
+    padding: 0 28px 0 10px;
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    letter-spacing: 0;
+}
+
 /* DESIGN.md §4 Buttons:
    - Primary Dark: #171717 background, white text, 6px radius, 8px 16px padding
    - Primary White (Shadow-bordered): white background, #171717 text, ring shadow
@@ -645,6 +705,9 @@ body.quote-ready .startup-screen {
 
 .billing-account-trigger {
     display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
     min-height: 42px;
     padding: 6px 34px 6px 12px;
     border-radius: var(--maliev-radius-sm);
@@ -652,6 +715,34 @@ body.quote-ready .startup-screen {
     box-shadow: var(--maliev-shadow-ring-light);
     cursor: pointer;
     list-style: none;
+}
+
+.customer-avatar,
+.account-profile-avatar {
+    display: inline-grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    overflow: hidden;
+    border-radius: 50%;
+    color: #ffffff;
+    background: linear-gradient(135deg, #171717 0%, #4d4d4d 100%);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.customer-avatar--image,
+.account-profile-avatar--image {
+    object-fit: cover;
+    background: var(--panel-tint);
+}
+
+.billing-account-copy {
+    display: grid;
+    min-width: 0;
+    gap: 1px;
 }
 
 .billing-account-trigger::-webkit-details-marker {
@@ -716,6 +807,18 @@ body.quote-ready .startup-screen {
     box-shadow: var(--maliev-shadow-ring), rgba(0, 0, 0, .12) 0 16px 34px -22px;
 }
 
+.billing-account-list,
+.customer-data-section {
+    display: grid;
+    gap: 6px;
+}
+
+.customer-data-section {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding-top: 8px;
+    border-top: 1px solid var(--line);
+}
+
 .billing-account-option {
     display: grid;
     gap: 2px;
@@ -759,7 +862,7 @@ body.quote-ready .startup-screen {
     width: 40px;
     height: 40px;
     color: var(--ink);
-    background: #ffffff;
+    background: var(--panel);
     border-radius: var(--maliev-radius-sm);
     box-shadow: var(--maliev-shadow-ring);
 }
@@ -1567,6 +1670,149 @@ textarea::placeholder {
     gap: 6px;
 }
 
+.account-overview-card {
+    display: grid;
+    gap: 16px;
+    padding: 20px;
+    border-radius: var(--maliev-radius-md);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.account-profile-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) minmax(190px, auto);
+    gap: 18px;
+    align-items: center;
+}
+
+.account-profile-avatar {
+    width: 64px;
+    height: 64px;
+    font-size: var(--maliev-font-large);
+}
+
+.account-profile-main {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+}
+
+.account-profile-main h2 {
+    margin: 0;
+    font-size: var(--maliev-font-card);
+    letter-spacing: 0;
+}
+
+.account-profile-main p,
+.account-nda-card small {
+    margin: 0;
+    color: var(--muted);
+}
+
+.account-profile-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.account-profile-meta span {
+    padding: 3px 8px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel-tint);
+    color: var(--muted);
+    font-size: var(--maliev-font-micro);
+}
+
+.account-nda-card {
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    border-radius: var(--maliev-radius-md);
+    background: var(--panel-tint);
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.account-action-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.account-action-grid a {
+    display: grid;
+    min-height: 76px;
+    place-items: center;
+    gap: 6px;
+    padding: 10px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel-tint);
+    color: var(--ink);
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.account-action-grid a:hover {
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.preferences-panel {
+    display: grid;
+    gap: 12px;
+    padding: 20px;
+    border-radius: var(--maliev-radius-md);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.preferences-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 16px;
+    align-items: center;
+    padding: 12px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel-tint);
+}
+
+.preferences-row > div:first-child {
+    display: grid;
+    gap: 4px;
+}
+
+.preferences-segmented {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.preferences-segment {
+    min-height: 32px;
+    min-width: 70px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    color: var(--muted);
+    background: transparent;
+    font-size: var(--maliev-font-small);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.preferences-segment.is-active,
+.preferences-segment:hover {
+    color: var(--paper);
+    background: var(--ink);
+}
+
+.preferences-currency-select {
+    background-color: var(--panel);
+}
+
 .profile-address-book {
     display: grid;
     gap: 20px;
@@ -1924,6 +2170,19 @@ textarea::placeholder {
 
     .config-grid,
     .profile-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .account-profile-card {
+        grid-template-columns: 1fr;
+        align-items: start;
+    }
+
+    .account-action-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .preferences-row {
         grid-template-columns: 1fr;
     }
 
@@ -2634,9 +2893,42 @@ textarea::placeholder {
     position: absolute;
     inset: 0;
     display: grid;
+    gap: 10px;
     place-items: center;
     color: var(--maliev-muted);
     font-size: var(--maliev-font-small);
+}
+
+.qe-viewer-loading-orbit {
+    position: relative;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.qe-viewer-loading-orbit::before,
+.qe-viewer-loading-orbit::after {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border: 2px solid transparent;
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: qe-viewer-orbit 900ms linear infinite;
+}
+
+.qe-viewer-loading-orbit::after {
+    inset: 12px;
+    border-top-color: var(--preview);
+    animation-duration: 650ms;
+    animation-direction: reverse;
+}
+
+@keyframes qe-viewer-orbit {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .qe-viewer-toolbar {
@@ -2645,13 +2937,28 @@ textarea::placeholder {
     bottom: 12px;
     z-index: 4;
     display: inline-flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 3px;
+    max-width: calc(100% - 24px);
     padding: 4px;
     border-radius: var(--maliev-radius-md);
-    background: rgba(255, 255, 255, .94);
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
     transform: translateX(-50%);
+}
+
+.qe-vt-group,
+.qe-vt-subtools {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.qe-vt-subtools {
+    flex: 1 0 100%;
+    justify-content: center;
+    padding-top: 3px;
 }
 
 .qe-vt-btn {
@@ -2667,11 +2974,43 @@ textarea::placeholder {
     cursor: pointer;
 }
 
+.qe-vt-axis {
+    min-width: 26px;
+    min-height: 24px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    color: var(--maliev-ink-2);
+    background: transparent;
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-nano);
+    font-weight: 600;
+    cursor: pointer;
+}
+
 .qe-vt-btn:hover,
+.qe-vt-axis:hover,
 .qe-vt-active {
     color: var(--maliev-ink);
     background: var(--maliev-panel-3);
     box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.qe-vt-subtools input[type="range"] {
+    width: 112px;
+}
+
+.qe-viewer-measure-readout {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    z-index: 5;
+    padding: 6px 10px;
+    border-radius: var(--maliev-radius-sm);
+    color: var(--ink);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-card);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
 }
 
 .qe-vt-sep {

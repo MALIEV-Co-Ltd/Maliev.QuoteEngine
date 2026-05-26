@@ -7,7 +7,11 @@
                @oninput="HandleTitleInput"
                class="qe-plp-title-input"
                title="Project title" />
-        <button type="button" class="qe-icon-btn" title="Duplicate project" disabled="@(!Parts.Any())">
+        <button type="button"
+                class="qe-icon-btn"
+                title="Duplicate project"
+                disabled="@(!Parts.Any())"
+                @onclick="OnDuplicateProject">
             <MudIcon Icon="@Icons.Material.Filled.ContentCopy" Size="Size.Small" />
         </button>
     </div>
@@ -101,6 +105,7 @@
     [Parameter] public string UploadHint { get; set; } = string.Empty;
     [Parameter] public bool IsDrawer { get; set; }
     [Parameter] public EventCallback<int> OnSelectPart { get; set; }
+    [Parameter] public EventCallback OnDuplicateProject { get; set; }
     [Parameter] public EventCallback<QuotePartViewModel> OnRemovePart { get; set; }
 
     private Task HandleTitleInput(ChangeEventArgs args)

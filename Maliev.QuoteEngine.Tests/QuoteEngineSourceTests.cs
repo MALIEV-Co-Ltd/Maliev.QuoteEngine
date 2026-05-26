@@ -334,10 +334,25 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("\"/quotes/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("@inject QuoteEngineApiClient Api", layout, StringComparison.Ordinal);
         Assert.Contains("@if (_authStatus.IsSignedIn)", layout, StringComparison.Ordinal);
-        Assert.Contains("<NavLink href=\"/profile\" Match=\"NavLinkMatch.Prefix\">Profile</NavLink>", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("<NavLink href=\"/profile\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("<NavLink href=\"/ndas\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("<NavLink href=\"/documents\"", layout, StringComparison.Ordinal);
         Assert.Contains("<a class=\"text-button\" href=\"/auth/sign-in\">Sign in</a>", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"billing-account-menu\"", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"billing-account-trigger\" aria-label=\"Select billing account\"", layout, StringComparison.Ordinal);
+        Assert.Contains("class=\"billing-account-trigger\" aria-label=\"Customer account and billing\"", layout, StringComparison.Ordinal);
+        Assert.Contains("CustomerAvatarMarkup", layout, StringComparison.Ordinal);
+        Assert.Contains("ProfileImageUrl", layout, StringComparison.Ordinal);
+        Assert.Contains("AvatarInitials", layout, StringComparison.Ordinal);
+        Assert.Contains("class=\"customer-data-section\"", layout, StringComparison.Ordinal);
+        Assert.Contains("href=\"/profile\"", layout, StringComparison.Ordinal);
+        Assert.Contains("href=\"/ndas\"", layout, StringComparison.Ordinal);
+        Assert.Contains("href=\"/documents\"", layout, StringComparison.Ordinal);
+        Assert.Contains("href=\"/preferences\"", layout, StringComparison.Ordinal);
+        Assert.Contains("ToggleThemeAsync", layout, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Toggle light or dark mode\"", layout, StringComparison.Ordinal);
+        Assert.Contains("class=\"quote-currency-select\"", layout, StringComparison.Ordinal);
+        Assert.Contains("PersistCurrencyAsync", layout, StringComparison.Ordinal);
+        Assert.Contains("<CascadingValue Value=\"_isDarkMode\" Name=\"IsDarkMode\">", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"billing-account-options\" role=\"listbox\" aria-label=\"Billing account\"", layout, StringComparison.Ordinal);
         Assert.Contains("Personal account", layout, StringComparison.Ordinal);
         Assert.Contains("Company account", layout, StringComparison.Ordinal);
@@ -348,6 +363,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_authStatus = await Api.GetAuthStatusAsync();", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"app-rail\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain(".app-rail", styles, StringComparison.Ordinal);
+        Assert.Contains(".customer-avatar", styles, StringComparison.Ordinal);
+        Assert.Contains(".customer-data-section", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-theme-toggle", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-currency-select", styles, StringComparison.Ordinal);
+        Assert.Contains(":root[data-maliev-theme=\"dark\"]", styles, StringComparison.Ordinal);
         Assert.Contains(".workspace--quote", styles, StringComparison.Ordinal);
     }
 
@@ -360,6 +380,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("if (!_authStatus.IsSignedIn)", profile, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(\"/auth/sign-in?returnUrl=/profile\"", profile, StringComparison.Ordinal);
         Assert.Contains("_profile = await Api.GetProfileAsync();", profile, StringComparison.Ordinal);
+        Assert.Contains("_ndas = [.. await Api.GetNdasAsync()];", profile, StringComparison.Ordinal);
+        Assert.Contains("class=\"account-overview-card\"", profile, StringComparison.Ordinal);
+        Assert.Contains("class=\"account-profile-card\"", profile, StringComparison.Ordinal);
+        Assert.Contains("class=\"account-action-grid\"", profile, StringComparison.Ordinal);
+        Assert.Contains("ProfileImageUrl", profile, StringComparison.Ordinal);
+        Assert.Contains("ProfileInitials", profile, StringComparison.Ordinal);
+        Assert.Contains("NdaStatus", profile, StringComparison.Ordinal);
+        Assert.Contains("NdaExpiryNotice", profile, StringComparison.Ordinal);
+        Assert.Contains("href=\"/ndas\"", profile, StringComparison.Ordinal);
+        Assert.Contains("href=\"/documents\"", profile, StringComparison.Ordinal);
+        Assert.Contains("href=\"/orders\"", profile, StringComparison.Ordinal);
+        Assert.Contains("href=\"/preferences\"", profile, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -919,6 +951,53 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("/images/generated/sample-part.svg", viewer, StringComparison.Ordinal);
         Assert.Contains("onerror=", partsList, StringComparison.Ordinal);
         Assert.Contains("FallbackPartImage", partsList, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Quote_viewer_exposes_ProjectNew_cad_toolbar_controls()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("SetRenderModeAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("ToggleGridAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("ToggleBoundingBoxAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("ToggleMeasureAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("ToggleThicknessAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("ToggleSectionAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("SetSectionAxisAsync", viewer, StringComparison.Ordinal);
+        Assert.Contains("NotifyMeasureResult", viewer, StringComparison.Ordinal);
+        Assert.Contains("\"setRenderMode\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("\"showGrid\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("\"hideGrid\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("\"toggleBoundingBox\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("\"enableMeasureTool\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("\"enableThicknessAnalysis\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("\"setSectionPlane\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("qe-viewer-loading-orbit", viewer, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Solid shaded view\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Transparent view\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"Toggle section cut\"", viewer, StringComparison.Ordinal);
+        Assert.Contains(".qe-viewer-loading-orbit", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-vt-subtools", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Project_parts_panel_and_workspace_expose_duplicate_project_flow()
+    {
+        var partsList = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartsListPanel.razor");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+
+        Assert.Contains("[Parameter] public EventCallback OnDuplicateProject", partsList, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"OnDuplicateProject\"", partsList, StringComparison.Ordinal);
+        Assert.Contains("OnDuplicateProject=\"DuplicateProjectAsync\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("private async Task DuplicateProjectAsync()", workspace, StringComparison.Ordinal);
+        Assert.Contains("DuplicateProjectAsync(_draftProjectId.Value", workspace, StringComparison.Ordinal);
+        Assert.Contains("CreateDraftProjectAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("ApplyDuplicatedProject", workspace, StringComparison.Ordinal);
+        Assert.Contains("DuplicateDraftProjectRequest", apiClient, StringComparison.Ordinal);
+        Assert.Contains("DuplicateDraftProjectResponse", apiClient, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -94,6 +94,29 @@
     document.body.classList.add("quote-loading-failed");
   }
 
+  function getPreference(key) {
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function setPreference(key, value) {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {
+      // localStorage can be unavailable in strict privacy modes.
+    }
+  }
+
+  function setTheme(theme) {
+    const normalizedTheme = theme === "dark" ? "dark" : "light";
+    root.setAttribute("data-maliev-theme", normalizedTheme);
+    root.style.colorScheme = normalizedTheme;
+    setPreference("maliev.quote.theme", normalizedTheme);
+  }
+
   function startBlazor() {
     setProgress(0, true);
     setStatus("Preparing quote engine");
@@ -113,6 +136,7 @@
   }
 
   setProgress(0, true);
+  setTheme(getPreference("maliev.quote.theme") || "light");
 
   window.quoteEngineLoader = {
     loadBootResource,
@@ -121,5 +145,11 @@
     markFailed,
     setProgress,
     startBlazor
+  };
+
+  window.quoteEnginePreferences = {
+    getPreference,
+    setPreference,
+    setTheme
   };
 })();

@@ -1,9 +1,84 @@
 @page "/preferences"
+@inject IJSRuntime Js
 
 <PageTitle>Preferences - MALIEV Quote Engine</PageTitle>
 
 <div class="section-heading">
     <span class="eyebrow">Account</span>
     <h1>Preferences</h1>
-    <p>Language, quote notifications, and order tracking preferences will be saved to the customer profile boundary.</p>
+    <p>Display and quoting preferences are applied immediately in the customer quote workspace.</p>
 </div>
+
+<section class="preferences-panel">
+    <div class="preferences-row">
+        <div>
+            <span class="eyebrow">Theme</span>
+            <strong>Interface appearance</strong>
+        </div>
+        <div class="preferences-segmented" role="group" aria-label="Display theme">
+            <button type="button" class="@ThemeButtonClass(false)" @onclick="() => SetThemeAsync(false)">Light</button>
+            <button type="button" class="@ThemeButtonClass(true)" @onclick="() => SetThemeAsync(true)">Dark</button>
+        </div>
+    </div>
+
+    <div class="preferences-row">
+        <div>
+            <span class="eyebrow">Currency</span>
+            <strong>Quote display currency</strong>
+        </div>
+        <select class="quote-currency-select preferences-currency-select"
+                value="@_selectedCurrency"
+                @onchange="HandleCurrencyChanged"
+                aria-label="Quote currency">
+            @foreach (var currency in SupportedCurrencies)
+            {
+                <option value="@currency">@currency</option>
+            }
+        </select>
+    </div>
+</section>
+
+@code {
+    private static readonly string[] SupportedCurrencies = ["THB", "USD", "EUR", "JPY", "SGD"];
+    private bool _isDarkMode;
+    private string _selectedCurrency = "THB";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        var theme = await Js.InvokeAsync<string?>("quoteEnginePreferences.getPreference", "maliev.quote.theme");
+        _isDarkMode = string.Equals(theme, "dark", StringComparison.OrdinalIgnoreCase);
+
+        var currency = await Js.InvokeAsync<string?>("quoteEnginePreferences.getPreference", "maliev.quote.currency");
+        _selectedCurrency = NormalizeCurrency(currency);
+        StateHasChanged();
+    }
+
+    private async Task SetThemeAsync(bool dark)
+    {
+        _isDarkMode = dark;
+        await Js.InvokeVoidAsync("quoteEnginePreferences.setTheme", dark ? "dark" : "light");
+    }
+
+    private async Task HandleCurrencyChanged(ChangeEventArgs args)
+    {
+        _selectedCurrency = NormalizeCurrency(args.Value?.ToString());
+        await Js.InvokeVoidAsync("quoteEnginePreferences.setPreference", "maliev.quote.currency", _selectedCurrency);
+    }
+
+    private string ThemeButtonClass(bool dark)
+    {
+        return _isDarkMode == dark ? "preferences-segment is-active" : "preferences-segment";
+    }
+
+    private static string NormalizeCurrency(string? currency)
+    {
+        return SupportedCurrencies.Contains(currency, StringComparer.OrdinalIgnoreCase)
+            ? SupportedCurrencies.First(candidate => candidate.Equals(currency, StringComparison.OrdinalIgnoreCase))
+            : "THB";
+    }
+}

@@ -17,31 +17,111 @@
             </div>
         }
 
-        @* Bottom toolbar *@
-        <div class="qe-viewer-toolbar">
-            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("front")' title="Front">Fr</button>
-            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("top")'   title="Top">Tp</button>
-            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("right")' title="Right">Rt</button>
-            <button class="qe-vt-btn" @onclick='() => SetPresetAsync("iso")'   title="Isometric">
-                <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
-            </button>
+        <div class="qe-viewer-toolbar" aria-label="CAD viewer toolbar">
+            <div class="qe-vt-group" aria-label="Camera presets">
+                <button class="qe-vt-btn" @onclick='() => SetPresetAsync("front")' title="Front" aria-label="Front view">Fr</button>
+                <button class="qe-vt-btn" @onclick='() => SetPresetAsync("top")' title="Top" aria-label="Top view">Tp</button>
+                <button class="qe-vt-btn" @onclick='() => SetPresetAsync("right")' title="Right" aria-label="Right view">Rt</button>
+                <button class="qe-vt-btn" @onclick='() => SetPresetAsync("iso")' title="Isometric" aria-label="Isometric view">
+                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+                </button>
+            </div>
             <span class="qe-vt-sep"></span>
-            <button class="qe-vt-btn @(_ortho ? "qe-vt-active" : "")"
-                    @onclick="ToggleProjectionAsync" title="Orthographic / Perspective">
-                <MudIcon Icon="@Icons.Material.Outlined.GridOn" Size="Size.Small" />
-            </button>
-            <button class="qe-vt-btn @(_edgesOn ? "qe-vt-active" : "")"
-                    @onclick="ToggleEdgesAsync" title="Edges">
-                <MudIcon Icon="@Icons.Material.Outlined.BorderAll" Size="Size.Small" />
-            </button>
-            <button class="qe-vt-btn" @onclick="ResetCameraAsync" title="Reset camera">
-                <MudIcon Icon="@Icons.Material.Outlined.RestartAlt" Size="Size.Small" />
-            </button>
+            <div class="qe-vt-group" aria-label="Display controls">
+                <button class="@ToolbarButtonClass(_renderMode == "solid")"
+                        @onclick='() => SetRenderModeAsync("solid")'
+                        title="Solid shaded view"
+                        aria-label="Solid shaded view">
+                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+                </button>
+                <button class="@ToolbarButtonClass(_renderMode == "transparent")"
+                        @onclick='() => SetRenderModeAsync("transparent")'
+                        title="Transparent view"
+                        aria-label="Transparent view">
+                    <MudIcon Icon="@Icons.Material.Outlined.Opacity" Size="Size.Small" />
+                </button>
+                <button class="@ToolbarButtonClass(_renderMode == "wireframe")"
+                        @onclick='() => SetRenderModeAsync("wireframe")'
+                        title="Wireframe view"
+                        aria-label="Wireframe view">
+                    <MudIcon Icon="@Icons.Material.Outlined.Grid4x4" Size="Size.Small" />
+                </button>
+                <button class="@ToolbarButtonClass(_ortho)"
+                        @onclick="ToggleProjectionAsync"
+                        title="Orthographic / Perspective"
+                        aria-label="Toggle orthographic projection">
+                    <MudIcon Icon="@Icons.Material.Outlined.AspectRatio" Size="Size.Small" />
+                </button>
+                <button class="@ToolbarButtonClass(_gridOn)"
+                        @onclick="ToggleGridAsync"
+                        title="Grid"
+                        aria-label="Toggle grid">
+                    <MudIcon Icon="@Icons.Material.Outlined.GridOn" Size="Size.Small" />
+                </button>
+                <button class="@ToolbarButtonClass(_edgesOn)"
+                        @onclick="ToggleEdgesAsync"
+                        title="Edges"
+                        aria-label="Toggle edges">
+                    <MudIcon Icon="@Icons.Material.Outlined.BorderAll" Size="Size.Small" />
+                </button>
+                <button class="@ToolbarButtonClass(_boundingBoxOn)"
+                        @onclick="ToggleBoundingBoxAsync"
+                        title="Bounding box"
+                        aria-label="Toggle bounding box">
+                    <MudIcon Icon="@Icons.Material.Outlined.CropFree" Size="Size.Small" />
+                </button>
+            </div>
+            <span class="qe-vt-sep"></span>
+            <div class="qe-vt-group" aria-label="Analysis controls">
+                <button class="@ToolbarButtonClass(_sectionOn)"
+                        @onclick="ToggleSectionAsync"
+                        title="Section cut"
+                        aria-label="Toggle section cut">
+                    <MudIcon Icon="@Icons.Material.Outlined.ContentCut" Size="Size.Small" />
+                </button>
+                <button class="@ToolbarButtonClass(_measureOn)"
+                        @onclick="ToggleMeasureAsync"
+                        title="Measure"
+                        aria-label="Toggle measure tool">
+                    <MudIcon Icon="@Icons.Material.Outlined.Straighten" Size="Size.Small" />
+                </button>
+                <button class="@ToolbarButtonClass(_thicknessOn)"
+                        @onclick="ToggleThicknessAsync"
+                        title="Thickness probe"
+                        aria-label="Toggle thickness analysis">
+                    <MudIcon Icon="@Icons.Material.Outlined.Layers" Size="Size.Small" />
+                </button>
+                <button class="qe-vt-btn" @onclick="ResetCameraAsync" title="Reset camera" aria-label="Reset camera">
+                    <MudIcon Icon="@Icons.Material.Outlined.RestartAlt" Size="Size.Small" />
+                </button>
+            </div>
+
+            @if (_sectionOn)
+            {
+                <div class="qe-vt-subtools" aria-label="Section plane">
+                    <button class="@AxisButtonClass("x")" @onclick='() => SetSectionAxisAsync("x")'>X</button>
+                    <button class="@AxisButtonClass("y")" @onclick='() => SetSectionAxisAsync("y")'>Y</button>
+                    <button class="@AxisButtonClass("z")" @onclick='() => SetSectionAxisAsync("z")'>Z</button>
+                    <input type="range"
+                           min="-100"
+                           max="100"
+                           step="1"
+                           value="@_sectionOffsetMm"
+                           @onchange="SetSectionOffsetAsync"
+                           aria-label="Section offset" />
+                </div>
+            }
         </div>
+
+        @if (!string.IsNullOrWhiteSpace(_lastMeasurement))
+        {
+            <div class="qe-viewer-measure-readout" role="status">@_lastMeasurement</div>
+        }
     }
     else
     {
         <div class="qe-viewer-placeholder">
+            <span class="qe-viewer-loading-orbit" aria-hidden="true"></span>
             <span>Loading 3D model&hellip;</span>
         </div>
     }
@@ -52,13 +132,24 @@
     [Parameter] public bool IsDarkMode { get; set; }
     [Parameter] public EventCallback<string> OnViewerError { get; set; }
 
-    private string _canvasId = $"qe-canvas-{Guid.NewGuid():N}";
+    private readonly string _canvasId = $"qe-canvas-{Guid.NewGuid():N}";
     private IJSObjectReference? _module;
     private DotNetObjectReference<QePartViewer>? _dotNetRef;
     private string? _lastGlbUrl;
     private string? _loadError;
+    private string? _lastMeasurement;
+    private string _cameraPreset = "iso";
+    private string _renderMode = "solid";
+    private string _sectionAxis = "z";
+    private double _sectionOffsetMm;
+    private bool _sectionOn;
+    private bool _sectionInverted = false;
     private bool _ortho;
     private bool _edgesOn = true;
+    private bool _gridOn = true;
+    private bool _boundingBoxOn;
+    private bool _measureOn;
+    private bool _thicknessOn;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -80,9 +171,21 @@
 
             await _module.InvokeVoidAsync("initialize",
                 _canvasId, GlbUrl, "glb", IsDarkMode,
-                null,   // no known bounding-box dims
+                null,
                 _dotNetRef,
-                new { });
+                new
+                {
+                    cameraPreset = _cameraPreset,
+                    renderMode = _renderMode,
+                    edgesEnabled = _edgesOn,
+                    gridEnabled = _gridOn,
+                    boundingBoxEnabled = _boundingBoxOn,
+                    cameraProjection = _ortho ? "orthographic" : "perspective",
+                    sectionEnabled = _sectionOn,
+                    sectionAxis = _sectionAxis,
+                    sectionOffsetMm = _sectionOffsetMm,
+                    sectionInverted = _sectionInverted
+                });
         }
         catch (Exception ex)
         {
@@ -98,10 +201,25 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    [JSInvokable]
+    public async Task NotifyMeasureResult(string distanceMm, string angleDeg)
+    {
+        _lastMeasurement = $"{distanceMm} mm / {angleDeg} deg";
+        await InvokeAsync(StateHasChanged);
+    }
+
     private async Task SetPresetAsync(string preset)
     {
         if (_module is null) return;
+        _cameraPreset = preset;
         await _module.InvokeVoidAsync("setCameraPreset", _canvasId, preset);
+    }
+
+    private async Task SetRenderModeAsync(string mode)
+    {
+        if (_module is null) return;
+        _renderMode = mode;
+        await _module.InvokeVoidAsync("setRenderMode", _canvasId, mode);
     }
 
     public async Task NotifyVisibleAsync()
@@ -132,7 +250,7 @@
     {
         if (_module is null) return;
         _ortho = !_ortho;
-        await _module.InvokeVoidAsync("setCameraProjection", _canvasId, _ortho ? "ortho" : "perspective");
+        await _module.InvokeVoidAsync("setCameraProjection", _canvasId, _ortho ? "orthographic" : "perspective");
     }
 
     private async Task ToggleEdgesAsync()
@@ -142,10 +260,93 @@
         await _module.InvokeVoidAsync("toggleEdges", _canvasId, _edgesOn);
     }
 
+    private async Task ToggleGridAsync()
+    {
+        if (_module is null) return;
+        _gridOn = !_gridOn;
+        await _module.InvokeVoidAsync(_gridOn ? "showGrid" : "hideGrid", _canvasId);
+    }
+
+    private async Task ToggleBoundingBoxAsync()
+    {
+        if (_module is null) return;
+        _boundingBoxOn = !_boundingBoxOn;
+        await _module.InvokeVoidAsync("toggleBoundingBox", _canvasId, _boundingBoxOn);
+    }
+
+    private async Task ToggleMeasureAsync()
+    {
+        if (_module is null || _dotNetRef is null) return;
+        _measureOn = !_measureOn;
+        if (_measureOn)
+        {
+            _thicknessOn = false;
+            await _module.InvokeVoidAsync("disableThicknessAnalysis", _canvasId);
+            await _module.InvokeVoidAsync("enableMeasureTool", _canvasId, _dotNetRef);
+        }
+        else
+        {
+            await _module.InvokeVoidAsync("disableMeasureTool", _canvasId);
+        }
+    }
+
+    private async Task ToggleThicknessAsync()
+    {
+        if (_module is null) return;
+        _thicknessOn = !_thicknessOn;
+        if (_thicknessOn)
+        {
+            _measureOn = false;
+            await _module.InvokeVoidAsync("disableMeasureTool", _canvasId);
+            await _module.InvokeVoidAsync("enableThicknessAnalysis", _canvasId);
+        }
+        else
+        {
+            await _module.InvokeVoidAsync("disableThicknessAnalysis", _canvasId);
+        }
+    }
+
+    private async Task ToggleSectionAsync()
+    {
+        _sectionOn = !_sectionOn;
+        await ApplySectionPlaneAsync();
+    }
+
+    private async Task SetSectionAxisAsync(string axis)
+    {
+        _sectionAxis = axis;
+        await ApplySectionPlaneAsync();
+    }
+
+    private async Task SetSectionOffsetAsync(ChangeEventArgs args)
+    {
+        if (double.TryParse(args.Value?.ToString(), out var value))
+        {
+            _sectionOffsetMm = value;
+            await ApplySectionPlaneAsync();
+        }
+    }
+
+    private async Task ApplySectionPlaneAsync()
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("setSectionPlane", _canvasId, _sectionOn, _sectionAxis, _sectionOffsetMm, _sectionInverted);
+    }
+
     private async Task ResetCameraAsync()
     {
         if (_module is null) return;
         await _module.InvokeVoidAsync("resetCamera", _canvasId);
+    }
+
+    private static string ToolbarButtonClass(bool active)
+    {
+        return active ? "qe-vt-btn qe-vt-active" : "qe-vt-btn";
+    }
+
+    private string AxisButtonClass(string axis)
+    {
+        return _sectionAxis == axis ? "qe-vt-axis qe-vt-active" : "qe-vt-axis";
     }
 
     public async ValueTask DisposeAsync()

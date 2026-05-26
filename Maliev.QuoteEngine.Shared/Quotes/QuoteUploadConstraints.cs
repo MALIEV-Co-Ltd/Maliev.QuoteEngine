@@ -24,7 +24,12 @@ public static class QuoteUploadConstraints
         "3mf",
         "obj",
         "gltf",
-        "glb"
+        "glb",
+        "ply",
+        "off",
+        "amf",
+        "wrl",
+        "x3d"
     ];
 
     /// <summary>
@@ -35,7 +40,21 @@ public static class QuoteUploadConstraints
         "step",
         "stp",
         "iges",
-        "igs"
+        "igs",
+        "x_t",
+        "x_b",
+        "sat",
+        "sab",
+        "sldprt",
+        "sldasm",
+        "prt",
+        "asm",
+        "catpart",
+        "catproduct",
+        "jt",
+        "3dxml",
+        "3dm",
+        "brep"
     ];
 
     /// <summary>
@@ -51,7 +70,26 @@ public static class QuoteUploadConstraints
         "igs",
         "iges",
         "gltf",
-        "glb"
+        "glb",
+        "ply",
+        "off",
+        "amf",
+        "wrl",
+        "x3d",
+        "x_t",
+        "x_b",
+        "sat",
+        "sab",
+        "sldprt",
+        "sldasm",
+        "prt",
+        "asm",
+        "catpart",
+        "catproduct",
+        "jt",
+        "3dxml",
+        "3dm",
+        "brep"
     ];
 
     /// <summary>

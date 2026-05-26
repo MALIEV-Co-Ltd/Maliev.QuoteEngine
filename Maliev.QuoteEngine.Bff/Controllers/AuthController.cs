@@ -131,7 +131,14 @@ public sealed class AuthController(QuoteEnginePrototypeStore store, ICustomerSer
                 customer.DisplayName,
                 customer.Phone,
                 string.IsNullOrWhiteSpace(customer.CompanyName) ? companyName : customer.CompanyName,
-                customer.PreferredLanguage);
+                customer.PreferredLanguage,
+                customer.ProfileImageUrl,
+                customer.PreferredCurrency,
+                customer.Timezone,
+                customer.Segment,
+                customer.Tier,
+                customer.NdaStatus,
+                customer.NdaExpiresAt);
     }
 
     private ObjectResult CustomerServiceUnavailable() =>

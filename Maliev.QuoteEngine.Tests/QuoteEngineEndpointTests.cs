@@ -768,6 +768,100 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(profile);
         Assert.NotEqual(Guid.Empty, profile.CustomerId);
         Assert.Equal("profile-owner@example.com", profile.Email);
+        Assert.Equal("THB", profile.PreferredCurrency);
+        Assert.NotEmpty(profile.Timezone);
+        Assert.Equal("Active", profile.NdaStatus);
+        Assert.NotNull(profile.NdaExpiresAt);
+    }
+
+    [Fact]
+    public async Task Duplicate_project_preserves_customer_owned_files_settings_drawings_and_viewer_settings()
+    {
+        using var client = await CreateSignedInClientAsync("duplicate-owner@example.com");
+        var partId = Guid.NewGuid();
+        var fileId = Guid.NewGuid();
+        var request = new CreateDraftProjectRequest(
+            QuoteSessionId: "duplicate-session",
+            Parts:
+            [
+                new QuotePartDraftDto
+                {
+                    PartId = partId,
+                    FileId = fileId,
+                    UploadId = "duplicate-upload",
+                    FileName = "duplicate-fixture.step",
+                    ProcessId = "cnc",
+                    MaterialId = "al6061",
+                    FinishId = "cnc-bead-blast-clear",
+                    FinishCode = "BEAD_BLAST_CLEAR",
+                    ToleranceId = "iso-2768-f",
+                    ToleranceCode = "ISO2768_F",
+                    InspectionLevel = "DIMENSIONAL_REPORT",
+                    RoughnessCode = "RA_1_6",
+                    Quantity = 4,
+                    VolumeCc = 42.5m,
+                    SurfaceAreaCm2 = 120.25m,
+                    HasThreadedHoles = true,
+                    ThreadSpecification = "M4x0.7",
+                    ThreadedHoleCount = 6,
+                    InsertType = "Helicoil",
+                    InsertCount = 3,
+                    BodyCount = 2,
+                    SelectedBodyIndex = 1,
+                    DfmAcknowledged = true,
+                    PartNotes = "Carry this exact customer configuration.",
+                    DrawingFiles =
+                    [
+                        new QuotePartAttachmentDto("duplicate-fixture.pdf", "customers/owner/q/drawing.pdf", "application/pdf", 4096, "Drawing")
+                    ],
+                    ViewerSettings = new QuotePartViewerSettingsDto("right", false, false, true)
+                }
+            ],
+            Notes: "Original draft notes.");
+
+        var createResponse = await client.PostAsJsonAsync("/quote/v1/projects/draft", request);
+        createResponse.EnsureSuccessStatusCode();
+        var created = await createResponse.Content.ReadFromJsonAsync<CreateDraftProjectResponse>();
+        Assert.NotNull(created);
+
+        var duplicateResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/projects/{created.ProjectId:D}/duplicate",
+            new DuplicateDraftProjectRequest("Duplicate fixture copy"));
+        duplicateResponse.EnsureSuccessStatusCode();
+        var duplicated = await duplicateResponse.Content.ReadFromJsonAsync<DuplicateDraftProjectResponse>();
+
+        Assert.NotNull(duplicated);
+        Assert.NotEqual(created.ProjectId, duplicated.ProjectId);
+        Assert.Equal("Duplicate fixture copy", duplicated.Title);
+        Assert.Equal("Draft", duplicated.Status);
+        var duplicatedPart = Assert.Single(duplicated.Parts);
+        Assert.NotEqual(partId, duplicatedPart.PartId);
+        Assert.Equal(fileId, duplicatedPart.FileId);
+        Assert.Equal("duplicate-upload", duplicatedPart.UploadId);
+        Assert.Equal("duplicate-fixture.step", duplicatedPart.FileName);
+        Assert.Equal("cnc", duplicatedPart.ProcessId);
+        Assert.Equal("al6061", duplicatedPart.MaterialId);
+        Assert.Equal("cnc-bead-blast-clear", duplicatedPart.FinishId);
+        Assert.Equal("ISO2768_F", duplicatedPart.ToleranceCode);
+        Assert.Equal("DIMENSIONAL_REPORT", duplicatedPart.InspectionLevel);
+        Assert.Equal("RA_1_6", duplicatedPart.RoughnessCode);
+        Assert.Equal(4, duplicatedPart.Quantity);
+        Assert.True(duplicatedPart.HasThreadedHoles);
+        Assert.Equal("M4x0.7", duplicatedPart.ThreadSpecification);
+        Assert.Equal(6, duplicatedPart.ThreadedHoleCount);
+        Assert.Equal("Helicoil", duplicatedPart.InsertType);
+        Assert.Equal(3, duplicatedPart.InsertCount);
+        Assert.Equal(2, duplicatedPart.BodyCount);
+        Assert.Equal(1, duplicatedPart.SelectedBodyIndex);
+        Assert.True(duplicatedPart.DfmAcknowledged);
+        Assert.Equal("Carry this exact customer configuration.", duplicatedPart.PartNotes);
+        var drawing = Assert.Single(duplicatedPart.DrawingFiles);
+        Assert.Equal("duplicate-fixture.pdf", drawing.FileName);
+        Assert.Equal("customers/owner/q/drawing.pdf", drawing.StoragePath);
+        Assert.Equal("right", duplicatedPart.ViewerSettings.CameraPreset);
+        Assert.False(duplicatedPart.ViewerSettings.EdgesEnabled);
+        Assert.False(duplicatedPart.ViewerSettings.GridEnabled);
+        Assert.True(duplicatedPart.ViewerSettings.DfmOverlayEnabled);
     }
 
     [Fact]

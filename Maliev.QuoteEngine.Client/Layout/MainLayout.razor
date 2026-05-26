@@ -4,7 +4,7 @@
 @inject NavigationManager Navigation
 @implements IDisposable
 
-<MudThemeProvider Theme="@_malievTheme" />
+<MudThemeProvider Theme="@_malievTheme" IsDarkMode="@_isDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
@@ -18,15 +18,25 @@
         <nav class="quote-topnav" aria-label="Customer quote navigation">
             <NavLink href="/projects/new" Match="NavLinkMatch.Prefix">Quote</NavLink>
             <NavLink href="/orders" Match="NavLinkMatch.Prefix">Orders</NavLink>
-            <NavLink href="/ndas" Match="NavLinkMatch.Prefix">NDAs</NavLink>
-            <NavLink href="/documents" Match="NavLinkMatch.Prefix">Documents</NavLink>
-            @if (_authStatus.IsSignedIn)
-            {
-                <NavLink href="/profile" Match="NavLinkMatch.Prefix">Profile</NavLink>
-            }
         </nav>
 
         <div class="top-actions">
+            <button type="button"
+                    class="quote-theme-toggle"
+                    aria-label="Toggle light or dark mode"
+                    title="@ThemeToggleTitle"
+                    @onclick="ToggleThemeAsync">
+                <MudIcon Icon="@ThemeToggleIcon" Size="Size.Small" />
+            </button>
+            <select class="quote-currency-select"
+                    aria-label="Currency"
+                    value="@_selectedCurrency"
+                    @onchange="HandleCurrencyChanged">
+                @foreach (var currency in SupportedCurrencies)
+                {
+                    <option value="@currency">@currency</option>
+                }
+            </select>
             <MudTooltip Text="MALIEV assistant" Placement="Placement.Bottom">
                 <MudIconButton Icon="@Icons.Material.Filled.SupportAgent"
                                Class="topbar-chat-toggle"
@@ -38,34 +48,44 @@
             @if (_authStatus.IsSignedIn)
             {
                 <details class="billing-account-menu">
-                    <summary class="billing-account-trigger" aria-label="Select billing account">
-                        <span>Bill to</span>
-                        <strong>@BillingAccountTitle</strong>
-                        <small>@BillingAccountHint</small>
+                    <summary class="billing-account-trigger" aria-label="Customer account and billing">
+                        @CustomerAvatarMarkup
+                        <span class="billing-account-copy">
+                            <span>Bill to</span>
+                            <strong>@BillingAccountTitle</strong>
+                            <small>@BillingAccountHint</small>
+                        </span>
                     </summary>
                     <div class="billing-account-options" role="listbox" aria-label="Billing account">
-                        <button type="button"
-                                class="@BillingAccountOptionClass("personal")"
-                                role="option"
-                                aria-selected="@IsBillingAccountSelected("personal")"
-                                @onclick="@(() => SelectBillingAccount("personal"))">
-                            <span>Personal account</span>
-                            <strong>@PersonalBillingName</strong>
-                            <small>Place order privately</small>
-                        </button>
-                        @if (HasCompanyBillingAccount)
-                        {
+                        <div class="billing-account-list">
                             <button type="button"
-                                    class="@BillingAccountOptionClass("company")"
+                                    class="@BillingAccountOptionClass("personal")"
                                     role="option"
-                                    aria-selected="@IsBillingAccountSelected("company")"
-                                    @onclick="@(() => SelectBillingAccount("company"))">
-                                <span>Company account</span>
-                                <strong>@_profile!.CompanyName</strong>
-                                <small>Use company billing details</small>
+                                    aria-selected="@IsBillingAccountSelected("personal")"
+                                    @onclick="@(() => SelectBillingAccount("personal"))">
+                                <span>Personal account</span>
+                                <strong>@PersonalBillingName</strong>
+                                <small>Place order privately</small>
                             </button>
-                        }
-                        <a class="billing-account-manage" href="/profile">Manage account</a>
+                            @if (HasCompanyBillingAccount)
+                            {
+                                <button type="button"
+                                        class="@BillingAccountOptionClass("company")"
+                                        role="option"
+                                        aria-selected="@IsBillingAccountSelected("company")"
+                                        @onclick="@(() => SelectBillingAccount("company"))">
+                                    <span>Company account</span>
+                                    <strong>@_profile!.CompanyName</strong>
+                                    <small>Use company billing details</small>
+                                </button>
+                            }
+                        </div>
+                        <div class="customer-data-section" aria-label="Customer data">
+                            <a class="billing-account-manage" href="/profile">Manage account</a>
+                            <a class="billing-account-manage" href="/ndas">NDAs</a>
+                            <a class="billing-account-manage" href="/documents">Documents</a>
+                            <a class="billing-account-manage" href="/preferences">Preferences</a>
+                        </div>
                     </div>
                 </details>
             }
@@ -85,18 +105,20 @@
     }
 
     <main class="@WorkspaceClass">
-        @if (IsQuoteWorkspace)
-        {
-            <div class="quote-workspace-host">
-                @Body
-            </div>
-        }
-        else
-        {
-            <section class="page-surface">
-                @Body
-            </section>
-        }
+        <CascadingValue Value="_isDarkMode" Name="IsDarkMode">
+            @if (IsQuoteWorkspace)
+            {
+                <div class="quote-workspace-host">
+                    @Body
+                </div>
+            }
+            else
+            {
+                <section class="page-surface">
+                    @Body
+                </section>
+            }
+        </CascadingValue>
     </main>
 </div>
 
@@ -124,6 +146,28 @@
             LinesDefault = "#ebebeb",
             AppbarBackground = "#ffffff",
             AppbarText = "#171717"
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#f5f5f5",
+            PrimaryContrastText = "#111111",
+            Secondary = "#171717",
+            SecondaryContrastText = "#f5f5f5",
+            Tertiary = "#ff4fb3",
+            Info = "#4f9cff",
+            InfoContrastText = "#0d1117",
+            Error = "#ff7a70",
+            ErrorContrastText = "#0d1117",
+            Dark = "#f5f5f5",
+            DarkContrastText = "#111111",
+            Surface = "#161616",
+            Background = "#0f0f10",
+            BackgroundGray = "#1f1f22",
+            TextPrimary = "#f5f5f5",
+            TextSecondary = "#c7c7c7",
+            LinesDefault = "#2d2d30",
+            AppbarBackground = "#111111",
+            AppbarText = "#f5f5f5"
         },
         Typography = new Typography
         {
@@ -159,9 +203,13 @@
         }
     };
 
+    private static readonly string[] SupportedCurrencies = ["THB", "USD", "EUR", "JPY", "SGD"];
     private bool IsQuoteWorkspace => IsQuoteWorkspacePath(new Uri(Navigation.Uri).AbsolutePath);
     private string WorkspaceClass => IsQuoteWorkspace ? "workspace workspace--quote" : "workspace";
     private bool _chatDrawerOpen;
+    private bool _isDarkMode;
+    private string _selectedCurrency = "THB";
+    private bool _preferencesLoaded;
     private QuoteAuthStatusResponse _authStatus = new(false, null, null);
     private CustomerProfileResponse? _profile;
     private string _selectedBillingAccountId = "personal";
@@ -174,6 +222,12 @@
     private string BillingAccountHint => _selectedBillingAccountId == "company" && HasCompanyBillingAccount
         ? "Company billing"
         : "Private order";
+    private string ThemeToggleIcon => _isDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
+    private string ThemeToggleTitle => _isDarkMode ? "Use light mode" : "Use dark mode";
+    private string AvatarInitials => GetInitials(_profile?.DisplayName ?? _authStatus.DisplayName ?? "Customer");
+    private MarkupString CustomerAvatarMarkup => !string.IsNullOrWhiteSpace(_profile?.ProfileImageUrl)
+        ? new MarkupString($"<img class=\"customer-avatar customer-avatar--image\" src=\"{System.Net.WebUtility.HtmlEncode(_profile.ProfileImageUrl)}\" alt=\"\" />")
+        : new MarkupString($"<span class=\"customer-avatar\" aria-hidden=\"true\">{System.Net.WebUtility.HtmlEncode(AvatarInitials)}</span>");
 
     private static bool IsQuoteWorkspacePath(string path)
     {
@@ -193,7 +247,9 @@
     {
         if (firstRender)
         {
+            await LoadPreferencesAsync();
             await Js.InvokeVoidAsync("quoteEngineLoader.markReady");
+            StateHasChanged();
         }
     }
 
@@ -214,6 +270,10 @@
             if (_authStatus.IsSignedIn)
             {
                 _profile = await Api.GetProfileAsync();
+                if (!_preferencesLoaded)
+                {
+                    _selectedCurrency = NormalizeCurrency(_profile?.PreferredCurrency ?? _selectedCurrency);
+                }
                 if (!HasCompanyBillingAccount && string.Equals(_selectedBillingAccountId, "company", StringComparison.Ordinal))
                 {
                     _selectedBillingAccountId = "personal";
@@ -231,6 +291,53 @@
             _profile = null;
             _selectedBillingAccountId = "personal";
         }
+    }
+
+    private async Task LoadPreferencesAsync()
+    {
+        var theme = await Js.InvokeAsync<string?>("quoteEnginePreferences.getPreference", "maliev.quote.theme");
+        _isDarkMode = string.Equals(theme, "dark", StringComparison.OrdinalIgnoreCase);
+        await Js.InvokeVoidAsync("quoteEnginePreferences.setTheme", _isDarkMode ? "dark" : "light");
+
+        var currency = await Js.InvokeAsync<string?>("quoteEnginePreferences.getPreference", "maliev.quote.currency");
+        _selectedCurrency = NormalizeCurrency(currency ?? _profile?.PreferredCurrency ?? _selectedCurrency);
+        _preferencesLoaded = true;
+    }
+
+    private async Task ToggleThemeAsync()
+    {
+        _isDarkMode = !_isDarkMode;
+        await Js.InvokeVoidAsync("quoteEnginePreferences.setTheme", _isDarkMode ? "dark" : "light");
+    }
+
+    private async Task HandleCurrencyChanged(ChangeEventArgs args)
+    {
+        _selectedCurrency = NormalizeCurrency(args.Value?.ToString());
+        await PersistCurrencyAsync();
+    }
+
+    private async Task PersistCurrencyAsync()
+    {
+        await Js.InvokeVoidAsync("quoteEnginePreferences.setPreference", "maliev.quote.currency", _selectedCurrency);
+    }
+
+    private static string NormalizeCurrency(string? currency)
+    {
+        return SupportedCurrencies.Contains(currency, StringComparer.OrdinalIgnoreCase)
+            ? SupportedCurrencies.First(candidate => candidate.Equals(currency, StringComparison.OrdinalIgnoreCase))
+            : "THB";
+    }
+
+    private static string GetInitials(string value)
+    {
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return "C";
+        }
+
+        var initials = string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+        return string.IsNullOrWhiteSpace(initials) ? "C" : initials;
     }
 
     private void SelectBillingAccount(string accountId)

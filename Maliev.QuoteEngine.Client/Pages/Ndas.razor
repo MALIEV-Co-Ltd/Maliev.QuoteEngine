@@ -14,7 +14,7 @@
         <div class="data-row">
             <span>@nda.Title</span>
             <strong>@nda.Status</strong>
-            <small>@nda.UpdatedAt.ToLocalTime().ToString("d MMM yyyy")</small>
+            <small>@NdaDateLine(nda)</small>
         </div>
     }
 </div>
@@ -25,5 +25,12 @@
     protected override async Task OnInitializedAsync()
     {
         _ndas = await Api.GetNdasAsync();
+    }
+
+    private static string NdaDateLine(CustomerNdaDto nda)
+    {
+        return nda.ExpiresAt.HasValue
+            ? $"Expires {nda.ExpiresAt.Value.ToLocalTime():d MMM yyyy}"
+            : $"Updated {nda.UpdatedAt.ToLocalTime():d MMM yyyy}";
     }
 }
