@@ -404,8 +404,9 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("class=\"quote-topbar\"", layout, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"@Text(\"Customer quote navigation\"", layout, StringComparison.Ordinal);
-        Assert.Contains("href=\"/quote/new\"", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"quote-brand\" href=\"/quote/new\"", layout, StringComparison.Ordinal);
+        // Brand logo links to the landing page ("/"), not the workspace.
+        Assert.Contains("class=\"quote-brand\" href=\"/\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"quote-brand\" href=\"/quote/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"quote-brand-logo\"", layout, StringComparison.Ordinal);
         Assert.Contains("src=\"/images/logo.svg\"", layout, StringComparison.Ordinal);
         Assert.Contains("alt=\"MALIEV\"", layout, StringComparison.Ordinal);
@@ -981,7 +982,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-pcs-feature-card", src, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"@Text(\"DFM reviewed\"", src, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-pcs-notes-input\"", src, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-pcs-bulk-badge\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-advanced-toggle\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-help-link\"", src, StringComparison.Ordinal);
         Assert.Contains("SetPartNotes", src, StringComparison.Ordinal);
         Assert.DoesNotContain("<select", src, StringComparison.OrdinalIgnoreCase);
 

@@ -514,52 +514,121 @@ body.quote-ready .startup-screen {
     box-shadow: rgba(255, 255, 255, 0.08) 0 1px 0 0;
 }
 
-/* Dark topbar treatment when the home shader background is active */
-.app-shell.is-home .quote-topbar {
+/* ── Home topbar: dark mode (near-black metallic shader) ──────────────── */
+[data-maliev-theme="dark"] .app-shell.is-home .quote-topbar {
     background: rgba(5, 5, 14, 0.55);
     box-shadow: rgba(255, 255, 255, 0.07) 0 1px 0 0;
 }
 
-.app-shell.is-home .quote-brand-logo {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-brand-logo {
     filter: invert(1) brightness(1.08);
 }
 
-.app-shell.is-home .quote-topnav a {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-topnav a {
     color: rgba(255, 255, 255, 0.55);
 }
 
-.app-shell.is-home .quote-topnav a:hover {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-topnav a:hover {
     color: #ffffff;
     background: rgba(255, 255, 255, 0.07);
 }
 
-.app-shell.is-home .quote-topnav a.active {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-topnav a.active {
     color: #111111;
 }
 
-.app-shell.is-home .quote-theme-toggle {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-theme-toggle {
     color: rgba(255, 255, 255, 0.55);
 }
 
-.app-shell.is-home .quote-theme-toggle:hover {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-theme-toggle:hover {
     color: #ffffff;
 }
 
-.app-shell.is-home .quote-language-toggle {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-language-toggle {
     background: rgba(255, 255, 255, 0.10);
 }
 
-.app-shell.is-home .quote-language-button {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-language-button {
     color: rgba(255, 255, 255, 0.55);
 }
 
-.app-shell.is-home .quote-language-button:hover {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-language-button:hover {
     color: #ffffff;
 }
 
-.app-shell.is-home .quote-language-button.is-active {
+[data-maliev-theme="dark"] .app-shell.is-home .quote-language-button.is-active {
     color: #111111;
     background: rgba(255, 255, 255, 0.9);
+}
+
+/* Sign-in button — glass white on the dark home topbar */
+[data-maliev-theme="dark"] .app-shell.is-home .quote-signin-btn {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+[data-maliev-theme="dark"] .app-shell.is-home .quote-signin-btn:hover {
+    background: rgba(255, 255, 255, 0.22);
+    filter: none;
+}
+
+/* ── Home topbar: light mode (ice-blue metallic shader) ───────────────── */
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-topbar {
+    background: rgba(220, 228, 248, 0.72);
+    backdrop-filter: blur(12px);
+    box-shadow: rgba(10, 15, 40, 0.07) 0 1px 0 0;
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-brand-logo {
+    filter: none;
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-topnav a {
+    color: rgba(10, 15, 45, 0.60);
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-topnav a:hover {
+    color: #0a0f2d;
+    background: rgba(10, 15, 45, 0.06);
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-theme-toggle {
+    color: rgba(10, 15, 45, 0.60);
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-theme-toggle:hover {
+    color: #0a0f2d;
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-language-toggle {
+    background: rgba(10, 15, 45, 0.08);
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-language-button {
+    color: rgba(10, 15, 45, 0.60);
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-language-button:hover {
+    color: #0a0f2d;
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-language-button.is-active {
+    color: #ffffff;
+    background: rgba(10, 15, 45, 0.65);
+}
+
+/* Sign-in button — dark glass on the light home topbar */
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-signin-btn {
+    background: rgba(10, 15, 45, 0.10);
+    color: #0a0f2d;
+    border: 1px solid rgba(10, 15, 45, 0.18);
+}
+
+:root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-signin-btn:hover {
+    background: rgba(10, 15, 45, 0.18);
+    filter: none;
 }
 
 .quote-brand {
@@ -4403,20 +4472,35 @@ textarea::placeholder {
     }
 }
 
-/* ─── Home page light-text treatment (dark shader background) ─────────── */
+/* ─── Home page text — adapts to shader mode ─────────────────────────── */
 
-.home-root .home-h1                         { color: #ffffff; }
-.home-root .home-h1-accent                  { color: #a78bfa; }
-.home-root .home-typewriter-cursor          { background: #a78bfa; }
-.home-root .home-sub                        { color: rgba(255, 255, 255, 0.65); }
-.home-root .home-start-btn                  { background: #ffffff; color: #171717; }
-.home-root .home-start-btn:hover            { filter: brightness(0.93); }
-.home-root .home-demo-btn                   { background: rgba(255, 255, 255, 0.08); color: #ffffff;
-                                              box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16); }
-.home-root .home-demo-btn:hover             { background: rgba(255, 255, 255, 0.14); }
-.home-root .home-benefits                   { border-top-color: rgba(255, 255, 255, 0.14); }
-.home-root .home-benefits li                { color: rgba(255, 255, 255, 0.5); }
-.home-root .home-benefits li.is-highlighted { color: #ffffff; }
+/* Dark mode: white text on near-black metallic shader */
+[data-maliev-theme="dark"] .home-root .home-h1                         { color: #ffffff; }
+[data-maliev-theme="dark"] .home-root .home-h1-accent                  { color: #93c5fd; }
+[data-maliev-theme="dark"] .home-root .home-typewriter-cursor          { background: #93c5fd; }
+[data-maliev-theme="dark"] .home-root .home-sub                        { color: rgba(255, 255, 255, 0.65); }
+[data-maliev-theme="dark"] .home-root .home-start-btn                  { background: #ffffff; color: #171717; }
+[data-maliev-theme="dark"] .home-root .home-start-btn:hover            { filter: brightness(0.93); }
+[data-maliev-theme="dark"] .home-root .home-demo-btn                   { background: rgba(255, 255, 255, 0.08); color: #ffffff;
+                                                                          box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16); }
+[data-maliev-theme="dark"] .home-root .home-demo-btn:hover             { background: rgba(255, 255, 255, 0.14); }
+[data-maliev-theme="dark"] .home-root .home-benefits                   { border-top-color: rgba(255, 255, 255, 0.14); }
+[data-maliev-theme="dark"] .home-root .home-benefits li                { color: rgba(255, 255, 255, 0.50); }
+[data-maliev-theme="dark"] .home-root .home-benefits li.is-highlighted { color: #ffffff; }
+
+/* Light mode: deep-navy text on ice-blue metallic shader */
+:root:not([data-maliev-theme="dark"]) .home-root .home-h1                         { color: #0a0f20; }
+:root:not([data-maliev-theme="dark"]) .home-root .home-h1-accent                  { color: #1e3a8a; }
+:root:not([data-maliev-theme="dark"]) .home-root .home-typewriter-cursor          { background: #1e3a8a; }
+:root:not([data-maliev-theme="dark"]) .home-root .home-sub                        { color: rgba(10, 15, 40, 0.72); }
+:root:not([data-maliev-theme="dark"]) .home-root .home-start-btn                  { background: #0a0f20; color: #ffffff; }
+:root:not([data-maliev-theme="dark"]) .home-root .home-start-btn:hover            { filter: brightness(1.22); }
+:root:not([data-maliev-theme="dark"]) .home-root .home-demo-btn                   { background: rgba(10, 15, 40, 0.08); color: #0a0f20;
+                                                                                    box-shadow: 0 0 0 1px rgba(10, 15, 40, 0.18); }
+:root:not([data-maliev-theme="dark"]) .home-root .home-demo-btn:hover             { background: rgba(10, 15, 40, 0.14); }
+:root:not([data-maliev-theme="dark"]) .home-root .home-benefits                   { border-top-color: rgba(10, 15, 40, 0.12); }
+:root:not([data-maliev-theme="dark"]) .home-root .home-benefits li                { color: rgba(10, 15, 40, 0.55); }
+:root:not([data-maliev-theme="dark"]) .home-root .home-benefits li.is-highlighted { color: #0a0f20; }
 
 /* ─── End home landing page ──────────────────────────────────────────── */
 
