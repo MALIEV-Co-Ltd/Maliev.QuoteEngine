@@ -472,6 +472,21 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     : IClassFixture<QuoteEngineWebApplicationFactory>
 {
     [Fact]
+    public async Task Root_landing_is_server_rendered_without_loading_wasm_bundle()
+    {
+        using var client = factory.CreateClient();
+
+        var html = await client.GetStringAsync("/");
+
+        Assert.Contains("class=\"landing-shell\"", html, StringComparison.Ordinal);
+        Assert.Contains("data-landing-appbar", html, StringComparison.Ordinal);
+        Assert.Contains("href=\"/demo\"", html, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage.setItem(\"maliev.quote.workspace.handoff\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("_framework/blazor.webassembly.js", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("_content/MudBlazor", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ReferenceData_exposes_customer_visible_processes_and_materials()
     {
         using var client = factory.CreateClient();

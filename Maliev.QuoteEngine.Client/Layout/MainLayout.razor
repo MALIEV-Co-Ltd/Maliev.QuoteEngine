@@ -13,13 +13,15 @@
 
 <div class="@AppShellClass">
     <header class="quote-topbar">
-        <a class="quote-brand" href="/projects/new">
+        <a class="quote-brand" href="/quote/new">
             <img class="quote-brand-logo" src="/images/logo.svg" alt="MALIEV" />
         </a>
 
         <nav class="quote-topnav" aria-label="@Text("Customer quote navigation", "เมนูลูกค้าสำหรับใบเสนอราคา")">
-            <NavLink href="/projects/new" Match="NavLinkMatch.Prefix">@Text("Quote", "ขอราคา")</NavLink>
-            <NavLink href="/orders" Match="NavLinkMatch.Prefix">@Text("Orders", "คำสั่งซื้อ")</NavLink>
+            @if (_authStatus.IsSignedIn)
+            {
+                <NavLink href="/orders" Match="NavLinkMatch.Prefix">@Text("Orders", "คำสั่งซื้อ")</NavLink>
+            }
         </nav>
 
         <div class="top-actions">
@@ -38,15 +40,36 @@
                         class="@LanguageButtonClass(SupportedCultures.ThaiCulture)"
                         @onclick="() => ChangeCultureAsync(SupportedCultures.ThaiCulture)">TH</button>
             </div>
-            <select class="quote-currency-select"
-                    aria-label="@Text("Currency", "สกุลเงิน")"
-                    value="@_selectedCurrency"
-                    @onchange="HandleCurrencyChanged">
-                @foreach (var currency in _currencyOptions)
-                {
-                    <option value="@currency.Code">@currency.Code</option>
-                }
-            </select>
+            @if (!IsHomePage)
+            {
+                <MudAutocomplete T="CurrencyOptionDto"
+                                 Value="@SelectedCurrencyDto"
+                                 ValueChanged="@SetCurrencyDtoAsync"
+                                 SearchFunc="@SearchCurrenciesAsync"
+                                 ToStringFunc="@(c => c is null ? "" : $"{c.Code} {c.Symbol}")"
+                                 Variant="Variant.Text"
+                                 Margin="Margin.None"
+                                 Dense="true"
+                                 Immediate="true"
+                                 CoerceText="false"
+                                 ResetValueOnEmptyText="false"
+                                 ShowProgressIndicator="false"
+                                 Disabled="@(_currencyOptions.Count == 0)"
+                                 Placeholder="@(_currencyOptions.Count == 0 ? "…" : _selectedCurrency)"
+                                 Class="quote-currency-autocomplete"
+                                 PopoverClass="quote-currency-popover"
+                                 AdornmentIcon="@Icons.Material.Filled.KeyboardArrowDown"
+                                 Adornment="Adornment.End"
+                                 AdornmentColor="Color.Default"
+                                 aria-label="@Text("Currency", "สกุลเงิน")">
+                    <ItemTemplate Context="c">
+                        <div class="quote-currency-item">
+                            <span class="maliev-mono quote-currency-code" style="font-weight:@(c.Code == _selectedCurrency ? "700" : "400")">@c.Code @c.Symbol</span>
+                            <span class="quote-currency-name">@c.Name</span>
+                        </div>
+                    </ItemTemplate>
+                </MudAutocomplete>
+            }
             <MudTooltip Text="@Text("MALIEV assistant", "ผู้ช่วย MALIEV")" Placement="Placement.Bottom">
                 <MudIconButton Icon="@Icons.Material.Filled.SupportAgent"
                                Class="topbar-chat-toggle"
@@ -101,7 +124,7 @@
             }
             else
             {
-                <a class="text-button" href="/auth/sign-in">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                <a class="quote-signin-btn" href="/auth/sign-in">@Text("Sign in", "เข้าสู่ระบบ")</a>
             }
         </div>
     </header>
@@ -117,10 +140,17 @@
     <main class="@WorkspaceClass">
         <CascadingValue Value="_isDarkMode" Name="IsDarkMode">
             <CascadingValue Value="_selectedCulture" Name="Culture">
+                <CascadingValue Value="_authStatus.IsSignedIn" Name="IsSignedIn">
                 <CascadingValue Value="OpenAssistantCallback" Name="OpenAssistant">
                     @if (IsQuoteWorkspace)
                     {
                         <div class="quote-workspace-host">
+                            @Body
+                        </div>
+                    }
+                    else if (IsHomePage)
+                    {
+                        <div class="home-host">
                             @Body
                         </div>
                     }
@@ -130,6 +160,7 @@
                             @Body
                         </section>
                     }
+                </CascadingValue>
                 </CascadingValue>
             </CascadingValue>
         </CascadingValue>
@@ -218,7 +249,9 @@
     };
 
     private static readonly CurrencyOptionDto FallbackCurrency = new("THB", "฿", "Thai Baht", true, true);
+    private static readonly string[] PriorityCodes = ["THB", "USD", "EUR", "GBP", "JPY", "CNY", "SGD", "AUD", "CAD", "CHF"];
     private bool IsQuoteWorkspace => IsQuoteWorkspacePath(new Uri(Navigation.Uri).AbsolutePath);
+    private bool IsHomePage => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Length == 0;
     private string WorkspaceClass => IsQuoteWorkspace ? "workspace workspace--quote" : "workspace";
     private bool _chatDrawerOpen;
     private bool _isDarkMode;
@@ -250,6 +283,7 @@
     {
         var normalized = path.TrimEnd('/');
         return normalized.Equals("/projects/new", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("/quote/new", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("/quotes/new", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("/demo", StringComparison.OrdinalIgnoreCase);
     }
@@ -357,16 +391,45 @@
         return Preferences.SetCultureAsync(culture);
     }
 
-    private async Task HandleCurrencyChanged(ChangeEventArgs args)
-    {
-        _selectedCurrency = NormalizeCurrency(args.Value?.ToString());
-        await PersistCurrencyAsync();
-    }
-
     private async Task PersistCurrencyAsync()
     {
         await Preferences.SetCurrencyAsync(_selectedCurrency);
         await Js.InvokeVoidAsync("quoteEnginePreferences.setPreference", "maliev.quote.currency", _selectedCurrency);
+    }
+
+    private CurrencyOptionDto? SelectedCurrencyDto =>
+        _currencyOptions.FirstOrDefault(c => c.Code.Equals(_selectedCurrency, StringComparison.OrdinalIgnoreCase));
+
+    private async Task SetCurrencyDtoAsync(CurrencyOptionDto? c)
+    {
+        if (c is null) return;
+        _selectedCurrency = c.Code;
+        await PersistCurrencyAsync();
+    }
+
+    private Task<IEnumerable<CurrencyOptionDto>> SearchCurrenciesAsync(string? query, CancellationToken _)
+    {
+        var active = _currencyOptions.Where(c => c.IsActive).ToList();
+        var currentDisplay = SelectedCurrencyDto is { } dto ? $"{dto.Code} {dto.Symbol}" : null;
+        var isShowAll = string.IsNullOrWhiteSpace(query) ||
+            (currentDisplay != null && string.Equals(query!.Trim(), currentDisplay.Trim(), StringComparison.OrdinalIgnoreCase));
+
+        if (isShowAll)
+        {
+            var priority = PriorityCodes
+                .Select(code => active.FirstOrDefault(c => c.Code == code))
+                .Where(c => c != null)
+                .Cast<CurrencyOptionDto>();
+            var rest = active.Where(c => !PriorityCodes.Contains(c.Code));
+            return Task.FromResult(priority.Concat(rest));
+        }
+
+        var q = query!.Trim();
+        var matches = active.Where(c =>
+            c.Code.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            c.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+            c.Symbol.Contains(q, StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(matches);
     }
 
     private string NormalizeCurrency(string? currency)

@@ -79,6 +79,6 @@ public sealed class WebHandoffAuthController(
     {
         return !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
             ? returnUrl
-            : "/projects/new";
+            : "/quote/new";
     }
 }

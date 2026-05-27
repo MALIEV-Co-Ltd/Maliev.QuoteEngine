@@ -1,5 +1,5 @@
 @page "/quotes/new"
-@page "/projects/new"
+@page "/quote/new"
 @page "/demo"
 @using System.Text
 @using System.Text.Json
@@ -86,40 +86,12 @@
             {
                 <section class="qe-empty-state">
                     <div class="@EmptyStateGridClass">
-                        @if (HasLaunchActionCards)
-                        {
-                            <div class="qe-launch-hero">
-                                <div class="qe-launch-copy">
-                                    <span class="qe-zone-label">@Text("Manufacturing quotes", "ใบเสนอราคาการผลิต")</span>
-                                    <h1>@Text("Get manufacturing quotes,", "ขอใบเสนอราคาการผลิต") <span>@Text("faster and easier.", "ได้เร็วและง่ายขึ้น")</span></h1>
-                                    <p>@Text("Upload your CAD files and project details. We'll get back with feedback and pricing.", "อัปโหลดไฟล์ CAD และรายละเอียดโปรเจกต์ แล้วเราจะส่งข้อเสนอแนะและราคาให้คุณ")</p>
-                                </div>
-                                <div class="qe-launch-visual" aria-hidden="true">
-                                    <span class="qe-launch-grid"></span>
-                                    <img src="/images/generated/metal-components-cutout.png" alt="" />
-                                </div>
-                            </div>
-                        }
                         <button id="@HeroDropzoneId" type="button" class="qe-dropzone qe-dropzone--hero">
                             <span class="qe-dropzone-icon" aria-hidden="true">
                                 <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
                             </span>
                             <span>@UploadHeroLabel</span>
-                            @if (HasLaunchActionCards)
-                            {
-                                <em>@Text("Upload CAD files or any relevant documents", "อัปโหลดไฟล์ CAD หรือเอกสารที่เกี่ยวข้อง")</em>
-                                <span class="qe-launch-format-chips" aria-label="@UploadHeroHint">
-                                    @foreach (var format in LaunchFormatChips)
-                                    {
-                                        <span>@format</span>
-                                    }
-                                </span>
-                                <small>@Text("/ max", "/ สูงสุด") @QuoteUploadConstraints.MaxFileSizeMegabytes MB @Text("per file", "ต่อไฟล์")</small>
-                            }
-                            else
-                            {
-                                <small>@UploadHeroHint</small>
-                            }
+                            <small>@UploadHeroHint</small>
                         </button>
                         @if (ShowDemoSampleCard)
                         {
@@ -147,7 +119,7 @@
                                     <strong>@Text("Already have an account?", "มีบัญชีอยู่แล้ว?")</strong>
                                     <p>@Text("Sign in to save quotes, track orders, and manage your projects.", "เข้าสู่ระบบเพื่อบันทึกราคา ติดตามคำสั่งซื้อ และจัดการโปรเจกต์")</p>
                                     <div class="qe-launch-actions">
-                                        <a class="qe-primary-btn qe-launch-signin" href="/auth/sign-in?returnUrl=/projects/new">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                                        <a class="qe-primary-btn qe-launch-signin" href="/auth/sign-in?returnUrl=/quote/new">@Text("Sign in", "เข้าสู่ระบบ")</a>
                                         <button type="button" class="qe-secondary-btn qe-launch-assistant" @onclick="OpenAssistantAsync">
                                             <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Size="Size.Small" />
                                             @Text("Ask assistant", "ถามผู้ช่วย")
@@ -155,32 +127,6 @@
                                     </div>
                                 </div>
                             </article>
-                        }
-                        @if (HasLaunchActionCards)
-                        {
-                            <div class="qe-launch-benefits" aria-label="@Text("Quote Engine benefits", "ประโยชน์ของ Quote Engine")">
-                                <article>
-                                    <span aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.FactCheck" Size="Size.Small" /></span>
-                                    <div>
-                                        <strong>@Text("DFM Feedback", "ข้อเสนอแนะ DFM")</strong>
-                                        <small>@Text("Get expert manufacturability analysis and recommendations.", "รับการวิเคราะห์และคำแนะนำด้านการผลิตจากผู้เชี่ยวชาญ")</small>
-                                    </div>
-                                </article>
-                                <article>
-                                    <span aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.Calculate" Size="Size.Small" /></span>
-                                    <div>
-                                        <strong>@Text("Accurate Pricing", "ราคาที่แม่นยำ")</strong>
-                                        <small>@Text("Receive transparent and competitive pricing.", "รับราคาที่โปร่งใสและแข่งขันได้")</small>
-                                    </div>
-                                </article>
-                                <article>
-                                    <span aria-hidden="true"><MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Small" /></span>
-                                    <div>
-                                        <strong>@Text("Secure & Private", "ปลอดภัยและเป็นส่วนตัว")</strong>
-                                        <small>@Text("Your files and data are protected with industry-standard security.", "ไฟล์และข้อมูลของคุณได้รับการปกป้องด้วยมาตรฐานความปลอดภัยระดับอุตสาหกรรม")</small>
-                                    </div>
-                                </article>
-                            </div>
                         }
                     </div>
                 </section>
@@ -283,39 +229,7 @@
     private bool CanPay => _order is not null && _estimate is not null && IsSignedIn && !IsDemoMode;
     private bool ShowDemoSampleCard => !IsSignedIn && !IsDemoMode;
     private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;
-    private bool HasLaunchActionCards => ShowDemoSampleCard || ShowLaunchAccountCard;
-    private string EmptyStateGridClass => HasLaunchActionCards ? "qe-empty-state-grid" : "qe-empty-state-grid qe-empty-state-grid--solo";
-    private static readonly string[] LaunchFormatChips =
-    [
-        "STL",
-        "STEP",
-        "STP",
-        "3MF",
-        "OBJ",
-        "IGS",
-        "IGES",
-        "GLTF",
-        "GLB",
-        "PLY",
-        "OFF",
-        "AMF",
-        "WRL",
-        "X3D",
-        "X_T",
-        "X_B",
-        "SAT",
-        "SAB",
-        "SLDPRT",
-        "SLDASM",
-        "PRT",
-        "ASM",
-        "CATPART",
-        "CATPRODUCT",
-        "JT",
-        "3DXML",
-        "3DM",
-        "BREP"
-    ];
+    private string EmptyStateGridClass => "qe-empty-state-grid qe-empty-state-grid--solo";
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
@@ -724,7 +638,7 @@
     {
         if (!IsSignedIn || IsDemoMode)
         {
-            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
         }
 
@@ -743,7 +657,7 @@
     {
         if (!IsSignedIn || IsDemoMode)
         {
-            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
         }
 
@@ -793,7 +707,7 @@
 
         if (!IsSignedIn || IsDemoMode)
         {
-            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
         }
 
@@ -809,7 +723,7 @@
 
         if (!IsSignedIn || IsDemoMode)
         {
-            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
         }
 
@@ -826,7 +740,7 @@
 
         if (!IsSignedIn || IsDemoMode)
         {
-            Navigation.NavigateTo("/auth/sign-in?returnUrl=/projects/new");
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
         }
 

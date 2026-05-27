@@ -81,7 +81,7 @@
     public string? ReturnUrl { get; set; }
 
     private string SafeReturnUrl => string.IsNullOrWhiteSpace(ReturnUrl) || !ReturnUrl.StartsWith("/", StringComparison.Ordinal)
-        ? "/projects/new"
+        ? "/quote/new"
         : ReturnUrl;
 
     private string SignInHref => $"/auth/sign-in?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}";

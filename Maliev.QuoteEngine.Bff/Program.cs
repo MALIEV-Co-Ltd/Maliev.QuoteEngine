@@ -4,6 +4,7 @@ using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Consumers;
 using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Options;
+using Maliev.QuoteEngine.Bff.Pages;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -115,6 +116,7 @@ app.MapStaticAssets().ShortCircuit();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/", LandingPageRenderer.RenderAsync).ExcludeFromDescription();
 app.MapControllers();
 app.MapHub<QuoteNotificationsHub>("/hubs/quote-notifications");
 app.MapFallback(async context =>

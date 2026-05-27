@@ -1,18 +1,56 @@
 @page "/"
 
-<PageTitle>MALIEV Quote Engine</PageTitle>
+<PageTitle>MALIEV — Get manufacturing quotes, faster and easier</PageTitle>
 
-<div class="hero-grid">
-    <div class="hero-copy">
-        <span class="eyebrow">quote.maliev.com</span>
-        <h1>Custom manufacturing orders start here.</h1>
-        <p>Upload CAD files, review manufacturability, configure every part, receive a deterministic estimate, and turn approved quotes into tracked manufacturing orders.</p>
-        <div class="hero-actions">
-            <a class="primary-button" href="/quotes/new">Start a quote</a>
-            <a class="text-button" href="/orders">Track orders</a>
+<div class="home-root">
+    <div class="home-copy">
+        <h1 class="home-h1">
+            @T("Get manufacturing quotes,", "ขอใบเสนอราคาการผลิต")
+            <span class="home-h1-accent" data-maliev-typewriter>
+                <span data-typewriter-text>@TypewriterOptions[0]</span><span class="home-typewriter-cursor" aria-hidden="true"></span>
+                @foreach (var option in TypewriterOptions)
+                {
+                    <span @key="@option" data-typewriter-option hidden>@option</span>
+                }
+            </span>
+        </h1>
+        <p class="home-sub">@T("Upload your CAD files and project details. We'll get back with expert DFM feedback and accurate, transparent pricing.", "อัปโหลดไฟล์ CAD และรายละเอียดโปรเจกต์ แล้วเราจะส่งข้อเสนอแนะ DFM จากผู้เชี่ยวชาญและราคาที่โปร่งใสให้คุณ")</p>
+        <div class="home-cta-row">
+            <a class="home-start-btn" href="@(IsSignedIn ? "/quote/new" : "/auth/sign-in")">
+                @T(IsSignedIn ? "Start a quote" : "Sign in & start quoting", IsSignedIn ? "เริ่มขอราคา" : "เข้าสู่ระบบแล้วขอราคา")
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M2.5 7h9M8 3.5L11.5 7 8 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                </svg>
+            </a>
+            <a class="home-demo-btn" href="/demo">@T("Try with sample file", "ลองใช้ไฟล์ตัวอย่าง")</a>
         </div>
+        <ul class="home-benefits" aria-label="@T("Key features", "คุณสมบัติหลัก")">
+            <li>@T("DFM Feedback", "ข้อเสนอแนะ DFM")</li>
+            <li>@T("Accurate Pricing", "ราคาที่แม่นยำ")</li>
+            <li class="is-highlighted">@T("Secure & Private", "ปลอดภัยและเป็นส่วนตัว")</li>
+        </ul>
     </div>
-    <div class="hero-media">
-        <img src="/images/generated/quote-hero.svg" alt="Manufacturing quote workspace preview" />
+    <div class="home-visual" aria-hidden="true">
+        <span class="home-visual-grid"></span>
+        <img src="/images/generated/metal-components-cutout.png" alt="" />
     </div>
 </div>
+
+@code {
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
+    [CascadingParameter(Name = "IsSignedIn")]
+    private bool IsSignedIn { get; set; }
+
+    private bool IsThai => string.Equals(
+        SupportedCultures.Normalize(Culture),
+        SupportedCultures.Normalize(SupportedCultures.ThaiCulture),
+        StringComparison.Ordinal);
+
+    private string[] TypewriterOptions => IsThai
+        ? ["เร็วและง่ายขึ้น", "พร้อมข้อเสนอแนะ DFM", "พร้อมราคาที่แม่นยำ", "อย่างปลอดภัยและเป็นส่วนตัว"]
+        : ["faster and easier.", "with expert DFM feedback.", "with accurate pricing.", "secure and private."];
+
+    private string T(string en, string th) => IsThai ? th : en;
+}

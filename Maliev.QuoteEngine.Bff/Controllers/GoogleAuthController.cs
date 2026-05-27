@@ -92,7 +92,7 @@ public sealed class GoogleAuthController(
     {
         return !string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl)
             ? returnUrl
-            : "/projects/new";
+            : "/quote/new";
     }
 
     private async Task<CustomerProfileResponse?> EnsureCustomerProfileAsync(

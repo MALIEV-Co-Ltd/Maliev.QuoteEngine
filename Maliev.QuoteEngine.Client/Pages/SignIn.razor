@@ -64,7 +64,7 @@
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     private string SafeReturnUrl => string.IsNullOrWhiteSpace(ReturnUrl) || !ReturnUrl.StartsWith("/", StringComparison.Ordinal)
-        ? "/projects/new"
+        ? "/quote/new"
         : ReturnUrl;
 
     private string SignUpHref => $"/auth/sign-up?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}";

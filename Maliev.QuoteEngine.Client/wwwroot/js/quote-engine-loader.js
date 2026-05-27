@@ -128,6 +128,20 @@
     document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
   }
 
+  function consumeWorkspaceHandoff() {
+    try {
+      const handoff = window.sessionStorage.getItem("maliev.quote.workspace.handoff");
+      if (handoff) {
+        window.sessionStorage.removeItem("maliev.quote.workspace.handoff");
+        return true;
+      }
+    } catch {
+      // sessionStorage can be unavailable in strict privacy modes.
+    }
+
+    return false;
+  }
+
   function normalizeCulture(culture) {
     return culture && culture.toLowerCase().startsWith("th") ? "th-TH" : "en-US";
   }
@@ -170,8 +184,9 @@
   }
 
   function startBlazor() {
+    const isWorkspaceHandoff = consumeWorkspaceHandoff();
     setProgress(0, true);
-    setStatus("Preparing quote engine");
+    setStatus(isWorkspaceHandoff ? "Starting quote workspace" : "Preparing quote engine");
 
     if (!window.Blazor || typeof window.Blazor.start !== "function") {
       markFailed(new Error("Blazor startup script is not available."));

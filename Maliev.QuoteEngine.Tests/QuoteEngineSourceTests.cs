@@ -36,7 +36,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SupportedCultures.DefaultCulture", layout, StringComparison.Ordinal);
         Assert.Contains("SupportedCultures.ThaiCulture", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"quote-language-toggle\"", layout, StringComparison.Ordinal);
-        Assert.Contains("Text(\"Quote\", \"ขอราคา\")", layout, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Orders\", \"คำสั่งซื้อ\")", layout, StringComparison.Ordinal);
         Assert.Contains("Platform language", preferences, StringComparison.Ordinal);
 
         Assert.Contains("resolveCulture", service, StringComparison.Ordinal);
@@ -246,12 +246,6 @@ public sealed class QuoteEngineSourceTests
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var script = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
 
-        Assert.Contains("class=\"qe-launch-hero\"", source, StringComparison.Ordinal);
-        Assert.Contains("Text(\"Get manufacturing quotes,\", \"ขอใบเสนอราคาการผลิต\")", source, StringComparison.Ordinal);
-        Assert.Contains("Text(\"faster and easier.\", \"ได้เร็วและง่ายขึ้น\")", source, StringComparison.Ordinal);
-        Assert.Contains("/images/generated/metal-components-cutout.png", source, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-launch-format-chips\"", source, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-launch-benefits\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
         Assert.Contains("Use sample file", source, StringComparison.Ordinal);
         Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
@@ -260,7 +254,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;", source, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-launch-account-card\"", source, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-primary-btn qe-launch-signin\"", source, StringComparison.Ordinal);
-        Assert.Contains("href=\"/auth/sign-in?returnUrl=/projects/new\"", source, StringComparison.Ordinal);
+        Assert.Contains("href=\"/auth/sign-in?returnUrl=/quote/new\"", source, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-secondary-btn qe-launch-assistant\"", source, StringComparison.Ordinal);
         Assert.Contains("OpenAssistantAsync", source, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
@@ -277,9 +271,6 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-dropzone::before", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-dropzone-icon .mud-icon-root", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-launch-visual img", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-launch-format-chips span", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-launch-benefits", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-launch-account-card", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-launch-actions", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-launch-assistant .mud-icon-root", styles, StringComparison.Ordinal);
@@ -324,6 +315,33 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Landing_page_is_server_rendered_and_hands_workspace_routes_to_wasm()
+    {
+        var program = ReadRepoFile("Maliev.QuoteEngine.Bff", "Program.cs");
+        var landingPath = RepoPath("Maliev.QuoteEngine.Bff", "Pages", "LandingPageRenderer.cs");
+        var loader = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
+        var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
+
+        Assert.Contains("app.MapGet(\"/\", LandingPageRenderer.RenderAsync)", program, StringComparison.Ordinal);
+        Assert.True(File.Exists(landingPath), "The BFF should own a server-rendered landing page for /.");
+
+        var landing = File.ReadAllText(landingPath);
+        Assert.Contains("class=\"landing-shell\"", landing, StringComparison.Ordinal);
+        Assert.Contains("data-landing-appbar", landing, StringComparison.Ordinal);
+        Assert.Contains("@keyframes landing-brand-inset", landing, StringComparison.Ordinal);
+        Assert.Contains("@keyframes landing-actions-inset", landing, StringComparison.Ordinal);
+        Assert.Contains("\"/auth/sign-in?returnUrl=/quote/new\"", landing, StringComparison.Ordinal);
+        Assert.Contains("href=\"/demo\"", landing, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage.setItem(\"maliev.quote.workspace.handoff\"", landing, StringComparison.Ordinal);
+        Assert.DoesNotContain("_framework/blazor.webassembly.js", landing, StringComparison.Ordinal);
+        Assert.DoesNotContain("MudBlazor", landing, StringComparison.Ordinal);
+
+        Assert.Contains("sessionStorage.getItem(\"maliev.quote.workspace.handoff\")", loader, StringComparison.Ordinal);
+        Assert.Contains("Starting quote workspace", loader, StringComparison.Ordinal);
+        Assert.Contains("_framework/blazor.webassembly.js", index, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Customer_auth_pages_follow_maliev_web_sign_in_pattern()
     {
         var signIn = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignIn.razor");
@@ -365,8 +383,8 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("class=\"quote-topbar\"", layout, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"@Text(\"Customer quote navigation\"", layout, StringComparison.Ordinal);
-        Assert.Contains("href=\"/projects/new\"", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"quote-brand\" href=\"/projects/new\"", layout, StringComparison.Ordinal);
+        Assert.Contains("href=\"/quote/new\"", layout, StringComparison.Ordinal);
+        Assert.Contains("class=\"quote-brand\" href=\"/quote/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"quote-brand-logo\"", layout, StringComparison.Ordinal);
         Assert.Contains("src=\"/images/logo.svg\"", layout, StringComparison.Ordinal);
         Assert.Contains("alt=\"MALIEV\"", layout, StringComparison.Ordinal);
@@ -389,7 +407,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("<NavLink href=\"/profile\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("<NavLink href=\"/ndas\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("<NavLink href=\"/documents\"", layout, StringComparison.Ordinal);
-        Assert.Contains("<a class=\"text-button\" href=\"/auth/sign-in\">@Text(\"Sign in\"", layout, StringComparison.Ordinal);
+        Assert.Contains("<a class=\"quote-signin-btn\" href=\"/auth/sign-in\">@Text(\"Sign in\"", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"billing-account-menu\"", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"billing-account-trigger\" aria-label=\"@Text(\"Customer account and billing\"", layout, StringComparison.Ordinal);
         Assert.Contains("CustomerAvatarMarkup", layout, StringComparison.Ordinal);
@@ -405,7 +423,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("<CascadingValue Value=\"OpenAssistantCallback\" Name=\"OpenAssistant\">", layout, StringComparison.Ordinal);
         Assert.Contains("private Func<Task> OpenAssistantCallback => OpenAssistantDrawerAsync;", layout, StringComparison.Ordinal);
         Assert.Contains("private Task OpenAssistantDrawerAsync()", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"quote-currency-select\"", layout, StringComparison.Ordinal);
+        Assert.Contains("Class=\"quote-currency-autocomplete\"", layout, StringComparison.Ordinal);
         Assert.Contains("PersistCurrencyAsync", layout, StringComparison.Ordinal);
         Assert.Contains("<CascadingValue Value=\"_isDarkMode\" Name=\"IsDarkMode\">", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"billing-account-options\" role=\"listbox\" aria-label=\"@Text(\"Billing account\"", layout, StringComparison.Ordinal);
@@ -421,7 +439,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".customer-avatar", styles, StringComparison.Ordinal);
         Assert.Contains(".customer-data-section", styles, StringComparison.Ordinal);
         Assert.Contains(".quote-theme-toggle", styles, StringComparison.Ordinal);
-        Assert.Contains(".quote-currency-select", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-currency-autocomplete", styles, StringComparison.Ordinal);
         Assert.Contains(":root[data-maliev-theme=\"dark\"]", styles, StringComparison.Ordinal);
         Assert.Contains("--primary-contrast: #111111;", styles, StringComparison.Ordinal);
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .quote-brand-logo", styles, StringComparison.Ordinal);
@@ -450,7 +468,7 @@ public sealed class QuoteEngineSourceTests
 
         Assert.DoesNotContain("SupportedCurrencies", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("SupportedCurrencies", preferences, StringComparison.Ordinal);
-        Assert.Contains("@foreach (var currency in _currencyOptions)", layout, StringComparison.Ordinal);
+        Assert.Contains("SearchCurrenciesAsync", layout, StringComparison.Ordinal);
         Assert.Contains("@foreach (var currency in _currencyOptions)", preferences, StringComparison.Ordinal);
         Assert.Contains("await LoadCurrencyOptionsAsync()", layout, StringComparison.Ordinal);
         Assert.Contains("await LoadCurrencyOptionsAsync()", preferences, StringComparison.Ordinal);
