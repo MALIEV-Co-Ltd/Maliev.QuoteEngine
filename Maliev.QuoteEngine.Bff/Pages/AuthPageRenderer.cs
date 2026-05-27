@@ -227,8 +227,8 @@ internal static class AuthPageRenderer
                     }
 
                     .auth-panel {
-                        width: min(100%, 522px);
-                        padding: clamp(28px, 4vw, 40px);
+                        width: min(100%, 640px);
+                        padding: clamp(34px, 5vw, 56px);
                         border-radius: 8px;
                         background: var(--panel);
                         box-shadow: var(--shadow-card);
@@ -238,10 +238,10 @@ internal static class AuthPageRenderer
                         display: flex;
                         flex-wrap: wrap;
                         align-items: baseline;
-                        gap: 12px;
+                        gap: 14px;
                         margin: 0;
-                        font-size: clamp(38px, 4.2vw, 54px);
-                        line-height: 1.02;
+                        font-size: clamp(42px, 4.5vw, 58px);
+                        line-height: 1.04;
                         letter-spacing: 0;
                     }
 
@@ -251,15 +251,17 @@ internal static class AuthPageRenderer
                     }
 
                     .auth-panel > p {
-                        margin: 22px 0 0;
+                        max-width: 520px;
+                        margin: 26px 0 0;
                         color: var(--muted);
-                        font-size: 16px;
-                        line-height: 1.58;
+                        font-size: 17px;
+                        line-height: 1.66;
                     }
 
                     .auth-google {
                         width: 100%;
-                        margin-top: 22px;
+                        height: 50px;
+                        margin-top: 30px;
                         display: inline-flex;
                         align-items: center;
                         justify-content: center;
@@ -281,15 +283,15 @@ internal static class AuthPageRenderer
                     }
 
                     .auth-email-panel {
-                        margin-top: 16px;
+                        margin-top: 20px;
                         border: 1px solid var(--line);
                         border-radius: 8px;
                         background: var(--panel-tint);
                     }
 
                     .auth-email-panel summary {
-                        min-height: 48px;
-                        padding: 0 16px;
+                        min-height: 56px;
+                        padding: 0 20px;
                         display: flex;
                         align-items: center;
                         justify-content: space-between;
@@ -314,8 +316,8 @@ internal static class AuthPageRenderer
 
                     .auth-form {
                         display: grid;
-                        gap: 14px;
-                        padding: 0 16px 16px;
+                        gap: 16px;
+                        padding: 0 20px 20px;
                     }
 
                     .auth-form-grid {
@@ -334,7 +336,7 @@ internal static class AuthPageRenderer
 
                     .auth-form input {
                         width: 100%;
-                        min-height: 42px;
+                        min-height: 46px;
                         padding: 0 12px;
                         border: 1px solid var(--line);
                         border-radius: 6px;
@@ -391,7 +393,7 @@ internal static class AuthPageRenderer
                     }
 
                     .auth-links {
-                        margin-top: 20px;
+                        margin-top: 26px;
                         display: flex;
                         justify-content: flex-end;
                     }
@@ -446,7 +448,7 @@ internal static class AuthPageRenderer
                         }
 
                         .auth-panel {
-                            padding: 24px;
+                            padding: 26px;
                         }
 
                         .auth-form-grid {

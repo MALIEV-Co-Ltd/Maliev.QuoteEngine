@@ -345,6 +345,8 @@ public sealed class QuoteEngineSourceTests
         var auth = File.ReadAllText(authPath);
         Assert.Contains("class=\"auth-shell\"", auth, StringComparison.Ordinal);
         Assert.Contains("data-auth-appbar", auth, StringComparison.Ordinal);
+        Assert.Contains("width: min(100%, 640px);", auth, StringComparison.Ordinal);
+        Assert.Contains("padding: clamp(34px, 5vw, 56px);", auth, StringComparison.Ordinal);
         Assert.Contains("var formMode = isSignUp ? \"sign-up\" : \"sign-in\";", auth, StringComparison.Ordinal);
         Assert.Contains("data-auth-form=\"{{formMode}}\"", auth, StringComparison.Ordinal);
         Assert.Contains("const handoffKey = \"{{WorkspaceHandoffKey}}\";", auth, StringComparison.Ordinal);
@@ -390,6 +392,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".auth-google", styles, StringComparison.Ordinal);
         Assert.Contains(".auth-email-panel", styles, StringComparison.Ordinal);
         Assert.Contains(".auth-field-help", styles, StringComparison.Ordinal);
+        Assert.Contains("width: min(100%, 640px);", styles, StringComparison.Ordinal);
+        Assert.Contains("max-width: 640px;", styles, StringComparison.Ordinal);
     }
 
     [Fact]

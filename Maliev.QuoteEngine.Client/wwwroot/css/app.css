@@ -1367,10 +1367,10 @@ body.quote-ready .startup-screen {
 }
 
 .auth-shell .auth-panel {
-    width: min(100%, 560px);
+    width: min(100%, 640px);
     display: grid;
-    gap: 18px;
-    padding: clamp(24px, 5vw, 38px);
+    gap: 24px;
+    padding: clamp(34px, 5vw, 56px);
 }
 
 .auth-shell .auth-panel h1,
@@ -1380,16 +1380,22 @@ body.quote-ready .startup-screen {
 
 .auth-shell .auth-panel h1 {
     max-width: none;
-    font-size: clamp(2rem, 5vw, 3.35rem);
-    line-height: 0.98;
+    font-size: clamp(2.625rem, 5vw, 3.625rem);
+    line-height: 1.04;
+}
+
+.auth-shell .auth-panel p {
+    max-width: 540px;
+    font-size: 1.05rem;
+    line-height: 1.66;
 }
 
 .auth-title {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    column-gap: 0.32em;
-    row-gap: 8px;
+    column-gap: 0.36em;
+    row-gap: 10px;
 }
 
 .auth-title-logo {
@@ -1398,7 +1404,7 @@ body.quote-ready .startup-screen {
 }
 
 .auth-google {
-    min-height: 44px;
+    min-height: 50px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1449,12 +1455,12 @@ body.quote-ready .startup-screen {
 }
 
 .auth-email-panel summary {
-    min-height: 44px;
+    min-height: 56px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 14px;
-    padding: 12px 14px;
+    padding: 14px 20px;
     color: var(--ink);
     cursor: pointer;
     font-size: var(--maliev-font-small);
@@ -1491,14 +1497,14 @@ body.quote-ready .startup-screen {
 }
 
 .auth-email-panel .auth-form {
-    padding: 14px;
+    padding: 20px;
     background: var(--panel);
 }
 
 .auth-form,
 .form-grid {
     display: grid;
-    gap: 14px;
+    gap: 16px;
 }
 
 .form-grid.two {
@@ -1514,7 +1520,7 @@ body.quote-ready .startup-screen {
 
 .auth-form input {
     width: 100%;
-    min-height: 42px;
+    min-height: 46px;
     border: 0;
     border-radius: var(--maliev-radius-sm);
     background: var(--panel-tint);
@@ -1538,7 +1544,7 @@ body.quote-ready .startup-screen {
 .auth-links {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
     align-items: center;
     justify-content: flex-end;
 }
@@ -2287,8 +2293,8 @@ textarea::placeholder {
 
 .auth-panel {
     display: grid;
-    gap: 14px;
-    max-width: 520px;
+    gap: 22px;
+    max-width: 640px;
 }
 
 .empty-state {
@@ -2390,6 +2396,11 @@ textarea::placeholder {
     .auth-shell {
         min-height: calc(100vh - 64px);
         padding: 28px 18px;
+    }
+
+    .auth-shell .auth-panel {
+        gap: 18px;
+        padding: 26px;
     }
 
     .form-grid.two {
