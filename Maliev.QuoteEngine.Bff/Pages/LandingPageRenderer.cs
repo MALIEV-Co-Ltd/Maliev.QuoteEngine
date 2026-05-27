@@ -31,6 +31,8 @@ internal static class LandingPageRenderer
         var htmlLang = culture == "th-TH" ? "th" : "en";
         var themeLabel = culture == "th-TH" ? "สลับโหมดสี" : "Toggle color mode";
         var assistantLabel = culture == "th-TH" ? "ผู้ช่วย MALIEV" : "MALIEV assistant";
+        var primaryWasmAttribute = WorkspaceLinkAttribute(primaryHref);
+        var topActionWasmAttribute = WorkspaceLinkAttribute(topActionHref);
 
         return $$"""
             <!DOCTYPE html>
@@ -551,7 +553,7 @@ internal static class LandingPageRenderer
                                         <path d="M17 18c-.8 1.4-2.2 2-4 2h-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
                                     </svg>
                                 </button>
-                                <a class="landing-signin" href="{{Html(topActionHref)}}" data-wasm-entry data-i18n-en="{{Html(topActionHref == "/quote/new" ? "Workspace" : "Sign in")}}" data-i18n-th="{{Html(topActionHref == "/quote/new" ? "พื้นที่ทำงาน" : "เข้าสู่ระบบ")}}">{{Html(topActionText)}}</a>
+                                <a class="landing-signin" href="{{Html(topActionHref)}}"{{topActionWasmAttribute}} data-i18n-en="{{Html(topActionHref == "/quote/new" ? "Workspace" : "Sign in")}}" data-i18n-th="{{Html(topActionHref == "/quote/new" ? "พื้นที่ทำงาน" : "เข้าสู่ระบบ")}}">{{Html(topActionText)}}</a>
                             </div>
                         </div>
                     </header>
@@ -568,7 +570,7 @@ internal static class LandingPageRenderer
                             </h1>
                             <p data-i18n-en="Upload CAD files and project details. MALIEV returns expert manufacturability feedback and transparent pricing before you move into production." data-i18n-th="อัปโหลดไฟล์ CAD และรายละเอียดโปรเจกต์ MALIEV จะส่งข้อเสนอแนะด้านการผลิตและราคาที่โปร่งใสก่อนเข้าสู่การผลิต">{{Html(copy.Body)}}</p>
                             <div class="landing-cta">
-                                <a class="landing-primary" href="{{Html(primaryHref)}}" data-wasm-entry data-i18n-en="{{Html(primaryHref == "/quote/new" ? "Start a quote" : "Sign in & start quoting")}}" data-i18n-th="{{Html(primaryHref == "/quote/new" ? "เริ่มขอราคา" : "เข้าสู่ระบบแล้วขอราคา")}}">
+                                <a class="landing-primary" href="{{Html(primaryHref)}}"{{primaryWasmAttribute}} data-i18n-en="{{Html(primaryHref == "/quote/new" ? "Start a quote" : "Sign in & start quoting")}}" data-i18n-th="{{Html(primaryHref == "/quote/new" ? "เริ่มขอราคา" : "เข้าสู่ระบบแล้วขอราคา")}}">
                                     {{Html(primaryText)}}
                                     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                                         <path d="M2.5 7h9M8 3.5 11.5 7 8 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
@@ -661,6 +663,13 @@ internal static class LandingPageRenderer
     private static string Html(string value) => WebUtility.HtmlEncode(value);
 
     private static string Bool(bool value) => value ? "true" : "false";
+
+    private static string WorkspaceLinkAttribute(string href)
+    {
+        return href is "/quote/new" or "/quotes/new" or "/projects/new" or "/demo"
+            ? " data-wasm-entry"
+            : string.Empty;
+    }
 
     private sealed record LandingCopy(
         string Title,

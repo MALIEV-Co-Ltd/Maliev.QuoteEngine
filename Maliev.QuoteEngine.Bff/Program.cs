@@ -117,6 +117,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/", LandingPageRenderer.RenderAsync).ExcludeFromDescription();
+app.MapGet("/auth/sign-in", AuthPageRenderer.RenderSignInAsync).ExcludeFromDescription();
+app.MapGet("/auth/sign-up", AuthPageRenderer.RenderSignUpAsync).ExcludeFromDescription();
 app.MapControllers();
 app.MapHub<QuoteNotificationsHub>("/hubs/quote-notifications");
 app.MapFallback(async context =>

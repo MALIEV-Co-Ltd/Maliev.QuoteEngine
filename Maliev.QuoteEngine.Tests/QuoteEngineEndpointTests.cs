@@ -481,9 +481,39 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Contains("class=\"landing-shell\"", html, StringComparison.Ordinal);
         Assert.Contains("data-landing-appbar", html, StringComparison.Ordinal);
         Assert.Contains("href=\"/demo\"", html, StringComparison.Ordinal);
+        Assert.Contains("href=\"/demo\" data-wasm-entry", html, StringComparison.Ordinal);
+        Assert.Contains("href=\"/auth/sign-in?returnUrl=/quote/new\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"/auth/sign-in?returnUrl=/quote/new\" data-wasm-entry", html, StringComparison.Ordinal);
         Assert.Contains("sessionStorage.setItem(\"maliev.quote.workspace.handoff\"", html, StringComparison.Ordinal);
         Assert.DoesNotContain("_framework/blazor.webassembly.js", html, StringComparison.Ordinal);
         Assert.DoesNotContain("_content/MudBlazor", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Auth_pages_are_server_rendered_without_loading_wasm_bundle()
+    {
+        using var client = factory.CreateClient();
+
+        var signIn = await client.GetStringAsync("/auth/sign-in?returnUrl=/quote/new");
+        var signUp = await client.GetStringAsync("/auth/sign-up?returnUrl=/quote/new");
+
+        Assert.Contains("class=\"auth-shell\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("data-auth-appbar", signIn, StringComparison.Ordinal);
+        Assert.Contains("data-auth-form=\"sign-in\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("href=\"/auth/google?returnUrl=%2Fquote%2Fnew\"", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-wasm-entry", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote-startup", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("_framework/blazor.webassembly.js", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("_content/MudBlazor", signIn, StringComparison.Ordinal);
+
+        Assert.Contains("class=\"auth-shell\"", signUp, StringComparison.Ordinal);
+        Assert.Contains("data-auth-appbar", signUp, StringComparison.Ordinal);
+        Assert.Contains("data-auth-form=\"sign-up\"", signUp, StringComparison.Ordinal);
+        Assert.Contains("href=\"/auth/google?returnUrl=%2Fquote%2Fnew\"", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-wasm-entry", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote-startup", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("_framework/blazor.webassembly.js", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("_content/MudBlazor", signUp, StringComparison.Ordinal);
     }
 
     [Fact]
