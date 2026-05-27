@@ -55,3 +55,9 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# npm (QuoteEngine.Client)
+Maliev.QuoteEngine.Client/node_modules/
+
+# esbuild output (regenerated on dotnet build)
+Maliev.QuoteEngine.Client/wwwroot/js/home-shader.bundle.js

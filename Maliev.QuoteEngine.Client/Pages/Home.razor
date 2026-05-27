@@ -1,6 +1,11 @@
 @page "/"
+@implements IAsyncDisposable
+@inject IJSRuntime Js
 
 <PageTitle>MALIEV — Get manufacturing quotes, faster and easier</PageTitle>
+
+<canvas id="home-shader-bg" class="home-shader-canvas" aria-hidden="true"></canvas>
+<canvas id="home-shader-overlay" class="home-shader-canvas home-shader-canvas--overlay" aria-hidden="true"></canvas>
 
 <div class="home-root">
     <div class="home-copy">
@@ -30,10 +35,6 @@
             <li class="is-highlighted">@T("Secure & Private", "ปลอดภัยและเป็นส่วนตัว")</li>
         </ul>
     </div>
-    <div class="home-visual" aria-hidden="true">
-        <span class="home-visual-grid"></span>
-        <img src="/images/generated/metal-components-cutout.png" alt="" />
-    </div>
 </div>
 
 @code {
@@ -53,4 +54,21 @@
         : ["faster and easier.", "with expert DFM feedback.", "with accurate pricing.", "secure and private."];
 
     private string T(string en, string th) => IsThai ? th : en;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await Js.InvokeVoidAsync("homeShader.init");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await Js.InvokeVoidAsync("homeShader.destroy");
+        }
+        catch (JSDisconnectedException) { }
+    }
 }

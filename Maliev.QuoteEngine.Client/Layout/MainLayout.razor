@@ -263,7 +263,8 @@
     private QuoteAuthStatusResponse _authStatus = new(false, null, null);
     private CustomerProfileResponse? _profile;
     private string _selectedBillingAccountId = "personal";
-    private string AppShellClass => _chatDrawerOpen ? "app-shell chatbot-open" : "app-shell";
+    private string AppShellClass =>
+        $"app-shell{(_chatDrawerOpen ? " chatbot-open" : "")}{(IsHomePage ? " is-home" : "")}";
     private bool HasCompanyBillingAccount => !string.IsNullOrWhiteSpace(_profile?.CompanyName);
     private string PersonalBillingName => _profile?.DisplayName ?? _authStatus.DisplayName ?? Text("Customer account", "บัญชีลูกค้า");
     private string BillingAccountTitle => _selectedBillingAccountId == "company" && HasCompanyBillingAccount

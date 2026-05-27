@@ -13,4 +13,22 @@
   <ItemGroup>
     <ProjectReference Include="..\Maliev.QuoteEngine.Shared\Maliev.QuoteEngine.Shared.csproj" />
   </ItemGroup>
+
+  <!-- npm install: only re-runs when package.json changes -->
+  <Target Name="NpmInstall"
+          Inputs="$(MSBuildProjectDirectory)/package.json"
+          Outputs="$(MSBuildProjectDirectory)/node_modules/.package-lock.json"
+          BeforeTargets="BuildHomeShaderJs">
+    <Exec Command="npm ci" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <!-- esbuild bundle: only re-runs when source or lock file changes.
+       BeforeTargets="BeforeBuild;BeforePublish" ensures the file exists before
+       ResolveStaticWebAssetsInputs scans wwwroot/ and builds the static-asset manifest. -->
+  <Target Name="BuildHomeShaderJs"
+          Inputs="$(MSBuildProjectDirectory)/js-src/home-shader.js;$(MSBuildProjectDirectory)/node_modules/.package-lock.json"
+          Outputs="$(MSBuildProjectDirectory)/wwwroot/js/home-shader.bundle.js"
+          BeforeTargets="BeforeBuild;BeforePublish">
+    <Exec Command="npm run build-js" WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
 </Project>
