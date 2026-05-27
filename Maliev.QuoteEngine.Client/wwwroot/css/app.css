@@ -629,7 +629,7 @@ body.quote-ready .startup-screen {
 .top-actions,
 .hero-actions {
     display: flex;
-    gap: 6px;
+    gap: 10px;
     align-items: center;
 }
 
@@ -733,6 +733,19 @@ body.quote-ready .startup-screen {
 
 .quote-currency-autocomplete .mud-input:hover {
     color: var(--ink);
+}
+
+.quote-currency-autocomplete .mud-input:hover,
+.quote-currency-autocomplete .mud-input.mud-input-focused {
+    border: 0 !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.quote-currency-autocomplete .mud-input-slot:focus-visible {
+    outline: 2px solid var(--focus-blue);
+    outline-offset: 2px;
+    border-radius: var(--maliev-radius-sm);
 }
 
 .quote-currency-autocomplete .mud-input-adornment {
@@ -5885,6 +5898,72 @@ body.mud-blazor {
 .qe-field input:focus {
     outline: none;
     box-shadow: var(--maliev-shadow-ring), var(--maliev-focus-ring);
+}
+
+.qe-pcs-advanced-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    color: var(--maliev-muted);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    text-transform: uppercase;
+    line-height: 1.33;
+}
+
+.qe-pcs-advanced-toggle:hover {
+    color: var(--maliev-ink);
+}
+
+.qe-pcs-advanced-content {
+    margin-top: 8px;
+}
+
+.qe-pcs-help-link {
+    color: var(--accent);
+    cursor: pointer;
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-nano);
+    font-weight: 500;
+    text-transform: uppercase;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.qe-pcs-help-link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+
+.qe-pcs-field-warning {
+    margin: 4px 2px 0;
+    font-size: var(--maliev-font-micro);
+    color: #b45309;
+    line-height: 1.3;
+}
+
+:root[data-maliev-theme="dark"] .qe-pcs-field-warning {
+    color: #f59e0b;
+}
+
+.qe-dat-pending-notice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 6px;
+    padding: 6px 8px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--maliev-panel-3);
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-micro);
+    line-height: 1.3;
 }
 
 .qe-pdc-body-tree {

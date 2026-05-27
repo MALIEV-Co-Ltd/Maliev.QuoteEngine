@@ -61,6 +61,7 @@
                                  AdornmentIcon="@Icons.Material.Filled.KeyboardArrowDown"
                                  Adornment="Adornment.End"
                                  AdornmentColor="Color.Default"
+                                 MinCharacters="0"
                                  aria-label="@Text("Currency", "สกุลเงิน")">
                     <ItemTemplate Context="c">
                         <div class="quote-currency-item">
@@ -407,8 +408,14 @@
         await PersistCurrencyAsync();
     }
 
-    private Task<IEnumerable<CurrencyOptionDto>> SearchCurrenciesAsync(string? query, CancellationToken _)
+    private async Task<IEnumerable<CurrencyOptionDto>> SearchCurrenciesAsync(string? query, CancellationToken ct)
     {
+        // Retry loading the full currency list if only the fallback THB entry is present.
+        if (_currencyOptions.Count <= 1)
+        {
+            await LoadCurrencyOptionsAsync();
+        }
+
         var active = _currencyOptions.Where(c => c.IsActive).ToList();
         var currentDisplay = SelectedCurrencyDto is { } dto ? $"{dto.Code} {dto.Symbol}" : null;
         var isShowAll = string.IsNullOrWhiteSpace(query) ||
@@ -421,15 +428,14 @@
                 .Where(c => c != null)
                 .Cast<CurrencyOptionDto>();
             var rest = active.Where(c => !PriorityCodes.Contains(c.Code));
-            return Task.FromResult(priority.Concat(rest));
+            return priority.Concat(rest);
         }
 
         var q = query!.Trim();
-        var matches = active.Where(c =>
+        return active.Where(c =>
             c.Code.Contains(q, StringComparison.OrdinalIgnoreCase) ||
             c.Name.Contains(q, StringComparison.OrdinalIgnoreCase) ||
             c.Symbol.Contains(q, StringComparison.OrdinalIgnoreCase));
-        return Task.FromResult(matches);
     }
 
     private string NormalizeCurrency(string? currency)
