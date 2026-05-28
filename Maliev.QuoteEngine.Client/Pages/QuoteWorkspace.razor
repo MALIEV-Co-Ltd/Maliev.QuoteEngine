@@ -477,6 +477,7 @@
                 part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
                 part.Findings = status.Findings;
                 ApplyAnalysisStatus(part, status);
+                await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
             {

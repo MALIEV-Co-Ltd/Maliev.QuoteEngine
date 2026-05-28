@@ -428,7 +428,7 @@ public sealed class QuoteEnginePrototypeStore
             Status = "Analyzed",
             VolumeCc = volume,
             SurfaceAreaCm2 = Math.Round(volume * 6.4m, 2),
-            ViewerGlbUrl = "/images/generated/sample-part.svg",
+            ViewerGlbUrl = "/models/sample-bracket.glb",
             ThumbnailUrl = "/images/generated/sample-part.svg",
             Findings =
             [

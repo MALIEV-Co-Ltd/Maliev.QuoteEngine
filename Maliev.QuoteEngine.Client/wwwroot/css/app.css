@@ -498,16 +498,20 @@ body.quote-ready .startup-screen {
     position: sticky;
     top: 0;
     z-index: 40;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    gap: 24px;
-    align-items: center;
-    min-height: 66px;
-    padding: 0 24px;
     background: color-mix(in srgb, var(--panel) 92%, transparent);
     box-shadow: rgba(0, 0, 0, 0.07) 0 1px 0 0;
     backdrop-filter: saturate(180%) blur(14px);
     -webkit-backdrop-filter: saturate(180%) blur(14px);
+}
+
+.quote-topbar-inner {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 0 24px;
+    min-height: 66px;
 }
 
 :root[data-maliev-theme="dark"] .quote-topbar {
@@ -516,8 +520,10 @@ body.quote-ready .startup-screen {
 
 /* ── Home topbar: dark mode (near-black metallic shader) ──────────────── */
 [data-maliev-theme="dark"] .app-shell.is-home .quote-topbar {
-    background: rgba(5, 5, 14, 0.55);
-    box-shadow: rgba(255, 255, 255, 0.07) 0 1px 0 0;
+    background: transparent;
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    box-shadow: rgba(255, 255, 255, 0.05) 0 1px 0 0;
 }
 
 [data-maliev-theme="dark"] .app-shell.is-home .quote-brand-logo {
@@ -576,9 +582,10 @@ body.quote-ready .startup-screen {
 
 /* ── Home topbar: light mode (ice-blue metallic shader) ───────────────── */
 :root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-topbar {
-    background: rgba(220, 228, 248, 0.72);
-    backdrop-filter: blur(12px);
-    box-shadow: rgba(10, 15, 40, 0.07) 0 1px 0 0;
+    background: transparent;
+    backdrop-filter: saturate(180%) blur(24px);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    box-shadow: rgba(10, 15, 40, 0.05) 0 1px 0 0;
 }
 
 :root:not([data-maliev-theme="dark"]) .app-shell.is-home .quote-brand-logo {
@@ -635,6 +642,7 @@ body.quote-ready .startup-screen {
     display: inline-flex;
     align-items: center;
     width: 118px;
+    flex-shrink: 0;
     text-decoration: none;
 }
 
@@ -665,7 +673,6 @@ body.quote-ready .startup-screen {
 }
 
 .quote-topnav {
-    justify-self: center;
     display: inline-flex;
     gap: 2px;
     align-items: center;
@@ -738,7 +745,8 @@ body.quote-ready .startup-screen {
 
 .workspace--quote {
     flex: 1 1 0;
-    height: 100%;
+    display: flex;
+    flex-direction: column;
     min-height: 0;
     overflow: hidden;
 }
@@ -748,6 +756,10 @@ body.quote-ready .startup-screen {
     display: flex;
     gap: 10px;
     align-items: center;
+}
+
+.top-actions {
+    margin-left: auto;
 }
 
 .top-actions > .text-button {
@@ -1186,10 +1198,19 @@ body.quote-ready .startup-screen {
     min-height: 40px;
     max-height: 40px;
     padding: 0;
+    border: 0;
+    cursor: pointer;
+    display: inline-grid;
+    place-items: center;
     color: var(--ink);
     background: var(--panel);
     border-radius: var(--maliev-radius-sm);
     box-shadow: var(--topbar-icon-ring);
+}
+
+.topbar-chat-icon {
+    width: 18px;
+    height: 18px;
 }
 
 .chatbot-open .topbar-chat-toggle,
@@ -1203,24 +1224,25 @@ body.quote-ready .startup-screen {
     inset: 0;
     z-index: 90;
     border: 0;
-    background: rgba(23, 23, 23, .18);
+    background: transparent;
 }
 
-/* Shadow-as-border per DESIGN.md §1 — replaces border-left. */
+/* Popup dropdown per design — positions below topbar, not full-height sidebar. */
 .quote-chat-drawer {
     position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
+    top: 74px;
+    right: 24px;
     z-index: 100;
-    width: min(520px, calc(100vw - 16px));
-    max-width: 100vw;
-    background: #ffffff;
-    box-shadow: rgba(0, 0, 0, 0.08) -1px 0 0 0, var(--maliev-shadow-card);
+    width: min(420px, calc(100vw - 48px));
+    height: min(580px, calc(100dvh - 90px));
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-card);
 }
 
 .quote-chat-drawer .customer-chatbot-panel {
-    height: 100dvh;
+    height: 100%;
 }
 
 .customer-chatbot-panel {
@@ -1230,7 +1252,7 @@ body.quote-ready .startup-screen {
     height: 100%;
     min-height: 0;
     color: var(--ink);
-    background: #ffffff;
+    background: var(--panel);
 }
 
 .customer-chatbot-header {
@@ -2440,8 +2462,7 @@ textarea::placeholder {
         grid-template-columns: 1fr;
     }
 
-    .quote-topbar {
-        grid-template-columns: auto minmax(0, 1fr) auto;
+    .quote-topbar-inner {
         gap: 12px;
         min-height: 52px;
         padding: 0 16px;
@@ -2468,10 +2489,8 @@ textarea::placeholder {
         display: grid;
     }
 
-    .quote-topbar {
-        grid-template-columns: auto 1fr auto;
+    .quote-topbar-inner {
         gap: 8px;
-        align-items: center;
         min-height: 52px;
         padding: 0 14px;
     }
@@ -2481,9 +2500,6 @@ textarea::placeholder {
     }
 
     .quote-topnav {
-        order: 2;
-        grid-column: auto;
-        justify-self: center;
         width: auto;
         max-width: 100%;
     }
@@ -2565,7 +2581,6 @@ textarea::placeholder {
 
 .quote-workspace-host {
     flex: 1 1 0;
-    height: 100%;
     min-height: 0;
     overflow: hidden;
     background: var(--maliev-bg);

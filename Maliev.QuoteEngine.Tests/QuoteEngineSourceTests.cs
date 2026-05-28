@@ -416,7 +416,10 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("class=\"web-link\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain(".web-link", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".quote-brand-mark", styles, StringComparison.Ordinal);
-        Assert.Contains("justify-self: center;", styles, StringComparison.Ordinal);
+        // Topbar uses a max-width inner container; top-actions pushed right via margin-left: auto.
+        Assert.Contains(".quote-topbar-inner", styles, StringComparison.Ordinal);
+        Assert.Contains("margin-left: auto;", styles, StringComparison.Ordinal);
+        Assert.Contains("class=\"quote-topbar-inner\"", layout, StringComparison.Ordinal);
         Assert.Contains("border-radius: var(--maliev-radius-tab);", styles, StringComparison.Ordinal);
         Assert.Contains(".quote-topnav a.active", styles, StringComparison.Ordinal);
         Assert.Contains("background: var(--primary);", styles, StringComparison.Ordinal);
@@ -532,8 +535,8 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("height: 100dvh;", styles, StringComparison.Ordinal);
         Assert.Contains("overflow-x: clip;", styles, StringComparison.Ordinal);
-        Assert.Contains(".workspace--quote {\n    flex: 1 1 0;\n    height: 100%;", styles, StringComparison.Ordinal);
-        Assert.Contains(".quote-workspace-host {\n    flex: 1 1 0;\n    height: 100%;", styles, StringComparison.Ordinal);
+        Assert.Contains(".workspace--quote {\n    flex: 1 1 0;\n    display: flex;\n    flex-direction: column;", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-workspace-host {\n    flex: 1 1 0;\n    min-height: 0;", styles, StringComparison.Ordinal);
         Assert.DoesNotContain("height: 100vh;", styles, StringComparison.Ordinal);
         Assert.Contains(".quote-chat-backdrop", styles, StringComparison.Ordinal);
         Assert.Contains(".quote-chat-drawer", styles, StringComparison.Ordinal);
@@ -585,7 +588,7 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("CustomerAssistantDrawer", layout, StringComparison.Ordinal);
         Assert.Contains("topbar-chat-toggle", layout, StringComparison.Ordinal);
-        Assert.Contains("Icon=\"@Icons.Material.Filled.SupportAgent\"", layout, StringComparison.Ordinal);
+        Assert.Contains("class=\"topbar-chat-icon\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("Icon=\"@Icons.Material.Outlined.Chat\"", layout, StringComparison.Ordinal);
         Assert.Contains("quote-chat-backdrop", layout, StringComparison.Ordinal);
         Assert.Contains("role=\"dialog\"", layout, StringComparison.Ordinal);
