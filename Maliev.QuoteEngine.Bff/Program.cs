@@ -7,7 +7,11 @@ using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Pages;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
+using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
+using Microsoft.Extensions.Options;
+using StackExchange.Redis;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,6 +38,18 @@ builder.AddMalievIdentityCookie(options =>
         return Task.CompletedTask;
     };
 });
+// Persist Data Protection keys to Redis so Web and QuoteEngine share the same key ring.
+builder.Services.AddSingleton<IPostConfigureOptions<KeyManagementOptions>>(sp =>
+    new PostConfigureOptions<KeyManagementOptions>(Microsoft.Extensions.Options.Options.DefaultName, opts =>
+    {
+        var mux = sp.GetService<IConnectionMultiplexer>();
+        if (mux is not null)
+        {
+            opts.XmlRepository = new RedisXmlRepository(
+                () => mux.GetDatabase(),
+                IdentityCookieExtensions.DataProtectionRedisKey);
+        }
+    }));
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<QuoteEnginePrototypeStore>();
 builder.Services.AddScoped<CustomerSessionResolver>();
