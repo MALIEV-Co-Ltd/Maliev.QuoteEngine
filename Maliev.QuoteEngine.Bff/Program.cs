@@ -7,8 +7,6 @@ using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Pages;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using System.Text.Json;
 
@@ -23,51 +21,23 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
-var authentication = builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-        options.DefaultSignInScheme = "MalievQuoteExternal";
-    })
-    .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
-    {
-        options.Cookie.Name = "__Host-Maliev.QuoteEngine";
-        options.LoginPath = "/auth/sign-in";
-        options.LogoutPath = "/quote/v1/auth/sign-out";
-        options.AccessDeniedPath = "/auth/sign-in";
-        options.SlidingExpiration = true;
-        options.ExpireTimeSpan = TimeSpan.FromDays(14);
-    })
-    .AddCookie("MalievQuoteExternal", options =>
-    {
-        options.Cookie.Name = "__Host-Maliev.QuoteEngine.External";
-        options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
-    });
-
-var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
-var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
+builder.AddMalievIdentityCookie(options =>
 {
-    authentication.AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
+    // Unauthenticated requests redirect cross-domain to the Web sign-in page,
+    // passing the original QuoteEngine URL as an absolute returnUrl.
+    options.Events.OnRedirectToLogin = context =>
     {
-        options.SignInScheme = "MalievQuoteExternal";
-        options.ClientId = googleClientId;
-        options.ClientSecret = googleClientSecret;
-        options.CallbackPath = "/auth/google/signin";
-        options.Scope.Add("profile");
-        options.Scope.Add("email");
-        options.SaveTokens = true;
-        options.Events.OnRedirectToAuthorizationEndpoint = context =>
-        {
-            context.Response.Redirect(context.RedirectUri + "&prompt=select_account");
-            return Task.CompletedTask;
-        };
-    });
-}
+        var webBaseUrl = context.HttpContext.RequestServices
+            .GetRequiredService<IConfiguration>()["Web:BaseUrl"]?.TrimEnd('/') ?? "https://www.maliev.com";
+        var returnUrl = $"{context.Request.Scheme}://{context.Request.Host}{context.RedirectUri}";
+        context.Response.Redirect($"{webBaseUrl}/auth/sign-in?returnUrl={Uri.EscapeDataString(returnUrl)}");
+        return Task.CompletedTask;
+    };
+});
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<QuoteEnginePrototypeStore>();
 builder.Services.AddScoped<CustomerSessionResolver>();
 builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
-builder.Services.AddScoped<CustomerSessionHandoffToken>();
 builder.Services.AddScoped<ICustomerChatbotService, CustomerChatbotService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(45));
@@ -117,8 +87,15 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/", LandingPageRenderer.RenderAsync).ExcludeFromDescription();
-app.MapGet("/auth/sign-in", AuthPageRenderer.RenderSignInAsync).ExcludeFromDescription();
-app.MapGet("/auth/sign-up", AuthPageRenderer.RenderSignUpAsync).ExcludeFromDescription();
+// Auth pages redirect to Maliev.Web — QuoteEngine has no own sign-in surface.
+app.MapGet("/auth/sign-in", (HttpContext context) => RedirectToWebAuth(context, "sign-in")).ExcludeFromDescription();
+app.MapGet("/auth/sign-up", (HttpContext context) => RedirectToWebAuth(context, "sign-up")).ExcludeFromDescription();
+// Account hub redirect: Blazor client links here instead of embedding the Web URL.
+app.MapGet("/account-hub", (IConfiguration config) =>
+{
+    var webBaseUrl = config["Web:BaseUrl"]?.TrimEnd('/') ?? "https://www.maliev.com";
+    return Results.Redirect($"{webBaseUrl}/account/profile");
+}).ExcludeFromDescription();
 app.MapControllers();
 app.MapHub<QuoteNotificationsHub>("/hubs/quote-notifications");
 app.MapFallback(async context =>
@@ -135,6 +112,31 @@ app.MapFallback(async context =>
 });
 
 app.Run();
+
+static IResult RedirectToWebAuth(HttpContext context, string page)
+{
+    var webBaseUrl = context.RequestServices
+        .GetRequiredService<IConfiguration>()["Web:BaseUrl"]?.TrimEnd('/') ?? "https://www.maliev.com";
+    var returnUrl = context.Request.Query["returnUrl"].ToString();
+    string absReturnUrl;
+    if (string.IsNullOrWhiteSpace(returnUrl))
+    {
+        absReturnUrl = string.Empty;
+    }
+    else if (returnUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+          || returnUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+    {
+        absReturnUrl = returnUrl;
+    }
+    else
+    {
+        absReturnUrl = $"{context.Request.Scheme}://{context.Request.Host}{returnUrl}";
+    }
+    var destination = string.IsNullOrWhiteSpace(absReturnUrl)
+        ? $"{webBaseUrl}/auth/{page}"
+        : $"{webBaseUrl}/auth/{page}?returnUrl={Uri.EscapeDataString(absReturnUrl)}";
+    return Results.Redirect(destination);
+}
 
 public partial class Program
 {

@@ -12,11 +12,6 @@
         </h1>
         <p>@Text("Use your customer account for quotes, uploaded CAD files, DFM review, orders, NDAs, and documents.", "ใช้บัญชีลูกค้าของคุณสำหรับใบเสนอราคา ไฟล์ CAD ที่อัปโหลด การตรวจ DFM คำสั่งซื้อ NDA และเอกสาร")</p>
 
-        @if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <div class="auth-error">@_error</div>
-        }
-
         <a class="auth-google" href="@GoogleHref" aria-label="@Text("Continue with Google", "ดำเนินการต่อด้วย Google")">
             <span class="auth-google-icon" aria-hidden="true">
                 <svg viewBox="0 0 18 18" focusable="false">
@@ -58,7 +53,6 @@
 
     private string _email = string.Empty;
     private string _password = string.Empty;
-    private string? _error;
 
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
@@ -69,20 +63,13 @@
 
     private string SignUpHref => $"/auth/sign-up?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}";
     private string GoogleHref => $"/auth/google?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}";
-    private bool EmailPanelOpen => !string.IsNullOrWhiteSpace(_error);
+    private bool EmailPanelOpen => false;
 
-    private async Task SignInAsync()
+    private Task SignInAsync()
     {
-        try
-        {
-            _error = null;
-            await Api.SignInAsync(new SignInRequest { Email = _email, Password = _password });
-            Navigation.NavigateTo(SafeReturnUrl);
-        }
-        catch (Exception)
-        {
-            _error = Text("Email or password sign-in could not be completed.", "ไม่สามารถเข้าสู่ระบบด้วยอีเมลหรือรหัสผ่านได้");
-        }
+        // Authentication is handled by Maliev.Web — forward to the server sign-in redirect.
+        Navigation.NavigateTo($"/auth/sign-in?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}", forceLoad: true);
+        return Task.CompletedTask;
     }
 
     private string Text(string en, string th)

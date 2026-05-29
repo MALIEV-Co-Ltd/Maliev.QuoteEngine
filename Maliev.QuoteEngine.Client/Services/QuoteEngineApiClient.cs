@@ -130,34 +130,6 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerAddressDto>>("quote/v1/account/addresses", cancellationToken) ?? [];
     }
 
-    public async Task<IReadOnlyList<ThaiAddressRegistryLocationDto>> GetThaiAddressLocationsAsync(
-        string query,
-        int limit = 8,
-        CancellationToken cancellationToken = default)
-    {
-        var path = $"quote/v1/address/thai-locations?query={Uri.EscapeDataString(query)}&limit={limit}";
-        return await httpClient.GetFromJsonAsync<IReadOnlyList<ThaiAddressRegistryLocationDto>>(path, cancellationToken) ?? [];
-    }
-
-    public Task<CustomerAddressDto> CreateAddressAsync(CustomerAddressUpsertRequest request, CancellationToken cancellationToken = default)
-    {
-        return PostAsync<CustomerAddressUpsertRequest, CustomerAddressDto>("quote/v1/account/addresses", request, cancellationToken);
-    }
-
-    public async Task<CustomerAddressDto> UpdateAddressAsync(Guid addressId, CustomerAddressUpsertRequest request, CancellationToken cancellationToken = default)
-    {
-        using var response = await httpClient.PatchAsJsonAsync($"quote/v1/account/addresses/{addressId:D}", request, cancellationToken);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<CustomerAddressDto>(cancellationToken: cancellationToken)
-            ?? throw new InvalidOperationException("The QuoteEngine API returned an empty address response.");
-    }
-
-    public async Task DeleteAddressAsync(Guid addressId, uint version, CancellationToken cancellationToken = default)
-    {
-        using var response = await httpClient.DeleteAsync($"quote/v1/account/addresses/{addressId:D}?version={version}", cancellationToken);
-        response.EnsureSuccessStatusCode();
-    }
-
     public async Task<IReadOnlyList<CustomerQuoteSummaryDto>> GetQuotesAsync(CancellationToken cancellationToken = default)
     {
         return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerQuoteSummaryDto>>("quote/v1/account/quotes", cancellationToken) ?? [];
@@ -176,21 +148,6 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     public async Task<IReadOnlyList<CustomerDocumentDto>> GetDocumentsAsync(CancellationToken cancellationToken = default)
     {
         return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerDocumentDto>>("quote/v1/account/documents", cancellationToken) ?? [];
-    }
-
-    public Task<AuthSessionResponse> SignInAsync(SignInRequest request, CancellationToken cancellationToken = default)
-    {
-        return PostAsync<SignInRequest, AuthSessionResponse>("quote/v1/auth/sign-in", request, cancellationToken);
-    }
-
-    public Task<AuthSessionResponse> ExchangeGoogleAsync(CancellationToken cancellationToken = default)
-    {
-        return PostAsync<object, AuthSessionResponse>("quote/v1/auth/google/exchange", new { }, cancellationToken);
-    }
-
-    public Task<AuthSessionResponse> SignUpAsync(SignUpRequest request, CancellationToken cancellationToken = default)
-    {
-        return PostAsync<SignUpRequest, AuthSessionResponse>("quote/v1/auth/sign-up", request, cancellationToken);
     }
 
     public Task<CustomerChatbotResponse> SendChatbotMessageAsync(CustomerChatbotRequest request, CancellationToken cancellationToken = default)

@@ -324,8 +324,10 @@ public sealed class QuoteEngineSourceTests
         var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
 
         Assert.Contains("app.MapGet(\"/\", LandingPageRenderer.RenderAsync)", program, StringComparison.Ordinal);
-        Assert.Contains("app.MapGet(\"/auth/sign-in\", AuthPageRenderer.RenderSignInAsync)", program, StringComparison.Ordinal);
-        Assert.Contains("app.MapGet(\"/auth/sign-up\", AuthPageRenderer.RenderSignUpAsync)", program, StringComparison.Ordinal);
+        // Auth routes redirect to Maliev.Web — QuoteEngine has no own sign-in surface.
+        Assert.Contains("app.MapGet(\"/auth/sign-in\"", program, StringComparison.Ordinal);
+        Assert.Contains("app.MapGet(\"/auth/sign-up\"", program, StringComparison.Ordinal);
+        Assert.Contains("RedirectToWebAuth", program, StringComparison.Ordinal);
         Assert.True(File.Exists(landingPath), "The BFF should own a server-rendered landing page for /.");
         Assert.True(File.Exists(authPath), "The BFF should own server-rendered auth pages before the WASM fallback.");
 

@@ -3,39 +3,30 @@ namespace Maliev.QuoteEngine.Tests;
 public sealed class QuoteEngineAddressSourceTests
 {
     [Fact]
-    public void Profile_page_renders_customer_address_book_with_google_picker()
+    public void Profile_page_shows_read_only_addresses_with_manage_link_to_web()
     {
         var profile = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Profile.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
-        var picker = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "GoogleAddressPicker.razor");
-        var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
 
-        Assert.Contains("GoogleAddressPicker", profile, StringComparison.Ordinal);
-        Assert.Contains("Address No./Moo/Soi/Road", profile, StringComparison.Ordinal);
-        Assert.Contains("Sub District", profile, StringComparison.Ordinal);
-        Assert.Contains("Contact Information", profile, StringComparison.Ordinal);
-        Assert.Contains("Note to driver", profile, StringComparison.Ordinal);
-        Assert.Contains("Set as a default address", profile, StringComparison.Ordinal);
-        Assert.Contains("ProvinceLocked", profile, StringComparison.Ordinal);
-        Assert.Contains("PostalCodeLocked", profile, StringComparison.Ordinal);
-        Assert.Contains("ApplyGoogleAddressSelection", profile, StringComparison.Ordinal);
-        Assert.Contains("Thai address registry", profile, StringComparison.Ordinal);
-        Assert.Contains("SearchRegistryLocationsAsync", profile, StringComparison.Ordinal);
-        Assert.Contains("ApplyRegistryLocation", profile, StringComparison.Ordinal);
-        Assert.Contains("AddressSource = \"RegistryThaiLocation\"", profile, StringComparison.Ordinal);
-        Assert.Contains("RecipientName = _profile?.DisplayName", profile, StringComparison.Ordinal);
-        Assert.Contains("RecipientPhone = _profile?.Phone", profile, StringComparison.Ordinal);
-
+        // Address list is rendered read-only; editing is delegated to the Web account hub.
         Assert.Contains("quote/v1/account/addresses", apiClient, StringComparison.Ordinal);
-        Assert.Contains("GetThaiAddressLocationsAsync", apiClient, StringComparison.Ordinal);
-        Assert.Contains("quote/v1/address/thai-locations", apiClient, StringComparison.Ordinal);
-        Assert.Contains("quote/v1/address/google-config", picker, StringComparison.Ordinal);
-        Assert.Contains("malievQuoteGoogleAddressPicker.initializeSearch", picker, StringComparison.Ordinal);
-        Assert.Contains("js/quote-google-address-picker.js", index, StringComparison.Ordinal);
+        Assert.Contains("GetAddressesAsync", apiClient, StringComparison.Ordinal);
+        Assert.DoesNotContain("CreateAddressAsync", apiClient, StringComparison.Ordinal);
+        Assert.DoesNotContain("UpdateAddressAsync", apiClient, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeleteAddressAsync", apiClient, StringComparison.Ordinal);
+
+        // Profile page shows addresses but no editing form.
+        Assert.Contains("/account-hub", profile, StringComparison.Ordinal);
+        Assert.Contains("Manage addresses", profile, StringComparison.Ordinal);
+        Assert.DoesNotContain("SaveAddressAsync", profile, StringComparison.Ordinal);
+        Assert.DoesNotContain("DeleteAddressAsync", profile, StringComparison.Ordinal);
+        Assert.DoesNotContain("EditAddress(", profile, StringComparison.Ordinal);
+        Assert.DoesNotContain("GoogleAddressPicker", profile, StringComparison.Ordinal);
+        Assert.DoesNotContain("SearchRegistryLocationsAsync", profile, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void Address_bff_contract_forwards_customer_service_google_metadata()
+    public void Address_bff_contract_exposes_read_only_customer_addresses()
     {
         var accountController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "AccountController.cs");
         var addressController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "AddressController.cs");
@@ -45,18 +36,14 @@ public sealed class QuoteEngineAddressSourceTests
         var dto = ReadRepoFile("Maliev.QuoteEngine.Shared", "Account", "AccountDtos.cs");
         var googleDto = ReadRepoFile("Maliev.QuoteEngine.Shared", "Account", "GoogleAddressDtos.cs");
 
+        // Read-only address list endpoint is kept for profile display and checkout address picker.
         Assert.Contains("[HttpGet(\"addresses\")]", accountController, StringComparison.Ordinal);
-        Assert.Contains("[HttpPost(\"addresses\")]", accountController, StringComparison.Ordinal);
-        Assert.Contains("[HttpPatch(\"addresses/{addressId:guid}\")]", accountController, StringComparison.Ordinal);
-        Assert.Contains("[HttpDelete(\"addresses/{addressId:guid}\")]", accountController, StringComparison.Ordinal);
-        Assert.Contains("ownerType = \"Customer\"", accountController, StringComparison.Ordinal);
-        Assert.Contains("placeLabel = request.PlaceLabel", accountController, StringComparison.Ordinal);
-        Assert.Contains("driverNote = request.DriverNote", accountController, StringComparison.Ordinal);
-        Assert.Contains("addressSource = string.IsNullOrWhiteSpace(request.AddressSource) ? \"Manual\" : request.AddressSource", accountController, StringComparison.Ordinal);
-        Assert.Contains("googlePlaceId = request.GooglePlaceId", accountController, StringComparison.Ordinal);
-        Assert.Contains("latitude = request.Latitude", accountController, StringComparison.Ordinal);
-        Assert.Contains("CustomerOwnsAddressAsync", accountController, StringComparison.Ordinal);
+        // Write endpoints removed — profile editing happens in Maliev.Web.
+        Assert.DoesNotContain("[HttpPost(\"addresses\")]", accountController, StringComparison.Ordinal);
+        Assert.DoesNotContain("[HttpPatch(\"addresses/{addressId:guid}\")]", accountController, StringComparison.Ordinal);
+        Assert.DoesNotContain("[HttpDelete(\"addresses/{addressId:guid}\")]", accountController, StringComparison.Ordinal);
 
+        // Thai address registry and Google picker endpoints remain (used by the quote/checkout flow).
         Assert.Contains("[Route(\"quote/v{version:apiVersion}/address\")]", addressController, StringComparison.Ordinal);
         Assert.Contains("[HttpGet(\"google-config\")]", addressController, StringComparison.Ordinal);
         Assert.Contains("[HttpGet(\"thai-locations\")]", addressController, StringComparison.Ordinal);
@@ -64,8 +51,6 @@ public sealed class QuoteEngineAddressSourceTests
         Assert.Contains("GoogleMaps", addressController, StringComparison.Ordinal);
 
         Assert.Contains("/customer/v1/addresses?ownerType=Customer&ownerId=", customerClient, StringComparison.Ordinal);
-        Assert.Contains("PostAsJsonAsync(\"/customer/v1/addresses\"", customerClient, StringComparison.Ordinal);
-        Assert.Contains("PatchAsJsonAsync($\"/customer/v1/addresses/{addressId:D}\"", customerClient, StringComparison.Ordinal);
         Assert.Contains("/registry/v1/thai/addresses/autocomplete", registryClient, StringComparison.Ordinal);
         Assert.Contains("AddAuthenticatedServiceClient<IRegistryServiceClient, RegistryServiceClient>(\"RegistryService\")", program, StringComparison.Ordinal);
 

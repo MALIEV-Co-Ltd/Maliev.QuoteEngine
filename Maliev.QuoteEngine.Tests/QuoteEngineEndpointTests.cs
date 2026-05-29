@@ -2,11 +2,18 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Maliev.QuoteEngine.Bff.Clients;
+using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Chatbot;
 using Maliev.QuoteEngine.Shared.Quotes;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -56,6 +63,10 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             // Returns a fixed hosted payment URL
             services.RemoveAll<IPaymentServiceClient>();
             services.AddSingleton<IPaymentServiceClient>(new FakePaymentServiceClient());
+
+            // Test-only sign-in endpoint: issues the shared identity cookie with customer_id claim.
+            // Replaces the removed /quote/v1/auth/sign-in endpoint for test authentication.
+            services.AddTransient<IStartupFilter, TestSignInStartupFilter>();
         });
     }
 
@@ -490,30 +501,22 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
-    public async Task Auth_pages_are_server_rendered_without_loading_wasm_bundle()
+    public async Task Auth_pages_redirect_to_web_sign_in_without_loading_wasm_bundle()
     {
-        using var client = factory.CreateClient();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var signIn = await client.GetStringAsync("/auth/sign-in?returnUrl=/quote/new");
-        var signUp = await client.GetStringAsync("/auth/sign-up?returnUrl=/quote/new");
+        var signIn = await client.GetAsync("/auth/sign-in?returnUrl=/quote/new");
+        var signUp = await client.GetAsync("/auth/sign-up?returnUrl=/quote/new");
 
-        Assert.Contains("class=\"auth-shell\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("data-auth-appbar", signIn, StringComparison.Ordinal);
-        Assert.Contains("data-auth-form=\"sign-in\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("href=\"/auth/google?returnUrl=%2Fquote%2Fnew\"", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("data-wasm-entry", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("quote-startup", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("_framework/blazor.webassembly.js", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("_content/MudBlazor", signIn, StringComparison.Ordinal);
+        // Auth pages redirect to Maliev.Web — QuoteEngine has no own sign-in surface.
+        Assert.Equal(HttpStatusCode.Redirect, signIn.StatusCode);
+        Assert.NotNull(signIn.Headers.Location);
+        Assert.Contains("/auth/sign-in", signIn.Headers.Location.OriginalString, StringComparison.Ordinal);
+        Assert.Contains("returnUrl=", signIn.Headers.Location.OriginalString, StringComparison.Ordinal);
 
-        Assert.Contains("class=\"auth-shell\"", signUp, StringComparison.Ordinal);
-        Assert.Contains("data-auth-appbar", signUp, StringComparison.Ordinal);
-        Assert.Contains("data-auth-form=\"sign-up\"", signUp, StringComparison.Ordinal);
-        Assert.Contains("href=\"/auth/google?returnUrl=%2Fquote%2Fnew\"", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("data-wasm-entry", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("quote-startup", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("_framework/blazor.webassembly.js", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("_content/MudBlazor", signUp, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.Redirect, signUp.StatusCode);
+        Assert.NotNull(signUp.Headers.Location);
+        Assert.Contains("/auth/sign-up", signUp.Headers.Location.OriginalString, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -862,29 +865,21 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
-    public async Task Unknown_customer_cookie_is_treated_as_signed_out_instead_of_prototype_profile()
+    public async Task Unauthenticated_request_is_signed_out_with_no_demo_customer_leakage()
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
-        using var sessionRequest = new HttpRequestMessage(HttpMethod.Get, "/quote/v1/auth/session");
-        sessionRequest.Headers.Add("Cookie", "maliev_quote_customer=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
 
-        var sessionResponse = await client.SendAsync(sessionRequest);
+        // No identity cookie at all — session endpoint returns not-signed-in.
+        var sessionResponse = await client.GetAsync("/quote/v1/auth/session");
         sessionResponse.EnsureSuccessStatusCode();
         var session = await sessionResponse.Content.ReadFromJsonAsync<QuoteAuthStatusResponse>();
 
         Assert.NotNull(session);
         Assert.False(session.IsSignedIn);
         Assert.Null(session.CustomerId);
-        Assert.DoesNotContain("Natt", session.DisplayName ?? string.Empty, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(
-            sessionResponse.Headers.GetValues("Set-Cookie"),
-            value => value.Contains("maliev_quote_customer=", StringComparison.OrdinalIgnoreCase)
-                && value.Contains("expires=", StringComparison.OrdinalIgnoreCase));
 
-        using var profileRequest = new HttpRequestMessage(HttpMethod.Get, "/quote/v1/account/profile");
-        profileRequest.Headers.Add("Cookie", "maliev_quote_customer=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-        var profileResponse = await client.SendAsync(profileRequest);
-
+        // Profile endpoint rejects unauthenticated requests.
+        var profileResponse = await client.GetAsync("/quote/v1/account/profile");
         Assert.Equal(HttpStatusCode.Unauthorized, profileResponse.StatusCode);
     }
 
@@ -979,118 +974,38 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
-    public async Task Account_addresses_round_trip_google_metadata_and_default_per_role()
+    public async Task Account_addresses_are_read_only_in_quote_engine()
     {
         using var client = await CreateSignedInClientAsync("address-owner@example.com");
 
-        var firstShippingResponse = await client.PostAsJsonAsync("/quote/v1/account/addresses", new CustomerAddressUpsertRequest
-        {
-            Type = "Shipping",
-            IsDefault = true,
-            PlaceLabel = "Home",
-            AddressLine1 = "12 Moo 3 MALIEV Road",
-            District = "Bang Kaeo",
-            City = "Bang Phli",
-            StateProvince = "Samut Prakan",
-            PostalCode = "10540",
-            RecipientName = "Quote Customer",
-            RecipientPhone = "0800000000",
-            DriverNote = "Call before delivery",
-            AddressSource = "GooglePlace",
-            GooglePlaceId = "place-maliev",
-            FormattedAddress = "MALIEV Co., Ltd., Samut Prakan, Thailand",
-            Latitude = 13.6485m,
-            Longitude = 100.6807m
-        });
-        firstShippingResponse.EnsureSuccessStatusCode();
-        var firstShipping = await firstShippingResponse.Content.ReadFromJsonAsync<CustomerAddressDto>();
-        Assert.NotNull(firstShipping);
-
-        var secondShippingResponse = await client.PostAsJsonAsync("/quote/v1/account/addresses", new CustomerAddressUpsertRequest
-        {
-            Type = "Shipping",
-            IsDefault = true,
-            PlaceLabel = "Work",
-            AddressLine1 = "99 Industrial Road",
-            District = "Bang Kaeo",
-            City = "Bang Phli",
-            StateProvince = "Samut Prakan",
-            PostalCode = "10540",
-            RecipientName = "Quote Customer",
-            RecipientPhone = "0800000000",
-            AddressSource = "GoogleMapPin",
-            Latitude = 13.65m,
-            Longitude = 100.68m
-        });
-        secondShippingResponse.EnsureSuccessStatusCode();
-        var secondShipping = await secondShippingResponse.Content.ReadFromJsonAsync<CustomerAddressDto>();
-        Assert.NotNull(secondShipping);
-
-        var billingResponse = await client.PostAsJsonAsync("/quote/v1/account/addresses", new CustomerAddressUpsertRequest
-        {
-            Type = "Billing",
-            IsDefault = true,
-            PlaceLabel = "Other",
-            PlaceLabelOther = "Head office",
-            AddressLine1 = "88 Finance Road",
-            District = "Bang Kaeo",
-            City = "Bang Phli",
-            StateProvince = "Samut Prakan",
-            PostalCode = "10540",
-            RecipientName = "Finance Team",
-            RecipientPhone = "0811111111"
-        });
-        billingResponse.EnsureSuccessStatusCode();
-
+        // GET still works — read-only access for checkout address picker.
         var addresses = await client.GetFromJsonAsync<CustomerAddressDto[]>("/quote/v1/account/addresses");
-
         Assert.NotNull(addresses);
-        Assert.Equal(3, addresses.Length);
-        var storedFirstShipping = Assert.Single(addresses, item => item.Id == firstShipping.Id);
-        var storedSecondShipping = Assert.Single(addresses, item => item.Id == secondShipping.Id);
-        var storedBilling = Assert.Single(addresses, item => item.Type == "Billing");
 
-        Assert.False(storedFirstShipping.IsDefault);
-        Assert.True(storedSecondShipping.IsDefault);
-        Assert.True(storedBilling.IsDefault);
-        Assert.Equal("GooglePlace", storedFirstShipping.AddressSource);
-        Assert.Equal("place-maliev", storedFirstShipping.GooglePlaceId);
-        Assert.Equal("MALIEV Co., Ltd., Samut Prakan, Thailand", storedFirstShipping.FormattedAddress);
-        Assert.Equal(13.6485m, storedFirstShipping.Latitude);
-        Assert.Equal(100.6807m, storedFirstShipping.Longitude);
-        Assert.Equal("Call before delivery", storedFirstShipping.DriverNote);
-    }
-
-    [Fact]
-    public async Task Account_address_update_is_scoped_to_signed_in_customer()
-    {
-        using var owner = await CreateSignedInClientAsync("address-scope-owner@example.com");
-        var createResponse = await owner.PostAsJsonAsync("/quote/v1/account/addresses", new CustomerAddressUpsertRequest
+        // Write endpoints are removed — address editing happens in Maliev.Web.
+        var postResponse = await client.PostAsJsonAsync("/quote/v1/account/addresses", new CustomerAddressUpsertRequest
         {
             Type = "Shipping",
-            IsDefault = true,
-            PlaceLabel = "Home",
-            AddressLine1 = "12 Owner Road",
+            AddressLine1 = "12 Test Road",
             City = "Bang Phli",
             StateProvince = "Samut Prakan",
             PostalCode = "10540"
         });
-        createResponse.EnsureSuccessStatusCode();
-        var created = await createResponse.Content.ReadFromJsonAsync<CustomerAddressDto>();
-        Assert.NotNull(created);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, postResponse.StatusCode);
+    }
 
-        using var other = await CreateSignedInClientAsync("address-scope-other@example.com");
-        var crossCustomerUpdate = await other.PatchAsJsonAsync($"/quote/v1/account/addresses/{created.Id:D}", new CustomerAddressUpsertRequest
-        {
-            Type = "Shipping",
-            AddressLine1 = "99 Other Road",
-            City = "Bang Phli",
-            StateProvince = "Samut Prakan",
-            PostalCode = "10540",
-            Version = created.Version
-        });
+    [Fact]
+    public async Task Account_profile_is_scoped_to_signed_in_customer()
+    {
+        using var owner = await CreateSignedInClientAsync("profile-scope-owner@example.com");
+        using var other = await CreateSignedInClientAsync("profile-scope-other@example.com");
 
-        Assert.Equal(HttpStatusCode.NotFound, crossCustomerUpdate.StatusCode);
+        var ownerProfile = await owner.GetFromJsonAsync<CustomerProfileResponse>("/quote/v1/account/profile");
+        var otherProfile = await other.GetFromJsonAsync<CustomerProfileResponse>("/quote/v1/account/profile");
+
+        Assert.NotNull(ownerProfile);
+        Assert.NotNull(otherProfile);
+        Assert.NotEqual(ownerProfile.CustomerId, otherProfile.CustomerId);
     }
 
     [Fact]
@@ -1328,11 +1243,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     private async Task<HttpClient> CreateSignedInClientAsync(string email = "customer@example.com")
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
-        var signIn = await client.PostAsJsonAsync("/quote/v1/auth/sign-in", new SignInRequest
-        {
-            Email = email,
-            Password = "PrototypeOnly123!"
-        });
+        var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(email)}");
         signIn.EnsureSuccessStatusCode();
         return client;
     }
@@ -1415,5 +1326,52 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
                 ]
             });
         }
+    }
+}
+
+/// <summary>
+/// Test-only startup filter that maps GET /test/sign-in?email=... to issue the shared identity
+/// cookie. Registered in QuoteEngineWebApplicationFactory.ConfigureTestServices to replace the
+/// removed /quote/v1/auth/sign-in endpoint for test authentication.
+/// </summary>
+internal sealed class TestSignInStartupFilter : IStartupFilter
+{
+    public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
+    {
+        return app =>
+        {
+            app.Use(async (context, nextMiddleware) =>
+            {
+                if (context.Request.Method == "GET" && context.Request.Path == "/test/sign-in")
+                {
+                    var email = context.Request.Query["email"].ToString();
+                    if (string.IsNullOrWhiteSpace(email)) email = "customer@example.com";
+                    var normalizedEmail = email.Trim().ToLowerInvariant();
+
+                    var idBytes = MD5.HashData(Encoding.UTF8.GetBytes(normalizedEmail));
+                    var customerId = new Guid(idBytes);
+
+                    var store = context.RequestServices.GetRequiredService<QuoteEnginePrototypeStore>();
+                    store.UpsertCustomer(customerId, normalizedEmail, "Test Customer", string.Empty, string.Empty, "en");
+
+                    var claims = new[]
+                    {
+                        new Claim(ClaimTypes.NameIdentifier, customerId.ToString()),
+                        new Claim("customer_id", customerId.ToString()),
+                        new Claim("user_type", "customer"),
+                        new Claim(ClaimTypes.Email, normalizedEmail),
+                        new Claim(ClaimTypes.Name, "Test Customer"),
+                        new Claim("email_verified", "true")
+                    };
+                    await context.SignInAsync(
+                        CookieAuthenticationDefaults.AuthenticationScheme,
+                        new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)));
+                    context.Response.StatusCode = 200;
+                    return;
+                }
+                await nextMiddleware(context);
+            });
+            next(app);
+        };
     }
 }

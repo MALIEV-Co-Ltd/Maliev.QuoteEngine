@@ -17,7 +17,6 @@
   <ItemGroup>
     <PackageReference Include="MassTransit" Version="8.5.8" />
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.8" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.7" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.7" />
   </ItemGroup>
 </Project>

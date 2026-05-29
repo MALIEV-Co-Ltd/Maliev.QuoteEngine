@@ -46,11 +46,11 @@ else
         </article>
 
         <div class="account-action-grid" aria-label="@Text("Customer data", "ข้อมูลลูกค้า")">
-            <a href="/profile">
+            <a href="/account-hub">
                 <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
                 <span>@Text("Profile", "โปรไฟล์")</span>
             </a>
-            <a href="/profile#addresses">
+            <a href="/account-hub">
                 <MudIcon Icon="@Icons.Material.Outlined.LocationOn" Size="Size.Small" />
                 <span>@Text("Addresses", "ที่อยู่")</span>
             </a>
@@ -79,169 +79,46 @@ else
                 <span class="eyebrow">@Text("Address book", "สมุดที่อยู่")</span>
                 <h2>@Text("Billing and shipping addresses", "ที่อยู่เรียกเก็บเงินและจัดส่ง")</h2>
             </div>
-            <button type="button" class="secondary-button" @onclick="ResetAddressForm">@Text("New address", "เพิ่มที่อยู่")</button>
+            <a href="/account-hub" class="secondary-button">@Text("Manage addresses", "จัดการที่อยู่")</a>
         </div>
 
-        <div class="profile-address-layout">
-            <form class="profile-address-form" @onsubmit="SaveAddressAsync" @onsubmit:preventDefault="true">
-                <GoogleAddressPicker Latitude="@_addressForm.Latitude"
-                                     Longitude="@_addressForm.Longitude"
-                                     FormattedAddress="@_addressForm.FormattedAddress"
-                                     SelectionChanged="ApplyGoogleAddressSelection" />
-
-                <div class="quote-registry-lookup">
-                    <label class="profile-form-wide">
-                        @Text("Thai address registry", "ทะเบียนที่อยู่ไทย")
-                        <input value="@_registryQuery"
-                               @oninput="SearchRegistryLocationsAsync"
-                               autocomplete="off"
-                               aria-label="@Text("Thai address registry", "ทะเบียนที่อยู่ไทย")"
-                               placeholder="@Text("Search sub district, district, province, or postal code", "ค้นหาแขวง/ตำบล เขต/อำเภอ จังหวัด หรือรหัสไปรษณีย์")" />
-                    </label>
-                    @if (_registryLoading)
-                    {
-                        <p class="profile-address-warning">@Text("Searching RegistryService...", "กำลังค้นหา RegistryService...")</p>
-                    }
-                    else if (_registryLocations.Count > 0)
-                    {
-                        <div class="quote-registry-suggestions" role="listbox" aria-label="@Text("Thai address registry suggestions", "คำแนะนำจากทะเบียนที่อยู่ไทย")">
-                            @foreach (var location in _registryLocations)
-                            {
-                                <button type="button" class="quote-registry-suggestion" role="option" @onclick="() => ApplyRegistryLocation(location)">
-                                    <span>@FormatRegistryLocationPrimary(location)</span>
-                                    <small>@FormatRegistryLocationSecondary(location)</small>
-                                </button>
-                            }
+        <div class="profile-address-list">
+            @if (_addressesLoading)
+            {
+                <MudSkeleton Height="96px" />
+                <MudSkeleton Height="96px" />
+            }
+            else if (_addresses.Count == 0)
+            {
+                <div class="empty-state">
+                    <strong>@Text("No addresses yet", "ยังไม่มีที่อยู่")</strong>
+                    <p>@Text("Add addresses on your MALIEV account page.", "เพิ่มที่อยู่ในหน้าบัญชี MALIEV ของคุณ")</p>
+                    <a href="/account-hub" class="secondary-button">@Text("Go to account", "ไปยังบัญชี")</a>
+                </div>
+            }
+            else
+            {
+                @foreach (var address in _addresses)
+                {
+                    <article class="profile-address-card">
+                        <div>
+                            <span>@AddressTitle(address)</span>
+                            <strong>@DisplayAddressType(address.Type)</strong>
                         </div>
-                    }
-                </div>
-
-                @if (!string.IsNullOrWhiteSpace(_addressWarning))
-                {
-                    <p class="profile-address-warning">@_addressWarning</p>
-                }
-
-                <div class="profile-form-grid">
-                    <label>
-                        @Text("Address role", "ประเภทที่อยู่")
-                        <select @bind="_addressForm.Type">
-                            <option value="Shipping">@Text("Shipping", "จัดส่ง")</option>
-                            <option value="Billing">@Text("Billing", "เรียกเก็บเงิน")</option>
-                        </select>
-                    </label>
-                    <label>
-                        @Text("Place name", "ชื่อสถานที่")
-                        <select @bind="CurrentPlaceLabel">
-                            <option value="Home">@Text("Home", "บ้าน")</option>
-                            <option value="Work">@Text("Work", "ที่ทำงาน")</option>
-                            <option value="Other">@Text("Other", "อื่นๆ")</option>
-                        </select>
-                    </label>
-                    @if (CurrentPlaceLabel == "Other")
-                    {
-                        <label>
-                            @Text("Other place name", "ชื่อสถานที่อื่น")
-                            <input @bind="_addressForm.PlaceLabelOther" maxlength="100" />
-                        </label>
-                    }
-                </div>
-
-                <div class="profile-form-grid">
-                    <label class="profile-form-wide">
-                        @Text("Address No./Moo/Soi/Road", "บ้านเลขที่/หมู่/ซอย/ถนน")
-                        <input @bind="_addressForm.AddressLine1" required maxlength="255" />
-                    </label>
-                    <label>
-                        @Text("Sub District", "แขวง/ตำบล")
-                        <input @bind="_addressForm.District" maxlength="100" />
-                    </label>
-                    <label>
-                        @Text("District", "เขต/อำเภอ")
-                        <input @bind="_addressForm.City" required maxlength="100" />
-                    </label>
-                    <label>
-                        @Text("Province", "จังหวัด")
-                        <input @bind="_addressForm.StateProvince" required maxlength="100" disabled="@ProvinceLocked" />
-                    </label>
-                    <label>
-                        @Text("Postal code", "รหัสไปรษณีย์")
-                        <input @bind="_addressForm.PostalCode" required maxlength="20" disabled="@PostalCodeLocked" />
-                    </label>
-                </div>
-
-                <div class="profile-address-contact">
-                    <span class="eyebrow">@Text("Contact Information", "ข้อมูลติดต่อ")</span>
-                    <div class="profile-form-grid">
-                        <label>
-                            @Text("Recipient Name", "ชื่อผู้รับ")
-                            <input @bind="_addressForm.RecipientName" maxlength="200" />
-                        </label>
-                        <label>
-                            @Text("Mobile Number", "เบอร์มือถือ")
-                            <input @bind="_addressForm.RecipientPhone" maxlength="20" />
-                        </label>
-                        <label class="profile-form-wide">
-                            @Text("Note to driver", "หมายเหตุถึงพนักงานส่งของ")
-                            <textarea @bind="_addressForm.DriverNote" maxlength="500"></textarea>
-                        </label>
-                    </div>
-                </div>
-
-                <label class="profile-check-row">
-                    <input type="checkbox" @bind="_addressForm.IsDefault" />
-                    <span>@Text("Set as a default address", "ตั้งเป็นที่อยู่เริ่มต้น")</span>
-                </label>
-
-                @if (!string.IsNullOrWhiteSpace(_addressError))
-                {
-                    <p class="auth-error">@_addressError</p>
-                }
-
-                <div class="profile-address-actions">
-                    <button type="submit" class="primary-button" disabled="@_addressSaving">@(_editingAddressId.HasValue ? Text("Update address", "อัปเดตที่อยู่") : Text("Add address", "เพิ่มที่อยู่"))</button>
-                    @if (_editingAddressId.HasValue)
-                    {
-                        <button type="button" class="secondary-button" @onclick="ResetAddressForm">@Text("Cancel", "ยกเลิก")</button>
-                    }
-                </div>
-            </form>
-
-            <div class="profile-address-list">
-                @if (_addressesLoading)
-                {
-                    <MudSkeleton Height="96px" />
-                    <MudSkeleton Height="96px" />
-                }
-                else if (_addresses.Count == 0)
-                {
-                    <div class="empty-state">
-                        <strong>@Text("No addresses yet", "ยังไม่มีที่อยู่")</strong>
-                        <p>@Text("Add a billing or shipping address before placing a manufacturing order.", "เพิ่มที่อยู่เรียกเก็บเงินหรือจัดส่งก่อนสั่งผลิต")</p>
-                    </div>
-                }
-                else
-                {
-                    @foreach (var address in _addresses)
-                    {
-                        <article class="profile-address-card">
-                            <div>
-                                <span>@AddressTitle(address)</span>
-                                <strong>@DisplayAddressType(address.Type)</strong>
-                            </div>
-                            <p>@AddressLines(address)</p>
-                            <small>@ContactLine(address)</small>
+                        <p>@AddressLines(address)</p>
+                        <small>@ContactLine(address)</small>
+                        @if (address.IsDefault)
+                        {
                             <div class="profile-address-card-actions">
-                                @if (address.IsDefault)
-                                {
-                                    <span class="profile-address-default">@Text("Default", "ค่าเริ่มต้น") @DisplayAddressType(address.Type)</span>
-                                }
-                                <button type="button" class="text-button" @onclick="() => EditAddress(address)">@Text("Edit", "แก้ไข")</button>
-                                <button type="button" class="text-button" @onclick="() => DeleteAddressAsync(address)">@Text("Delete", "ลบ")</button>
+                                <span class="profile-address-default">@Text("Default", "ค่าเริ่มต้น") @DisplayAddressType(address.Type)</span>
                             </div>
-                        </article>
-                    }
+                        }
+                    </article>
                 }
-            </div>
+                <p class="profile-address-manage-hint">
+                    <a href="/account-hub">@Text("Edit or add addresses on your MALIEV account page", "แก้ไขหรือเพิ่มที่อยู่ในหน้าบัญชี MALIEV")</a>
+                </p>
+            }
         </div>
     </section>
 }
@@ -251,38 +128,13 @@ else
     private QuoteAuthStatusResponse _authStatus = new(false, null, null);
     private List<CustomerAddressDto> _addresses = [];
     private List<CustomerNdaDto> _ndas = [];
-    private List<ThaiAddressRegistryLocationDto> _registryLocations = [];
-    private CustomerAddressUpsertRequest _addressForm = new();
-    private Guid? _editingAddressId;
     private bool _addressesLoading;
-    private bool _addressSaving;
-    private bool _registryLoading;
-    private int _registrySearchVersion;
-    private string _registryQuery = string.Empty;
-    private string? _addressError;
-    private string? _addressWarning;
 
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     private bool IsThai => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture;
 
-    private string CurrentPlaceLabel
-    {
-        get => string.IsNullOrWhiteSpace(_addressForm.PlaceLabel) ? "Home" : _addressForm.PlaceLabel;
-        set
-        {
-            _addressForm.PlaceLabel = value;
-            if (!string.Equals(value, "Other", StringComparison.OrdinalIgnoreCase))
-            {
-                _addressForm.PlaceLabelOther = null;
-            }
-        }
-    }
-
-    private bool ProvinceLocked => IsGoogleAddress(_addressForm) && !string.IsNullOrWhiteSpace(_addressForm.StateProvince);
-
-    private bool PostalCodeLocked => IsGoogleAddress(_addressForm) && !string.IsNullOrWhiteSpace(_addressForm.PostalCode);
     private string ProfileInitials => GetInitials(_profile?.DisplayName ?? Text("Customer", "ลูกค้า"));
     private CustomerNdaDto? ActiveNda => _ndas.FirstOrDefault(nda => nda.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
     private string NdaStatus => DisplayNdaStatus(ActiveNda?.Status ?? _profile?.NdaStatus);
@@ -318,21 +170,18 @@ else
 
         _profile = await Api.GetProfileAsync();
         _ndas = [.. await Api.GetNdasAsync()];
-        ResetAddressForm();
         await LoadAddressesAsync();
     }
 
     private async Task LoadAddressesAsync()
     {
         _addressesLoading = true;
-        _addressError = null;
         try
         {
             _addresses = [.. await Api.GetAddressesAsync()];
         }
         catch
         {
-            _addressError = Text("Address book is temporarily unavailable.", "สมุดที่อยู่ไม่พร้อมใช้งานชั่วคราว");
             _addresses = [];
         }
         finally
@@ -340,181 +189,6 @@ else
             _addressesLoading = false;
         }
     }
-
-    private async Task SaveAddressAsync()
-    {
-        _addressSaving = true;
-        _addressError = null;
-        try
-        {
-            if (_editingAddressId.HasValue)
-            {
-                await Api.UpdateAddressAsync(_editingAddressId.Value, _addressForm);
-            }
-            else
-            {
-                await Api.CreateAddressAsync(_addressForm);
-            }
-
-            ResetAddressForm();
-            await LoadAddressesAsync();
-        }
-        catch
-        {
-            _addressError = Text("MALIEV could not save this address. Please check the required fields and try again.", "MALIEV ไม่สามารถบันทึกที่อยู่นี้ได้ กรุณาตรวจสอบฟิลด์ที่จำเป็นและลองอีกครั้ง");
-        }
-        finally
-        {
-            _addressSaving = false;
-        }
-    }
-
-    private async Task DeleteAddressAsync(CustomerAddressDto address)
-    {
-        _addressError = null;
-        try
-        {
-            await Api.DeleteAddressAsync(address.Id, address.Version);
-            if (_editingAddressId == address.Id)
-            {
-                ResetAddressForm();
-            }
-            await LoadAddressesAsync();
-        }
-        catch
-        {
-            _addressError = Text("MALIEV could not delete this address.", "MALIEV ไม่สามารถลบที่อยู่นี้ได้");
-        }
-    }
-
-    private void EditAddress(CustomerAddressDto address)
-    {
-        _editingAddressId = address.Id;
-        _addressWarning = null;
-        _addressForm = new CustomerAddressUpsertRequest
-        {
-            Type = string.IsNullOrWhiteSpace(address.Type) ? "Shipping" : address.Type,
-            IsDefault = address.IsDefault,
-            PlaceLabel = string.IsNullOrWhiteSpace(address.PlaceLabel) ? "Home" : address.PlaceLabel,
-            PlaceLabelOther = address.PlaceLabelOther,
-            AddressLine1 = address.AddressLine1,
-            AddressLine2 = address.AddressLine2,
-            AddressLine3 = address.AddressLine3,
-            District = address.District,
-            City = address.City,
-            StateProvince = address.StateProvince,
-            PostalCode = address.PostalCode,
-            CountryId = address.CountryId,
-            RecipientName = address.RecipientName,
-            RecipientPhone = address.RecipientPhone,
-            DriverNote = address.DriverNote,
-            AddressSource = string.IsNullOrWhiteSpace(address.AddressSource) ? "Manual" : address.AddressSource,
-            GooglePlaceId = address.GooglePlaceId,
-            FormattedAddress = address.FormattedAddress,
-            Latitude = address.Latitude,
-            Longitude = address.Longitude,
-            Version = address.Version
-        };
-        _registryQuery = string.Empty;
-        _registryLocations = [];
-    }
-
-    private void ResetAddressForm()
-    {
-        _editingAddressId = null;
-        _addressWarning = null;
-        _addressForm = new CustomerAddressUpsertRequest
-        {
-            Type = "Shipping",
-            PlaceLabel = "Home",
-            AddressSource = "Manual",
-            RecipientName = _profile?.DisplayName,
-            RecipientPhone = _profile?.Phone
-        };
-        _registryQuery = string.Empty;
-        _registryLocations = [];
-        _registryLoading = false;
-    }
-
-    private void ApplyGoogleAddressSelection(GoogleAddressSelection selection)
-    {
-        _addressForm.AddressSource = string.IsNullOrWhiteSpace(selection.Source) ? "GooglePlace" : selection.Source;
-        _addressForm.GooglePlaceId = selection.PlaceId;
-        _addressForm.FormattedAddress = selection.FormattedAddress;
-        _addressForm.Latitude = selection.Latitude;
-        _addressForm.Longitude = selection.Longitude;
-
-        if (!string.IsNullOrWhiteSpace(selection.AddressLine1)) _addressForm.AddressLine1 = selection.AddressLine1;
-        if (!string.IsNullOrWhiteSpace(selection.District)) _addressForm.District = selection.District;
-        if (!string.IsNullOrWhiteSpace(selection.City)) _addressForm.City = selection.City;
-        if (!string.IsNullOrWhiteSpace(selection.StateProvince)) _addressForm.StateProvince = selection.StateProvince;
-        if (!string.IsNullOrWhiteSpace(selection.PostalCode)) _addressForm.PostalCode = selection.PostalCode;
-
-        _addressWarning = string.IsNullOrWhiteSpace(_addressForm.StateProvince) || string.IsNullOrWhiteSpace(_addressForm.PostalCode)
-            ? Text("Google did not return complete province or postal code data. Please complete the missing fields manually.", "Google ไม่ได้ส่งข้อมูลจังหวัดหรือรหัสไปรษณีย์ครบถ้วน กรุณากรอกข้อมูลที่ขาดด้วยตนเอง")
-            : null;
-    }
-
-    private async Task SearchRegistryLocationsAsync(ChangeEventArgs args)
-    {
-        _registryQuery = args.Value?.ToString() ?? string.Empty;
-        var query = _registryQuery.Trim();
-        var searchVersion = ++_registrySearchVersion;
-
-        if (query.Length < 2)
-        {
-            _registryLocations = [];
-            _registryLoading = false;
-            return;
-        }
-
-        _registryLoading = true;
-        try
-        {
-            var locations = await Api.GetThaiAddressLocationsAsync(query, 8);
-            if (searchVersion == _registrySearchVersion)
-            {
-                _registryLocations = locations.ToList();
-            }
-        }
-        catch
-        {
-            if (searchVersion == _registrySearchVersion)
-            {
-                _registryLocations = [];
-            }
-        }
-        finally
-        {
-            if (searchVersion == _registrySearchVersion)
-            {
-                _registryLoading = false;
-            }
-        }
-    }
-
-    private void ApplyRegistryLocation(ThaiAddressRegistryLocationDto location)
-    {
-        var useThai = UseThaiRegistryLabels();
-        _addressForm.District = RegistryText(useThai ? location.SubDistrictTh : location.SubDistrictEn, useThai ? location.SubDistrictEn : location.SubDistrictTh);
-        _addressForm.City = RegistryText(useThai ? location.DistrictTh : location.DistrictEn, useThai ? location.DistrictEn : location.DistrictTh);
-        _addressForm.StateProvince = RegistryText(useThai ? location.ProvinceTh : location.ProvinceEn, useThai ? location.ProvinceEn : location.ProvinceTh);
-        _addressForm.PostalCode = location.PostalCode;
-        _addressForm.AddressSource = "RegistryThaiLocation";
-        _addressForm.GooglePlaceId = null;
-        _addressForm.FormattedAddress = null;
-        _addressForm.Latitude = null;
-        _addressForm.Longitude = null;
-        _addressWarning = null;
-        _registryQuery = FormatRegistryLocationPrimary(location);
-        _registryLocations = [];
-        _registryLoading = false;
-        _registrySearchVersion++;
-    }
-
-    private static bool IsGoogleAddress(CustomerAddressUpsertRequest address) =>
-        string.Equals(address.AddressSource, "GooglePlace", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(address.AddressSource, "GoogleMapPin", StringComparison.OrdinalIgnoreCase);
 
     private static string DisplayOrDash(string? value)
     {
@@ -531,46 +205,6 @@ else
 
         var initials = string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
         return string.IsNullOrWhiteSpace(initials) ? "C" : initials;
-    }
-
-    private bool UseThaiRegistryLabels()
-    {
-        return IsThai
-            || ContainsThai(_registryQuery)
-            || ContainsThai(_addressForm.AddressLine1)
-            || ContainsThai(_addressForm.District)
-            || ContainsThai(_addressForm.City)
-            || ContainsThai(_addressForm.StateProvince);
-    }
-
-    private string FormatRegistryLocationPrimary(ThaiAddressRegistryLocationDto location)
-    {
-        var useThai = UseThaiRegistryLabels();
-        var subDistrict = RegistryText(useThai ? location.SubDistrictTh : location.SubDistrictEn, useThai ? location.SubDistrictEn : location.SubDistrictTh);
-        var district = RegistryText(useThai ? location.DistrictTh : location.DistrictEn, useThai ? location.DistrictEn : location.DistrictTh);
-        var province = RegistryText(useThai ? location.ProvinceTh : location.ProvinceEn, useThai ? location.ProvinceEn : location.ProvinceTh);
-        var separator = useThai ? " " : ", ";
-        return string.Join(separator, new[] { subDistrict, district, province, location.PostalCode }.Where(part => !string.IsNullOrWhiteSpace(part)));
-    }
-
-    private string FormatRegistryLocationSecondary(ThaiAddressRegistryLocationDto location)
-    {
-        var useThai = UseThaiRegistryLabels();
-        var subDistrict = RegistryText(useThai ? location.SubDistrictEn : location.SubDistrictTh, useThai ? location.SubDistrictTh : location.SubDistrictEn);
-        var district = RegistryText(useThai ? location.DistrictEn : location.DistrictTh, useThai ? location.DistrictTh : location.DistrictEn);
-        var province = RegistryText(useThai ? location.ProvinceEn : location.ProvinceTh, useThai ? location.ProvinceTh : location.ProvinceEn);
-        var separator = useThai ? ", " : " ";
-        return string.Join(separator, new[] { subDistrict, district, province, location.PostalCode }.Where(part => !string.IsNullOrWhiteSpace(part)));
-    }
-
-    private static string RegistryText(string? preferred, string? fallback)
-    {
-        return !string.IsNullOrWhiteSpace(preferred) ? preferred : fallback ?? string.Empty;
-    }
-
-    private static bool ContainsThai(string? value)
-    {
-        return value?.Any(character => character is >= '\u0E00' and <= '\u0E7F') == true;
     }
 
     private string AddressTitle(CustomerAddressDto address)
