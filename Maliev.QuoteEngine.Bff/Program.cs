@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
+using System.Security.Claims;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -116,6 +117,24 @@ app.MapControllers();
 app.MapHub<QuoteNotificationsHub>("/hubs/quote-notifications");
 app.MapFallback(async context =>
 {
+    var user = context.User;
+    var customerId = user.FindFirst("customer_id")?.Value;
+    var isAuthenticated = user.Identity?.IsAuthenticated == true
+        && Guid.TryParse(customerId, out _);
+
+    // /demo is the only public WASM route — everything else requires a valid session.
+    // Redirecting unauthenticated users here (server-side, before WASM loads) avoids the
+    // 15-30 second WASM cold-start just to end up showing a sign-in redirect anyway.
+    var isDemoRoute = context.Request.Path.StartsWithSegments("/demo");
+    if (!isAuthenticated && !isDemoRoute)
+    {
+        var config = context.RequestServices.GetRequiredService<IConfiguration>();
+        var webBaseUrl = config["Web:BaseUrl"]?.TrimEnd('/') ?? "https://www.maliev.com";
+        var returnUrl = $"{context.Request.Scheme}://{context.Request.Host}{context.Request.Path}{context.Request.QueryString}";
+        context.Response.Redirect($"{webBaseUrl}/auth/sign-in?returnUrl={Uri.EscapeDataString(returnUrl)}");
+        return;
+    }
+
     var indexPath = Program.ResolveStaticWebAssetPath("index.html");
     if (indexPath is null)
     {
@@ -123,8 +142,23 @@ app.MapFallback(async context =>
         return;
     }
 
+    // Inject auth state into the page so Blazor pre-hydrates on first paint — no API round-trip needed.
+    // Authenticated users see their account info in the header immediately; unauthenticated (/demo)
+    // see the sign-in button immediately. Both cases eliminate the sign-in button flash.
+    var displayName = user.FindFirst(ClaimTypes.Name)?.Value
+        ?? user.FindFirst(ClaimTypes.Email)?.Value
+        ?? string.Empty;
+    var authJson = isAuthenticated
+        ? $"{{\"isSignedIn\":true,\"customerId\":{JsonSerializer.Serialize(customerId)},\"displayName\":{JsonSerializer.Serialize(displayName)}}}"
+        : "{\"isSignedIn\":false,\"customerId\":null,\"displayName\":null}";
+
+    var html = await File.ReadAllTextAsync(indexPath, context.RequestAborted);
+    html = html.Replace("</head>",
+        $"<script>window.getMalievAuth=function(){{return {authJson};}};</script></head>",
+        StringComparison.OrdinalIgnoreCase);
+
     context.Response.ContentType = "text/html; charset=utf-8";
-    await context.Response.SendFileAsync(indexPath, context.RequestAborted);
+    await context.Response.WriteAsync(html, context.RequestAborted);
 });
 
 app.Run();

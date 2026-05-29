@@ -13,10 +13,10 @@
 
 <div class="@AppShellClass">
     <header class="quote-topbar">
-        <a class="quote-brand" href="/">
+        <div class="quote-topbar-inner">
+        <a class="quote-brand" href="/" @onclick="GoToLanding" @onclick:preventDefault>
             <img class="quote-brand-logo" src="/images/logo.svg" alt="MALIEV" />
         </a>
-
         <nav class="quote-topnav" aria-label="@Text("Customer quote navigation", "เมนูลูกค้าสำหรับใบเสนอราคา")">
             @if (_authStatus.IsSignedIn)
             {
@@ -71,14 +71,17 @@
                     </ItemTemplate>
                 </MudAutocomplete>
             }
-            <MudTooltip Text="@Text("MALIEV assistant", "ผู้ช่วย MALIEV")" Placement="Placement.Bottom">
-                <MudIconButton Icon="@Icons.Material.Filled.SupportAgent"
-                               Class="topbar-chat-toggle"
-                               Size="Size.Medium"
-                               aria-label="@Text("Open MALIEV assistant", "เปิดผู้ช่วย MALIEV")"
-                               Color="@(_chatDrawerOpen ? Color.Primary : Color.Default)"
-                               OnClick="ToggleChatDrawerAsync" />
-            </MudTooltip>
+            <button type="button"
+                    class="topbar-chat-toggle"
+                    title="@Text("MALIEV assistant", "ผู้ช่วย MALIEV")"
+                    aria-label="@Text("Open MALIEV assistant", "เปิดผู้ช่วย MALIEV")"
+                    @onclick="ToggleChatDrawerAsync">
+                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="topbar-chat-icon">
+                    <path d="M5 13a7 7 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+                    <path d="M4 13h3v5H5a1 1 0 0 1-1-1v-4Zm13 0h3v4a1 1 0 0 1-1 1h-2v-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+                    <path d="M17 18c-.8 1.4-2.2 2-4 2h-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+                </svg>
+            </button>
             @if (_authStatus.IsSignedIn)
             {
                 <details class="billing-account-menu">
@@ -127,6 +130,8 @@
             {
                 <a class="quote-signin-btn" href="/auth/sign-in">@Text("Sign in", "เข้าสู่ระบบ")</a>
             }
+        </div>
+
         </div>
     </header>
 
@@ -290,10 +295,26 @@
             || normalized.Equals("/demo", StringComparison.OrdinalIgnoreCase);
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
         Preferences.Changed += OnPreferencesChanged;
         Navigation.LocationChanged += OnLocationChanged;
+        // Pre-hydrate auth state from the server-injected window.getMalievAuth() so the
+        // correct header (account info or sign-in button) shows on first paint — before any
+        // API round-trip or WASM cold-start delay.
+        if (Js is IJSInProcessRuntime jsSync)
+        {
+            try
+            {
+                var preloaded = jsSync.Invoke<QuoteAuthStatusResponse?>("getMalievAuth");
+                if (preloaded is not null) _authStatus = preloaded;
+            }
+            catch { /* getMalievAuth not defined — no server pre-hydration available */ }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
         await LoadCurrencyOptionsAsync();
         await RefreshAuthStatusAsync();
     }
@@ -483,6 +504,9 @@
             ? "quote-language-button is-active"
             : "quote-language-button";
     }
+
+    // Force a full HTTP request so the BFF SSR landing page is served (not the WASM Home.razor).
+    private void GoToLanding() => Navigation.NavigateTo("/", forceLoad: true);
 
     private string Text(string en, string th)
     {
