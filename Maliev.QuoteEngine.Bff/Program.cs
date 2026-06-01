@@ -68,6 +68,13 @@ builder.AddAuthenticatedServiceClient<ICountryServiceClient, CountryServiceClien
 builder.AddAuthenticatedServiceClient<ICurrencyServiceClient, CurrencyServiceClient>("CurrencyService");
 builder.AddAuthenticatedServiceClient<IRegistryServiceClient, RegistryServiceClient>("RegistryService");
 builder.AddAuthenticatedServiceClient<IPaymentServiceClient, PaymentServiceClient>("PaymentService");
+builder.Services.AddHttpClient<IQuoteGeometryRuntimeClient, QuoteGeometryRuntimeClient>(client =>
+    {
+        client.BaseAddress = new Uri("https+http://GeometryService");
+        client.Timeout = TimeSpan.FromSeconds(30);
+    })
+    .AddServiceDiscovery()
+    .AddHttpMessageHandler<ServiceAccountAuthenticationHandler>();
 
 // DemoMode options (short-circuit for sample bracket in dev/demo)
 builder.Services.Configure<DemoModeOptions>(

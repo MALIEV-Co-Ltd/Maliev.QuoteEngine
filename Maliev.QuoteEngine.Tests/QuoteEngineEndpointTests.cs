@@ -40,6 +40,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             services.RemoveAll<QuoteUploadServiceClient>();
             services.AddSingleton<QuoteUploadServiceClient>(new NoOpQuoteUploadServiceClient());
 
+            services.RemoveAll<IQuoteGeometryRuntimeClient>();
+            services.AddSingleton<IQuoteGeometryRuntimeClient>(new FakeQuoteGeometryRuntimeClient());
+
             // Replace real downstream service clients with in-memory fakes.
             services.RemoveAll<IMaterialCatalogClient>();
             services.AddSingleton<IMaterialCatalogClient>(new FakeMaterialCatalogClient());
@@ -88,6 +91,45 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         public override Task<string> GetDownloadUrlByPathAsync(string storagePath,
             int expirationMinutes = 60, CancellationToken ct = default)
             => Task.FromResult($"https://test-cdn.example.com/{Uri.EscapeDataString(storagePath)}");
+    }
+
+    private sealed class FakeQuoteGeometryRuntimeClient : IQuoteGeometryRuntimeClient
+    {
+        public Task<HttpResponseMessage> GetRuntimeManifestAsync(CancellationToken ct = default)
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(
+                    "{\"runtimeVersion\":\"0.1.0\",\"assets\":{\"worker\":\"/geometry/client-runtime/assets/client-geometry-runtime.abc.worker.js\"}}",
+                    Encoding.UTF8,
+                    "application/json")
+            };
+            response.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
+            return Task.FromResult(response);
+        }
+
+        public Task<HttpResponseMessage> GetRuntimeAssetAsync(string assetName, CancellationToken ct = default)
+        {
+            if (assetName == "missing.worker.js")
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)
+                {
+                    Content = new StringContent("{\"detail\":\"Runtime asset not found\"}", Encoding.UTF8, "application/json")
+                });
+            }
+
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("self.__runtime=true;", Encoding.UTF8, "text/javascript")
+            };
+            response.Headers.CacheControl = new CacheControlHeaderValue
+            {
+                Public = true,
+                MaxAge = TimeSpan.FromDays(365),
+            };
+            response.Headers.CacheControl.Extensions.Add(new NameValueHeaderValue("immutable"));
+            return Task.FromResult(response);
+        }
     }
 
     // ── Fake service clients ──────────────────────────────────────────────────
@@ -517,6 +559,48 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(HttpStatusCode.Redirect, signUp.StatusCode);
         Assert.NotNull(signUp.Headers.Location);
         Assert.Contains("/auth/sign-up", signUp.Headers.Location.OriginalString, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GeometryRuntime_manifest_is_public_and_preserves_no_cache()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/quote/v1/geometry/runtime/manifest");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
+        Assert.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"runtimeVersion\":\"0.1.0\"", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GeometryRuntime_asset_is_public_and_preserves_immutable_cache()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync(
+            "/quote/v1/geometry/runtime/assets/client-geometry-runtime.abc.worker.js");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("immutable", response.Headers.CacheControl?.ToString(), StringComparison.Ordinal);
+        Assert.Equal("text/javascript; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        Assert.Equal("self.__runtime=true;", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task GeometryRuntime_missing_asset_returns404()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/quote/v1/geometry/runtime/assets/missing.worker.js");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Contains(
+            "Runtime asset not found",
+            await response.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
