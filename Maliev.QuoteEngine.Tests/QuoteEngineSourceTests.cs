@@ -350,9 +350,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("width: min(100%, 640px);", auth, StringComparison.Ordinal);
         Assert.Contains("padding: clamp(34px, 5vw, 56px);", auth, StringComparison.Ordinal);
         Assert.Contains("var formMode = isSignUp ? \"sign-up\" : \"sign-in\";", auth, StringComparison.Ordinal);
-        Assert.Contains("data-auth-form=\"{{formMode}}\"", auth, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-email-entry-form", auth, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-credential-form", auth, StringComparison.Ordinal);
+        Assert.Contains("data-auth-step", auth, StringComparison.Ordinal);
+        Assert.Contains("data-auth-back", auth, StringComparison.Ordinal);
+        Assert.Contains("Verify email address", auth, StringComparison.Ordinal);
+        Assert.Contains("Password has at least 6 characters.", auth, StringComparison.Ordinal);
         Assert.Contains("const handoffKey = \"{{WorkspaceHandoffKey}}\";", auth, StringComparison.Ordinal);
         Assert.Contains("sessionStorage.setItem(handoffKey, \"true\")", auth, StringComparison.Ordinal);
+        Assert.DoesNotContain("name=\"firstName\"", auth, StringComparison.Ordinal);
+        Assert.DoesNotContain("name=\"lastName\"", auth, StringComparison.Ordinal);
+        Assert.DoesNotContain("name=\"phone\"", auth, StringComparison.Ordinal);
+        Assert.DoesNotContain("name=\"companyName\"", auth, StringComparison.Ordinal);
         Assert.DoesNotContain("data-wasm-entry", auth, StringComparison.Ordinal);
         Assert.DoesNotContain("_framework/blazor.webassembly.js", auth, StringComparison.Ordinal);
         Assert.DoesNotContain("MudBlazor", auth, StringComparison.Ordinal);
@@ -377,8 +386,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("href=\"@GoogleHref\"", signIn, StringComparison.Ordinal);
         Assert.Contains("private string GoogleHref =>", signIn, StringComparison.Ordinal);
         Assert.DoesNotContain("ExchangeGoogleAsync", signIn, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-email-panel\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("Use email instead", signIn, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-email-entry-form", signIn, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-credential-form", signIn, StringComparison.Ordinal);
+        Assert.Contains("@onsubmit=\"ContinueWithEmail\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"BackToEmailStep\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("PasswordRequirementClass", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"auth-email-panel\"", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("Use email instead", signIn, StringComparison.Ordinal);
         Assert.DoesNotContain("<span class=\"eyebrow\">Customer account</span>", signIn, StringComparison.Ordinal);
         Assert.DoesNotContain("<div class=\"auth-divider\">or use email</div>", signIn, StringComparison.Ordinal);
 
@@ -387,12 +401,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"auth-google\"", signUp, StringComparison.Ordinal);
         Assert.Contains("href=\"@GoogleHref\"", signUp, StringComparison.Ordinal);
         Assert.DoesNotContain("ExchangeGoogleAsync", signUp, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-email-panel\"", signUp, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-email-entry-form", signUp, StringComparison.Ordinal);
+        Assert.Contains("class=\"auth-credential-form", signUp, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Verify email address\", \"ยืนยันอีเมล\")", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"auth-email-panel\"", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("First name", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("Company", signUp, StringComparison.Ordinal);
 
         Assert.Contains(".auth-shell", styles, StringComparison.Ordinal);
         Assert.Contains(".auth-title-logo", styles, StringComparison.Ordinal);
         Assert.Contains(".auth-google", styles, StringComparison.Ordinal);
-        Assert.Contains(".auth-email-panel", styles, StringComparison.Ordinal);
+        Assert.Contains(".auth-email-entry-form", styles, StringComparison.Ordinal);
+        Assert.Contains(".auth-credential-form", styles, StringComparison.Ordinal);
+        Assert.Contains(".auth-requirement-list", styles, StringComparison.Ordinal);
         Assert.Contains(".auth-field-help", styles, StringComparison.Ordinal);
         Assert.Contains("width: min(100%, 640px);", styles, StringComparison.Ordinal);
         Assert.Contains("max-width: 640px;", styles, StringComparison.Ordinal);

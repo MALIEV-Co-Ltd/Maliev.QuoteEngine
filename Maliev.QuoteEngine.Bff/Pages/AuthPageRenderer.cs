@@ -27,14 +27,18 @@ internal static class AuthPageRenderer
         var htmlLang = culture == "th-TH" ? "th" : "en";
         var isSignUp = mode == AuthMode.SignUp;
         var formMode = isSignUp ? "sign-up" : "sign-in";
-        var form = isSignUp ? RenderSignUpForm(copy) : RenderSignInForm(copy);
+        var backText = culture == "th-TH" ? "กลับ" : "Back";
+        var continueText = culture == "th-TH" ? "ดำเนินการต่อ" : "Continue";
+        var validEmailText = culture == "th-TH" ? "อีเมลถูกต้อง" : "Valid email address.";
+        var emailEntryHelp = culture == "th-TH" ? "กรอกอีเมลที่ถูกต้อง" : "Enter a valid email address.";
+        var form = isSignUp ? RenderSignUpForm(copy, backText, validEmailText) : RenderSignInForm(copy, backText, validEmailText);
         var alternateHref = isSignUp
             ? $"/auth/sign-in?returnUrl={Uri.EscapeDataString(returnUrl)}"
             : $"/auth/sign-up?returnUrl={Uri.EscapeDataString(returnUrl)}";
         var googleHref = $"/auth/google?returnUrl={Uri.EscapeDataString(returnUrl)}";
         var hasError = !string.IsNullOrWhiteSpace(error);
         var errorHiddenAttribute = hasError ? string.Empty : " hidden";
-        var emailOpenAttribute = hasError ? " open" : string.Empty;
+
         var errorText = hasError ? error : string.Empty;
 
         return $$"""
@@ -369,6 +373,86 @@ internal static class AuthPageRenderer
                         cursor: pointer;
                     }
 
+                    .auth-email-entry-form,
+                    .auth-credential-form {
+                        padding: 0;
+                    }
+
+                    .auth-divider {
+                        display: flex;
+                        align-items: center;
+                        gap: 12px;
+                        color: var(--muted);
+                        font-size: 12px;
+                        text-transform: uppercase;
+                    }
+
+                    .auth-divider::before,
+                    .auth-divider::after {
+                        content: "";
+                        flex: 1;
+                        height: 1px;
+                        background: var(--line);
+                    }
+
+                    .auth-step-actions {
+                        display: grid;
+                        gap: 10px;
+                    }
+
+                    .auth-requirement-list {
+                        display: grid;
+                        gap: 7px;
+                        margin: -2px 0 0;
+                        padding: 0;
+                        list-style: none;
+                    }
+
+                    .auth-requirement-item {
+                        display: grid;
+                        grid-template-columns: 18px minmax(0, 1fr);
+                        gap: 8px;
+                        align-items: start;
+                        color: var(--muted);
+                        font-size: 12px;
+                        line-height: 1.35;
+                    }
+
+                    .auth-requirement-item::before {
+                        content: "";
+                        width: 16px;
+                        height: 16px;
+                        border-radius: 999px;
+                        background: var(--panel-tint);
+                        box-shadow: rgba(0, 0, 0, .1) 0 0 0 1px;
+                    }
+
+                    .auth-requirement-item.is-met {
+                        color: var(--ink);
+                    }
+
+                    .auth-requirement-item.is-met::before {
+                        content: "\2713";
+                        display: grid;
+                        place-items: center;
+                        color: #ffffff;
+                        background: #16a34a;
+                        font-size: 11px;
+                        font-weight: 700;
+                    }
+
+                    .auth-secondary {
+                        width: 100%;
+                        height: 40px;
+                        border-radius: 6px;
+                        color: var(--ink);
+                        background: var(--panel);
+                        border: 1px solid var(--line);
+                        cursor: pointer;
+                        font: inherit;
+                        font-weight: 700;
+                        letter-spacing: 0;
+                    }
                     .auth-primary:disabled {
                         cursor: progress;
                         opacity: .72;
@@ -498,19 +582,27 @@ internal static class AuthPageRenderer
                             </h1>
                             <p>{{Html(copy.Body)}}</p>
                             <div class="auth-error" role="alert"{{errorHiddenAttribute}}>{{Html(errorText)}}</div>
+                            <form class="auth-email-entry-form auth-form" data-auth-step="email" novalidate>
+                                <label>
+                                    {{Html(copy.EmailLabel)}}
+                                    <input id="auth-email-entry" name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="auth-email-entry-requirements" required>
+                                </label>
+                                <ul id="auth-email-entry-requirements" class="auth-requirement-list" aria-live="polite">
+                                    <li class="auth-requirement-item is-pending">{{Html(emailEntryHelp)}}</li>
+                                </ul>
+                                <button type="submit" class="auth-primary" data-auth-continue>{{Html(continueText)}}</button>
+                            </form>
+                            <div class="auth-divider" role="separator">or</div>
                             <a class="auth-google" href="{{Html(googleHref)}}" aria-label="{{Html(copy.Google)}}">
                                 <span class="auth-google-icon" aria-hidden="true">
                                     {{GoogleIcon()}}
                                 </span>
                                 <span>{{Html(copy.Google)}}</span>
                             </a>
-                            <details class="auth-email-panel"{{emailOpenAttribute}}>
-                                <summary>{{Html(copy.EmailSummary)}}</summary>
-                                <form class="auth-form" data-auth-form="{{formMode}}" data-error-text="{{Html(copy.FormError)}}" data-submitting-text="{{Html(copy.Submitting)}}" novalidate>
-                                    <div class="auth-error" data-auth-error role="alert" hidden></div>
-                                    {{form}}
-                                </form>
-                            </details>
+                            <form class="auth-credential-form auth-form" data-auth-form="{{formMode}}" data-auth-step="credentials" data-error-text="{{Html(copy.FormError)}}" data-submitting-text="{{Html(copy.Submitting)}}" novalidate hidden>
+                                <div class="auth-error" data-auth-error role="alert" hidden></div>
+                                {{form}}
+                            </form>
                             <div class="auth-links">
                                 <a href="{{Html(alternateHref)}}">{{Html(copy.AlternateBodyAction)}}</a>
                             </div>
@@ -531,6 +623,11 @@ internal static class AuthPageRenderer
                         };
                         const isWorkspaceReturn = value => /^\/(quote\/new|quotes\/new|projects\/new|demo)(?:[/?#]|$)/.test(value);
                         const readValue = (data, name) => (data.get(name) || "").toString();
+                        const emailStep = document.querySelector("[data-auth-step='email']");
+                        const credentialStep = document.querySelector("[data-auth-step='credentials']");
+                        const entryEmail = emailStep?.querySelector("input[name='email']");
+                        const credentialEmail = credentialStep?.querySelector("input[name='email']");
+                        const credentialPassword = credentialStep?.querySelector("input[name='password']");
 
                         document.querySelector("[data-theme-toggle]")?.addEventListener("click", () => {
                             const nextTheme = root.dataset.malievTheme === "dark" ? "light" : "dark";
@@ -548,6 +645,28 @@ internal static class AuthPageRenderer
                                 setCookie("maliev.culture", culture);
                                 location.reload();
                             });
+                        });
+
+                        emailStep?.addEventListener("submit", event => {
+                            event.preventDefault();
+                            if (!entryEmail?.checkValidity()) {
+                                entryEmail?.reportValidity();
+                                return;
+                            }
+
+                            if (credentialEmail) {
+                                credentialEmail.value = entryEmail.value;
+                            }
+
+                            emailStep.hidden = true;
+                            credentialStep.hidden = false;
+                            credentialPassword?.focus();
+                        });
+
+                        document.querySelector("[data-auth-back]")?.addEventListener("click", () => {
+                            credentialStep.hidden = true;
+                            emailStep.hidden = false;
+                            entryEmail?.focus();
                         });
 
                         document.querySelectorAll("[data-auth-form]").forEach(form => {
@@ -570,19 +689,10 @@ internal static class AuthPageRenderer
                                     submit.textContent = form.dataset.submittingText || originalText;
                                 }
 
-                                const body = mode === "sign-up"
-                                    ? {
-                                        firstName: readValue(data, "firstName"),
-                                        lastName: readValue(data, "lastName"),
-                                        email: readValue(data, "email"),
-                                        password: readValue(data, "password"),
-                                        phone: readValue(data, "phone"),
-                                        companyName: readValue(data, "companyName")
-                                    }
-                                    : {
-                                        email: readValue(data, "email"),
-                                        password: readValue(data, "password")
-                                    };
+                                const body = {
+                                    email: readValue(data, "email"),
+                                    password: readValue(data, "password")
+                                };
 
                                 try {
                                     const response = await fetch(mode === "sign-up" ? "/quote/v1/auth/sign-up" : "/quote/v1/auth/sign-in", {
@@ -612,7 +722,7 @@ internal static class AuthPageRenderer
                                         error.hidden = false;
                                     }
 
-                                    form.closest("details")?.setAttribute("open", "");
+
                                     if (submit) {
                                         submit.disabled = false;
                                         submit.textContent = originalText;
@@ -627,7 +737,7 @@ internal static class AuthPageRenderer
             """;
     }
 
-    private static string RenderSignInForm(AuthCopy copy) =>
+    private static string RenderSignInForm(AuthCopy copy, string backText, string validEmailText) =>
         $$"""
                                     <label>
                                         {{Html(copy.EmailLabel)}}
@@ -637,23 +747,20 @@ internal static class AuthPageRenderer
                                     <label>
                                         {{Html(copy.PasswordLabel)}}
                                         <input name="password" type="password" autocomplete="current-password" minlength="6" aria-describedby="sign-in-password-requirements" required>
-                                        <small id="sign-in-password-requirements" class="auth-field-help">{{Html(copy.PasswordHelp)}}</small>
                                     </label>
-                                    <button type="submit" class="auth-primary" data-auth-submit>{{Html(copy.Submit)}}</button>
+                                    <ul id="sign-in-password-requirements" class="auth-requirement-list" aria-live="polite">
+                                        <li class="auth-requirement-item is-pending">{{Html(validEmailText)}}</li>
+                                        <li class="auth-requirement-item is-pending">{{Html(copy.PasswordHelp)}}</li>
+                                    </ul>
+                                    <div class="auth-step-actions">
+                                        <button type="submit" class="auth-primary" data-auth-submit>{{Html(copy.Submit)}}</button>
+                                        <button type="button" class="auth-secondary" data-auth-back>{{Html(backText)}}</button>
+                                    </div>
             """;
 
-    private static string RenderSignUpForm(AuthCopy copy) =>
+    private static string RenderSignUpForm(AuthCopy copy, string backText, string validEmailText) =>
         $$"""
-                                    <div class="auth-form-grid">
-                                        <label>
-                                            {{Html(copy.FirstNameLabel)}}
-                                            <input name="firstName" autocomplete="given-name" required>
-                                        </label>
-                                        <label>
-                                            {{Html(copy.LastNameLabel)}}
-                                            <input name="lastName" autocomplete="family-name" required>
-                                        </label>
-                                    </div>
+
                                     <label>
                                         {{Html(copy.EmailLabel)}}
                                         <input name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="sign-up-email-requirements" required>
@@ -662,17 +769,15 @@ internal static class AuthPageRenderer
                                     <label>
                                         {{Html(copy.PasswordLabel)}}
                                         <input name="password" type="password" autocomplete="new-password" minlength="6" aria-describedby="sign-up-password-requirements" required>
-                                        <small id="sign-up-password-requirements" class="auth-field-help">{{Html(copy.PasswordHelp)}}</small>
                                     </label>
-                                    <label>
-                                        {{Html(copy.PhoneLabel)}}
-                                        <input name="phone" autocomplete="tel">
-                                    </label>
-                                    <label>
-                                        {{Html(copy.CompanyLabel)}}
-                                        <input name="companyName" autocomplete="organization">
-                                    </label>
-                                    <button type="submit" class="auth-primary" data-auth-submit>{{Html(copy.Submit)}}</button>
+                                    <ul id="sign-up-password-requirements" class="auth-requirement-list" aria-live="polite">
+                                        <li class="auth-requirement-item is-pending">{{Html(validEmailText)}}</li>
+                                        <li class="auth-requirement-item is-pending">{{Html(copy.PasswordHelp)}}</li>
+                                    </ul>
+                                    <div class="auth-step-actions">
+                                        <button type="submit" class="auth-primary" data-auth-submit>{{Html(copy.Submit)}}</button>
+                                        <button type="button" class="auth-secondary" data-auth-back>{{Html(backText)}}</button>
+                                    </div>
             """;
 
     private static string ResolveCulture(HttpContext context)
@@ -747,7 +852,7 @@ internal static class AuthPageRenderer
                         "Google เป็นวิธีที่เร็วที่สุด และสามารถใช้อีเมลกับรหัสผ่านได้เมื่อทีมของคุณต้องการบัญชีแยก",
                         "ดำเนินการต่อด้วย Google",
                         "สร้างด้วยอีเมล",
-                        "สร้างบัญชี",
+                        "ยืนยันอีเมล",
                         "กำลังสร้างบัญชี...",
                         "ไม่สามารถสร้างบัญชีได้",
                         "เข้าสู่ระบบ",
@@ -756,7 +861,7 @@ internal static class AuthPageRenderer
                         "อีเมล",
                         "ใช้อีเมลแบบเต็ม เช่น name@company.com",
                         "รหัสผ่าน",
-                        "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร",
+                        "รหัสผ่านมีอย่างน้อย 6 ตัวอักษร",
                         "ชื่อ",
                         "นามสกุล",
                         "โทรศัพท์",
@@ -777,7 +882,7 @@ internal static class AuthPageRenderer
                         "อีเมล",
                         "ใช้อีเมลแบบเต็ม เช่น name@company.com",
                         "รหัสผ่าน",
-                        "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร",
+                        "รหัสผ่านมีอย่างน้อย 6 ตัวอักษร",
                         "ชื่อ",
                         "นามสกุล",
                         "โทรศัพท์",
@@ -792,7 +897,7 @@ internal static class AuthPageRenderer
                     "Google is the fastest path. Email and password is available when your team needs a separate login.",
                     "Continue with Google",
                     "Create with email",
-                    "Create account",
+                    "Verify email address",
                     "Creating account...",
                     "Account creation could not be completed.",
                     "Sign in",
@@ -801,7 +906,7 @@ internal static class AuthPageRenderer
                     "Email",
                     "Use a full email address, for example name@company.com.",
                     "Password",
-                    "Password must be at least 6 characters.",
+                    "Password has at least 6 characters.",
                     "First name",
                     "Last name",
                     "Phone",
@@ -822,7 +927,7 @@ internal static class AuthPageRenderer
                     "Email",
                     "Use a full email address, for example name@company.com.",
                     "Password",
-                    "Password must be at least 6 characters.",
+                    "Password has at least 6 characters.",
                     "First name",
                     "Last name",
                     "Phone",

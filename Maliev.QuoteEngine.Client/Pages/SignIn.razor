@@ -1,49 +1,80 @@
 @page "/auth/sign-in"
-@inject QuoteEngineApiClient Api
+@using System.ComponentModel.DataAnnotations
 @inject NavigationManager Navigation
 
-<PageTitle>@Text("Sign in - MALIEV Quote Engine", "เข้าสู่ระบบ - MALIEV Quote Engine")</PageTitle>
+<PageTitle>@Text("Sign in or sign up - MALIEV Quote Engine", "เข้าสู่ระบบหรือสมัครสมาชิก - MALIEV Quote Engine")</PageTitle>
 
 <section class="auth-shell">
     <div class="auth-panel">
-        <h1 class="auth-title">
-            <span>@Text("Sign in to", "เข้าสู่ระบบ")</span>
-            <img class="auth-title-logo" src="/images/logo.svg" width="154" height="35" alt="MALIEV" />
-        </h1>
-        <p>@Text("Use your customer account for quotes, uploaded CAD files, DFM review, orders, NDAs, and documents.", "ใช้บัญชีลูกค้าของคุณสำหรับใบเสนอราคา ไฟล์ CAD ที่อัปโหลด การตรวจ DFM คำสั่งซื้อ NDA และเอกสาร")</p>
+        @if (ShowEmailStep)
+        {
+            <h1 class="auth-title">
+                <span>@Text("Sign in or sign up", "เข้าสู่ระบบหรือสมัครสมาชิก")</span>
+                <img class="auth-title-logo" src="/images/logo.svg" width="154" height="35" alt="MALIEV" />
+            </h1>
+            <p>@Text("Google is the fastest way to use MALIEV Quote Engine. Email and password remains available for teams that need it.", "Google เป็นวิธีที่เร็วที่สุดในการใช้ MALIEV Quote Engine และยังใช้อีเมลกับรหัสผ่านได้เมื่อทีมต้องการ")</p>
 
-        <a class="auth-google" href="@GoogleHref" aria-label="@Text("Continue with Google", "ดำเนินการต่อด้วย Google")">
-            <span class="auth-google-icon" aria-hidden="true">
-                <svg viewBox="0 0 18 18" focusable="false">
-                    <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.08-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.87 2.69-6.62z" />
-                    <path fill="#34A853" d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33C2.44 15.98 5.48 18 9 18z" />
-                    <path fill="#FBBC05" d="M3.96 10.71A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.17.28-1.71V4.96H.96A8.96 8.96 0 0 0 0 9c0 1.45.35 2.83.96 4.04l3-2.33z" />
-                    <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z" />
-                </svg>
-            </span>
-            <span>@Text("Continue with Google", "ดำเนินการต่อด้วย Google")</span>
-        </a>
+            <form class="auth-email-entry-form auth-form" @onsubmit="ContinueWithEmail" @onsubmit:preventDefault>
+                <label>
+                    @Text("Email address", "อีเมล")
+                    <input id="auth-email-entry" name="Email" type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="auth-email-entry-requirements" @bind="_email" @bind:event="oninput" required />
+                </label>
+                <ul id="auth-email-entry-requirements" class="auth-requirement-list" aria-live="polite">
+                    <li class="@EmailRequirementClass">@Text("Enter a valid email address.", "กรอกอีเมลที่ถูกต้อง")</li>
+                </ul>
+                <button type="submit" class="primary-button full" disabled="@(!EmailLooksValid)">@Text("Continue", "ดำเนินการต่อ")</button>
+            </form>
 
-        <details class="auth-email-panel" open="@EmailPanelOpen">
-            <summary>@Text("Use email instead", "ใช้ email แทน")</summary>
-            <div class="auth-form">
+            <div class="auth-divider" role="separator">@Text("or", "หรือ")</div>
+
+            <a class="auth-google" href="@GoogleHref" aria-label="@Text("Continue with Google", "ดำเนินการต่อด้วย Google")">
+                <span class="auth-google-icon" aria-hidden="true">
+                    <svg viewBox="0 0 18 18" focusable="false">
+                        <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.08-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.87 2.69-6.62z" />
+                        <path fill="#34A853" d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33C2.44 15.98 5.48 18 9 18z" />
+                        <path fill="#FBBC05" d="M3.96 10.71A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.17.28-1.71V4.96H.96A8.96 8.96 0 0 0 0 9c0 1.45.35 2.83.96 4.04l3-2.33z" />
+                        <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z" />
+                    </svg>
+                </span>
+                <span>@Text("Continue with Google", "ดำเนินการต่อด้วย Google")</span>
+            </a>
+
+            <div class="auth-links">
+                <a href="@SignUpHref">@Text("Create account", "สร้างบัญชี")</a>
+            </div>
+        }
+        else
+        {
+            <h1 class="auth-title">
+                <span>@Text("Sign in with email", "เข้าสู่ระบบด้วยอีเมล")</span>
+                <img class="auth-title-logo" src="/images/logo.svg" width="154" height="35" alt="MALIEV" />
+            </h1>
+            <p>@Text("Enter your password to continue with your Quote Engine workspace.", "กรอกรหัสผ่านเพื่อใช้งานพื้นที่ทำงาน Quote Engine ต่อ")</p>
+
+            <div class="auth-credential-form auth-form">
                 <label>
                     @Text("Email", "อีเมล")
-                    <input type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="sign-in-email-requirements" @bind="_email" required />
+                    <input type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="sign-in-email-requirements" @bind="_email" @bind:event="oninput" required />
                     <small id="sign-in-email-requirements" class="auth-field-help">@Text("Use a full email address, for example name@company.com.", "ใช้อีเมลแบบเต็ม เช่น name@company.com")</small>
                 </label>
                 <label>
                     @Text("Password", "รหัสผ่าน")
-                    <input type="password" autocomplete="current-password" minlength="6" aria-describedby="sign-in-password-requirements" @bind="_password" required />
-                    <small id="sign-in-password-requirements" class="auth-field-help">@Text("Password must be at least 6 characters.", "รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร")</small>
+                    <input type="password" autocomplete="current-password" minlength="6" aria-describedby="sign-in-password-requirements" @bind="_password" @bind:event="oninput" required />
                 </label>
-                <button type="button" class="primary-button full" @onclick="SignInAsync">@Text("Sign in", "เข้าสู่ระบบ")</button>
+                <ul id="sign-in-password-requirements" class="auth-requirement-list" aria-live="polite">
+                    <li class="@EmailRequirementClass">@Text("Valid email address.", "อีเมลถูกต้อง")</li>
+                    <li class="@PasswordRequirementClass">@Text("Password has at least 6 characters.", "รหัสผ่านมีอย่างน้อย 6 ตัวอักษร")</li>
+                </ul>
+                <div class="auth-step-actions">
+                    <button type="button" class="primary-button full" @onclick="SignInAsync" disabled="@(!CredentialsReady)">@Text("Sign in", "เข้าสู่ระบบ")</button>
+                    <button type="button" class="secondary-button full" @onclick="BackToEmailStep">@Text("Back", "กลับ")</button>
+                </div>
             </div>
-        </details>
 
-        <div class="auth-links">
-            <a href="@SignUpHref">@Text("Create account", "สร้างบัญชี")</a>
-        </div>
+            <div class="auth-links">
+                <a href="@SignUpHref">@Text("Create account", "สร้างบัญชี")</a>
+            </div>
+        }
     </div>
 </section>
 
@@ -51,8 +82,11 @@
     [SupplyParameterFromQuery(Name = "returnUrl")]
     public string? ReturnUrl { get; set; }
 
+    private static readonly EmailAddressAttribute EmailValidator = new();
+
     private string _email = string.Empty;
     private string _password = string.Empty;
+    private bool _showCredentialStep;
 
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
@@ -63,7 +97,25 @@
 
     private string SignUpHref => $"/auth/sign-up?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}";
     private string GoogleHref => $"/auth/google?returnUrl={Uri.EscapeDataString(SafeReturnUrl)}";
-    private bool EmailPanelOpen => false;
+    private bool ShowEmailStep => !_showCredentialStep;
+    private bool EmailLooksValid => !string.IsNullOrWhiteSpace(_email) && EmailValidator.IsValid(_email.Trim());
+    private bool PasswordMeetsRequirement => _password.Length >= 6;
+    private bool CredentialsReady => EmailLooksValid && PasswordMeetsRequirement;
+    private string EmailRequirementClass => EmailLooksValid ? "auth-requirement-item is-met" : "auth-requirement-item is-pending";
+    private string PasswordRequirementClass => PasswordMeetsRequirement ? "auth-requirement-item is-met" : "auth-requirement-item is-pending";
+
+    private void ContinueWithEmail()
+    {
+        if (EmailLooksValid)
+        {
+            _showCredentialStep = true;
+        }
+    }
+
+    private void BackToEmailStep()
+    {
+        _showCredentialStep = false;
+    }
 
     private Task SignInAsync()
     {
