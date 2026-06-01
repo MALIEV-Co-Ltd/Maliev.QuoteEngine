@@ -380,8 +380,8 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("class=\"auth-shell\"", signIn, StringComparison.Ordinal);
         Assert.Contains("class=\"auth-title\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-title-logo\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("src=\"/images/logo.svg\"", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"auth-title-logo\"", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("<img class=\"auth-title-logo\"", signIn, StringComparison.Ordinal);
         Assert.Contains("class=\"auth-google\"", signIn, StringComparison.Ordinal);
         Assert.Contains("href=\"@GoogleHref\"", signIn, StringComparison.Ordinal);
         Assert.Contains("private string GoogleHref =>", signIn, StringComparison.Ordinal);
@@ -397,7 +397,8 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("<div class=\"auth-divider\">or use email</div>", signIn, StringComparison.Ordinal);
 
         Assert.Contains("class=\"auth-shell\"", signUp, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-title-logo\"", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"auth-title-logo\"", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("<img class=\"auth-title-logo\"", signUp, StringComparison.Ordinal);
         Assert.Contains("class=\"auth-google\"", signUp, StringComparison.Ordinal);
         Assert.Contains("href=\"@GoogleHref\"", signUp, StringComparison.Ordinal);
         Assert.DoesNotContain("ExchangeGoogleAsync", signUp, StringComparison.Ordinal);

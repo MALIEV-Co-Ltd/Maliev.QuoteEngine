@@ -578,7 +578,6 @@ internal static class AuthPageRenderer
                         <section class="auth-panel" aria-labelledby="auth-title">
                             <h1 class="auth-title" id="auth-title">
                                 <span>{{Html(copy.Heading)}}</span>
-                                <img class="auth-title-logo" src="/images/logo.svg" width="154" height="35" alt="MALIEV">
                             </h1>
                             <p>{{Html(copy.Body)}}</p>
                             <div class="auth-error" role="alert"{{errorHiddenAttribute}}>{{Html(errorText)}}</div>
