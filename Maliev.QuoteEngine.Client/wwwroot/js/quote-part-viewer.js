@@ -461,6 +461,8 @@ const loadGenerations       = {};   // canvasId → number (incremented on each 
 const shadowGenerators      = {};   // canvasId → BABYLON.ShadowGenerator
 const analysisModelMeshIds  = {};   // canvasId → Set<mesh.uniqueId> for real model geometry
 const analysisCameraButtons = {};   // canvasId → previous ArcRotate pointer buttons while analysis tools are active
+const localAdvisoryRuns     = {};   // canvasId → latest local advisory run id
+const localAdvisoryWorkers  = {};   // canvasId → active geometry worker
 
 // ── Auto-rotation animation state ────────────────────────────────────────────
 const edgesEnabled          = {};  // canvasId → boolean
@@ -472,6 +474,9 @@ const SPEED_HOVER           = CONFIG.AUTO_ROTATION_SPEED_HOVER;
 const SPEED_STOP            = CONFIG.AUTO_ROTATION_SPEED_STOP;
 const ORTHO_RADIUS_FACTOR   = 0.45; // fraction of cam.radius used for orthographic viewport half-height (≈ tan(FOV/2) to match perspective zoom)
 const _arcAnimGuard         = {};   // canvasId → bool — suppresses the ortho observer during arc animations
+const LOCAL_ADVISORY_MANIFEST_URL = '/quote/v1/geometry/runtime/manifest';
+const LOCAL_ADVISORY_ASSET_BASE_URL = '/quote/v1/geometry/runtime/assets/';
+const LOCAL_ADVISORY_FRONTEND_API_VERSION = 1;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -2119,6 +2124,9 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                     viewerSettings.sectionOffsetMm,
                     !!viewerSettings.sectionInverted
                 );
+                runLocalAdvisoryGeometry(canvasId, {
+                    processCode: viewerSettings.processId,
+                });
             },
             null,
             (_scene, message, exception) => {
@@ -2844,6 +2852,232 @@ function isModelMeshForAnalysis(mesh, canvasId = null) {
  */
 function isSystemMesh(mesh) {
     return isAnalysisHelperMesh(mesh);
+}
+
+function toPlainNumberArray(values) {
+    return Array.from(values ?? [], value => Number(value)).filter(Number.isFinite);
+}
+
+function getMeshWorldPositions(mesh, positions) {
+    if (!mesh || !positions || positions.length === 0) return [];
+
+    try {
+        mesh.computeWorldMatrix?.(true);
+        const matrix = mesh.getWorldMatrix?.();
+        if (!matrix || !BABYLON?.Vector3?.TransformCoordinates) {
+            return toPlainNumberArray(positions);
+        }
+
+        const transformed = [];
+        for (let index = 0; index < positions.length; index += 3) {
+            const point = BABYLON.Vector3.TransformCoordinates(
+                new BABYLON.Vector3(
+                    Number(positions[index]),
+                    Number(positions[index + 1]),
+                    Number(positions[index + 2])
+                ),
+                matrix
+            );
+            transformed.push(point.x, point.y, point.z);
+        }
+        return transformed;
+    } catch (_) {
+        return toPlainNumberArray(positions);
+    }
+}
+
+/**
+ * Collects mesh buffers for the browser advisory geometry runtime.
+ * @param {string} canvasId
+ * @returns {Array<{positions:number[], indices:number[]}>}
+ */
+export function collectAdvisoryMeshBuffers(canvasId) {
+    const scene = scenes[canvasId];
+    if (!scene) return [];
+
+    ensureModelMeshesTagged(canvasId, scene);
+    const buffers = [];
+    for (const mesh of scene.meshes ?? []) {
+        if (!mesh?.isVisible || !isModelMeshForAnalysis(mesh, canvasId)) continue;
+        const positions = mesh.getVerticesData?.(BABYLON.VertexBuffer.PositionKind);
+        if (!positions || positions.length < 9) continue;
+
+        const indices = mesh.getIndices?.() ?? [];
+        const safeIndices = indices.length > 0
+            ? toPlainNumberArray(indices)
+            : Array.from({ length: positions.length / 3 }, (_, index) => index);
+        if (safeIndices.length < 3) continue;
+
+        buffers.push({
+            positions: getMeshWorldPositions(mesh, positions),
+            indices: safeIndices,
+        });
+    }
+
+    return buffers;
+}
+
+function resolveRuntimeAssetUrl(assetPath, assetBaseUrl = LOCAL_ADVISORY_ASSET_BASE_URL) {
+    const value = String(assetPath ?? '');
+    if (value.includes('..') || value.includes('\\')) return null;
+    const name = value.split('?')[0].split('/').pop();
+    if (!name || name.includes('..') || name.includes('/') || name.includes('\\')) return null;
+    return `${assetBaseUrl}${encodeURIComponent(name)}`;
+}
+
+function getLocalAdvisoryPanel(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    const host = canvas?.parentElement;
+    if (!host) return null;
+
+    const selector = `[data-local-geometry-advisory="${canvasId}"]`;
+    let panel = host.querySelector?.(selector);
+    if (!panel) {
+        panel = document.createElement('div');
+        panel.setAttribute('data-local-geometry-advisory', canvasId);
+        panel.setAttribute('role', 'status');
+        Object.assign(panel.style, {
+            position: 'absolute',
+            right: '12px',
+            bottom: '12px',
+            maxWidth: '260px',
+            padding: '9px 11px',
+            borderRadius: '6px',
+            background: 'rgba(17, 24, 39, 0.86)',
+            color: '#ffffff',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.22)',
+            font: '500 12px/1.35 system-ui, -apple-system, Segoe UI, sans-serif',
+            pointerEvents: 'none',
+            zIndex: '8',
+        });
+        host.appendChild(panel);
+    }
+
+    return panel;
+}
+
+function clearLocalAdvisoryPanel(canvasId) {
+    const canvas = document.getElementById(canvasId);
+    const host = canvas?.parentElement;
+    const panel = host?.querySelector?.(`[data-local-geometry-advisory="${canvasId}"]`);
+    panel?.remove?.();
+}
+
+function renderLocalAdvisoryStatus(canvasId, state, result = null) {
+    const panel = getLocalAdvisoryPanel(canvasId);
+    if (!panel) return;
+
+    if (state === 'pending') {
+        panel.textContent = 'Local preliminary DFM running...';
+        return;
+    }
+
+    const issues = Array.isArray(result?.issues) ? result.issues : [];
+    const warnings = issues.filter(issue => issue?.severity !== 'info').length;
+    const faceCount = Number(result?.metrics?.faceCount ?? 0);
+    const issueLabel = warnings === 0
+        ? 'no warnings'
+        : `${warnings} warning${warnings === 1 ? '' : 's'}`;
+    panel.textContent = `Local preliminary DFM: ${issueLabel} · advisory only · ${faceCount.toLocaleString()} tris`;
+}
+
+function terminateLocalAdvisoryWorker(canvasId) {
+    try { localAdvisoryWorkers[canvasId]?.terminate?.(); } catch (_) {}
+    delete localAdvisoryWorkers[canvasId];
+}
+
+function analyzeWithLocalAdvisoryWorker(canvasId, workerUrl, input, processCode, timeoutMs) {
+    terminateLocalAdvisoryWorker(canvasId);
+
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(workerUrl, { name: 'maliev-geometry-advisory' });
+        localAdvisoryWorkers[canvasId] = worker;
+        const messageId = `${canvasId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+        const timeout = setTimeout(() => {
+            terminateLocalAdvisoryWorker(canvasId);
+            reject(new Error('Local advisory geometry runtime timed out.'));
+        }, timeoutMs);
+
+        worker.onmessage = event => {
+            const message = event.data ?? {};
+            if (message.id !== messageId) return;
+            clearTimeout(timeout);
+            terminateLocalAdvisoryWorker(canvasId);
+            message.ok ? resolve(message.result) : reject(new Error(message.error || 'Local advisory geometry runtime failed.'));
+        };
+        worker.onerror = event => {
+            clearTimeout(timeout);
+            terminateLocalAdvisoryWorker(canvasId);
+            reject(new Error(event?.message || 'Local advisory geometry worker failed.'));
+        };
+        worker.postMessage({ id: messageId, input, processCode });
+    });
+}
+
+/**
+ * Runs the GeometryService-owned advisory browser runtime through the same-origin BFF proxy.
+ * Falls back silently to the server-only path when the manifest or worker cannot be used.
+ * @param {string} canvasId
+ * @param {{processCode?: string, manifestUrl?: string, assetBaseUrl?: string, timeoutMs?: number}} options
+ * @returns {Promise<object|null>}
+ */
+export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
+    if (typeof fetch !== 'function' || typeof Worker === 'undefined') return null;
+
+    const runId = (localAdvisoryRuns[canvasId] ?? 0) + 1;
+    localAdvisoryRuns[canvasId] = runId;
+
+    const meshBuffers = collectAdvisoryMeshBuffers(canvasId);
+    if (meshBuffers.length === 0) return null;
+
+    renderLocalAdvisoryStatus(canvasId, 'pending');
+    try {
+        const manifestResponse = await fetch(options.manifestUrl ?? LOCAL_ADVISORY_MANIFEST_URL, {
+            cache: 'no-cache',
+            credentials: 'same-origin',
+        });
+        if (!manifestResponse.ok || localAdvisoryRuns[canvasId] !== runId) {
+            clearLocalAdvisoryPanel(canvasId);
+            return null;
+        }
+
+        const manifest = await manifestResponse.json();
+        if (Number(manifest.minFrontendApiVersion ?? 1) > LOCAL_ADVISORY_FRONTEND_API_VERSION ||
+            manifest.isAuthoritative !== false ||
+            manifest.authority !== 'advisory') {
+            clearLocalAdvisoryPanel(canvasId);
+            return null;
+        }
+
+        const workerUrl = resolveRuntimeAssetUrl(
+            manifest.assets?.worker,
+            options.assetBaseUrl ?? LOCAL_ADVISORY_ASSET_BASE_URL);
+        if (!workerUrl) {
+            clearLocalAdvisoryPanel(canvasId);
+            return null;
+        }
+
+        const result = await analyzeWithLocalAdvisoryWorker(
+            canvasId,
+            workerUrl,
+            { meshBuffers },
+            options.processCode ?? 'FDM',
+            Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 15000);
+        if (localAdvisoryRuns[canvasId] !== runId ||
+            result?.isAuthoritative !== false ||
+            result?.authority !== 'advisory') {
+            clearLocalAdvisoryPanel(canvasId);
+            return null;
+        }
+
+        renderLocalAdvisoryStatus(canvasId, 'complete', result);
+        return result;
+    } catch (_) {
+        if (localAdvisoryRuns[canvasId] === runId) {
+            clearLocalAdvisoryPanel(canvasId);
+        }
+        return null;
+    }
 }
 
 function getPointerRenderCoordinates(canvasId, pointerEvent) {
@@ -4566,6 +4800,9 @@ export function dispose(canvasId) {
     delete autoSpeedTarget[canvasId];
     delete analysisModelMeshIds[canvasId];
     delete analysisCameraButtons[canvasId];
+    delete localAdvisoryRuns[canvasId];
+    terminateLocalAdvisoryWorker(canvasId);
+    clearLocalAdvisoryPanel(canvasId);
 
     // Clean up all per-part overlay slots for this canvas.
     const prefix = `${canvasId}::`;
@@ -5725,4 +5962,6 @@ window.quotePartViewer = {
     setCameraProjection,
     toggleDfmOverlay,
     clearDfmOverlays,
+    collectAdvisoryMeshBuffers,
+    runLocalAdvisoryGeometry,
 };

@@ -1208,6 +1208,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("initialize", handleBlock);
         Assert.Contains("toggleDfmOverlay", handleBlock);
         Assert.Contains("setCameraPreset", handleBlock);
+        Assert.Contains("collectAdvisoryMeshBuffers", handleBlock);
+        Assert.Contains("runLocalAdvisoryGeometry", handleBlock);
+        Assert.Contains("/quote/v1/geometry/runtime/manifest", js, StringComparison.Ordinal);
+        Assert.Contains("Local preliminary DFM", js, StringComparison.Ordinal);
+        Assert.Contains("advisory only", js, StringComparison.Ordinal);
     }
 
     private static string ExtractWindowHandleBlock(string js, string handleName)
