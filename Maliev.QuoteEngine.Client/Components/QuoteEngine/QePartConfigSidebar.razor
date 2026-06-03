@@ -62,6 +62,36 @@
         </section>
 
         <section class="qe-pcs-section">
+            <div class="qe-pcs-section-header">
+                <span class="qe-pcs-section-title">@Text("Quantity", "จำนวน")</span>
+            </div>
+            <div class="qe-pcs-qty-stack">
+                <div class="qe-qty-stepper">
+                    <button type="button"
+                            class="qe-qty-stepper-btn"
+                            disabled="@(Part.Quantity <= 1)"
+                            @onclick="DecrementQuantity">-</button>
+                    <input type="number"
+                           class="qe-qty-stepper-input"
+                           aria-label="@Text("Quantity", "จำนวน")"
+                           min="1"
+                           value="@Part.Quantity"
+                           @oninput="SetQuantityInput" />
+                    <button type="button" class="qe-qty-stepper-btn" @onclick="IncrementQuantity">+</button>
+                </div>
+                <div class="qe-qty-presets">
+                    @foreach (var preset in QuantityPresets)
+                    {
+                        var value = preset;
+                        <button type="button"
+                                class="qe-qty-preset-btn @(Part.Quantity == value ? "qe-qty-preset-btn--active" : "")"
+                                @onclick="@(() => SetQuantityPreset(value))">@value</button>
+                    }
+                </div>
+            </div>
+        </section>
+
+        <section class="qe-pcs-section">
             @{
                 var finishes = FinishesFor(Part.ProcessId).ToArray();
             }
@@ -91,7 +121,7 @@
                             <span class="qe-pcs-fin-name">@finish.Name</span>
                             <span class="qe-pcs-fin-sub">@finish.Description</span>
                         </span>
-                        <span class="qe-pcs-fin-price">@FormatMultiplier(finish.PriceMultiplier)</span>
+                        <span class="qe-pcs-fin-price" title="@Text("Price multiplier over base cost", "ตัวคูณราคาจากราคาพื้นฐาน")">@FormatMultiplier(finish.PriceMultiplier)</span>
                         @if (active)
                         {
                             <span class="qe-pcs-card-check">
@@ -142,10 +172,11 @@
                     var active = Part.ToleranceId == tolerance.Id || Part.ToleranceCode == tolerance.Code;
                     <button type="button"
                             class="qe-pcs-tol-card @(active ? "qe-pcs-tol-card--active" : "")"
+                            title="@tolerance.Description"
                             @onclick="@(() => SetTolerance(tolerance))">
                         <span class="qe-pcs-tol-name">@tolerance.Name</span>
                         <span class="qe-pcs-tol-grade">@tolerance.Code</span>
-                        <span class="qe-pcs-tol-range">@FormatMultiplier(tolerance.PriceMultiplier)</span>
+                        <span class="qe-pcs-tol-range" title="@Text("Price multiplier over base cost", "ตัวคูณราคาจากราคาพื้นฐาน")">@FormatMultiplier(tolerance.PriceMultiplier)</span>
                         @if (active)
                         {
                             <span class="qe-pcs-tol-check">
@@ -206,36 +237,6 @@
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">@Text("Inspection", "การตรวจสอบ")</span>
-                <span class="qe-pcs-section-count">@FormatOptionCount((ReferenceData?.InspectionLevels.Count ?? 0))</span>
-            </div>
-            <div class="qe-pcs-cards">
-                @foreach (var inspection in ReferenceData?.InspectionLevels ?? [])
-                {
-                    var active = string.Equals(Part.InspectionLevel, inspection.Code, StringComparison.OrdinalIgnoreCase);
-                    <button type="button"
-                            class="qe-pcs-choice-card @(active ? "qe-pcs-choice-card--active" : "")"
-                            @onclick="@(() => SetInspection(inspection.Code))">
-                        <span class="qe-pcs-choice-swatch">
-                            <MudIcon Icon="@Icons.Material.Outlined.FactCheck" Size="Size.Small" />
-                        </span>
-                        <span class="qe-pcs-choice-info">
-                            <span class="qe-pcs-choice-name">@inspection.Name</span>
-                            <span class="qe-pcs-choice-sub">@inspection.Description</span>
-                        </span>
-                        @if (active)
-                        {
-                            <span class="qe-pcs-card-check">
-                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
-                            </span>
-                        }
-                    </button>
-                }
-            </div>
-        </section>
-
-        <section class="qe-pcs-section">
-            <div class="qe-pcs-section-header">
                 <span class="qe-pcs-section-title">@Text("Part Features", "ฟีเจอร์ชิ้นงาน")</span>
                 <span class="qe-pcs-section-count">@Text("2 options", "2 ตัวเลือก")</span>
             </div>
@@ -288,6 +289,10 @@
                         <input type="number" min="0" value="@Part.ThreadedHoleCount" @oninput="SetThreadedHoleCount" />
                     </label>
                 </div>
+                @if (IsThreadSpecInvalid)
+                {
+                    <p class="qe-pcs-field-warning">@Text("Enter a standard metric or UNC thread spec, e.g. M3x0.5, M6x1, #6-32, 1/4-20", "ป้อนสเปกเกลียวมาตรฐาน เช่น M3x0.5, M6x1, #6-32, 1/4-20")</p>
+                }
             }
 
             @if (HasInserts)
@@ -309,50 +314,65 @@
         </section>
 
         <section class="qe-pcs-section">
-            <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">@Text("Quantity", "จำนวน")</span>
-                <span class="qe-pcs-bulk-badge">@ComputeBulkDiscount()% @Text("bulk off", "ส่วนลดจำนวน")</span>
-            </div>
-            <div class="qe-pcs-qty-stack">
-                <div>
-                    <div class="qe-qty-stepper">
-                        <button type="button"
-                                class="qe-qty-stepper-btn"
-                                disabled="@(Part.Quantity <= 1)"
-                                @onclick="DecrementQuantity">-</button>
-                        <input type="number"
-                               class="qe-qty-stepper-input"
-                               aria-label="@Text("Quantity", "จำนวน")"
-                               min="1"
-                               value="@Part.Quantity"
-                               @oninput="SetQuantityInput" />
-                        <button type="button" class="qe-qty-stepper-btn" @onclick="IncrementQuantity">+</button>
+            <button type="button" class="qe-pcs-advanced-toggle" @onclick="@(() => _advancedOpen = !_advancedOpen)">
+                <span class="qe-pcs-section-title">@Text("Advanced options", "ตัวเลือกขั้นสูง")</span>
+                <MudIcon Icon="@(_advancedOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
+            </button>
+            @if (_advancedOpen)
+            {
+                <div class="qe-pcs-advanced-content">
+                    <div class="qe-pcs-section-header">
+                        <span class="qe-pcs-section-title">@Text("Inspection", "การตรวจสอบ")</span>
+                        <span class="qe-pcs-section-count">@FormatOptionCount((ReferenceData?.InspectionLevels.Count ?? 0))</span>
                     </div>
-                    <div class="qe-qty-presets">
-                        @foreach (var preset in QuantityPresets)
+                    <div class="qe-pcs-cards">
+                        @foreach (var inspection in ReferenceData?.InspectionLevels ?? [])
                         {
-                            var value = preset;
+                            var active = string.Equals(Part.InspectionLevel, inspection.Code, StringComparison.OrdinalIgnoreCase);
                             <button type="button"
-                                    class="qe-qty-preset-btn @(Part.Quantity == value ? "qe-qty-preset-btn--active" : "")"
-                                    @onclick="@(() => SetQuantityPreset(value))">@value</button>
+                                    class="qe-pcs-choice-card @(active ? "qe-pcs-choice-card--active" : "")"
+                                    @onclick="@(() => SetInspection(inspection.Code))">
+                                <span class="qe-pcs-choice-swatch">
+                                    <MudIcon Icon="@Icons.Material.Outlined.FactCheck" Size="Size.Small" />
+                                </span>
+                                <span class="qe-pcs-choice-info">
+                                    <span class="qe-pcs-choice-name">@inspection.Name</span>
+                                    <span class="qe-pcs-choice-sub">@inspection.Description</span>
+                                </span>
+                                @if (active)
+                                {
+                                    <span class="qe-pcs-card-check">
+                                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                    </span>
+                                }
+                            </button>
                         }
                     </div>
                 </div>
-                <label class="qe-pcs-choice-card qe-pcs-dfm-review-card @(Part.DfmAcknowledged ? "qe-pcs-choice-card--active" : "")">
-                    <input type="checkbox"
-                           class="qe-pcs-choice-input"
-                           aria-label="@Text("DFM reviewed", "ตรวจ DFM แล้ว")"
-                           checked="@Part.DfmAcknowledged"
-                           @onchange="SetDfmAcknowledged" />
-                    <span class="qe-pcs-choice-swatch">
-                        <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
-                    </span>
-                    <span class="qe-pcs-choice-info">
-                        <span class="qe-pcs-choice-name">@Text("DFM reviewed", "ตรวจ DFM แล้ว")</span>
-                        <span class="qe-pcs-choice-sub">@Text("I understand the highlighted manufacturing notes.", "ฉันเข้าใจหมายเหตุการผลิตที่เน้นไว้")</span>
-                    </span>
-                </label>
+            }
+        </section>
+
+        <section class="qe-pcs-section">
+            <div class="qe-pcs-section-header">
+                <span class="qe-pcs-section-title">@Text("DFM Review", "การตรวจ DFM")</span>
+                <MudTooltip Text="@Text("Design for Manufacturability (DFM) flags features that could be difficult or costly to produce — such as thin walls, sharp internal corners, or unsupported overhangs.", "การวิเคราะห์ DFM ตรวจหาฟีเจอร์ที่อาจยากหรือมีต้นทุนสูงในการผลิต เช่น ผนังบาง มุมฉากภายใน หรือส่วนที่ยื่นออกมา")" Placement="Placement.Left" Arrow="true">
+                    <span class="qe-pcs-help-link" tabindex="0">@Text("What is DFM?", "DFM คืออะไร?")</span>
+                </MudTooltip>
             </div>
+            <label class="qe-pcs-choice-card qe-pcs-dfm-review-card @(Part.DfmAcknowledged ? "qe-pcs-choice-card--active" : "")">
+                <input type="checkbox"
+                       class="qe-pcs-choice-input"
+                       aria-label="@Text("DFM reviewed", "ตรวจ DFM แล้ว")"
+                       checked="@Part.DfmAcknowledged"
+                       @onchange="SetDfmAcknowledged" />
+                <span class="qe-pcs-choice-swatch">
+                    <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
+                </span>
+                <span class="qe-pcs-choice-info">
+                    <span class="qe-pcs-choice-name">@Text("DFM reviewed", "ตรวจ DFM แล้ว")</span>
+                    <span class="qe-pcs-choice-sub">@Text("I understand the highlighted manufacturing notes.", "ฉันเข้าใจหมายเหตุการผลิตที่เน้นไว้")</span>
+                </span>
+            </label>
         </section>
 
         <section class="qe-pcs-section">
@@ -371,6 +391,9 @@
 @code {
     private static readonly int[] QuantityPresets = [1, 5, 10, 25, 50];
     private static readonly string[] InsertOptions = ["HeatSet", "PressFit", "Ultrasonic"];
+    private static readonly System.Text.RegularExpressions.Regex _threadSpecRegex =
+        new(@"^(M\d+(\.\d+)?([xX]\d+(\.\d+)?)?|#\d+-\d+|\d+/\d+-\d+)$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     [Parameter, EditorRequired] public QuotePartViewModel Part { get; set; } = new();
     [Parameter] public QuoteReferenceDataResponse? ReferenceData { get; set; }
@@ -379,9 +402,16 @@
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
+    private bool _advancedOpen;
+
     private bool IsCnc => Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase);
     private bool HasInserts => !string.IsNullOrWhiteSpace(Part.InsertType)
         && !Part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsThreadSpecInvalid =>
+        Part.HasThreadedHoles &&
+        !string.IsNullOrWhiteSpace(Part.ThreadSpecification) &&
+        !_threadSpecRegex.IsMatch(Part.ThreadSpecification.Trim());
 
     private IEnumerable<MaterialOptionDto> MaterialsFor(string processId) =>
         (ReferenceData?.Materials ?? []).Where(item => item.ProcessId == processId);
@@ -574,14 +604,6 @@
     {
         await OnPartChanged.InvokeAsync(Part);
     }
-
-    private int ComputeBulkDiscount() => Part.Quantity switch
-    {
-        >= 50 => 15,
-        >= 25 => 10,
-        >= 10 => 5,
-        _ => 0
-    };
 
     private static int ParseNonNegativeInt(object? value, int fallback)
     {

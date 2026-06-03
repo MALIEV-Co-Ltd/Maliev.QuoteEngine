@@ -194,12 +194,26 @@
         return date;
     }
 
-    private static string LeadTimeBadge(LeadTimeOptionDto leadTime) => leadTime.PriceMultiplier switch
+    private string LeadTimeBadge(LeadTimeOptionDto leadTime)
     {
-        < 1m => $"-{Math.Round((1m - leadTime.PriceMultiplier) * 100m)}%",
-        > 1m => $"+{Math.Round((leadTime.PriceMultiplier - 1m) * 100m)}%",
-        _ => "base"
-    };
+        if (Estimate is not null && leadTime.PriceMultiplier != 1m)
+        {
+            var currentMultiplier = ReferenceData?.LeadTimes
+                .FirstOrDefault(lt => lt.Code == LeadTimeCode)?.PriceMultiplier ?? 1m;
+            var baseTotal = currentMultiplier == 0m ? Estimate.Total : Estimate.Total / currentMultiplier;
+            var delta = baseTotal * leadTime.PriceMultiplier - Estimate.Total;
+            return delta > 0
+                ? $"+{delta:N0} {Estimate.Currency}"
+                : $"{delta:N0} {Estimate.Currency}";
+        }
+
+        return leadTime.PriceMultiplier switch
+        {
+            < 1m => $"-{Math.Round((1m - leadTime.PriceMultiplier) * 100m)}%",
+            > 1m => $"+{Math.Round((leadTime.PriceMultiplier - 1m) * 100m)}%",
+            _ => Text("base", "พื้นฐาน")
+        };
+    }
 
     private string Text(string en, string th)
     {

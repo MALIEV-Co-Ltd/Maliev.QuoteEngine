@@ -18,6 +18,10 @@
 
         @if (Part.DrawingFiles.Count > 0)
         {
+            <p class="qe-dat-pending-notice">
+                <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" />
+                @Text("Files are saved locally and will be submitted with your quote request.", "ไฟล์ถูกบันทึกในเครื่องและจะส่งพร้อมคำขอใบเสนอราคา")
+            </p>
             <div class="qe-dat-list">
                 @foreach (var file in Part.DrawingFiles)
                 {

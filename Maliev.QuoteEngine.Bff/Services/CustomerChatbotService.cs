@@ -26,8 +26,10 @@ internal sealed class CustomerChatbotService(
     QuoteEnginePrototypeStore store,
     CustomerSessionResolver sessionResolver,
     CustomerAssistantHandoffCookie handoffCookie,
-    IHttpContextAccessor httpContextAccessor) : ICustomerChatbotService
+    IHttpContextAccessor httpContextAccessor,
+    ILogger<CustomerChatbotService> logger) : ICustomerChatbotService
 {
+    private readonly ILogger<CustomerChatbotService> _logger = logger;
     private static readonly string[] AccountSpecificTerms =
     [
         "my order", "my orders", "order status", "track order", "my quote", "my quotes", "quote status",
@@ -83,6 +85,22 @@ internal sealed class CustomerChatbotService(
             SessionId = ensuredSessionId,
             Content = ComposeMessage(message, request.CustomerContext, identity)
         }, cancellationToken);
+
+        if (chatbotResponse is null && sessionId.HasValue)
+        {
+            // The session ID from the handoff cookie may be stale (ChatbotService DB reset or session
+            // expired and purged). Initiate a fresh session and retry the message once so the customer
+            // gets a real AI response instead of a silent fallback.
+            _logger.LogInformation(
+                "SendMessage returned null for session {SessionId}; initiating fresh session and retrying.",
+                ensuredSessionId);
+            ensuredSessionId = await InitiateFreshSessionAsync(language, cancellationToken);
+            chatbotResponse = await chatbotClient.SendMessageAsync(new ChatbotSendMessageRequest
+            {
+                SessionId = ensuredSessionId,
+                Content = ComposeMessage(message, request.CustomerContext, identity)
+            }, cancellationToken);
+        }
 
         var response = new CustomerChatbotResponse
         {
@@ -170,15 +188,25 @@ internal sealed class CustomerChatbotService(
     {
         if (sessionId.HasValue && sessionId.Value != Guid.Empty)
         {
+            // Return the existing session ID; stale IDs are recovered in SendAsync after a null response.
             return sessionId;
         }
 
+        return await InitiateFreshSessionAsync(language, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a new ChatbotService session and returns its ID.
+    /// Falls back to a locally-generated GUID if the upstream call fails.
+    /// </summary>
+    private async Task<Guid> InitiateFreshSessionAsync(string language, CancellationToken cancellationToken)
+    {
         var session = await chatbotClient.InitiateSessionAsync(new ChatbotInitiateSessionRequest
         {
             Channel = "website",
             Language = language
         }, cancellationToken);
-        return session?.SessionId == Guid.Empty ? Guid.NewGuid() : session?.SessionId ?? Guid.NewGuid();
+        return session?.SessionId is { } id && id != Guid.Empty ? id : Guid.NewGuid();
     }
 
     private CustomerChatbotResponse CreateAccountResponse(

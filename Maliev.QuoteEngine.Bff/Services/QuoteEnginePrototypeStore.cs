@@ -39,6 +39,7 @@ public sealed class QuoteEnginePrototypeStore
             new("cnc", "CNC Machining", "Aluminum and engineering plastic machining.", QuoteUploadConstraints.MachiningFileExtensions)
         ],
         [
+            new("pla", "fdm", "PLA", "General purpose FDM material, multiple colors available", 1.24m, "Matte"),
             new("pla-black", "fdm", "PLA Black", "General prototype", 1.24m, "Matte black"),
             new("petg-clear", "fdm", "PETG Clear", "Functional prototype", 1.27m, "Translucent"),
             new("resin-gray", "sla", "Standard Resin", "Presentation model", 1.10m, "Smooth gray"),
@@ -69,7 +70,9 @@ public sealed class QuoteEnginePrototypeStore
             new("RA_0_8", "cnc", "Ra 0.8", "Precision machined surface requiring additional finishing.", 1.18m)
         ],
         [
-            new("BLACK", "Black", "#242424", ["pla-black"]),
+            new("RED", "Red", "#CC2200", ["pla"]),
+            new("WHITE", "White", "#F2F0EC", ["pla"]),
+            new("BLACK", "Black", "#242424", ["pla", "pla-black"]),
             new("CLEAR", "Clear", "#d9eef2", ["petg-clear"]),
             new("GRAY", "Gray", "#a8adb4", ["resin-gray"]),
             new("Natural", "Natural", "#b9c2c5", ["al6061"])

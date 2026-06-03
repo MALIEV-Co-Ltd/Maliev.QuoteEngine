@@ -139,38 +139,104 @@ const CONFIG = {
     // LIGHTING SETTINGS
     // =========================================================================
 
-    /** Ambient light (hemispheric) - provides base illumination */
-    LIGHTING_AMBIENT: {
-        intensityDark: 0.20,
-        intensityLight: 0.30,
-        specular: { r: 0.05, g: 0.05, b: 0.05 },
-        groundColorDark: { r: 0.08, g: 0.08, b: 0.12 },
-        groundColorLight: { r: 0.50, g: 0.55, b: 0.60 },
-        direction: { x: -0.70, y: -1.00, z: -0.80 },
+    /**
+     * Studio lighting — light mode (clean white product photography).
+     * 3-point setup: key (warm white), fill (cool blue), rim (pure white) + soft ambient.
+     */
+    STUDIO_LIGHT: {
+        key: {
+            direction:    { x: -0.50, y: -1.10, z: -0.80 },
+            diffuse:      { r: 1.00, g: 0.97, b: 0.93 },
+            intensity:    1.80,
+            shadowMapSize: 2048,
+            shadowDarkness: 0.55,
+        },
+        fill: {
+            direction:    { x: 0.85, y: -0.40, z: -0.20 },
+            diffuse:      { r: 0.82, g: 0.90, b: 1.00 },
+            intensity:    0.58,
+        },
+        rim: {
+            direction:    { x: 0.10, y: 0.70, z: -0.40 },
+            diffuse:      { r: 1.00, g: 0.99, b: 0.97 },
+            intensity:    0.42,
+        },
+        ambient: {
+            direction:    { x: 0, y: 1, z: 0 },
+            diffuse:      { r: 0.80, g: 0.85, b: 0.92 },
+            groundColor:  { r: 0.42, g: 0.44, b: 0.48 },
+            specular:     { r: 0.05, g: 0.05, b: 0.05 },
+            intensity:    0.20,
+        },
+        exposure: 1.02,
     },
 
-    /** Key light (directional) - main light source with shadows */
-    LIGHTING_KEY: {
-        intensityDark: 0.80,
-        intensityLight: 1.50,
-        direction: { x: -0.70, y: -1.00, z: -0.80 },
-        shadowMapSize: 2048,
-        shadowDarknessDark: 0.30,
-        shadowDarknessLight: 0.60,
+    /**
+     * Studio lighting — dark mode (dramatic product dark studio).
+     * Key (warm gold) from one side, cool blue rim from the opposite side, minimal ambient.
+     */
+    STUDIO_DARK: {
+        key: {
+            direction:    { x: 0.65, y: -1.10, z: -0.60 },
+            diffuse:      { r: 1.00, g: 0.84, b: 0.65 },
+            intensity:    2.60,
+            shadowMapSize: 2048,
+            shadowDarkness: 0.18,
+        },
+        rim: {
+            direction:    { x: -0.80, y: -0.30, z: 0.55 },
+            diffuse:      { r: 0.38, g: 0.55, b: 1.00 },
+            intensity:    1.05,
+        },
+        back: {
+            direction:    { x: 0.10, y: 0.90, z: 0.80 },
+            diffuse:      { r: 0.32, g: 0.44, b: 0.88 },
+            intensity:    0.24,
+        },
+        ambient: {
+            direction:    { x: 0, y: 1, z: 0 },
+            diffuse:      { r: 0.10, g: 0.12, b: 0.18 },
+            groundColor:  { r: 0.02, g: 0.02, b: 0.04 },
+            specular:     { r: 0.02, g: 0.02, b: 0.02 },
+            intensity:    0.10,
+        },
+        exposure: 0.92,
     },
 
-    /** Fill light (directional) - fills shadows with soft light */
-    LIGHTING_FILL: {
-        intensityDark: 0.30,
-        intensityLight: 0.50,
-        direction: { x: 0.80, y: -0.40, z: -0.30 },
+    /**
+     * Per-process PBR material profiles.
+     * Keys are finishCode values from the reference data (uppercase).
+     * GLB exports have no UV coordinates (trimesh export), so only UV-free PBR scalars are used:
+     * metallic, roughness, and clearCoat (clearCoat intensity/roughness need no UV).
+     * Bump maps are intentionally absent.
+     */
+    MATERIAL_PROFILES: {
+        fdm: {
+            MATTE:        { metallic: 0.00, roughness: 0.78 },
+            VAPOR_SMOOTH: { metallic: 0.00, roughness: 0.12, clearCoat: { intensity: 0.65, roughness: 0.06 } },
+            default:      { metallic: 0.00, roughness: 0.78 },
+        },
+        sla: {
+            STANDARD_CURE: { metallic: 0.00, roughness: 0.35 },
+            SANDED_PRIMER: { metallic: 0.00, roughness: 0.62 },
+            default:       { metallic: 0.00, roughness: 0.35 },
+        },
+        cnc: {
+            AS_MACHINED:      { metallic: 0.95, roughness: 0.48 },
+            BEAD_BLAST_CLEAR: { metallic: 0.88, roughness: 0.55, clearCoat: { intensity: 0.28, roughness: 0.05 } },
+            default:          { metallic: 0.92, roughness: 0.48 },
+        },
+        default: { metallic: 0.00, roughness: 0.70 },
     },
 
-    /** Back light (directional) - provides rim lighting from behind */
-    LIGHTING_BACK: {
-        intensityDark: 0.40,
-        intensityLight: 0.65,
-        direction: { x: 0.00, y: 1.00, z: -0.50 },
+    /**
+     * Maps roughness code → PBR roughness value for CNC AS_MACHINED finish.
+     * Ra 3.2 = visible tool marks (rough), Ra 0.8 = near-mirror (fine).
+     */
+    CNC_ROUGHNESS_MAP: {
+        RA_3_2: 0.52,
+        RA_1_6: 0.34,
+        RA_0_8: 0.18,
     },
 
     // =========================================================================
@@ -461,6 +527,7 @@ const loadGenerations       = {};   // canvasId → number (incremented on each 
 const shadowGenerators      = {};   // canvasId → BABYLON.ShadowGenerator
 const analysisModelMeshIds  = {};   // canvasId → Set<mesh.uniqueId> for real model geometry
 const analysisCameraButtons = {};   // canvasId → previous ArcRotate pointer buttons while analysis tools are active
+const activeRenderModes     = {};   // canvasId → 'solid' | 'wireframe' | 'transparent'
 const localAdvisoryRuns     = {};   // canvasId → latest local advisory run id
 const localAdvisoryWorkers  = {};   // canvasId → active geometry worker
 
@@ -535,6 +602,10 @@ function normalizeViewerSettings(viewerSettings) {
         sectionAxis,
         sectionOffsetMm: Number.isFinite(Number(settings.sectionOffsetMm)) ? Number(settings.sectionOffsetMm) : 0,
         sectionInverted: !!settings.sectionInverted,
+        partColor:     typeof settings.partColor     === 'string' ? settings.partColor     : null,
+        processId:     typeof settings.processId     === 'string' ? settings.processId     : null,
+        finishCode:    typeof settings.finishCode    === 'string' ? settings.finishCode    : null,
+        roughnessCode: typeof settings.roughnessCode === 'string' ? settings.roughnessCode : null,
     };
 }
 
@@ -1783,34 +1854,9 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                 // ── Re-affirm transparent background (append:true keeps existing scene) ──
                 _scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
 
-                // ── Remove placeholder lights, add proper Z-up lighting ──
-                _scene.lights.forEach(l => l.dispose());
-
-                // ── Ambient (HemisphericLight — no shadows) ──
-                const hemi = new BABYLON.HemisphericLight('hemi', toVector3(CONFIG.LIGHTING_AMBIENT.direction), _scene);
-                hemi.intensity   = isDark ? CONFIG.LIGHTING_AMBIENT.intensityDark : CONFIG.LIGHTING_AMBIENT.intensityLight;
-                hemi.specular    = toColor3(CONFIG.LIGHTING_AMBIENT.specular);
-                hemi.groundColor = isDark ? toColor3(CONFIG.LIGHTING_AMBIENT.groundColorDark)
-                                          : toColor3(CONFIG.LIGHTING_AMBIENT.groundColorLight);
-
-                // ── Key Light (shadows) — front-right-above ──
-                const key = new BABYLON.DirectionalLight('key', toVector3(CONFIG.LIGHTING_KEY.direction), _scene);
-                key.intensity = isDark ? CONFIG.LIGHTING_KEY.intensityDark : CONFIG.LIGHTING_KEY.intensityLight;
-
-                const shadowGenerator = new BABYLON.ShadowGenerator(CONFIG.LIGHTING_KEY.shadowMapSize, key);
-                shadowGenerator.usePercentageCloserFiltering = true;
-                shadowGenerator.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH;
-                shadowGenerator.setDarkness(isDark ? CONFIG.LIGHTING_KEY.shadowDarknessDark : CONFIG.LIGHTING_KEY.shadowDarknessLight);
-                shadowGenerator.transparencyShadow = true;  // Enable shadows for transparent/xray-mode meshes
-                shadowGenerators[canvasId] = shadowGenerator;
-
-                // ── Fill Light (no shadows) — left-front-above ──
-                const fill = new BABYLON.DirectionalLight('fill', toVector3(CONFIG.LIGHTING_FILL.direction), _scene);
-                fill.intensity = isDark ? CONFIG.LIGHTING_FILL.intensityDark : CONFIG.LIGHTING_FILL.intensityLight;
-
-                // ── Back Light (no shadows) — behind-above ──
-                const back = new BABYLON.DirectionalLight('back', toVector3(CONFIG.LIGHTING_BACK.direction), _scene);
-                back.intensity = isDark ? CONFIG.LIGHTING_BACK.intensityDark : CONFIG.LIGHTING_BACK.intensityLight;
+                // ── Studio lighting + image processing ──
+                const shadowGenerator = setupStudioLighting(canvasId, _scene, isDark);
+                setupImageProcessing(_scene, isDark);
 
                 // ── Find real model root nodes (TransformNodes or Meshes at scene root) ──
                 // Operating on scene.rootNodes guarantees local-space == world-space
@@ -2048,13 +2094,20 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                 });
                 tagModelMeshesForAnalysis(canvasId, _scene);
 
-                // Position directional light to correctly cast shadows from the top, front-left
+                // Position key light based on bounding box so its shadow frustum covers the model.
                 const dist = Math.max(
                     finalBb.max.x - finalBb.min.x,
                     finalBb.max.y - finalBb.min.y,
                     finalBb.max.z - finalBb.min.z
                 );
-                key.position = new BABYLON.Vector3(meshCenters[canvasId].x - dist, meshCenters[canvasId].y - dist, finalBb.max.z + dist);
+                const keyLight = _scene.getLightByName('key');
+                if (keyLight) {
+                    keyLight.position = new BABYLON.Vector3(
+                        meshCenters[canvasId].x - dist,
+                        meshCenters[canvasId].y - dist,
+                        finalBb.max.z + dist
+                    );
+                }
 
                 // ── Configure camera ──
                 const cam = mainCameras[canvasId];
@@ -2114,6 +2167,13 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                 resizeObservers[canvasId] = ro;
 
                 setRenderMode(canvasId, viewerSettings.renderMode);
+                if (viewerSettings.partColor || viewerSettings.processId) {
+                    setPartMaterial(canvasId,
+                        viewerSettings.processId,
+                        viewerSettings.finishCode,
+                        viewerSettings.roughnessCode,
+                        viewerSettings.partColor);
+                }
                 toggleEdges(canvasId, !!viewerSettings.edgesEnabled);
                 toggleBoundingBox(canvasId, !!viewerSettings.boundingBoxEnabled);
                 viewerSettings.gridEnabled ? showGrid(canvasId) : hideGrid(canvasId);
@@ -2646,6 +2706,209 @@ function getCadMaterial(scene) {
     pbr.metallic    = CONFIG.MATERIAL_CAD_SOLID.metallic;
     pbr.roughness   = CONFIG.MATERIAL_CAD_SOLID.roughness;
     return pbr;
+}
+
+// ── Studio lighting ───────────────────────────────────────────────────────────
+
+/**
+ * Replace all scene lights with studio-quality lighting tuned for light or dark mode.
+ * Creates key + fill/rim + ambient hemisphere lights. Stores the shadow generator in
+ * shadowGenerators[canvasId] and returns it.
+ * @param {string} canvasId
+ * @param {BABYLON.Scene} scene
+ * @param {boolean} isDark
+ * @returns {BABYLON.ShadowGenerator}
+ */
+function setupStudioLighting(canvasId, scene, isDark) {
+    scene.lights.slice().forEach(l => l.dispose());
+
+    const lc = isDark ? CONFIG.STUDIO_DARK : CONFIG.STUDIO_LIGHT;
+
+    // ── Key light (directional, casts shadows) ──
+    const key = new BABYLON.DirectionalLight('key', toVector3(lc.key.direction), scene);
+    key.intensity = lc.key.intensity;
+    key.diffuse   = toColor3(lc.key.diffuse);
+    key.specular  = toColor3(lc.key.diffuse);
+
+    const shadowGen = new BABYLON.ShadowGenerator(lc.key.shadowMapSize, key);
+    shadowGen.usePercentageCloserFiltering = true;
+    shadowGen.filteringQuality = BABYLON.ShadowGenerator.QUALITY_HIGH;
+    shadowGen.setDarkness(lc.key.shadowDarkness);
+    shadowGen.transparencyShadow = true;
+    shadowGenerators[canvasId] = shadowGen;
+
+    // ── Fill / rim lights (no shadows) ──
+    if (lc.fill) {
+        const fill = new BABYLON.DirectionalLight('fill', toVector3(lc.fill.direction), scene);
+        fill.intensity = lc.fill.intensity;
+        fill.diffuse   = toColor3(lc.fill.diffuse);
+        fill.specular  = new BABYLON.Color3(0.05, 0.05, 0.06);
+    }
+
+    if (lc.rim) {
+        const rim = new BABYLON.DirectionalLight('rim', toVector3(lc.rim.direction), scene);
+        rim.intensity = lc.rim.intensity;
+        rim.diffuse   = toColor3(lc.rim.diffuse);
+        rim.specular  = toColor3(lc.rim.diffuse);
+    }
+
+    if (lc.back) {
+        const back = new BABYLON.DirectionalLight('back', toVector3(lc.back.direction), scene);
+        back.intensity = lc.back.intensity;
+        back.diffuse   = toColor3(lc.back.diffuse);
+        back.specular  = new BABYLON.Color3(0.02, 0.02, 0.04);
+    }
+
+    // ── Ambient hemisphere ──
+    const amb = lc.ambient;
+    const hemi = new BABYLON.HemisphericLight('hemi', toVector3(amb.direction), scene);
+    hemi.intensity   = amb.intensity;
+    hemi.diffuse     = toColor3(amb.diffuse);
+    hemi.groundColor = toColor3(amb.groundColor);
+    hemi.specular    = toColor3(amb.specular);
+
+    return shadowGen;
+}
+
+/**
+ * Configure scene image processing — exposure adjustment only.
+ * No tone-mapping or vignette: preserves the selected material colour accurately
+ * while allowing a slight brightness correction per mode.
+ * @param {BABYLON.Scene} scene
+ * @param {boolean} isDark
+ */
+function setupImageProcessing(scene, isDark) {
+    const ipc = scene.imageProcessingConfiguration;
+    if (!ipc) return;
+    ipc.isEnabled            = true;
+    ipc.toneMappingEnabled   = false;
+    ipc.vignetteEnabled      = false;
+    ipc.exposure             = isDark ? CONFIG.STUDIO_DARK.exposure : CONFIG.STUDIO_LIGHT.exposure;
+    ipc.contrast             = 1.0;
+}
+
+// ── Material profiles ─────────────────────────────────────────────────────────
+
+/**
+ * Resolve the PBR profile for a given process + finish + optional roughness code.
+ * Returns { metallic, roughness, clearCoat? } — all UV-free scalars.
+ * @param {string} processId  e.g. "fdm", "sla", "cnc"
+ * @param {string} finishCode e.g. "MATTE", "VAPOR_SMOOTH", "AS_MACHINED"
+ * @param {string|null} roughnessCode e.g. "RA_3_2" (CNC only)
+ * @returns {{ metallic: number, roughness: number, clearCoat?: {intensity:number, roughness:number} }}
+ */
+function getMaterialProfile(processId, finishCode, roughnessCode) {
+    const processProfiles = CONFIG.MATERIAL_PROFILES[processId?.toLowerCase()] ?? CONFIG.MATERIAL_PROFILES.default;
+    const profile = (finishCode && processProfiles[finishCode])
+        ? { ...processProfiles[finishCode] }
+        : { ...processProfiles.default ?? CONFIG.MATERIAL_PROFILES.default };
+
+    // CNC: override roughness from Ra code when provided
+    if (processId?.toLowerCase() === 'cnc' && roughnessCode) {
+        const raRoughness = CONFIG.CNC_ROUGHNESS_MAP[roughnessCode];
+        if (raRoughness !== undefined) profile.roughness = raRoughness;
+    }
+
+    return profile;
+}
+
+/**
+ * Create a PBR material from a profile + albedo Color3.
+ * Applies metallic, roughness, and optional clearCoat.
+ * @param {BABYLON.Scene} scene
+ * @param {BABYLON.Color3} albedo
+ * @param {{ metallic:number, roughness:number, clearCoat?:{intensity:number,roughness:number} }} profile
+ * @param {string} name
+ * @returns {BABYLON.PBRMaterial}
+ */
+function createProfiledMaterial(scene, albedo, profile, name) {
+    const mat          = new BABYLON.PBRMaterial(name, scene);
+    mat.albedoColor    = albedo;
+    mat.metallic       = profile.metallic;
+    mat.roughness      = profile.roughness;
+    mat.backFaceCulling = false;
+
+    if (profile.clearCoat) {
+        mat.clearCoat.isEnabled = true;
+        mat.clearCoat.intensity = profile.clearCoat.intensity;
+        mat.clearCoat.roughness = profile.clearCoat.roughness;
+    }
+
+    return mat;
+}
+
+// ── Color helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Parse a CSS hex color (#RGB or #RRGGBB) into a BABYLON.Color3.
+ * Returns null if the input is invalid.
+ * @param {string} css
+ * @returns {BABYLON.Color3|null}
+ */
+function parseCssHexColor(css) {
+    if (!css || !css.startsWith('#')) return null;
+    let hex = css.slice(1);
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    if (hex.length !== 6) return null;
+    const r = parseInt(hex.slice(0, 2), 16) / 255;
+    const g = parseInt(hex.slice(2, 4), 16) / 255;
+    const b = parseInt(hex.slice(4, 6), 16) / 255;
+    return Number.isNaN(r + g + b) ? null : new BABYLON.Color3(r, g, b);
+}
+
+/**
+ * Apply the user-selected material to the 3D model.
+ * Picks the correct PBR profile from processId + finishCode + roughnessCode, then tints it
+ * with the provided CSS hex albedo color.  Passing no cssColor resets to CAD gray.
+ * Safe to call at any time — no-ops if the scene is not yet initialised.
+ *
+ * @param {string} canvasId
+ * @param {string|null} processId    e.g. "fdm", "sla", "cnc"
+ * @param {string|null} finishCode   e.g. "MATTE", "VAPOR_SMOOTH", "AS_MACHINED"
+ * @param {string|null} roughnessCode e.g. "RA_3_2" (CNC only)
+ * @param {string|null} cssColor     CSS hex colour e.g. "#CC2200"
+ */
+export function setPartMaterial(canvasId, processId, finishCode, roughnessCode, cssColor) {
+    const scene = scenes[canvasId];
+    if (!scene) return;
+
+    const albedo  = parseCssHexColor(cssColor);
+    const defMap  = defaultSolidMaterials[canvasId];
+    const bodyMap = perCanvasBodyMap[canvasId];
+    const isSolid = !activeRenderModes[canvasId] || activeRenderModes[canvasId] === 'solid';
+
+    const profile = getMaterialProfile(processId, finishCode, roughnessCode);
+
+    scene.meshes.forEach(mesh => {
+        if (isSystemMesh(mesh) || mesh.name === '__root__' || mesh.name.startsWith('__axis')) return;
+        if (!(analysisModelMeshIds[canvasId]?.has(mesh.uniqueId))) return;
+
+        const mat = albedo
+            ? createProfiledMaterial(scene, albedo, profile, `__part_mat_${mesh.uniqueId}__`)
+            : getCadMaterial(scene);
+
+        // Update the solid-mode baseline so setRenderMode('solid') restores the chosen material.
+        if (defMap) defMap.set(mesh.uniqueId, mat);
+
+        // Keep per-body colorMaterial in sync for body-selection logic.
+        if (bodyMap) {
+            for (const bd of bodyMap.values()) {
+                if (bd.meshes.includes(mesh)) { bd.colorMaterial = mat; break; }
+            }
+        }
+
+        if (isSolid) mesh.material = mat;
+    });
+}
+
+/**
+ * Backwards-compatible wrapper — applies colour with a generic plastic profile.
+ * Prefer setPartMaterial when process/finish information is available.
+ * @param {string} canvasId
+ * @param {string|null} cssColor
+ */
+export function setPartColor(canvasId, cssColor) {
+    setPartMaterial(canvasId, null, null, null, cssColor);
 }
 
 /**
@@ -3266,6 +3529,7 @@ function animateMaterialAlpha(material, fromAlpha, toAlpha, scene, duration = CO
 export function setRenderMode(canvasId, mode) {
     const scene = scenes[canvasId];
     if (!scene) return;
+    activeRenderModes[canvasId] = mode;
     const origMats = originalMaterials[canvasId] ?? {};
 
     scene.meshes.forEach(mesh => {
@@ -5985,6 +6249,8 @@ export function enableSectionPanelDrag(panelId) {
 window.quotePartViewer = {
     initialize,
     setRenderMode,
+    setPartMaterial,
+    setPartColor,
     resetCamera,
     dispose,
     setCameraPreset,

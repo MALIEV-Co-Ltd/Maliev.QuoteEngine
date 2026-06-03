@@ -38,8 +38,18 @@ internal static class AuthPageRenderer
         var googleHref = $"/auth/google?returnUrl={Uri.EscapeDataString(returnUrl)}";
         var hasError = !string.IsNullOrWhiteSpace(error);
         var errorHiddenAttribute = hasError ? string.Empty : " hidden";
-
+        var emailOpenAttribute = hasError ? " open" : string.Empty;
         var errorText = hasError ? error : string.Empty;
+
+        var isThai = culture == "th-TH";
+        var brandTagline = isThai ? "งานผลิตความแม่นยำสูง ตามความต้องการ" : "Precision manufacturing on demand.";
+        var brandFeature1 = isThai ? "งาน CNC" : "CNC Machining";
+        var brandFeature2 = isThai ? "พิมพ์ 3 มิติ — FDM, SLA, SLS, MJF" : "3D Printing — FDM, SLA, SLS, MJF";
+        var brandFeature3 = isThai ? "สแกน 3 มิติ และ Reverse Engineering" : "3D Scanning & Reverse Engineering";
+        var brandFeature4 = isThai ? "ราคาโปร่งใสจากไฟล์ CAD" : "Transparent pricing from CAD files";
+        var trustSsl = isThai ? "ความปลอดภัย SSL" : "256-bit SSL";
+        var trustData = isThai ? "ข้อมูลได้รับการคุ้มครอง" : "Data protected";
+        var trustGdpr = isThai ? "ปฏิบัติตาม GDPR" : "GDPR compliant";
 
         return $$"""
             <!DOCTYPE html>
@@ -160,6 +170,7 @@ internal static class AuthPageRenderer
                     .auth-language-btn,
                     .auth-top-link,
                     .auth-primary,
+                    .auth-secondary,
                     .auth-google {
                         height: 40px;
                         border: 0;
@@ -222,20 +233,115 @@ internal static class AuthPageRenderer
                         text-decoration: none;
                     }
 
-                    .auth-main {
-                        width: min(100%, 1240px);
-                        margin-inline: auto;
-                        padding: clamp(64px, 13vh, 156px) clamp(20px, 4vw, 40px) 64px;
+                    .auth-split {
                         display: grid;
-                        place-items: center;
+                        grid-template-columns: 1fr 1.4fr;
+                        overflow: hidden;
                     }
 
-                    .auth-panel {
+                    .auth-brand-panel {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: clamp(40px, 6vw, 80px);
+                        background: var(--panel-tint);
+                        border-right: 1px solid var(--line);
+                        position: relative;
+                    }
+
+                    :root[data-maliev-theme="dark"] .auth-brand-panel {
+                        background: var(--panel);
+                    }
+
+                    .auth-brand-content {
+                        max-width: 380px;
+                        width: 100%;
+                        position: relative;
+                        z-index: 1;
+                        display: grid;
+                        gap: 24px;
+                    }
+
+                    .auth-brand-logo {
+                        width: 140px;
+                        height: auto;
+                        display: block;
+                    }
+
+                    :root[data-maliev-theme="dark"] .auth-brand-logo {
+                        filter: invert(1) brightness(1.08) contrast(.96);
+                        opacity: .94;
+                    }
+
+                    .auth-brand-tagline {
+                        margin: 0;
+                        font-size: 20px;
+                        font-weight: 750;
+                        line-height: 1.35;
+                        letter-spacing: -0.01em;
+                    }
+
+                    .auth-brand-features {
+                        list-style: none;
+                        margin: 0;
+                        padding: 0;
+                        display: grid;
+                        gap: 10px;
+                    }
+
+                    .auth-brand-features li {
+                        display: flex;
+                        align-items: center;
+                        gap: 10px;
+                        font-size: 14px;
+                        color: var(--muted);
+                    }
+
+                    .auth-brand-features li::before {
+                        content: "";
+                        width: 6px;
+                        height: 6px;
+                        border-radius: 50%;
+                        background: var(--accent);
+                        flex-shrink: 0;
+                    }
+
+                    .auth-trust-row {
+                        display: flex;
+                        flex-wrap: wrap;
+                        gap: 10px;
+                        padding-top: 20px;
+                        border-top: 1px solid var(--line);
+                    }
+
+                    .auth-trust-badge {
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 6px;
+                        font-size: 12px;
+                        font-weight: 700;
+                        color: var(--muted);
+                    }
+
+                    .auth-trust-badge svg {
+                        width: 14px;
+                        height: 14px;
+                        flex-shrink: 0;
+                    }
+
+                    .auth-form-panel {
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        padding: clamp(40px, 5vw, 80px);
+                        overflow-y: auto;
+                    }
+
+                    .auth-form-inner {
                         width: min(100%, 640px);
                         padding: clamp(34px, 5vw, 56px);
-                        border-radius: 8px;
-                        background: var(--panel);
-                        box-shadow: var(--shadow-card);
+                        display: grid;
+                        gap: 20px;
                     }
 
                     .auth-title {
@@ -254,9 +360,8 @@ internal static class AuthPageRenderer
                         height: auto;
                     }
 
-                    .auth-panel > p {
-                        max-width: 520px;
-                        margin: 26px 0 0;
+                    .auth-form-inner > p {
+                        margin: 0;
                         color: var(--muted);
                         font-size: 17px;
                         line-height: 1.66;
@@ -265,7 +370,6 @@ internal static class AuthPageRenderer
                     .auth-google {
                         width: 100%;
                         height: 50px;
-                        margin-top: 30px;
                         display: inline-flex;
                         align-items: center;
                         justify-content: center;
@@ -287,7 +391,6 @@ internal static class AuthPageRenderer
                     }
 
                     .auth-email-panel {
-                        margin-top: 20px;
                         border: 1px solid var(--line);
                         border-radius: 8px;
                         background: var(--panel-tint);
@@ -347,30 +450,6 @@ internal static class AuthPageRenderer
                         color: var(--ink);
                         background: var(--panel);
                         font: inherit;
-                    }
-
-                    .auth-form input:focus-visible,
-                    .auth-google:focus-visible,
-                    .auth-primary:focus-visible,
-                    .auth-top-link:focus-visible,
-                    .auth-icon-btn:focus-visible,
-                    .auth-language-btn:focus-visible {
-                        outline: 2px solid var(--accent);
-                        outline-offset: 2px;
-                    }
-
-                    .auth-field-help {
-                        color: var(--muted);
-                        font-size: 12px;
-                        font-weight: 500;
-                        line-height: 1.45;
-                    }
-
-                    .auth-primary {
-                        width: 100%;
-                        color: #ffffff;
-                        background: var(--accent);
-                        cursor: pointer;
                     }
 
                     .auth-email-entry-form,
@@ -441,18 +520,39 @@ internal static class AuthPageRenderer
                         font-weight: 700;
                     }
 
+                    .auth-form input:focus-visible,
+                    .auth-google:focus-visible,
+                    .auth-primary:focus-visible,
+                    .auth-secondary:focus-visible,
+                    .auth-top-link:focus-visible,
+                    .auth-icon-btn:focus-visible,
+                    .auth-language-btn:focus-visible {
+                        outline: 2px solid var(--accent);
+                        outline-offset: 2px;
+                    }
+
+                    .auth-field-help {
+                        color: var(--muted);
+                        font-size: 12px;
+                        font-weight: 500;
+                        line-height: 1.45;
+                    }
+
+                    .auth-primary {
+                        width: 100%;
+                        color: #ffffff;
+                        background: var(--accent);
+                        cursor: pointer;
+                    }
+
                     .auth-secondary {
                         width: 100%;
-                        height: 40px;
-                        border-radius: 6px;
                         color: var(--ink);
                         background: var(--panel);
                         border: 1px solid var(--line);
                         cursor: pointer;
-                        font: inherit;
-                        font-weight: 700;
-                        letter-spacing: 0;
                     }
+
                     .auth-primary:disabled {
                         cursor: progress;
                         opacity: .72;
@@ -477,7 +577,6 @@ internal static class AuthPageRenderer
                     }
 
                     .auth-links {
-                        margin-top: 26px;
                         display: flex;
                         justify-content: flex-end;
                     }
@@ -526,13 +625,23 @@ internal static class AuthPageRenderer
                             font-size: 13px;
                         }
 
-                        .auth-main {
-                            padding-top: 44px;
-                            align-items: start;
+                        .auth-split {
+                            grid-template-columns: 1fr;
                         }
 
-                        .auth-panel {
-                            padding: 26px;
+                        .auth-brand-panel {
+                            padding: 28px clamp(20px, 5vw, 40px);
+                            border-right: none;
+                            border-bottom: 1px solid var(--line);
+                        }
+
+                        .auth-brand-features,
+                        .auth-trust-row {
+                            display: none;
+                        }
+
+                        .auth-form-panel {
+                            padding: 32px clamp(20px, 5vw, 40px);
                         }
 
                         .auth-form-grid {
@@ -545,9 +654,8 @@ internal static class AuthPageRenderer
                             display: none;
                         }
 
-                        .auth-panel {
-                            box-shadow: none;
-                            padding-inline: 0;
+                        .auth-form-inner {
+                            padding-inline: 20px;
                         }
                     }
                 </style>
@@ -574,39 +682,67 @@ internal static class AuthPageRenderer
                             </div>
                         </div>
                     </header>
-                    <main class="auth-main">
-                        <section class="auth-panel" aria-labelledby="auth-title">
-                            <h1 class="auth-title" id="auth-title">
-                                <span>{{Html(copy.Heading)}}</span>
-                            </h1>
-                            <p>{{Html(copy.Body)}}</p>
-                            <div class="auth-error" role="alert"{{errorHiddenAttribute}}>{{Html(errorText)}}</div>
-                            <form class="auth-email-entry-form auth-form" data-auth-step="email" novalidate>
-                                <label>
-                                    {{Html(copy.EmailLabel)}}
-                                    <input id="auth-email-entry" name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="auth-email-entry-requirements" required>
-                                </label>
-                                <ul id="auth-email-entry-requirements" class="auth-requirement-list" aria-live="polite">
-                                    <li class="auth-requirement-item is-pending">{{Html(emailEntryHelp)}}</li>
+                    <div class="auth-split">
+                        <div class="auth-brand-panel">
+                            <div class="auth-brand-content">
+                                <img class="auth-brand-logo" src="/images/logo.svg" width="140" height="32" alt="MALIEV">
+                                <p class="auth-brand-tagline">{{Html(brandTagline)}}</p>
+                                <ul class="auth-brand-features" aria-hidden="true">
+                                    <li>{{Html(brandFeature1)}}</li>
+                                    <li>{{Html(brandFeature2)}}</li>
+                                    <li>{{Html(brandFeature3)}}</li>
+                                    <li>{{Html(brandFeature4)}}</li>
                                 </ul>
-                                <button type="submit" class="auth-primary" data-auth-continue>{{Html(continueText)}}</button>
-                            </form>
-                            <div class="auth-divider" role="separator">or</div>
-                            <a class="auth-google" href="{{Html(googleHref)}}" aria-label="{{Html(copy.Google)}}">
-                                <span class="auth-google-icon" aria-hidden="true">
-                                    {{GoogleIcon()}}
-                                </span>
-                                <span>{{Html(copy.Google)}}</span>
-                            </a>
-                            <form class="auth-credential-form auth-form" data-auth-form="{{formMode}}" data-auth-step="credentials" data-error-text="{{Html(copy.FormError)}}" data-submitting-text="{{Html(copy.Submitting)}}" novalidate hidden>
-                                <div class="auth-error" data-auth-error role="alert" hidden></div>
-                                {{form}}
-                            </form>
-                            <div class="auth-links">
-                                <a href="{{Html(alternateHref)}}">{{Html(copy.AlternateBodyAction)}}</a>
+                                <div class="auth-trust-row">
+                                    <span class="auth-trust-badge">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                                        {{Html(trustSsl)}}
+                                    </span>
+                                    <span class="auth-trust-badge">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                                        {{Html(trustData)}}
+                                    </span>
+                                    <span class="auth-trust-badge">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 12l2 2 4-4"/></svg>
+                                        {{Html(trustGdpr)}}
+                                    </span>
+                                </div>
                             </div>
-                        </section>
-                    </main>
+                        </div>
+                        <div class="auth-form-panel">
+                            <div class="auth-form-inner" aria-labelledby="auth-title">
+                                <h1 class="auth-title" id="auth-title">
+                                    <span>{{Html(copy.Heading)}}</span>
+                                </h1>
+                                <p>{{Html(copy.Body)}}</p>
+                                <div class="auth-error" role="alert"{{errorHiddenAttribute}}>{{Html(errorText)}}</div>
+                                <form class="auth-email-entry-form auth-form" data-auth-step="email" novalidate>
+                                    <label>
+                                        {{Html(copy.EmailLabel)}}
+                                        <input id="auth-email-entry" name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="auth-email-entry-requirements" required>
+                                    </label>
+                                    <ul id="auth-email-entry-requirements" class="auth-requirement-list" aria-live="polite">
+                                        <li class="auth-requirement-item is-pending">{{Html(emailEntryHelp)}}</li>
+                                    </ul>
+                                    <button type="submit" class="auth-primary" data-auth-continue>{{Html(continueText)}}</button>
+                                </form>
+                                <div class="auth-divider" role="separator">or</div>
+                                <a class="auth-google" href="{{Html(googleHref)}}" aria-label="{{Html(copy.Google)}}">
+                                    <span class="auth-google-icon" aria-hidden="true">
+                                        {{GoogleIcon()}}
+                                    </span>
+                                    <span>{{Html(copy.Google)}}</span>
+                                </a>
+                                <form class="auth-credential-form auth-form" data-auth-form="{{formMode}}" data-auth-step="credentials" data-error-text="{{Html(copy.FormError)}}" data-submitting-text="{{Html(copy.Submitting)}}" novalidate hidden>
+                                    <div class="auth-error" data-auth-error role="alert" hidden></div>
+                                    {{form}}
+                                </form>
+                                <div class="auth-links">
+                                    <a href="{{Html(alternateHref)}}">{{Html(copy.AlternateBodyAction)}}</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <script>
                     (() => {
@@ -721,7 +857,6 @@ internal static class AuthPageRenderer
                                         error.hidden = false;
                                     }
 
-
                                     if (submit) {
                                         submit.disabled = false;
                                         submit.textContent = originalText;
@@ -759,7 +894,6 @@ internal static class AuthPageRenderer
 
     private static string RenderSignUpForm(AuthCopy copy, string backText, string validEmailText) =>
         $$"""
-
                                     <label>
                                         {{Html(copy.EmailLabel)}}
                                         <input name="email" type="email" autocomplete="email" inputmode="email" placeholder="name@company.com" aria-describedby="sign-up-email-requirements" required>

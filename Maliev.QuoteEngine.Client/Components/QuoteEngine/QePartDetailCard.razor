@@ -95,6 +95,10 @@
                 <QePartViewer @ref="_viewer"
                               GlbUrl="@Part.GlbUrl"
                               IsDarkMode="@IsDarkMode"
+                              PartColor="@PartColorCss"
+                              ProcessId="@Part.ProcessId"
+                              FinishCode="@Part.FinishCode"
+                              RoughnessCode="@Part.RoughnessCode"
                               OnViewerError="@HandleViewerError" />
 
                 @if (Part.BodyCount > 1)
@@ -194,6 +198,10 @@
     private QePartViewer? _viewer;
     private readonly HashSet<string> _activeDfmOverlays = [];
     private bool _bodyTreeExpanded;
+
+    private string? PartColorCss => string.IsNullOrWhiteSpace(Part.Color)
+        ? null
+        : (ReferenceData?.Colors ?? []).FirstOrDefault(c => string.Equals(c.Code, Part.Color, StringComparison.OrdinalIgnoreCase))?.CssValue;
 
     private IReadOnlyList<QeDfmOverlayIssue> DfmOverlayIssues => BuildDfmOverlayIssues();
     private bool HasAnyDfmReport => Part.FdmDfmReport is not null || Part.SlaDfmReport is not null || Part.CncDfmReport is not null;

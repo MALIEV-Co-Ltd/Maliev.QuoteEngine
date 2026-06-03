@@ -108,11 +108,23 @@ internal static class LandingPageRenderer
 
                     a { color: inherit; }
 
+                    .home-shader-canvas {
+                        position: fixed;
+                        inset: 0;
+                        width: 100%;
+                        height: 100%;
+                        z-index: 0;
+                        pointer-events: none;
+                        opacity: .14;
+                    }
+
                     .landing-shell {
+                        position: relative;
+                        z-index: 1;
                         min-height: 100dvh;
                         display: grid;
                         grid-template-rows: auto minmax(0, 1fr);
-                        background: var(--paper);
+                        background: transparent;
                     }
 
                     .landing-topbar {
@@ -529,6 +541,7 @@ internal static class LandingPageRenderer
                 </style>
             </head>
             <body>
+                <canvas id="home-shader-bg" class="home-shader-canvas" aria-hidden="true"></canvas>
                 <div class="landing-shell">
                     <header class="landing-topbar" data-landing-appbar>
                         <div class="landing-topbar-inner">
@@ -564,9 +577,13 @@ internal static class LandingPageRenderer
                     </aside>
                     <main class="landing-main">
                         <section class="landing-copy" aria-labelledby="landing-title">
-                            <h1 id="landing-title">
+                            <h1 id="landing-title" data-maliev-typewriter>
                                 <span data-i18n-en="Get manufacturing quotes," data-i18n-th="ขอใบเสนอราคาการผลิต">{{Html(copy.HeadlineLead)}}</span>
-                                <span class="landing-h1-accent" data-i18n-en="with DFM feedback." data-i18n-th="พร้อมข้อเสนอแนะ DFM">{{Html(copy.HeadlineAccent)}}</span>
+                                <span class="landing-h1-accent" data-typewriter-text>
+                                    <span data-typewriter-option data-i18n-en="with DFM feedback." data-i18n-th="พร้อมข้อเสนอแนะ DFM">{{Html(copy.HeadlineAccent)}}</span>
+                                    <span data-typewriter-option data-i18n-en="in days, not weeks." data-i18n-th="ภายในไม่กี่วัน">{{Html(culture == "th-TH" ? "ภายในไม่กี่วัน" : "in days, not weeks.")}}</span>
+                                    <span data-typewriter-option data-i18n-en="at transparent prices." data-i18n-th="ในราคาที่โปร่งใส">{{Html(culture == "th-TH" ? "ในราคาที่โปร่งใส" : "at transparent prices.")}}</span>
+                                </span>
                             </h1>
                             <p data-i18n-en="Upload CAD files and project details. MALIEV returns expert manufacturability feedback and transparent pricing before you move into production." data-i18n-th="อัปโหลดไฟล์ CAD และรายละเอียดโปรเจกต์ MALIEV จะส่งข้อเสนอแนะด้านการผลิตและราคาที่โปร่งใสก่อนเข้าสู่การผลิต">{{Html(copy.Body)}}</p>
                             <div class="landing-cta">
@@ -632,11 +649,21 @@ internal static class LandingPageRenderer
                         });
 
                         document.querySelector("[data-theme-toggle]")?.addEventListener("click", () => {
-                            applyTheme(root.dataset.malievTheme === "dark" ? "light" : "dark");
+                            const nextTheme = root.dataset.malievTheme === "dark" ? "light" : "dark";
+                            applyTheme(nextTheme);
+                            if (typeof homeShader !== "undefined") {
+                                homeShader.setMode(nextTheme === "dark");
+                            }
                         });
 
                         document.querySelectorAll("[data-culture-btn]").forEach(button => {
-                            button.addEventListener("click", () => applyCulture(button.dataset.cultureBtn));
+                            button.addEventListener("click", () => {
+                                const c = button.dataset.cultureBtn === "th-TH" ? "th-TH" : "en-US";
+                                setStore("maliev.quote.culture", c);
+                                setStore("maliev.culture", c);
+                                setCookie("maliev.culture", c);
+                                location.reload();
+                            });
                         });
 
                         const assistantToggle = document.querySelector("[data-assistant-toggle]");
@@ -648,6 +675,13 @@ internal static class LandingPageRenderer
 
                         applyCulture(root.dataset.culture === "th-TH" ? "th-TH" : "en-US");
                     })();
+                </script>
+                <script src="/js/home-shader.bundle.js"></script>
+                <script src="/js/maliev-typewriter.js"></script>
+                <script>
+                    if (typeof homeShader !== "undefined") {
+                        homeShader.init(document.documentElement.dataset.malievTheme === "dark");
+                    }
                 </script>
             </body>
             </html>
