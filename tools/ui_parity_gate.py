@@ -24,7 +24,7 @@ from playwright.sync_api import BrowserContext, Page, TimeoutError, sync_playwri
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SAMPLE = REPO_ROOT / "Maliev.QuoteEngine.Client" / "wwwroot" / "samples" / "maliev-sample-bracket.step"
+DEFAULT_SAMPLE = REPO_ROOT / "Maliev.QuoteEngine.Client" / "wwwroot" / "samples" / "sample.step"
 
 SELECTORS: dict[str, str] = {
     "root": ".qe-pn-root, .pn-root",

@@ -299,7 +299,7 @@ public sealed class QuoteEnginePrototypeStore
                 PartId = Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd"),
                 FileId = Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
                 UploadId = "demo-upload-sample-bracket",
-                FileName = "maliev-sample-bracket.step",
+                FileName = "sample.step",
                 ProcessId = "cnc",
                 MaterialId = "al6061",
                 Quantity = 2,
@@ -431,7 +431,7 @@ public sealed class QuoteEnginePrototypeStore
             Status = "Analyzed",
             VolumeCc = volume,
             SurfaceAreaCm2 = Math.Round(volume * 6.4m, 2),
-            ViewerGlbUrl = "/models/sample-bracket.glb",
+            ViewerGlbUrl = "/models/sample.glb",
             ThumbnailUrl = "/images/generated/sample-part.svg",
             Findings =
             [

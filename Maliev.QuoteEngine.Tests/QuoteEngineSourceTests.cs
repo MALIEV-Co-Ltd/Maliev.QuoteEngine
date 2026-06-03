@@ -285,8 +285,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@keyframes qe-panel-enter-left", styles, StringComparison.Ordinal);
         Assert.Contains("@keyframes qe-panel-enter-bottom", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-dropzone .mud-icon-root {", styles, StringComparison.Ordinal);
-        Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "samples", "maliev-sample-bracket.step")));
-        Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "models", "sample-bracket.glb")));
+        Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "samples", "sample.step")));
+        Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "models", "sample.glb")));
         Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "images", "generated", "metal-components-cutout.png")));
         Assert.False(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "sample-file.step")));
         Assert.Contains("\"Sign in to quote\"", source, StringComparison.Ordinal);

@@ -629,7 +629,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Contains("sample", demo.Title, StringComparison.OrdinalIgnoreCase);
         Assert.Single(demo.Parts);
         Assert.Contains("does not create", demo.Notice, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("/models/sample-bracket.glb", demo.ViewerUrl);
+        Assert.Equal("/models/sample.glb", demo.ViewerUrl);
         Assert.StartsWith("/", demo.ViewerUrl, StringComparison.Ordinal);
     }
 
@@ -762,7 +762,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var initResp = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
-            FileName = "maliev-sample-bracket.step",
+            FileName = "sample.step",
             ContentType = "application/octet-stream",
             FileSizeBytes = 1024,
             QuoteSessionId = "test-session-demo"
@@ -783,7 +783,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         Assert.NotNull(completed);
         Assert.Equal("Analyzed", completed.Status);
-        Assert.Equal("maliev-sample-bracket.step", completed.FileName);
+        Assert.Equal("sample.step", completed.FileName);
     }
 
     [Fact]

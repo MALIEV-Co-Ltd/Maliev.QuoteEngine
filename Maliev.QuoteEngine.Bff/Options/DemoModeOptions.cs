@@ -11,7 +11,7 @@ public sealed class DemoModeOptions
 {
     public const string Section = "DemoMode";
 
-    public string SampleFileName { get; set; } = "maliev-sample-bracket.step";
+    public string SampleFileName { get; set; } = "sample.step";
 
     /// <summary>Pre-signed or long-lived GLB URL for the sample bracket.</summary>
     public string? GlbUrl { get; set; }
