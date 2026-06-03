@@ -27,8 +27,9 @@ public static class QeLocalDfmMapper
         }
 
         var expectedProcessCode = ToRuntimeProcessCode(part.ProcessId);
-        if (string.IsNullOrWhiteSpace(result.ProcessCode)
-            || !string.Equals(result.ProcessCode, expectedProcessCode, StringComparison.OrdinalIgnoreCase))
+        var actualProcessCode = ToRuntimeProcessCode(result.ProcessCode);
+        if (string.IsNullOrWhiteSpace(actualProcessCode)
+            || !string.Equals(actualProcessCode, expectedProcessCode, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
@@ -40,7 +41,7 @@ public static class QeLocalDfmMapper
                 issue.Description ?? issue.Title ?? "Detected by local browser DFM."))
             .ToList();
 
-        if (part.ProcessId.Equals("sla", StringComparison.OrdinalIgnoreCase))
+        if (IsSlaProcess(part.ProcessId))
         {
             part.SlaDfmReport = new QeSlaDfmReport(
                 CountIssues(result, "thin_wall"),
@@ -49,7 +50,7 @@ public static class QeLocalDfmMapper
                 HasIssue(result, "hollow"),
                 issues);
         }
-        else if (part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase))
+        else if (IsCncProcess(part.ProcessId))
         {
             part.CncDfmReport = new QeCncDfmReport(
                 CountIssues(result, "sharp_corner", "internal_radius"),
@@ -87,18 +88,42 @@ public static class QeLocalDfmMapper
     /// Returns true when the quote part has a DFM report for its currently selected process.
     /// </summary>
     public static bool HasCurrentProcessReport(QuotePartViewModel part) =>
-        part.ProcessId.Equals("sla", StringComparison.OrdinalIgnoreCase)
+        IsSlaProcess(part.ProcessId)
             ? part.SlaDfmReport is not null
-            : part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase)
+            : IsCncProcess(part.ProcessId)
                 ? part.CncDfmReport is not null
                 : part.FdmDfmReport is not null;
 
-    private static string ToRuntimeProcessCode(string processId) =>
-        processId.Equals("sla", StringComparison.OrdinalIgnoreCase)
-            ? "sla"
-            : processId.Equals("cnc", StringComparison.OrdinalIgnoreCase)
-                ? "cnc"
-                : "fdm";
+    internal static bool IsSlaProcess(string? processCode) =>
+        string.Equals(ToRuntimeProcessCode(processCode), "sla", StringComparison.Ordinal);
+
+    internal static bool IsCncProcess(string? processCode) =>
+        string.Equals(ToRuntimeProcessCode(processCode), "cnc", StringComparison.Ordinal);
+
+    private static string ToRuntimeProcessCode(string? processCode)
+    {
+        if (string.IsNullOrWhiteSpace(processCode))
+        {
+            return string.Empty;
+        }
+
+        var normalized = processCode.Trim()
+            .Replace("-", "_", StringComparison.Ordinal)
+            .Replace("/", "_", StringComparison.Ordinal)
+            .Replace(" ", "_", StringComparison.Ordinal)
+            .ToUpperInvariant();
+
+        return normalized switch
+        {
+            "CNC" or "CNC_MILL" or "CNC_MILLING" or "MILLING" => "cnc",
+            "CNC_TURN" or "CNC_TURNING" or "TURNING" or "LATHE" => "cnc",
+            "CNC_5AXIS" or "CNC_5_AXIS" or "CNC_5AXIS_MILLING" or "CNC_5_AXIS_MILLING" => "cnc",
+            _ when normalized.StartsWith("CNC_", StringComparison.Ordinal) => "cnc",
+            "SLA" or "DLP" or "SLA_DLP" => "sla",
+            "FDM" or "FFF" or "FUSED_FILAMENT_FABRICATION" => "fdm",
+            _ => normalized.ToLowerInvariant()
+        };
+    }
 
     private static int CountIssues(LocalGeometryRuntimeResult result, params string[] categories) =>
         result.Issues.Count(issue => categories.Any(category => IsIssue(issue, category)));

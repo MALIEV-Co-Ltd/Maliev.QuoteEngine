@@ -228,6 +228,48 @@ public sealed class QuoteEngineSourceTests
         Assert.False(QeLocalDfmMapper.HasCurrentProcessReport(part));
     }
 
+    [Theory]
+    [InlineData("cnc", "CNC_MILL", "cnc")]
+    [InlineData("CNC_MILL", "cnc", "cnc")]
+    [InlineData("sla", "SLA_DLP", "sla")]
+    [InlineData("SLA_DLP", "sla", "sla")]
+    [InlineData("fdm", "FDM", "fdm")]
+    public void QeLocalDfmMapper_accepts_browser_result_process_aliases(
+        string selectedProcessId,
+        string browserProcessCode,
+        string expectedReport)
+    {
+        var part = new QuotePartViewModel
+        {
+            ProcessId = selectedProcessId,
+            Status = "GlbReady"
+        };
+        var result = new LocalGeometryRuntimeResult
+        {
+            ProcessCode = browserProcessCode,
+            Authority = "local_primary",
+            ExecutionMode = "primary_interactive",
+            IsAuthoritative = false,
+            Issues =
+            [
+                new LocalGeometryRuntimeIssue
+                {
+                    Category = "thin_wall",
+                    Severity = "warning",
+                    Description = "Local warning."
+                }
+            ]
+        };
+
+        Assert.True(QeLocalDfmMapper.TryApply(part, result));
+
+        Assert.Equal("DfmAnalysisReady", part.Status);
+        Assert.Equal(expectedReport == "fdm", part.FdmDfmReport is not null);
+        Assert.Equal(expectedReport == "sla", part.SlaDfmReport is not null);
+        Assert.Equal(expectedReport == "cnc", part.CncDfmReport is not null);
+        Assert.True(QeLocalDfmMapper.HasCurrentProcessReport(part));
+    }
+
     [Fact]
     public void Quote_part_draft_customer_configuration_round_trips_through_json()
     {

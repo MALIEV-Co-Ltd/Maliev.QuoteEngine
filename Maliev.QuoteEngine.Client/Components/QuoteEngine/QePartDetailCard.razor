@@ -350,12 +350,12 @@
 
     private IEnumerable<QeDfmIssueItem> ActiveTypedIssues()
     {
-        if (Part.ProcessId.Equals("sla", StringComparison.OrdinalIgnoreCase) && Part.SlaDfmReport is not null)
+        if (QeLocalDfmMapper.IsSlaProcess(Part.ProcessId) && Part.SlaDfmReport is not null)
         {
             return Part.SlaDfmReport.Issues;
         }
 
-        if (Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase) && Part.CncDfmReport is not null)
+        if (QeLocalDfmMapper.IsCncProcess(Part.ProcessId) && Part.CncDfmReport is not null)
         {
             return Part.CncDfmReport.Issues;
         }
@@ -365,9 +365,9 @@
 
     private QeDfmOverlayIssue CreateIssue(string icon, string title, string description, string severity, string category, ref int overlayIndex)
     {
-        var process = Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase)
+        var process = QeLocalDfmMapper.IsCncProcess(Part.ProcessId)
             ? "CNC"
-            : Part.ProcessId.Equals("sla", StringComparison.OrdinalIgnoreCase) ? "SLA" : "FDM";
+            : QeLocalDfmMapper.IsSlaProcess(Part.ProcessId) ? "SLA" : "FDM";
         var overlayKey = category.Equals("multi_body", StringComparison.OrdinalIgnoreCase)
             ? "GENERAL__multi_body"
             : $"{process}__{category.ToLowerInvariant()}";
