@@ -1352,6 +1352,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("dispatchLocalAdvisoryTelemetry", js, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeComplete", js, StringComparison.Ordinal);
         Assert.Contains("notifyLocalAdvisoryDotNet", js, StringComparison.Ordinal);
+        Assert.Contains("normalizeAdvisoryFileBytes(options.fileBytes)", js, StringComparison.Ordinal);
+        Assert.Contains("{ fileBytes: runtimeFileBytes, fileName: runtimeFileName }", js, StringComparison.Ordinal);
         Assert.Contains("metrics: result?.metrics", js, StringComparison.Ordinal);
         Assert.Contains("issues,", js, StringComparison.Ordinal);
         Assert.Contains("local_primary", js, StringComparison.Ordinal);

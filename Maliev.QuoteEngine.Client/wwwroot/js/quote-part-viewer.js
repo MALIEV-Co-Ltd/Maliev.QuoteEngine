@@ -3322,11 +3322,24 @@ function isBrowserFirstRuntimeContract(value) {
         value?.executionMode === 'primary_interactive';
 }
 
+function normalizeAdvisoryFileBytes(fileBytes) {
+    if (!fileBytes) return null;
+    if (typeof Uint8Array !== 'undefined' && fileBytes instanceof Uint8Array) return fileBytes;
+    if (typeof ArrayBuffer !== 'undefined') {
+        if (fileBytes instanceof ArrayBuffer) return new Uint8Array(fileBytes);
+        if (typeof ArrayBuffer.isView === 'function' && ArrayBuffer.isView(fileBytes)) {
+            return new Uint8Array(fileBytes.buffer, fileBytes.byteOffset ?? 0, fileBytes.byteLength ?? fileBytes.length);
+        }
+    }
+    if (Array.isArray(fileBytes) && typeof Uint8Array !== 'undefined') return Uint8Array.from(fileBytes);
+    return fileBytes;
+}
+
 /**
  * Runs the GeometryService-owned browser-first runtime through the same-origin BFF proxy.
  * Falls back silently to the server-only path when the manifest or worker cannot be used.
  * @param {string} canvasId
- * @param {{processCode?: string, manifestUrl?: string, assetBaseUrl?: string, timeoutMs?: number, dotNetRef?: object}} options
+ * @param {{processCode?: string, manifestUrl?: string, assetBaseUrl?: string, timeoutMs?: number, dotNetRef?: object, fileBytes?: ArrayBuffer|Uint8Array|number[], fileName?: string}} options
  * @returns {Promise<object|null>}
  */
 export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
@@ -3336,7 +3349,13 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
     localAdvisoryRuns[canvasId] = runId;
 
     const meshBuffers = collectAdvisoryMeshBuffers(canvasId);
-    if (meshBuffers.length === 0) return null;
+    const runtimeFileBytes = normalizeAdvisoryFileBytes(options.fileBytes);
+    const hasRuntimeFileBytes = Number(runtimeFileBytes?.byteLength ?? runtimeFileBytes?.length ?? 0) > 0;
+    if (meshBuffers.length === 0 && !hasRuntimeFileBytes) return null;
+    const runtimeFileName = typeof options.fileName === 'string' ? options.fileName : '';
+    const runtimeInput = meshBuffers.length > 0
+        ? { meshBuffers }
+        : { fileBytes: runtimeFileBytes, fileName: runtimeFileName };
 
     renderLocalAdvisoryStatus(canvasId, 'pending');
     try {
@@ -3367,7 +3386,7 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         const result = await analyzeWithLocalAdvisoryWorker(
             canvasId,
             workerUrl,
-            { meshBuffers },
+            runtimeInput,
             options.processCode ?? 'FDM',
             Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 15000);
         if (localAdvisoryRuns[canvasId] !== runId ||
