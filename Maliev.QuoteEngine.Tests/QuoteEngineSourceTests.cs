@@ -1451,6 +1451,20 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewerJs_honors_geometry_manifest_device_input_limits()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function isLocalAdvisoryInputWithinDeviceProfile(manifest, input)", js, StringComparison.Ordinal);
+        Assert.Contains("profile?.maxInputBytes", js, StringComparison.Ordinal);
+        Assert.Contains("profile?.maxTriangles", js, StringComparison.Ordinal);
+        Assert.Contains("countLocalAdvisoryInputTriangles(input)", js, StringComparison.Ordinal);
+        Assert.Contains("if (!isLocalAdvisoryInputWithinDeviceProfile(manifest, runtimeInput))", js, StringComparison.Ordinal);
+        Assert.Contains("clearLocalAdvisoryPanel(canvasId);", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");

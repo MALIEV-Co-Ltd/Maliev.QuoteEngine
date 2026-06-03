@@ -3378,19 +3378,50 @@ function resolveLocalAdvisoryDeviceProfileName() {
     return 'desktop';
 }
 
+function resolveLocalAdvisoryDeviceProfile(manifest) {
+    return manifest?.deviceProfiles?.[resolveLocalAdvisoryDeviceProfileName()] ?? null;
+}
+
 function resolveLocalAdvisoryTimeoutMs(manifest, options = {}) {
     const explicitTimeout = Number(options.timeoutMs);
     if (Number.isFinite(explicitTimeout) && explicitTimeout > 0) return explicitTimeout;
 
-    const profiles = manifest?.deviceProfiles;
-    const profileName = resolveLocalAdvisoryDeviceProfileName();
-    const selectedTimeout = Number(profiles?.[profileName]?.timeoutMs);
+    const profile = resolveLocalAdvisoryDeviceProfile(manifest);
+    const selectedTimeout = Number(profile?.timeoutMs);
     if (Number.isFinite(selectedTimeout) && selectedTimeout > 0) return selectedTimeout;
 
+    const profiles = manifest?.deviceProfiles;
     const profileTimeouts = Object.values(profiles ?? {})
         .map(profile => Number(profile?.timeoutMs))
         .filter(timeout => Number.isFinite(timeout) && timeout > 0);
     return profileTimeouts.length > 0 ? Math.max(...profileTimeouts) : 15000;
+}
+
+function countLocalAdvisoryInputTriangles(input) {
+    if (!Array.isArray(input?.meshBuffers)) return 0;
+    return input.meshBuffers.reduce((total, buffer) => {
+        const indexCount = Number(buffer?.indices?.length ?? 0);
+        return total + Math.floor(indexCount / 3);
+    }, 0);
+}
+
+function getLocalAdvisoryInputByteLength(input) {
+    return Number(input?.fileBytes?.byteLength ?? input?.fileBytes?.length ?? 0);
+}
+
+function isLocalAdvisoryInputWithinDeviceProfile(manifest, input) {
+    const profile = resolveLocalAdvisoryDeviceProfile(manifest);
+    if (!profile) return true;
+
+    const maxInputBytes = Number(profile?.maxInputBytes);
+    const inputBytes = getLocalAdvisoryInputByteLength(input);
+    if (Number.isFinite(maxInputBytes) && maxInputBytes > 0 && inputBytes > maxInputBytes) {
+        return false;
+    }
+
+    const maxTriangles = Number(profile?.maxTriangles);
+    const triangleCount = countLocalAdvisoryInputTriangles(input);
+    return !(Number.isFinite(maxTriangles) && maxTriangles > 0 && triangleCount > maxTriangles);
 }
 
 async function resolveAdvisoryFileBytes(options) {
@@ -3447,6 +3478,11 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         const manifest = await manifestResponse.json();
         if (Number(manifest.minFrontendApiVersion ?? 1) > LOCAL_ADVISORY_FRONTEND_API_VERSION ||
             !isBrowserFirstRuntimeContract(manifest)) {
+            clearLocalAdvisoryPanel(canvasId);
+            return null;
+        }
+
+        if (!isLocalAdvisoryInputWithinDeviceProfile(manifest, runtimeInput)) {
             clearLocalAdvisoryPanel(canvasId);
             return null;
         }
