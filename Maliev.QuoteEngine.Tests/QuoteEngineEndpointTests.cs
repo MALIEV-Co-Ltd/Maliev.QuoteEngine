@@ -118,9 +118,11 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 });
             }
 
+            var content = new ByteArrayContent([0x00, 0x61, 0xFF, 0x7F]);
+            content.Headers.ContentType = new MediaTypeHeaderValue("application/wasm");
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("self.__runtime=true;", Encoding.UTF8, "text/javascript")
+                Content = content
             };
             response.Headers.CacheControl = new CacheControlHeaderValue
             {
@@ -585,8 +587,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("immutable", response.Headers.CacheControl?.ToString(), StringComparison.Ordinal);
-        Assert.Equal("text/javascript; charset=utf-8", response.Content.Headers.ContentType?.ToString());
-        Assert.Equal("self.__runtime=true;", await response.Content.ReadAsStringAsync());
+        Assert.Equal("application/wasm", response.Content.Headers.ContentType?.ToString());
+        Assert.Equal([0x00, 0x61, 0xFF, 0x7F], await response.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
