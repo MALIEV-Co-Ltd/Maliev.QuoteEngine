@@ -252,15 +252,16 @@
         }
     }
 
-    private async Task HandleLocalGeometryRuntimeCompletedAsync(LocalGeometryRuntimeResult result)
+    private async Task<bool> HandleLocalGeometryRuntimeCompletedAsync(LocalGeometryRuntimeResult result)
     {
         if (!QeLocalDfmMapper.TryApply(Part, result))
         {
-            return;
+            return false;
         }
 
         await OnPartChanged.InvokeAsync(Part);
         await InvokeAsync(StateHasChanged);
+        return true;
     }
 
     private async Task SelectBodyAsync(int bodyIndex)

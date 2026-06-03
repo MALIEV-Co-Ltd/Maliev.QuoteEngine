@@ -1409,6 +1409,15 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewerJs_clears_local_dfm_panel_only_when_blazor_accepts_result()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js");
+
+        Assert.Contains("const accepted = await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeComplete', result);", js, StringComparison.Ordinal);
+        Assert.Contains("return accepted === true;", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
@@ -1416,8 +1425,9 @@ public sealed class QuoteEngineSourceTests
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var model = ReadRepoFile("Maliev.QuoteEngine.Client", "Models", "QuotePartViewModel.cs");
 
-        Assert.Contains("EventCallback<LocalGeometryRuntimeResult> OnLocalGeometryRuntimeCompleted", viewer, StringComparison.Ordinal);
+        Assert.Contains("Func<LocalGeometryRuntimeResult, Task<bool>>? OnLocalGeometryRuntimeCompleted", viewer, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeComplete", viewer, StringComparison.Ordinal);
+        Assert.Contains("public async Task<bool> NotifyLocalGeometryRuntimeComplete(LocalGeometryRuntimeResult result)", viewer, StringComparison.Ordinal);
         Assert.Contains("RunLocalGeometryRuntimeAsync(ProcessId)", viewer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public string FileExtension", viewer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public string? BrowserFileClientId", viewer, StringComparison.Ordinal);
@@ -1430,6 +1440,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("BrowserFileClientId=\"@Part.ClientFileId\"", detail, StringComparison.Ordinal);
         Assert.Contains("BrowserFileName=\"@Part.FileName\"", detail, StringComparison.Ordinal);
         Assert.Contains("OnLocalGeometryRuntimeCompleted=\"@HandleLocalGeometryRuntimeCompletedAsync\"", detail, StringComparison.Ordinal);
+        Assert.Contains("private async Task<bool> HandleLocalGeometryRuntimeCompletedAsync(LocalGeometryRuntimeResult result)", detail, StringComparison.Ordinal);
         Assert.Contains("QeLocalDfmMapper.TryApply(Part, result)", detail, StringComparison.Ordinal);
         Assert.Contains("QeLocalDfmMapper.HasCurrentProcessReport(Part)", detail, StringComparison.Ordinal);
         Assert.Contains("public string? ClientFileId { get; set; }", model, StringComparison.Ordinal);

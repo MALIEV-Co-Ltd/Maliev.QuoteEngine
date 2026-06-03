@@ -3276,8 +3276,8 @@ async function notifyLocalAdvisoryDotNet(dotNetRef, result) {
     if (!dotNetRef || typeof dotNetRef.invokeMethodAsync !== 'function') return false;
 
     try {
-        await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeComplete', result);
-        return true;
+        const accepted = await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeComplete', result);
+        return accepted === true;
     } catch (_) {
         return false;
     }

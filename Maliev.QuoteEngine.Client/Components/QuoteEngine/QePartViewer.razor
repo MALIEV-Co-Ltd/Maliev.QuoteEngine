@@ -156,7 +156,7 @@
     [Parameter] public string? FinishCode { get; set; }
     [Parameter] public string? RoughnessCode { get; set; }
     [Parameter] public EventCallback<string> OnViewerError { get; set; }
-    [Parameter] public EventCallback<LocalGeometryRuntimeResult> OnLocalGeometryRuntimeCompleted { get; set; }
+    [Parameter] public Func<LocalGeometryRuntimeResult, Task<bool>>? OnLocalGeometryRuntimeCompleted { get; set; }
 
     private readonly string _canvasId = $"qe-canvas-{Guid.NewGuid():N}";
     private IJSObjectReference? _module;
@@ -334,12 +334,12 @@
     }
 
     [JSInvokable]
-    public async Task NotifyLocalGeometryRuntimeComplete(LocalGeometryRuntimeResult result)
+    public async Task<bool> NotifyLocalGeometryRuntimeComplete(LocalGeometryRuntimeResult result)
     {
-        if (OnLocalGeometryRuntimeCompleted.HasDelegate)
-        {
-            await OnLocalGeometryRuntimeCompleted.InvokeAsync(result);
-        }
+        if (OnLocalGeometryRuntimeCompleted is null)
+            return false;
+
+        return await OnLocalGeometryRuntimeCompleted(result);
     }
 
     private async Task SetProjectionAsync(string projection)
