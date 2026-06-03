@@ -1212,6 +1212,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("runLocalAdvisoryGeometry", handleBlock);
         Assert.Contains("/quote/v1/geometry/runtime/manifest", js, StringComparison.Ordinal);
         Assert.Contains("Local preliminary DFM", js, StringComparison.Ordinal);
+        Assert.Contains("maliev:geometry-local-runtime-complete", js, StringComparison.Ordinal);
+        Assert.Contains("dispatchLocalAdvisoryTelemetry", js, StringComparison.Ordinal);
         Assert.Contains("local_primary", js, StringComparison.Ordinal);
         Assert.Contains("primary_interactive", js, StringComparison.Ordinal);
         Assert.DoesNotContain("authority !== 'advisory'", js, StringComparison.Ordinal);

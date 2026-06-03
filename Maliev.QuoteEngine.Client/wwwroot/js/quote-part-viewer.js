@@ -2981,6 +2981,31 @@ function renderLocalAdvisoryStatus(canvasId, state, result = null) {
     panel.textContent = `Local preliminary DFM: ${issueLabel} · local primary · ${faceCount.toLocaleString()} tris`;
 }
 
+function dispatchLocalAdvisoryTelemetry(canvasId, result) {
+    try {
+        if (typeof window?.dispatchEvent !== 'function' ||
+            typeof CustomEvent !== 'function') return;
+
+        const issues = Array.isArray(result?.issues) ? result.issues : [];
+        window.dispatchEvent(new CustomEvent('maliev:geometry-local-runtime-complete', {
+            detail: {
+                canvasId,
+                processCode: result?.processCode ?? null,
+                runtimeVersion: result?.runtimeVersion ?? null,
+                algorithmVersion: result?.algorithmVersion ?? null,
+                authority: result?.authority ?? null,
+                executionMode: result?.executionMode ?? null,
+                inputHash: result?.inputHash ?? null,
+                issueCount: issues.length,
+                warningCount: issues.filter(issue => issue?.severity !== 'info').length,
+                faceCount: Number(result?.metrics?.faceCount ?? 0),
+            },
+        }));
+    } catch (_) {
+        // Local telemetry must never interrupt viewer interaction.
+    }
+}
+
 function terminateLocalAdvisoryWorker(canvasId) {
     try { localAdvisoryWorkers[canvasId]?.terminate?.(); } catch (_) {}
     delete localAdvisoryWorkers[canvasId];
@@ -3075,6 +3100,7 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         }
 
         renderLocalAdvisoryStatus(canvasId, 'complete', result);
+        dispatchLocalAdvisoryTelemetry(canvasId, result);
         return result;
     } catch (_) {
         if (localAdvisoryRuns[canvasId] === runId) {
