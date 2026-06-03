@@ -482,6 +482,7 @@
                 part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
                 part.Findings = status.Findings;
                 ApplyAnalysisStatus(part, status);
+                await TryApplyLocalViewerUrlAsync(part);
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
@@ -774,6 +775,7 @@
 
         var status = await Api.GetAnalysisStatusAsync(part.UploadId);
         ApplyAnalysisStatus(part, status);
+        await TryApplyLocalViewerUrlAsync(part);
     }
 
     private static void ApplyAnalysisStatus(QuotePartViewModel part, QuoteAnalysisStatusResponse status)
@@ -793,6 +795,45 @@
         part.SlaDfmReport = status.SlaReport;
         part.CncDfmReport = status.CncReport;
         part.OverlayGlbUrls = status.OverlayGlbUrls;
+    }
+
+    private async Task<bool> TryApplyLocalViewerUrlAsync(QuotePartViewModel part)
+    {
+        var viewerExtension = ResolveBrowserFileViewerExtension(part);
+        if (viewerExtension is null || string.IsNullOrWhiteSpace(part.ClientFileId))
+        {
+            return false;
+        }
+
+        try
+        {
+            var objectUrl = await Js.InvokeAsync<string?>(
+                "quoteEngineUploads.getObjectUrl",
+                part.ClientFileId);
+            if (string.IsNullOrWhiteSpace(objectUrl))
+            {
+                return false;
+            }
+
+            part.GlbUrl = objectUrl;
+            part.ViewerStoragePath ??= part.StoragePath;
+            part.ViewerFileExtension = viewerExtension;
+            return true;
+        }
+        catch (JSException)
+        {
+            return false;
+        }
+    }
+
+    private static bool CanUseBrowserFileViewer(QuotePartViewModel part)
+        => ResolveBrowserFileViewerExtension(part) is not null;
+
+    private static string? ResolveBrowserFileViewerExtension(QuotePartViewModel part)
+    {
+        var ext = NormalizeViewerFileExtension(null, part.StoragePath ?? part.FileName);
+
+        return ext is ".stl" or ".obj" or ".glb" or ".gltf" ? ext : null;
     }
 
     private static string? NormalizeViewerFileExtension(string? fileExtension, string? storagePath)

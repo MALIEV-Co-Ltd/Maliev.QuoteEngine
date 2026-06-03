@@ -311,6 +311,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("registerDropzone", source, StringComparison.Ordinal);
         Assert.Contains("HandleDroppedFilesAsync", source, StringComparison.Ordinal);
         Assert.Contains("async function getFileBytes(clientFileId)", source, StringComparison.Ordinal);
+        Assert.Contains("function getObjectUrl(clientFileId)", source, StringComparison.Ordinal);
         Assert.Contains("scheduleClearFile", source, StringComparison.Ordinal);
     }
 
@@ -1391,6 +1392,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("QeLocalDfmMapper.HasCurrentProcessReport(Part)", detail, StringComparison.Ordinal);
         Assert.Contains("public string? ClientFileId { get; set; }", model, StringComparison.Ordinal);
         Assert.Contains("ClientFileId = candidate.ClientFileId", workspace, StringComparison.Ordinal);
+        Assert.Contains("TryApplyLocalViewerUrlAsync(part)", workspace, StringComparison.Ordinal);
+        Assert.Contains("quoteEngineUploads.getObjectUrl", workspace, StringComparison.Ordinal);
+        Assert.Contains("CanUseBrowserFileViewer", workspace, StringComparison.Ordinal);
+        Assert.Contains("ResolveBrowserFileViewerExtension(part)", workspace, StringComparison.Ordinal);
+        Assert.Contains("NormalizeViewerFileExtension(null, part.StoragePath ?? part.FileName)", workspace, StringComparison.Ordinal);
     }
 
     private static string ExtractWindowHandleBlock(string js, string handleName)

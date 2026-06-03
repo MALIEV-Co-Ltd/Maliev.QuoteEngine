@@ -1,5 +1,6 @@
 window.quoteEngineUploads = (() => {
   const fileMap = new Map();
+  const objectUrlMap = new Map();
   const dropzoneMap = new Map();
   const clearTimerMap = new Map();
   const fileRetentionMs = 10 * 60 * 1000;
@@ -131,6 +132,11 @@ window.quoteEngineUploads = (() => {
     const existingTimer = clearTimerMap.get(clientFileId);
     if (existingTimer) clearTimeout(existingTimer);
     clearTimerMap.delete(clientFileId);
+    const objectUrl = objectUrlMap.get(clientFileId);
+    if (objectUrl && typeof URL !== "undefined" && typeof URL.revokeObjectURL === "function") {
+      URL.revokeObjectURL(objectUrl);
+    }
+    objectUrlMap.delete(clientFileId);
     fileMap.delete(clientFileId);
   }
 
@@ -155,6 +161,21 @@ window.quoteEngineUploads = (() => {
     return new Uint8Array(await file.arrayBuffer());
   }
 
+  function getObjectUrl(clientFileId) {
+    const file = fileMap.get(clientFileId);
+    if (!file || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+      return null;
+    }
+
+    let objectUrl = objectUrlMap.get(clientFileId);
+    if (!objectUrl) {
+      objectUrl = URL.createObjectURL(file);
+      objectUrlMap.set(clientFileId, objectUrl);
+    }
+
+    return objectUrl;
+  }
+
   return {
     captureFiles,
     openFilePicker,
@@ -163,6 +184,7 @@ window.quoteEngineUploads = (() => {
     uploadFile,
     clearFile,
     scheduleClearFile,
-    getFileBytes
+    getFileBytes,
+    getObjectUrl
   };
 })();
