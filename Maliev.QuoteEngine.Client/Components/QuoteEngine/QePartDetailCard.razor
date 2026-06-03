@@ -99,6 +99,7 @@
                               ProcessId="@Part.ProcessId"
                               FinishCode="@Part.FinishCode"
                               RoughnessCode="@Part.RoughnessCode"
+                              OnLocalGeometryRuntimeCompleted="@HandleLocalGeometryRuntimeCompletedAsync"
                               OnViewerError="@HandleViewerError" />
 
                 @if (Part.BodyCount > 1)
@@ -204,10 +205,10 @@
         : (ReferenceData?.Colors ?? []).FirstOrDefault(c => string.Equals(c.Code, Part.Color, StringComparison.OrdinalIgnoreCase))?.CssValue;
 
     private IReadOnlyList<QeDfmOverlayIssue> DfmOverlayIssues => BuildDfmOverlayIssues();
-    private bool HasAnyDfmReport => Part.FdmDfmReport is not null || Part.SlaDfmReport is not null || Part.CncDfmReport is not null;
-    private bool IsDfmAnalyzing => !HasAnyDfmReport && !string.IsNullOrWhiteSpace(Part.GlbUrl) && !string.IsNullOrWhiteSpace(Part.ProcessId);
+    private bool HasCurrentProcessDfmReport => QeLocalDfmMapper.HasCurrentProcessReport(Part);
+    private bool IsDfmAnalyzing => !HasCurrentProcessDfmReport && !string.IsNullOrWhiteSpace(Part.GlbUrl) && !string.IsNullOrWhiteSpace(Part.ProcessId);
     private bool IsDfmUnavailable => Part.Status.Equals("Failed", StringComparison.OrdinalIgnoreCase);
-    private bool ShouldShowAllClearOverlay => HasAnyDfmReport && DfmOverlayIssues.Count == 0 && !Part.DfmAcknowledged;
+    private bool ShouldShowAllClearOverlay => HasCurrentProcessDfmReport && DfmOverlayIssues.Count == 0 && !Part.DfmAcknowledged;
 
     private async Task ShowModelAsync()
     {
@@ -234,6 +235,17 @@
         {
             await OnRequestFreshViewerUrl.InvokeAsync(Part.StoragePath);
         }
+    }
+
+    private async Task HandleLocalGeometryRuntimeCompletedAsync(LocalGeometryRuntimeResult result)
+    {
+        if (!QeLocalDfmMapper.TryApply(Part, result))
+        {
+            return;
+        }
+
+        await OnPartChanged.InvokeAsync(Part);
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task SelectBodyAsync(int bodyIndex)

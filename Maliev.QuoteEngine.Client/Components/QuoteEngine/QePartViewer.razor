@@ -153,6 +153,7 @@
     [Parameter] public string? FinishCode { get; set; }
     [Parameter] public string? RoughnessCode { get; set; }
     [Parameter] public EventCallback<string> OnViewerError { get; set; }
+    [Parameter] public EventCallback<LocalGeometryRuntimeResult> OnLocalGeometryRuntimeCompleted { get; set; }
 
     private readonly string _canvasId = $"qe-canvas-{Guid.NewGuid():N}";
     private IJSObjectReference? _module;
@@ -204,11 +205,16 @@
         }
         else if (_module is not null && MaterialChanged())
         {
+            var processChanged = ProcessId != _lastProcessId;
             _lastPartColor = PartColor;
             _lastProcessId = ProcessId;
             _lastFinishCode = FinishCode;
             _lastRoughnessCode = RoughnessCode;
             await _module.InvokeVoidAsync("setPartMaterial", _canvasId, ProcessId, FinishCode, RoughnessCode, PartColor);
+            if (processChanged)
+            {
+                await RunLocalGeometryRuntimeAsync(ProcessId);
+            }
         }
     }
 
@@ -244,6 +250,7 @@
                     sectionInverted = _sectionInverted,
                     partColor = PartColor,
                     processId = ProcessId,
+                    processCode = ProcessId,
                     finishCode = FinishCode,
                     roughnessCode = RoughnessCode
                 });
@@ -305,6 +312,25 @@
     {
         if (_module is null) return;
         await _module.InvokeVoidAsync("clearDfmOverlays", _canvasId, partKey);
+    }
+
+    public async Task RunLocalGeometryRuntimeAsync(string? processCode = null)
+    {
+        if (_module is null) return;
+        await _module.InvokeVoidAsync("runLocalAdvisoryGeometry", _canvasId, new
+        {
+            processCode = string.IsNullOrWhiteSpace(processCode) ? ProcessId : processCode,
+            dotNetRef = _dotNetRef
+        });
+    }
+
+    [JSInvokable]
+    public async Task NotifyLocalGeometryRuntimeComplete(LocalGeometryRuntimeResult result)
+    {
+        if (OnLocalGeometryRuntimeCompleted.HasDelegate)
+        {
+            await OnLocalGeometryRuntimeCompleted.InvokeAsync(result);
+        }
     }
 
     private async Task SetProjectionAsync(string projection)

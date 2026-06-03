@@ -1,5 +1,8 @@
 using MassTransit;
 using Maliev.MessagingContracts.Contracts.Geometry;
+using Maliev.QuoteEngine.Client.Components;
+using Maliev.QuoteEngine.Client.Components.QuoteEngine;
+using Maliev.QuoteEngine.Client.Models;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Consumers;
 using Maliev.QuoteEngine.Bff.Hubs;
@@ -154,6 +157,71 @@ public sealed class QuoteEngineSourceTests
         Assert.True(d2.CncReport.HasUndercuts);
         Assert.Equal(2, d2.OverlayGlbUrls.Count);
         Assert.Equal("https://cdn.example.com/overlay1.glb", d2.OverlayGlbUrls[0]);
+    }
+
+    [Fact]
+    public void QeLocalDfmMapper_accepts_matching_browser_result_and_populates_current_report()
+    {
+        var part = new QuotePartViewModel
+        {
+            ProcessId = "fdm",
+            Status = "GlbReady"
+        };
+        var result = new LocalGeometryRuntimeResult
+        {
+            ProcessCode = "fdm",
+            Authority = "local_primary",
+            ExecutionMode = "primary_interactive",
+            IsAuthoritative = false,
+            Issues =
+            [
+                new LocalGeometryRuntimeIssue
+                {
+                    Category = "thin_wall",
+                    Severity = "warning",
+                    Description = "Thin feature risk."
+                },
+                new LocalGeometryRuntimeIssue
+                {
+                    Category = "overhang",
+                    Severity = "warning",
+                    Description = "Support risk.",
+                    Value = 1.25,
+                    FaceIndices = [1, 2, 3]
+                }
+            ]
+        };
+
+        Assert.True(QeLocalDfmMapper.TryApply(part, result));
+
+        Assert.Equal("DfmAnalysisReady", part.Status);
+        Assert.NotNull(part.FdmDfmReport);
+        Assert.Equal(1, part.FdmDfmReport.ThinWallCount);
+        Assert.Equal(3, part.FdmDfmReport.OverhangFaceCount);
+        Assert.Equal(1.25m, part.FdmDfmReport.OverhangAreaCm2);
+        Assert.True(part.FdmDfmReport.SupportRequired);
+        Assert.True(QeLocalDfmMapper.HasCurrentProcessReport(part));
+    }
+
+    [Fact]
+    public void QeLocalDfmMapper_rejects_stale_process_results()
+    {
+        var part = new QuotePartViewModel
+        {
+            ProcessId = "cnc",
+            Status = "GlbReady"
+        };
+        var result = new LocalGeometryRuntimeResult
+        {
+            ProcessCode = "fdm",
+            Authority = "local_primary",
+            ExecutionMode = "primary_interactive",
+            IsAuthoritative = false
+        };
+
+        Assert.False(QeLocalDfmMapper.TryApply(part, result));
+        Assert.Null(part.CncDfmReport);
+        Assert.False(QeLocalDfmMapper.HasCurrentProcessReport(part));
     }
 
     [Fact]
@@ -1214,9 +1282,27 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Local preliminary DFM", js, StringComparison.Ordinal);
         Assert.Contains("maliev:geometry-local-runtime-complete", js, StringComparison.Ordinal);
         Assert.Contains("dispatchLocalAdvisoryTelemetry", js, StringComparison.Ordinal);
+        Assert.Contains("NotifyLocalGeometryRuntimeComplete", js, StringComparison.Ordinal);
+        Assert.Contains("notifyLocalAdvisoryDotNet", js, StringComparison.Ordinal);
+        Assert.Contains("metrics: result?.metrics", js, StringComparison.Ordinal);
+        Assert.Contains("issues,", js, StringComparison.Ordinal);
         Assert.Contains("local_primary", js, StringComparison.Ordinal);
         Assert.Contains("primary_interactive", js, StringComparison.Ordinal);
         Assert.DoesNotContain("authority !== 'advisory'", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
+        var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
+
+        Assert.Contains("EventCallback<LocalGeometryRuntimeResult> OnLocalGeometryRuntimeCompleted", viewer, StringComparison.Ordinal);
+        Assert.Contains("NotifyLocalGeometryRuntimeComplete", viewer, StringComparison.Ordinal);
+        Assert.Contains("RunLocalGeometryRuntimeAsync(ProcessId)", viewer, StringComparison.Ordinal);
+        Assert.Contains("OnLocalGeometryRuntimeCompleted=\"@HandleLocalGeometryRuntimeCompletedAsync\"", detail, StringComparison.Ordinal);
+        Assert.Contains("QeLocalDfmMapper.TryApply(Part, result)", detail, StringComparison.Ordinal);
+        Assert.Contains("QeLocalDfmMapper.HasCurrentProcessReport(Part)", detail, StringComparison.Ordinal);
     }
 
     private static string ExtractWindowHandleBlock(string js, string handleName)

@@ -2185,7 +2185,8 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                     !!viewerSettings.sectionInverted
                 );
                 runLocalAdvisoryGeometry(canvasId, {
-                    processCode: viewerSettings.processId,
+                    processCode: viewerSettings.processCode ?? viewerSettings.processId,
+                    dotNetRef,
                 });
             },
             null,
@@ -3262,10 +3263,23 @@ function dispatchLocalAdvisoryTelemetry(canvasId, result) {
                 issueCount: issues.length,
                 warningCount: issues.filter(issue => issue?.severity !== 'info').length,
                 faceCount: Number(result?.metrics?.faceCount ?? 0),
+                metrics: result?.metrics ?? null,
+                issues,
             },
         }));
     } catch (_) {
         // Local telemetry must never interrupt viewer interaction.
+    }
+}
+
+async function notifyLocalAdvisoryDotNet(dotNetRef, result) {
+    if (!dotNetRef || typeof dotNetRef.invokeMethodAsync !== 'function') return false;
+
+    try {
+        await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeComplete', result);
+        return true;
+    } catch (_) {
+        return false;
     }
 }
 
@@ -3312,7 +3326,7 @@ function isBrowserFirstRuntimeContract(value) {
  * Runs the GeometryService-owned browser-first runtime through the same-origin BFF proxy.
  * Falls back silently to the server-only path when the manifest or worker cannot be used.
  * @param {string} canvasId
- * @param {{processCode?: string, manifestUrl?: string, assetBaseUrl?: string, timeoutMs?: number}} options
+ * @param {{processCode?: string, manifestUrl?: string, assetBaseUrl?: string, timeoutMs?: number, dotNetRef?: object}} options
  * @returns {Promise<object|null>}
  */
 export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
@@ -3364,6 +3378,9 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
 
         renderLocalAdvisoryStatus(canvasId, 'complete', result);
         dispatchLocalAdvisoryTelemetry(canvasId, result);
+        if (await notifyLocalAdvisoryDotNet(options.dotNetRef, result)) {
+            clearLocalAdvisoryPanel(canvasId);
+        }
         return result;
     } catch (_) {
         if (localAdvisoryRuns[canvasId] === runId) {
