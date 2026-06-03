@@ -32,6 +32,8 @@ public sealed class QuotePartViewModel
     public decimal VolumeCc { get; set; }
     public decimal SurfaceAreaCm2 { get; set; }
     public bool DfmAcknowledged { get; set; }
+    public bool LocalDfmRuntimeUnavailable { get; set; }
+    public string? LocalDfmRuntimeUnavailableReason { get; set; }
     public string? PartNotes { get; set; }
     public string Status { get; set; } = "Waiting";
     public IReadOnlyList<DfmFindingDto> Findings { get; set; } = [];

@@ -34,6 +34,18 @@ public sealed class LocalGeometryRuntimeResult
 }
 
 /// <summary>
+/// Terminal notification produced when the browser geometry runtime cannot run locally.
+/// </summary>
+public sealed class LocalGeometryRuntimeUnavailable
+{
+    /// <summary>Manufacturing process code requested for the browser runtime attempt.</summary>
+    public string? ProcessCode { get; set; }
+
+    /// <summary>Machine-readable reason why the local attempt ended without a DFM report.</summary>
+    public string? Reason { get; set; }
+}
+
+/// <summary>
 /// Mesh metrics produced by the browser geometry runtime.
 /// </summary>
 public sealed class LocalGeometryRuntimeMetrics

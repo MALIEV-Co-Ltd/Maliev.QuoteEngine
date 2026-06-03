@@ -1465,6 +1465,19 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewerJs_notifies_blazor_when_local_dfm_cannot_run()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function notifyLocalAdvisoryUnavailableDotNet(dotNetRef, payload)", js, StringComparison.Ordinal);
+        Assert.Contains("NotifyLocalGeometryRuntimeUnavailable", js, StringComparison.Ordinal);
+        Assert.Contains("options.dotNetRef", js, StringComparison.Ordinal);
+        Assert.Contains("'input_too_large'", js, StringComparison.Ordinal);
+        Assert.Contains("'worker_failed'", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
@@ -1497,6 +1510,39 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("CanUseBrowserFileViewer", workspace, StringComparison.Ordinal);
         Assert.Contains("ResolveBrowserFileViewerExtension(part)", workspace, StringComparison.Ordinal);
         Assert.Contains("NormalizeViewerFileExtension(null, part.StoragePath ?? part.FileName)", workspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_unavailable_to_part_state()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
+        var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
+        var model = ReadRepoFile("Maliev.QuoteEngine.Client", "Models", "QuotePartViewModel.cs");
+        var mapper = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeLocalDfmMapper.cs");
+
+        Assert.Contains("Func<LocalGeometryRuntimeUnavailable, Task>? OnLocalGeometryRuntimeUnavailable", viewer, StringComparison.Ordinal);
+        Assert.Contains("NotifyLocalGeometryRuntimeUnavailable", viewer, StringComparison.Ordinal);
+        Assert.Contains("OnLocalGeometryRuntimeUnavailable=\"@HandleLocalGeometryRuntimeUnavailableAsync\"", detail, StringComparison.Ordinal);
+        Assert.Contains("Part.LocalDfmRuntimeUnavailable = true", detail, StringComparison.Ordinal);
+        Assert.Contains("!Part.LocalDfmRuntimeUnavailable", detail, StringComparison.Ordinal);
+        Assert.Contains("Part.LocalDfmRuntimeUnavailable ||", detail, StringComparison.Ordinal);
+        Assert.Contains("LocalDfmRuntimeUnavailable", model, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeUnavailable = false", mapper, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Quote_process_changes_clear_terminal_local_dfm_unavailable_state()
+    {
+        var sidebar = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
+        var bulkTable = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeBulkTable.razor");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+
+        Assert.Contains("Part.LocalDfmRuntimeUnavailable = false", sidebar, StringComparison.Ordinal);
+        Assert.Contains("Part.LocalDfmRuntimeUnavailableReason = null", sidebar, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeUnavailable = false", bulkTable, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeUnavailableReason = null", bulkTable, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeUnavailable = false", workspace, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeUnavailableReason = null", workspace, StringComparison.Ordinal);
     }
 
     private static string ExtractWindowHandleBlock(string js, string handleName)

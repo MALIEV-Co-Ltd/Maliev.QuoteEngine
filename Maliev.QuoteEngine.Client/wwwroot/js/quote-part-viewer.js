@@ -3309,6 +3309,16 @@ async function notifyLocalAdvisoryDotNet(dotNetRef, result) {
     }
 }
 
+async function notifyLocalAdvisoryUnavailableDotNet(dotNetRef, payload) {
+    if (!dotNetRef || typeof dotNetRef.invokeMethodAsync !== 'function') return;
+
+    try {
+        await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeUnavailable', payload);
+    } catch (_) {
+        // Local runtime fallback signaling must never interrupt viewer interaction.
+    }
+}
+
 function terminateLocalAdvisoryWorker(canvasId) {
     try { localAdvisoryWorkers[canvasId]?.terminate?.(); } catch (_) {}
     delete localAdvisoryWorkers[canvasId];
@@ -3450,7 +3460,17 @@ async function resolveAdvisoryFileBytes(options) {
  * @returns {Promise<object|null>}
  */
 export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
-    if (typeof fetch !== 'function' || typeof Worker === 'undefined') return null;
+    const unavailablePayload = reason => ({
+        processCode: options.processCode ?? 'FDM',
+        reason,
+    });
+
+    if (typeof fetch !== 'function' || typeof Worker === 'undefined') {
+        await notifyLocalAdvisoryUnavailableDotNet(
+            options.dotNetRef,
+            unavailablePayload('runtime_unsupported'));
+        return null;
+    }
 
     const runId = (localAdvisoryRuns[canvasId] ?? 0) + 1;
     localAdvisoryRuns[canvasId] = runId;
@@ -3458,7 +3478,12 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
     const meshBuffers = collectAdvisoryMeshBuffers(canvasId);
     const runtimeFileBytes = await resolveAdvisoryFileBytes(options);
     const hasRuntimeFileBytes = hasAdvisoryFileBytes(runtimeFileBytes);
-    if (meshBuffers.length === 0 && !hasRuntimeFileBytes) return null;
+    if (meshBuffers.length === 0 && !hasRuntimeFileBytes) {
+        await notifyLocalAdvisoryUnavailableDotNet(
+            options.dotNetRef,
+            unavailablePayload('no_input'));
+        return null;
+    }
     const runtimeFileName = typeof options.fileName === 'string' ? options.fileName : '';
     const runtimeInput = meshBuffers.length > 0
         ? { meshBuffers }
@@ -3472,6 +3497,11 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         });
         if (!manifestResponse.ok || localAdvisoryRuns[canvasId] !== runId) {
             clearLocalAdvisoryPanel(canvasId);
+            if (localAdvisoryRuns[canvasId] === runId) {
+                await notifyLocalAdvisoryUnavailableDotNet(
+                    options.dotNetRef,
+                    unavailablePayload('manifest_unavailable'));
+            }
             return null;
         }
 
@@ -3479,11 +3509,17 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         if (Number(manifest.minFrontendApiVersion ?? 1) > LOCAL_ADVISORY_FRONTEND_API_VERSION ||
             !isBrowserFirstRuntimeContract(manifest)) {
             clearLocalAdvisoryPanel(canvasId);
+            await notifyLocalAdvisoryUnavailableDotNet(
+                options.dotNetRef,
+                unavailablePayload('manifest_incompatible'));
             return null;
         }
 
         if (!isLocalAdvisoryInputWithinDeviceProfile(manifest, runtimeInput)) {
             clearLocalAdvisoryPanel(canvasId);
+            await notifyLocalAdvisoryUnavailableDotNet(
+                options.dotNetRef,
+                unavailablePayload('input_too_large'));
             return null;
         }
 
@@ -3492,6 +3528,9 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
             options.assetBaseUrl ?? LOCAL_ADVISORY_ASSET_BASE_URL);
         if (!workerUrl) {
             clearLocalAdvisoryPanel(canvasId);
+            await notifyLocalAdvisoryUnavailableDotNet(
+                options.dotNetRef,
+                unavailablePayload('asset_unavailable'));
             return null;
         }
 
@@ -3504,6 +3543,11 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         if (localAdvisoryRuns[canvasId] !== runId ||
             !isBrowserFirstRuntimeContract(result)) {
             clearLocalAdvisoryPanel(canvasId);
+            if (localAdvisoryRuns[canvasId] === runId) {
+                await notifyLocalAdvisoryUnavailableDotNet(
+                    options.dotNetRef,
+                    unavailablePayload('invalid_result'));
+            }
             return null;
         }
 
@@ -3517,6 +3561,9 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
     } catch (_) {
         if (localAdvisoryRuns[canvasId] === runId) {
             clearLocalAdvisoryPanel(canvasId);
+            await notifyLocalAdvisoryUnavailableDotNet(
+                options.dotNetRef,
+                unavailablePayload('worker_failed'));
         }
         return null;
     }

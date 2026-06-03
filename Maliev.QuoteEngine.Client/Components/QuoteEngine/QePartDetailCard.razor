@@ -103,6 +103,7 @@
                               FinishCode="@Part.FinishCode"
                               RoughnessCode="@Part.RoughnessCode"
                               OnLocalGeometryRuntimeCompleted="@HandleLocalGeometryRuntimeCompletedAsync"
+                              OnLocalGeometryRuntimeUnavailable="@HandleLocalGeometryRuntimeUnavailableAsync"
                               OnViewerError="@HandleViewerError" />
 
                 @if (Part.BodyCount > 1)
@@ -209,7 +210,11 @@
 
     private IReadOnlyList<QeDfmOverlayIssue> DfmOverlayIssues => BuildDfmOverlayIssues();
     private bool HasCurrentProcessDfmReport => QeLocalDfmMapper.HasCurrentProcessReport(Part);
-    private bool IsDfmAnalyzing => !HasCurrentProcessDfmReport && !string.IsNullOrWhiteSpace(Part.GlbUrl) && !string.IsNullOrWhiteSpace(Part.ProcessId);
+    private bool IsDfmAnalyzing =>
+        !HasCurrentProcessDfmReport
+        && !Part.LocalDfmRuntimeUnavailable
+        && !string.IsNullOrWhiteSpace(Part.GlbUrl)
+        && !string.IsNullOrWhiteSpace(Part.ProcessId);
 
     private string ResolveViewerFileExtension()
     {
@@ -222,7 +227,9 @@
 
         return ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
     }
-    private bool IsDfmUnavailable => Part.Status.Equals("Failed", StringComparison.OrdinalIgnoreCase);
+    private bool IsDfmUnavailable =>
+        Part.LocalDfmRuntimeUnavailable ||
+        Part.Status.Equals("Failed", StringComparison.OrdinalIgnoreCase);
     private bool ShouldShowAllClearOverlay => HasCurrentProcessDfmReport && DfmOverlayIssues.Count == 0 && !Part.DfmAcknowledged;
 
     private async Task ShowModelAsync()
@@ -262,6 +269,21 @@
         await OnPartChanged.InvokeAsync(Part);
         await InvokeAsync(StateHasChanged);
         return true;
+    }
+
+    private async Task HandleLocalGeometryRuntimeUnavailableAsync(LocalGeometryRuntimeUnavailable result)
+    {
+        if (!QeLocalDfmMapper.MatchesProcess(Part, result.ProcessCode))
+        {
+            return;
+        }
+
+        Part.LocalDfmRuntimeUnavailable = true;
+        Part.LocalDfmRuntimeUnavailableReason = string.IsNullOrWhiteSpace(result.Reason)
+            ? "local_runtime_unavailable"
+            : result.Reason;
+        await OnPartChanged.InvokeAsync(Part);
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task SelectBodyAsync(int bodyIndex)

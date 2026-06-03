@@ -157,6 +157,7 @@
     [Parameter] public string? RoughnessCode { get; set; }
     [Parameter] public EventCallback<string> OnViewerError { get; set; }
     [Parameter] public Func<LocalGeometryRuntimeResult, Task<bool>>? OnLocalGeometryRuntimeCompleted { get; set; }
+    [Parameter] public Func<LocalGeometryRuntimeUnavailable, Task>? OnLocalGeometryRuntimeUnavailable { get; set; }
 
     private readonly string _canvasId = $"qe-canvas-{Guid.NewGuid():N}";
     private IJSObjectReference? _module;
@@ -340,6 +341,13 @@
             return false;
 
         return await OnLocalGeometryRuntimeCompleted(result);
+    }
+
+    [JSInvokable]
+    public async Task NotifyLocalGeometryRuntimeUnavailable(LocalGeometryRuntimeUnavailable result)
+    {
+        if (OnLocalGeometryRuntimeUnavailable is not null)
+            await OnLocalGeometryRuntimeUnavailable(result);
     }
 
     private async Task SetProjectionAsync(string projection)

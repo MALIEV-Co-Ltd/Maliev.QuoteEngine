@@ -26,10 +26,7 @@ public static class QeLocalDfmMapper
             return false;
         }
 
-        var expectedProcessCode = ToRuntimeProcessCode(part.ProcessId);
-        var actualProcessCode = ToRuntimeProcessCode(result.ProcessCode);
-        if (string.IsNullOrWhiteSpace(actualProcessCode)
-            || !string.Equals(actualProcessCode, expectedProcessCode, StringComparison.OrdinalIgnoreCase))
+        if (!MatchesProcess(part, result.ProcessCode))
         {
             return false;
         }
@@ -81,7 +78,20 @@ public static class QeLocalDfmMapper
         }
 
         part.Status = "DfmAnalysisReady";
+        part.LocalDfmRuntimeUnavailable = false;
+        part.LocalDfmRuntimeUnavailableReason = null;
         return true;
+    }
+
+    /// <summary>
+    /// Returns true when a browser runtime process code matches the part's selected process.
+    /// </summary>
+    public static bool MatchesProcess(QuotePartViewModel part, string? processCode)
+    {
+        var expectedProcessCode = ToRuntimeProcessCode(part.ProcessId);
+        var actualProcessCode = ToRuntimeProcessCode(processCode);
+        return !string.IsNullOrWhiteSpace(actualProcessCode)
+            && string.Equals(actualProcessCode, expectedProcessCode, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

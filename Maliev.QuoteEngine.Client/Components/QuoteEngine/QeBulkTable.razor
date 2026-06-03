@@ -342,6 +342,8 @@
         foreach (var part in SelectedParts())
         {
             part.ProcessId = processId;
+            part.LocalDfmRuntimeUnavailable = false;
+            part.LocalDfmRuntimeUnavailableReason = null;
             var material = Materials.FirstOrDefault(item => item.ProcessId == processId);
             if (material is not null)
             {
@@ -458,6 +460,8 @@
     {
         if (string.IsNullOrWhiteSpace(processId)) return;
         part.ProcessId = processId;
+        part.LocalDfmRuntimeUnavailable = false;
+        part.LocalDfmRuntimeUnavailableReason = null;
         var material = Materials.FirstOrDefault(item => item.ProcessId == processId);
         if (material is not null)
         {

@@ -438,6 +438,8 @@
     private async Task SetProcess(ProcessOptionDto process)
     {
         Part.ProcessId = process.Id;
+        Part.LocalDfmRuntimeUnavailable = false;
+        Part.LocalDfmRuntimeUnavailableReason = null;
         var material = MaterialsFor(process.Id).FirstOrDefault();
         if (material is not null)
         {
