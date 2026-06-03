@@ -1435,6 +1435,22 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewerJs_uses_geometry_manifest_device_profile_timeout()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function resolveLocalAdvisoryDeviceProfileName()", js, StringComparison.Ordinal);
+        Assert.Contains("function resolveLocalAdvisoryTimeoutMs(manifest, options = {})", js, StringComparison.Ordinal);
+        Assert.Contains("manifest?.deviceProfiles", js, StringComparison.Ordinal);
+        Assert.Contains("resolveLocalAdvisoryTimeoutMs(manifest, options));", js, StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 15000",
+            js,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");

@@ -3365,6 +3365,34 @@ function hasAdvisoryFileBytes(fileBytes) {
     return Number(fileBytes?.byteLength ?? fileBytes?.length ?? 0) > 0;
 }
 
+function resolveLocalAdvisoryDeviceProfileName() {
+    const viewport = typeof window !== 'undefined' ? window : null;
+    const root = typeof document !== 'undefined' ? document.documentElement : null;
+    const width = Number(viewport?.innerWidth ?? root?.clientWidth ?? 0);
+    const height = Number(viewport?.innerHeight ?? root?.clientHeight ?? 0);
+    const minSide = width > 0 && height > 0 ? Math.min(width, height) : 0;
+    const coarsePointer = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+    if (coarsePointer && minSide > 0 && minSide < 768) return 'mobile';
+    if (coarsePointer || (width > 0 && width < 1180)) return 'tablet';
+    return 'desktop';
+}
+
+function resolveLocalAdvisoryTimeoutMs(manifest, options = {}) {
+    const explicitTimeout = Number(options.timeoutMs);
+    if (Number.isFinite(explicitTimeout) && explicitTimeout > 0) return explicitTimeout;
+
+    const profiles = manifest?.deviceProfiles;
+    const profileName = resolveLocalAdvisoryDeviceProfileName();
+    const selectedTimeout = Number(profiles?.[profileName]?.timeoutMs);
+    if (Number.isFinite(selectedTimeout) && selectedTimeout > 0) return selectedTimeout;
+
+    const profileTimeouts = Object.values(profiles ?? {})
+        .map(profile => Number(profile?.timeoutMs))
+        .filter(timeout => Number.isFinite(timeout) && timeout > 0);
+    return profileTimeouts.length > 0 ? Math.max(...profileTimeouts) : 15000;
+}
+
 async function resolveAdvisoryFileBytes(options) {
     const directFileBytes = normalizeAdvisoryFileBytes(options.fileBytes);
     if (hasAdvisoryFileBytes(directFileBytes)) return directFileBytes;
@@ -3436,7 +3464,7 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
             workerUrl,
             runtimeInput,
             options.processCode ?? 'FDM',
-            Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 15000);
+            resolveLocalAdvisoryTimeoutMs(manifest, options));
         if (localAdvisoryRuns[canvasId] !== runId ||
             !isBrowserFirstRuntimeContract(result)) {
             clearLocalAdvisoryPanel(canvasId);
