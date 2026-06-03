@@ -1,6 +1,8 @@
 window.quoteEngineUploads = (() => {
   const fileMap = new Map();
   const dropzoneMap = new Map();
+  const clearTimerMap = new Map();
+  const fileRetentionMs = 10 * 60 * 1000;
 
   function captureFiles(inputId, mappings) {
     const input = document.getElementById(inputId);
@@ -12,6 +14,9 @@ window.quoteEngineUploads = (() => {
       const match = Array.from(input.files).find(file =>
         file.name === mapping.fileName && file.size === mapping.fileSizeBytes);
       if (match) {
+        const existingTimer = clearTimerMap.get(mapping.clientFileId);
+        if (existingTimer) clearTimeout(existingTimer);
+        clearTimerMap.delete(mapping.clientFileId);
         fileMap.set(mapping.clientFileId, match);
       }
     }
@@ -118,7 +123,46 @@ window.quoteEngineUploads = (() => {
     if (!response.ok) {
       throw new Error(`Upload failed with HTTP ${response.status}.`);
     }
+
+    scheduleClearFile(clientFileId);
   }
 
-  return { captureFiles, openFilePicker, registerDropzone, unregisterDropzone, uploadFile };
+  function clearFile(clientFileId) {
+    const existingTimer = clearTimerMap.get(clientFileId);
+    if (existingTimer) clearTimeout(existingTimer);
+    clearTimerMap.delete(clientFileId);
+    fileMap.delete(clientFileId);
+  }
+
+  function scheduleClearFile(clientFileId, delayMs) {
+    if (!fileMap.has(clientFileId)) {
+      return;
+    }
+
+    const existingTimer = clearTimerMap.get(clientFileId);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    const timer = setTimeout(() => clearFile(clientFileId), Number(delayMs) > 0 ? Number(delayMs) : fileRetentionMs);
+    clearTimerMap.set(clientFileId, timer);
+  }
+
+  async function getFileBytes(clientFileId) {
+    const file = fileMap.get(clientFileId);
+    if (!file || typeof file.arrayBuffer !== "function") {
+      return null;
+    }
+
+    return new Uint8Array(await file.arrayBuffer());
+  }
+
+  return {
+    captureFiles,
+    openFilePicker,
+    registerDropzone,
+    unregisterDropzone,
+    uploadFile,
+    clearFile,
+    scheduleClearFile,
+    getFileBytes
+  };
 })();

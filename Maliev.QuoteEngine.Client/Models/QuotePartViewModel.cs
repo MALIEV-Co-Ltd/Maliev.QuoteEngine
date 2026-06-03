@@ -12,6 +12,7 @@ public sealed class QuotePartViewModel
     public Guid PartId { get; set; } = Guid.NewGuid();
     public Guid FileId { get; set; }
     public string UploadId { get; set; } = string.Empty;
+    public string? ClientFileId { get; set; }
     public string FileName { get; set; } = string.Empty;
     public string ProcessId { get; set; } = "fdm";
     public string MaterialId { get; set; } = "pla-black";

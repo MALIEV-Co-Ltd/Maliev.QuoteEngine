@@ -445,7 +445,12 @@
                 continue;
             }
 
-            var part = new QuotePartViewModel { FileName = candidate.FileName, Status = "Uploading" };
+            var part = new QuotePartViewModel
+            {
+                FileName = candidate.FileName,
+                Status = "Uploading",
+                ClientFileId = candidate.ClientFileId
+            };
             ApplyDefaultRouting(part, candidate.FileName);
             _parts.Add(part);
             _selectedPartIndex = _parts.Count - 1;

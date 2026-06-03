@@ -151,6 +151,8 @@
     [Parameter] public bool IsDarkMode { get; set; }
     [Parameter] public string? PartColor { get; set; }
     [Parameter] public string? ProcessId { get; set; }
+    [Parameter] public string? BrowserFileClientId { get; set; }
+    [Parameter] public string? BrowserFileName { get; set; }
     [Parameter] public string? FinishCode { get; set; }
     [Parameter] public string? RoughnessCode { get; set; }
     [Parameter] public EventCallback<string> OnViewerError { get; set; }
@@ -324,6 +326,9 @@
         await _module.InvokeVoidAsync("runLocalAdvisoryGeometry", _canvasId, new
         {
             processCode = string.IsNullOrWhiteSpace(processCode) ? ProcessId : processCode,
+            clientUploadId = BrowserFileClientId,
+            fileName = BrowserFileName,
+            fileBytesProvider = "quoteEngineUploads",
             dotNetRef = _dotNetRef
         });
     }

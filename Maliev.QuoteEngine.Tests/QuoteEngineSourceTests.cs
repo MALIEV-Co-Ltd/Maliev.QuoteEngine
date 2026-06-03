@@ -310,6 +310,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("event.dataTransfer.files", source, StringComparison.Ordinal);
         Assert.Contains("registerDropzone", source, StringComparison.Ordinal);
         Assert.Contains("HandleDroppedFilesAsync", source, StringComparison.Ordinal);
+        Assert.Contains("async function getFileBytes(clientFileId)", source, StringComparison.Ordinal);
+        Assert.Contains("scheduleClearFile", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1353,6 +1355,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("NotifyLocalGeometryRuntimeComplete", js, StringComparison.Ordinal);
         Assert.Contains("notifyLocalAdvisoryDotNet", js, StringComparison.Ordinal);
         Assert.Contains("normalizeAdvisoryFileBytes(options.fileBytes)", js, StringComparison.Ordinal);
+        Assert.Contains("resolveAdvisoryFileBytes(options)", js, StringComparison.Ordinal);
+        Assert.Contains("fileBytesProvider", js, StringComparison.Ordinal);
         Assert.Contains("{ fileBytes: runtimeFileBytes, fileName: runtimeFileName }", js, StringComparison.Ordinal);
         Assert.Contains("metrics: result?.metrics", js, StringComparison.Ordinal);
         Assert.Contains("issues,", js, StringComparison.Ordinal);
@@ -1366,16 +1370,27 @@ public sealed class QuoteEngineSourceTests
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
         var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var model = ReadRepoFile("Maliev.QuoteEngine.Client", "Models", "QuotePartViewModel.cs");
 
         Assert.Contains("EventCallback<LocalGeometryRuntimeResult> OnLocalGeometryRuntimeCompleted", viewer, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeComplete", viewer, StringComparison.Ordinal);
         Assert.Contains("RunLocalGeometryRuntimeAsync(ProcessId)", viewer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public string FileExtension", viewer, StringComparison.Ordinal);
+        Assert.Contains("[Parameter] public string? BrowserFileClientId", viewer, StringComparison.Ordinal);
+        Assert.Contains("[Parameter] public string? BrowserFileName", viewer, StringComparison.Ordinal);
+        Assert.Contains("clientUploadId = BrowserFileClientId", viewer, StringComparison.Ordinal);
+        Assert.Contains("fileName = BrowserFileName", viewer, StringComparison.Ordinal);
+        Assert.Contains("fileBytesProvider = \"quoteEngineUploads\"", viewer, StringComparison.Ordinal);
         Assert.Contains("_canvasId, GlbUrl, FileExtension", viewer, StringComparison.Ordinal);
         Assert.Contains("FileExtension=\"@ResolveViewerFileExtension()\"", detail, StringComparison.Ordinal);
+        Assert.Contains("BrowserFileClientId=\"@Part.ClientFileId\"", detail, StringComparison.Ordinal);
+        Assert.Contains("BrowserFileName=\"@Part.FileName\"", detail, StringComparison.Ordinal);
         Assert.Contains("OnLocalGeometryRuntimeCompleted=\"@HandleLocalGeometryRuntimeCompletedAsync\"", detail, StringComparison.Ordinal);
         Assert.Contains("QeLocalDfmMapper.TryApply(Part, result)", detail, StringComparison.Ordinal);
         Assert.Contains("QeLocalDfmMapper.HasCurrentProcessReport(Part)", detail, StringComparison.Ordinal);
+        Assert.Contains("public string? ClientFileId { get; set; }", model, StringComparison.Ordinal);
+        Assert.Contains("ClientFileId = candidate.ClientFileId", workspace, StringComparison.Ordinal);
     }
 
     private static string ExtractWindowHandleBlock(string js, string handleName)

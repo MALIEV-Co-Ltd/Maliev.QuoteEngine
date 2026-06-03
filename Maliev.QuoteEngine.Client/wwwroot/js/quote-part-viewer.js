@@ -3335,11 +3335,33 @@ function normalizeAdvisoryFileBytes(fileBytes) {
     return fileBytes;
 }
 
+function hasAdvisoryFileBytes(fileBytes) {
+    return Number(fileBytes?.byteLength ?? fileBytes?.length ?? 0) > 0;
+}
+
+async function resolveAdvisoryFileBytes(options) {
+    const directFileBytes = normalizeAdvisoryFileBytes(options.fileBytes);
+    if (hasAdvisoryFileBytes(directFileBytes)) return directFileBytes;
+
+    const clientUploadId = typeof options.clientUploadId === 'string'
+        ? options.clientUploadId
+        : typeof options.clientFileId === 'string'
+            ? options.clientFileId
+            : '';
+    const providerName = typeof options.fileBytesProvider === 'string' ? options.fileBytesProvider : '';
+    const provider = providerName && typeof window !== 'undefined'
+        ? window[providerName]
+        : null;
+    if (!clientUploadId || typeof provider?.getFileBytes !== 'function') return null;
+
+    return normalizeAdvisoryFileBytes(await provider.getFileBytes(clientUploadId));
+}
+
 /**
  * Runs the GeometryService-owned browser-first runtime through the same-origin BFF proxy.
  * Falls back silently to the server-only path when the manifest or worker cannot be used.
  * @param {string} canvasId
- * @param {{processCode?: string, manifestUrl?: string, assetBaseUrl?: string, timeoutMs?: number, dotNetRef?: object, fileBytes?: ArrayBuffer|Uint8Array|number[], fileName?: string}} options
+ * @param {{processCode?: string, manifestUrl?: string, assetBaseUrl?: string, timeoutMs?: number, dotNetRef?: object, fileBytes?: ArrayBuffer|Uint8Array|number[], fileName?: string, clientUploadId?: string, clientFileId?: string, fileBytesProvider?: string}} options
  * @returns {Promise<object|null>}
  */
 export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
@@ -3349,8 +3371,8 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
     localAdvisoryRuns[canvasId] = runId;
 
     const meshBuffers = collectAdvisoryMeshBuffers(canvasId);
-    const runtimeFileBytes = normalizeAdvisoryFileBytes(options.fileBytes);
-    const hasRuntimeFileBytes = Number(runtimeFileBytes?.byteLength ?? runtimeFileBytes?.length ?? 0) > 0;
+    const runtimeFileBytes = await resolveAdvisoryFileBytes(options);
+    const hasRuntimeFileBytes = hasAdvisoryFileBytes(runtimeFileBytes);
     if (meshBuffers.length === 0 && !hasRuntimeFileBytes) return null;
     const runtimeFileName = typeof options.fileName === 'string' ? options.fileName : '';
     const runtimeInput = meshBuffers.length > 0
