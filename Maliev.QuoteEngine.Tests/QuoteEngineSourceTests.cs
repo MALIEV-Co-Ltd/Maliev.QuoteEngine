@@ -358,6 +358,20 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspace_RetainsBrowserViewerFilesUntilPartLifecycleEnds()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
+
+        Assert.DoesNotContain("scheduleClearFile(clientFileId);", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("ShouldRetainBrowserUploadFile(part)", workspace, StringComparison.Ordinal);
+        Assert.Contains("!ShouldRetainBrowserUploadFile(part)", workspace, StringComparison.Ordinal);
+        Assert.Contains("ClearBrowserUploadFileAsync(part)", workspace, StringComparison.Ordinal);
+        Assert.Contains("ClearRetainedBrowserUploadFilesAsync()", workspace, StringComparison.Ordinal);
+        Assert.Contains("quoteEngineUploads.clearFile", workspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void New_quote_workspace_gives_anonymous_users_demo_and_help_actions()
     {
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");

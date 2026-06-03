@@ -124,8 +124,6 @@ window.quoteEngineUploads = (() => {
     if (!response.ok) {
       throw new Error(`Upload failed with HTTP ${response.status}.`);
     }
-
-    scheduleClearFile(clientFileId);
   }
 
   function clearFile(clientFileId) {
