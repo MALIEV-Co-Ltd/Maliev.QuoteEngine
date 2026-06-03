@@ -1413,6 +1413,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("postLocalAdvisoryTelemetry", js, StringComparison.Ordinal);
         Assert.Contains("navigator.sendBeacon", js, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeComplete", js, StringComparison.Ordinal);
+        Assert.Contains("dispatchLocalAdvisoryUnavailableTelemetry", js, StringComparison.Ordinal);
+        Assert.Contains("status: 'unavailable'", js, StringComparison.Ordinal);
+        Assert.Contains("reason: payload?.reason ?? 'local_runtime_unavailable'", js, StringComparison.Ordinal);
         Assert.Contains("notifyLocalAdvisoryDotNet", js, StringComparison.Ordinal);
         Assert.Contains("normalizeAdvisoryFileBytes(options.fileBytes)", js, StringComparison.Ordinal);
         Assert.Contains("resolveAdvisoryFileBytes(options)", js, StringComparison.Ordinal);
@@ -1473,6 +1476,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("function notifyLocalAdvisoryUnavailableDotNet(dotNetRef, payload)", js, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeUnavailable", js, StringComparison.Ordinal);
         Assert.Contains("options.dotNetRef", js, StringComparison.Ordinal);
+        Assert.Contains("dispatchLocalAdvisoryUnavailableTelemetry(payload);", js, StringComparison.Ordinal);
         Assert.Contains("'input_too_large'", js, StringComparison.Ordinal);
         Assert.Contains("'worker_failed'", js, StringComparison.Ordinal);
     }
