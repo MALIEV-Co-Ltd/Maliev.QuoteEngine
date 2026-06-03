@@ -606,6 +606,30 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task GeometryRuntime_telemetry_accepts_browser_local_completion_without_auth()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync(
+            "/quote/v1/geometry/runtime/telemetry",
+            new
+            {
+                processCode = "CNC_MILL",
+                runtimeVersion = "1.0.0",
+                algorithmVersion = "browser-first-dfm-v1",
+                authority = "local_primary",
+                executionMode = "primary_interactive",
+                accepted = true,
+                issueCount = 1,
+                warningCount = 1,
+                faceCount = 27122,
+                inputHash = "abc123"
+            });
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
     public async Task ReferenceData_exposes_customer_visible_processes_and_materials()
     {
         using var client = factory.CreateClient();

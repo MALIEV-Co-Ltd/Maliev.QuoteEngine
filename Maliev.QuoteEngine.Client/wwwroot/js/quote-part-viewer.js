@@ -543,6 +543,7 @@ const ORTHO_RADIUS_FACTOR   = 0.45; // fraction of cam.radius used for orthograp
 const _arcAnimGuard         = {};   // canvasId → bool — suppresses the ortho observer during arc animations
 const LOCAL_ADVISORY_MANIFEST_URL = '/quote/v1/geometry/runtime/manifest';
 const LOCAL_ADVISORY_ASSET_BASE_URL = '/quote/v1/geometry/runtime/assets/';
+const LOCAL_ADVISORY_TELEMETRY_URL = '/quote/v1/geometry/runtime/telemetry';
 const LOCAL_ADVISORY_FRONTEND_API_VERSION = 1;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -3245,28 +3246,53 @@ function renderLocalAdvisoryStatus(canvasId, state, result = null) {
     panel.textContent = `Local preliminary DFM: ${issueLabel} · local primary · ${faceCount.toLocaleString()} tris`;
 }
 
-function dispatchLocalAdvisoryTelemetry(canvasId, result) {
+function postLocalAdvisoryTelemetry(endpointUrl, payload) {
+    try {
+        const body = JSON.stringify(payload);
+        if (typeof navigator !== 'undefined' &&
+            typeof navigator.sendBeacon === 'function' &&
+            typeof Blob !== 'undefined') {
+            const blob = new Blob([body], { type: 'application/json' });
+            if (navigator.sendBeacon(endpointUrl, blob)) return;
+        }
+
+        if (typeof fetch === 'function') {
+            fetch(endpointUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body,
+                credentials: 'same-origin',
+                keepalive: true,
+            }).catch(() => {});
+        }
+    } catch (_) {
+        // Browser telemetry must never interrupt viewer interaction.
+    }
+}
+
+function dispatchLocalAdvisoryTelemetry(canvasId, result, accepted) {
     try {
         if (typeof window?.dispatchEvent !== 'function' ||
             typeof CustomEvent !== 'function') return;
 
         const issues = Array.isArray(result?.issues) ? result.issues : [];
-        window.dispatchEvent(new CustomEvent('maliev:geometry-local-runtime-complete', {
-            detail: {
-                canvasId,
-                processCode: result?.processCode ?? null,
-                runtimeVersion: result?.runtimeVersion ?? null,
-                algorithmVersion: result?.algorithmVersion ?? null,
-                authority: result?.authority ?? null,
-                executionMode: result?.executionMode ?? null,
-                inputHash: result?.inputHash ?? null,
-                issueCount: issues.length,
-                warningCount: issues.filter(issue => issue?.severity !== 'info').length,
-                faceCount: Number(result?.metrics?.faceCount ?? 0),
-                metrics: result?.metrics ?? null,
-                issues,
-            },
-        }));
+        const detail = {
+            canvasId,
+            processCode: result?.processCode ?? null,
+            runtimeVersion: result?.runtimeVersion ?? null,
+            algorithmVersion: result?.algorithmVersion ?? null,
+            authority: result?.authority ?? null,
+            executionMode: result?.executionMode ?? null,
+            accepted,
+            inputHash: result?.inputHash ?? null,
+            issueCount: issues.length,
+            warningCount: issues.filter(issue => issue?.severity !== 'info').length,
+            faceCount: Number(result?.metrics?.faceCount ?? 0),
+            metrics: result?.metrics ?? null,
+            issues,
+        };
+        window.dispatchEvent(new CustomEvent('maliev:geometry-local-runtime-complete', { detail }));
+        postLocalAdvisoryTelemetry(LOCAL_ADVISORY_TELEMETRY_URL, detail);
     } catch (_) {
         // Local telemetry must never interrupt viewer interaction.
     }
@@ -3418,8 +3444,9 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         }
 
         renderLocalAdvisoryStatus(canvasId, 'complete', result);
-        dispatchLocalAdvisoryTelemetry(canvasId, result);
-        if (await notifyLocalAdvisoryDotNet(options.dotNetRef, result)) {
+        const accepted = await notifyLocalAdvisoryDotNet(options.dotNetRef, result);
+        dispatchLocalAdvisoryTelemetry(canvasId, result, accepted);
+        if (accepted) {
             clearLocalAdvisoryPanel(canvasId);
         }
         return result;

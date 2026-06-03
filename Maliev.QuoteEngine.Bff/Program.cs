@@ -1,5 +1,6 @@
 using Maliev.Aspire.ServiceDefaults;
 using Maliev.Aspire.ServiceDefaults.IAM;
+using Maliev.QuoteEngine.Bff;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Consumers;
 using Maliev.QuoteEngine.Bff.Hubs;
@@ -20,12 +21,14 @@ var builder = WebApplication.CreateBuilder(args);
 builder.WebHost.UseStaticWebAssets();
 builder.AddServiceDefaults();
 builder.AddDefaultApiVersioning();
+builder.AddServiceMeters("quote-engine");
 builder.AddIAMServiceClient("QuoteEngineBff");
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<BffMetrics>();
 builder.AddMalievIdentityCookie(options =>
 {
     // Unauthenticated requests redirect cross-domain to the Web sign-in page,
