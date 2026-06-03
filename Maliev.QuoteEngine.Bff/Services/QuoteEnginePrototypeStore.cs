@@ -806,6 +806,7 @@ public sealed record UploadState(
         VolumeCc = VolumeCc,
         SurfaceAreaCm2 = SurfaceAreaCm2,
         ViewerGlbUrl = ViewerGlbUrl,
+        ViewerFileExtension = string.IsNullOrWhiteSpace(ViewerGlbUrl) ? null : ".glb",
         ThumbnailUrl = ThumbnailUrl,
         Findings = Findings
     };

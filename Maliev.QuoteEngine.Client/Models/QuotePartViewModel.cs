@@ -38,6 +38,8 @@ public sealed class QuotePartViewModel
     // Phase 2 fields
     public string? StoragePath { get; set; }
     public string? GlbUrl { get; set; }
+    public string? ViewerStoragePath { get; set; }
+    public string? ViewerFileExtension { get; set; }
     public string? ThumbnailUrl { get; set; }
     public int BodyCount { get; set; } = 1;
     public bool IsManifold { get; set; } = true;

@@ -23,7 +23,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
     }
 
     public Task SetGlbReadyAsync(string storagePath, string glbUrl, string? thumbnailUrl,
-        int bodyCount, bool isManifold, CancellationToken ct = default)
+        int bodyCount, bool isManifold, CancellationToken ct = default,
+        string? viewerStoragePath = null, string? viewerFileExtension = null)
     {
         _store.AddOrUpdate(
             storagePath,
@@ -32,6 +33,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
                 StoragePath = storagePath,
                 Status = "GlbReady",
                 GlbUrl = glbUrl,
+                ViewerStoragePath = viewerStoragePath,
+                ViewerFileExtension = viewerFileExtension,
                 ThumbnailUrl = thumbnailUrl,
                 BodyCount = bodyCount,
                 IsManifold = isManifold
@@ -40,6 +43,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             {
                 Status = "GlbReady",
                 GlbUrl = glbUrl,
+                ViewerStoragePath = viewerStoragePath ?? existing.ViewerStoragePath,
+                ViewerFileExtension = viewerFileExtension ?? existing.ViewerFileExtension,
                 ThumbnailUrl = thumbnailUrl,
                 BodyCount = bodyCount,
                 IsManifold = isManifold
@@ -61,6 +66,7 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
                 FdmReport = fdmReport,
                 SlaReport = slaReport,
                 CncReport = cncReport,
+                ViewerStoragePath = storagePath,
                 OverlayGlbUrls = overlayGlbUrls,
                 NonManifoldReason = nonManifoldReason,
                 AnalysisErrorCode = analysisErrorCode
@@ -72,6 +78,12 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
                 FdmReport = fdmReport ?? existing.FdmReport,
                 SlaReport = slaReport ?? existing.SlaReport,
                 CncReport = cncReport ?? existing.CncReport,
+                GlbUrl = existing.GlbUrl,
+                ViewerStoragePath = existing.ViewerStoragePath,
+                ViewerFileExtension = existing.ViewerFileExtension,
+                ThumbnailUrl = existing.ThumbnailUrl,
+                BodyCount = existing.BodyCount,
+                IsManifold = existing.IsManifold,
                 // Accumulate overlay URLs across multiple DfmAnalysisReady events
                 OverlayGlbUrls = overlayGlbUrls.Count > 0
                     ? [.. existing.OverlayGlbUrls, .. overlayGlbUrls]

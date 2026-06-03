@@ -8,7 +8,8 @@ public interface IQuoteFileAnalysisStatusService
     Task<QuoteFileAnalysisStatus?> GetStatusAsync(string storagePath, CancellationToken ct = default);
     Task SetProcessingAsync(string storagePath, CancellationToken ct = default);
     Task SetGlbReadyAsync(string storagePath, string glbUrl, string? thumbnailUrl,
-        int bodyCount, bool isManifold, CancellationToken ct = default);
+        int bodyCount, bool isManifold, CancellationToken ct = default,
+        string? viewerStoragePath = null, string? viewerFileExtension = null);
     Task SetDfmReportsAsync(string storagePath,
         QeFdmDfmReport? fdmReport, QeSlaDfmReport? slaReport, QeCncDfmReport? cncReport,
         IReadOnlyList<string> overlayGlbUrls, string? nonManifoldReason,

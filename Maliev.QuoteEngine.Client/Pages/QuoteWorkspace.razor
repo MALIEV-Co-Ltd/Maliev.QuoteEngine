@@ -777,6 +777,8 @@
         part.VolumeCc = status.VolumeCc;
         part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
         part.GlbUrl = status.ViewerGlbUrl ?? part.GlbUrl;
+        part.ViewerStoragePath = status.ViewerStoragePath ?? part.ViewerStoragePath;
+        part.ViewerFileExtension = NormalizeViewerFileExtension(status.ViewerFileExtension, part.ViewerStoragePath ?? part.StoragePath);
         part.ThumbnailUrl = status.ThumbnailUrl ?? part.ThumbnailUrl;
         part.Findings = status.Findings;
         part.IsManifold = status.IsManifold;
@@ -786,6 +788,18 @@
         part.SlaDfmReport = status.SlaReport;
         part.CncDfmReport = status.CncReport;
         part.OverlayGlbUrls = status.OverlayGlbUrls;
+    }
+
+    private static string? NormalizeViewerFileExtension(string? fileExtension, string? storagePath)
+    {
+        var ext = !string.IsNullOrWhiteSpace(fileExtension)
+            ? fileExtension.Trim()
+            : Path.GetExtension(storagePath);
+
+        if (string.IsNullOrWhiteSpace(ext))
+            return null;
+
+        return ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
     }
 
     private static QuotePartViewModel CreatePartViewModel(QuotePartDraftDto part)
@@ -858,6 +872,8 @@
                 if (part is null) return;
 
                 part.GlbUrl = payload.Failed ? null : payload.GlbUrl;
+                part.ViewerStoragePath = payload.ViewerStoragePath ?? part.ViewerStoragePath;
+                part.ViewerFileExtension = NormalizeViewerFileExtension(payload.ViewerFileExtension, part.ViewerStoragePath ?? part.StoragePath);
                 part.ThumbnailUrl = payload.ThumbnailUrl;
                 part.IsManifold = payload.IsManifold;
                 part.BodyCount = payload.BodyCount;
@@ -934,6 +950,7 @@
                 ViewerSettings = part.ViewerSettings,
                 Status = "DfmAnalysisReady",
                 GlbUrl = string.IsNullOrWhiteSpace(demo.ViewerUrl) ? null : demo.ViewerUrl,
+                ViewerFileExtension = ".glb",
                 ThumbnailUrl = string.IsNullOrWhiteSpace(demo.ThumbnailUrl) ? null : demo.ThumbnailUrl,
                 CncDfmReport = new QeCncDfmReport(0, false, true, 2, false, false, false, []),
                 Findings =

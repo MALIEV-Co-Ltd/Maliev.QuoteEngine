@@ -94,6 +94,7 @@
             <div class="qe-pdc-thumb-area">
                 <QePartViewer @ref="_viewer"
                               GlbUrl="@Part.GlbUrl"
+                              FileExtension="@ResolveViewerFileExtension()"
                               IsDarkMode="@IsDarkMode"
                               PartColor="@PartColorCss"
                               ProcessId="@Part.ProcessId"
@@ -207,6 +208,18 @@
     private IReadOnlyList<QeDfmOverlayIssue> DfmOverlayIssues => BuildDfmOverlayIssues();
     private bool HasCurrentProcessDfmReport => QeLocalDfmMapper.HasCurrentProcessReport(Part);
     private bool IsDfmAnalyzing => !HasCurrentProcessDfmReport && !string.IsNullOrWhiteSpace(Part.GlbUrl) && !string.IsNullOrWhiteSpace(Part.ProcessId);
+
+    private string ResolveViewerFileExtension()
+    {
+        var ext = !string.IsNullOrWhiteSpace(Part.ViewerFileExtension)
+            ? Part.ViewerFileExtension.Trim()
+            : System.IO.Path.GetExtension(Part.ViewerStoragePath ?? Part.StoragePath);
+
+        if (string.IsNullOrWhiteSpace(ext))
+            return ".glb";
+
+        return ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
+    }
     private bool IsDfmUnavailable => Part.Status.Equals("Failed", StringComparison.OrdinalIgnoreCase);
     private bool ShouldShowAllClearOverlay => HasCurrentProcessDfmReport && DfmOverlayIssues.Count == 0 && !Part.DfmAcknowledged;
 

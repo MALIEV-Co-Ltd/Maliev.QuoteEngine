@@ -147,6 +147,7 @@
 
 @code {
     [Parameter] public string? GlbUrl { get; set; }
+    [Parameter] public string FileExtension { get; set; } = ".glb";
     [Parameter] public bool IsDarkMode { get; set; }
     [Parameter] public string? PartColor { get; set; }
     [Parameter] public string? ProcessId { get; set; }
@@ -159,6 +160,7 @@
     private IJSObjectReference? _module;
     private DotNetObjectReference<QePartViewer>? _dotNetRef;
     private string? _lastGlbUrl;
+    private string? _lastFileExtension;
     private string? _lastPartColor;
     private string? _lastProcessId;
     private string? _lastFinishCode;
@@ -193,9 +195,11 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrEmpty(GlbUrl) && GlbUrl != _lastGlbUrl)
+        if (!string.IsNullOrEmpty(GlbUrl)
+            && (GlbUrl != _lastGlbUrl || FileExtension != _lastFileExtension))
         {
             _lastGlbUrl = GlbUrl;
+            _lastFileExtension = FileExtension;
             _lastPartColor = PartColor;
             _lastProcessId = ProcessId;
             _lastFinishCode = FinishCode;
@@ -233,7 +237,7 @@
             _dotNetRef ??= DotNetObjectReference.Create(this);
 
             await _module.InvokeVoidAsync("initialize",
-                _canvasId, GlbUrl, "glb", IsDarkMode,
+                _canvasId, GlbUrl, FileExtension, IsDarkMode,
                 null,
                 _dotNetRef,
                 new

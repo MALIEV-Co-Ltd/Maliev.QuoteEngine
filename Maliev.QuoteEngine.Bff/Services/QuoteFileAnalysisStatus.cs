@@ -12,6 +12,8 @@ public sealed record QuoteFileAnalysisStatus
     public required string StoragePath { get; init; }
     public string Status { get; init; } = "Processing";      // Processing | GlbReady | DfmAnalysisReady | Failed
     public string? GlbUrl { get; init; }
+    public string? ViewerStoragePath { get; init; }
+    public string? ViewerFileExtension { get; init; }
     public string? ThumbnailUrl { get; init; }
     public int BodyCount { get; init; } = 1;
     public bool IsManifold { get; init; } = true;

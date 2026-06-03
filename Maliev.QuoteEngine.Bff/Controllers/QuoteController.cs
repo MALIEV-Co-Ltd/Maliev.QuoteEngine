@@ -232,10 +232,33 @@ public sealed class QuoteController(
     }
 
     [HttpGet("uploads/{uploadId}/analysis-status")]
-    public ActionResult<QuoteAnalysisStatusResponse> GetAnalysisStatus(string uploadId)
+    public async Task<ActionResult<QuoteAnalysisStatusResponse>> GetAnalysisStatus(
+        string uploadId,
+        CancellationToken cancellationToken)
     {
         var upload = store.GetUpload(uploadId);
-        return upload is null ? NotFound() : Ok(upload.ToAnalysisStatus());
+        if (upload is null)
+            return NotFound();
+
+        var response = upload.ToAnalysisStatus();
+        var liveStatus = await statusService.GetStatusAsync(upload.StoragePath, cancellationToken);
+        if (liveStatus is null)
+            return Ok(response);
+
+        response.Status = liveStatus.Status;
+        response.ViewerGlbUrl = liveStatus.GlbUrl ?? response.ViewerGlbUrl;
+        response.ViewerStoragePath = liveStatus.ViewerStoragePath ?? response.ViewerStoragePath;
+        response.ViewerFileExtension = liveStatus.ViewerFileExtension ?? response.ViewerFileExtension;
+        response.ThumbnailUrl = liveStatus.ThumbnailUrl ?? response.ThumbnailUrl;
+        response.IsManifold = liveStatus.IsManifold;
+        response.BodyCount = liveStatus.BodyCount;
+        response.NonManifoldReason = liveStatus.NonManifoldReason;
+        response.AnalysisErrorCode = liveStatus.AnalysisErrorCode;
+        response.FdmReport = liveStatus.FdmReport;
+        response.SlaReport = liveStatus.SlaReport;
+        response.CncReport = liveStatus.CncReport;
+        response.OverlayGlbUrls = liveStatus.OverlayGlbUrls;
+        return Ok(response);
     }
 
     [HttpPost("estimate")]

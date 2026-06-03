@@ -13,7 +13,9 @@ public sealed record QeGlbReadyPayload(
     int BodyCount,
     bool IsManifold,
     bool Failed,
-    string? ErrorCode);
+    string? ErrorCode,
+    string? ViewerStoragePath = null,
+    string? ViewerFileExtension = null);
 
 /// <summary>
 /// Pushed to the client via SignalR "OrderStatusChanged" when the order transitions to a new lifecycle state.

@@ -161,6 +161,10 @@ public sealed class QuoteAnalysisStatusResponse
 
     public string? ViewerGlbUrl { get; set; }
 
+    public string? ViewerStoragePath { get; set; }
+
+    public string? ViewerFileExtension { get; set; }
+
     public string? ThumbnailUrl { get; set; }
 
     public IReadOnlyList<DfmFindingDto> Findings { get; set; } = [];

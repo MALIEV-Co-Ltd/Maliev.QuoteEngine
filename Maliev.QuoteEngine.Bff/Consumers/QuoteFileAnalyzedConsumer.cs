@@ -35,11 +35,17 @@ public sealed class QuoteFileAnalyzedConsumer(
         string? thumbnailUrl = null;
         bool failed = false;
         string? errorCode = null;
+        var viewerStoragePath = string.IsNullOrWhiteSpace(payload.ViewerStoragePath)
+            ? payload.GlbStoragePath
+            : payload.ViewerStoragePath;
+        var viewerFileExtension = NormalizeViewerFileExtension(
+            payload.ViewerFileExtension,
+            viewerStoragePath);
 
         try
         {
-            if (!string.IsNullOrEmpty(payload.GlbStoragePath))
-                glbUrl = await uploadClient.GetDownloadUrlByPathAsync(payload.GlbStoragePath, ct: context.CancellationToken);
+            if (!string.IsNullOrEmpty(viewerStoragePath))
+                glbUrl = await uploadClient.GetDownloadUrlByPathAsync(viewerStoragePath, ct: context.CancellationToken);
 
             if (!string.IsNullOrEmpty(payload.ThumbnailStoragePath))
                 thumbnailUrl = await uploadClient.GetDownloadUrlByPathAsync(payload.ThumbnailStoragePath, ct: context.CancellationToken);
@@ -60,7 +66,9 @@ public sealed class QuoteFileAnalyzedConsumer(
                 thumbnailUrl,
                 payload.BodyCount ?? 1,
                 payload.Metrics?.IsManifold ?? true,
-                context.CancellationToken);
+                context.CancellationToken,
+                viewerStoragePath,
+                viewerFileExtension);
         }
 
         var signalRPayload = new QeGlbReadyPayload(
@@ -70,10 +78,24 @@ public sealed class QuoteFileAnalyzedConsumer(
             BodyCount: payload.BodyCount ?? 1,
             IsManifold: payload.Metrics?.IsManifold ?? true,
             Failed: failed,
-            ErrorCode: errorCode);
+            ErrorCode: errorCode,
+            ViewerStoragePath: viewerStoragePath,
+            ViewerFileExtension: viewerFileExtension);
 
         await hub.Clients
             .Group(QuoteNotificationsHub.FileGroup(storagePath))
             .SendAsync("GlbReady", signalRPayload, context.CancellationToken);
+    }
+
+    private static string? NormalizeViewerFileExtension(string? fileExtension, string? storagePath)
+    {
+        var ext = !string.IsNullOrWhiteSpace(fileExtension)
+            ? fileExtension.Trim()
+            : Path.GetExtension(storagePath);
+
+        if (string.IsNullOrWhiteSpace(ext))
+            return null;
+
+        return ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
     }
 }
