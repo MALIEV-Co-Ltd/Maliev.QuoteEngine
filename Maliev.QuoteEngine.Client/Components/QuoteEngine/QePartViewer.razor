@@ -170,6 +170,7 @@
     private string? _lastProcessId;
     private string? _lastFinishCode;
     private string? _lastRoughnessCode;
+    private string? _pendingLocalDfmProcessCode;
     private string? _loadError;
     private string? _lastMeasurement;
     private string _cameraPreset = "iso";
@@ -184,6 +185,7 @@
     private bool _boundingBoxOn;
     private bool _measureOn;
     private bool _thicknessOn;
+    private bool _viewerMaterialPushPending;
 
     private static readonly ViewPreset[] ViewPresets =
     [
@@ -209,21 +211,59 @@
             _lastProcessId = ProcessId;
             _lastFinishCode = FinishCode;
             _lastRoughnessCode = RoughnessCode;
+            _pendingLocalDfmProcessCode = null;
+            _viewerMaterialPushPending = false;
             _loadError = null;
             await InitializeViewerAsync();
         }
-        else if (_module is not null && MaterialChanged())
+        else if (MaterialChanged())
         {
-            var processChanged = ProcessId != _lastProcessId;
-            _lastPartColor = PartColor;
-            _lastProcessId = ProcessId;
-            _lastFinishCode = FinishCode;
-            _lastRoughnessCode = RoughnessCode;
-            await _module.InvokeVoidAsync("setPartMaterial", _canvasId, ProcessId, FinishCode, RoughnessCode, PartColor);
-            if (processChanged)
+            await PushViewerMaterialStateAsync(ProcessId != _lastProcessId ? ProcessId : null);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_module is null)
+            return;
+
+        if (!_viewerMaterialPushPending && string.IsNullOrWhiteSpace(_pendingLocalDfmProcessCode))
+            return;
+
+        var localDfmProcessCode = _pendingLocalDfmProcessCode;
+        if (!string.IsNullOrWhiteSpace(localDfmProcessCode)
+            && !string.Equals(ProcessId, localDfmProcessCode, StringComparison.OrdinalIgnoreCase))
+        {
+            localDfmProcessCode = null;
+        }
+
+        await PushViewerMaterialStateAsync(localDfmProcessCode);
+    }
+
+    private async Task PushViewerMaterialStateAsync(string? localDfmProcessCode = null)
+    {
+        if (_module is null)
+        {
+            _viewerMaterialPushPending = true;
+            if (!string.IsNullOrWhiteSpace(localDfmProcessCode))
             {
-                await RunLocalGeometryRuntimeAsync(ProcessId);
+                _pendingLocalDfmProcessCode = localDfmProcessCode;
             }
+
+            return;
+        }
+
+        _lastPartColor = PartColor;
+        _lastProcessId = ProcessId;
+        _lastFinishCode = FinishCode;
+        _lastRoughnessCode = RoughnessCode;
+        _viewerMaterialPushPending = false;
+        _pendingLocalDfmProcessCode = null;
+
+        await _module.InvokeVoidAsync("setPartMaterial", _canvasId, ProcessId, FinishCode, RoughnessCode, PartColor);
+        if (!string.IsNullOrWhiteSpace(localDfmProcessCode))
+        {
+            await RunLocalGeometryRuntimeAsync(localDfmProcessCode);
         }
     }
 
@@ -326,10 +366,20 @@
 
     public async Task RunLocalGeometryRuntimeAsync(string? processCode = null)
     {
-        if (_module is null) return;
+        var runtimeProcessCode = string.IsNullOrWhiteSpace(processCode) ? ProcessId : processCode;
+        if (_module is null)
+        {
+            if (!string.IsNullOrWhiteSpace(runtimeProcessCode))
+            {
+                _pendingLocalDfmProcessCode = runtimeProcessCode;
+            }
+
+            return;
+        }
+
         await _module.InvokeVoidAsync("runLocalAdvisoryGeometry", _canvasId, new
         {
-            processCode = string.IsNullOrWhiteSpace(processCode) ? ProcessId : processCode,
+            processCode = runtimeProcessCode,
             clientUploadId = BrowserFileClientId,
             fileName = BrowserFileName,
             storagePath = StoragePath,

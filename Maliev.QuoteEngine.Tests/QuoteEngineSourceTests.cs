@@ -1678,7 +1678,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("public async Task NotifyLocalGeometryRuntimeStarted(LocalGeometryRuntimeStarted result)", viewer, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeComplete", viewer, StringComparison.Ordinal);
         Assert.Contains("public async Task<bool> NotifyLocalGeometryRuntimeComplete(LocalGeometryRuntimeResult result)", viewer, StringComparison.Ordinal);
-        Assert.Contains("RunLocalGeometryRuntimeAsync(ProcessId)", viewer, StringComparison.Ordinal);
+        Assert.Contains("RunLocalGeometryRuntimeAsync(localDfmProcessCode)", viewer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public string FileExtension", viewer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public string? BrowserFileClientId", viewer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public string? BrowserFileName", viewer, StringComparison.Ordinal);
@@ -1709,6 +1709,35 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("CanUseBrowserFileViewer", workspace, StringComparison.Ordinal);
         Assert.Contains("ResolveBrowserFileViewerExtension(part)", workspace, StringComparison.Ordinal);
         Assert.Contains("NormalizeViewerFileExtension(null, part.StoragePath ?? part.FileName)", workspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuotePartViewer_DefersBrowserLocalDfmUntilJsModuleExists()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("private string? _pendingLocalDfmProcessCode;", viewer, StringComparison.Ordinal);
+        Assert.Contains("private bool _viewerMaterialPushPending;", viewer, StringComparison.Ordinal);
+        Assert.Contains("protected override async Task OnAfterRenderAsync(bool firstRender)", viewer, StringComparison.Ordinal);
+        Assert.Contains("await PushViewerMaterialStateAsync(ProcessId != _lastProcessId ? ProcessId : null);", viewer, StringComparison.Ordinal);
+        Assert.Contains("_pendingLocalDfmProcessCode = runtimeProcessCode;", viewer, StringComparison.Ordinal);
+        Assert.Contains("await RunLocalGeometryRuntimeAsync(localDfmProcessCode);", viewer, StringComparison.Ordinal);
+        Assert.Contains("private async Task PushViewerMaterialStateAsync(string? localDfmProcessCode = null)", viewer, StringComparison.Ordinal);
+
+        var pushMethodStart = viewer.IndexOf("private async Task PushViewerMaterialStateAsync(string? localDfmProcessCode = null)", StringComparison.Ordinal);
+        var materialChangedStart = viewer.IndexOf("private bool MaterialChanged()", StringComparison.Ordinal);
+        Assert.True(pushMethodStart >= 0, "QePartViewer must have a helper for pushing viewer material/process state.");
+        Assert.True(materialChangedStart > pushMethodStart, "QePartViewer push helper must appear before MaterialChanged.");
+        var pushMethod = viewer[pushMethodStart..materialChangedStart];
+
+        var moduleGuardIndex = pushMethod.IndexOf("if (_module is null)", StringComparison.Ordinal);
+        var lastProcessUpdateIndex = pushMethod.IndexOf("_lastProcessId = ProcessId;", StringComparison.Ordinal);
+        Assert.True(moduleGuardIndex >= 0, "QePartViewer must check for a missing JS module before pushing material/process state.");
+        Assert.True(lastProcessUpdateIndex >= 0, "QePartViewer must track the last pushed process id.");
+        Assert.True(
+            moduleGuardIndex < lastProcessUpdateIndex,
+            "QePartViewer must not mark material/process state as pushed before the JS module exists.");
     }
 
     [Fact]
