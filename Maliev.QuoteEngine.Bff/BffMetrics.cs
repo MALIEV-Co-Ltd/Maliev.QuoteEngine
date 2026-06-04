@@ -13,6 +13,7 @@ public sealed class BffMetrics
     private readonly Histogram<long> _browserDfmRuntimeInputTriangles;
     private readonly Counter<long> _browserDfmRuntimeStarts;
     private readonly Counter<long> _browserDfmRuntimeTerminalAttempts;
+    private readonly Counter<long> _dfmExecutionDecisions;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BffMetrics"/> class.
@@ -41,6 +42,10 @@ public sealed class BffMetrics
             "quote_browser_dfm_runtime_terminal_attempts",
             unit: "{attempt}",
             description: "Counts browser-first local DFM runtime attempts that ended before producing a local report.");
+        _dfmExecutionDecisions = meter.CreateCounter<long>(
+            "quote_dfm_execution_decisions",
+            unit: "{decision}",
+            description: "Counts whether QuoteEngine DFM work was satisfied by browser-local execution or required GeometryService fallback.");
     }
 
     /// <summary>
@@ -63,6 +68,18 @@ public sealed class BffMetrics
             { "authority", NormalizeMarker(authority, "other") },
             { "execution_mode", NormalizeMarker(executionMode, "other") },
         });
+
+        if (accepted)
+        {
+            _dfmExecutionDecisions.Add(1, new TagList
+            {
+                { "process_family", NormalizeProcessFamily(processCode) },
+                { "execution_path", "browser_primary" },
+                { "decision", "satisfied" },
+                { "authority", NormalizeMarker(authority, "other") },
+                { "execution_mode", NormalizeMarker(executionMode, "other") },
+            });
+        }
     }
 
     /// <summary>
@@ -116,6 +133,15 @@ public sealed class BffMetrics
         {
             { "process_family", NormalizeProcessFamily(processCode) },
             { "reason", NormalizeMarker(reason, "local_runtime_unavailable") },
+            { "authority", NormalizeMarker(authority, "other") },
+            { "execution_mode", NormalizeMarker(executionMode, "other") },
+        });
+        _dfmExecutionDecisions.Add(1, new TagList
+        {
+            { "process_family", NormalizeProcessFamily(processCode) },
+            { "execution_path", "server_fallback" },
+            { "decision", "required" },
+            { "fallback_reason", NormalizeMarker(reason, "local_runtime_unavailable") },
             { "authority", NormalizeMarker(authority, "other") },
             { "execution_mode", NormalizeMarker(executionMode, "other") },
         });
