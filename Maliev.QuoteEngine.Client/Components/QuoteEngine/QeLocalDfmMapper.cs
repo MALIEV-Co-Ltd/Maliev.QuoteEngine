@@ -80,6 +80,8 @@ public static class QeLocalDfmMapper
         part.Status = "DfmAnalysisReady";
         part.LocalDfmRuntimeUnavailable = false;
         part.LocalDfmRuntimeUnavailableReason = null;
+        part.LocalDfmRuntimeRunningProcessId = null;
+        part.LocalDfmRuntimeStartedAtUtc = null;
         return true;
     }
 

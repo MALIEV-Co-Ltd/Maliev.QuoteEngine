@@ -1111,6 +1111,8 @@
         part.ProcessId = process.Id;
         part.LocalDfmRuntimeUnavailable = false;
         part.LocalDfmRuntimeUnavailableReason = null;
+        part.LocalDfmRuntimeRunningProcessId = null;
+        part.LocalDfmRuntimeStartedAtUtc = null;
         var material = MaterialsFor(process.Id).FirstOrDefault();
         if (material is not null)
         {

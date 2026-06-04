@@ -15,7 +15,7 @@ else if (Analyzing)
         <div class="qe-dfm-overlay-header">
             <div class="qe-dfm-overlay-left">
                 <MudProgressCircular Indeterminate="true" Size="Size.Small" />
-                <span>@Text("Analyzing your model...", "กำลังวิเคราะห์โมเดลของคุณ...")</span>
+                <span>@(LocalAnalyzing ? Text("Local DFM running on this device", "กำลังวิเคราะห์ DFM บนอุปกรณ์นี้") : Text("Analyzing your model...", "กำลังวิเคราะห์โมเดลของคุณ..."))</span>
             </div>
         </div>
     </div>
@@ -71,6 +71,7 @@ else if (IsVisible && DfmIssues.Count > 0)
     [Parameter] public IReadOnlyList<QeDfmOverlayIssue> DfmIssues { get; set; } = [];
     [Parameter] public bool IsVisible { get; set; }
     [Parameter] public bool Analyzing { get; set; }
+    [Parameter] public bool LocalAnalyzing { get; set; }
     [Parameter] public bool TimedOut { get; set; }
     [Parameter] public string? ErrorMessage { get; set; }
     [Parameter] public bool AllClear { get; set; }

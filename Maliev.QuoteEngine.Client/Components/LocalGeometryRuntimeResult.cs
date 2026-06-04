@@ -34,6 +34,15 @@ public sealed class LocalGeometryRuntimeResult
 }
 
 /// <summary>
+/// Notification produced when the browser geometry runtime has enough local input and starts work.
+/// </summary>
+public sealed class LocalGeometryRuntimeStarted
+{
+    /// <summary>Manufacturing process code requested for the browser runtime attempt.</summary>
+    public string? ProcessCode { get; set; }
+}
+
+/// <summary>
 /// Terminal notification produced when the browser geometry runtime cannot run locally.
 /// </summary>
 public sealed class LocalGeometryRuntimeUnavailable

@@ -103,6 +103,7 @@
                               FinishCode="@Part.FinishCode"
                               RoughnessCode="@Part.RoughnessCode"
                               OnLocalGeometryRuntimeCompleted="@HandleLocalGeometryRuntimeCompletedAsync"
+                              OnLocalGeometryRuntimeStarted="@HandleLocalGeometryRuntimeStartedAsync"
                               OnLocalGeometryRuntimeUnavailable="@HandleLocalGeometryRuntimeUnavailableAsync"
                               OnViewerError="@HandleViewerError" />
 
@@ -149,6 +150,7 @@
                 <QeDfmOverlayPanel DfmIssues="@DfmOverlayIssues"
                                    IsVisible="@(DfmOverlayIssues.Count > 0 && !Part.DfmAcknowledged)"
                                    Analyzing="@IsDfmAnalyzing"
+                                   LocalAnalyzing="@IsLocalDfmRuntimeRunning"
                                    TimedOut="@IsDfmUnavailable"
                                    ErrorMessage="@Part.NonManifoldReason"
                                    AllClear="@ShouldShowAllClearOverlay"
@@ -210,6 +212,10 @@
 
     private IReadOnlyList<QeDfmOverlayIssue> DfmOverlayIssues => BuildDfmOverlayIssues();
     private bool HasCurrentProcessDfmReport => QeLocalDfmMapper.HasCurrentProcessReport(Part);
+    private bool IsLocalDfmRuntimeRunning =>
+        !string.IsNullOrWhiteSpace(Part.LocalDfmRuntimeRunningProcessId)
+        && Part.LocalDfmRuntimeStartedAtUtc.HasValue
+        && QeLocalDfmMapper.MatchesProcess(Part, Part.LocalDfmRuntimeRunningProcessId);
     private bool IsDfmAnalyzing =>
         !HasCurrentProcessDfmReport
         && !Part.LocalDfmRuntimeUnavailable
@@ -271,6 +277,21 @@
         return true;
     }
 
+    private async Task HandleLocalGeometryRuntimeStartedAsync(LocalGeometryRuntimeStarted result)
+    {
+        if (!QeLocalDfmMapper.MatchesProcess(Part, result.ProcessCode))
+        {
+            return;
+        }
+
+        Part.LocalDfmRuntimeUnavailable = false;
+        Part.LocalDfmRuntimeUnavailableReason = null;
+        Part.LocalDfmRuntimeRunningProcessId = result.ProcessCode;
+        Part.LocalDfmRuntimeStartedAtUtc = DateTimeOffset.UtcNow;
+        await OnPartChanged.InvokeAsync(Part);
+        await InvokeAsync(StateHasChanged);
+    }
+
     private async Task HandleLocalGeometryRuntimeUnavailableAsync(LocalGeometryRuntimeUnavailable result)
     {
         if (!QeLocalDfmMapper.MatchesProcess(Part, result.ProcessCode))
@@ -282,6 +303,8 @@
         Part.LocalDfmRuntimeUnavailableReason = string.IsNullOrWhiteSpace(result.Reason)
             ? "local_runtime_unavailable"
             : result.Reason;
+        Part.LocalDfmRuntimeRunningProcessId = null;
+        Part.LocalDfmRuntimeStartedAtUtc = null;
         await OnPartChanged.InvokeAsync(Part);
         await InvokeAsync(StateHasChanged);
     }

@@ -357,7 +357,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("activeUploadIds.add(clientFileId);", source, StringComparison.Ordinal);
         Assert.Contains("const isUploadRetained = pendingUploadIds.has(clientFileId) || activeUploadIds.has(clientFileId);", source, StringComparison.Ordinal);
         Assert.Contains("skipped: true", source, StringComparison.Ordinal);
-        Assert.Contains("body: file.blob", source, StringComparison.Ordinal);
+        Assert.Contains("xhr.send(uploadBody)", source, StringComparison.Ordinal);
         Assert.Contains("Content-Range", source, StringComparison.Ordinal);
         Assert.Contains("event.dataTransfer.files", source, StringComparison.Ordinal);
         Assert.Contains("registerDropzone", source, StringComparison.Ordinal);
@@ -1482,12 +1482,45 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewModel_tracks_browser_local_dfm_running_state()
+    {
+        var started = new LocalGeometryRuntimeStarted { ProcessCode = "fdm" };
+        var part = new QuotePartViewModel
+        {
+            ProcessId = "fdm",
+            LocalDfmRuntimeRunningProcessId = started.ProcessCode,
+            LocalDfmRuntimeStartedAtUtc = DateTimeOffset.UtcNow
+        };
+
+        Assert.Equal("fdm", part.LocalDfmRuntimeRunningProcessId);
+        Assert.True(part.LocalDfmRuntimeStartedAtUtc.HasValue);
+    }
+
+    [Fact]
     public void QuotePartViewerJs_clears_local_dfm_panel_only_when_blazor_accepts_result()
     {
         var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js");
 
         Assert.Contains("const accepted = await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeComplete', result);", js, StringComparison.Ordinal);
         Assert.Contains("return accepted === true;", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuotePartViewerJs_notifies_blazor_when_local_dfm_starts()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function notifyLocalAdvisoryStartedDotNet(dotNetRef, payload)", js, StringComparison.Ordinal);
+        Assert.Contains("NotifyLocalGeometryRuntimeStarted", js, StringComparison.Ordinal);
+
+        var inputIndex = js.IndexOf("const runtimeInput =", StringComparison.Ordinal);
+        var startedIndex = js.IndexOf("await notifyLocalAdvisoryStartedDotNet(options.dotNetRef", StringComparison.Ordinal);
+        var fetchIndex = js.IndexOf("const manifestResponse = await fetch", StringComparison.Ordinal);
+
+        Assert.True(inputIndex >= 0, "runtime input creation must exist");
+        Assert.True(startedIndex > inputIndex, "local DFM start must be reported after local input is available");
+        Assert.True(fetchIndex > startedIndex, "local DFM start must be reported before manifest/worker work can stall");
     }
 
     [Fact]
@@ -1543,6 +1576,9 @@ public sealed class QuoteEngineSourceTests
         var model = ReadRepoFile("Maliev.QuoteEngine.Client", "Models", "QuotePartViewModel.cs");
 
         Assert.Contains("Func<LocalGeometryRuntimeResult, Task<bool>>? OnLocalGeometryRuntimeCompleted", viewer, StringComparison.Ordinal);
+        Assert.Contains("Func<LocalGeometryRuntimeStarted, Task>? OnLocalGeometryRuntimeStarted", viewer, StringComparison.Ordinal);
+        Assert.Contains("NotifyLocalGeometryRuntimeStarted", viewer, StringComparison.Ordinal);
+        Assert.Contains("public async Task NotifyLocalGeometryRuntimeStarted(LocalGeometryRuntimeStarted result)", viewer, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeComplete", viewer, StringComparison.Ordinal);
         Assert.Contains("public async Task<bool> NotifyLocalGeometryRuntimeComplete(LocalGeometryRuntimeResult result)", viewer, StringComparison.Ordinal);
         Assert.Contains("RunLocalGeometryRuntimeAsync(ProcessId)", viewer, StringComparison.Ordinal);
@@ -1557,10 +1593,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("BrowserFileClientId=\"@Part.ClientFileId\"", detail, StringComparison.Ordinal);
         Assert.Contains("BrowserFileName=\"@Part.FileName\"", detail, StringComparison.Ordinal);
         Assert.Contains("OnLocalGeometryRuntimeCompleted=\"@HandleLocalGeometryRuntimeCompletedAsync\"", detail, StringComparison.Ordinal);
+        Assert.Contains("OnLocalGeometryRuntimeStarted=\"@HandleLocalGeometryRuntimeStartedAsync\"", detail, StringComparison.Ordinal);
+        Assert.Contains("private async Task HandleLocalGeometryRuntimeStartedAsync(LocalGeometryRuntimeStarted result)", detail, StringComparison.Ordinal);
+        Assert.Contains("Part.LocalDfmRuntimeRunningProcessId = result.ProcessCode", detail, StringComparison.Ordinal);
+        Assert.Contains("Part.LocalDfmRuntimeStartedAtUtc = DateTimeOffset.UtcNow", detail, StringComparison.Ordinal);
         Assert.Contains("private async Task<bool> HandleLocalGeometryRuntimeCompletedAsync(LocalGeometryRuntimeResult result)", detail, StringComparison.Ordinal);
         Assert.Contains("QeLocalDfmMapper.TryApply(Part, result)", detail, StringComparison.Ordinal);
         Assert.Contains("QeLocalDfmMapper.HasCurrentProcessReport(Part)", detail, StringComparison.Ordinal);
         Assert.Contains("public string? ClientFileId { get; set; }", model, StringComparison.Ordinal);
+        Assert.Contains("public string? LocalDfmRuntimeRunningProcessId { get; set; }", model, StringComparison.Ordinal);
+        Assert.Contains("public DateTimeOffset? LocalDfmRuntimeStartedAtUtc { get; set; }", model, StringComparison.Ordinal);
         Assert.Contains("ClientFileId = candidate.ClientFileId", workspace, StringComparison.Ordinal);
         Assert.Contains("TryApplyLocalViewerUrlAsync(part)", workspace, StringComparison.Ordinal);
         Assert.Contains("quoteEngineUploads.getObjectUrl", workspace, StringComparison.Ordinal);
@@ -1585,6 +1627,20 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Part.LocalDfmRuntimeUnavailable ||", detail, StringComparison.Ordinal);
         Assert.Contains("LocalDfmRuntimeUnavailable", model, StringComparison.Ordinal);
         Assert.Contains("part.LocalDfmRuntimeUnavailable = false", mapper, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeRunningProcessId = null", mapper, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeStartedAtUtc = null", mapper, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteDfmOverlayPanel_labels_browser_local_analysis()
+    {
+        var panel = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeDfmOverlayPanel.razor");
+        var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
+
+        Assert.Contains("[Parameter] public bool LocalAnalyzing { get; set; }", panel, StringComparison.Ordinal);
+        Assert.Contains("Local DFM running on this device", panel, StringComparison.Ordinal);
+        Assert.Contains("LocalAnalyzing=\"@IsLocalDfmRuntimeRunning\"", detail, StringComparison.Ordinal);
+        Assert.Contains("private bool IsLocalDfmRuntimeRunning", detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1596,10 +1652,16 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("Part.LocalDfmRuntimeUnavailable = false", sidebar, StringComparison.Ordinal);
         Assert.Contains("Part.LocalDfmRuntimeUnavailableReason = null", sidebar, StringComparison.Ordinal);
+        Assert.Contains("Part.LocalDfmRuntimeRunningProcessId = null", sidebar, StringComparison.Ordinal);
+        Assert.Contains("Part.LocalDfmRuntimeStartedAtUtc = null", sidebar, StringComparison.Ordinal);
         Assert.Contains("part.LocalDfmRuntimeUnavailable = false", bulkTable, StringComparison.Ordinal);
         Assert.Contains("part.LocalDfmRuntimeUnavailableReason = null", bulkTable, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeRunningProcessId = null", bulkTable, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeStartedAtUtc = null", bulkTable, StringComparison.Ordinal);
         Assert.Contains("part.LocalDfmRuntimeUnavailable = false", workspace, StringComparison.Ordinal);
         Assert.Contains("part.LocalDfmRuntimeUnavailableReason = null", workspace, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeRunningProcessId = null", workspace, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeStartedAtUtc = null", workspace, StringComparison.Ordinal);
     }
 
     private static string ExtractWindowHandleBlock(string js, string handleName)

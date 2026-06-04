@@ -34,6 +34,8 @@ public sealed class QuotePartViewModel
     public bool DfmAcknowledged { get; set; }
     public bool LocalDfmRuntimeUnavailable { get; set; }
     public string? LocalDfmRuntimeUnavailableReason { get; set; }
+    public string? LocalDfmRuntimeRunningProcessId { get; set; }
+    public DateTimeOffset? LocalDfmRuntimeStartedAtUtc { get; set; }
     public string? PartNotes { get; set; }
     public string Status { get; set; } = "Waiting";
     public IReadOnlyList<DfmFindingDto> Findings { get; set; } = [];

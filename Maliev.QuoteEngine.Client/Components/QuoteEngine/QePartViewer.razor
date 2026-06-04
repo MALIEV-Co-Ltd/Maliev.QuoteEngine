@@ -157,6 +157,7 @@
     [Parameter] public string? RoughnessCode { get; set; }
     [Parameter] public EventCallback<string> OnViewerError { get; set; }
     [Parameter] public Func<LocalGeometryRuntimeResult, Task<bool>>? OnLocalGeometryRuntimeCompleted { get; set; }
+    [Parameter] public Func<LocalGeometryRuntimeStarted, Task>? OnLocalGeometryRuntimeStarted { get; set; }
     [Parameter] public Func<LocalGeometryRuntimeUnavailable, Task>? OnLocalGeometryRuntimeUnavailable { get; set; }
 
     private readonly string _canvasId = $"qe-canvas-{Guid.NewGuid():N}";
@@ -341,6 +342,13 @@
             return false;
 
         return await OnLocalGeometryRuntimeCompleted(result);
+    }
+
+    [JSInvokable]
+    public async Task NotifyLocalGeometryRuntimeStarted(LocalGeometryRuntimeStarted result)
+    {
+        if (OnLocalGeometryRuntimeStarted is not null)
+            await OnLocalGeometryRuntimeStarted(result);
     }
 
     [JSInvokable]

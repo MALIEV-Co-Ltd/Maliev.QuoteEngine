@@ -3328,6 +3328,16 @@ async function notifyLocalAdvisoryDotNet(dotNetRef, result) {
     }
 }
 
+async function notifyLocalAdvisoryStartedDotNet(dotNetRef, payload) {
+    if (!dotNetRef || typeof dotNetRef.invokeMethodAsync !== 'function') return;
+
+    try {
+        await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeStarted', payload);
+    } catch (_) {
+        // Local runtime start signaling must never interrupt viewer interaction.
+    }
+}
+
 async function notifyLocalAdvisoryUnavailableDotNet(dotNetRef, payload) {
     dispatchLocalAdvisoryUnavailableTelemetry(payload);
 
@@ -3509,6 +3519,7 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
     const runtimeInput = meshBuffers.length > 0
         ? { meshBuffers }
         : { fileBytes: runtimeFileBytes, fileName: runtimeFileName };
+    await notifyLocalAdvisoryStartedDotNet(options.dotNetRef, unavailablePayload(null));
 
     renderLocalAdvisoryStatus(canvasId, 'pending');
     try {

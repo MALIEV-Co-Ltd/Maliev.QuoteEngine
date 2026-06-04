@@ -344,6 +344,8 @@
             part.ProcessId = processId;
             part.LocalDfmRuntimeUnavailable = false;
             part.LocalDfmRuntimeUnavailableReason = null;
+            part.LocalDfmRuntimeRunningProcessId = null;
+            part.LocalDfmRuntimeStartedAtUtc = null;
             var material = Materials.FirstOrDefault(item => item.ProcessId == processId);
             if (material is not null)
             {
@@ -462,6 +464,8 @@
         part.ProcessId = processId;
         part.LocalDfmRuntimeUnavailable = false;
         part.LocalDfmRuntimeUnavailableReason = null;
+        part.LocalDfmRuntimeRunningProcessId = null;
+        part.LocalDfmRuntimeStartedAtUtc = null;
         var material = Materials.FirstOrDefault(item => item.ProcessId == processId);
         if (material is not null)
         {
