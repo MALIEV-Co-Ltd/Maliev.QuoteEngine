@@ -368,7 +368,7 @@
     private async Task ResetWorkspaceStateAsync()
     {
         _quoteSessionId = Guid.NewGuid().ToString("N");
-        await ClearRetainedBrowserUploadFilesAsync();
+        await ClearRetainedBrowserUploadFilesAsync("workspace-reset");
         _parts.Clear();
         _estimate = null;
         _formalQuote = null;
@@ -538,7 +538,7 @@
 
             _quoteSessionId = string.IsNullOrWhiteSpace(request.QuoteSessionId) ? _quoteSessionId : request.QuoteSessionId;
             var response = await Api.ImportHandoffAsync(request);
-            await ClearRetainedBrowserUploadFilesAsync();
+            await ClearRetainedBrowserUploadFilesAsync("handoff-import");
             _parts.Clear();
             foreach (var part in response.Parts)
             {
@@ -585,7 +585,7 @@
     {
         var idx = _parts.IndexOf(part);
         _parts.Remove(part);
-        await ClearBrowserUploadFileAsync(part);
+        await ClearBrowserUploadFileAsync(part, reason: "remove-part");
         _draftProjectId = null;
         if (_parts.Count > 0)
         {
@@ -701,7 +701,7 @@
         _draftProjectId = project.ProjectId;
         _title = project.Title;
         _quoteSessionId = Guid.NewGuid().ToString("N");
-        await ClearRetainedBrowserUploadFilesAsync();
+        await ClearRetainedBrowserUploadFilesAsync("duplicate-project");
         _parts.Clear();
         foreach (var part in project.Parts)
         {
@@ -844,10 +844,10 @@
         && part.Status != "Upload failed"
         && CanUseBrowserFileViewer(part);
 
-    private async Task ClearRetainedBrowserUploadFilesAsync()
+    private async Task ClearRetainedBrowserUploadFilesAsync(string reason)
     {
         foreach (var part in _parts.ToArray())
-            await ClearBrowserUploadFileAsync(part, force: true);
+            await ClearBrowserUploadFileAsync(part, force: true, reason: reason);
     }
 
     private async Task ScheduleBrowserUploadFileCleanupAsync(string? clientFileId)
@@ -867,7 +867,7 @@
         }
     }
 
-    private async Task ClearBrowserUploadFileAsync(QuotePartViewModel part, bool force = false)
+    private async Task ClearBrowserUploadFileAsync(QuotePartViewModel part, bool force = false, string reason = "explicit")
     {
         if (string.IsNullOrWhiteSpace(part.ClientFileId))
             return;
@@ -881,7 +881,7 @@
 
         try
         {
-            await Js.InvokeVoidAsync("quoteEngineUploads.clearFile", part.ClientFileId);
+            await Js.InvokeVoidAsync("quoteEngineUploads.clearFile", part.ClientFileId, reason);
         }
         catch (JSDisconnectedException)
         {
@@ -1026,7 +1026,7 @@
         }
 
         _title = demo.Title;
-        await ClearRetainedBrowserUploadFilesAsync();
+        await ClearRetainedBrowserUploadFilesAsync("demo-project");
         _parts.Clear();
         foreach (var part in demo.Parts)
         {
@@ -1194,7 +1194,7 @@
     {
         try
         {
-            await ClearRetainedBrowserUploadFilesAsync();
+            await ClearRetainedBrowserUploadFilesAsync("dispose");
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", CompactDropzoneId);
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", MobileDropzoneId);
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", HeroDropzoneId);

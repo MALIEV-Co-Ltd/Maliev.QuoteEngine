@@ -346,8 +346,18 @@ public sealed class QuoteEngineSourceTests
     {
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
 
+        Assert.Contains("getCapturedInputFiles", source, StringComparison.Ordinal);
+        Assert.Contains("input._blazorFilesById", source, StringComparison.Ordinal);
         Assert.Contains("file.name === mapping.fileName", source, StringComparison.Ordinal);
-        Assert.Contains("file.size === mapping.fileSizeBytes", source, StringComparison.Ordinal);
+        Assert.Contains("file.size === Number(mapping.fileSizeBytes)", source, StringComparison.Ordinal);
+        Assert.Contains("const pendingUploadIds = new Set();", source, StringComparison.Ordinal);
+        Assert.Contains("const activeUploadIds = new Set();", source, StringComparison.Ordinal);
+        Assert.Contains("pendingUploadIds.add(mapping.clientFileId)", source, StringComparison.Ordinal);
+        Assert.Contains("pendingUploadIds.delete(clientFileId);", source, StringComparison.Ordinal);
+        Assert.Contains("activeUploadIds.add(clientFileId);", source, StringComparison.Ordinal);
+        Assert.Contains("const isUploadRetained = pendingUploadIds.has(clientFileId) || activeUploadIds.has(clientFileId);", source, StringComparison.Ordinal);
+        Assert.Contains("skipped: true", source, StringComparison.Ordinal);
+        Assert.Contains("body: file.blob", source, StringComparison.Ordinal);
         Assert.Contains("Content-Range", source, StringComparison.Ordinal);
         Assert.Contains("event.dataTransfer.files", source, StringComparison.Ordinal);
         Assert.Contains("registerDropzone", source, StringComparison.Ordinal);
@@ -366,8 +376,9 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("scheduleClearFile(clientFileId);", uploadScript, StringComparison.Ordinal);
         Assert.Contains("ShouldRetainBrowserUploadFile(part)", workspace, StringComparison.Ordinal);
         Assert.Contains("!ShouldRetainBrowserUploadFile(part)", workspace, StringComparison.Ordinal);
-        Assert.Contains("ClearBrowserUploadFileAsync(part)", workspace, StringComparison.Ordinal);
-        Assert.Contains("ClearRetainedBrowserUploadFilesAsync()", workspace, StringComparison.Ordinal);
+        Assert.Contains("ClearBrowserUploadFileAsync(part, reason: \"remove-part\")", workspace, StringComparison.Ordinal);
+        Assert.Contains("ClearRetainedBrowserUploadFilesAsync(\"workspace-reset\")", workspace, StringComparison.Ordinal);
+        Assert.Contains("ClearRetainedBrowserUploadFilesAsync(\"dispose\")", workspace, StringComparison.Ordinal);
         Assert.Contains("quoteEngineUploads.clearFile", workspace, StringComparison.Ordinal);
     }
 

@@ -3,24 +3,85 @@ window.quoteEngineUploads = (() => {
   const objectUrlMap = new Map();
   const dropzoneMap = new Map();
   const clearTimerMap = new Map();
+  const pendingUploadIds = new Set();
+  const activeUploadIds = new Set();
   const fileRetentionMs = 10 * 60 * 1000;
+  let lastCaptureDiagnostics = null;
+  let lastClearDiagnostics = null;
+
+  function normalizeFile(fileLike) {
+    if (!fileLike) {
+      return null;
+    }
+
+    const blob = fileLike instanceof Blob ? fileLike : fileLike.blob || fileLike.file;
+    if (!blob) {
+      return null;
+    }
+
+    return {
+      blob,
+      name: fileLike.name || blob.name || "",
+      size: Number(fileLike.size ?? blob.size ?? 0),
+      type: fileLike.type || fileLike.contentType || blob.type || ""
+    };
+  }
+
+  function getCapturedInputFiles(input) {
+    const inputFiles = Array.from(input.files || [])
+      .map(normalizeFile)
+      .filter(Boolean);
+    if (inputFiles.length > 0) {
+      return inputFiles;
+    }
+
+    const blazorFiles = input._blazorFilesById ? Object.values(input._blazorFilesById) : [];
+    return blazorFiles
+      .map(normalizeFile)
+      .filter(Boolean);
+  }
 
   function captureFiles(inputId, mappings) {
     const input = document.getElementById(inputId);
-    if (!input || !input.files) {
+    if (!input) {
+      lastCaptureDiagnostics = { inputId, inputFound: false };
       return;
     }
 
-    for (const mapping of mappings) {
-      const match = Array.from(input.files).find(file =>
-        file.name === mapping.fileName && file.size === mapping.fileSizeBytes);
+    const capturedFiles = getCapturedInputFiles(input);
+    const mappingList = Array.from(mappings || []);
+    const matchedClientFileIds = [];
+    for (const mapping of mappingList) {
+      const match = capturedFiles.find(file =>
+        file.name === mapping.fileName && file.size === Number(mapping.fileSizeBytes));
       if (match) {
         const existingTimer = clearTimerMap.get(mapping.clientFileId);
         if (existingTimer) clearTimeout(existingTimer);
         clearTimerMap.delete(mapping.clientFileId);
         fileMap.set(mapping.clientFileId, match);
+        pendingUploadIds.add(mapping.clientFileId);
+        matchedClientFileIds.push(mapping.clientFileId);
       }
     }
+
+    lastCaptureDiagnostics = {
+      inputId,
+      inputFound: true,
+      inputFileCount: input.files?.length || 0,
+      inputFiles: Array.from(input.files || []).map(file => ({ name: file.name, size: file.size, type: file.type || "" })),
+      blazorFileCount: input._blazorFilesById ? Object.keys(input._blazorFilesById).length : 0,
+      blazorFileKeys: input._blazorFilesById ? Object.keys(input._blazorFilesById) : [],
+      capturedFiles: capturedFiles.map(file => ({ name: file.name, size: file.size, type: file.type || "" })),
+      pendingUploadIds: Array.from(pendingUploadIds),
+      activeUploadIds: Array.from(activeUploadIds),
+      mappings: mappingList.map(mapping => ({
+        clientFileId: mapping.clientFileId,
+        fileName: mapping.fileName,
+        fileSizeBytes: mapping.fileSizeBytes
+      })),
+      matchedClientFileIds,
+      knownClientFileIds: Array.from(fileMap.keys())
+    };
   }
 
   function openFilePicker(inputId) {
@@ -62,7 +123,9 @@ window.quoteEngineUploads = (() => {
 
       const files = Array.from(event.dataTransfer.files).map(file => {
         const clientFileId = createClientFileId();
-        fileMap.set(clientFileId, file);
+        const storedFile = normalizeFile(file);
+        fileMap.set(clientFileId, storedFile);
+        pendingUploadIds.add(clientFileId);
         return {
           clientFileId,
           fileName: file.name,
@@ -107,26 +170,53 @@ window.quoteEngineUploads = (() => {
 
   async function uploadFile(clientFileId, uploadUrl, contentType) {
     const file = fileMap.get(clientFileId);
-    if (!file) {
-      throw new Error("The selected browser file is no longer available.");
+    if (!file || !file.blob) {
+      throw new Error(`The selected browser file is no longer available. ${JSON.stringify({
+        clientFileId,
+        knownClientFileIds: Array.from(fileMap.keys()),
+        pendingUploadIds: Array.from(pendingUploadIds),
+        activeUploadIds: Array.from(activeUploadIds),
+        lastCapture: lastCaptureDiagnostics,
+        lastClear: lastClearDiagnostics
+      })}`);
     }
 
-    const response = await fetch(uploadUrl, {
-      method: "PUT",
-      credentials: "include",
-      headers: {
-        "Content-Type": contentType || file.type || "application/octet-stream",
-        "Content-Range": `bytes 0-${file.size - 1}/${file.size}`
-      },
-      body: file
-    });
+    pendingUploadIds.delete(clientFileId);
+    activeUploadIds.add(clientFileId);
+    try {
+      const response = await fetch(uploadUrl, {
+        method: "PUT",
+        credentials: "include",
+        headers: {
+          "Content-Type": contentType || file.type || "application/octet-stream",
+          "Content-Range": `bytes 0-${file.size - 1}/${file.size}`
+        },
+        body: file.blob
+      });
 
-    if (!response.ok) {
-      throw new Error(`Upload failed with HTTP ${response.status}.`);
+      if (!response.ok) {
+        throw new Error(`Upload failed with HTTP ${response.status}.`);
+      }
+    } finally {
+      activeUploadIds.delete(clientFileId);
     }
   }
 
-  function clearFile(clientFileId) {
+  function clearFile(clientFileId, reason = "explicit") {
+    const isUploadRetained = pendingUploadIds.has(clientFileId) || activeUploadIds.has(clientFileId);
+    if (isUploadRetained) {
+      lastClearDiagnostics = {
+        clientFileId,
+        reason,
+        skipped: true,
+        pendingUploadIds: Array.from(pendingUploadIds),
+        activeUploadIds: Array.from(activeUploadIds),
+        knownClientFileIds: Array.from(fileMap.keys()),
+        stack: new Error().stack
+      };
+      return;
+    }
+
     const existingTimer = clearTimerMap.get(clientFileId);
     if (existingTimer) clearTimeout(existingTimer);
     clearTimerMap.delete(clientFileId);
@@ -135,7 +225,18 @@ window.quoteEngineUploads = (() => {
       URL.revokeObjectURL(objectUrl);
     }
     objectUrlMap.delete(clientFileId);
+    pendingUploadIds.delete(clientFileId);
+    activeUploadIds.delete(clientFileId);
     fileMap.delete(clientFileId);
+    lastClearDiagnostics = {
+      clientFileId,
+      reason,
+      skipped: false,
+      pendingUploadIds: Array.from(pendingUploadIds),
+      activeUploadIds: Array.from(activeUploadIds),
+      knownClientFileIds: Array.from(fileMap.keys()),
+      stack: new Error().stack
+    };
   }
 
   function scheduleClearFile(clientFileId, delayMs) {
@@ -146,28 +247,28 @@ window.quoteEngineUploads = (() => {
     const existingTimer = clearTimerMap.get(clientFileId);
     if (existingTimer) clearTimeout(existingTimer);
 
-    const timer = setTimeout(() => clearFile(clientFileId), Number(delayMs) > 0 ? Number(delayMs) : fileRetentionMs);
+    const timer = setTimeout(() => clearFile(clientFileId, "timer"), Number(delayMs) > 0 ? Number(delayMs) : fileRetentionMs);
     clearTimerMap.set(clientFileId, timer);
   }
 
   async function getFileBytes(clientFileId) {
     const file = fileMap.get(clientFileId);
-    if (!file || typeof file.arrayBuffer !== "function") {
+    if (!file?.blob || typeof file.blob.arrayBuffer !== "function") {
       return null;
     }
 
-    return new Uint8Array(await file.arrayBuffer());
+    return new Uint8Array(await file.blob.arrayBuffer());
   }
 
   function getObjectUrl(clientFileId) {
     const file = fileMap.get(clientFileId);
-    if (!file || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
+    if (!file?.blob || typeof URL === "undefined" || typeof URL.createObjectURL !== "function") {
       return null;
     }
 
     let objectUrl = objectUrlMap.get(clientFileId);
     if (!objectUrl) {
-      objectUrl = URL.createObjectURL(file);
+      objectUrl = URL.createObjectURL(file.blob);
       objectUrlMap.set(clientFileId, objectUrl);
     }
 
