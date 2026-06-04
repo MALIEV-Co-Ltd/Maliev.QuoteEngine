@@ -177,6 +177,13 @@ public sealed class QuoteEngineSourceTests
             Authority = "local_primary",
             ExecutionMode = "primary_interactive",
             IsAuthoritative = false,
+            Metrics = new LocalGeometryRuntimeMetrics
+            {
+                VolumeMm3 = 12500,
+                SurfaceAreaMm2 = 4500,
+                IsManifold = false,
+                NonManifoldEdgeCount = 8,
+            },
             Issues =
             [
                 new LocalGeometryRuntimeIssue
@@ -204,6 +211,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Equal(3, part.FdmDfmReport.OverhangFaceCount);
         Assert.Equal(1.25m, part.FdmDfmReport.OverhangAreaCm2);
         Assert.True(part.FdmDfmReport.SupportRequired);
+        Assert.Equal(12.5m, part.VolumeCc);
+        Assert.Equal(45m, part.SurfaceAreaCm2);
+        Assert.False(part.IsManifold);
+        Assert.Equal("Browser local DFM found 8 non-manifold edge(s).", part.NonManifoldReason);
         Assert.True(QeLocalDfmMapper.HasCurrentProcessReport(part));
     }
 

@@ -1,3 +1,4 @@
+using System.Globalization;
 using Maliev.QuoteEngine.Client.Models;
 using Maliev.QuoteEngine.Shared.Quotes;
 
@@ -77,12 +78,61 @@ public static class QeLocalDfmMapper
                 issues);
         }
 
+        ApplyLocalGeometryRuntimeMetrics(part, result.Metrics);
         part.Status = "DfmAnalysisReady";
         part.LocalDfmRuntimeUnavailable = false;
         part.LocalDfmRuntimeUnavailableReason = null;
         part.LocalDfmRuntimeRunningProcessId = null;
         part.LocalDfmRuntimeStartedAtUtc = null;
         return true;
+    }
+
+    private static void ApplyLocalGeometryRuntimeMetrics(
+        QuotePartViewModel part,
+        LocalGeometryRuntimeMetrics? metrics)
+    {
+        if (metrics is null)
+        {
+            return;
+        }
+
+        if (TryGetFiniteNonNegative(metrics.VolumeMm3, out var volumeMm3)
+            && volumeMm3 <= (double)decimal.MaxValue)
+        {
+            part.VolumeCc = (decimal)volumeMm3 / 1_000m;
+        }
+
+        if (TryGetFiniteNonNegative(metrics.SurfaceAreaMm2, out var surfaceAreaMm2)
+            && surfaceAreaMm2 <= (double)decimal.MaxValue)
+        {
+            part.SurfaceAreaCm2 = (decimal)surfaceAreaMm2 / 100m;
+        }
+
+        if (metrics.IsManifold.HasValue)
+        {
+            part.IsManifold = metrics.IsManifold.Value;
+        }
+
+        if (TryGetFiniteNonNegative(metrics.NonManifoldEdgeCount, out var edgeCountValue)
+            && edgeCountValue > 0
+            && edgeCountValue <= int.MaxValue)
+        {
+            var edgeCount = Math.Max(1, (int)Math.Round(edgeCountValue, MidpointRounding.AwayFromZero));
+            part.IsManifold = false;
+            part.NonManifoldReason = string.Create(
+                CultureInfo.InvariantCulture,
+                $"Browser local DFM found {edgeCount:N0} non-manifold edge(s).");
+        }
+        else if (metrics.IsManifold == true)
+        {
+            part.NonManifoldReason = null;
+        }
+    }
+
+    private static bool TryGetFiniteNonNegative(double? value, out double number)
+    {
+        number = value.GetValueOrDefault();
+        return value.HasValue && double.IsFinite(number) && number >= 0;
     }
 
     /// <summary>
