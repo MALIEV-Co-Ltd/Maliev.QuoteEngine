@@ -3324,6 +3324,8 @@ function dispatchLocalAdvisoryStartedTelemetry(payload) {
             status: 'started',
             authority: 'local_primary',
             executionMode: 'primary_interactive',
+            inputByteCount: payload?.inputByteCount ?? null,
+            inputTriangleCount: payload?.inputTriangleCount ?? null,
         };
         if (typeof window?.dispatchEvent === 'function' &&
             typeof CustomEvent === 'function') {
@@ -3466,8 +3468,23 @@ function countLocalAdvisoryInputTriangles(input) {
     }, 0);
 }
 
+function getArrayLikeByteLength(values, bytesPerElement) {
+    const byteLength = Number(values?.byteLength);
+    if (Number.isFinite(byteLength) && byteLength > 0) return Math.round(byteLength);
+
+    const length = Number(values?.length);
+    if (!Number.isFinite(length) || length <= 0) return 0;
+    return Math.round(length * bytesPerElement);
+}
+
 function getLocalAdvisoryInputByteLength(input) {
-    return Number(input?.fileBytes?.byteLength ?? input?.fileBytes?.length ?? 0);
+    const fileBytes = Number(input?.fileBytes?.byteLength ?? input?.fileBytes?.length ?? 0);
+    if (Number.isFinite(fileBytes) && fileBytes > 0) return Math.round(fileBytes);
+
+    if (!Array.isArray(input?.meshBuffers)) return 0;
+    return input.meshBuffers.reduce((total, buffer) => total
+        + getArrayLikeByteLength(buffer?.positions, 8)
+        + getArrayLikeByteLength(buffer?.indices, 4), 0);
 }
 
 function isLocalAdvisoryInputWithinDeviceProfile(manifest, input) {
@@ -3539,7 +3556,13 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
     const runtimeInput = meshBuffers.length > 0
         ? { meshBuffers }
         : { fileBytes: runtimeFileBytes, fileName: runtimeFileName };
-    await notifyLocalAdvisoryStartedDotNet(options.dotNetRef, unavailablePayload(null));
+    await notifyLocalAdvisoryStartedDotNet(
+        options.dotNetRef,
+        {
+            processCode: options.processCode ?? 'FDM',
+            inputByteCount: getLocalAdvisoryInputByteLength(runtimeInput),
+            inputTriangleCount: countLocalAdvisoryInputTriangles(runtimeInput),
+        });
 
     renderLocalAdvisoryStatus(canvasId, 'pending');
     try {

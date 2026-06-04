@@ -1468,6 +1468,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("NotifyLocalGeometryRuntimeComplete", js, StringComparison.Ordinal);
         Assert.Contains("dispatchLocalAdvisoryStartedTelemetry", js, StringComparison.Ordinal);
         Assert.Contains("status: 'started'", js, StringComparison.Ordinal);
+        Assert.Contains("inputByteCount: payload?.inputByteCount ?? null", js, StringComparison.Ordinal);
+        Assert.Contains("inputTriangleCount: payload?.inputTriangleCount ?? null", js, StringComparison.Ordinal);
         Assert.Contains("dispatchLocalAdvisoryUnavailableTelemetry", js, StringComparison.Ordinal);
         Assert.Contains("status: 'unavailable'", js, StringComparison.Ordinal);
         Assert.Contains("reason: payload?.reason ?? 'local_runtime_unavailable'", js, StringComparison.Ordinal);
@@ -1492,8 +1494,12 @@ public sealed class QuoteEngineSourceTests
             .ReplaceLineEndings("\n");
 
         Assert.Contains("public bool IsStarted", controller, StringComparison.Ordinal);
+        Assert.Contains("InputByteCount", controller, StringComparison.Ordinal);
+        Assert.Contains("InputTriangleCount", controller, StringComparison.Ordinal);
         Assert.Contains("RecordBrowserDfmRuntimeStart", controller, StringComparison.Ordinal);
         Assert.Contains("quote_browser_dfm_runtime_starts", metrics, StringComparison.Ordinal);
+        Assert.Contains("quote_browser_dfm_runtime_input_bytes", metrics, StringComparison.Ordinal);
+        Assert.Contains("quote_browser_dfm_runtime_input_triangles", metrics, StringComparison.Ordinal);
         Assert.Contains("RecordBrowserDfmRuntimeStart", metrics, StringComparison.Ordinal);
         Assert.Contains("function dispatchLocalAdvisoryStartedTelemetry(payload)", js, StringComparison.Ordinal);
         Assert.Contains("dispatchLocalAdvisoryStartedTelemetry(payload);", js, StringComparison.Ordinal);
@@ -1533,7 +1539,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("NotifyLocalGeometryRuntimeStarted", js, StringComparison.Ordinal);
 
         var inputIndex = js.IndexOf("const runtimeInput =", StringComparison.Ordinal);
-        var startedIndex = js.IndexOf("await notifyLocalAdvisoryStartedDotNet(options.dotNetRef", StringComparison.Ordinal);
+        var startedIndex = js.IndexOf("await notifyLocalAdvisoryStartedDotNet(\n        options.dotNetRef", StringComparison.Ordinal);
         var fetchIndex = js.IndexOf("const manifestResponse = await fetch", StringComparison.Ordinal);
 
         Assert.True(inputIndex >= 0, "runtime input creation must exist");
@@ -1566,6 +1572,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("function isLocalAdvisoryInputWithinDeviceProfile(manifest, input)", js, StringComparison.Ordinal);
         Assert.Contains("profile?.maxInputBytes", js, StringComparison.Ordinal);
         Assert.Contains("profile?.maxTriangles", js, StringComparison.Ordinal);
+        Assert.Contains("function getArrayLikeByteLength(values, bytesPerElement)", js, StringComparison.Ordinal);
         Assert.Contains("countLocalAdvisoryInputTriangles(input)", js, StringComparison.Ordinal);
         Assert.Contains("if (!isLocalAdvisoryInputWithinDeviceProfile(manifest, runtimeInput))", js, StringComparison.Ordinal);
         Assert.Contains("clearLocalAdvisoryPanel(canvasId);", js, StringComparison.Ordinal);

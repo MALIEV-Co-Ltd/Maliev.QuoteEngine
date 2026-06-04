@@ -660,7 +660,9 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
                 processCode = "CNC_MILL",
                 status = "started",
                 authority = "local_primary",
-                executionMode = "primary_interactive"
+                executionMode = "primary_interactive",
+                inputByteCount = 84,
+                inputTriangleCount = 1
             });
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);

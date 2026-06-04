@@ -9,6 +9,8 @@ namespace Maliev.QuoteEngine.Bff;
 public sealed class BffMetrics
 {
     private readonly Counter<long> _browserDfmRuntimeCompletions;
+    private readonly Histogram<long> _browserDfmRuntimeInputBytes;
+    private readonly Histogram<long> _browserDfmRuntimeInputTriangles;
     private readonly Counter<long> _browserDfmRuntimeStarts;
     private readonly Counter<long> _browserDfmRuntimeTerminalAttempts;
 
@@ -27,6 +29,14 @@ public sealed class BffMetrics
             "quote_browser_dfm_runtime_starts",
             unit: "{start}",
             description: "Counts browser-first local DFM runtime starts observed by QuoteEngine.");
+        _browserDfmRuntimeInputBytes = meter.CreateHistogram<long>(
+            "quote_browser_dfm_runtime_input_bytes",
+            unit: "By",
+            description: "Records browser-first local DFM runtime input payload sizes observed by QuoteEngine.");
+        _browserDfmRuntimeInputTriangles = meter.CreateHistogram<long>(
+            "quote_browser_dfm_runtime_input_triangles",
+            unit: "{triangle}",
+            description: "Records browser-first local DFM runtime triangle workloads observed by QuoteEngine.");
         _browserDfmRuntimeTerminalAttempts = meter.CreateCounter<long>(
             "quote_browser_dfm_runtime_terminal_attempts",
             unit: "{attempt}",
@@ -61,17 +71,32 @@ public sealed class BffMetrics
     /// <param name="processCode">The process code requested for the browser runtime.</param>
     /// <param name="authority">The runtime authority marker.</param>
     /// <param name="executionMode">The runtime execution mode marker.</param>
+    /// <param name="inputByteCount">The approximate local runtime input size in bytes.</param>
+    /// <param name="inputTriangleCount">The approximate local runtime triangle workload.</param>
     public void RecordBrowserDfmRuntimeStart(
         string? processCode,
         string? authority,
-        string? executionMode)
+        string? executionMode,
+        long? inputByteCount = null,
+        long? inputTriangleCount = null)
     {
-        _browserDfmRuntimeStarts.Add(1, new TagList
+        var tags = new TagList
         {
             { "process_family", NormalizeProcessFamily(processCode) },
             { "authority", NormalizeMarker(authority, "other") },
             { "execution_mode", NormalizeMarker(executionMode, "other") },
-        });
+        };
+
+        _browserDfmRuntimeStarts.Add(1, tags);
+        if (inputByteCount is > 0)
+        {
+            _browserDfmRuntimeInputBytes.Record(inputByteCount.Value, tags);
+        }
+
+        if (inputTriangleCount is > 0)
+        {
+            _browserDfmRuntimeInputTriangles.Record(inputTriangleCount.Value, tags);
+        }
     }
 
     /// <summary>
