@@ -3534,8 +3534,11 @@ async function resolveAdvisoryFileBytes(options) {
  * @returns {Promise<object|null>}
  */
 export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
+    const processCode = typeof options.processCode === 'string' && options.processCode.trim()
+        ? options.processCode.trim()
+        : null;
     const unavailablePayload = reason => ({
-        processCode: options.processCode ?? 'FDM',
+        processCode,
         reason,
     });
 
@@ -3543,6 +3546,13 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         await notifyLocalAdvisoryUnavailableDotNet(
             options.dotNetRef,
             unavailablePayload('runtime_unsupported'));
+        return null;
+    }
+
+    if (!processCode) {
+        await notifyLocalAdvisoryUnavailableDotNet(
+            options.dotNetRef,
+            unavailablePayload('process_code_missing'));
         return null;
     }
 
@@ -3566,7 +3576,7 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
     await notifyLocalAdvisoryStartedDotNet(
         options.dotNetRef,
         {
-            processCode: options.processCode ?? 'FDM',
+            processCode,
             inputByteCount: getLocalAdvisoryInputByteLength(runtimeInput),
             inputTriangleCount: countLocalAdvisoryInputTriangles(runtimeInput),
         });
@@ -3620,7 +3630,7 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
             canvasId,
             workerUrl,
             runtimeInput,
-            options.processCode ?? 'FDM',
+            processCode,
             resolveLocalAdvisoryTimeoutMs(manifest, options));
         result.storagePath = typeof options.storagePath === 'string' && options.storagePath.trim()
             ? options.storagePath.trim()

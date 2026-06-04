@@ -1653,6 +1653,18 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewerJs_refuses_missing_process_code_instead_of_defaulting_to_fdm()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("const processCode = typeof options.processCode === 'string' && options.processCode.trim()", js, StringComparison.Ordinal);
+        Assert.Contains("processCode,", js, StringComparison.Ordinal);
+        Assert.Contains("unavailablePayload('process_code_missing')", js, StringComparison.Ordinal);
+        Assert.DoesNotContain("options.processCode ?? 'FDM'", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
