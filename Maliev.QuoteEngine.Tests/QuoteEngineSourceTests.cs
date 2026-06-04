@@ -1523,6 +1523,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("resolveAdvisoryFileBytes(options)", js, StringComparison.Ordinal);
         Assert.Contains("fileBytesProvider", js, StringComparison.Ordinal);
         Assert.Contains("{ fileBytes: runtimeFileBytes, fileName: runtimeFileName }", js, StringComparison.Ordinal);
+        Assert.Contains("const wasmUrl = resolveRuntimeAssetUrl(", js, StringComparison.Ordinal);
+        Assert.Contains("manifest.assets?.wasm", js, StringComparison.Ordinal);
+        Assert.Contains("worker.postMessage({ id: messageId, input, processCode, wasmUrl });", js, StringComparison.Ordinal);
         Assert.Contains("storagePath: result?.storagePath ?? null", js, StringComparison.Ordinal);
         Assert.Contains("result.storagePath = typeof options.storagePath === 'string' && options.storagePath.trim()", js, StringComparison.Ordinal);
         Assert.Contains("metrics: result?.metrics", js, StringComparison.Ordinal);
