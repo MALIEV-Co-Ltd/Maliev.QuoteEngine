@@ -20,6 +20,13 @@ public sealed class GeometryRuntimeController(
     BffMetrics bffMetrics,
     ILogger<GeometryRuntimeController> logger) : ControllerBase
 {
+    private static readonly string[] RuntimeExecutionHeaders =
+    [
+        "X-Maliev-Geometry-Execution-Mode",
+        "X-Maliev-Geometry-Authority",
+        "X-Maliev-Geometry-Server-Role"
+    ];
+
     /// <summary>
     /// Retrieves the latest browser geometry runtime manifest.
     /// </summary>
@@ -70,6 +77,7 @@ public sealed class GeometryRuntimeController(
         {
             Response.Headers.CacheControl = cacheControl;
         }
+        ForwardRuntimeExecutionHeaders(response);
 
         return new ContentResult
         {
@@ -90,6 +98,7 @@ public sealed class GeometryRuntimeController(
         {
             Response.Headers.CacheControl = cacheControl;
         }
+        ForwardRuntimeExecutionHeaders(response);
 
         var contentType = response.Content.Headers.ContentType?.ToString()
             ?? fallbackContentType;
@@ -232,6 +241,17 @@ public sealed class GeometryRuntimeController(
             surfaceAreaCm2.HasValue ||
             request.Metrics.IsManifold.HasValue ||
             nonManifoldReason is not null;
+    }
+
+    private void ForwardRuntimeExecutionHeaders(HttpResponseMessage response)
+    {
+        foreach (var headerName in RuntimeExecutionHeaders)
+        {
+            if (response.Headers.TryGetValues(headerName, out var values))
+            {
+                Response.Headers[headerName] = string.Join(",", values);
+            }
+        }
     }
 
     private static bool TryGetFiniteNonNegative(double? value, out double number)
