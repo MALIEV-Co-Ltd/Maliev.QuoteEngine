@@ -2188,6 +2188,9 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                 runLocalAdvisoryGeometry(canvasId, {
                     processCode: viewerSettings.processCode ?? viewerSettings.processId,
                     storagePath: viewerSettings.storagePath,
+                    clientUploadId: viewerSettings.browserFileClientId ?? viewerSettings.clientUploadId,
+                    fileName: viewerSettings.browserFileName ?? viewerSettings.fileName,
+                    fileBytesProvider: viewerSettings.fileBytesProvider ?? 'quoteEngineUploads',
                     dotNetRef,
                 });
             },

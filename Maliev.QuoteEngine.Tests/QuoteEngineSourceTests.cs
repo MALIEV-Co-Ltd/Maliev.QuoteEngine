@@ -1733,6 +1733,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("storagePath = StoragePath", viewer, StringComparison.Ordinal);
         Assert.Contains("fileBytesProvider = \"quoteEngineUploads\"", viewer, StringComparison.Ordinal);
         Assert.Contains("_canvasId, GlbUrl, FileExtension", viewer, StringComparison.Ordinal);
+        Assert.Contains("browserFileClientId = BrowserFileClientId", viewer, StringComparison.Ordinal);
+        Assert.Contains("browserFileName = BrowserFileName", viewer, StringComparison.Ordinal);
         Assert.Contains("FileExtension=\"@ResolveViewerFileExtension()\"", detail, StringComparison.Ordinal);
         Assert.Contains("BrowserFileClientId=\"@Part.ClientFileId\"", detail, StringComparison.Ordinal);
         Assert.Contains("BrowserFileName=\"@Part.FileName\"", detail, StringComparison.Ordinal);
@@ -1754,6 +1756,21 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("CanUseBrowserFileViewer", workspace, StringComparison.Ordinal);
         Assert.Contains("ResolveBrowserFileViewerExtension(part)", workspace, StringComparison.Ordinal);
         Assert.Contains("NormalizeViewerFileExtension(null, part.StoragePath ?? part.FileName)", workspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuotePartViewerJs_initial_local_dfm_uses_retained_browser_file_bytes()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        var runIndex = js.IndexOf("runLocalAdvisoryGeometry(canvasId, {", StringComparison.Ordinal);
+        Assert.True(runIndex >= 0, "Initial model-load local DFM invocation must exist.");
+
+        var runBlock = js[runIndex..js.IndexOf("});", runIndex, StringComparison.Ordinal)];
+        Assert.Contains("clientUploadId: viewerSettings.browserFileClientId ?? viewerSettings.clientUploadId", runBlock, StringComparison.Ordinal);
+        Assert.Contains("fileName: viewerSettings.browserFileName ?? viewerSettings.fileName", runBlock, StringComparison.Ordinal);
+        Assert.Contains("fileBytesProvider: viewerSettings.fileBytesProvider ?? 'quoteEngineUploads'", runBlock, StringComparison.Ordinal);
     }
 
     [Fact]
