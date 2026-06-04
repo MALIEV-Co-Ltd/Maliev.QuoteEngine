@@ -76,6 +76,7 @@ public sealed class BffMetrics
                 { "process_family", NormalizeProcessFamily(processCode) },
                 { "execution_path", "browser_primary" },
                 { "decision", "satisfied" },
+                { "server_cpu", "avoided" },
                 { "authority", NormalizeMarker(authority, "other") },
                 { "execution_mode", NormalizeMarker(executionMode, "other") },
             });
@@ -136,14 +137,20 @@ public sealed class BffMetrics
             { "authority", NormalizeMarker(authority, "other") },
             { "execution_mode", NormalizeMarker(executionMode, "other") },
         });
+    }
+
+    /// <summary>
+    /// Records that a server DFM analysis result was received from GeometryService.
+    /// </summary>
+    /// <param name="processCode">The manufacturing process represented by the DFM report.</param>
+    public void RecordServerDfmAnalysisReady(string? processCode)
+    {
         _dfmExecutionDecisions.Add(1, new TagList
         {
             { "process_family", NormalizeProcessFamily(processCode) },
             { "execution_path", "server_fallback" },
-            { "decision", "required" },
-            { "fallback_reason", NormalizeMarker(reason, "local_runtime_unavailable") },
-            { "authority", NormalizeMarker(authority, "other") },
-            { "execution_mode", NormalizeMarker(executionMode, "other") },
+            { "decision", "server_completed" },
+            { "server_cpu", "consumed" },
         });
     }
 

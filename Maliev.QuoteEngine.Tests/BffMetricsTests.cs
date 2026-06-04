@@ -138,12 +138,13 @@ public sealed class BffMetricsTests
         Assert.Equal("cnc", tags["process_family"]);
         Assert.Equal("browser_primary", tags["execution_path"]);
         Assert.Equal("satisfied", tags["decision"]);
+        Assert.Equal("avoided", tags["server_cpu"]);
         Assert.Equal("local_primary", tags["authority"]);
         Assert.Equal("primary_interactive", tags["execution_mode"]);
     }
 
     [Fact]
-    public void RecordBrowserDfmRuntimeTerminalAttempt_EmitsServerFallbackDecision()
+    public void RecordBrowserDfmRuntimeTerminalAttempt_DoesNotEmitExecutionDecision()
     {
         var services = new ServiceCollection();
         services.AddMetrics();
@@ -175,10 +176,46 @@ public sealed class BffMetricsTests
         var metrics = new BffMetrics(provider.GetRequiredService<IMeterFactory>());
         metrics.RecordBrowserDfmRuntimeTerminalAttempt("CNC_MILL", "input_too_large", "local_primary", "primary_interactive");
 
+        Assert.Empty(measurements);
+    }
+
+    [Fact]
+    public void RecordServerDfmAnalysisReady_EmitsConsumedServerCpuDecision()
+    {
+        var services = new ServiceCollection();
+        services.AddMetrics();
+
+        var measurements = new List<Dictionary<string, object?>>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Name == "quote_dfm_execution_decisions")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var snapshot = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var tag in tags)
+            {
+                snapshot[tag.Key] = tag.Value;
+            }
+
+            measurements.Add(snapshot);
+        });
+        listener.Start();
+
+        using var provider = services.BuildServiceProvider();
+        var metrics = new BffMetrics(provider.GetRequiredService<IMeterFactory>());
+        metrics.RecordServerDfmAnalysisReady("CNC_MILL");
+
         var tags = Assert.Single(measurements);
         Assert.Equal("cnc", tags["process_family"]);
         Assert.Equal("server_fallback", tags["execution_path"]);
-        Assert.Equal("required", tags["decision"]);
-        Assert.Equal("input_too_large", tags["fallback_reason"]);
+        Assert.Equal("server_completed", tags["decision"]);
+        Assert.Equal("consumed", tags["server_cpu"]);
     }
 }

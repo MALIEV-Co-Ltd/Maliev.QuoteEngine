@@ -14,6 +14,7 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
     IQuoteFileAnalysisStatusService status,
     QuoteUploadServiceClient uploadClient,
     IHubContext<QuoteNotificationsHub> hub,
+    BffMetrics bffMetrics,
     ILogger<QuoteDfmAnalysisReadyConsumer> logger) : IConsumer<DfmAnalysisReadyEvent>
 {
     private static readonly JsonSerializerOptions JsonOpts =
@@ -39,6 +40,7 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
         var fdmReport = MapFdm(payload.FdmReport);
         var slaReport = MapSla(payload.SlaReport);
         var cncReport = MapCnc(payload.CncReport);
+        RecordServerDfmReports(fdmReport, slaReport, cncReport, bffMetrics);
 
         // Sign overlay GLB paths in parallel; silently skip on error (analysis still usable)
         var rawOverlayPaths = ExtractStringList(payload.OverlayPaths);
@@ -82,6 +84,28 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
     }
 
     // ── Mapping helpers ──────────────────────────────────────────────────────
+
+    private static void RecordServerDfmReports(
+        QeFdmDfmReport? fdmReport,
+        QeSlaDfmReport? slaReport,
+        QeCncDfmReport? cncReport,
+        BffMetrics bffMetrics)
+    {
+        if (fdmReport is not null)
+        {
+            bffMetrics.RecordServerDfmAnalysisReady("FDM");
+        }
+
+        if (slaReport is not null)
+        {
+            bffMetrics.RecordServerDfmAnalysisReady("SLA");
+        }
+
+        if (cncReport is not null)
+        {
+            bffMetrics.RecordServerDfmAnalysisReady("CNC_MILL");
+        }
+    }
 
     private static QeFdmDfmReport? MapFdm(object? raw)
     {

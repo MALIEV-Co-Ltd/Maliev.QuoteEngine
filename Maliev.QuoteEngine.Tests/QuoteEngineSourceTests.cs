@@ -1,5 +1,7 @@
+using System.Diagnostics.Metrics;
 using MassTransit;
 using Maliev.MessagingContracts.Contracts.Geometry;
+using Maliev.QuoteEngine.Bff;
 using Maliev.QuoteEngine.Client.Components;
 using Maliev.QuoteEngine.Client.Components.QuoteEngine;
 using Maliev.QuoteEngine.Client.Models;
@@ -10,6 +12,7 @@ using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Localization;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using System.Runtime.CompilerServices;
@@ -1119,9 +1122,36 @@ public sealed class QuoteEngineSourceTests
         var hubCtx = Substitute.For<IHubContext<QuoteNotificationsHub>>();
         hubCtx.Clients.Returns(hubClients);
 
+        var metricMeasurements = new List<Dictionary<string, object?>>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Name == "quote_dfm_execution_decisions")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var snapshot = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var tag in tags)
+            {
+                snapshot[tag.Key] = tag.Value;
+            }
+
+            metricMeasurements.Add(snapshot);
+        });
+        listener.Start();
+        using var metricProvider = new ServiceCollection()
+            .AddMetrics()
+            .BuildServiceProvider();
+        var bffMetrics = new BffMetrics(metricProvider.GetRequiredService<IMeterFactory>());
+
         var uploadClient = new FakeQuoteUploadServiceClient("https://cdn.example.com/overlay.glb");
         var consumer = new QuoteDfmAnalysisReadyConsumer(
-            statusSvc, uploadClient, hubCtx,
+            statusSvc, uploadClient, hubCtx, bffMetrics,
             NullLogger<QuoteDfmAnalysisReadyConsumer>.Instance);
 
         // First event: FDM report only
@@ -1192,6 +1222,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Equal(2, dfmPayload.FdmReport.ThinWallCount);
         Assert.NotNull(dfmPayload.CncReport);
         Assert.Equal(3, dfmPayload.CncReport.SharpCornerCount);
+
+        Assert.Equal(2, metricMeasurements.Count);
+        var fdmMetric = Assert.Single(metricMeasurements, tags => string.Equals(tags["process_family"], "fdm"));
+        Assert.Equal("server_fallback", fdmMetric["execution_path"]);
+        Assert.Equal("server_completed", fdmMetric["decision"]);
+        Assert.Equal("consumed", fdmMetric["server_cpu"]);
+        var cncMetric = Assert.Single(metricMeasurements, tags => string.Equals(tags["process_family"], "cnc"));
+        Assert.Equal("server_fallback", cncMetric["execution_path"]);
+        Assert.Equal("server_completed", cncMetric["decision"]);
+        Assert.Equal("consumed", cncMetric["server_cpu"]);
     }
 
     [Fact]
