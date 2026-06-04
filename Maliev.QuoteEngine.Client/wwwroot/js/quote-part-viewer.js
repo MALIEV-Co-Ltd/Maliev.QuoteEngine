@@ -3191,6 +3191,25 @@ function resolveRuntimeAssetUrl(assetPath, assetBaseUrl = LOCAL_ADVISORY_ASSET_B
     return `${assetBaseUrl}${encodeURIComponent(name)}`;
 }
 
+async function fetchLocalAdvisoryManifest(manifestUrl) {
+    let lastResponse = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+            lastResponse = await fetch(manifestUrl, {
+                cache: 'no-cache',
+                credentials: 'same-origin',
+            });
+        } catch (_) {
+            lastResponse = null;
+        }
+
+        if (lastResponse?.ok || (lastResponse && Number(lastResponse.status) < 500)) return lastResponse;
+        await Promise.resolve();
+    }
+
+    return lastResponse;
+}
+
 function getLocalAdvisoryPanel(canvasId) {
     const canvas = document.getElementById(canvasId);
     const host = canvas?.parentElement;
@@ -3583,11 +3602,8 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
 
     if (renderLocalPanel) renderLocalAdvisoryStatus(canvasId, 'pending');
     try {
-        const manifestResponse = await fetch(options.manifestUrl ?? LOCAL_ADVISORY_MANIFEST_URL, {
-            cache: 'no-cache',
-            credentials: 'same-origin',
-        });
-        if (!manifestResponse.ok || localAdvisoryRuns[canvasId] !== runId) {
+        const manifestResponse = await fetchLocalAdvisoryManifest(options.manifestUrl ?? LOCAL_ADVISORY_MANIFEST_URL);
+        if (!manifestResponse?.ok || localAdvisoryRuns[canvasId] !== runId) {
             clearLocalAdvisoryPanel(canvasId);
             if (localAdvisoryRuns[canvasId] === runId) {
                 await notifyLocalAdvisoryUnavailableDotNet(

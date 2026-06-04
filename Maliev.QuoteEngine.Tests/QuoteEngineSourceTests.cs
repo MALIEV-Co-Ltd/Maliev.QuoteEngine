@@ -1504,6 +1504,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("collectAdvisoryMeshBuffers", handleBlock);
         Assert.Contains("runLocalAdvisoryGeometry", handleBlock);
         Assert.Contains("/quote/v1/geometry/runtime/manifest", js, StringComparison.Ordinal);
+        Assert.Contains("fetchLocalAdvisoryManifest", js, StringComparison.Ordinal);
+        Assert.Contains("for (let attempt = 0; attempt < 2; attempt += 1)", js, StringComparison.Ordinal);
         Assert.Contains("/quote/v1/geometry/runtime/telemetry", js, StringComparison.Ordinal);
         Assert.Contains("Local preliminary DFM", js, StringComparison.Ordinal);
         Assert.Contains("maliev:geometry-local-runtime-complete", js, StringComparison.Ordinal);
