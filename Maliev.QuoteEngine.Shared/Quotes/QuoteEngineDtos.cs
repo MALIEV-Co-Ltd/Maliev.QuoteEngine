@@ -250,6 +250,35 @@ public sealed class QuotePartDraftDto
     [Range(0, 1_000_000)]
     public decimal SurfaceAreaCm2 { get; set; }
 
+    public string? StoragePath { get; set; }
+
+    [MaxLength(80)]
+    public string Status { get; set; } = "Waiting";
+
+    public string? ViewerGlbUrl { get; set; }
+
+    public string? ViewerStoragePath { get; set; }
+
+    [MaxLength(16)]
+    public string? ViewerFileExtension { get; set; }
+
+    public string? ThumbnailUrl { get; set; }
+
+    public IReadOnlyList<DfmFindingDto> Findings { get; set; } = [];
+
+    public bool IsManifold { get; set; } = true;
+
+    [MaxLength(2_000)]
+    public string? NonManifoldReason { get; set; }
+
+    public QeFdmDfmReport? FdmReport { get; set; }
+
+    public QeSlaDfmReport? SlaReport { get; set; }
+
+    public QeCncDfmReport? CncReport { get; set; }
+
+    public IReadOnlyList<string> OverlayGlbUrls { get; set; } = [];
+
     public bool DfmAcknowledged { get; set; }
 
     [MaxLength(2_000)]

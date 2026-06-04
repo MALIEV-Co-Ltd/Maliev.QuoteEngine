@@ -667,6 +667,19 @@ public sealed class QuoteEnginePrototypeStore
             Quantity = source.Quantity,
             VolumeCc = source.VolumeCc,
             SurfaceAreaCm2 = source.SurfaceAreaCm2,
+            StoragePath = source.StoragePath,
+            Status = source.Status,
+            ViewerGlbUrl = source.ViewerGlbUrl,
+            ViewerStoragePath = source.ViewerStoragePath,
+            ViewerFileExtension = source.ViewerFileExtension,
+            ThumbnailUrl = source.ThumbnailUrl,
+            Findings = source.Findings.Select(finding => finding with { }).ToArray(),
+            IsManifold = source.IsManifold,
+            NonManifoldReason = source.NonManifoldReason,
+            FdmReport = CloneReport(source.FdmReport),
+            SlaReport = CloneReport(source.SlaReport),
+            CncReport = CloneReport(source.CncReport),
+            OverlayGlbUrls = source.OverlayGlbUrls.ToArray(),
             DfmAcknowledged = source.DfmAcknowledged,
             PartNotes = source.PartNotes,
             BodyCount = source.BodyCount,
@@ -675,6 +688,18 @@ public sealed class QuoteEnginePrototypeStore
             ViewerSettings = source.ViewerSettings with { }
         };
     }
+
+    private static QeFdmDfmReport? CloneReport(QeFdmDfmReport? source)
+        => source is null ? null : source with { Issues = CloneIssues(source.Issues) };
+
+    private static QeSlaDfmReport? CloneReport(QeSlaDfmReport? source)
+        => source is null ? null : source with { Issues = CloneIssues(source.Issues) };
+
+    private static QeCncDfmReport? CloneReport(QeCncDfmReport? source)
+        => source is null ? null : source with { Issues = CloneIssues(source.Issues) };
+
+    private static IReadOnlyList<QeDfmIssueItem> CloneIssues(IReadOnlyList<QeDfmIssueItem> issues)
+        => issues.Select(issue => issue with { }).ToArray();
 
     private static CustomerAddressDto MapAddressRequest(CustomerAddressUpsertRequest request, Guid resolvedCountryId)
     {

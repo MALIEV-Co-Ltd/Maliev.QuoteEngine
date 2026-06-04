@@ -1166,6 +1166,97 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Draft_project_create_and_duplicate_preserve_browser_local_dfm_payload()
+    {
+        using var client = await CreateSignedInClientAsync("local-dfm-owner@example.com");
+        var request = new
+        {
+            quoteSessionId = "local-dfm-session",
+            parts = new[]
+            {
+                new
+                {
+                    partId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                    fileId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+                    uploadId = "upload-local-dfm",
+                    fileName = "local-bracket.stl",
+                    processId = "cnc",
+                    materialId = "al6061",
+                    quantity = 1,
+                    volumeCc = 27.122m,
+                    surfaceAreaCm2 = 84.5m,
+                    storagePath = "projects/session/local-bracket.stl",
+                    status = "DfmAnalysisReady",
+                    viewerGlbUrl = "blob:https://quote.local/viewer",
+                    viewerStoragePath = "projects/session/local-bracket.stl",
+                    viewerFileExtension = ".stl",
+                    thumbnailUrl = "blob:https://quote.local/thumb",
+                    findings = new[]
+                    {
+                        new
+                        {
+                            severity = "warning",
+                            code = "LOCAL_PRIMARY",
+                            message = "Browser local DFM warning."
+                        }
+                    },
+                    isManifold = false,
+                    nonManifoldReason = "Open edge detected locally.",
+                    cncReport = new
+                    {
+                        sharpCornerCount = 1,
+                        hasUndercuts = false,
+                        hasDrillHoles = true,
+                        drillHoleCount = 2,
+                        requiresEdm = false,
+                        requiresGrinding = false,
+                        isTurnable = true,
+                        issues = new[]
+                        {
+                            new
+                            {
+                                severity = "warning",
+                                code = "LOCAL_SHARP_CORNER",
+                                message = "Local CNC warning."
+                            }
+                        }
+                    },
+                    overlayGlbUrls = new[] { "blob:https://quote.local/overlay" }
+                }
+            },
+            notes = "Preserve local DFM analysis.",
+            title = "Local DFM draft"
+        };
+
+        var createResponse = await client.PostAsJsonAsync("/quote/v1/projects/draft", request);
+        createResponse.EnsureSuccessStatusCode();
+        var createdJson = await createResponse.Content.ReadAsStringAsync();
+        using var createdDocument = JsonDocument.Parse(createdJson);
+        var created = createdDocument.RootElement;
+        var createdPart = created.GetProperty("parts")[0];
+        Assert.Equal("projects/session/local-bracket.stl", createdPart.GetProperty("storagePath").GetString());
+        Assert.Equal("DfmAnalysisReady", createdPart.GetProperty("status").GetString());
+        Assert.Equal("blob:https://quote.local/viewer", createdPart.GetProperty("viewerGlbUrl").GetString());
+        Assert.Equal("LOCAL_PRIMARY", createdPart.GetProperty("findings")[0].GetProperty("code").GetString());
+        Assert.Equal("LOCAL_SHARP_CORNER", createdPart.GetProperty("cncReport").GetProperty("issues")[0].GetProperty("code").GetString());
+        Assert.Equal("blob:https://quote.local/overlay", createdPart.GetProperty("overlayGlbUrls")[0].GetString());
+
+        var projectId = created.GetProperty("projectId").GetGuid();
+        var duplicateResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/projects/{projectId:D}/duplicate",
+            new DuplicateDraftProjectRequest("Local DFM copy"));
+        duplicateResponse.EnsureSuccessStatusCode();
+        var duplicateJson = await duplicateResponse.Content.ReadAsStringAsync();
+        using var duplicateDocument = JsonDocument.Parse(duplicateJson);
+        var duplicatePart = duplicateDocument.RootElement.GetProperty("parts")[0];
+        Assert.Equal("projects/session/local-bracket.stl", duplicatePart.GetProperty("storagePath").GetString());
+        Assert.Equal("DfmAnalysisReady", duplicatePart.GetProperty("status").GetString());
+        Assert.Equal("LOCAL_PRIMARY", duplicatePart.GetProperty("findings")[0].GetProperty("code").GetString());
+        Assert.Equal(1, duplicatePart.GetProperty("cncReport").GetProperty("sharpCornerCount").GetInt32());
+        Assert.Equal("blob:https://quote.local/overlay", duplicatePart.GetProperty("overlayGlbUrls")[0].GetString());
+    }
+
+    [Fact]
     public async Task Account_addresses_are_read_only_in_quote_engine()
     {
         using var client = await CreateSignedInClientAsync("address-owner@example.com");

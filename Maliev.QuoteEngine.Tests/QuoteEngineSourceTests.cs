@@ -354,6 +354,67 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("\"drawingFiles\"", json, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void QuotePartViewModel_ToDraft_preserves_browser_local_dfm_analysis_payload()
+    {
+        var part = new QuotePartViewModel
+        {
+            PartId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            FileId = Guid.Parse("22222222-2222-2222-2222-222222222222"),
+            UploadId = "upload-local-dfm",
+            FileName = "local-bracket.stl",
+            ProcessId = "cnc",
+            MaterialId = "al6061",
+            Quantity = 1,
+            VolumeCc = 27.122m,
+            SurfaceAreaCm2 = 84.5m,
+            StoragePath = "projects/session/local-bracket.stl",
+            Status = "DfmAnalysisReady",
+            GlbUrl = "blob:https://quote.local/viewer",
+            ViewerStoragePath = "projects/session/local-bracket.stl",
+            ViewerFileExtension = ".stl",
+            ThumbnailUrl = "blob:https://quote.local/thumb",
+            Findings =
+            [
+                new DfmFindingDto("warning", "LOCAL_PRIMARY", "Browser local DFM warning.")
+            ],
+            IsManifold = false,
+            NonManifoldReason = "Open edge detected locally.",
+            FdmDfmReport = new QeFdmDfmReport(0, 0, 0m, false, 0, []),
+            CncDfmReport = new QeCncDfmReport(
+                SharpCornerCount: 1,
+                HasUndercuts: false,
+                HasDrillHoles: true,
+                DrillHoleCount: 2,
+                RequiresEdm: false,
+                RequiresGrinding: false,
+                IsTurnable: true,
+                Issues:
+                [
+                    new QeDfmIssueItem("warning", "LOCAL_SHARP_CORNER", "Local CNC warning.")
+                ]),
+            OverlayGlbUrls = ["blob:https://quote.local/overlay"]
+        };
+
+        var json = JsonSerializer.Serialize(part.ToDraft(), new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+        Assert.Equal("projects/session/local-bracket.stl", root.GetProperty("storagePath").GetString());
+        Assert.Equal("DfmAnalysisReady", root.GetProperty("status").GetString());
+        Assert.Equal("blob:https://quote.local/viewer", root.GetProperty("viewerGlbUrl").GetString());
+        Assert.Equal("projects/session/local-bracket.stl", root.GetProperty("viewerStoragePath").GetString());
+        Assert.Equal(".stl", root.GetProperty("viewerFileExtension").GetString());
+        Assert.Equal("blob:https://quote.local/thumb", root.GetProperty("thumbnailUrl").GetString());
+        Assert.False(root.GetProperty("isManifold").GetBoolean());
+        Assert.Equal("Open edge detected locally.", root.GetProperty("nonManifoldReason").GetString());
+        Assert.Equal("LOCAL_PRIMARY", root.GetProperty("findings")[0].GetProperty("code").GetString());
+        Assert.Equal(0, root.GetProperty("fdmReport").GetProperty("thinWallCount").GetInt32());
+        Assert.Equal(1, root.GetProperty("cncReport").GetProperty("sharpCornerCount").GetInt32());
+        Assert.Equal("LOCAL_SHARP_CORNER", root.GetProperty("cncReport").GetProperty("issues")[0].GetProperty("code").GetString());
+        Assert.Equal("blob:https://quote.local/overlay", root.GetProperty("overlayGlbUrls")[0].GetString());
+    }
+
 
     [Fact]
     public void Upload_script_matches_browser_files_by_name_and_size()

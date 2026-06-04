@@ -937,13 +937,25 @@
             Quantity = part.Quantity,
             VolumeCc = part.VolumeCc,
             SurfaceAreaCm2 = part.SurfaceAreaCm2,
+            StoragePath = part.StoragePath,
+            GlbUrl = part.ViewerGlbUrl,
+            ViewerStoragePath = part.ViewerStoragePath,
+            ViewerFileExtension = NormalizeViewerFileExtension(part.ViewerFileExtension, part.ViewerStoragePath ?? part.StoragePath),
+            ThumbnailUrl = part.ThumbnailUrl,
+            Findings = part.Findings,
+            IsManifold = part.IsManifold,
+            NonManifoldReason = part.NonManifoldReason,
+            FdmDfmReport = part.FdmReport,
+            SlaDfmReport = part.SlaReport,
+            CncDfmReport = part.CncReport,
+            OverlayGlbUrls = part.OverlayGlbUrls,
             DfmAcknowledged = part.DfmAcknowledged,
             PartNotes = part.PartNotes,
             BodyCount = part.BodyCount ?? 1,
             SelectedBodyIndex = part.SelectedBodyIndex,
             DrawingFiles = [.. part.DrawingFiles],
             ViewerSettings = part.ViewerSettings,
-            Status = "Analyzed"
+            Status = string.IsNullOrWhiteSpace(part.Status) ? "Analyzed" : part.Status
         };
     }
 
