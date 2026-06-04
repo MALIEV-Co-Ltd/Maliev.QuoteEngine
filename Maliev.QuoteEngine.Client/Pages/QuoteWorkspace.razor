@@ -455,6 +455,7 @@
             ApplyDefaultRouting(part, candidate.FileName);
             _parts.Add(part);
             _selectedPartIndex = _parts.Count - 1;
+            await InvokeAsync(StateHasChanged);
             try
             {
                 var initiation = await Api.InitiateUploadAsync(
@@ -493,6 +494,7 @@
                 part.Status = "Upload failed";
                 _error = ex.Message;
                 await ScheduleBrowserUploadFileCleanupAsync(candidate.ClientFileId);
+                await InvokeAsync(StateHasChanged);
             }
         }
     }
