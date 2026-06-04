@@ -9,6 +9,7 @@ namespace Maliev.QuoteEngine.Bff;
 public sealed class BffMetrics
 {
     private readonly Counter<long> _browserDfmRuntimeCompletions;
+    private readonly Counter<long> _browserDfmRuntimeStarts;
     private readonly Counter<long> _browserDfmRuntimeTerminalAttempts;
 
     /// <summary>
@@ -22,6 +23,10 @@ public sealed class BffMetrics
             "quote_browser_dfm_runtime_completions",
             unit: "{completion}",
             description: "Counts browser-first local DFM runtime completions observed by QuoteEngine.");
+        _browserDfmRuntimeStarts = meter.CreateCounter<long>(
+            "quote_browser_dfm_runtime_starts",
+            unit: "{start}",
+            description: "Counts browser-first local DFM runtime starts observed by QuoteEngine.");
         _browserDfmRuntimeTerminalAttempts = meter.CreateCounter<long>(
             "quote_browser_dfm_runtime_terminal_attempts",
             unit: "{attempt}",
@@ -45,6 +50,25 @@ public sealed class BffMetrics
         {
             { "process_family", NormalizeProcessFamily(processCode) },
             { "accepted", accepted },
+            { "authority", NormalizeMarker(authority, "other") },
+            { "execution_mode", NormalizeMarker(executionMode, "other") },
+        });
+    }
+
+    /// <summary>
+    /// Records that a browser-first local DFM runtime started.
+    /// </summary>
+    /// <param name="processCode">The process code requested for the browser runtime.</param>
+    /// <param name="authority">The runtime authority marker.</param>
+    /// <param name="executionMode">The runtime execution mode marker.</param>
+    public void RecordBrowserDfmRuntimeStart(
+        string? processCode,
+        string? authority,
+        string? executionMode)
+    {
+        _browserDfmRuntimeStarts.Add(1, new TagList
+        {
+            { "process_family", NormalizeProcessFamily(processCode) },
             { "authority", NormalizeMarker(authority, "other") },
             { "execution_mode", NormalizeMarker(executionMode, "other") },
         });

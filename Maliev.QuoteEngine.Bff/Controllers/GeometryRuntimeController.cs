@@ -114,6 +114,20 @@ public sealed class GeometryRuntimeController(
     [HttpPost("telemetry")]
     public IActionResult RecordTelemetry([FromBody] BrowserGeometryRuntimeTelemetryRequest request)
     {
+        if (request.IsStarted)
+        {
+            bffMetrics.RecordBrowserDfmRuntimeStart(
+                request.ProcessCode,
+                request.Authority,
+                request.ExecutionMode);
+
+            logger.LogInformation(
+                "Browser-first quote DFM local runtime started for process {ProcessCode}",
+                request.ProcessCode);
+
+            return NoContent();
+        }
+
         if (request.IsTerminalUnavailable)
         {
             bffMetrics.RecordBrowserDfmRuntimeTerminalAttempt(
@@ -168,7 +182,7 @@ public sealed class BrowserGeometryRuntimeTelemetryRequest
     /// <summary>The runtime execution mode marker.</summary>
     public string? ExecutionMode { get; set; }
 
-    /// <summary>Telemetry event status, for example <c>complete</c> or <c>unavailable</c>.</summary>
+    /// <summary>Telemetry event status, for example <c>started</c>, <c>complete</c>, or <c>unavailable</c>.</summary>
     public string? Status { get; set; }
 
     /// <summary>Low-cardinality reason why a local attempt ended before producing a report.</summary>
@@ -193,4 +207,7 @@ public sealed class BrowserGeometryRuntimeTelemetryRequest
     public bool IsTerminalUnavailable =>
         string.Equals(Status, "unavailable", StringComparison.OrdinalIgnoreCase)
         || !string.IsNullOrWhiteSpace(Reason);
+
+    /// <summary>Whether this payload represents the start of a local runtime attempt.</summary>
+    public bool IsStarted => string.Equals(Status, "started", StringComparison.OrdinalIgnoreCase);
 }

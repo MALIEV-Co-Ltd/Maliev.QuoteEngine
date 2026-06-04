@@ -1466,6 +1466,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("postLocalAdvisoryTelemetry", js, StringComparison.Ordinal);
         Assert.Contains("navigator.sendBeacon", js, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeComplete", js, StringComparison.Ordinal);
+        Assert.Contains("dispatchLocalAdvisoryStartedTelemetry", js, StringComparison.Ordinal);
+        Assert.Contains("status: 'started'", js, StringComparison.Ordinal);
         Assert.Contains("dispatchLocalAdvisoryUnavailableTelemetry", js, StringComparison.Ordinal);
         Assert.Contains("status: 'unavailable'", js, StringComparison.Ordinal);
         Assert.Contains("reason: payload?.reason ?? 'local_runtime_unavailable'", js, StringComparison.Ordinal);
@@ -1479,6 +1481,22 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("local_primary", js, StringComparison.Ordinal);
         Assert.Contains("primary_interactive", js, StringComparison.Ordinal);
         Assert.DoesNotContain("authority !== 'advisory'", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteGeometryRuntimeTelemetry_tracks_browser_local_start_attempts()
+    {
+        var controller = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "GeometryRuntimeController.cs");
+        var metrics = ReadRepoFile("Maliev.QuoteEngine.Bff", "BffMetrics.cs");
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("public bool IsStarted", controller, StringComparison.Ordinal);
+        Assert.Contains("RecordBrowserDfmRuntimeStart", controller, StringComparison.Ordinal);
+        Assert.Contains("quote_browser_dfm_runtime_starts", metrics, StringComparison.Ordinal);
+        Assert.Contains("RecordBrowserDfmRuntimeStart", metrics, StringComparison.Ordinal);
+        Assert.Contains("function dispatchLocalAdvisoryStartedTelemetry(payload)", js, StringComparison.Ordinal);
+        Assert.Contains("dispatchLocalAdvisoryStartedTelemetry(payload);", js, StringComparison.Ordinal);
     }
 
     [Fact]
