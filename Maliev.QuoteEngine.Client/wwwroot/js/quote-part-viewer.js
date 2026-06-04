@@ -3228,6 +3228,10 @@ function clearLocalAdvisoryPanel(canvasId) {
     panel?.remove?.();
 }
 
+function shouldRenderLocalAdvisoryPanel(options) {
+    return !options?.dotNetRef || typeof options.dotNetRef.invokeMethodAsync !== 'function';
+}
+
 function renderLocalAdvisoryStatus(canvasId, state, result = null) {
     const panel = getLocalAdvisoryPanel(canvasId);
     if (!panel) return;
@@ -3542,6 +3546,7 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
 
     const runId = (localAdvisoryRuns[canvasId] ?? 0) + 1;
     localAdvisoryRuns[canvasId] = runId;
+    const renderLocalPanel = shouldRenderLocalAdvisoryPanel(options);
 
     const meshBuffers = collectAdvisoryMeshBuffers(canvasId);
     const runtimeFileBytes = await resolveAdvisoryFileBytes(options);
@@ -3564,7 +3569,7 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
             inputTriangleCount: countLocalAdvisoryInputTriangles(runtimeInput),
         });
 
-    renderLocalAdvisoryStatus(canvasId, 'pending');
+    if (renderLocalPanel) renderLocalAdvisoryStatus(canvasId, 'pending');
     try {
         const manifestResponse = await fetch(options.manifestUrl ?? LOCAL_ADVISORY_MANIFEST_URL, {
             cache: 'no-cache',
@@ -3626,7 +3631,7 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
             return null;
         }
 
-        renderLocalAdvisoryStatus(canvasId, 'complete', result);
+        if (renderLocalPanel) renderLocalAdvisoryStatus(canvasId, 'complete', result);
         const accepted = await notifyLocalAdvisoryDotNet(options.dotNetRef, result);
         dispatchLocalAdvisoryTelemetry(canvasId, result, accepted);
         if (accepted) {

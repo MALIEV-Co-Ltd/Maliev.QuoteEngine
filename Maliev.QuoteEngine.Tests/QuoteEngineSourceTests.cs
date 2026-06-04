@@ -1530,6 +1530,19 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewerJs_suppresses_internal_local_dfm_panel_when_blazor_handles_status()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function shouldRenderLocalAdvisoryPanel(options)", js, StringComparison.Ordinal);
+        Assert.Contains("const renderLocalPanel = shouldRenderLocalAdvisoryPanel(options);", js, StringComparison.Ordinal);
+        Assert.DoesNotContain("\n    renderLocalAdvisoryStatus(canvasId, 'pending');", js, StringComparison.Ordinal);
+        Assert.Contains("if (renderLocalPanel) renderLocalAdvisoryStatus(canvasId, 'pending');", js, StringComparison.Ordinal);
+        Assert.Contains("if (renderLocalPanel) renderLocalAdvisoryStatus(canvasId, 'complete', result);", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewerJs_notifies_blazor_when_local_dfm_starts()
     {
         var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
