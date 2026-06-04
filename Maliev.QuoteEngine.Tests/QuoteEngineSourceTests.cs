@@ -1163,6 +1163,32 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspaceRazor_owns_legacy_projects_new_route()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+
+        Assert.Contains("@page \"/projects/new\"", src, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteUploadJs_clones_selected_browser_file_before_fetch_upload()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
+
+        Assert.Contains("const uploadBody = typeof file.blob.slice === \"function\"", src, StringComparison.Ordinal);
+        Assert.Contains("new XMLHttpRequest()", src, StringComparison.Ordinal);
+        Assert.Contains("xhr.send(uploadBody)", src, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteWorkspaceRazor_disables_upload_input_until_route_state_is_initialized()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+
+        Assert.Contains("disabled=\"@(!_routeStateInitialized || IsDemoMode)\"", src, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteWorkspaceRazor_resets_demo_workspace_when_leaving_demo_route()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");

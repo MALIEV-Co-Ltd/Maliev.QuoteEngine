@@ -168,6 +168,27 @@ window.quoteEngineUploads = (() => {
     return crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : `${Date.now()}${Math.random()}`;
   }
 
+  function uploadBlob(uploadUrl, contentType, file, uploadBody) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("PUT", uploadUrl, true);
+      xhr.withCredentials = true;
+      xhr.setRequestHeader("Content-Type", contentType || file.type || "application/octet-stream");
+      xhr.setRequestHeader("Content-Range", `bytes 0-${file.size - 1}/${file.size}`);
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+          return;
+        }
+
+        reject(new Error(`Upload failed with HTTP ${xhr.status}.`));
+      };
+      xhr.onerror = () => reject(new Error("Upload failed before the server returned a response."));
+      xhr.onabort = () => reject(new Error("Upload was aborted before completion."));
+      xhr.send(uploadBody);
+    });
+  }
+
   async function uploadFile(clientFileId, uploadUrl, contentType) {
     const file = fileMap.get(clientFileId);
     if (!file || !file.blob) {
@@ -184,19 +205,10 @@ window.quoteEngineUploads = (() => {
     pendingUploadIds.delete(clientFileId);
     activeUploadIds.add(clientFileId);
     try {
-      const response = await fetch(uploadUrl, {
-        method: "PUT",
-        credentials: "include",
-        headers: {
-          "Content-Type": contentType || file.type || "application/octet-stream",
-          "Content-Range": `bytes 0-${file.size - 1}/${file.size}`
-        },
-        body: file.blob
-      });
-
-      if (!response.ok) {
-        throw new Error(`Upload failed with HTTP ${response.status}.`);
-      }
+      const uploadBody = typeof file.blob.slice === "function"
+        ? file.blob.slice(0, file.size, contentType || file.type || "application/octet-stream")
+        : file.blob;
+      await uploadBlob(uploadUrl, contentType, file, uploadBody);
     } finally {
       activeUploadIds.delete(clientFileId);
     }

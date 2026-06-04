@@ -1,5 +1,6 @@
 @page "/quotes/new"
 @page "/quote/new"
+@page "/projects/new"
 @page "/demo"
 @using System.Text
 @using System.Text.Json
@@ -13,7 +14,7 @@
 
 <div class="@WorkspaceRootClass">
     <div id="@UploadContainerId">
-        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@QuoteUploadConstraints.SupportedCadAccept" />
+        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@QuoteUploadConstraints.SupportedCadAccept" disabled="@(!_routeStateInitialized || IsDemoMode)" />
     </div>
 
     <div class="qe-pn-body">
