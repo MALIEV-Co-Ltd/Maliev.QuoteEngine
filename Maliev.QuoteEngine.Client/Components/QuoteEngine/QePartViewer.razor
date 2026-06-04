@@ -153,6 +153,7 @@
     [Parameter] public string? ProcessId { get; set; }
     [Parameter] public string? BrowserFileClientId { get; set; }
     [Parameter] public string? BrowserFileName { get; set; }
+    [Parameter] public string? StoragePath { get; set; }
     [Parameter] public string? FinishCode { get; set; }
     [Parameter] public string? RoughnessCode { get; set; }
     [Parameter] public EventCallback<string> OnViewerError { get; set; }
@@ -259,6 +260,7 @@
                     partColor = PartColor,
                     processId = ProcessId,
                     processCode = ProcessId,
+                    storagePath = StoragePath,
                     finishCode = FinishCode,
                     roughnessCode = RoughnessCode
                 });
@@ -330,6 +332,7 @@
             processCode = string.IsNullOrWhiteSpace(processCode) ? ProcessId : processCode,
             clientUploadId = BrowserFileClientId,
             fileName = BrowserFileName,
+            storagePath = StoragePath,
             fileBytesProvider = "quoteEngineUploads",
             dotNetRef = _dotNetRef
         });

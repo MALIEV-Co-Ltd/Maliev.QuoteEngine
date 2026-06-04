@@ -2187,6 +2187,7 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                 );
                 runLocalAdvisoryGeometry(canvasId, {
                     processCode: viewerSettings.processCode ?? viewerSettings.processId,
+                    storagePath: viewerSettings.storagePath,
                     dotNetRef,
                 });
             },
@@ -3282,6 +3283,7 @@ function dispatchLocalAdvisoryTelemetry(canvasId, result, accepted) {
         const issues = Array.isArray(result?.issues) ? result.issues : [];
         const detail = {
             canvasId,
+            storagePath: result?.storagePath ?? null,
             processCode: result?.processCode ?? null,
             runtimeVersion: result?.runtimeVersion ?? null,
             algorithmVersion: result?.algorithmVersion ?? null,
@@ -3528,7 +3530,7 @@ async function resolveAdvisoryFileBytes(options) {
  * Runs the GeometryService-owned browser-first runtime through the same-origin BFF proxy.
  * Falls back silently to the server-only path when the manifest or worker cannot be used.
  * @param {string} canvasId
- * @param {{processCode?: string, manifestUrl?: string, assetBaseUrl?: string, timeoutMs?: number, dotNetRef?: object, fileBytes?: ArrayBuffer|Uint8Array|number[], fileName?: string, clientUploadId?: string, clientFileId?: string, fileBytesProvider?: string}} options
+ * @param {{processCode?: string, storagePath?: string, manifestUrl?: string, assetBaseUrl?: string, timeoutMs?: number, dotNetRef?: object, fileBytes?: ArrayBuffer|Uint8Array|number[], fileName?: string, clientUploadId?: string, clientFileId?: string, fileBytesProvider?: string}} options
  * @returns {Promise<object|null>}
  */
 export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
@@ -3620,6 +3622,9 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
             runtimeInput,
             options.processCode ?? 'FDM',
             resolveLocalAdvisoryTimeoutMs(manifest, options));
+        result.storagePath = typeof options.storagePath === 'string' && options.storagePath.trim()
+            ? options.storagePath.trim()
+            : null;
         if (localAdvisoryRuns[canvasId] !== runId ||
             !isBrowserFirstRuntimeContract(result)) {
             clearLocalAdvisoryPanel(canvasId);

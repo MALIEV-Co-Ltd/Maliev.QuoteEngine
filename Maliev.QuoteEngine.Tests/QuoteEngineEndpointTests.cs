@@ -630,6 +630,49 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task GeometryRuntime_telemetry_when_accepted_metrics_hydrates_analysis_status()
+    {
+        using var client = factory.CreateClient();
+        var initResponse = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = "local-metrics-session",
+            FileName = "local-metrics-part.stl",
+            ContentType = "model/stl",
+            FileSizeBytes = 12
+        });
+        initResponse.EnsureSuccessStatusCode();
+        var upload = await initResponse.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(upload);
+
+        var telemetryResponse = await client.PostAsJsonAsync(
+            "/quote/v1/geometry/runtime/telemetry",
+            new
+            {
+                storagePath = upload.StoragePath,
+                processCode = "CNC_MILL",
+                authority = "local_primary",
+                executionMode = "primary_interactive",
+                accepted = true,
+                metrics = new
+                {
+                    volumeMm3 = 12_500,
+                    surfaceAreaMm2 = 6_200,
+                    isManifold = false,
+                    nonManifoldEdgeCount = 4
+                }
+            });
+
+        Assert.Equal(HttpStatusCode.NoContent, telemetryResponse.StatusCode);
+        var status = await client.GetFromJsonAsync<QuoteAnalysisStatusResponse>(
+            $"/quote/v1/uploads/{upload.UploadId}/analysis-status");
+        Assert.NotNull(status);
+        Assert.Equal(12.5m, status.VolumeCc);
+        Assert.Equal(62m, status.SurfaceAreaCm2);
+        Assert.False(status.IsManifold);
+        Assert.Equal("Browser local DFM found 4 non-manifold edge(s).", status.NonManifoldReason);
+    }
+
+    [Fact]
     public async Task GeometryRuntime_telemetry_accepts_browser_local_terminal_unavailable_without_auth()
     {
         using var client = factory.CreateClient();

@@ -873,6 +873,40 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public async Task StatusService_SetLocalGeometryMetrics_merges_with_existing_viewer_status()
+    {
+        var svc = new QuoteFileAnalysisStatusService();
+        const string path = "quotes/temp/s/u/browser-local.stl";
+
+        await svc.SetGlbReadyAsync(
+            path,
+            "https://glb.example.com/browser-local.glb",
+            "https://glb.example.com/browser-local.webp",
+            1,
+            true,
+            viewerStoragePath: "processed/browser-local.glb",
+            viewerFileExtension: ".glb");
+
+        await svc.SetLocalGeometryMetricsAsync(
+            path,
+            12.5m,
+            62m,
+            false,
+            "Browser local DFM found 4 non-manifold edge(s).");
+        await svc.SetProcessingAsync(path);
+
+        var status = await svc.GetStatusAsync(path);
+        Assert.NotNull(status);
+        Assert.Equal("Processing", status.Status);
+        Assert.Equal("https://glb.example.com/browser-local.glb", status.GlbUrl);
+        Assert.Equal("processed/browser-local.glb", status.ViewerStoragePath);
+        Assert.Equal(12.5m, status.VolumeCc);
+        Assert.Equal(62m, status.SurfaceAreaCm2);
+        Assert.False(status.IsManifold);
+        Assert.Equal("Browser local DFM found 4 non-manifold edge(s).", status.NonManifoldReason);
+    }
+
+    [Fact]
     public async Task StatusService_SetFailed_sets_error_code()
     {
         var svc = new QuoteFileAnalysisStatusService();
@@ -1489,6 +1523,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("resolveAdvisoryFileBytes(options)", js, StringComparison.Ordinal);
         Assert.Contains("fileBytesProvider", js, StringComparison.Ordinal);
         Assert.Contains("{ fileBytes: runtimeFileBytes, fileName: runtimeFileName }", js, StringComparison.Ordinal);
+        Assert.Contains("storagePath: result?.storagePath ?? null", js, StringComparison.Ordinal);
+        Assert.Contains("result.storagePath = typeof options.storagePath === 'string' && options.storagePath.trim()", js, StringComparison.Ordinal);
         Assert.Contains("metrics: result?.metrics", js, StringComparison.Ordinal);
         Assert.Contains("issues,", js, StringComparison.Ordinal);
         Assert.Contains("local_primary", js, StringComparison.Ordinal);
@@ -1634,13 +1670,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("[Parameter] public string FileExtension", viewer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public string? BrowserFileClientId", viewer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public string? BrowserFileName", viewer, StringComparison.Ordinal);
+        Assert.Contains("[Parameter] public string? StoragePath", viewer, StringComparison.Ordinal);
         Assert.Contains("clientUploadId = BrowserFileClientId", viewer, StringComparison.Ordinal);
         Assert.Contains("fileName = BrowserFileName", viewer, StringComparison.Ordinal);
+        Assert.Contains("storagePath = StoragePath", viewer, StringComparison.Ordinal);
         Assert.Contains("fileBytesProvider = \"quoteEngineUploads\"", viewer, StringComparison.Ordinal);
         Assert.Contains("_canvasId, GlbUrl, FileExtension", viewer, StringComparison.Ordinal);
         Assert.Contains("FileExtension=\"@ResolveViewerFileExtension()\"", detail, StringComparison.Ordinal);
         Assert.Contains("BrowserFileClientId=\"@Part.ClientFileId\"", detail, StringComparison.Ordinal);
         Assert.Contains("BrowserFileName=\"@Part.FileName\"", detail, StringComparison.Ordinal);
+        Assert.Contains("StoragePath=\"@Part.StoragePath\"", detail, StringComparison.Ordinal);
         Assert.Contains("OnLocalGeometryRuntimeCompleted=\"@HandleLocalGeometryRuntimeCompletedAsync\"", detail, StringComparison.Ordinal);
         Assert.Contains("OnLocalGeometryRuntimeStarted=\"@HandleLocalGeometryRuntimeStartedAsync\"", detail, StringComparison.Ordinal);
         Assert.Contains("private async Task HandleLocalGeometryRuntimeStartedAsync(LocalGeometryRuntimeStarted result)", detail, StringComparison.Ordinal);

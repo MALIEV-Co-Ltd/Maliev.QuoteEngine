@@ -14,5 +14,8 @@ public interface IQuoteFileAnalysisStatusService
         QeFdmDfmReport? fdmReport, QeSlaDfmReport? slaReport, QeCncDfmReport? cncReport,
         IReadOnlyList<string> overlayGlbUrls, string? nonManifoldReason,
         string? analysisErrorCode, CancellationToken ct = default);
+    Task SetLocalGeometryMetricsAsync(string storagePath,
+        decimal? volumeCc, decimal? surfaceAreaCm2, bool isManifold,
+        string? nonManifoldReason, CancellationToken ct = default);
     Task SetFailedAsync(string storagePath, string errorCode, CancellationToken ct = default);
 }

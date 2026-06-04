@@ -15,6 +15,8 @@ public sealed record QuoteFileAnalysisStatus
     public string? ViewerStoragePath { get; init; }
     public string? ViewerFileExtension { get; init; }
     public string? ThumbnailUrl { get; init; }
+    public decimal? VolumeCc { get; init; }
+    public decimal? SurfaceAreaCm2 { get; init; }
     public int BodyCount { get; init; } = 1;
     public bool IsManifold { get; init; } = true;
     public string? NonManifoldReason { get; init; }

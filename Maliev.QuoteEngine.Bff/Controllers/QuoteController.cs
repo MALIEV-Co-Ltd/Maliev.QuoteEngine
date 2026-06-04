@@ -246,6 +246,16 @@ public sealed class QuoteController(
             return Ok(response);
 
         response.Status = liveStatus.Status;
+        if (liveStatus.VolumeCc.HasValue)
+        {
+            response.VolumeCc = liveStatus.VolumeCc.Value;
+        }
+
+        if (liveStatus.SurfaceAreaCm2.HasValue)
+        {
+            response.SurfaceAreaCm2 = liveStatus.SurfaceAreaCm2.Value;
+        }
+
         response.ViewerGlbUrl = liveStatus.GlbUrl ?? response.ViewerGlbUrl;
         response.ViewerStoragePath = liveStatus.ViewerStoragePath ?? response.ViewerStoragePath;
         response.ViewerFileExtension = liveStatus.ViewerFileExtension ?? response.ViewerFileExtension;

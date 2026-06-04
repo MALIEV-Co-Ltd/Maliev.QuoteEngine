@@ -18,7 +18,10 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
 
     public Task SetProcessingAsync(string storagePath, CancellationToken ct = default)
     {
-        _store[storagePath] = new QuoteFileAnalysisStatus { StoragePath = storagePath, Status = "Processing" };
+        _store.AddOrUpdate(
+            storagePath,
+            _ => new QuoteFileAnalysisStatus { StoragePath = storagePath, Status = "Processing" },
+            (_, existing) => existing with { Status = "Processing" });
         return Task.CompletedTask;
     }
 
@@ -36,6 +39,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
                 ViewerStoragePath = viewerStoragePath,
                 ViewerFileExtension = viewerFileExtension,
                 ThumbnailUrl = thumbnailUrl,
+                VolumeCc = null,
+                SurfaceAreaCm2 = null,
                 BodyCount = bodyCount,
                 IsManifold = isManifold
             },
@@ -46,6 +51,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
                 ViewerStoragePath = viewerStoragePath ?? existing.ViewerStoragePath,
                 ViewerFileExtension = viewerFileExtension ?? existing.ViewerFileExtension,
                 ThumbnailUrl = thumbnailUrl,
+                VolumeCc = existing.VolumeCc,
+                SurfaceAreaCm2 = existing.SurfaceAreaCm2,
                 BodyCount = bodyCount,
                 IsManifold = isManifold
             });
@@ -68,6 +75,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
                 CncReport = cncReport,
                 ViewerStoragePath = storagePath,
                 OverlayGlbUrls = overlayGlbUrls,
+                VolumeCc = null,
+                SurfaceAreaCm2 = null,
                 NonManifoldReason = nonManifoldReason,
                 AnalysisErrorCode = analysisErrorCode
             },
@@ -82,6 +91,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
                 ViewerStoragePath = existing.ViewerStoragePath,
                 ViewerFileExtension = existing.ViewerFileExtension,
                 ThumbnailUrl = existing.ThumbnailUrl,
+                VolumeCc = existing.VolumeCc,
+                SurfaceAreaCm2 = existing.SurfaceAreaCm2,
                 BodyCount = existing.BodyCount,
                 IsManifold = existing.IsManifold,
                 // Accumulate overlay URLs across multiple DfmAnalysisReady events
@@ -90,6 +101,34 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
                     : existing.OverlayGlbUrls,
                 NonManifoldReason = nonManifoldReason ?? existing.NonManifoldReason,
                 AnalysisErrorCode = analysisErrorCode ?? existing.AnalysisErrorCode
+            });
+        return Task.CompletedTask;
+    }
+
+    public Task SetLocalGeometryMetricsAsync(string storagePath,
+        decimal? volumeCc, decimal? surfaceAreaCm2, bool isManifold,
+        string? nonManifoldReason, CancellationToken ct = default)
+    {
+        _store.AddOrUpdate(
+            storagePath,
+            _ => new QuoteFileAnalysisStatus
+            {
+                StoragePath = storagePath,
+                Status = "Processing",
+                VolumeCc = volumeCc,
+                SurfaceAreaCm2 = surfaceAreaCm2,
+                IsManifold = isManifold,
+                NonManifoldReason = ResolveNonManifoldReason(isManifold, nonManifoldReason, null)
+            },
+            (_, existing) => existing with
+            {
+                VolumeCc = volumeCc ?? existing.VolumeCc,
+                SurfaceAreaCm2 = surfaceAreaCm2 ?? existing.SurfaceAreaCm2,
+                IsManifold = isManifold,
+                NonManifoldReason = ResolveNonManifoldReason(
+                    isManifold,
+                    nonManifoldReason,
+                    existing.NonManifoldReason)
             });
         return Task.CompletedTask;
     }
@@ -106,5 +145,15 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             },
             (_, existing) => existing with { Status = "Failed", AnalysisErrorCode = errorCode });
         return Task.CompletedTask;
+    }
+
+    private static string? ResolveNonManifoldReason(
+        bool isManifold,
+        string? nonManifoldReason,
+        string? existingNonManifoldReason)
+    {
+        return isManifold
+            ? null
+            : nonManifoldReason ?? existingNonManifoldReason;
     }
 }
