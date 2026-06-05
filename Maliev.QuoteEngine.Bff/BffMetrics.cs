@@ -14,6 +14,8 @@ public sealed class BffMetrics
     private readonly Counter<long> _browserDfmRuntimeStarts;
     private readonly Counter<long> _browserDfmRuntimeTerminalAttempts;
     private readonly Counter<long> _dfmExecutionDecisions;
+    private readonly Histogram<long> _dfmServerAvoidedInputBytes;
+    private readonly Histogram<long> _dfmServerAvoidedInputTriangles;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BffMetrics"/> class.
@@ -46,6 +48,14 @@ public sealed class BffMetrics
             "quote_dfm_execution_decisions",
             unit: "{decision}",
             description: "Counts whether QuoteEngine DFM work was satisfied by browser-local execution or required GeometryService fallback.");
+        _dfmServerAvoidedInputBytes = meter.CreateHistogram<long>(
+            "quote_dfm_server_avoided_input_bytes",
+            unit: "By",
+            description: "Records accepted browser-local DFM input bytes that avoided GeometryService server processing.");
+        _dfmServerAvoidedInputTriangles = meter.CreateHistogram<long>(
+            "quote_dfm_server_avoided_input_triangles",
+            unit: "{triangle}",
+            description: "Records accepted browser-local DFM triangle workloads that avoided GeometryService server processing.");
     }
 
     /// <summary>
@@ -55,11 +65,15 @@ public sealed class BffMetrics
     /// <param name="accepted">Whether the Blazor client accepted the local result for the active part.</param>
     /// <param name="authority">The runtime authority marker.</param>
     /// <param name="executionMode">The runtime execution mode marker.</param>
+    /// <param name="inputByteCount">The browser-local input size that did not require server processing.</param>
+    /// <param name="inputTriangleCount">The browser-local triangle workload that did not require server processing.</param>
     public void RecordBrowserDfmRuntimeCompletion(
         string? processCode,
         bool accepted,
         string? authority,
-        string? executionMode)
+        string? executionMode,
+        long? inputByteCount = null,
+        long? inputTriangleCount = null)
     {
         _browserDfmRuntimeCompletions.Add(1, new TagList
         {
@@ -80,6 +94,7 @@ public sealed class BffMetrics
                 { "authority", NormalizeMarker(authority, "other") },
                 { "execution_mode", NormalizeMarker(executionMode, "other") },
             });
+            RecordAvoidedServerWorkload(processCode, authority, executionMode, inputByteCount, inputTriangleCount);
         }
     }
 
@@ -152,6 +167,33 @@ public sealed class BffMetrics
             { "decision", "server_completed" },
             { "server_cpu", "consumed" },
         });
+    }
+
+    private void RecordAvoidedServerWorkload(
+        string? processCode,
+        string? authority,
+        string? executionMode,
+        long? inputByteCount,
+        long? inputTriangleCount)
+    {
+        var tags = new TagList
+        {
+            { "process_family", NormalizeProcessFamily(processCode) },
+            { "execution_path", "browser_primary" },
+            { "server_cpu", "avoided" },
+            { "authority", NormalizeMarker(authority, "other") },
+            { "execution_mode", NormalizeMarker(executionMode, "other") },
+        };
+
+        if (inputByteCount is > 0)
+        {
+            _dfmServerAvoidedInputBytes.Record(inputByteCount.Value, tags);
+        }
+
+        if (inputTriangleCount is > 0)
+        {
+            _dfmServerAvoidedInputTriangles.Record(inputTriangleCount.Value, tags);
+        }
     }
 
     private static string NormalizeProcessFamily(string? processCode)

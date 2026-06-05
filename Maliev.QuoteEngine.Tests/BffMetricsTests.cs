@@ -144,6 +144,67 @@ public sealed class BffMetricsTests
     }
 
     [Fact]
+    public void RecordBrowserDfmRuntimeCompletion_WhenAccepted_RecordsAvoidedServerWorkload()
+    {
+        var services = new ServiceCollection();
+        services.AddMetrics();
+
+        var measurements = new List<(string InstrumentName, long Value, Dictionary<string, object?> Tags)>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Name is "quote_dfm_server_avoided_input_bytes"
+                    or "quote_dfm_server_avoided_input_triangles")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((instrument, value, tags, _) =>
+        {
+            var snapshot = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var tag in tags)
+            {
+                snapshot[tag.Key] = tag.Value;
+            }
+
+            measurements.Add((instrument.Name, value, snapshot));
+        });
+        listener.Start();
+
+        using var provider = services.BuildServiceProvider();
+        var metrics = new BffMetrics(provider.GetRequiredService<IMeterFactory>());
+        metrics.RecordBrowserDfmRuntimeCompletion(
+            "CNC_MILL",
+            accepted: true,
+            "local_primary",
+            "primary_interactive",
+            inputByteCount: 1024,
+            inputTriangleCount: 12);
+
+        var byteMeasurement = Assert.Single(
+            measurements,
+            item => item.InstrumentName == "quote_dfm_server_avoided_input_bytes");
+        Assert.Equal(1024, byteMeasurement.Value);
+        Assert.Equal("cnc", byteMeasurement.Tags["process_family"]);
+        Assert.Equal("browser_primary", byteMeasurement.Tags["execution_path"]);
+        Assert.Equal("avoided", byteMeasurement.Tags["server_cpu"]);
+        Assert.Equal("local_primary", byteMeasurement.Tags["authority"]);
+        Assert.Equal("primary_interactive", byteMeasurement.Tags["execution_mode"]);
+
+        var triangleMeasurement = Assert.Single(
+            measurements,
+            item => item.InstrumentName == "quote_dfm_server_avoided_input_triangles");
+        Assert.Equal(12, triangleMeasurement.Value);
+        Assert.Equal("cnc", triangleMeasurement.Tags["process_family"]);
+        Assert.Equal("browser_primary", triangleMeasurement.Tags["execution_path"]);
+        Assert.Equal("avoided", triangleMeasurement.Tags["server_cpu"]);
+        Assert.Equal("local_primary", triangleMeasurement.Tags["authority"]);
+        Assert.Equal("primary_interactive", triangleMeasurement.Tags["execution_mode"]);
+    }
+
+    [Fact]
     public void RecordBrowserDfmRuntimeTerminalAttempt_DoesNotEmitExecutionDecision()
     {
         var services = new ServiceCollection();

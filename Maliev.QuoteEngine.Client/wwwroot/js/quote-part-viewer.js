@@ -3403,6 +3403,8 @@ function dispatchLocalAdvisoryTelemetry(canvasId, result, accepted) {
             executionMode: result?.executionMode ?? null,
             accepted,
             inputHash: result?.inputHash ?? null,
+            inputByteCount: result?.inputByteCount ?? null,
+            inputTriangleCount: result?.inputTriangleCount ?? null,
             issueCount: issues.length,
             warningCount: issues.filter(issue => issue?.severity !== 'info').length,
             faceCount: Number(result?.metrics?.faceCount ?? 0),
@@ -3842,12 +3844,14 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
     const runtimeInput = meshBuffers.length > 0
         ? { meshBuffers }
         : { fileBytes: runtimeFileBytes, fileName: runtimeFileName };
+    const inputByteCount = getLocalAdvisoryInputByteLength(runtimeInput);
+    const inputTriangleCount = countLocalAdvisoryInputTriangles(runtimeInput);
     await notifyLocalAdvisoryStartedDotNet(
         options.dotNetRef,
         {
             processCode,
-            inputByteCount: getLocalAdvisoryInputByteLength(runtimeInput),
-            inputTriangleCount: countLocalAdvisoryInputTriangles(runtimeInput),
+            inputByteCount,
+            inputTriangleCount,
         });
 
     if (renderLocalPanel) renderLocalAdvisoryStatus(canvasId, 'pending');
@@ -3913,6 +3917,10 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         result.storagePath = typeof options.storagePath === 'string' && options.storagePath.trim()
             ? options.storagePath.trim()
             : null;
+        result.inputByteCount = inputByteCount;
+        result.inputTriangleCount = inputTriangleCount > 0
+            ? inputTriangleCount
+            : Math.max(0, Math.round(Number(result?.metrics?.faceCount ?? 0)));
         if (localAdvisoryRuns[canvasId] !== runId ||
             !isBrowserFirstRuntimeContract(result)) {
             clearLocalAdvisoryPanel(canvasId);

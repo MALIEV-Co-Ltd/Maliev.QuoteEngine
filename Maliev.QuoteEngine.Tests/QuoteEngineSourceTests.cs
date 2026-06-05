@@ -1726,9 +1726,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("InputByteCount", controller, StringComparison.Ordinal);
         Assert.Contains("InputTriangleCount", controller, StringComparison.Ordinal);
         Assert.Contains("RecordBrowserDfmRuntimeStart", controller, StringComparison.Ordinal);
+        Assert.Contains("inputByteCount: result?.inputByteCount ?? null", js, StringComparison.Ordinal);
+        Assert.Contains("inputTriangleCount: result?.inputTriangleCount ?? null", js, StringComparison.Ordinal);
         Assert.Contains("quote_browser_dfm_runtime_starts", metrics, StringComparison.Ordinal);
         Assert.Contains("quote_browser_dfm_runtime_input_bytes", metrics, StringComparison.Ordinal);
         Assert.Contains("quote_browser_dfm_runtime_input_triangles", metrics, StringComparison.Ordinal);
+        Assert.Contains("quote_dfm_server_avoided_input_bytes", metrics, StringComparison.Ordinal);
+        Assert.Contains("quote_dfm_server_avoided_input_triangles", metrics, StringComparison.Ordinal);
         Assert.Contains("RecordBrowserDfmRuntimeStart", metrics, StringComparison.Ordinal);
         Assert.Contains("function dispatchLocalAdvisoryStartedTelemetry(payload)", js, StringComparison.Ordinal);
         Assert.Contains("dispatchLocalAdvisoryStartedTelemetry(payload);", js, StringComparison.Ordinal);
