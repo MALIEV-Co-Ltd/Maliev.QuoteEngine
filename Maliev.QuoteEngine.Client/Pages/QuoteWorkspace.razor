@@ -2,6 +2,7 @@
 @page "/quote/new"
 @page "/projects/new"
 @page "/demo"
+@using System.Net.Http
 @using System.Text
 @using System.Text.Json
 @using Microsoft.AspNetCore.SignalR.Client
@@ -201,6 +202,16 @@
     private DotNetObjectReference<QuoteWorkspace>? _dotNetRef;
     private readonly List<string> _liveNotifications = [];
     private readonly HashSet<string> _registeredDropzoneIds = [];
+    private static readonly HashSet<string> DefaultBrowserViewerExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".3mf",
+        ".glb",
+        ".gltf",
+        ".obj",
+        ".stl"
+    };
+    private HashSet<string>? _runtimeBrowserViewerExtensions;
+    private Task<HashSet<string>?>? _runtimeBrowserViewerExtensionsTask;
     private string _leadTimeCode = "STANDARD";
     private string _title = "Untitled quote";
     private int _selectedPartIndex;
@@ -795,7 +806,7 @@
 
     private async Task<bool> TryApplyLocalViewerUrlAsync(QuotePartViewModel part)
     {
-        var viewerExtension = ResolveBrowserFileViewerExtension(part);
+        var viewerExtension = await ResolveBrowserFileViewerExtensionAsync(part);
         if (viewerExtension is null || string.IsNullOrWhiteSpace(part.ClientFileId))
         {
             return false;
@@ -822,10 +833,10 @@
         }
     }
 
-    private static bool CanUseBrowserFileViewer(QuotePartViewModel part)
-        => ResolveBrowserFileViewerExtension(part) is not null;
+    private bool CanUseBrowserFileViewer(QuotePartViewModel part)
+        => ResolveBrowserFileViewerExtension(part, _runtimeBrowserViewerExtensions ?? DefaultBrowserViewerExtensions) is not null;
 
-    private static bool ShouldRetainBrowserUploadFile(QuotePartViewModel part) =>
+    private bool ShouldRetainBrowserUploadFile(QuotePartViewModel part) =>
         !string.IsNullOrWhiteSpace(part.ClientFileId)
         && !string.IsNullOrWhiteSpace(part.StoragePath)
         && part.Status != "Upload failed"
@@ -879,11 +890,71 @@
         }
     }
 
-    private static string? ResolveBrowserFileViewerExtension(QuotePartViewModel part)
+    private async Task<string?> ResolveBrowserFileViewerExtensionAsync(QuotePartViewModel part)
+    {
+        var extensions = await GetRuntimeBrowserViewerExtensionsAsync();
+        return ResolveBrowserFileViewerExtension(part, extensions ?? DefaultBrowserViewerExtensions);
+    }
+
+    private async Task<HashSet<string>?> GetRuntimeBrowserViewerExtensionsAsync()
+    {
+        if (_runtimeBrowserViewerExtensions is { Count: > 0 })
+        {
+            return _runtimeBrowserViewerExtensions;
+        }
+
+        _runtimeBrowserViewerExtensionsTask ??= FetchRuntimeBrowserViewerExtensionsAsync();
+        var extensions = await _runtimeBrowserViewerExtensionsTask;
+        if (extensions is { Count: > 0 })
+        {
+            _runtimeBrowserViewerExtensions = extensions;
+        }
+        else
+        {
+            _runtimeBrowserViewerExtensionsTask = null;
+        }
+
+        return extensions;
+    }
+
+    private async Task<HashSet<string>?> FetchRuntimeBrowserViewerExtensionsAsync()
+    {
+        using var manifest = await Api.GetGeometryRuntimeManifestAsync();
+        return manifest is null ? null : ReadDirectBrowserViewerExtensions(manifest.RootElement);
+    }
+
+    private static HashSet<string>? ReadDirectBrowserViewerExtensions(JsonElement root)
+    {
+        if (!root.TryGetProperty("artifactPolicy", out var artifactPolicy)
+            || !artifactPolicy.TryGetProperty("directBrowserViewerExtensions", out var extensions)
+            || extensions.ValueKind != JsonValueKind.Array)
+        {
+            return null;
+        }
+
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var extension in extensions.EnumerateArray())
+        {
+            if (extension.ValueKind != JsonValueKind.String)
+            {
+                continue;
+            }
+
+            var normalized = NormalizeViewerFileExtension(extension.GetString(), null);
+            if (!string.IsNullOrWhiteSpace(normalized))
+            {
+                result.Add(normalized);
+            }
+        }
+
+        return result.Count > 0 ? result : null;
+    }
+
+    private static string? ResolveBrowserFileViewerExtension(QuotePartViewModel part, ISet<string> browserViewerExtensions)
     {
         var ext = NormalizeViewerFileExtension(null, part.StoragePath ?? part.FileName);
 
-        return ext is ".3mf" or ".stl" or ".obj" or ".glb" or ".gltf" ? ext : null;
+        return !string.IsNullOrWhiteSpace(ext) && browserViewerExtensions.Contains(ext) ? ext : null;
     }
 
     private static string? NormalizeViewerFileExtension(string? fileExtension, string? storagePath)

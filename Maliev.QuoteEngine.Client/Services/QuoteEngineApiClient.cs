@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Text.Json;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Chatbot;
 using Maliev.QuoteEngine.Shared.Quotes;
@@ -77,6 +78,18 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     {
         return await httpClient.GetFromJsonAsync<QuoteAnalysisStatusResponse>($"quote/v1/uploads/{Uri.EscapeDataString(uploadId)}/analysis-status", cancellationToken)
             ?? new QuoteAnalysisStatusResponse { UploadId = uploadId };
+    }
+
+    public async Task<JsonDocument?> GetGeometryRuntimeManifestAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await httpClient.GetFromJsonAsync<JsonDocument>("quote/v1/geometry/runtime/manifest", cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException or OperationCanceledException)
+        {
+            return null;
+        }
     }
 
     public Task<QuoteEstimateResponse> EstimateAsync(QuoteEstimateRequest request, CancellationToken cancellationToken = default)
