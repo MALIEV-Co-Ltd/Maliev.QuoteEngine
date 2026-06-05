@@ -486,17 +486,23 @@
                     candidate.ContentType);
 
                 var upload = await Api.CompleteUploadAsync(initiation.UploadId);
-                var status = await Api.GetAnalysisStatusAsync(upload.UploadId);
                 part.PartId = Guid.NewGuid();
                 part.FileId = upload.FileId;
                 part.UploadId = upload.UploadId;
                 part.StoragePath = upload.StoragePath;
-                part.Status = status.Status;
-                part.VolumeCc = status.VolumeCc;
-                part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
-                part.Findings = status.Findings;
-                ApplyAnalysisStatus(part, status);
-                await TryApplyLocalViewerUrlAsync(part);
+                part.Status = "Processing";
+                var completedLocally = await TryCompleteBrowserPrimaryViewerLocallyAsync(part);
+                if (!completedLocally)
+                {
+                    var status = await Api.GetAnalysisStatusAsync(upload.UploadId);
+                    part.Status = status.Status;
+                    part.VolumeCc = status.VolumeCc;
+                    part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
+                    part.Findings = status.Findings;
+                    ApplyAnalysisStatus(part, status);
+                    await TryApplyLocalViewerUrlAsync(part);
+                }
+
                 if (!ShouldRetainBrowserUploadFile(part))
                     await ScheduleBrowserUploadFileCleanupAsync(candidate.ClientFileId);
                 await InvokeAsync(StateHasChanged);
@@ -802,6 +808,19 @@
     private static void ApplyAnalysisStatus(QuotePartViewModel part, QuoteAnalysisStatusResponse status)
     {
         QeLocalDfmMapper.ApplyAnalysisStatus(part, status);
+    }
+
+    private async Task<bool> TryCompleteBrowserPrimaryViewerLocallyAsync(QuotePartViewModel part)
+    {
+        if (!await TryApplyLocalViewerUrlAsync(part))
+        {
+            return false;
+        }
+
+        part.Status = "Ready";
+        part.LocalDfmRuntimeUnavailable = false;
+        part.LocalDfmRuntimeUnavailableReason = null;
+        return true;
     }
 
     private async Task<bool> TryApplyLocalViewerUrlAsync(QuotePartViewModel part)

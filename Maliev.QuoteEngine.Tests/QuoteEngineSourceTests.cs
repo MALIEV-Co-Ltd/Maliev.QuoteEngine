@@ -1382,6 +1382,25 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspaceRazor_browser_primary_upload_skips_analysis_status_after_local_viewer()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor")
+            .ReplaceLineEndings("\n");
+        var uploadBlock = ExtractBlock(src, "private async Task ProcessUploadCandidatesAsync");
+
+        Assert.Contains("TryCompleteBrowserPrimaryViewerLocallyAsync(part)", uploadBlock, StringComparison.Ordinal);
+        Assert.Contains("if (!completedLocally)", uploadBlock, StringComparison.Ordinal);
+        Assert.Contains("Api.GetAnalysisStatusAsync(upload.UploadId)", uploadBlock, StringComparison.Ordinal);
+        Assert.True(
+            uploadBlock.IndexOf("TryCompleteBrowserPrimaryViewerLocallyAsync(part)", StringComparison.Ordinal)
+            < uploadBlock.IndexOf("Api.GetAnalysisStatusAsync(upload.UploadId)", StringComparison.Ordinal),
+            "QuoteEngine should try the retained browser file viewer before asking the BFF for analysis status.");
+
+        var localViewerBlock = ExtractBlock(src, "private async Task<bool> TryCompleteBrowserPrimaryViewerLocallyAsync");
+        Assert.Contains("part.Status = \"Ready\";", localViewerBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteWorkspaceRazor_disables_upload_input_until_route_state_is_initialized()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
@@ -2035,6 +2054,34 @@ public sealed class QuoteEngineSourceTests
         if (start < 0) return "";
         var end = js.IndexOf("};", start, StringComparison.Ordinal);
         return end > start ? js[start..end] : js[start..];
+    }
+
+    private static string ExtractBlock(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        if (start < 0) return string.Empty;
+
+        var firstBrace = source.IndexOf('{', start);
+        if (firstBrace < 0) return source[start..];
+
+        var depth = 0;
+        for (var index = firstBrace; index < source.Length; index++)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+            }
+            else if (source[index] == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return source[start..(index + 1)];
+                }
+            }
+        }
+
+        return source[start..];
     }
 
     private static FileAnalyzedEvent BuildFileAnalyzedEvent(
