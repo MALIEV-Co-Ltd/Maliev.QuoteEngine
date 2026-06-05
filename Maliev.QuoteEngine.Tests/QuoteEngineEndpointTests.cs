@@ -84,6 +84,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             string contentType,
             long totalSize,
             string storagePath,
+            IReadOnlyDictionary<string, string>? metadataTags,
             CancellationToken ct) => Task.FromResult($"downstream-{Guid.NewGuid():N}");
 
         public override Task StreamUploadAsync(Stream body, string contentType, long contentLength,
@@ -92,6 +93,24 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         public override Task<string> GetDownloadUrlByPathAsync(string storagePath,
             int expirationMinutes = 60, CancellationToken ct = default)
             => Task.FromResult($"https://test-cdn.example.com/{Uri.EscapeDataString(storagePath)}");
+    }
+
+    internal sealed class RecordingQuoteUploadServiceClient()
+        : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
+    {
+        public IReadOnlyDictionary<string, string>? LastMetadataTags { get; private set; }
+
+        public override Task<string> InitiateResumableUploadAsync(
+            string fileName,
+            string contentType,
+            long totalSize,
+            string storagePath,
+            IReadOnlyDictionary<string, string>? metadataTags,
+            CancellationToken ct)
+        {
+            LastMetadataTags = metadataTags;
+            return Task.FromResult($"downstream-{Guid.NewGuid():N}");
+        }
     }
 
     private sealed class FakeQuoteGeometryRuntimeClient : IQuoteGeometryRuntimeClient
@@ -943,6 +962,36 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task ResumableUpload_marks_browser_primary_mesh_uploads_for_downstream_upload()
+    {
+        var recordingUploadClient = new QuoteEngineWebApplicationFactory.RecordingQuoteUploadServiceClient();
+        using var recordingFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(recordingUploadClient);
+            });
+        });
+        using var client = recordingFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = "session-browser-primary",
+            FileName = "part.stl",
+            ContentType = "model/stl",
+            FileSizeBytes = 12
+        });
+
+        response.EnsureSuccessStatusCode();
+
+        Assert.NotNull(recordingUploadClient.LastMetadataTags);
+        Assert.Equal("browser_primary", recordingUploadClient.LastMetadataTags!["geometry.executionPolicy"]);
+        Assert.Equal("required", recordingUploadClient.LastMetadataTags["geometry.browserRuntime"]);
+        Assert.Equal("skip_for_browser_viewable", recordingUploadClient.LastMetadataTags["geometry.serverGlbExport"]);
+    }
+
+    [Fact]
     public async Task UploadHandoff_imports_web_uploaded_files_into_active_workspace()
     {
         using var client = factory.CreateClient();
@@ -1723,6 +1772,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             string contentType,
             long totalSize,
             string storagePath,
+            IReadOnlyDictionary<string, string>? metadataTags,
             CancellationToken ct) =>
             throw new InvalidOperationException("UploadService is intentionally unavailable.");
 

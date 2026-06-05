@@ -18,6 +18,7 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
         string contentType,
         long totalSize,
         string storagePath,
+        IReadOnlyDictionary<string, string>? metadataTags,
         CancellationToken ct)
     {
         using var response = await http.PostAsJsonAsync("/upload/v1/uploads/resumable", new
@@ -27,7 +28,8 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
             serviceName = "QuoteEngine",
             contentType,
             totalSize,
-            overwrite = true
+            overwrite = true,
+            metadataTags
         }, ct);
 
         if (!response.IsSuccessStatusCode)

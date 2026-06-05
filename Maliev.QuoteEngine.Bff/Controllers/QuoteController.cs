@@ -30,6 +30,9 @@ public sealed class QuoteController(
     ILogger<QuoteController> logger) : ControllerBase
 {
     private const string PrototypeUploadPrefix = "prototype-local:";
+    private static readonly HashSet<string> BrowserViewerSourceExtensions = new(
+        [".3mf", ".glb", ".gltf", ".obj", ".stl"],
+        StringComparer.OrdinalIgnoreCase);
 
     [HttpGet("reference-data")]
     public ActionResult<QuoteReferenceDataResponse> GetReferenceData()
@@ -86,11 +89,13 @@ public sealed class QuoteController(
         var upload = store.InitiateUpload(request, customerId);
         try
         {
+            var metadataTags = BuildBrowserPrimaryUploadMetadata(upload.FileName);
             var downstreamUploadId = await uploadClient.InitiateResumableUploadAsync(
                 upload.FileName,
                 upload.ContentType,
                 upload.ExpectedSizeBytes,
                 upload.StoragePath,
+                metadataTags,
                 cancellationToken);
             upload = store.AttachDownstreamUpload(upload.UploadId, downstreamUploadId);
         }
@@ -570,4 +575,17 @@ public sealed class QuoteController(
 
     private static bool IsPrototypeUpload(UploadState upload) =>
         upload.DownstreamUploadId?.StartsWith(PrototypeUploadPrefix, StringComparison.Ordinal) == true;
+
+    private static IReadOnlyDictionary<string, string>? BuildBrowserPrimaryUploadMetadata(string fileName)
+    {
+        if (!BrowserViewerSourceExtensions.Contains(Path.GetExtension(fileName)))
+            return null;
+
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["geometry.executionPolicy"] = "browser_primary",
+            ["geometry.browserRuntime"] = "required",
+            ["geometry.serverGlbExport"] = "skip_for_browser_viewable"
+        };
+    }
 }
