@@ -1817,6 +1817,21 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewerJs_serializes_local_geometry_workers()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("let localAdvisoryWorkerQueue = Promise.resolve();", js, StringComparison.Ordinal);
+        Assert.Contains("function enqueueLocalAdvisoryWorker(work)", js, StringComparison.Ordinal);
+        Assert.Contains("localAdvisoryWorkerQueue = run.catch(() => {});", js, StringComparison.Ordinal);
+        Assert.Contains("const result = await enqueueLocalAdvisoryWorker(() => {", js, StringComparison.Ordinal);
+        Assert.Contains("if (localAdvisoryRuns[canvasId] !== runId) return null;", js, StringComparison.Ordinal);
+        Assert.Contains("return analyzeWithLocalAdvisoryWorker(", js, StringComparison.Ordinal);
+        Assert.Contains("if (!result) {", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewerJs_honors_geometry_manifest_device_input_limits()
     {
         var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
