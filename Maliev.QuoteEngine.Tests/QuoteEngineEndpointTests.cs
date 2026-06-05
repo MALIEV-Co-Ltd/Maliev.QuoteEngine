@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
+using Polly.Timeout;
 
 namespace Maliev.QuoteEngine.Tests;
 
@@ -132,6 +133,45 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             response.Headers.CacheControl.Extensions.Add(new NameValueHeaderValue("immutable"));
             return Task.FromResult(response);
         }
+    }
+
+    internal sealed class TimeoutQuoteGeometryRuntimeClient : IQuoteGeometryRuntimeClient
+    {
+        public Task<HttpResponseMessage> GetRuntimeManifestAsync(CancellationToken ct = default)
+        {
+            throw new TaskCanceledException(
+                "The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.",
+                new TimeoutException("The operation was canceled."));
+        }
+
+        public Task<HttpResponseMessage> GetRuntimeAssetAsync(string assetName, CancellationToken ct = default)
+        {
+            throw new TaskCanceledException(
+                "The request was canceled due to the configured HttpClient.Timeout of 30 seconds elapsing.",
+                new TimeoutException("The operation was canceled."));
+        }
+    }
+
+    internal sealed class PollyTimeoutQuoteGeometryRuntimeClient : IQuoteGeometryRuntimeClient
+    {
+        public Task<HttpResponseMessage> GetRuntimeManifestAsync(CancellationToken ct = default) =>
+            Task.FromException<HttpResponseMessage>(new TimeoutRejectedException(
+                "The operation didn't complete within the allowed timeout of '00:01:00'."));
+
+        public Task<HttpResponseMessage> GetRuntimeAssetAsync(string assetName, CancellationToken ct = default) =>
+            Task.FromException<HttpResponseMessage>(new TimeoutRejectedException(
+                "The operation didn't complete within the allowed timeout of '00:01:00'."));
+    }
+
+    internal sealed class ThrowIfCalledQuoteGeometryRuntimeClient : IQuoteGeometryRuntimeClient
+    {
+        public Task<HttpResponseMessage> GetRuntimeManifestAsync(CancellationToken ct = default) =>
+            Task.FromException<HttpResponseMessage>(
+                new InvalidOperationException("Packaged runtime assets must not call GeometryService."));
+
+        public Task<HttpResponseMessage> GetRuntimeAssetAsync(string assetName, CancellationToken ct = default) =>
+            Task.FromException<HttpResponseMessage>(
+                new InvalidOperationException("Packaged runtime assets must not call GeometryService."));
     }
 
     // ── Fake service clients ──────────────────────────────────────────────────
@@ -575,6 +615,142 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("application/json; charset=utf-8", response.Content.Headers.ContentType?.ToString());
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("\"runtimeVersion\":\"0.1.0\"", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GeometryRuntime_manifest_falls_back_to_packaged_runtime_when_geometry_service_times_out()
+    {
+        await using var timeoutFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQuoteGeometryRuntimeClient>();
+                services.AddSingleton<IQuoteGeometryRuntimeClient>(
+                    new QuoteEngineWebApplicationFactory.TimeoutQuoteGeometryRuntimeClient());
+            });
+        });
+        using var client = timeoutFactory.CreateClient();
+
+        var response = await client.GetAsync("/quote/v1/geometry/runtime/manifest");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"runtimeVersion\":\"1.0.0\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"runtimeKind\":\"browser-first-geometry\"", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GeometryRuntime_manifest_falls_back_to_packaged_runtime_when_geometry_service_polly_times_out()
+    {
+        await using var timeoutFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQuoteGeometryRuntimeClient>();
+                services.AddSingleton<IQuoteGeometryRuntimeClient>(
+                    new QuoteEngineWebApplicationFactory.PollyTimeoutQuoteGeometryRuntimeClient());
+            });
+        });
+        using var client = timeoutFactory.CreateClient();
+
+        var response = await client.GetAsync("/quote/v1/geometry/runtime/manifest");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("\"runtimeVersion\":\"1.0.0\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"runtimeKind\":\"browser-first-geometry\"", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GeometryRuntime_asset_falls_back_to_packaged_runtime_when_geometry_service_times_out()
+    {
+        await using var timeoutFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQuoteGeometryRuntimeClient>();
+                services.AddSingleton<IQuoteGeometryRuntimeClient>(
+                    new QuoteEngineWebApplicationFactory.TimeoutQuoteGeometryRuntimeClient());
+            });
+        });
+        using var client = timeoutFactory.CreateClient();
+
+        var manifest = await client.GetFromJsonAsync<JsonElement>("/quote/v1/geometry/runtime/manifest");
+        var workerPath = manifest.GetProperty("assets").GetProperty("worker").GetString();
+        Assert.NotNull(workerPath);
+        var workerName = workerPath.Split('/').Last();
+
+        var response = await client.GetAsync($"/quote/v1/geometry/runtime/assets/{workerName}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("immutable", response.Headers.CacheControl?.ToString(), StringComparison.Ordinal);
+        Assert.Equal("text/javascript; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        Assert.Contains(
+            "MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION",
+            await response.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GeometryRuntime_asset_falls_back_to_packaged_runtime_when_geometry_service_polly_times_out()
+    {
+        await using var timeoutFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQuoteGeometryRuntimeClient>();
+                services.AddSingleton<IQuoteGeometryRuntimeClient>(
+                    new QuoteEngineWebApplicationFactory.PollyTimeoutQuoteGeometryRuntimeClient());
+            });
+        });
+        using var client = timeoutFactory.CreateClient();
+
+        var manifest = await client.GetFromJsonAsync<JsonElement>("/quote/v1/geometry/runtime/manifest");
+        var workerPath = manifest.GetProperty("assets").GetProperty("worker").GetString();
+        Assert.NotNull(workerPath);
+        var workerName = workerPath.Split('/').Last();
+
+        var response = await client.GetAsync($"/quote/v1/geometry/runtime/assets/{workerName}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("immutable", response.Headers.CacheControl?.ToString(), StringComparison.Ordinal);
+        Assert.Equal("text/javascript; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        Assert.Contains(
+            "MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION",
+            await response.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GeometryRuntime_asset_serves_packaged_runtime_without_calling_geometry_service_when_asset_name_matches()
+    {
+        var provider = new GeometryRuntimeFallbackProvider();
+        using var manifestDocument = JsonDocument.Parse(Encoding.UTF8.GetString(provider.GetManifest().Content));
+        var workerPath = manifestDocument.RootElement.GetProperty("assets").GetProperty("worker").GetString();
+        Assert.NotNull(workerPath);
+        var workerName = workerPath.Split('/').Last();
+        await using var noDownstreamFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQuoteGeometryRuntimeClient>();
+                services.AddSingleton<IQuoteGeometryRuntimeClient>(
+                    new QuoteEngineWebApplicationFactory.ThrowIfCalledQuoteGeometryRuntimeClient());
+            });
+        });
+        using var client = noDownstreamFactory.CreateClient();
+
+        var response = await client.GetAsync($"/quote/v1/geometry/runtime/assets/{workerName}");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("immutable", response.Headers.CacheControl?.ToString(), StringComparison.Ordinal);
+        Assert.Equal("text/javascript; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        Assert.Contains(
+            "MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION",
+            await response.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
     }
 
     [Fact]

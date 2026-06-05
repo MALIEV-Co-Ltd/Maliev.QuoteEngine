@@ -1,10 +1,12 @@
 using System.Globalization;
+using System.Text;
 using Asp.Versioning;
 using Maliev.QuoteEngine.Bff;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Polly.Timeout;
 
 namespace Maliev.QuoteEngine.Bff.Controllers;
 
@@ -17,6 +19,7 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 public sealed class GeometryRuntimeController(
     IQuoteGeometryRuntimeClient runtimeClient,
     IQuoteFileAnalysisStatusService statusService,
+    GeometryRuntimeFallbackProvider runtimeFallbackProvider,
     BffMetrics bffMetrics,
     ILogger<GeometryRuntimeController> logger) : ControllerBase
 {
@@ -36,11 +39,29 @@ public sealed class GeometryRuntimeController(
     [HttpGet("manifest")]
     public async Task<IActionResult> GetManifest(CancellationToken ct)
     {
-        using var response = await runtimeClient.GetRuntimeManifestAsync(ct);
-        return await ProxyRuntimeResponseAsync(
-            response,
-            "application/json; charset=utf-8",
-            ct);
+        try
+        {
+            using var response = await runtimeClient.GetRuntimeManifestAsync(ct);
+            if (response.IsSuccessStatusCode)
+            {
+                return await ProxyRuntimeResponseAsync(
+                    response,
+                    "application/json; charset=utf-8",
+                    ct);
+            }
+
+            logger.LogWarning(
+                "GeometryService runtime manifest returned {StatusCode}; serving packaged QuoteEngine runtime fallback",
+                (int)response.StatusCode);
+            return RuntimeManifestFallbackResult(runtimeFallbackProvider.GetManifest());
+        }
+        catch (Exception ex) when (IsRuntimeDeliveryUnavailable(ex, ct))
+        {
+            logger.LogWarning(
+                ex,
+                "GeometryService runtime manifest was unavailable; serving packaged QuoteEngine runtime fallback");
+            return RuntimeManifestFallbackResult(runtimeFallbackProvider.GetManifest());
+        }
     }
 
     /// <summary>
@@ -59,12 +80,78 @@ public sealed class GeometryRuntimeController(
             return NotFound();
         }
 
-        using var response = await runtimeClient.GetRuntimeAssetAsync(assetName, ct);
-        return await ProxyRuntimeAssetResponseAsync(
-            response,
-            "text/javascript; charset=utf-8",
-            ct);
+        if (runtimeFallbackProvider.TryGetAsset(assetName, out var packagedAsset))
+        {
+            return RuntimeAssetFallbackResult(packagedAsset!);
+        }
+
+        try
+        {
+            using var response = await runtimeClient.GetRuntimeAssetAsync(assetName, ct);
+            if (response.IsSuccessStatusCode || !runtimeFallbackProvider.TryGetAsset(assetName, out var fallbackAsset))
+            {
+                return await ProxyRuntimeAssetResponseAsync(
+                    response,
+                    "text/javascript; charset=utf-8",
+                    ct);
+            }
+
+            logger.LogWarning(
+                "GeometryService runtime asset {AssetName} returned {StatusCode}; serving packaged QuoteEngine runtime fallback",
+                assetName,
+                (int)response.StatusCode);
+            return RuntimeAssetFallbackResult(fallbackAsset!);
+        }
+        catch (Exception ex) when (IsRuntimeDeliveryUnavailable(ex, ct))
+        {
+            if (!runtimeFallbackProvider.TryGetAsset(assetName, out var fallbackAsset))
+            {
+                logger.LogWarning(
+                    ex,
+                    "GeometryService runtime asset {AssetName} was unavailable and no packaged fallback matched",
+                    assetName);
+                return NotFound();
+            }
+
+            logger.LogWarning(
+                ex,
+                "GeometryService runtime asset {AssetName} was unavailable; serving packaged QuoteEngine runtime fallback",
+                assetName);
+            return RuntimeAssetFallbackResult(fallbackAsset!);
+        }
     }
+
+    private ContentResult RuntimeManifestFallbackResult(GeometryRuntimeFallbackAsset asset)
+    {
+        ApplyRuntimeFallbackHeaders(asset);
+        return new ContentResult
+        {
+            StatusCode = StatusCodes.Status200OK,
+            Content = Encoding.UTF8.GetString(asset.Content),
+            ContentType = asset.ContentType
+        };
+    }
+
+    private FileContentResult RuntimeAssetFallbackResult(GeometryRuntimeFallbackAsset asset)
+    {
+        ApplyRuntimeFallbackHeaders(asset);
+        return new FileContentResult(asset.Content, asset.ContentType);
+    }
+
+    private void ApplyRuntimeFallbackHeaders(GeometryRuntimeFallbackAsset asset)
+    {
+        Response.Headers.CacheControl = asset.CacheControl;
+        Response.Headers["X-Maliev-Geometry-Execution-Mode"] = "primary_interactive";
+        Response.Headers["X-Maliev-Geometry-Authority"] = "local_primary";
+        Response.Headers["X-Maliev-Geometry-Server-Role"] = "fallback_and_final_validation";
+    }
+
+    private static bool IsRuntimeDeliveryUnavailable(Exception ex, CancellationToken ct) =>
+        !ct.IsCancellationRequested &&
+        ex is HttpRequestException
+            or TaskCanceledException
+            or OperationCanceledException
+            or TimeoutRejectedException;
 
     private async Task<ContentResult> ProxyRuntimeResponseAsync(
         HttpResponseMessage response,

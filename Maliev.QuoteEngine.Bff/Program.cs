@@ -78,6 +78,7 @@ builder.Services.AddHttpClient<IQuoteGeometryRuntimeClient, QuoteGeometryRuntime
     })
     .AddServiceDiscovery()
     .AddHttpMessageHandler<ServiceAccountAuthenticationHandler>();
+builder.Services.AddSingleton<GeometryRuntimeFallbackProvider>();
 
 // DemoMode options (short-circuit for sample bracket in dev/demo)
 builder.Services.Configure<DemoModeOptions>(
