@@ -46,7 +46,7 @@ public sealed class GeometryRuntimeFallbackProvider
             },
             artifactPolicy = new
             {
-                directBrowserViewerExtensions = new[] { ".glb", ".gltf", ".obj", ".stl" },
+                directBrowserViewerExtensions = new[] { ".3mf", ".glb", ".gltf", ".obj", ".stl" },
                 browserViewableUploads = new
                 {
                     viewerSource = "original_upload",

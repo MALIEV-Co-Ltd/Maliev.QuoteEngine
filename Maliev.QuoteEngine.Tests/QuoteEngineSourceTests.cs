@@ -1919,6 +1919,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("CanUseBrowserFileViewer", workspace, StringComparison.Ordinal);
         Assert.Contains("ResolveBrowserFileViewerExtension(part)", workspace, StringComparison.Ordinal);
         Assert.Contains("NormalizeViewerFileExtension(null, part.StoragePath ?? part.FileName)", workspace, StringComparison.Ordinal);
+        Assert.Contains("return ext is \".3mf\" or \".stl\" or \".obj\" or \".glb\" or \".gltf\" ? ext : null;", workspace, StringComparison.Ordinal);
         Assert.Contains("QeLocalDfmMapper.ApplyAnalysisStatus(part, status)", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("part.FdmDfmReport = status.FdmReport", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("part.SlaDfmReport = status.SlaReport", workspace, StringComparison.Ordinal);

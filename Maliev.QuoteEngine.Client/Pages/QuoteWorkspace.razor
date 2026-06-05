@@ -883,7 +883,7 @@
     {
         var ext = NormalizeViewerFileExtension(null, part.StoragePath ?? part.FileName);
 
-        return ext is ".stl" or ".obj" or ".glb" or ".gltf" ? ext : null;
+        return ext is ".3mf" or ".stl" or ".obj" or ".glb" or ".gltf" ? ext : null;
     }
 
     private static string? NormalizeViewerFileExtension(string? fileExtension, string? storagePath)

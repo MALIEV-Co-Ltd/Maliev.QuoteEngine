@@ -638,6 +638,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("\"runtimeVersion\":\"1.0.0\"", body, StringComparison.Ordinal);
         Assert.Contains("\"runtimeKind\":\"browser-first-geometry\"", body, StringComparison.Ordinal);
+        Assert.Contains(
+            "\"directBrowserViewerExtensions\":[\".3mf\",\".glb\",\".gltf\",\".obj\",\".stl\"]",
+            body,
+            StringComparison.Ordinal);
     }
 
     [Fact]

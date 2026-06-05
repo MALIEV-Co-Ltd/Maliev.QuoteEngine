@@ -11,7 +11,7 @@
  * wwwroot/lib/babylonjs/ and update the version comment above.
  *
  * Supported formats (via babylonjs.loaders): .glb, .gltf, .stl, .obj
- * Unsupported formats (.step, .iges, .3mf etc.) must be converted to GLB before reaching this script.
+ * Unsupported CAD exchange formats (.step, .iges etc.) must be converted to GLB before reaching this script.
  *
  * COORDINATE SYSTEM CONTRACT:
  *   All GLBs served to this viewer follow the glTF spec: Y-up, mm.
