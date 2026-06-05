@@ -67,6 +67,7 @@ public sealed class GeometryRuntimeFallbackProvider
                 fallbackOnUnsupportedDevice = true,
                 fallbackOnTimeout = true,
                 fallbackOnInputTooLarge = true,
+                interactiveServerDfmFallbackForBrowserPrimaryUploads = false,
                 finalValidationRequired = true
             },
             assets = new

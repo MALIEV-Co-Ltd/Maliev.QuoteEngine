@@ -642,6 +642,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             "\"directBrowserViewerExtensions\":[\".3mf\",\".glb\",\".gltf\",\".obj\",\".stl\"]",
             body,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "\"interactiveServerDfmFallbackForBrowserPrimaryUploads\":false",
+            body,
+            StringComparison.Ordinal);
     }
 
     [Fact]
