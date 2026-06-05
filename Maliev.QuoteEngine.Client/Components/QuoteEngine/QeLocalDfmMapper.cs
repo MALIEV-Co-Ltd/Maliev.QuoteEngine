@@ -10,6 +10,61 @@ namespace Maliev.QuoteEngine.Client.Components.QuoteEngine;
 public static class QeLocalDfmMapper
 {
     /// <summary>
+    /// Applies a server analysis status refresh without erasing accepted browser-local DFM.
+    /// </summary>
+    /// <param name="part">The quote part to update.</param>
+    /// <param name="status">The latest server analysis status.</param>
+    public static void ApplyAnalysisStatus(
+        QuotePartViewModel part,
+        QuoteAnalysisStatusResponse status)
+    {
+        var hasCurrentBrowserReport = HasCurrentProcessReport(part);
+        var hasIncomingServerReport = status.FdmReport is not null
+            || status.SlaReport is not null
+            || status.CncReport is not null;
+        var preserveCurrentBrowserReport = hasCurrentBrowserReport && !hasIncomingServerReport;
+
+        part.Status = preserveCurrentBrowserReport
+            ? "DfmAnalysisReady"
+            : status.Status;
+        if (!preserveCurrentBrowserReport || status.VolumeCc > 0m)
+        {
+            part.VolumeCc = status.VolumeCc;
+        }
+
+        if (!preserveCurrentBrowserReport || status.SurfaceAreaCm2 > 0m)
+        {
+            part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
+        }
+
+        part.GlbUrl = status.ViewerGlbUrl ?? part.GlbUrl;
+        part.ViewerStoragePath = status.ViewerStoragePath ?? part.ViewerStoragePath;
+        part.ViewerFileExtension = NormalizeViewerFileExtension(
+            status.ViewerFileExtension,
+            part.ViewerStoragePath ?? part.StoragePath);
+        part.ThumbnailUrl = status.ThumbnailUrl ?? part.ThumbnailUrl;
+        if (!preserveCurrentBrowserReport || status.Findings.Count > 0)
+        {
+            part.Findings = status.Findings;
+        }
+
+        if (!preserveCurrentBrowserReport)
+        {
+            part.IsManifold = status.IsManifold;
+            part.BodyCount = status.BodyCount;
+            part.NonManifoldReason = status.NonManifoldReason;
+        }
+
+        part.FdmDfmReport = status.FdmReport ?? part.FdmDfmReport;
+        part.SlaDfmReport = status.SlaReport ?? part.SlaDfmReport;
+        part.CncDfmReport = status.CncReport ?? part.CncDfmReport;
+        if (!preserveCurrentBrowserReport || status.OverlayGlbUrls.Count > 0)
+        {
+            part.OverlayGlbUrls = status.OverlayGlbUrls;
+        }
+    }
+
+    /// <summary>
     /// Applies a browser local DFM result to the matching process report slot on a quote part.
     /// </summary>
     /// <param name="part">The quote part to update.</param>
@@ -161,6 +216,22 @@ public static class QeLocalDfmMapper
 
     internal static bool IsCncProcess(string? processCode) =>
         string.Equals(ToRuntimeProcessCode(processCode), "cnc", StringComparison.Ordinal);
+
+    private static string? NormalizeViewerFileExtension(
+        string? fileExtension,
+        string? storagePath)
+    {
+        var ext = !string.IsNullOrWhiteSpace(fileExtension)
+            ? fileExtension.Trim()
+            : Path.GetExtension(storagePath);
+
+        if (string.IsNullOrWhiteSpace(ext))
+        {
+            return null;
+        }
+
+        return ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
+    }
 
     private static string ToRuntimeProcessCode(string? processCode)
     {

@@ -790,21 +790,7 @@
 
     private static void ApplyAnalysisStatus(QuotePartViewModel part, QuoteAnalysisStatusResponse status)
     {
-        part.Status = status.Status;
-        part.VolumeCc = status.VolumeCc;
-        part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
-        part.GlbUrl = status.ViewerGlbUrl ?? part.GlbUrl;
-        part.ViewerStoragePath = status.ViewerStoragePath ?? part.ViewerStoragePath;
-        part.ViewerFileExtension = NormalizeViewerFileExtension(status.ViewerFileExtension, part.ViewerStoragePath ?? part.StoragePath);
-        part.ThumbnailUrl = status.ThumbnailUrl ?? part.ThumbnailUrl;
-        part.Findings = status.Findings;
-        part.IsManifold = status.IsManifold;
-        part.BodyCount = status.BodyCount;
-        part.NonManifoldReason = status.NonManifoldReason;
-        part.FdmDfmReport = status.FdmReport;
-        part.SlaDfmReport = status.SlaReport;
-        part.CncDfmReport = status.CncReport;
-        part.OverlayGlbUrls = status.OverlayGlbUrls;
+        QeLocalDfmMapper.ApplyAnalysisStatus(part, status);
     }
 
     private async Task<bool> TryApplyLocalViewerUrlAsync(QuotePartViewModel part)

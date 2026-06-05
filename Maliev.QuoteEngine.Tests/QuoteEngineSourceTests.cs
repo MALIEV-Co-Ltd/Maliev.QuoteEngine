@@ -242,6 +242,61 @@ public sealed class QuoteEngineSourceTests
         Assert.False(QeLocalDfmMapper.HasCurrentProcessReport(part));
     }
 
+    [Fact]
+    public void QeLocalDfmMapper_ApplyAnalysisStatus_preserves_browser_local_dfm_when_server_status_has_no_report()
+    {
+        var part = new QuotePartViewModel
+        {
+            ProcessId = "cnc",
+            Status = "DfmAnalysisReady",
+            VolumeCc = 27.122m,
+            SurfaceAreaCm2 = 84.5m,
+            GlbUrl = "blob:https://quote.local/viewer",
+            ViewerStoragePath = "quotes/temp/session/part.stl",
+            ViewerFileExtension = ".stl",
+            IsManifold = false,
+            BodyCount = 2,
+            NonManifoldReason = "Browser local DFM found 8 non-manifold edge(s).",
+            CncDfmReport = new QeCncDfmReport(
+                SharpCornerCount: 1,
+                HasUndercuts: false,
+                HasDrillHoles: true,
+                DrillHoleCount: 2,
+                RequiresEdm: false,
+                RequiresGrinding: false,
+                IsTurnable: true,
+                Issues:
+                [
+                    new QeDfmIssueItem("warning", "LOCAL_PRIMARY", "Browser local CNC warning.")
+                ])
+        };
+        var status = new QuoteAnalysisStatusResponse
+        {
+            Status = "GlbReady",
+            ViewerGlbUrl = "https://cdn.example.com/generated.glb",
+            ViewerStoragePath = "processed/generated.glb",
+            ViewerFileExtension = ".glb",
+            IsManifold = true,
+            BodyCount = 1
+        };
+
+        QeLocalDfmMapper.ApplyAnalysisStatus(part, status);
+
+        Assert.Equal("DfmAnalysisReady", part.Status);
+        Assert.NotNull(part.CncDfmReport);
+        Assert.Equal(1, part.CncDfmReport.SharpCornerCount);
+        Assert.Equal("LOCAL_PRIMARY", part.CncDfmReport.Issues[0].Code);
+        Assert.Equal("https://cdn.example.com/generated.glb", part.GlbUrl);
+        Assert.Equal("processed/generated.glb", part.ViewerStoragePath);
+        Assert.Equal(".glb", part.ViewerFileExtension);
+        Assert.Equal(27.122m, part.VolumeCc);
+        Assert.Equal(84.5m, part.SurfaceAreaCm2);
+        Assert.False(part.IsManifold);
+        Assert.Equal(2, part.BodyCount);
+        Assert.Equal("Browser local DFM found 8 non-manifold edge(s).", part.NonManifoldReason);
+        Assert.True(QeLocalDfmMapper.HasCurrentProcessReport(part));
+    }
+
     [Theory]
     [InlineData("cnc", "CNC_MILL", "cnc")]
     [InlineData("CNC_MILL", "cnc", "cnc")]
@@ -1606,7 +1661,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("runLocalAdvisoryGeometry", handleBlock);
         Assert.Contains("/quote/v1/geometry/runtime/manifest", js, StringComparison.Ordinal);
         Assert.Contains("fetchLocalAdvisoryManifest", js, StringComparison.Ordinal);
-        Assert.Contains("for (let attempt = 0; attempt < 2; attempt += 1)", js, StringComparison.Ordinal);
+        Assert.Contains("LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS = 6", js, StringComparison.Ordinal);
         Assert.Contains("/quote/v1/geometry/runtime/telemetry", js, StringComparison.Ordinal);
         Assert.Contains("Local preliminary DFM", js, StringComparison.Ordinal);
         Assert.Contains("maliev:geometry-local-runtime-complete", js, StringComparison.Ordinal);
@@ -1703,6 +1758,11 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("function notifyLocalAdvisoryStartedDotNet(dotNetRef, payload)", js, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeStarted", js, StringComparison.Ordinal);
+        Assert.Contains("const LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS = 6;", js, StringComparison.Ordinal);
+        Assert.Contains("function waitLocalAdvisoryManifestRetry(attempt)", js, StringComparison.Ordinal);
+        Assert.Contains("attempt < LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS - 1", js, StringComparison.Ordinal);
+        Assert.Contains("await waitLocalAdvisoryManifestRetry(attempt);", js, StringComparison.Ordinal);
+        Assert.DoesNotContain("for (let attempt = 0; attempt < 2; attempt += 1)", js, StringComparison.Ordinal);
 
         var inputIndex = js.IndexOf("const runtimeInput =", StringComparison.Ordinal);
         var startedIndex = js.IndexOf("await notifyLocalAdvisoryStartedDotNet(\n        options.dotNetRef", StringComparison.Ordinal);
@@ -1817,6 +1877,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("CanUseBrowserFileViewer", workspace, StringComparison.Ordinal);
         Assert.Contains("ResolveBrowserFileViewerExtension(part)", workspace, StringComparison.Ordinal);
         Assert.Contains("NormalizeViewerFileExtension(null, part.StoragePath ?? part.FileName)", workspace, StringComparison.Ordinal);
+        Assert.Contains("QeLocalDfmMapper.ApplyAnalysisStatus(part, status)", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("part.FdmDfmReport = status.FdmReport", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("part.SlaDfmReport = status.SlaReport", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("part.CncDfmReport = status.CncReport", workspace, StringComparison.Ordinal);
     }
 
     [Fact]

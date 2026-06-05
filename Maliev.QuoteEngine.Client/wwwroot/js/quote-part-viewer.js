@@ -3194,9 +3194,24 @@ function resolveRuntimeAssetUrl(assetPath, assetBaseUrl = LOCAL_ADVISORY_ASSET_B
     return `${assetBaseUrl}${encodeURIComponent(name)}`;
 }
 
+const LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS = 6;
+const LOCAL_ADVISORY_MANIFEST_RETRY_DELAYS_MS = [125, 250, 500, 1000, 1500];
+
+function waitLocalAdvisoryManifestRetry(attempt) {
+    const delayMs = LOCAL_ADVISORY_MANIFEST_RETRY_DELAYS_MS[
+        Math.min(attempt, LOCAL_ADVISORY_MANIFEST_RETRY_DELAYS_MS.length - 1)
+    ] ?? 0;
+    const root = typeof globalThis !== 'undefined' ? globalThis : window;
+    if (delayMs <= 0 || typeof root?.setTimeout !== 'function' || root.setTimeout.length === 0) {
+        return Promise.resolve();
+    }
+
+    return new Promise(resolve => root.setTimeout(resolve, delayMs));
+}
+
 async function fetchLocalAdvisoryManifest(manifestUrl) {
     let lastResponse = null;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS; attempt += 1) {
         try {
             lastResponse = await fetch(manifestUrl, {
                 cache: 'no-cache',
@@ -3207,7 +3222,9 @@ async function fetchLocalAdvisoryManifest(manifestUrl) {
         }
 
         if (lastResponse?.ok || (lastResponse && Number(lastResponse.status) < 500)) return lastResponse;
-        await Promise.resolve();
+        if (attempt < LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS - 1) {
+            await waitLocalAdvisoryManifestRetry(attempt);
+        }
     }
 
     return lastResponse;
