@@ -583,6 +583,7 @@ function toWorldPoint(point) {
 
 function normalizeViewerSettings(viewerSettings) {
     const settings = viewerSettings && typeof viewerSettings === 'object' ? viewerSettings : {};
+    const firstString = (...values) => values.find(value => typeof value === 'string' && value.trim()) ?? null;
     const renderMode = settings.renderMode === 'wireframe' || settings.renderMode === 'transparent'
         ? settings.renderMode
         : 'solid';
@@ -605,6 +606,14 @@ function normalizeViewerSettings(viewerSettings) {
         sectionInverted: !!settings.sectionInverted,
         partColor:     typeof settings.partColor     === 'string' ? settings.partColor     : null,
         processId:     typeof settings.processId     === 'string' ? settings.processId     : null,
+        processCode:   firstString(settings.processCode, settings.processId),
+        storagePath:   firstString(settings.storagePath),
+        browserFileClientId: firstString(settings.browserFileClientId, settings.clientUploadId, settings.clientFileId),
+        clientUploadId: firstString(settings.clientUploadId, settings.browserFileClientId, settings.clientFileId),
+        browserFileName: firstString(settings.browserFileName, settings.fileName),
+        fileName: firstString(settings.fileName, settings.browserFileName),
+        fileBytesProvider: firstString(settings.fileBytesProvider),
+        fileBytes: settings.browserFileBytes ?? settings.fileBytes ?? null,
         finishCode:    typeof settings.finishCode    === 'string' ? settings.finishCode    : null,
         roughnessCode: typeof settings.roughnessCode === 'string' ? settings.roughnessCode : null,
     };
@@ -1783,6 +1792,8 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
             disableUniformBuffers: true,
         });
         const scene  = new BABYLON.Scene(engine);
+        engines[canvasId] = engine;
+        scenes[canvasId]  = scene;
         engine.resize();
 
         scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
@@ -2191,6 +2202,7 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                     clientUploadId: viewerSettings.browserFileClientId ?? viewerSettings.clientUploadId,
                     fileName: viewerSettings.browserFileName ?? viewerSettings.fileName,
                     fileBytesProvider: viewerSettings.fileBytesProvider ?? 'quoteEngineUploads',
+                    fileBytes: viewerSettings.fileBytes,
                     dotNetRef,
                 });
             },
@@ -2224,7 +2236,70 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
             forcedExt,
             );
         }
-        _loadAttempt(0);
+        const _localRuntimeMesh = await tryLoadLocalViewerMeshFromRuntime(canvasId, scene, forcedExt, viewerSettings, {});
+        if (loadGenerations[canvasId] !== currentGen || engines[canvasId] !== engine || scenes[canvasId] !== scene) {
+            try { engine.stopRenderLoop(); } catch { }
+            try { scene.dispose(); } catch { }
+            try { engine.dispose(); } catch { }
+            return;
+        }
+
+        if (_localRuntimeMesh) {
+            modelLoadState[canvasId] = 'loaded';
+            requestAnimationFrame(() => { canvas.style.opacity = '1'; });
+            scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
+            setupStudioLighting(canvasId, scene, isDark);
+            setupImageProcessing(scene, isDark);
+            _localRuntimeMesh.computeWorldMatrix?.(true);
+            const finalBb = computeSceneBounds(scene);
+            if (finalBb) {
+                sceneBoundingBoxes[canvasId] = finalBb;
+                meshCenters[canvasId] = {
+                    x: (finalBb.min.x + finalBb.max.x) / 2,
+                    y: (finalBb.min.y + finalBb.max.y) / 2,
+                    z: (finalBb.min.z + finalBb.max.z) / 2,
+                };
+                tagModelMeshesForAnalysis(canvasId, scene);
+                const cam = mainCameras[canvasId];
+                if (cam) {
+                    cam.upVector = new BABYLON.Vector3(0, 0, 1);
+                    fitCameraToMesh(cam, finalBb, meshCenters[canvasId], canvasId);
+                    applyPreset(cam, 'iso');
+                    setCameraProjection(canvasId, viewerSettings.cameraProjection);
+                }
+                setRenderMode(canvasId, viewerSettings.renderMode);
+                if (viewerSettings.partColor || viewerSettings.processId) {
+                    setPartMaterial(canvasId,
+                        viewerSettings.processId,
+                        viewerSettings.finishCode,
+                        viewerSettings.roughnessCode,
+                        viewerSettings.partColor);
+                }
+                toggleEdges(canvasId, !!viewerSettings.edgesEnabled);
+                toggleBoundingBox(canvasId, !!viewerSettings.boundingBoxEnabled);
+                viewerSettings.gridEnabled ? showGrid(canvasId) : hideGrid(canvasId);
+                setSectionPlane(
+                    canvasId,
+                    !!viewerSettings.sectionEnabled,
+                    viewerSettings.sectionAxis,
+                    viewerSettings.sectionOffsetMm,
+                    !!viewerSettings.sectionInverted
+                );
+                runLocalAdvisoryGeometry(canvasId, {
+                    processCode: viewerSettings.processCode ?? viewerSettings.processId,
+                    storagePath: viewerSettings.storagePath,
+                    clientUploadId: viewerSettings.browserFileClientId ?? viewerSettings.clientUploadId,
+                    fileName: viewerSettings.browserFileName ?? viewerSettings.fileName,
+                    fileBytesProvider: viewerSettings.fileBytesProvider ?? 'quoteEngineUploads',
+                    fileBytes: viewerSettings.fileBytes,
+                    dotNetRef,
+                });
+            } else {
+                _loadAttempt(0);
+            }
+        } else {
+            _loadAttempt(0);
+        }
 
         engine.runRenderLoop(() => {
             if (loadGenerations[canvasId] !== currentGen || engines[canvasId] !== engine || scenes[canvasId] !== scene) {
@@ -2255,9 +2330,6 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
         };
         window.addEventListener('resize', resizeHandler);
         engine._resizeHandler = resizeHandler;
-
-        engines[canvasId] = engine;
-        scenes[canvasId]  = scene;
 
     } catch (err) {
         modelLoadState[canvasId] = 'error';
@@ -3563,6 +3635,155 @@ async function resolveAdvisoryFileBytes(options) {
     if (!clientUploadId || typeof provider?.getFileBytes !== 'function') return null;
 
     return normalizeAdvisoryFileBytes(await provider.getFileBytes(clientUploadId));
+}
+
+function isLocalViewerMeshRuntimeCandidate(fileExt, viewerSettings = {}) {
+    const ext = String(fileExt || '').toLowerCase();
+    if (ext !== '.3mf') return false;
+
+    return hasAdvisoryFileBytes(viewerSettings.fileBytes)
+        || typeof viewerSettings.browserFileClientId === 'string'
+        || typeof viewerSettings.clientUploadId === 'string'
+        || typeof viewerSettings.clientFileId === 'string';
+}
+
+function localRuntimeArray(values) {
+    if (!values) return [];
+    if (Array.isArray(values)) return values.map(Number);
+    if (typeof ArrayBuffer !== 'undefined' &&
+        typeof ArrayBuffer.isView === 'function' &&
+        ArrayBuffer.isView(values)) {
+        return Array.from(values, Number);
+    }
+
+    return [];
+}
+
+function resolveLocalViewerMeshBuffer(result) {
+    const meshBuffers = result?.meshBuffers;
+    const buffer = Array.isArray(meshBuffers) ? meshBuffers[0] : meshBuffers;
+    const positions = localRuntimeArray(buffer?.positions);
+    const indices = localRuntimeArray(buffer?.indices).map(value => Math.trunc(value));
+
+    return positions.length >= 9 && indices.length >= 3
+        ? { positions, indices }
+        : null;
+}
+
+function createLocalViewerMeshFromBuffers(scene, result) {
+    const buffer = resolveLocalViewerMeshBuffer(result);
+    if (!buffer) return null;
+
+    const mesh = new BABYLON.Mesh('__local_runtime_mesh__', scene);
+    mesh.metadata = {
+        ...(mesh.metadata ?? {}),
+        malievLocalRuntimeSource: result?.sourceFormat || 'browser_runtime',
+        malievLocalRuntimeOperation: result?.operation || 'extract_mesh',
+    };
+    mesh.isPickable = true;
+
+    const vertexData = new BABYLON.VertexData();
+    vertexData.positions = buffer.positions;
+    vertexData.indices = buffer.indices;
+    if (typeof BABYLON.VertexData.ComputeNormals === 'function') {
+        const normals = [];
+        BABYLON.VertexData.ComputeNormals(buffer.positions, buffer.indices, normals);
+        vertexData.normals = normals;
+    }
+    vertexData.applyToMesh(mesh);
+
+    if (Array.isArray(scene?.rootNodes) && !scene.rootNodes.includes(mesh)) {
+        scene.rootNodes.push(mesh);
+    }
+
+    return mesh;
+}
+
+function extractLocalViewerMeshWithRuntime(canvasId, workerUrl, wasmUrl, input, timeoutMs) {
+    terminateLocalAdvisoryWorker(canvasId);
+
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(workerUrl, { name: 'maliev-geometry-mesh-extract' });
+        localAdvisoryWorkers[canvasId] = worker;
+        const messageId = `${canvasId}:extract:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+        const timeout = setTimeout(() => {
+            terminateLocalAdvisoryWorker(canvasId);
+            reject(new Error('Local viewer mesh extraction timed out.'));
+        }, timeoutMs);
+
+        worker.onmessage = event => {
+            const message = event.data ?? {};
+            if (message.id !== messageId) return;
+            clearTimeout(timeout);
+            terminateLocalAdvisoryWorker(canvasId);
+            message.ok ? resolve(message.result) : reject(new Error(message.error || 'Local viewer mesh extraction failed.'));
+        };
+        worker.onerror = event => {
+            clearTimeout(timeout);
+            terminateLocalAdvisoryWorker(canvasId);
+            reject(new Error(event?.message || 'Local viewer mesh worker failed.'));
+        };
+        worker.postMessage({ id: messageId, operation: 'extract_mesh', input, wasmUrl });
+    });
+}
+
+async function tryLoadLocalViewerMeshFromRuntime(canvasId, scene, fileExt, viewerSettings = {}, options = {}) {
+    if (typeof fetch !== 'function' || typeof Worker === 'undefined') return null;
+    if (!isLocalViewerMeshRuntimeCandidate(fileExt, viewerSettings)) return null;
+
+    const runtimeFileBytes = await resolveAdvisoryFileBytes({
+        fileBytes: viewerSettings.fileBytes,
+        clientUploadId: viewerSettings.browserFileClientId ?? viewerSettings.clientUploadId,
+        clientFileId: viewerSettings.clientFileId,
+        fileBytesProvider: viewerSettings.fileBytesProvider ?? 'quoteEngineUploads',
+    });
+    if (!hasAdvisoryFileBytes(runtimeFileBytes)) return null;
+
+    const runtimeInput = {
+        fileBytes: runtimeFileBytes,
+        fileName: viewerSettings.browserFileName ?? viewerSettings.fileName ?? '',
+    };
+    if (!runtimeInput.fileName) return null;
+
+    try {
+        const manifestResponse = await fetchLocalAdvisoryManifest(options.manifestUrl ?? LOCAL_ADVISORY_MANIFEST_URL);
+        if (!manifestResponse?.ok) return null;
+
+        const manifest = await manifestResponse.json();
+        const localOperations = Array.isArray(manifest?.capabilities?.localOperations)
+            ? manifest.capabilities.localOperations
+            : [];
+        if (Number(manifest.minFrontendApiVersion ?? 1) > LOCAL_ADVISORY_FRONTEND_API_VERSION ||
+            !isBrowserFirstRuntimeContract(manifest) ||
+            !localOperations.includes('mesh_extraction') ||
+            !isLocalAdvisoryInputWithinDeviceProfile(manifest, runtimeInput)) {
+            return null;
+        }
+
+        const workerUrl = resolveRuntimeAssetUrl(
+            manifest.assets?.worker,
+            options.assetBaseUrl ?? LOCAL_ADVISORY_ASSET_BASE_URL);
+        if (!workerUrl) return null;
+
+        const wasmUrl = resolveRuntimeAssetUrl(
+            manifest.assets?.wasm,
+            options.assetBaseUrl ?? LOCAL_ADVISORY_ASSET_BASE_URL);
+
+        const result = await extractLocalViewerMeshWithRuntime(
+            canvasId,
+            workerUrl,
+            wasmUrl,
+            runtimeInput,
+            resolveLocalAdvisoryTimeoutMs(manifest, options));
+
+        if (!isBrowserFirstRuntimeContract(result) || result?.operation !== 'extract_mesh') {
+            return null;
+        }
+
+        return createLocalViewerMeshFromBuffers(scene, result);
+    } catch (_) {
+        return null;
+    }
 }
 
 /**

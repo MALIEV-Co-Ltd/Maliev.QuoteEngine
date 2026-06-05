@@ -1659,6 +1659,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("setCameraPreset", handleBlock);
         Assert.Contains("collectAdvisoryMeshBuffers", handleBlock);
         Assert.Contains("runLocalAdvisoryGeometry", handleBlock);
+        Assert.DoesNotContain("tryLoadLocalViewerMeshFromRuntime", handleBlock, StringComparison.Ordinal);
         Assert.Contains("/quote/v1/geometry/runtime/manifest", js, StringComparison.Ordinal);
         Assert.Contains("fetchLocalAdvisoryManifest", js, StringComparison.Ordinal);
         Assert.Contains("LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS = 6", js, StringComparison.Ordinal);
@@ -1681,6 +1682,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("resolveAdvisoryFileBytes(options)", js, StringComparison.Ordinal);
         Assert.Contains("fileBytesProvider", js, StringComparison.Ordinal);
         Assert.Contains("{ fileBytes: runtimeFileBytes, fileName: runtimeFileName }", js, StringComparison.Ordinal);
+        Assert.Contains("createLocalViewerMeshFromBuffers", js, StringComparison.Ordinal);
+        Assert.Contains("tryLoadLocalViewerMeshFromRuntime", js, StringComparison.Ordinal);
+        Assert.Contains("operation: 'extract_mesh'", js, StringComparison.Ordinal);
         Assert.Contains("const wasmUrl = resolveRuntimeAssetUrl(", js, StringComparison.Ordinal);
         Assert.Contains("manifest.assets?.wasm", js, StringComparison.Ordinal);
         Assert.Contains("worker.postMessage({ id: messageId, input, processCode, wasmUrl });", js, StringComparison.Ordinal);
@@ -1691,6 +1695,23 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("local_primary", js, StringComparison.Ordinal);
         Assert.Contains("primary_interactive", js, StringComparison.Ordinal);
         Assert.DoesNotContain("authority !== 'advisory'", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuotePartViewerJs_tries_browser_runtime_mesh_extraction_before_signed_url_fallback()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        var normalizeIndex = js.IndexOf("browserFileClientId:", StringComparison.Ordinal);
+        Assert.True(normalizeIndex >= 0, "normalizeViewerSettings must preserve the retained browser upload id.");
+
+        var localIndex = js.IndexOf("tryLoadLocalViewerMeshFromRuntime(canvasId, scene, forcedExt, viewerSettings", StringComparison.Ordinal);
+        var fallbackIndex = js.IndexOf("_loadAttempt(0);", StringComparison.Ordinal);
+
+        Assert.True(localIndex >= 0, "initialize should try local runtime mesh extraction.");
+        Assert.True(fallbackIndex >= 0, "initialize should retain signed-url SceneLoader fallback.");
+        Assert.True(localIndex < fallbackIndex, "local runtime mesh extraction must run before signed-url fallback.");
     }
 
     [Fact]
@@ -1764,9 +1785,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("await waitLocalAdvisoryManifestRetry(attempt);", js, StringComparison.Ordinal);
         Assert.DoesNotContain("for (let attempt = 0; attempt < 2; attempt += 1)", js, StringComparison.Ordinal);
 
-        var inputIndex = js.IndexOf("const runtimeInput =", StringComparison.Ordinal);
-        var startedIndex = js.IndexOf("await notifyLocalAdvisoryStartedDotNet(\n        options.dotNetRef", StringComparison.Ordinal);
-        var fetchIndex = js.IndexOf("const manifestResponse = await fetch", StringComparison.Ordinal);
+        var runStart = js.IndexOf("export async function runLocalAdvisoryGeometry", StringComparison.Ordinal);
+        Assert.True(runStart >= 0, "runLocalAdvisoryGeometry must exist.");
+        var runEnd = js.IndexOf("\nfunction getPointerRenderCoordinates", runStart, StringComparison.Ordinal);
+        Assert.True(runEnd > runStart, "runLocalAdvisoryGeometry block must end before pointer helpers.");
+        var runBlock = js[runStart..runEnd];
+
+        var inputIndex = runBlock.IndexOf("const runtimeInput =", StringComparison.Ordinal);
+        var startedIndex = runBlock.IndexOf("await notifyLocalAdvisoryStartedDotNet(\n        options.dotNetRef", StringComparison.Ordinal);
+        var fetchIndex = runBlock.IndexOf("const manifestResponse = await fetch", StringComparison.Ordinal);
 
         Assert.True(inputIndex >= 0, "runtime input creation must exist");
         Assert.True(startedIndex > inputIndex, "local DFM start must be reported after local input is available");
