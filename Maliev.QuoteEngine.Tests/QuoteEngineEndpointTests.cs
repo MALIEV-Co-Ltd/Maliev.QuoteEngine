@@ -1599,6 +1599,38 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Account_documents_download_returns_signed_url_for_owner_only()
+    {
+        using var owner = await CreateSignedInClientAsync("documents-download-owner@example.com");
+
+        var postResponse = await owner.PostAsJsonAsync("/quote/v1/account/documents", new CustomerDocumentUploadRequest
+        {
+            FileName = "receipt-1001.pdf",
+            Kind = "Receipt",
+            StoragePath = "customers/owner/orders/ord-1001/receipt-1001.pdf",
+            ContentType = "application/pdf",
+            FileSizeBytes = 21_000,
+            OrderNumber = "ORD-1001"
+        });
+        postResponse.EnsureSuccessStatusCode();
+        var uploaded = await postResponse.Content.ReadFromJsonAsync<CustomerDocumentDto>();
+        Assert.NotNull(uploaded);
+
+        var download = await owner.GetFromJsonAsync<CustomerDocumentDownloadResponse>(
+            $"/quote/v1/account/documents/{uploaded.DocumentId:D}/download");
+
+        Assert.NotNull(download);
+        Assert.Equal(uploaded.DocumentId, download.DocumentId);
+        Assert.Equal("receipt-1001.pdf", download.FileName);
+        Assert.StartsWith("https://test-cdn.example.com/", download.DownloadUrl);
+        Assert.Contains(Uri.EscapeDataString("customers/owner/orders/ord-1001/receipt-1001.pdf"), download.DownloadUrl);
+
+        using var other = await CreateSignedInClientAsync("documents-download-other@example.com");
+        var crossCustomerDownload = await other.GetAsync($"/quote/v1/account/documents/{uploaded.DocumentId:D}/download");
+        Assert.Equal(HttpStatusCode.NotFound, crossCustomerDownload.StatusCode);
+    }
+
+    [Fact]
     public async Task Address_google_config_is_available_for_signed_in_customer()
     {
         using var client = await CreateSignedInClientAsync("address-config@example.com");

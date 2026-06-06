@@ -18,6 +18,7 @@ public sealed class AccountController(
     ICustomerServiceClient customerClient,
     IQuotationServiceClient quotationClient,
     IOrderServiceClient orderClient,
+    QuoteUploadServiceClient uploadClient,
     IHostEnvironment environment) : ControllerBase
 {
     private static readonly HashSet<string> AllowedDocumentKinds = new(StringComparer.OrdinalIgnoreCase)
@@ -173,6 +174,31 @@ public sealed class AccountController(
         }
 
         return Ok(store.UploadDocument(customerId, request));
+    }
+
+    [HttpGet("documents/{documentId:guid}/download")]
+    public async Task<IActionResult> DownloadDocument(Guid documentId, CancellationToken cancellationToken)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        var document = store.GetDocuments(customerId).FirstOrDefault(candidate => candidate.DocumentId == documentId);
+        if (document is null || string.IsNullOrWhiteSpace(document.StoragePath))
+        {
+            return NotFound();
+        }
+
+        var downloadUrl = await uploadClient.GetDownloadUrlByPathAsync(
+            document.StoragePath,
+            expirationMinutes: 15,
+            ct: cancellationToken);
+        return Ok(new CustomerDocumentDownloadResponse(
+            document.DocumentId,
+            document.FileName,
+            downloadUrl,
+            DateTimeOffset.UtcNow.AddMinutes(15)));
     }
 
     private BadRequestObjectResult? ValidateDocumentUpload(CustomerDocumentUploadRequest request)

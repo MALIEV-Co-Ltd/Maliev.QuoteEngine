@@ -175,6 +175,14 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return PostAsync<CustomerDocumentUploadRequest, CustomerDocumentDto>("quote/v1/account/documents", request, cancellationToken);
     }
 
+    public async Task<CustomerDocumentDownloadResponse> GetDocumentDownloadAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<CustomerDocumentDownloadResponse>(
+            $"quote/v1/account/documents/{documentId:D}/download",
+            cancellationToken)
+            ?? throw new InvalidOperationException("The QuoteEngine API returned an empty document download response.");
+    }
+
     public Task<CustomerChatbotResponse> SendChatbotMessageAsync(CustomerChatbotRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<CustomerChatbotRequest, CustomerChatbotResponse>("quote/v1/chatbot/messages", request, cancellationToken);

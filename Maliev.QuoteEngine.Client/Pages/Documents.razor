@@ -83,6 +83,12 @@
             <span>@document.FileName</span>
             <strong>@document.Kind</strong>
             <small>@DocumentMeta(document)</small>
+            <button type="button"
+                    class="qe-secondary-btn"
+                    disabled="@_openingDocumentIds.Contains(document.DocumentId)"
+                    @onclick="@(() => OpenDocumentAsync(document))">
+                @(_openingDocumentIds.Contains(document.DocumentId) ? Text("Opening...", "กำลังเปิด...") : Text("Open", "เปิด"))
+            </button>
         </div>
     }
 </div>
@@ -115,6 +121,7 @@
     private string _libraryKindFilter = AllDocumentKinds;
     private string _orderNumber = string.Empty;
     private string? _status;
+    private readonly HashSet<Guid> _openingDocumentIds = [];
 
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
@@ -219,6 +226,20 @@
     private void ClearOrderContext()
     {
         _orderNumber = string.Empty;
+    }
+
+    private async Task OpenDocumentAsync(CustomerDocumentDto document)
+    {
+        _openingDocumentIds.Add(document.DocumentId);
+        try
+        {
+            var download = await Api.GetDocumentDownloadAsync(document.DocumentId);
+            Navigation.NavigateTo(download.DownloadUrl, forceLoad: true);
+        }
+        finally
+        {
+            _openingDocumentIds.Remove(document.DocumentId);
+        }
     }
 
     private static string? NormalizeOrderNumber(string value)

@@ -72,6 +72,12 @@ public sealed record CustomerDocumentDto(
     long FileSizeBytes = 0,
     string? OrderNumber = null);
 
+public sealed record CustomerDocumentDownloadResponse(
+    Guid DocumentId,
+    string FileName,
+    string DownloadUrl,
+    DateTimeOffset ExpiresAt);
+
 public sealed class CustomerDocumentUploadRequest
 {
     [Required]

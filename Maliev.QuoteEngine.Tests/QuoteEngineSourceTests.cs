@@ -992,6 +992,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("document.OrderNumber", detail, StringComparison.Ordinal);
         Assert.Contains("document.Kind", detail, StringComparison.Ordinal);
         Assert.Contains("document.FileName", detail, StringComparison.Ordinal);
+        Assert.Contains("OpenDocumentAsync", detail, StringComparison.Ordinal);
+        Assert.Contains("GetDocumentDownloadAsync(document.DocumentId)", detail, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(download.DownloadUrl, forceLoad: true)", detail, StringComparison.Ordinal);
         Assert.Contains("IAsyncDisposable", detail, StringComparison.Ordinal);
         Assert.Contains("HubConnectionBuilder", detail, StringComparison.Ordinal);
         Assert.Contains(".WithUrl(Navigation.ToAbsoluteUri(\"/hubs/quote-notifications\"))", detail, StringComparison.Ordinal);
@@ -1094,6 +1097,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private bool MatchesDocumentContext(CustomerDocumentDto document)", documents, StringComparison.Ordinal);
         Assert.Contains("private bool MatchesDocumentKindFilter(CustomerDocumentDto document)", documents, StringComparison.Ordinal);
         Assert.Contains("document.OrderNumber", documents, StringComparison.Ordinal);
+        Assert.Contains("OpenDocumentAsync", documents, StringComparison.Ordinal);
+        Assert.Contains("GetDocumentDownloadAsync(document.DocumentId)", documents, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(download.DownloadUrl, forceLoad: true)", documents, StringComparison.Ordinal);
         Assert.Contains("PurchaseOrder", documents, StringComparison.Ordinal);
         Assert.Contains("Invoice", documents, StringComparison.Ordinal);
         Assert.Contains("Receipt", documents, StringComparison.Ordinal);
@@ -1103,9 +1109,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"documents-order-field\"", documents, StringComparison.Ordinal);
 
         Assert.Contains("UploadDocumentAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("GetDocumentDownloadAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/account/documents/{documentId:D}/download", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/account/documents", apiClient, StringComparison.Ordinal);
         Assert.Contains("[HttpPost(\"documents\")]", accountController, StringComparison.Ordinal);
+        Assert.Contains("[HttpGet(\"documents/{documentId:guid}/download\")]", accountController, StringComparison.Ordinal);
+        Assert.Contains("GetDownloadUrlByPathAsync", accountController, StringComparison.Ordinal);
         Assert.Contains("UploadDocument(customerId", accountController, StringComparison.Ordinal);
+        Assert.Contains("public sealed record CustomerDocumentDownloadResponse", accountDtos, StringComparison.Ordinal);
         Assert.Contains("public sealed class CustomerDocumentUploadRequest", accountDtos, StringComparison.Ordinal);
         Assert.Contains("public sealed record CustomerDocumentDto", accountDtos, StringComparison.Ordinal);
         Assert.Contains("string? OrderNumber", accountDtos, StringComparison.Ordinal);
