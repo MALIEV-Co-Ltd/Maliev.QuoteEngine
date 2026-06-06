@@ -1652,6 +1652,31 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeConfigSidebar_uses_ProjectNew_process_options_contract()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var dto = ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs");
+        var store = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteEnginePrototypeStore.cs");
+
+        Assert.Contains("public sealed record ProcessConfigOptionDto", dto, StringComparison.Ordinal);
+        Assert.Contains("IReadOnlyList<ProcessConfigOptionDto> ProcessOptions", dto, StringComparison.Ordinal);
+        Assert.Contains("\"deburr_edges\"", store, StringComparison.Ordinal);
+        Assert.Contains("\"print_orientation\"", store, StringComparison.Ordinal);
+
+        Assert.Contains("data-config-section=\"process-options\"", src, StringComparison.Ordinal);
+        Assert.Contains("VisibleProcessOptions", src, StringComparison.Ordinal);
+        Assert.Contains("IsBooleanOption", src, StringComparison.Ordinal);
+        Assert.Contains("IsCardChoiceOption", src, StringComparison.Ordinal);
+        Assert.Contains("SetProcessOptionBool", src, StringComparison.Ordinal);
+        Assert.Contains("SetProcessOptionText", src, StringComparison.Ordinal);
+        Assert.Contains("GetProcessOptionChoices", src, StringComparison.Ordinal);
+        Assert.Contains("qe-pcs-process-option-card", src, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-pcs-process-option-card", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeDetailCard_retains_viewer_and_exposes_body_tree_and_dfm_overlay()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");

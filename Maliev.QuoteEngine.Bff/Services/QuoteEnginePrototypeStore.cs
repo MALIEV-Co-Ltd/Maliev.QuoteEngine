@@ -82,6 +82,32 @@ public sealed class QuoteEnginePrototypeStore
             new("STANDARD", "Standard", 6, 1.00m),
             new("EXPRESS", "Express", 3, 1.35m)
         ],
+        [
+            new(
+                "deburr_edges",
+                "cnc",
+                "Deburr edges",
+                "boolean",
+                "true",
+                "Remove sharp edges after machining.",
+                []),
+            new(
+                "print_orientation",
+                "fdm",
+                "Print orientation",
+                "select",
+                "Best strength",
+                "Choose how the part should be oriented for FDM printing.",
+                ["Best strength", "Best surface", "Fastest print"]),
+            new(
+                "support_removal",
+                "sla",
+                "Support removal",
+                "select",
+                "Standard",
+                "Select the resin support cleanup level.",
+                ["Standard", "Cosmetic faces protected"])
+        ],
         QuoteUploadConstraints.SupportedCadExtensions);
 
     public IReadOnlyList<CustomerNdaDto> Ndas { get; } =

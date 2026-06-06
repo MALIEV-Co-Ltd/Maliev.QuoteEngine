@@ -13,7 +13,7 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     public async Task<QuoteReferenceDataResponse> GetReferenceDataAsync(CancellationToken cancellationToken = default)
     {
         return await httpClient.GetFromJsonAsync<QuoteReferenceDataResponse>("quote/v1/reference-data", cancellationToken)
-            ?? new QuoteReferenceDataResponse([], [], [], [], [], [], [], [], []);
+            ?? new QuoteReferenceDataResponse([], [], [], [], [], [], [], [], [], []);
     }
 
     public async Task<IReadOnlyList<CurrencyOptionDto>> GetCurrenciesAsync(CancellationToken cancellationToken = default)

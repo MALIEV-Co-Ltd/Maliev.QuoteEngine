@@ -398,6 +398,84 @@
             }
         </section>
 
+        @{
+            var visibleProcessOptions = VisibleProcessOptions.ToArray();
+        }
+        @if (visibleProcessOptions.Length > 0)
+        {
+            <section class="qe-pcs-section" data-config-section="process-options">
+                <div class="qe-pcs-section-header">
+                    <span class="qe-pcs-section-title">@Text("Options", "ตัวเลือก")</span>
+                    <span class="qe-pcs-section-count">@FormatOptionCount(visibleProcessOptions.Length)</span>
+                </div>
+                <div class="qe-pcs-options-stack">
+                    @foreach (var option in visibleProcessOptions)
+                    {
+                        <div class="qe-pcs-option-row">
+                            @if (IsBooleanOption(option))
+                            {
+                                var enabled = GetProcessOptionBool(option.ConfigKey);
+                                <button type="button"
+                                        class="qe-pcs-choice-card qe-pcs-process-option-card @(enabled ? "qe-pcs-choice-card--active" : "")"
+                                        @onclick="@(() => SetProcessOptionBool(option.ConfigKey, !enabled))">
+                                    <span class="qe-pcs-choice-swatch">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
+                                    </span>
+                                    <span class="qe-pcs-choice-info">
+                                        <span class="qe-pcs-choice-name">@option.Label</span>
+                                        <span class="qe-pcs-choice-sub">@option.HelpText</span>
+                                    </span>
+                                    @if (enabled)
+                                    {
+                                        <span class="qe-pcs-card-check">
+                                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                        </span>
+                                    }
+                                </button>
+                            }
+                            else if (IsCardChoiceOption(option))
+                            {
+                                var currentValue = GetProcessOptionValue(option.ConfigKey, option.DefaultValue);
+                                <span class="qe-pcs-option-label">@option.Label</span>
+                                <div class="qe-pcs-cards">
+                                    @foreach (var choice in GetProcessOptionChoices(option))
+                                    {
+                                        var active = string.Equals(currentValue, choice, StringComparison.OrdinalIgnoreCase);
+                                        <button type="button"
+                                                class="qe-pcs-choice-card qe-pcs-process-option-card @(active ? "qe-pcs-choice-card--active" : "")"
+                                                @onclick="@(() => SetProcessOptionValue(option.ConfigKey, choice))">
+                                            <span class="qe-pcs-choice-swatch">
+                                                <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
+                                            </span>
+                                            <span class="qe-pcs-choice-info">
+                                                <span class="qe-pcs-choice-name">@FormatOptionLabel(choice)</span>
+                                                <span class="qe-pcs-choice-sub">@option.HelpText</span>
+                                            </span>
+                                            @if (active)
+                                            {
+                                                <span class="qe-pcs-card-check">
+                                                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                                </span>
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <label class="qe-field">
+                                    @option.Label
+                                    <input value="@GetProcessOptionValue(option.ConfigKey, option.DefaultValue)"
+                                           placeholder="@option.HelpText"
+                                           @oninput="@(args => SetProcessOptionText(option.ConfigKey, args))" />
+                                </label>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
         <section class="qe-pcs-section" data-config-section="inspection">
             <div class="qe-pcs-section-header">
                 <span class="qe-pcs-section-title">@Text("Inspection", "การตรวจสอบ")</span>
@@ -557,6 +635,12 @@
 
     private IEnumerable<ColorOptionDto> MaterialColorOptions => ColorsFor(Part.MaterialId);
 
+    private IEnumerable<ProcessConfigOptionDto> VisibleProcessOptions =>
+        (ReferenceData?.ProcessOptions ?? [])
+            .Where(option => string.Equals(option.ProcessId, Part.ProcessId, StringComparison.OrdinalIgnoreCase))
+            .Where(option => !IsDedicatedFinishOption(option))
+            .Where(option => !IsHiddenCustomerOption(option));
+
     private IEnumerable<FinishColorOption> FinishColorOptions
     {
         get
@@ -692,6 +776,16 @@
         {
             await NotifyChanged();
         }
+    }
+
+    private async Task SetProcessOptionBool(string key, bool value)
+    {
+        await SetProcessOptionValue(key, value ? "true" : null);
+    }
+
+    private async Task SetProcessOptionText(string key, ChangeEventArgs args)
+    {
+        await SetProcessOptionValue(key, args.Value?.ToString());
     }
 
     private async Task ToggleThreadedHoles()
@@ -876,6 +970,47 @@
         Part.ProcessOptionValues.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value
             : defaultValue;
+
+    private bool GetProcessOptionBool(string key) =>
+        Part.ProcessOptionValues.TryGetValue(key, out var value)
+        && bool.TryParse(value, out var parsed)
+        && parsed;
+
+    private static bool IsBooleanOption(ProcessConfigOptionDto option) =>
+        option.ConfigType.Equals("boolean", StringComparison.OrdinalIgnoreCase)
+        || option.ConfigType.Equals("checkbox", StringComparison.OrdinalIgnoreCase)
+        || option.ConfigKey.Contains("deburr", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCardChoiceOption(ProcessConfigOptionDto option) =>
+        option.ConfigType.Equals("dropdown", StringComparison.OrdinalIgnoreCase)
+        || option.ConfigType.Equals("select", StringComparison.OrdinalIgnoreCase)
+        || option.Choices.Count > 0;
+
+    private static IEnumerable<string> GetProcessOptionChoices(ProcessConfigOptionDto option) =>
+        option.Choices.Count > 0 ? option.Choices : [option.DefaultValue];
+
+    private static bool IsDedicatedFinishOption(ProcessConfigOptionDto option)
+    {
+        var normalized = NormalizeOptionText($"{option.ConfigKey} {option.Label}");
+        return normalized.Contains("paintcolor", StringComparison.Ordinal)
+            || normalized.Contains("powdercoatcolor", StringComparison.Ordinal)
+            || normalized.Contains("anodizecolor", StringComparison.Ordinal)
+            || normalized.Contains("anodisecolor", StringComparison.Ordinal);
+    }
+
+    private static bool IsHiddenCustomerOption(ProcessConfigOptionDto option)
+    {
+        var normalized = NormalizeOptionText($"{option.ConfigKey} {option.Label}");
+        return normalized.Contains("layerheight", StringComparison.Ordinal)
+            || normalized.Contains("infill", StringComparison.Ordinal)
+            || normalized.Contains("supporttype", StringComparison.Ordinal)
+            || normalized.Contains("threadspec", StringComparison.Ordinal)
+            || normalized.Contains("threadedhole", StringComparison.Ordinal)
+            || normalized.Contains("threadinsert", StringComparison.Ordinal)
+            || normalized.Contains("uvcure", StringComparison.Ordinal)
+            || normalized.Contains("postcure", StringComparison.Ordinal)
+            || normalized.Contains("undercut", StringComparison.Ordinal);
+    }
 
     private static bool IsPaintColorSelected(PaintColorOption paint, string? paintHex, string? paintReference) =>
         string.Equals(paint.Hex, paintHex, StringComparison.OrdinalIgnoreCase)

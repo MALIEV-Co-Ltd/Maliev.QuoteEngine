@@ -5962,6 +5962,10 @@ body.mud-blazor {
     grid-template-columns: 32px minmax(0, 1fr);
 }
 
+.qe-pcs-process-option-card {
+    min-height: 54px;
+}
+
 .qe-pcs-roughness-card {
     min-height: 56px;
 }

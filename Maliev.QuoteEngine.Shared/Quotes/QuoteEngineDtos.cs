@@ -30,6 +30,15 @@ public sealed record ColorOptionDto(string Code, string Name, string CssValue, I
 
 public sealed record LeadTimeOptionDto(string Code, string Name, int BusinessDays, decimal PriceMultiplier);
 
+public sealed record ProcessConfigOptionDto(
+    string ConfigKey,
+    string ProcessId,
+    string Label,
+    string ConfigType,
+    string DefaultValue,
+    string HelpText,
+    IReadOnlyList<string> Choices);
+
 public sealed record QuoteReferenceDataResponse(
     IReadOnlyList<ProcessOptionDto> Processes,
     IReadOnlyList<MaterialOptionDto> Materials,
@@ -39,6 +48,7 @@ public sealed record QuoteReferenceDataResponse(
     IReadOnlyList<RoughnessOptionDto> RoughnessOptions,
     IReadOnlyList<ColorOptionDto> Colors,
     IReadOnlyList<LeadTimeOptionDto> LeadTimes,
+    IReadOnlyList<ProcessConfigOptionDto> ProcessOptions,
     IReadOnlyList<string> SupportedExtensions);
 
 public sealed record QuoteEngineDemoProjectResponse(

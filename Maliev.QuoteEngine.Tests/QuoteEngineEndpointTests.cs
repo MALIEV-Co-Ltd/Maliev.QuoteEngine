@@ -924,6 +924,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(response);
         Assert.Contains(response.Processes, process => process.Id == "fdm");
         Assert.Contains(response.Materials, material => material.ProcessId == "cnc");
+        Assert.Contains(response.ProcessOptions, option => option.ProcessId == "cnc" && option.ConfigKey == "deburr_edges");
+        Assert.Contains(response.ProcessOptions, option => option.ProcessId == "fdm" && option.ConfigKey == "print_orientation");
         Assert.Contains("step", response.SupportedExtensions);
     }
 
