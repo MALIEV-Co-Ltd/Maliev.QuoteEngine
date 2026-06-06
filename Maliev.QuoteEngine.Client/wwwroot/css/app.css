@@ -2566,6 +2566,75 @@ textarea::placeholder {
     box-shadow: var(--maliev-shadow-ring);
 }
 
+.profile-quote-history {
+    display: grid;
+    gap: 12px;
+    padding: 16px;
+    border-radius: var(--maliev-radius-md);
+    background: var(--panel-tint);
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.profile-quote-heading {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.profile-quote-heading h2 {
+    margin: 2px 0 0;
+    font-size: var(--maliev-font-card);
+    letter-spacing: 0;
+}
+
+.profile-quote-list {
+    display: grid;
+    gap: 8px;
+}
+
+.profile-quote-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 10px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.profile-quote-row > a:first-child {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    color: var(--ink);
+}
+
+.profile-quote-row span {
+    overflow-wrap: anywhere;
+    font-weight: 650;
+}
+
+.profile-quote-row strong {
+    color: var(--primary);
+}
+
+.profile-quote-row small {
+    color: var(--muted);
+    font-size: var(--maliev-font-small);
+}
+
+.profile-quote-pdf {
+    padding: 6px 9px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel-tint);
+    color: var(--ink);
+    font-size: var(--maliev-font-micro);
+    font-weight: 700;
+    box-shadow: var(--maliev-shadow-ring-light);
+}
+
 .preferences-panel {
     display: grid;
     gap: 12px;

@@ -847,9 +847,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Navigation.NavigateTo(\"/auth/sign-in?returnUrl=/profile\"", profile, StringComparison.Ordinal);
         Assert.Contains("_profile = await Api.GetProfileAsync();", profile, StringComparison.Ordinal);
         Assert.Contains("_ndas = [.. await Api.GetNdasAsync()];", profile, StringComparison.Ordinal);
+        Assert.Contains("_quotes = [.. await Api.GetQuotesAsync()];", profile, StringComparison.Ordinal);
         Assert.Contains("class=\"account-overview-card\"", profile, StringComparison.Ordinal);
         Assert.Contains("class=\"account-profile-card\"", profile, StringComparison.Ordinal);
         Assert.Contains("class=\"account-action-grid\"", profile, StringComparison.Ordinal);
+        Assert.Contains("class=\"profile-quote-history\"", profile, StringComparison.Ordinal);
+        Assert.Contains("CustomerQuoteSummaryDto", profile, StringComparison.Ordinal);
+        Assert.Contains("href=\"/quotes/@quote.QuoteId\"", profile, StringComparison.Ordinal);
+        Assert.Contains("quote.QuoteNumber", profile, StringComparison.Ordinal);
+        Assert.Contains("FormatMoney(quote.Total, quote.Currency)", profile, StringComparison.Ordinal);
         Assert.Contains("ProfileImageUrl", profile, StringComparison.Ordinal);
         Assert.Contains("ProfileInitials", profile, StringComparison.Ordinal);
         Assert.Contains("NdaStatus", profile, StringComparison.Ordinal);
