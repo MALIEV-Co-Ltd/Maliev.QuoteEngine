@@ -1489,6 +1489,29 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeConfigSidebar_uses_ProjectNew_process_photo_selector()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("data-config-section=\"manufacturing-process\"", src, StringComparison.Ordinal);
+        Assert.Contains("data-horizontal-wheel=\"true\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-process-row\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-process-photo\"", src, StringComparison.Ordinal);
+        Assert.Contains("background-image:url('/images/processes/@ProcessImageFile(process.Id)')", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-process-description\"", src, StringComparison.Ordinal);
+        Assert.Contains("aria-pressed=\"@active\"", src, StringComparison.Ordinal);
+        Assert.Contains("qe-pcs-process-card--dimmed", src, StringComparison.Ordinal);
+        Assert.Contains("ProcessDescription(process.Id)", src, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-pcs-process-row", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-process-photo", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-process-description", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-process-card--dimmed", styles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 112px;", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeDetailCard_retains_viewer_and_exposes_body_tree_and_dfm_overlay()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");

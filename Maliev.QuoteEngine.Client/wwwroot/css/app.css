@@ -3945,14 +3945,20 @@ textarea::placeholder {
     margin-bottom: 8px;
 }
 
-.qe-pcs-process-grid,
+.qe-pcs-process-row,
 .qe-pcs-cards {
     display: grid;
     gap: 6px;
 }
 
-.qe-pcs-process-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+.qe-pcs-process-row {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 0 8px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: thin;
 }
 
 .qe-pcs-process-card,
@@ -3969,13 +3975,18 @@ textarea::placeholder {
 }
 
 .qe-pcs-process-card {
+    flex: 0 0 112px;
+    width: 112px;
     display: grid;
-    place-items: center;
-    align-content: center;
+    grid-template-rows: 78px auto auto;
+    align-content: start;
     gap: 6px;
-    min-height: 76px;
-    padding: 8px 6px;
-    text-align: center;
+    min-height: 152px;
+    padding: 0 0 9px;
+    overflow: hidden;
+    text-align: left;
+    scroll-snap-align: start;
+    transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
 }
 
 .qe-pcs-process-card strong {
@@ -3990,12 +4001,24 @@ textarea::placeholder {
     box-shadow: var(--maliev-shadow-card);
 }
 
+.qe-pcs-process-card:hover {
+    transform: translateY(-1px);
+}
+
 .qe-pcs-process-card--active,
 .qe-pcs-mat-card--active,
 .qe-qsb-lead-btn--active {
     color: var(--maliev-ink);
     background: var(--maliev-panel-3);
     box-shadow: var(--maliev-shadow-card), 0 0 0 1px var(--accent) inset;
+}
+
+.qe-pcs-process-card--dimmed {
+    opacity: 0.72;
+}
+
+.qe-pcs-process-card--dimmed:hover {
+    opacity: 1;
 }
 
 .qe-card-check {
@@ -4814,7 +4837,6 @@ textarea::placeholder {
         width: 100%;
     }
 
-    .qe-pcs-process-grid,
     .profile-form-grid,
     .qe-pcs-qty-row,
     .qe-qsb-lead-options {
@@ -5838,6 +5860,17 @@ body.mud-blazor {
     background: #ebf5ff;
 }
 
+.qe-pcs-process-photo {
+    display: block;
+    width: 100%;
+    height: 78px;
+    background-color: var(--maliev-panel-3);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border-bottom: 1px solid var(--maliev-border);
+}
+
 .qe-pcs-process-name,
 .qe-pcs-mat-name,
 .qe-pcs-fin-name,
@@ -5852,6 +5885,25 @@ body.mud-blazor {
     line-height: 1.25;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.qe-pcs-process-name {
+    padding: 0 9px;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+.qe-pcs-process-description {
+    display: -webkit-box;
+    min-height: 28px;
+    padding: 0 9px;
+    overflow: hidden;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    line-height: 1.25;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 .qe-pcs-mat-info,

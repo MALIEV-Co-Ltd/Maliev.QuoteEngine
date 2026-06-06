@@ -7,16 +7,25 @@
     </header>
 
     <div class="qe-pcs-scroll">
-        <section class="qe-pcs-section">
+        <section class="qe-pcs-section"
+                 data-config-section="manufacturing-process"
+                 data-horizontal-wheel="true"
+                 onwheel="const row = this.querySelector('.qe-pcs-process-row'); if (row && Math.abs(event.deltaY) >= Math.abs(event.deltaX)) { row.scrollLeft += event.deltaY; event.preventDefault(); }">
             <div class="qe-pcs-section-header">
                 <span class="qe-pcs-section-title">@Text("Manufacturing Process", "กระบวนการผลิต")</span>
             </div>
-            <div class="qe-pcs-process-grid">
+            <div class="qe-pcs-process-row">
                 @foreach (var process in ReferenceData?.Processes ?? [])
                 {
                     var active = Part.ProcessId == process.Id;
+                    var cardClass = active
+                        ? "qe-pcs-process-card qe-pcs-process-card--active"
+                        : HasSelectedProcess ? "qe-pcs-process-card qe-pcs-process-card--dimmed" : "qe-pcs-process-card";
                     <button type="button"
-                            class="qe-pcs-process-card @(active ? "qe-pcs-process-card--active" : "")"
+                            class="@cardClass"
+                            data-process-code="@process.Id"
+                            aria-pressed="@active"
+                            title="@process.Name"
                             @onclick="@(() => SetProcess(process))">
                         @if (active)
                         {
@@ -24,10 +33,13 @@
                                 <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
                             </span>
                         }
-                        <span class="qe-pcs-process-icon">
-                            <MudIcon Icon="@ProcessIcon(process.Id)" Size="Size.Small" />
+                        <span class="qe-pcs-process-photo"
+                              style="background-image:url('/images/processes/@ProcessImageFile(process.Id)')"
+                              role="img"
+                              aria-label="@process.Name">
                         </span>
                         <span class="qe-pcs-process-name">@process.Name</span>
+                        <span class="qe-pcs-process-description">@ProcessDescription(process.Id)</span>
                     </button>
                 }
             </div>
@@ -405,6 +417,7 @@
     private bool _advancedOpen;
 
     private bool IsCnc => Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase);
+    private bool HasSelectedProcess => !string.IsNullOrWhiteSpace(Part.ProcessId);
     private bool HasInserts => !string.IsNullOrWhiteSpace(Part.InsertType)
         && !Part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase);
 
@@ -633,12 +646,40 @@
         return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 
-    private static string ProcessIcon(string processId) => processId switch
+    private static string ProcessImageFile(string processId) => NormalizeProcessAssetCode(processId) + ".jpg";
+
+    private string ProcessDescription(string processId)
     {
-        "cnc" => Icons.Material.Outlined.PrecisionManufacturing,
-        "sla" => Icons.Material.Outlined.Science,
-        _ => Icons.Material.Outlined.ViewInAr
-    };
+        var description = ReferenceData?.Processes.FirstOrDefault(process =>
+            string.Equals(process.Id, processId, StringComparison.OrdinalIgnoreCase))?.Description;
+
+        return !string.IsNullOrWhiteSpace(description)
+            ? description
+            : NormalizeProcessAssetCode(processId) switch
+            {
+                "cnc" or "cnc_mill" => Text("Precision machined parts", "ชิ้นงานกลึงกัดความแม่นยำ"),
+                "cnc_turn" => Text("Lathe-turned cylindrical parts", "ชิ้นงานทรงกระบอกกลึง"),
+                "sla" or "sla_dlp" => Text("High-detail resin printing", "พิมพ์เรซินรายละเอียดสูง"),
+                "fdm" => Text("Fast functional prototypes", "ต้นแบบใช้งานจริงที่รวดเร็ว"),
+                "sls" => Text("Strong nylon production parts", "ชิ้นงานไนลอนแข็งแรง"),
+                "mjf" => Text("Production-grade nylon batches", "ผลิตเป็นชุดด้วยไนลอน"),
+                "sheet_metal" => Text("Cut and bent sheet metal", "ตัดและพับโลหะแผ่น"),
+                _ => Text("Custom manufacturing route", "กระบวนการผลิตแบบกำหนดเอง")
+            };
+    }
+
+    private static string NormalizeProcessAssetCode(string processId)
+    {
+        var normalized = processId.Trim().ToLowerInvariant().Replace('-', '_');
+        return normalized switch
+        {
+            "sla" => "sla_dlp",
+            "cnc_milling" => "cnc_mill",
+            "cnc_turning" => "cnc_turn",
+            "sheetmetal" => "sheet_metal",
+            _ => normalized
+        };
+    }
 
     private static string MaterialSwatch(string materialId) => materialId switch
     {
