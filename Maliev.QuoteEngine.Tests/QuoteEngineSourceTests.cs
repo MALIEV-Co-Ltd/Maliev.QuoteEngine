@@ -1008,9 +1008,15 @@ public sealed class QuoteEngineSourceTests
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
         Assert.Contains("@page \"/quotes/{QuoteId:guid}\"", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("@page \"/quotes\"", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("@inject QuoteEngineApiClient Api", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("GetQuotesAsync", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("CustomerQuoteSummaryDto", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("_quotes = [.. quotes]", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("IsHistoryRoute", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("data-quote-section=\"history\"", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("href=\"/quotes/@quote.QuoteId\"", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("quote.QuoteNumber", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("_quote = quotes.FirstOrDefault", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("data-quote-section=\"summary\"", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("data-quote-section=\"actions\"", quoteDetail, StringComparison.Ordinal);
@@ -1024,6 +1030,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("GetQuotesAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains(".quote-detail-shell", styles, StringComparison.Ordinal);
         Assert.Contains(".quote-detail-actions", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-history-list", styles, StringComparison.Ordinal);
     }
 
     [Fact]

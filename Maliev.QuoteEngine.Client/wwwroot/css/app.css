@@ -2224,6 +2224,44 @@ p {
     margin-top: 12px;
 }
 
+.quote-history-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.quote-history-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: center;
+    padding: 10px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.quote-history-row > a:first-child {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    color: var(--ink);
+}
+
+.quote-history-row span {
+    overflow-wrap: anywhere;
+    font-weight: 650;
+}
+
+.quote-history-row strong {
+    color: var(--primary);
+}
+
+.quote-history-row small {
+    color: var(--muted);
+    font-size: var(--maliev-font-small);
+}
+
 .order-status-timeline {
     display: grid;
     gap: 12px;
