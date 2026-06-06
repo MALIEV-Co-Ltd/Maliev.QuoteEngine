@@ -869,6 +869,17 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@inject QuoteEngineApiClient Api", detail, StringComparison.Ordinal);
         Assert.Contains("@inject NavigationManager Navigation", detail, StringComparison.Ordinal);
         Assert.Contains("GetOrderDetailAsync(OrderNumber)", detail, StringComparison.Ordinal);
+        Assert.Contains("IAsyncDisposable", detail, StringComparison.Ordinal);
+        Assert.Contains("HubConnectionBuilder", detail, StringComparison.Ordinal);
+        Assert.Contains(".WithUrl(Navigation.ToAbsoluteUri(\"/hubs/quote-notifications\"))", detail, StringComparison.Ordinal);
+        Assert.Contains("JoinOrderGroup", detail, StringComparison.Ordinal);
+        Assert.Contains("LeaveOrderGroup", detail, StringComparison.Ordinal);
+        Assert.Contains("OrderStatusChanged", detail, StringComparison.Ordinal);
+        Assert.Contains("PaymentCompleted", detail, StringComparison.Ordinal);
+        Assert.Contains("QeOrderStatusChangedPayload", detail, StringComparison.Ordinal);
+        Assert.Contains("QePaymentCompletedPayload", detail, StringComparison.Ordinal);
+        Assert.Contains("ApplyOrderStatusChanged", detail, StringComparison.Ordinal);
+        Assert.Contains("ApplyPaymentCompleted", detail, StringComparison.Ordinal);
         Assert.Contains("InitiatePaymentAsync", detail, StringComparison.Ordinal);
         Assert.Contains("new InitiatePaymentRequest", detail, StringComparison.Ordinal);
         Assert.Contains("OrderId = _order.OrderId", detail, StringComparison.Ordinal);

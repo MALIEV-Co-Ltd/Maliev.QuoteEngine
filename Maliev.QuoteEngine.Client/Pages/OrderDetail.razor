@@ -1,5 +1,7 @@
 @page "/orders/{OrderNumber}"
 @using System.Globalization
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject NavigationManager Navigation
 
@@ -136,6 +138,8 @@ else
     private bool _loading = true;
     private bool _paymentBusy;
     private string? _paymentError;
+    private HubConnection? _notificationConnection;
+    private string? _joinedOrderNumber;
 
     private int ManufacturingProgressPercent => _order?.CurrentStatus.ToLowerInvariant() switch
     {
@@ -166,6 +170,11 @@ else
             ? null
             : await Api.GetOrderDetailAsync(OrderNumber);
         _loading = false;
+
+        if (_order is not null)
+        {
+            await EnsureOrderNotificationConnectionAsync(_order.OrderNumber);
+        }
     }
 
     private async Task InitiatePaymentAsync()
@@ -225,6 +234,99 @@ else
         return _order is null
             ? "/documents"
             : $"/documents?kind={Uri.EscapeDataString(kind)}&orderNumber={Uri.EscapeDataString(_order.OrderNumber)}";
+    }
+
+    private async Task EnsureOrderNotificationConnectionAsync(string orderNumber)
+    {
+        if (_notificationConnection is null)
+        {
+            _notificationConnection = new HubConnectionBuilder()
+                .WithUrl(Navigation.ToAbsoluteUri("/hubs/quote-notifications"))
+                .WithAutomaticReconnect()
+                .Build();
+
+            _notificationConnection.On<QeOrderStatusChangedPayload>("OrderStatusChanged", payload =>
+            {
+                _ = InvokeAsync(() =>
+                {
+                    ApplyOrderStatusChanged(payload);
+                    StateHasChanged();
+                });
+            });
+
+            _notificationConnection.On<QePaymentCompletedPayload>("PaymentCompleted", payload =>
+            {
+                _ = InvokeAsync(() =>
+                {
+                    ApplyPaymentCompleted(payload);
+                    StateHasChanged();
+                });
+            });
+        }
+
+        if (_notificationConnection.State == HubConnectionState.Disconnected)
+        {
+            await _notificationConnection.StartAsync();
+        }
+
+        if (!string.Equals(_joinedOrderNumber, orderNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.IsNullOrWhiteSpace(_joinedOrderNumber))
+            {
+                await _notificationConnection.InvokeAsync("LeaveOrderGroup", _joinedOrderNumber);
+            }
+
+            await _notificationConnection.InvokeAsync("JoinOrderGroup", orderNumber);
+            _joinedOrderNumber = orderNumber;
+        }
+    }
+
+    private void ApplyOrderStatusChanged(QeOrderStatusChangedPayload payload)
+    {
+        if (_order is null ||
+            !string.Equals(_order.OrderNumber, payload.OrderNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var entry = new OrderStatusEntryDto(payload.NewStatus, payload.Reason, payload.ChangedAt);
+        _order = _order with
+        {
+            CurrentStatus = payload.NewStatus,
+            UpdatedAt = payload.ChangedAt,
+            StatusHistory = [entry, .. _order.StatusHistory]
+        };
+    }
+
+    private void ApplyPaymentCompleted(QePaymentCompletedPayload payload)
+    {
+        if (_order is null ||
+            !string.Equals(_order.OrderNumber, payload.OrderNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _order = _order with
+        {
+            PaymentStatus = "Paid",
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_notificationConnection is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(_joinedOrderNumber) &&
+            _notificationConnection.State == HubConnectionState.Connected)
+        {
+            await _notificationConnection.InvokeAsync("LeaveOrderGroup", _joinedOrderNumber);
+        }
+
+        await _notificationConnection.DisposeAsync();
     }
 
     private string Text(string en, string th)
