@@ -103,36 +103,6 @@
             </section>
         }
 
-        <section class="qe-pcs-section">
-            <div class="qe-pcs-section-header">
-                <span class="qe-pcs-section-title">@Text("Quantity", "จำนวน")</span>
-            </div>
-            <div class="qe-pcs-qty-stack">
-                <div class="qe-qty-stepper">
-                    <button type="button"
-                            class="qe-qty-stepper-btn"
-                            disabled="@(Part.Quantity <= 1)"
-                            @onclick="DecrementQuantity">-</button>
-                    <input type="number"
-                           class="qe-qty-stepper-input"
-                           aria-label="@Text("Quantity", "จำนวน")"
-                           min="1"
-                           value="@Part.Quantity"
-                           @oninput="SetQuantityInput" />
-                    <button type="button" class="qe-qty-stepper-btn" @onclick="IncrementQuantity">+</button>
-                </div>
-                <div class="qe-qty-presets">
-                    @foreach (var preset in QuantityPresets)
-                    {
-                        var value = preset;
-                        <button type="button"
-                                class="qe-qty-preset-btn @(Part.Quantity == value ? "qe-qty-preset-btn--active" : "")"
-                                @onclick="@(() => SetQuantityPreset(value))">@value</button>
-                    }
-                </div>
-            </div>
-        </section>
-
         <section class="qe-pcs-section" data-config-section="surface-finish">
             @{
                 var finishes = FinishesFor(Part.ProcessId).ToArray();
@@ -176,7 +146,7 @@
 
         </section>
 
-        <section class="qe-pcs-section">
+        <section class="qe-pcs-section" data-config-section="tolerance">
             @{
                 var tolerances = TolerancesFor(Part.ProcessId).ToArray();
             }
@@ -260,7 +230,7 @@
             </section>
         }
 
-        <section class="qe-pcs-section">
+        <section class="qe-pcs-section" data-config-section="part-features">
             <div class="qe-pcs-section-header">
                 <span class="qe-pcs-section-title">@Text("Part Features", "ฟีเจอร์ชิ้นงาน")</span>
                 <span class="qe-pcs-section-count">@Text("2 options", "2 ตัวเลือก")</span>
@@ -336,6 +306,36 @@
                     <input type="number" min="0" value="@Part.InsertCount" @oninput="SetInsertCount" />
                 </label>
             }
+        </section>
+
+        <section class="qe-pcs-section" data-config-section="quantity">
+            <div class="qe-pcs-section-header">
+                <span class="qe-pcs-section-title">@Text("Quantity", "จำนวน")</span>
+            </div>
+            <div class="qe-pcs-qty-stack">
+                <div class="qe-qty-stepper">
+                    <button type="button"
+                            class="qe-qty-stepper-btn"
+                            disabled="@(Part.Quantity <= 1)"
+                            @onclick="DecrementQuantity">-</button>
+                    <input type="number"
+                           class="qe-qty-stepper-input"
+                           aria-label="@Text("Quantity", "จำนวน")"
+                           min="1"
+                           value="@Part.Quantity"
+                           @oninput="SetQuantityInput" />
+                    <button type="button" class="qe-qty-stepper-btn" @onclick="IncrementQuantity">+</button>
+                </div>
+                <div class="qe-qty-presets">
+                    @foreach (var preset in QuantityPresets)
+                    {
+                        var value = preset;
+                        <button type="button"
+                                class="qe-qty-preset-btn @(Part.Quantity == value ? "qe-qty-preset-btn--active" : "")"
+                                @onclick="@(() => SetQuantityPreset(value))">@value</button>
+                    }
+                </div>
+            </div>
         </section>
 
         <section class="qe-pcs-section">

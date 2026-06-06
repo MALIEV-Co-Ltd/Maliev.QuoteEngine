@@ -1532,6 +1532,26 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeConfigSidebar_places_quantity_after_part_configuration_sections()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
+
+        Assert.Contains("data-config-section=\"surface-finish\"", src, StringComparison.Ordinal);
+        Assert.Contains("data-config-section=\"tolerance\"", src, StringComparison.Ordinal);
+        Assert.Contains("data-config-section=\"part-features\"", src, StringComparison.Ordinal);
+        Assert.Contains("data-config-section=\"quantity\"", src, StringComparison.Ordinal);
+
+        var finishIndex = src.IndexOf("data-config-section=\"surface-finish\"", StringComparison.Ordinal);
+        var toleranceIndex = src.IndexOf("data-config-section=\"tolerance\"", StringComparison.Ordinal);
+        var featuresIndex = src.IndexOf("data-config-section=\"part-features\"", StringComparison.Ordinal);
+        var quantityIndex = src.IndexOf("data-config-section=\"quantity\"", StringComparison.Ordinal);
+
+        Assert.True(toleranceIndex > finishIndex, "Tolerance must appear after Surface Finish.");
+        Assert.True(featuresIndex > toleranceIndex, "Part Features must appear after Tolerance.");
+        Assert.True(quantityIndex > featuresIndex, "Quantity must appear after Part Features like Project New.");
+    }
+
+    [Fact]
     public void QeDetailCard_retains_viewer_and_exposes_body_tree_and_dfm_overlay()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
