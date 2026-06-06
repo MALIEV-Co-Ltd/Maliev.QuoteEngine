@@ -480,6 +480,29 @@ public sealed class QuoteController(
             return NotFound();
         }
 
+        var orderDetail = await orderClient.GetDetailAsync(request.OrderNumber, cancellationToken);
+        var paymentAmount = request.Amount;
+        var paymentCurrency = request.Currency;
+        if (orderDetail?.QuotedAmount is decimal quotedAmount && quotedAmount > 0)
+        {
+            var quotedCurrency = string.IsNullOrWhiteSpace(orderDetail.QuoteCurrency)
+                ? "THB"
+                : orderDetail.QuoteCurrency;
+            if (request.Amount != quotedAmount ||
+                !string.Equals(request.Currency, quotedCurrency, StringComparison.OrdinalIgnoreCase))
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Payment amount does not match the order quote.",
+                    Detail = "Payment initiation must use the quoted order amount and currency.",
+                    Status = StatusCodes.Status400BadRequest
+                });
+            }
+
+            paymentAmount = quotedAmount;
+            paymentCurrency = quotedCurrency;
+        }
+
         // Build return/cancel URLs from the current request so the redirect lands back in the SPA.
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
         var returnUrl = $"{baseUrl}/payment/success?orderId={Uri.EscapeDataString(request.OrderNumber)}";
@@ -498,8 +521,8 @@ public sealed class QuoteController(
             customerId.ToString("D"),
             request.OrderId.ToString("D"),
             request.OrderNumber,
-            request.Amount,
-            request.Currency,
+            paymentAmount,
+            paymentCurrency,
             returnUrl,
             cancelUrl,
             idempotencyKey,

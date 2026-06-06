@@ -271,7 +271,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 OrderNumber: orderNumber,
                 CurrentStatus: "Pending",
                 PaymentStatus: "Unpaid",
-                QuotedAmount: null,
+                QuotedAmount: 1500m,
                 QuoteCurrency: "THB",
                 PromisedDeliveryDate: null,
                 ActualDeliveryDate: null,
@@ -1778,7 +1778,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         {
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
-            Amount = 1250.00m,
+            Amount = 1500.00m,
             Currency = "THB"
         });
 
@@ -1829,7 +1829,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         {
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
-            Amount = 1250.00m,
+            Amount = 1500.00m,
             Currency = "THB"
         });
 
@@ -1839,11 +1839,51 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         {
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
-            Amount = 1250.00m,
+            Amount = 1500.00m,
             Currency = "THB"
         });
 
         ownerPayment.EnsureSuccessStatusCode();
+    }
+
+    [Fact]
+    public async Task Payment_initiation_rejects_customer_supplied_amount_that_does_not_match_order()
+    {
+        using var client = await CreateSignedInClientAsync("payment-amount@example.com");
+
+        var quoteResp = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-amount", [], "Payment amount scope."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-AMOUNT", "Payment amount order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        var underpayment = await client.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1.00m,
+            Currency = "THB"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, underpayment.StatusCode);
+
+        var matchingPayment = await client.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1500.00m,
+            Currency = "THB"
+        });
+
+        matchingPayment.EnsureSuccessStatusCode();
     }
 
     [Fact]
