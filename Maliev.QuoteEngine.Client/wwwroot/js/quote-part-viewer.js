@@ -135,6 +135,46 @@ const CONFIG = {
         alpha: 1.0,       // Fully opaque
     },
 
+    /** Realistic PBR material presets mirrored from Project New for customer-visible clear materials. */
+    MATERIAL_REALISTIC: {
+        'aluminum': {
+            albedoColor: { r: 0.82, g: 0.82, b: 0.80 },
+            metallic: 0.95,
+            roughness: 0.34,
+        },
+        'pla': {
+            albedoColor: { r: 0.85, g: 0.85, b: 0.80 },
+            metallic: 0.0,
+            roughness: 0.34,
+        },
+        'resin': {
+            albedoColor: { r: 0.78, g: 0.78, b: 0.78 },
+            metallic: 0.0,
+            roughness: 0.22,
+        },
+        'petg-clear': {
+            albedoColor: { r: 0.96, g: 0.98, b: 1.00 },
+            metallic: 0.0,
+            roughness: 0.14,
+            alpha: 0.58,
+            indexOfRefraction: 1.48,
+        },
+        'acrylic-clear': {
+            albedoColor: { r: 0.98, g: 0.99, b: 1.00 },
+            metallic: 0.0,
+            roughness: 0.035,
+            alpha: 0.38,
+            indexOfRefraction: 1.49,
+        },
+        'resin-clear': {
+            albedoColor: { r: 0.93, g: 0.97, b: 1.00 },
+            metallic: 0.0,
+            roughness: 0.10,
+            alpha: 0.46,
+            indexOfRefraction: 1.52,
+        },
+    },
+
     // =========================================================================
     // LIGHTING SETTINGS
     // =========================================================================
@@ -2185,7 +2225,8 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                         viewerSettings.processId,
                         viewerSettings.finishCode,
                         viewerSettings.roughnessCode,
-                        viewerSettings.partColor);
+                        viewerSettings.partColor,
+                        viewerSettings.materialId);
                 }
                 toggleEdges(canvasId, !!viewerSettings.edgesEnabled);
                 toggleBoundingBox(canvasId, !!viewerSettings.boundingBoxEnabled);
@@ -2274,7 +2315,8 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                         viewerSettings.processId,
                         viewerSettings.finishCode,
                         viewerSettings.roughnessCode,
-                        viewerSettings.partColor);
+                        viewerSettings.partColor,
+                        viewerSettings.materialId);
                 }
                 toggleEdges(canvasId, !!viewerSettings.edgesEnabled);
                 toggleBoundingBox(canvasId, !!viewerSettings.boundingBoxEnabled);
@@ -2891,6 +2933,51 @@ function getMaterialProfile(processId, finishCode, roughnessCode) {
     return profile;
 }
 
+function normalizeMaterialToken(value) {
+    return (value ?? '').toString().trim().toLowerCase().replace(/[_\s]+/g, '-');
+}
+
+function resolveRealisticMaterialKey(processId, materialId, finishCode) {
+    const materialKey = normalizeMaterialToken(materialId);
+    const finishKey = normalizeMaterialToken(finishCode);
+    const processKey = normalizeMaterialToken(processId);
+
+    if (materialKey.includes('petg') && materialKey.includes('clear')) return 'petg-clear';
+    if ((materialKey.includes('acrylic') || materialKey.includes('pmma')) && materialKey.includes('clear')) return 'acrylic-clear';
+    if (materialKey.includes('resin') && materialKey.includes('clear')) return 'resin-clear';
+    if (materialKey.includes('al6061') || materialKey.includes('aluminum') || processKey === 'cnc') return 'aluminum';
+    if (materialKey.includes('resin') || processKey === 'sla') return 'resin';
+    if (materialKey.includes('pla') || processKey === 'fdm') return 'pla';
+    if (finishKey.includes('clear')) return 'aluminum';
+    return null;
+}
+
+function applyRealisticTransparencySettings(material, preset) {
+    if (!material || !preset || preset.alpha === undefined || preset.alpha >= 1) {
+        return;
+    }
+
+    material.alpha = preset.alpha;
+    material.transparencyMode = BABYLON.Material?.MATERIAL_ALPHABLEND ?? 2;
+    material.needDepthPrePass = true;
+    material.separateCullingPass = true;
+    material.backFaceCulling = false;
+    material.useAlphaFromAlbedoTexture = false;
+    material.linkRefractionWithTransparency = true;
+    material.useRadianceOverAlpha = true;
+    material.useSpecularOverAlpha = true;
+    if (preset.indexOfRefraction !== undefined) {
+        material.indexOfRefraction = preset.indexOfRefraction;
+    }
+
+    if (material.subSurface) {
+        material.subSurface.isRefractionEnabled = !!material.getScene?.()?.environmentTexture;
+        material.subSurface.isTranslucencyEnabled = true;
+        material.subSurface.refractionIntensity = 0.35;
+        material.subSurface.translucencyIntensity = Math.max(0.2, Math.min(1, 1 - (preset.roughness ?? 0.1)));
+    }
+}
+
 /**
  * Create a PBR material from a profile + albedo Color3.
  * Applies metallic, roughness, and optional clearCoat.
@@ -2900,11 +2987,11 @@ function getMaterialProfile(processId, finishCode, roughnessCode) {
  * @param {string} name
  * @returns {BABYLON.PBRMaterial}
  */
-function createProfiledMaterial(scene, albedo, profile, name) {
+function createProfiledMaterial(scene, albedo, profile, name, realisticPreset = null) {
     const mat          = new BABYLON.PBRMaterial(name, scene);
-    mat.albedoColor    = albedo;
-    mat.metallic       = profile.metallic;
-    mat.roughness      = profile.roughness;
+    mat.albedoColor    = albedo ?? (realisticPreset ? toColor3(realisticPreset.albedoColor) : toColor3(CONFIG.MATERIAL_CAD_SOLID.albedoColor));
+    mat.metallic       = realisticPreset?.metallic ?? profile.metallic;
+    mat.roughness      = realisticPreset?.roughness ?? profile.roughness;
     mat.backFaceCulling = false;
 
     if (profile.clearCoat) {
@@ -2912,6 +2999,8 @@ function createProfiledMaterial(scene, albedo, profile, name) {
         mat.clearCoat.intensity = profile.clearCoat.intensity;
         mat.clearCoat.roughness = profile.clearCoat.roughness;
     }
+
+    applyRealisticTransparencySettings(mat, realisticPreset);
 
     return mat;
 }
@@ -2946,8 +3035,9 @@ function parseCssHexColor(css) {
  * @param {string|null} finishCode   e.g. "MATTE", "VAPOR_SMOOTH", "AS_MACHINED"
  * @param {string|null} roughnessCode e.g. "RA_3_2" (CNC only)
  * @param {string|null} cssColor     CSS hex colour e.g. "#CC2200"
+ * @param {string|null} materialId   catalog material id e.g. "petg-clear"
  */
-export function setPartMaterial(canvasId, processId, finishCode, roughnessCode, cssColor) {
+export function setPartMaterial(canvasId, processId, finishCode, roughnessCode, cssColor, materialId = null) {
     const scene = scenes[canvasId];
     if (!scene) return;
 
@@ -2957,13 +3047,15 @@ export function setPartMaterial(canvasId, processId, finishCode, roughnessCode, 
     const isSolid = !activeRenderModes[canvasId] || activeRenderModes[canvasId] === 'solid';
 
     const profile = getMaterialProfile(processId, finishCode, roughnessCode);
+    const realisticKey = resolveRealisticMaterialKey(processId, materialId, finishCode);
+    const realisticPreset = realisticKey ? CONFIG.MATERIAL_REALISTIC[realisticKey] : null;
 
     scene.meshes.forEach(mesh => {
         if (isSystemMesh(mesh) || mesh.name === '__root__' || mesh.name.startsWith('__axis')) return;
         if (!(analysisModelMeshIds[canvasId]?.has(mesh.uniqueId))) return;
 
-        const mat = albedo
-            ? createProfiledMaterial(scene, albedo, profile, `__part_mat_${mesh.uniqueId}__`)
+        const mat = albedo || realisticPreset
+            ? createProfiledMaterial(scene, albedo, profile, `__part_mat_${mesh.uniqueId}__`, realisticPreset)
             : getCadMaterial(scene);
 
         // Update the solid-mode baseline so setRenderMode('solid') restores the chosen material.

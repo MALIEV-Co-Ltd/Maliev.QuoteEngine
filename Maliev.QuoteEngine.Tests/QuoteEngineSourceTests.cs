@@ -2117,6 +2117,38 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Quote_viewer_replica_uses_ProjectNew_clear_material_transparency()
+    {
+        var detailCard = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js");
+
+        Assert.Contains("[Parameter] public string? MaterialId", viewer, StringComparison.Ordinal);
+        Assert.Contains("MaterialId=\"@Part.MaterialId\"", detailCard, StringComparison.Ordinal);
+        Assert.Contains("materialId = MaterialId", viewer, StringComparison.Ordinal);
+        Assert.Contains("await _module.InvokeVoidAsync(\"setPartMaterial\", _canvasId, ProcessId, FinishCode, RoughnessCode, PartColor, MaterialId);", viewer, StringComparison.Ordinal);
+        Assert.Contains("MaterialId != _lastMaterialId", viewer, StringComparison.Ordinal);
+
+        Assert.Contains("MATERIAL_REALISTIC", js, StringComparison.Ordinal);
+        Assert.Contains("'petg-clear'", js, StringComparison.Ordinal);
+        Assert.Contains("'acrylic-clear'", js, StringComparison.Ordinal);
+        Assert.Contains("'resin-clear'", js, StringComparison.Ordinal);
+        Assert.Contains("resolveRealisticMaterialKey", js, StringComparison.Ordinal);
+        Assert.Contains("applyRealisticTransparencySettings", js, StringComparison.Ordinal);
+        Assert.Contains("material.transparencyMode = BABYLON.Material?.MATERIAL_ALPHABLEND ?? 2;", js, StringComparison.Ordinal);
+        Assert.Contains("material.needDepthPrePass = true;", js, StringComparison.Ordinal);
+        Assert.Contains("material.separateCullingPass = true;", js, StringComparison.Ordinal);
+        Assert.Contains("material.linkRefractionWithTransparency = true;", js, StringComparison.Ordinal);
+        Assert.Contains("material.useRadianceOverAlpha = true;", js, StringComparison.Ordinal);
+        Assert.Contains("material.useSpecularOverAlpha = true;", js, StringComparison.Ordinal);
+        Assert.Contains("material.indexOfRefraction = preset.indexOfRefraction;", js, StringComparison.Ordinal);
+        Assert.Contains("material.subSurface.isRefractionEnabled", js, StringComparison.Ordinal);
+        Assert.Contains("material.subSurface.isTranslucencyEnabled = true;", js, StringComparison.Ordinal);
+        Assert.Contains("const mat = albedo || realisticPreset", js, StringComparison.Ordinal);
+        Assert.Contains("setPartMaterial(canvasId, processId, finishCode, roughnessCode, cssColor, materialId", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Project_parts_panel_and_workspace_expose_duplicate_project_flow()
     {
         var partsList = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartsListPanel.razor");

@@ -151,6 +151,7 @@
     [Parameter] public bool IsDarkMode { get; set; }
     [Parameter] public string? PartColor { get; set; }
     [Parameter] public string? ProcessId { get; set; }
+    [Parameter] public string? MaterialId { get; set; }
     [Parameter] public string? BrowserFileClientId { get; set; }
     [Parameter] public string? BrowserFileName { get; set; }
     [Parameter] public string? StoragePath { get; set; }
@@ -168,6 +169,7 @@
     private string? _lastFileExtension;
     private string? _lastPartColor;
     private string? _lastProcessId;
+    private string? _lastMaterialId;
     private string? _lastFinishCode;
     private string? _lastRoughnessCode;
     private string? _pendingLocalDfmProcessCode;
@@ -209,6 +211,7 @@
             _lastFileExtension = FileExtension;
             _lastPartColor = PartColor;
             _lastProcessId = ProcessId;
+            _lastMaterialId = MaterialId;
             _lastFinishCode = FinishCode;
             _lastRoughnessCode = RoughnessCode;
             _pendingLocalDfmProcessCode = null;
@@ -255,12 +258,13 @@
 
         _lastPartColor = PartColor;
         _lastProcessId = ProcessId;
+        _lastMaterialId = MaterialId;
         _lastFinishCode = FinishCode;
         _lastRoughnessCode = RoughnessCode;
         _viewerMaterialPushPending = false;
         _pendingLocalDfmProcessCode = null;
 
-        await _module.InvokeVoidAsync("setPartMaterial", _canvasId, ProcessId, FinishCode, RoughnessCode, PartColor);
+        await _module.InvokeVoidAsync("setPartMaterial", _canvasId, ProcessId, FinishCode, RoughnessCode, PartColor, MaterialId);
         if (!string.IsNullOrWhiteSpace(localDfmProcessCode))
         {
             await RunLocalGeometryRuntimeAsync(localDfmProcessCode);
@@ -270,6 +274,7 @@
     private bool MaterialChanged() =>
         PartColor != _lastPartColor ||
         ProcessId != _lastProcessId ||
+        MaterialId != _lastMaterialId ||
         FinishCode != _lastFinishCode ||
         RoughnessCode != _lastRoughnessCode;
 
@@ -300,6 +305,7 @@
                     partColor = PartColor,
                     processId = ProcessId,
                     processCode = ProcessId,
+                    materialId = MaterialId,
                     storagePath = StoragePath,
                     browserFileClientId = BrowserFileClientId,
                     browserFileName = BrowserFileName,
