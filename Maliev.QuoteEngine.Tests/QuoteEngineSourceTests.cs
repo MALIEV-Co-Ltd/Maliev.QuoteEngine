@@ -886,6 +886,34 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Documents_page_supports_customer_purchase_order_invoice_receipt_uploads()
+    {
+        var documents = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Documents.razor");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+        var accountController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "AccountController.cs");
+        var accountDtos = ReadRepoFile("Maliev.QuoteEngine.Shared", "Account", "AccountDtos.cs");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("InputFile", documents, StringComparison.Ordinal);
+        Assert.Contains("CustomerDocumentUploadRequest", documents, StringComparison.Ordinal);
+        Assert.Contains("UploadDocumentAsync", documents, StringComparison.Ordinal);
+        Assert.Contains("PurchaseOrder", documents, StringComparison.Ordinal);
+        Assert.Contains("Invoice", documents, StringComparison.Ordinal);
+        Assert.Contains("Receipt", documents, StringComparison.Ordinal);
+        Assert.Contains("class=\"documents-upload-panel\"", documents, StringComparison.Ordinal);
+        Assert.Contains("class=\"documents-kind-grid\"", documents, StringComparison.Ordinal);
+
+        Assert.Contains("UploadDocumentAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/account/documents", apiClient, StringComparison.Ordinal);
+        Assert.Contains("[HttpPost(\"documents\")]", accountController, StringComparison.Ordinal);
+        Assert.Contains("UploadDocument(customerId", accountController, StringComparison.Ordinal);
+        Assert.Contains("public sealed class CustomerDocumentUploadRequest", accountDtos, StringComparison.Ordinal);
+
+        Assert.Contains(".documents-upload-panel", styles, StringComparison.Ordinal);
+        Assert.Contains(".documents-kind-grid", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Quote_workspace_is_single_viewport_application_shell()
     {
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");

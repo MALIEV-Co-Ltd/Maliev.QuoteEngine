@@ -117,12 +117,28 @@ public sealed class AccountController(
     [HttpGet("documents")]
     public IActionResult GetDocuments()
     {
-        if (!sessionResolver.TryResolveCustomerId(out _))
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized();
         }
 
-        return Ok(store.Documents);
+        return Ok(store.GetDocuments(customerId));
+    }
+
+    [HttpPost("documents")]
+    public IActionResult UploadDocument([FromBody] CustomerDocumentUploadRequest request)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(store.UploadDocument(customerId, request));
     }
 
     private bool CanUsePrototypeAddressFallback(HttpResponseMessage response)

@@ -16,6 +16,7 @@ public sealed class QuoteEnginePrototypeStore
     private readonly ConcurrentDictionary<Guid, CustomerOrderRecord> _orders = new();
     private readonly ConcurrentDictionary<Guid, CustomerProjectRecord> _projects = new();
     private readonly ConcurrentDictionary<Guid, List<CustomerAddressDto>> _addressesByCustomer = new();
+    private readonly ConcurrentDictionary<Guid, List<CustomerDocumentDto>> _documentsByCustomer = new();
 
     public CustomerProfileResponse PrototypeCustomer { get; } = new(
         Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
@@ -120,10 +121,40 @@ public sealed class QuoteEnginePrototypeStore
             DateTimeOffset.UtcNow.AddDays(90))
     ];
 
-    public IReadOnlyList<CustomerDocumentDto> Documents { get; } =
-    [
-        new(Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"), "manufacturing-requirements.pdf", "Requirement", DateTimeOffset.UtcNow.AddDays(-4))
-    ];
+    public IReadOnlyList<CustomerDocumentDto> GetDocuments(Guid customerId)
+    {
+        var documents = new List<CustomerDocumentDto>
+        {
+            new(Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"), "manufacturing-requirements.pdf", "Requirement", DateTimeOffset.UtcNow.AddDays(-4))
+        };
+
+        if (_documentsByCustomer.TryGetValue(customerId, out var customerDocuments))
+        {
+            lock (customerDocuments)
+            {
+                documents.AddRange(customerDocuments);
+            }
+        }
+
+        return documents.OrderByDescending(document => document.UploadedAt).ToArray();
+    }
+
+    public CustomerDocumentDto UploadDocument(Guid customerId, CustomerDocumentUploadRequest request)
+    {
+        var document = new CustomerDocumentDto(
+            Guid.NewGuid(),
+            string.IsNullOrWhiteSpace(request.FileName) ? "customer-document" : request.FileName.Trim(),
+            string.IsNullOrWhiteSpace(request.Kind) ? "Document" : request.Kind.Trim(),
+            DateTimeOffset.UtcNow);
+
+        var documents = _documentsByCustomer.GetOrAdd(customerId, _ => []);
+        lock (documents)
+        {
+            documents.Add(document);
+        }
+
+        return document;
+    }
 
     public IReadOnlyList<CustomerQuoteSummaryDto> GetQuotes(Guid customerId)
     {

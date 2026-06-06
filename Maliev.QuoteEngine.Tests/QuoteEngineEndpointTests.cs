@@ -1527,6 +1527,37 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Account_documents_allow_customer_scoped_purchase_order_uploads()
+    {
+        using var owner = await CreateSignedInClientAsync("documents-owner@example.com");
+
+        var postResponse = await owner.PostAsJsonAsync("/quote/v1/account/documents", new CustomerDocumentUploadRequest
+        {
+            FileName = "po-1001.pdf",
+            Kind = "PurchaseOrder",
+            StoragePath = "customers/owner/orders/ord-1001/po-1001.pdf",
+            ContentType = "application/pdf",
+            FileSizeBytes = 42_000,
+            OrderNumber = "ORD-1001"
+        });
+        postResponse.EnsureSuccessStatusCode();
+
+        var uploaded = await postResponse.Content.ReadFromJsonAsync<CustomerDocumentDto>();
+        Assert.NotNull(uploaded);
+        Assert.Equal("po-1001.pdf", uploaded.FileName);
+        Assert.Equal("PurchaseOrder", uploaded.Kind);
+
+        var ownerDocuments = await owner.GetFromJsonAsync<CustomerDocumentDto[]>("/quote/v1/account/documents");
+        Assert.NotNull(ownerDocuments);
+        Assert.Contains(ownerDocuments, document => document.DocumentId == uploaded.DocumentId);
+
+        using var other = await CreateSignedInClientAsync("documents-other@example.com");
+        var otherDocuments = await other.GetFromJsonAsync<CustomerDocumentDto[]>("/quote/v1/account/documents");
+        Assert.NotNull(otherDocuments);
+        Assert.DoesNotContain(otherDocuments, document => document.DocumentId == uploaded.DocumentId);
+    }
+
+    [Fact]
     public async Task Address_google_config_is_available_for_signed_in_customer()
     {
         using var client = await CreateSignedInClientAsync("address-config@example.com");

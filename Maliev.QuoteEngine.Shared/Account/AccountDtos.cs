@@ -64,6 +64,31 @@ public sealed record CustomerNdaDto(
 
 public sealed record CustomerDocumentDto(Guid DocumentId, string FileName, string Kind, DateTimeOffset UploadedAt);
 
+public sealed class CustomerDocumentUploadRequest
+{
+    [Required]
+    [MaxLength(260)]
+    public string FileName { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(80)]
+    public string Kind { get; set; } = "PurchaseOrder";
+
+    [Required]
+    [MaxLength(512)]
+    public string StoragePath { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(120)]
+    public string ContentType { get; set; } = "application/octet-stream";
+
+    [Range(1, 50_000_000)]
+    public long FileSizeBytes { get; set; }
+
+    [MaxLength(80)]
+    public string? OrderNumber { get; set; }
+}
+
 public sealed class CustomerAddressDto
 {
     public Guid Id { get; set; }

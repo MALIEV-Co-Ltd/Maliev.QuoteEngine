@@ -2119,6 +2119,105 @@ p {
     color: var(--ink);
 }
 
+.documents-upload-panel {
+    display: grid;
+    gap: 14px;
+    width: min(100%, 980px);
+    margin: 0 auto 18px;
+    padding: 16px;
+    background: #ffffff;
+    border-radius: var(--maliev-radius-md);
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.documents-upload-panel h2 {
+    margin: 2px 0 0;
+    font-size: clamp(20px, 2vw, 28px);
+    letter-spacing: 0;
+}
+
+.documents-kind-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.documents-kind-card {
+    min-height: 82px;
+    padding: 10px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring);
+    color: var(--ink);
+    cursor: pointer;
+    text-align: left;
+}
+
+.documents-kind-card--active {
+    box-shadow: var(--maliev-shadow-ring), 0 0 0 1px var(--primary) inset;
+}
+
+.documents-kind-card strong,
+.documents-kind-card small {
+    display: block;
+}
+
+.documents-kind-card small {
+    margin-top: 4px;
+    color: var(--muted);
+    line-height: 1.35;
+}
+
+.documents-upload-dropzone {
+    position: relative;
+    display: grid;
+    place-items: center;
+    gap: 4px;
+    min-height: 116px;
+    padding: 18px;
+    border-radius: var(--maliev-radius-md);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring);
+    cursor: pointer;
+    text-align: center;
+}
+
+.documents-upload-dropzone input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.documents-upload-dropzone span {
+    color: var(--ink);
+    font-size: var(--maliev-font-medium);
+    font-weight: 650;
+    text-transform: none;
+}
+
+.documents-upload-dropzone small,
+.documents-upload-status {
+    color: var(--muted);
+    font-size: var(--maliev-font-small);
+    line-height: 1.4;
+}
+
+.documents-library {
+    width: min(100%, 980px);
+    margin: 0 auto;
+}
+
+.documents-row {
+    background: #ffffff;
+    box-shadow: var(--maliev-shadow-card);
+    border-radius: var(--maliev-radius-sm);
+    padding: 12px;
+}
+
 .config-grid,
 .profile-grid {
     display: grid;
@@ -2695,7 +2794,8 @@ textarea::placeholder {
 
     .order-detail-header,
     .order-progress-meta,
-    .order-detail-grid {
+    .order-detail-grid,
+    .documents-kind-grid {
         grid-template-columns: 1fr;
     }
 

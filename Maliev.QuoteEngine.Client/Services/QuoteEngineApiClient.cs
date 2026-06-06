@@ -170,6 +170,11 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerDocumentDto>>("quote/v1/account/documents", cancellationToken) ?? [];
     }
 
+    public Task<CustomerDocumentDto> UploadDocumentAsync(CustomerDocumentUploadRequest request, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<CustomerDocumentUploadRequest, CustomerDocumentDto>("quote/v1/account/documents", request, cancellationToken);
+    }
+
     public Task<CustomerChatbotResponse> SendChatbotMessageAsync(CustomerChatbotRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<CustomerChatbotRequest, CustomerChatbotResponse>("quote/v1/chatbot/messages", request, cancellationToken);

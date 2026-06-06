@@ -1,4 +1,6 @@
 @page "/documents"
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Forms
 @inject QuoteEngineApiClient Api
 
 <PageTitle>@Text("Documents - MALIEV Quote Engine", "เอกสาร - MALIEV Quote Engine")</PageTitle>
@@ -6,21 +8,71 @@
 <div class="section-heading">
     <span class="eyebrow">@Text("Customer files", "ไฟล์ลูกค้า")</span>
     <h1>@Text("Documents", "เอกสาร")</h1>
+    <p>@Text("Upload purchase orders and keep receipts, invoices, and manufacturing documents in one place.", "อัปโหลดใบสั่งซื้อและเก็บใบเสร็จ ใบแจ้งหนี้ และเอกสารการผลิตไว้ในที่เดียว")</p>
 </div>
 
-<div class="data-list">
+<section class="documents-upload-panel">
+    <div>
+        <span class="eyebrow">@Text("Upload document", "อัปโหลดเอกสาร")</span>
+        <h2>@Text("Add purchase order, invoice, or receipt", "เพิ่มใบสั่งซื้อ ใบแจ้งหนี้ หรือใบเสร็จ")</h2>
+    </div>
+
+    <div class="documents-kind-grid" role="radiogroup" aria-label="@Text("Document type", "ประเภทเอกสาร")">
+        @foreach (var kind in DocumentKinds)
+        {
+            var active = string.Equals(_selectedKind, kind.Code, StringComparison.OrdinalIgnoreCase);
+            <button type="button"
+                    class="documents-kind-card @(active ? "documents-kind-card--active" : "")"
+                    aria-pressed="@active"
+                    @onclick="@(() => _selectedKind = kind.Code)">
+                <strong>@kind.Label</strong>
+                <small>@kind.Hint</small>
+            </button>
+        }
+    </div>
+
+    <label class="documents-upload-dropzone">
+        <InputFile OnChange="UploadDocumentAsync" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" />
+        <span>@Text("Choose file", "เลือกไฟล์")</span>
+        <small>@Text("PDF, image, Word, or Excel documents up to 50 MB.", "รองรับ PDF, รูปภาพ, Word หรือ Excel สูงสุด 50 MB")</small>
+    </label>
+
+    @if (!string.IsNullOrWhiteSpace(_status))
+    {
+        <p class="documents-upload-status">@_status</p>
+    }
+</section>
+
+<div class="documents-library data-list">
     @foreach (var document in _documents)
     {
-        <div class="data-row">
+        <div class="data-row documents-row">
             <span>@document.FileName</span>
             <strong>@document.Kind</strong>
-            <small>@document.UploadedAt.ToLocalTime().ToString("d MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)))</small>
+            <small>@FormatDate(document.UploadedAt)</small>
         </div>
     }
 </div>
 
+@if (!_documents.Any())
+{
+    <div class="empty-state">
+        <p>@Text("No customer documents yet.", "ยังไม่มีเอกสารลูกค้า")</p>
+    </div>
+}
+
 @code {
+    private static readonly DocumentKind[] DocumentKinds =
+    [
+        new("PurchaseOrder", "Purchase order", "Customer PO for order approval."),
+        new("Invoice", "Invoice", "Accounting invoice copy."),
+        new("Receipt", "Receipt", "Payment receipt or tax receipt."),
+        new("Requirement", "Requirement", "Specification, drawing note, or manufacturing requirement.")
+    ];
+
     private IReadOnlyList<CustomerDocumentDto> _documents = [];
+    private string _selectedKind = "PurchaseOrder";
+    private string? _status;
 
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
@@ -30,8 +82,32 @@
         _documents = await Api.GetDocumentsAsync();
     }
 
+    private async Task UploadDocumentAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        var request = new CustomerDocumentUploadRequest
+        {
+            FileName = file.Name,
+            Kind = _selectedKind,
+            StoragePath = $"customer-documents/{Guid.NewGuid():N}/{Uri.EscapeDataString(file.Name)}",
+            ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
+            FileSizeBytes = file.Size
+        };
+
+        var uploaded = await Api.UploadDocumentAsync(request);
+        _documents = [uploaded, .. _documents];
+        _status = Text("Document uploaded.", "อัปโหลดเอกสารแล้ว");
+    }
+
+    private string FormatDate(DateTimeOffset value)
+    {
+        return value.ToLocalTime().ToString("d MMM yyyy", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)));
+    }
+
     private string Text(string en, string th)
     {
         return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
+
+    private sealed record DocumentKind(string Code, string Label, string Hint);
 }
