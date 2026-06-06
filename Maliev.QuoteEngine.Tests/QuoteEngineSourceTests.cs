@@ -935,6 +935,29 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Payment_return_pages_route_customers_back_to_order_detail()
+    {
+        var success = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "PaymentSuccess.razor");
+        var cancel = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "PaymentCancel.razor");
+        var quoteController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "QuoteController.cs");
+
+        Assert.Contains("@page \"/payment/success\"", success, StringComparison.Ordinal);
+        Assert.Contains("@inject NavigationManager Navigation", success, StringComparison.Ordinal);
+        Assert.Contains("GetOrderNumberFromQuery", success, StringComparison.Ordinal);
+        Assert.Contains("href=\"@OrderDetailHref\"", success, StringComparison.Ordinal);
+        Assert.Contains("Payment received", success, StringComparison.Ordinal);
+
+        Assert.Contains("@page \"/payment/cancel\"", cancel, StringComparison.Ordinal);
+        Assert.Contains("@inject NavigationManager Navigation", cancel, StringComparison.Ordinal);
+        Assert.Contains("GetOrderNumberFromQuery", cancel, StringComparison.Ordinal);
+        Assert.Contains("href=\"@OrderDetailHref\"", cancel, StringComparison.Ordinal);
+        Assert.Contains("Payment was not completed", cancel, StringComparison.Ordinal);
+
+        Assert.Contains("/payment/success?orderId={Uri.EscapeDataString(request.OrderNumber)}", quoteController, StringComparison.Ordinal);
+        Assert.Contains("/payment/cancel?orderId={Uri.EscapeDataString(request.OrderNumber)}", quoteController, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Quote_workspace_is_single_viewport_application_shell()
     {
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");

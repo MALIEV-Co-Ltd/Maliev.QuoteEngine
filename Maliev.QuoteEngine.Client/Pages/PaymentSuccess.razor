@@ -1,0 +1,45 @@
+@page "/payment/success"
+@inject NavigationManager Navigation
+
+<PageTitle>@Text("Payment received - MALIEV", "ได้รับการชำระเงิน - MALIEV")</PageTitle>
+
+<div class="empty-state payment-return-state">
+    <span class="eyebrow">@Text("Payment", "การชำระเงิน")</span>
+    <h1>@Text("Payment received", "ได้รับการชำระเงินแล้ว")</h1>
+    <p>@Text("Your order page will show the latest payment and manufacturing status as soon as the platform confirms it.", "หน้าคำสั่งซื้อจะแสดงสถานะการชำระเงินและการผลิตล่าสุดเมื่อระบบยืนยันเรียบร้อย")</p>
+    <div class="order-detail-actions">
+        <a class="primary-button" href="@OrderDetailHref">@Text("Back to order", "กลับไปที่คำสั่งซื้อ")</a>
+        <a class="qe-secondary-btn" href="/documents?kind=Receipt">@Text("Receipts", "ใบเสร็จ")</a>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
+    private string OrderNumber => GetOrderNumberFromQuery();
+
+    private string OrderDetailHref => string.IsNullOrWhiteSpace(OrderNumber)
+        ? "/orders"
+        : $"/orders/{Uri.EscapeDataString(OrderNumber)}";
+
+    private string GetOrderNumberFromQuery()
+    {
+        var query = new Uri(Navigation.Uri).Query.TrimStart('?');
+        foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            if (parts.Length == 2 && string.Equals(parts[0], "orderId", StringComparison.OrdinalIgnoreCase))
+            {
+                return Uri.UnescapeDataString(parts[1].Replace('+', ' '));
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
+}

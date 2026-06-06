@@ -2093,6 +2093,15 @@ p {
     line-height: 1.4;
 }
 
+.payment-return-state {
+    width: min(100%, 720px);
+    margin: 44px auto;
+}
+
+.payment-return-state .order-detail-actions {
+    justify-content: center;
+}
+
 .order-status-timeline {
     display: grid;
     gap: 12px;
