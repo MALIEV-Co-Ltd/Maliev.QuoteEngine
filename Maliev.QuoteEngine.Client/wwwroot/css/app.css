@@ -2224,6 +2224,25 @@ p {
     margin-top: 12px;
 }
 
+.quote-conversion-card {
+    border: 1px solid rgba(203, 161, 53, 0.36);
+    background: linear-gradient(180deg, #fffdf7 0%, #ffffff 100%);
+}
+
+.quote-conversion-card p {
+    max-width: 680px;
+    margin: 10px 0 0;
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.quote-action-error {
+    margin: 10px 0 0;
+    color: var(--maliev-danger);
+    font-size: var(--maliev-font-small);
+    font-weight: 700;
+}
+
 .quote-history-list {
     display: grid;
     gap: 8px;

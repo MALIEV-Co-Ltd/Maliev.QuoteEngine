@@ -1622,6 +1622,30 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Quote_approval_is_scoped_to_signed_in_customer()
+    {
+        using var customerA = await CreateSignedInClientAsync("quote-approve-owner@example.com");
+
+        var quoteResponse = await customerA.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-approve", [], "Customer A quote approval."));
+        quoteResponse.EnsureSuccessStatusCode();
+        var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var ownerApprove = await customerA.PostAsJsonAsync($"/quote/v1/quotes/{quote.QuoteId:D}/approve", new { });
+        ownerApprove.EnsureSuccessStatusCode();
+        var ownerApprovedQuote = await ownerApprove.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(ownerApprovedQuote);
+        Assert.Equal(quote.QuoteId, ownerApprovedQuote.QuoteId);
+        Assert.Equal("Approved", ownerApprovedQuote.Status);
+
+        using var customerB = await CreateSignedInClientAsync("quote-approve-other@example.com");
+        var crossCustomerApprove = await customerB.PostAsJsonAsync($"/quote/v1/quotes/{quote.QuoteId:D}/approve", new { });
+        Assert.Equal(HttpStatusCode.NotFound, crossCustomerApprove.StatusCode);
+    }
+
+    [Fact]
     public async Task Order_detail_returns_status_history_for_signed_in_customer()
     {
         using var client = await CreateSignedInClientAsync("order-detail@example.com");

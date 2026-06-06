@@ -2,6 +2,7 @@
 @page "/quotes"
 @using System.Globalization
 @inject QuoteEngineApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>@Text("Quote detail - MALIEV", "รายละเอียดใบเสนอราคา - MALIEV")</PageTitle>
 
@@ -118,6 +119,26 @@ else
                 <a class="qe-secondary-btn" href="/quotes/new">@Text("Start another quote", "เริ่มขอราคาใหม่")</a>
             </div>
         </section>
+
+        <section class="quote-detail-card quote-conversion-card" data-quote-section="conversion">
+            <div class="order-panel-head">
+                <span>@Text("Accept and order", "ยอมรับและสั่งซื้อ")</span>
+                <strong>@ConversionStatus</strong>
+            </div>
+            <p>@Text("Approve this formal quote, then create the manufacturing order from the same customer account.", "อนุมัติใบเสนอราคานี้แล้วสร้างคำสั่งผลิตจากบัญชีลูกค้าเดียวกัน")</p>
+            <div class="quote-detail-actions">
+                <button type="button" class="qe-secondary-btn" disabled="@(!CanApproveQuote || _quoteActionBusy)" @onclick="ApproveQuoteAsync">
+                    @Text("Approve quote", "อนุมัติใบเสนอราคา")
+                </button>
+                <button type="button" class="qe-primary-btn" disabled="@(!CanCreateOrder || _quoteActionBusy)" @onclick="CreateOrderAsync">
+                    @Text("Create order", "สร้างคำสั่งซื้อ")
+                </button>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(_quoteActionError))
+            {
+                <p class="quote-action-error">@_quoteActionError</p>
+            }
+        </section>
     </main>
 }
 
@@ -131,11 +152,21 @@ else
     private CustomerQuoteSummaryDto? _quote;
     private List<CustomerQuoteSummaryDto> _quotes = [];
     private bool _loading = true;
+    private bool _quoteActionBusy;
+    private string? _quoteActionError;
     private bool IsHistoryRoute => QuoteId == Guid.Empty;
+    private bool CanApproveQuote => _quote is not null && !IsApprovedQuote(_quote.Status) && !IsTerminalQuote(_quote.Status);
+    private bool CanCreateOrder => _quote is not null && !IsTerminalQuote(_quote.Status);
+    private string ConversionStatus => _quote is null
+        ? Text("Unavailable", "ไม่พร้อมใช้งาน")
+        : IsApprovedQuote(_quote.Status)
+            ? Text("Approved", "อนุมัติแล้ว")
+            : Text("Ready", "พร้อมดำเนินการ");
 
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
+        _quoteActionError = null;
         var quotes = await Api.GetQuotesAsync();
         _quotes = [.. quotes];
         _quote = null;
@@ -146,6 +177,59 @@ else
         _loading = false;
     }
 
+    private async Task ApproveQuoteAsync()
+    {
+        if (_quote is null || !CanApproveQuote)
+        {
+            return;
+        }
+
+        _quoteActionBusy = true;
+        _quoteActionError = null;
+        try
+        {
+            var approved = await Api.ApproveQuoteAsync(_quote.QuoteId);
+            _quote = _quote with
+            {
+                Status = approved.Status,
+                PdfUrl = string.IsNullOrWhiteSpace(approved.PdfUrl) ? _quote.PdfUrl : approved.PdfUrl,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+        }
+        catch (Exception)
+        {
+            _quoteActionError = Text("Quote approval failed. Please try again.", "อนุมัติใบเสนอราคาไม่สำเร็จ กรุณาลองใหม่");
+        }
+        finally
+        {
+            _quoteActionBusy = false;
+        }
+    }
+
+    private async Task CreateOrderAsync()
+    {
+        if (_quote is null || !CanCreateOrder)
+        {
+            return;
+        }
+
+        _quoteActionBusy = true;
+        _quoteActionError = null;
+        try
+        {
+            var order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_quote.QuoteId, string.Empty, "Customer accepted quote from quote history."));
+            Navigation.NavigateTo($"/orders/{Uri.EscapeDataString(order.OrderNumber)}");
+        }
+        catch (Exception)
+        {
+            _quoteActionError = Text("Order creation failed. Please try again.", "สร้างคำสั่งซื้อไม่สำเร็จ กรุณาลองใหม่");
+        }
+        finally
+        {
+            _quoteActionBusy = false;
+        }
+    }
+
     private string FormatMoney(decimal amount, string currency)
     {
         return $"{amount.ToString("N2", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)))} {currency}";
@@ -154,6 +238,18 @@ else
     private string FormatDate(DateTimeOffset value)
     {
         return value.ToLocalTime().ToString("d MMM yyyy", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)));
+    }
+
+    private static bool IsApprovedQuote(string status)
+    {
+        return status.Contains("approved", StringComparison.OrdinalIgnoreCase) ||
+            status.Contains("accepted", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsTerminalQuote(string status)
+    {
+        return status.Contains("expired", StringComparison.OrdinalIgnoreCase) ||
+            status.Contains("cancelled", StringComparison.OrdinalIgnoreCase);
     }
 
     private string Text(string en, string th)

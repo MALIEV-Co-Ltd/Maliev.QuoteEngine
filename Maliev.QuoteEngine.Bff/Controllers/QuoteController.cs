@@ -507,14 +507,20 @@ public sealed class QuoteController(
     }
 
     [HttpPost("quotes/{quoteId:guid}/approve")]
-    public ActionResult<GenerateFormalQuoteResponse> ApproveQuote(Guid quoteId)
+    public async Task<ActionResult<GenerateFormalQuoteResponse>> ApproveQuote(Guid quoteId, CancellationToken cancellationToken)
     {
-        if (!sessionResolver.TryResolveCustomerId(out _))
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized();
         }
 
-        return Ok(new GenerateFormalQuoteResponse(quoteId, $"MQ-{DateTime.UtcNow:yyyyMMdd}-APPROVED", "/quote/v1/account/quotes/sample.pdf", "Approved"));
+        var quotation = await quotationClient.GetByIdAsync(quoteId, cancellationToken);
+        if (quotation is null || quotation.CustomerId != customerId)
+        {
+            return NotFound();
+        }
+
+        return Ok(new GenerateFormalQuoteResponse(quotation.Id, quotation.QuotationNumber, string.Empty, "Approved"));
     }
 
     [HttpPost("orders")]

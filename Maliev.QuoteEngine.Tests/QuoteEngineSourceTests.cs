@@ -1119,12 +1119,22 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@_quote.Status", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("FormatMoney(_quote.Total, _quote.Currency)", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("href=\"@_quote.PdfUrl\"", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("ApproveQuoteAsync", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("CreateOrderAsync", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("CanApproveQuote", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("CanCreateOrder", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("new CreateManufacturingOrderRequest(_quote.QuoteId", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo($\"/orders/{Uri.EscapeDataString(order.OrderNumber)}\")", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("data-quote-section=\"conversion\"", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("Start another quote", quoteDetail, StringComparison.Ordinal);
         Assert.DoesNotContain("ready to connect to QuotationService", quoteDetail, StringComparison.Ordinal);
 
         Assert.Contains("GetQuotesAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("ApproveQuoteAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("CreateOrderAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains(".quote-detail-shell", styles, StringComparison.Ordinal);
         Assert.Contains(".quote-detail-actions", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-conversion-card", styles, StringComparison.Ordinal);
         Assert.Contains(".quote-history-list", styles, StringComparison.Ordinal);
     }
 
