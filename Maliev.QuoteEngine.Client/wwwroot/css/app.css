@@ -2508,6 +2508,32 @@ p {
     line-height: 1.35;
 }
 
+.documents-filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 16px 0;
+}
+
+.documents-filter-chip {
+    min-height: 34px;
+    border: 1px solid var(--line);
+    border-radius: var(--maliev-radius-tab);
+    background: var(--panel);
+    color: var(--muted);
+    padding: 0 12px;
+    font-size: var(--maliev-font-small);
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.documents-filter-chip--active,
+.documents-filter-chip:hover {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: var(--primary-contrast);
+}
+
 .documents-order-field {
     display: grid;
     gap: 6px;

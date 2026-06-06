@@ -25,7 +25,7 @@
             <button type="button"
                     class="documents-kind-card @(active ? "documents-kind-card--active" : "")"
                     aria-pressed="@active"
-                    @onclick="@(() => _selectedKind = kind.Code)">
+                    @onclick="@(() => SelectUploadKind(kind.Code))">
                 <strong>@kind.Label</strong>
                 <small>@kind.Hint</small>
             </button>
@@ -48,6 +48,19 @@
     @if (!string.IsNullOrWhiteSpace(_status))
     {
         <p class="documents-upload-status">@_status</p>
+    }
+</section>
+
+<section class="documents-filter-bar" data-documents-section="library-filters" aria-label="@Text("Document library filters", "ตัวกรองคลังเอกสาร")">
+    @foreach (var filter in LibraryKindFilters)
+    {
+        var active = string.Equals(_libraryKindFilter, filter.Code, StringComparison.OrdinalIgnoreCase);
+        <button type="button"
+                class="documents-filter-chip @(active ? "documents-filter-chip--active" : "")"
+                aria-pressed="@active"
+                @onclick="@(() => SetLibraryKindFilter(filter.Code))">
+            @filter.Label
+        </button>
     }
 </section>
 
@@ -77,11 +90,12 @@
 @if (!VisibleDocuments.Any())
 {
     <div class="empty-state">
-        <p>@(HasOrderContext ? Text("No documents are attached to this order yet.", "ยังไม่มีเอกสารที่ผูกกับคำสั่งซื้อนี้") : Text("No customer documents yet.", "ยังไม่มีเอกสารลูกค้า"))</p>
+        <p>@EmptyLibraryMessage</p>
     </div>
 }
 
 @code {
+    private const string AllDocumentKinds = "All";
     private static readonly DocumentKind[] DocumentKinds =
     [
         new("PurchaseOrder", "Purchase order", "Customer PO for order approval."),
@@ -90,8 +104,15 @@
         new("Requirement", "Requirement", "Specification, drawing note, or manufacturing requirement.")
     ];
 
+    private static readonly DocumentKind[] LibraryKindFilters =
+    [
+        new(AllDocumentKinds, "All documents", "Every customer document."),
+        .. DocumentKinds
+    ];
+
     private IReadOnlyList<CustomerDocumentDto> _documents = [];
     private string _selectedKind = "PurchaseOrder";
+    private string _libraryKindFilter = AllDocumentKinds;
     private string _orderNumber = string.Empty;
     private string? _status;
 
@@ -106,9 +127,18 @@
 
     private bool HasOrderContext => !string.IsNullOrWhiteSpace(_orderNumber);
 
-    private IReadOnlyList<CustomerDocumentDto> VisibleDocuments => HasOrderContext
-        ? _documents.Where(document => string.Equals(document.OrderNumber, _orderNumber, StringComparison.OrdinalIgnoreCase)).ToArray()
-        : _documents;
+    private bool HasKindFilter => !string.Equals(_libraryKindFilter, AllDocumentKinds, StringComparison.OrdinalIgnoreCase);
+
+    private IReadOnlyList<CustomerDocumentDto> VisibleDocuments => _documents
+        .Where(MatchesDocumentContext)
+        .Where(MatchesDocumentKindFilter)
+        .ToArray();
+
+    private string EmptyLibraryMessage => HasOrderContext
+        ? Text("No matching documents are attached to this order yet.", "ยังไม่มีเอกสารที่ตรงกับตัวกรองนี้ในคำสั่งซื้อนี้")
+        : HasKindFilter
+            ? Text("No matching customer documents yet.", "ยังไม่มีเอกสารลูกค้าที่ตรงกับตัวกรองนี้")
+            : Text("No customer documents yet.", "ยังไม่มีเอกสารลูกค้า");
 
     private async Task UploadDocumentAsync(InputFileChangeEventArgs args)
     {
@@ -135,6 +165,7 @@
             DocumentKinds.Any(option => string.Equals(option.Code, kind, StringComparison.OrdinalIgnoreCase)))
         {
             _selectedKind = kind;
+            _libraryKindFilter = kind;
         }
 
         if (parameters.TryGetValue("orderNumber", out var orderNumber))
@@ -156,6 +187,28 @@
         }
 
         return values;
+    }
+
+    private void SelectUploadKind(string kind)
+    {
+        _selectedKind = kind;
+    }
+
+    private void SetLibraryKindFilter(string kind)
+    {
+        _libraryKindFilter = LibraryKindFilters.Any(option => string.Equals(option.Code, kind, StringComparison.OrdinalIgnoreCase))
+            ? kind
+            : AllDocumentKinds;
+    }
+
+    private bool MatchesDocumentContext(CustomerDocumentDto document)
+    {
+        return !HasOrderContext || string.Equals(document.OrderNumber, _orderNumber, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesDocumentKindFilter(CustomerDocumentDto document)
+    {
+        return !HasKindFilter || string.Equals(document.Kind, _libraryKindFilter, StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnOrderNumberChanged(ChangeEventArgs args)

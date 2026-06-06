@@ -1038,13 +1038,22 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("HasOrderContext", documents, StringComparison.Ordinal);
         Assert.Contains("ClearOrderContext", documents, StringComparison.Ordinal);
         Assert.Contains("data-documents-section=\"order-context\"", documents, StringComparison.Ordinal);
-        Assert.Contains("_documents.Where(document => string.Equals(document.OrderNumber, _orderNumber", documents, StringComparison.Ordinal);
+        Assert.Contains("data-documents-section=\"library-filters\"", documents, StringComparison.Ordinal);
+        Assert.Contains("LibraryKindFilters", documents, StringComparison.Ordinal);
+        Assert.Contains("_libraryKindFilter", documents, StringComparison.Ordinal);
+        Assert.Contains("SetLibraryKindFilter", documents, StringComparison.Ordinal);
+        Assert.Contains("VisibleDocuments => _documents", documents, StringComparison.Ordinal);
+        Assert.Contains(".Where(MatchesDocumentContext)", documents, StringComparison.Ordinal);
+        Assert.Contains(".Where(MatchesDocumentKindFilter)", documents, StringComparison.Ordinal);
+        Assert.Contains("private bool MatchesDocumentContext(CustomerDocumentDto document)", documents, StringComparison.Ordinal);
+        Assert.Contains("private bool MatchesDocumentKindFilter(CustomerDocumentDto document)", documents, StringComparison.Ordinal);
         Assert.Contains("document.OrderNumber", documents, StringComparison.Ordinal);
         Assert.Contains("PurchaseOrder", documents, StringComparison.Ordinal);
         Assert.Contains("Invoice", documents, StringComparison.Ordinal);
         Assert.Contains("Receipt", documents, StringComparison.Ordinal);
         Assert.Contains("class=\"documents-upload-panel\"", documents, StringComparison.Ordinal);
         Assert.Contains("class=\"documents-kind-grid\"", documents, StringComparison.Ordinal);
+        Assert.Contains("class=\"documents-filter-chip", documents, StringComparison.Ordinal);
         Assert.Contains("class=\"documents-order-field\"", documents, StringComparison.Ordinal);
 
         Assert.Contains("UploadDocumentAsync", apiClient, StringComparison.Ordinal);
@@ -1057,6 +1066,8 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains(".documents-upload-panel", styles, StringComparison.Ordinal);
         Assert.Contains(".documents-kind-grid", styles, StringComparison.Ordinal);
+        Assert.Contains(".documents-filter-bar", styles, StringComparison.Ordinal);
+        Assert.Contains(".documents-filter-chip", styles, StringComparison.Ordinal);
         Assert.Contains(".documents-order-field", styles, StringComparison.Ordinal);
         Assert.Contains(".documents-order-context", styles, StringComparison.Ordinal);
     }
