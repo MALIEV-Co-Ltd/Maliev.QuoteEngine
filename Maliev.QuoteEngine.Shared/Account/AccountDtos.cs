@@ -62,7 +62,15 @@ public sealed record CustomerNdaDto(
     DateTimeOffset UpdatedAt,
     DateTimeOffset? ExpiresAt = null);
 
-public sealed record CustomerDocumentDto(Guid DocumentId, string FileName, string Kind, DateTimeOffset UploadedAt);
+public sealed record CustomerDocumentDto(
+    Guid DocumentId,
+    string FileName,
+    string Kind,
+    DateTimeOffset UploadedAt,
+    string? StoragePath = null,
+    string? ContentType = null,
+    long FileSizeBytes = 0,
+    string? OrderNumber = null);
 
 public sealed class CustomerDocumentUploadRequest
 {

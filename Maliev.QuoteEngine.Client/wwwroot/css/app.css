@@ -2169,6 +2169,29 @@ p {
     line-height: 1.35;
 }
 
+.documents-order-field {
+    display: grid;
+    gap: 6px;
+}
+
+.documents-order-field span {
+    color: var(--ink);
+    font-size: var(--maliev-font-small);
+    font-weight: 650;
+}
+
+.documents-order-field input {
+    min-height: 42px;
+    width: 100%;
+    padding: 9px 11px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring);
+    color: var(--ink);
+    font: inherit;
+}
+
 .documents-upload-dropzone {
     position: relative;
     display: grid;

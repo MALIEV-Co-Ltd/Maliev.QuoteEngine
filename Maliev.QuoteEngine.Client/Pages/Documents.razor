@@ -2,6 +2,7 @@
 @using System.Globalization
 @using Microsoft.AspNetCore.Components.Forms
 @inject QuoteEngineApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>@Text("Documents - MALIEV Quote Engine", "เอกสาร - MALIEV Quote Engine")</PageTitle>
 
@@ -31,6 +32,13 @@
         }
     </div>
 
+    <label class="documents-order-field">
+        <span>@Text("Order number", "เลขที่คำสั่งซื้อ")</span>
+        <input value="@_orderNumber"
+               @oninput="OnOrderNumberChanged"
+               placeholder="@Text("Optional order reference", "เลขที่คำสั่งซื้อถ้ามี")" />
+    </label>
+
     <label class="documents-upload-dropzone">
         <InputFile OnChange="UploadDocumentAsync" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" />
         <span>@Text("Choose file", "เลือกไฟล์")</span>
@@ -49,7 +57,7 @@
         <div class="data-row documents-row">
             <span>@document.FileName</span>
             <strong>@document.Kind</strong>
-            <small>@FormatDate(document.UploadedAt)</small>
+            <small>@DocumentMeta(document)</small>
         </div>
     }
 </div>
@@ -72,6 +80,7 @@
 
     private IReadOnlyList<CustomerDocumentDto> _documents = [];
     private string _selectedKind = "PurchaseOrder";
+    private string _orderNumber = string.Empty;
     private string? _status;
 
     [CascadingParameter(Name = "Culture")]
@@ -79,6 +88,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        ApplyDocumentRouteContext();
         _documents = await Api.GetDocumentsAsync();
     }
 
@@ -91,12 +101,61 @@
             Kind = _selectedKind,
             StoragePath = $"customer-documents/{Guid.NewGuid():N}/{Uri.EscapeDataString(file.Name)}",
             ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-            FileSizeBytes = file.Size
+            FileSizeBytes = file.Size,
+            OrderNumber = NormalizeOrderNumber(_orderNumber)
         };
 
         var uploaded = await Api.UploadDocumentAsync(request);
         _documents = [uploaded, .. _documents];
         _status = Text("Document uploaded.", "อัปโหลดเอกสารแล้ว");
+    }
+
+    private void ApplyDocumentRouteContext()
+    {
+        var parameters = ParseQuery(Navigation.Uri);
+        if (parameters.TryGetValue("kind", out var kind) &&
+            DocumentKinds.Any(option => string.Equals(option.Code, kind, StringComparison.OrdinalIgnoreCase)))
+        {
+            _selectedKind = kind;
+        }
+
+        if (parameters.TryGetValue("orderNumber", out var orderNumber))
+        {
+            _orderNumber = orderNumber;
+        }
+    }
+
+    private static Dictionary<string, string> ParseQuery(string uri)
+    {
+        var query = new Uri(uri).Query.TrimStart('?');
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            var key = Uri.UnescapeDataString(parts[0].Replace('+', ' '));
+            var value = parts.Length == 2 ? Uri.UnescapeDataString(parts[1].Replace('+', ' ')) : string.Empty;
+            values[key] = value;
+        }
+
+        return values;
+    }
+
+    private void OnOrderNumberChanged(ChangeEventArgs args)
+    {
+        _orderNumber = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private static string? NormalizeOrderNumber(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private string DocumentMeta(CustomerDocumentDto document)
+    {
+        var uploadedAt = FormatDate(document.UploadedAt);
+        return string.IsNullOrWhiteSpace(document.OrderNumber)
+            ? uploadedAt
+            : $"{document.OrderNumber} · {uploadedAt}";
     }
 
     private string FormatDate(DateTimeOffset value)

@@ -1546,10 +1546,17 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(uploaded);
         Assert.Equal("po-1001.pdf", uploaded.FileName);
         Assert.Equal("PurchaseOrder", uploaded.Kind);
+        Assert.Equal("ORD-1001", uploaded.OrderNumber);
+        Assert.Equal("customers/owner/orders/ord-1001/po-1001.pdf", uploaded.StoragePath);
+        Assert.Equal("application/pdf", uploaded.ContentType);
+        Assert.Equal(42_000, uploaded.FileSizeBytes);
 
         var ownerDocuments = await owner.GetFromJsonAsync<CustomerDocumentDto[]>("/quote/v1/account/documents");
         Assert.NotNull(ownerDocuments);
-        Assert.Contains(ownerDocuments, document => document.DocumentId == uploaded.DocumentId);
+        Assert.Contains(ownerDocuments, document =>
+            document.DocumentId == uploaded.DocumentId &&
+            document.OrderNumber == "ORD-1001" &&
+            document.StoragePath == "customers/owner/orders/ord-1001/po-1001.pdf");
 
         using var other = await CreateSignedInClientAsync("documents-other@example.com");
         var otherDocuments = await other.GetFromJsonAsync<CustomerDocumentDto[]>("/quote/v1/account/documents");

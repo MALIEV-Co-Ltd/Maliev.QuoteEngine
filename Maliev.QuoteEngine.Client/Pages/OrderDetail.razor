@@ -67,7 +67,8 @@ else
                     </div>
                 </dl>
                 <div class="order-detail-actions">
-                    <a class="qe-secondary-btn" href="/documents">@Text("Receipts and invoices", "ใบเสร็จและใบแจ้งหนี้")</a>
+                    <a class="qe-secondary-btn" href="@DocumentHref("Receipt")">@Text("Receipts", "ใบเสร็จ")</a>
+                    <a class="qe-secondary-btn" href="@DocumentHref("Invoice")">@Text("Invoices", "ใบแจ้งหนี้")</a>
                 </div>
             </article>
 
@@ -87,7 +88,7 @@ else
                     </div>
                 </dl>
                 <div class="order-detail-actions">
-                    <a class="qe-secondary-btn" href="/documents">@Text("Upload purchase order", "อัปโหลดใบสั่งซื้อ")</a>
+                    <a class="qe-secondary-btn" href="@DocumentHref("PurchaseOrder")">@Text("Upload purchase order", "อัปโหลดใบสั่งซื้อ")</a>
                 </div>
             </article>
         </section>
@@ -164,6 +165,13 @@ else
         return value is null
             ? Text("Pending", "รอดำเนินการ")
             : value.Value.ToString("d MMM yyyy", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)));
+    }
+
+    private string DocumentHref(string kind)
+    {
+        return _order is null
+            ? "/documents"
+            : $"/documents?kind={Uri.EscapeDataString(kind)}&orderNumber={Uri.EscapeDataString(_order.OrderNumber)}";
     }
 
     private string Text(string en, string th)

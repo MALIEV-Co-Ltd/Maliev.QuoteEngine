@@ -877,6 +877,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("StatusHistory", detail, StringComparison.Ordinal);
         Assert.Contains("PromisedDeliveryDate", detail, StringComparison.Ordinal);
         Assert.Contains("ManufacturingProgressPercent", detail, StringComparison.Ordinal);
+        Assert.Contains("DocumentHref(\"PurchaseOrder\")", detail, StringComparison.Ordinal);
+        Assert.Contains("DocumentHref(\"Receipt\")", detail, StringComparison.Ordinal);
+        Assert.Contains("DocumentHref(\"Invoice\")", detail, StringComparison.Ordinal);
+        Assert.Contains("kind={Uri.EscapeDataString(kind)}&orderNumber={Uri.EscapeDataString(_order.OrderNumber)}", detail, StringComparison.Ordinal);
 
         Assert.Contains("GetOrderDetailAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/account/orders/{Uri.EscapeDataString(orderNumber)}", apiClient, StringComparison.Ordinal);
@@ -895,22 +899,30 @@ public sealed class QuoteEngineSourceTests
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
         Assert.Contains("InputFile", documents, StringComparison.Ordinal);
+        Assert.Contains("@inject NavigationManager Navigation", documents, StringComparison.Ordinal);
         Assert.Contains("CustomerDocumentUploadRequest", documents, StringComparison.Ordinal);
         Assert.Contains("UploadDocumentAsync", documents, StringComparison.Ordinal);
+        Assert.Contains("ApplyDocumentRouteContext", documents, StringComparison.Ordinal);
+        Assert.Contains("OrderNumber = NormalizeOrderNumber(_orderNumber)", documents, StringComparison.Ordinal);
+        Assert.Contains("document.OrderNumber", documents, StringComparison.Ordinal);
         Assert.Contains("PurchaseOrder", documents, StringComparison.Ordinal);
         Assert.Contains("Invoice", documents, StringComparison.Ordinal);
         Assert.Contains("Receipt", documents, StringComparison.Ordinal);
         Assert.Contains("class=\"documents-upload-panel\"", documents, StringComparison.Ordinal);
         Assert.Contains("class=\"documents-kind-grid\"", documents, StringComparison.Ordinal);
+        Assert.Contains("class=\"documents-order-field\"", documents, StringComparison.Ordinal);
 
         Assert.Contains("UploadDocumentAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/account/documents", apiClient, StringComparison.Ordinal);
         Assert.Contains("[HttpPost(\"documents\")]", accountController, StringComparison.Ordinal);
         Assert.Contains("UploadDocument(customerId", accountController, StringComparison.Ordinal);
         Assert.Contains("public sealed class CustomerDocumentUploadRequest", accountDtos, StringComparison.Ordinal);
+        Assert.Contains("public sealed record CustomerDocumentDto", accountDtos, StringComparison.Ordinal);
+        Assert.Contains("string? OrderNumber", accountDtos, StringComparison.Ordinal);
 
         Assert.Contains(".documents-upload-panel", styles, StringComparison.Ordinal);
         Assert.Contains(".documents-kind-grid", styles, StringComparison.Ordinal);
+        Assert.Contains(".documents-order-field", styles, StringComparison.Ordinal);
     }
 
     [Fact]

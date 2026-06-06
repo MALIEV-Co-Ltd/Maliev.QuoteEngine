@@ -125,7 +125,14 @@ public sealed class QuoteEnginePrototypeStore
     {
         var documents = new List<CustomerDocumentDto>
         {
-            new(Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"), "manufacturing-requirements.pdf", "Requirement", DateTimeOffset.UtcNow.AddDays(-4))
+            new(
+                Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc"),
+                "manufacturing-requirements.pdf",
+                "Requirement",
+                DateTimeOffset.UtcNow.AddDays(-4),
+                "customer-documents/sample/manufacturing-requirements.pdf",
+                "application/pdf",
+                285_000)
         };
 
         if (_documentsByCustomer.TryGetValue(customerId, out var customerDocuments))
@@ -145,7 +152,11 @@ public sealed class QuoteEnginePrototypeStore
             Guid.NewGuid(),
             string.IsNullOrWhiteSpace(request.FileName) ? "customer-document" : request.FileName.Trim(),
             string.IsNullOrWhiteSpace(request.Kind) ? "Document" : request.Kind.Trim(),
-            DateTimeOffset.UtcNow);
+            DateTimeOffset.UtcNow,
+            string.IsNullOrWhiteSpace(request.StoragePath) ? null : request.StoragePath.Trim(),
+            string.IsNullOrWhiteSpace(request.ContentType) ? "application/octet-stream" : request.ContentType.Trim(),
+            request.FileSizeBytes,
+            string.IsNullOrWhiteSpace(request.OrderNumber) ? null : request.OrderNumber.Trim());
 
         var documents = _documentsByCustomer.GetOrAdd(customerId, _ => []);
         lock (documents)
