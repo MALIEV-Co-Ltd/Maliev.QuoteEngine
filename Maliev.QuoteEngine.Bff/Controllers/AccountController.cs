@@ -98,7 +98,14 @@ public sealed class AccountController(
     [HttpGet("orders/{orderNumber}")]
     public async Task<IActionResult> GetOrderDetail(string orderNumber, CancellationToken cancellationToken)
     {
-        if (!sessionResolver.TryResolveCustomerId(out _)) return Unauthorized();
+        if (!sessionResolver.TryResolveCustomerId(out var customerId)) return Unauthorized();
+
+        var customerOrders = await orderClient.GetByCustomerAsync(customerId.ToString("D"), cancellationToken);
+        if (!customerOrders.Any(order => string.Equals(order.OrderNumber, orderNumber, StringComparison.OrdinalIgnoreCase)))
+        {
+            return NotFound();
+        }
+
         var detail = await orderClient.GetDetailAsync(orderNumber, cancellationToken);
         return detail is null ? NotFound() : Ok(detail);
     }

@@ -934,6 +934,7 @@ public sealed class QuoteEngineSourceTests
         var orders = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Orders.razor");
         var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "OrderDetail.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+        var accountController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "AccountController.cs");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
         Assert.Contains("href=\"/orders/@Uri.EscapeDataString(order.OrderNumber)\"", orders, StringComparison.Ordinal);
@@ -990,6 +991,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("GetOrderDetailAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("GetDocumentsAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/account/orders/{Uri.EscapeDataString(orderNumber)}", apiClient, StringComparison.Ordinal);
+        Assert.Contains("TryResolveCustomerId(out var customerId)", accountController, StringComparison.Ordinal);
+        Assert.Contains("GetByCustomerAsync(customerId.ToString(\"D\")", accountController, StringComparison.Ordinal);
+        Assert.Contains("string.Equals(order.OrderNumber, orderNumber, StringComparison.OrdinalIgnoreCase)", accountController, StringComparison.Ordinal);
+        Assert.Contains("return NotFound();", accountController, StringComparison.Ordinal);
 
         Assert.Contains(".order-detail-shell", styles, StringComparison.Ordinal);
         Assert.Contains(".order-progress-track", styles, StringComparison.Ordinal);

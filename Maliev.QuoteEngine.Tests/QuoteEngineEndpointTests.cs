@@ -1677,6 +1677,33 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Order_detail_is_scoped_to_signed_in_customer()
+    {
+        using var customerA = await CreateSignedInClientAsync("order-detail-owner@example.com");
+
+        var quoteResp = await customerA.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-order-owner", [], "Customer A order detail."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await customerA.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-OWNER", "Owner order detail."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        var ownerDetail = await customerA.GetAsync($"/quote/v1/account/orders/{Uri.EscapeDataString(order.OrderNumber)}");
+        ownerDetail.EnsureSuccessStatusCode();
+
+        using var customerB = await CreateSignedInClientAsync("order-detail-other@example.com");
+        var crossCustomerDetail = await customerB.GetAsync($"/quote/v1/account/orders/{Uri.EscapeDataString(order.OrderNumber)}");
+        Assert.Equal(HttpStatusCode.NotFound, crossCustomerDetail.StatusCode);
+    }
+
+    [Fact]
     public async Task Order_detail_returns_404_for_unknown_order_number()
     {
         using var client = await CreateSignedInClientAsync("order-detail-404@example.com");
