@@ -755,9 +755,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("\"/quotes/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("@inject QuoteEngineApiClient Api", layout, StringComparison.Ordinal);
         Assert.Contains("@if (_authStatus.IsSignedIn)", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("<NavLink href=\"/profile\"", layout, StringComparison.Ordinal);
+        Assert.Contains("<NavLink href=\"/quotes/new\"", layout, StringComparison.Ordinal);
+        Assert.Contains("Text(\"New quote\", \"ใบเสนอราคาใหม่\")", layout, StringComparison.Ordinal);
+        Assert.Contains("<NavLink href=\"/orders\"", layout, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Orders\", \"คำสั่งซื้อ\")", layout, StringComparison.Ordinal);
+        Assert.Contains("<NavLink href=\"/documents\"", layout, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Documents\", \"เอกสาร\")", layout, StringComparison.Ordinal);
+        Assert.Contains("<NavLink href=\"/profile\"", layout, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Account\", \"บัญชี\")", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("<NavLink href=\"/ndas\"", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("<NavLink href=\"/documents\"", layout, StringComparison.Ordinal);
         Assert.Contains("<a class=\"quote-signin-btn\" href=\"/auth/sign-in\">@Text(\"Sign in\"", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"billing-account-menu\"", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"billing-account-trigger\" aria-label=\"@Text(\"Customer account and billing\"", layout, StringComparison.Ordinal);

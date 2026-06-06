@@ -20,7 +20,10 @@
         <nav class="quote-topnav" aria-label="@Text("Customer quote navigation", "เมนูลูกค้าสำหรับใบเสนอราคา")">
             @if (_authStatus.IsSignedIn)
             {
+                <NavLink href="/quotes/new" Match="NavLinkMatch.Prefix">@Text("New quote", "ใบเสนอราคาใหม่")</NavLink>
                 <NavLink href="/orders" Match="NavLinkMatch.Prefix">@Text("Orders", "คำสั่งซื้อ")</NavLink>
+                <NavLink href="/documents" Match="NavLinkMatch.Prefix">@Text("Documents", "เอกสาร")</NavLink>
+                <NavLink href="/profile" Match="NavLinkMatch.Prefix">@Text("Account", "บัญชี")</NavLink>
             }
         </nav>
 
