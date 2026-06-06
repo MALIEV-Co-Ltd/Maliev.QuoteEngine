@@ -1565,6 +1565,40 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Account_documents_reject_unsafe_storage_paths_and_unknown_kinds()
+    {
+        using var owner = await CreateSignedInClientAsync("documents-validation@example.com");
+
+        var unsafePathResponse = await owner.PostAsJsonAsync("/quote/v1/account/documents", new CustomerDocumentUploadRequest
+        {
+            FileName = "po.pdf",
+            Kind = "PurchaseOrder",
+            StoragePath = "../private/po.pdf",
+            ContentType = "application/pdf",
+            FileSizeBytes = 42_000,
+            OrderNumber = "ORD-1001"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, unsafePathResponse.StatusCode);
+
+        var unknownKindResponse = await owner.PostAsJsonAsync("/quote/v1/account/documents", new CustomerDocumentUploadRequest
+        {
+            FileName = "callback.html",
+            Kind = "WebhookCallback",
+            StoragePath = "customer-documents/owner/callback.html",
+            ContentType = "text/html",
+            FileSizeBytes = 1_200,
+            OrderNumber = "ORD-1001"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, unknownKindResponse.StatusCode);
+
+        var documents = await owner.GetFromJsonAsync<CustomerDocumentDto[]>("/quote/v1/account/documents");
+        Assert.NotNull(documents);
+        Assert.DoesNotContain(documents, document => document.FileName == "po.pdf" || document.FileName == "callback.html");
+    }
+
+    [Fact]
     public async Task Address_google_config_is_available_for_signed_in_customer()
     {
         using var client = await CreateSignedInClientAsync("address-config@example.com");

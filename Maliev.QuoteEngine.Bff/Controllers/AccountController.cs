@@ -20,6 +20,27 @@ public sealed class AccountController(
     IOrderServiceClient orderClient,
     IHostEnvironment environment) : ControllerBase
 {
+    private static readonly HashSet<string> AllowedDocumentKinds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "PurchaseOrder",
+        "Invoice",
+        "Receipt",
+        "Requirement"
+    };
+
+    private static readonly HashSet<string> AllowedDocumentContentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+        "image/webp",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/octet-stream"
+    };
+
     [HttpGet("profile")]
     public async Task<IActionResult> GetProfile(CancellationToken cancellationToken)
     {
@@ -145,7 +166,61 @@ public sealed class AccountController(
             return ValidationProblem(ModelState);
         }
 
+        var validationProblem = ValidateDocumentUpload(request);
+        if (validationProblem is not null)
+        {
+            return validationProblem;
+        }
+
         return Ok(store.UploadDocument(customerId, request));
+    }
+
+    private BadRequestObjectResult? ValidateDocumentUpload(CustomerDocumentUploadRequest request)
+    {
+        if (!AllowedDocumentKinds.Contains(request.Kind.Trim()))
+        {
+            return BadRequest(AccountProblem(
+                "Unsupported document kind",
+                "Customer documents must be purchase orders, invoices, receipts, or requirements.",
+                StatusCodes.Status400BadRequest));
+        }
+
+        if (!IsSafeCustomerDocumentStoragePath(request.StoragePath))
+        {
+            return BadRequest(AccountProblem(
+                "Unsafe document storage path",
+                "Customer document storage paths must be relative paths under customer document storage.",
+                StatusCodes.Status400BadRequest));
+        }
+
+        if (!AllowedDocumentContentTypes.Contains(request.ContentType.Trim()))
+        {
+            return BadRequest(AccountProblem(
+                "Unsupported document content type",
+                "Customer documents must be PDF, image, Word, or Excel files.",
+                StatusCodes.Status400BadRequest));
+        }
+
+        return null;
+    }
+
+    private static bool IsSafeCustomerDocumentStoragePath(string storagePath)
+    {
+        if (string.IsNullOrWhiteSpace(storagePath))
+        {
+            return false;
+        }
+
+        var normalized = storagePath.Trim().Replace('\\', '/');
+        if (normalized.StartsWith("/", StringComparison.Ordinal)
+            || normalized.Contains("://", StringComparison.Ordinal)
+            || normalized.Split(['/'], StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or ".."))
+        {
+            return false;
+        }
+
+        return normalized.StartsWith("customer-documents/", StringComparison.OrdinalIgnoreCase)
+            || normalized.StartsWith("customers/", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool CanUsePrototypeAddressFallback(HttpResponseMessage response)
