@@ -227,6 +227,8 @@ public sealed class QuotePartDraftDto
     [MaxLength(80)]
     public string? Color { get; set; }
 
+    public Dictionary<string, string> ProcessOptionValues { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public bool HasThreadedHoles { get; set; }
 
     [MaxLength(80)]

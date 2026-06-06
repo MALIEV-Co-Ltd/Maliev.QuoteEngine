@@ -6036,6 +6036,25 @@ body.mud-blazor {
     margin-top: 8px;
 }
 
+.qe-pcs-options-stack {
+    display: grid;
+    gap: 10px;
+}
+
+.qe-pcs-option-row {
+    display: grid;
+    gap: 6px;
+}
+
+.qe-pcs-option-label {
+    color: var(--maliev-muted);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    font-weight: 500;
+    line-height: 1.3;
+    text-transform: uppercase;
+}
+
 .qe-pcs-tolerance-groups {
     display: grid;
     gap: 8px;
@@ -6104,6 +6123,41 @@ body.mud-blazor {
     height: 18px;
     border-radius: 999px;
     box-shadow: var(--maliev-shadow-ring);
+}
+
+.qe-pcs-color-chip--custom {
+    box-shadow: var(--maliev-shadow-ring), 0 0 0 2px color-mix(in oklch, var(--accent) 18%, transparent);
+}
+
+.qe-pcs-color-picker-row {
+    display: grid;
+    grid-template-columns: minmax(112px, 0.6fr) minmax(0, 1fr);
+    gap: 8px;
+    align-items: end;
+}
+
+.qe-pcs-native-color {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-small);
+    line-height: 1.3;
+}
+
+.qe-pcs-native-color input {
+    width: 100%;
+    height: 34px;
+    padding: 3px;
+    border: 0;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--maliev-panel);
+    box-shadow: var(--maliev-shadow-ring);
+    cursor: pointer;
+}
+
+.qe-pcs-color-reference {
+    min-width: 0;
 }
 
 .qe-pcs-tol-grid {

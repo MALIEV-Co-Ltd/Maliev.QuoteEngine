@@ -146,6 +146,95 @@
 
         </section>
 
+        @{
+            var finishColorOptions = FinishColorOptions.ToArray();
+        }
+        @if (finishColorOptions.Length > 0)
+        {
+            <section class="qe-pcs-section" data-config-section="finish-options">
+                <div class="qe-pcs-section-header">
+                    <span class="qe-pcs-section-title">@Text("Finish Options", "ตัวเลือกผิวสำเร็จ")</span>
+                    <span class="qe-pcs-section-count">@FormatOptionCount(finishColorOptions.Length)</span>
+                </div>
+                <div class="qe-pcs-options-stack">
+                    @foreach (var option in finishColorOptions)
+                    {
+                        <div class="qe-pcs-option-row">
+                            <span class="qe-pcs-option-label">@option.Label</span>
+                            @if (option.IsPaint)
+                            {
+                                var paintHex = GetProcessOptionValue(PaintColorHexKey, string.Empty);
+                                var paintReference = GetProcessOptionValue(PaintColorReferenceKey, string.Empty);
+                                var customPaintSelected = IsCustomPaintColorSelected(paintHex, paintReference);
+                                <div class="qe-pcs-color-choice-grid">
+                                    @foreach (var paint in StandardPaintColors)
+                                    {
+                                        var active = IsPaintColorSelected(paint, paintHex, paintReference);
+                                        <button type="button"
+                                                class="qe-pcs-color-choice @(active ? "qe-pcs-color-choice--active" : "")"
+                                                @onclick="@(() => SetStandardPaintColor(paint))">
+                                            <span class="qe-pcs-color-chip" style="background:@paint.Hex"></span>
+                                            <span>@paint.Name</span>
+                                            @if (active)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                            }
+                                        </button>
+                                    }
+                                    <button type="button"
+                                            class="qe-pcs-color-choice @(customPaintSelected ? "qe-pcs-color-choice--active" : "")"
+                                            @onclick="SelectCustomPaintColor">
+                                        <span class="qe-pcs-color-chip qe-pcs-color-chip--custom" style="background:@GetProcessOptionValue(PaintColorHexKey, "#111111")"></span>
+                                        <span>@Text("Custom", "กำหนดเอง")</span>
+                                        @if (customPaintSelected)
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                        }
+                                    </button>
+                                </div>
+                                @if (customPaintSelected)
+                                {
+                                    <div class="qe-pcs-color-picker-row">
+                                        <label class="qe-pcs-native-color">
+                                            <span>@Text("Custom color", "สีที่กำหนดเอง")</span>
+                                            <input type="color"
+                                                   value="@GetProcessOptionValue(PaintColorHexKey, "#111111")"
+                                                   @onchange="SetCustomPaintColorHex" />
+                                        </label>
+                                        <label class="qe-field qe-pcs-color-reference">
+                                            @Text("Color name/code", "ชื่อหรือรหัสสี")
+                                            <input value="@paintReference"
+                                                   placeholder="RAL 9005, Pantone Black C"
+                                                   @oninput="SetCustomPaintColorReference" />
+                                        </label>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div class="qe-pcs-color-choice-grid">
+                                    @foreach (var color in option.Choices)
+                                    {
+                                        var active = string.Equals(GetProcessOptionValue(option.ConfigKey, option.DefaultValue), color, StringComparison.OrdinalIgnoreCase);
+                                        <button type="button"
+                                                class="qe-pcs-color-choice @(active ? "qe-pcs-color-choice--active" : "")"
+                                                @onclick="@(() => SetProcessOptionValue(option.ConfigKey, color))">
+                                            <span class="qe-pcs-color-chip" style="background:@FinishOptionColorSwatch(color)"></span>
+                                            <span>@FormatOptionLabel(color)</span>
+                                            @if (active)
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                            }
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
         <section class="qe-pcs-section" data-config-section="tolerance">
             @{
                 var tolerances = TolerancesFor(Part.ProcessId).ToArray();
@@ -406,8 +495,23 @@
 </aside>
 
 @code {
+    private const string PaintColorKey = "paint_color";
+    private const string PaintColorHexKey = "paint_color_hex";
+    private const string PaintColorReferenceKey = "paint_color_reference";
+    private const string AnodizeColorKey = "anodize_color";
+
     private static readonly int[] QuantityPresets = [1, 5, 10, 25, 50];
     private static readonly string[] InsertOptions = ["HeatSet", "PressFit", "Ultrasonic"];
+    private static readonly PaintColorOption[] StandardPaintColors =
+    [
+        new("Black", "#111111", "RAL 9005"),
+        new("White", "#f5f5f5", "RAL 9016"),
+        new("Light Gray", "#b8bfcc", "RAL 7035"),
+        new("Red", "#c62828", "RAL 3020"),
+        new("Blue", "#1565c0", "RAL 5015"),
+        new("Green", "#2e7d32", "RAL 6002")
+    ];
+
     private static readonly System.Text.RegularExpressions.Regex _threadSpecRegex =
         new(@"^(M\d+(\.\d+)?([xX]\d+(\.\d+)?)?|#\d+-\d+|\d+/\d+-\d+)$",
             System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -453,6 +557,30 @@
 
     private IEnumerable<ColorOptionDto> MaterialColorOptions => ColorsFor(Part.MaterialId);
 
+    private IEnumerable<FinishColorOption> FinishColorOptions
+    {
+        get
+        {
+            var normalized = NormalizeOptionText($"{Part.FinishId} {Part.FinishCode}");
+            if (normalized.Contains("paint", StringComparison.Ordinal)
+                || normalized.Contains("powder", StringComparison.Ordinal)
+                || normalized.Contains("coat", StringComparison.Ordinal))
+            {
+                yield return new FinishColorOption(PaintColorKey, Text("Paint color", "สีพ่น"), true, [], string.Empty);
+            }
+
+            if (normalized.Contains("anod", StringComparison.Ordinal))
+            {
+                yield return new FinishColorOption(
+                    AnodizeColorKey,
+                    Text("Anodize color", "สีอโนไดซ์"),
+                    false,
+                    ["Clear", "Black", "Blue", "Red", "Green"],
+                    "Clear");
+            }
+        }
+    }
+
     private async Task SetProcess(ProcessOptionDto process)
     {
         Part.ProcessId = process.Id;
@@ -481,6 +609,7 @@
     {
         Part.FinishId = finish?.Id;
         Part.FinishCode = finish?.Code;
+        ApplyFinishOptionDefaults();
         await NotifyChanged();
     }
 
@@ -507,6 +636,62 @@
     {
         Part.Color = color;
         await NotifyChanged();
+    }
+
+    private async Task SetStandardPaintColor(PaintColorOption paint)
+    {
+        await SetProcessOptionValue(PaintColorHexKey, paint.Hex, notify: false);
+        await SetProcessOptionValue(PaintColorReferenceKey, paint.Reference, notify: false);
+        await SetProcessOptionValue(PaintColorKey, paint.Reference);
+    }
+
+    private async Task SelectCustomPaintColor()
+    {
+        var currentHex = GetProcessOptionValue(PaintColorHexKey, "#111111");
+        var currentReference = GetProcessOptionValue(PaintColorReferenceKey, string.Empty);
+        if (StandardPaintColors.Any(paint => IsPaintColorSelected(paint, currentHex, currentReference)))
+        {
+            currentReference = string.Empty;
+        }
+
+        await SetProcessOptionValue(PaintColorHexKey, currentHex, notify: false);
+        await SetProcessOptionValue(PaintColorReferenceKey, currentReference, notify: false);
+        await SetProcessOptionValue(PaintColorKey, string.IsNullOrWhiteSpace(currentReference) ? currentHex : currentReference);
+    }
+
+    private async Task SetCustomPaintColorHex(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString();
+        await SetProcessOptionValue(PaintColorHexKey, value, notify: false);
+        await SetProcessOptionValue(PaintColorKey, string.IsNullOrWhiteSpace(GetProcessOptionValue(PaintColorReferenceKey, string.Empty))
+            ? value
+            : GetProcessOptionValue(PaintColorReferenceKey, string.Empty));
+    }
+
+    private async Task SetCustomPaintColorReference(ChangeEventArgs args)
+    {
+        var value = args.Value?.ToString();
+        await SetProcessOptionValue(PaintColorReferenceKey, value, notify: false);
+        await SetProcessOptionValue(PaintColorKey, string.IsNullOrWhiteSpace(value)
+            ? GetProcessOptionValue(PaintColorHexKey, "#111111")
+            : value);
+    }
+
+    private async Task SetProcessOptionValue(string key, string? value, bool notify = true)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            Part.ProcessOptionValues.Remove(key);
+        }
+        else
+        {
+            Part.ProcessOptionValues[key] = value.Trim();
+        }
+
+        if (notify)
+        {
+            await NotifyChanged();
+        }
     }
 
     private async Task ToggleThreadedHoles()
@@ -620,6 +805,7 @@
         Part.InspectionLevel = ReferenceData?.InspectionLevels.FirstOrDefault()?.Code ?? "STANDARD";
         Part.RoughnessCode = RoughnessFor(Part.ProcessId).FirstOrDefault()?.Code;
         Part.Color = ColorsFor(Part.MaterialId).FirstOrDefault()?.Code;
+        ApplyFinishOptionDefaults();
     }
 
     private async Task NotifyChanged()
@@ -655,6 +841,60 @@
         "cnc" => "ISO 2768",
         "sla" => Text("Resin print standard", "มาตรฐานงานพิมพ์เรซิน"),
         _ => Text("Manufacturing standard", "มาตรฐานการผลิต")
+    };
+
+    private void ApplyFinishOptionDefaults()
+    {
+        var options = FinishColorOptions.ToArray();
+        if (!options.Any(option => option.IsPaint))
+        {
+            Part.ProcessOptionValues.Remove(PaintColorKey);
+            Part.ProcessOptionValues.Remove(PaintColorHexKey);
+            Part.ProcessOptionValues.Remove(PaintColorReferenceKey);
+        }
+        else if (!Part.ProcessOptionValues.ContainsKey(PaintColorKey))
+        {
+            var paint = StandardPaintColors[0];
+            Part.ProcessOptionValues[PaintColorHexKey] = paint.Hex;
+            Part.ProcessOptionValues[PaintColorReferenceKey] = paint.Reference;
+            Part.ProcessOptionValues[PaintColorKey] = paint.Reference;
+        }
+
+        var anodizeOption = options.FirstOrDefault(option =>
+            string.Equals(option.ConfigKey, AnodizeColorKey, StringComparison.OrdinalIgnoreCase));
+        if (anodizeOption is null)
+        {
+            Part.ProcessOptionValues.Remove(AnodizeColorKey);
+        }
+        else if (!Part.ProcessOptionValues.ContainsKey(AnodizeColorKey))
+        {
+            Part.ProcessOptionValues[AnodizeColorKey] = anodizeOption.DefaultValue;
+        }
+    }
+
+    private string GetProcessOptionValue(string key, string defaultValue) =>
+        Part.ProcessOptionValues.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : defaultValue;
+
+    private static bool IsPaintColorSelected(PaintColorOption paint, string? paintHex, string? paintReference) =>
+        string.Equals(paint.Hex, paintHex, StringComparison.OrdinalIgnoreCase)
+        || string.Equals(paint.Reference, paintReference, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsCustomPaintColorSelected(string? paintHex, string? paintReference) =>
+        !string.IsNullOrWhiteSpace(paintHex)
+        && !StandardPaintColors.Any(paint => IsPaintColorSelected(paint, paintHex, paintReference));
+
+    private string FormatOptionLabel(string value) => value.Replace('_', ' ');
+
+    private static string FinishOptionColorSwatch(string value) => NormalizeOptionText(value) switch
+    {
+        "black" => "#111111",
+        "blue" => "#1565c0",
+        "red" => "#c62828",
+        "green" => "#2e7d32",
+        "clear" => "linear-gradient(135deg, #f8fafc, #cfd8dc)",
+        _ => "linear-gradient(135deg, #fafafa 0%, #ebebeb 100%)"
     };
 
     private static string GetRoughnessImageUrl(string code) =>
@@ -738,4 +978,13 @@
         "matte" => "repeating-linear-gradient(0deg, #d4d8e0, #d4d8e0 2px, #c4c8d0 2px, #c4c8d0 3px)",
         _ => "linear-gradient(135deg, #e8ecf2, #c0c6d0)"
     };
+
+    private sealed record PaintColorOption(string Name, string Hex, string Reference);
+
+    private sealed record FinishColorOption(
+        string ConfigKey,
+        string Label,
+        bool IsPaint,
+        IReadOnlyList<string> Choices,
+        string DefaultValue);
 }

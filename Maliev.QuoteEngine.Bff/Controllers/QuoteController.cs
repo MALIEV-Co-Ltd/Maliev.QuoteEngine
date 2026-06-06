@@ -438,6 +438,13 @@ public sealed class QuoteController(
         if (!string.IsNullOrWhiteSpace(part.ToleranceCode)) notes.Add($"tolerance {part.ToleranceCode}");
         if (!string.IsNullOrWhiteSpace(part.InspectionLevel)) notes.Add($"inspection {part.InspectionLevel}");
         if (!string.IsNullOrWhiteSpace(part.RoughnessCode)) notes.Add($"roughness {part.RoughnessCode}");
+        if (part.ProcessOptionValues.Count > 0)
+        {
+            notes.Add("process options " + string.Join(", ", part.ProcessOptionValues
+                .OrderBy(option => option.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(option => $"{option.Key}={option.Value}")));
+        }
+
         if (part.HasThreadedHoles || part.ThreadedHoleCount > 0) notes.Add($"threaded holes {Math.Max(part.ThreadedHoleCount, 1)}");
         if (!string.IsNullOrWhiteSpace(part.InsertType) && !part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase))
         {

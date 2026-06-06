@@ -659,6 +659,7 @@ public sealed class QuoteEnginePrototypeStore
             InspectionLevel = source.InspectionLevel,
             RoughnessCode = source.RoughnessCode,
             Color = source.Color,
+            ProcessOptionValues = new(source.ProcessOptionValues, StringComparer.OrdinalIgnoreCase),
             HasThreadedHoles = source.HasThreadedHoles,
             ThreadSpecification = source.ThreadSpecification,
             ThreadedHoleCount = source.ThreadedHoleCount,

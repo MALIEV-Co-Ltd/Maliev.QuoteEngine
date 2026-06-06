@@ -1005,6 +1005,7 @@
             InspectionLevel = part.InspectionLevel,
             RoughnessCode = part.RoughnessCode,
             Color = part.Color,
+            ProcessOptionValues = new(part.ProcessOptionValues, StringComparer.OrdinalIgnoreCase),
             HasThreadedHoles = part.HasThreadedHoles,
             ThreadSpecification = part.ThreadSpecification,
             ThreadedHoleCount = part.ThreadedHoleCount,

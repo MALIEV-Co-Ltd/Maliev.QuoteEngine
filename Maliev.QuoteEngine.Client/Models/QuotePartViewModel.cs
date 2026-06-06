@@ -23,6 +23,7 @@ public sealed class QuotePartViewModel
     public string? InspectionLevel { get; set; } = "STANDARD";
     public string? RoughnessCode { get; set; }
     public string? Color { get; set; }
+    public Dictionary<string, string> ProcessOptionValues { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public bool HasThreadedHoles { get; set; }
     public string? ThreadSpecification { get; set; }
     public int ThreadedHoleCount { get; set; }
@@ -73,6 +74,7 @@ public sealed class QuotePartViewModel
         InspectionLevel = InspectionLevel,
         RoughnessCode = RoughnessCode,
         Color = Color,
+        ProcessOptionValues = new(ProcessOptionValues, StringComparer.OrdinalIgnoreCase),
         HasThreadedHoles = HasThreadedHoles,
         ThreadSpecification = ThreadSpecification,
         ThreadedHoleCount = ThreadedHoleCount,

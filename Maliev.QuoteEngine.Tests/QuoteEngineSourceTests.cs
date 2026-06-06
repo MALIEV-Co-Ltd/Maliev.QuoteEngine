@@ -357,6 +357,11 @@ public sealed class QuoteEngineSourceTests
             InspectionLevel = "Standard",
             RoughnessCode = "RA_1_6",
             Color = "Natural",
+            ProcessOptionValues =
+            {
+                ["paint_color_hex"] = "#111111",
+                ["paint_color_reference"] = "RAL 9005"
+            },
             HasThreadedHoles = true,
             ThreadSpecification = "M3x0.5",
             ThreadedHoleCount = 4,
@@ -391,6 +396,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Equal("Standard", deserialized.InspectionLevel);
         Assert.Equal("RA_1_6", deserialized.RoughnessCode);
         Assert.Equal("Natural", deserialized.Color);
+        Assert.Equal("#111111", deserialized.ProcessOptionValues["paint_color_hex"]);
+        Assert.Equal("RAL 9005", deserialized.ProcessOptionValues["paint_color_reference"]);
         Assert.True(deserialized.HasThreadedHoles);
         Assert.Equal("M3x0.5", deserialized.ThreadSpecification);
         Assert.Equal(4, deserialized.ThreadedHoleCount);
@@ -405,6 +412,7 @@ public sealed class QuoteEngineSourceTests
         Assert.False(deserialized.ViewerSettings.GridEnabled);
         Assert.True(deserialized.ViewerSettings.DfmOverlayEnabled);
         Assert.Contains("\"finishId\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"processOptionValues\"", json, StringComparison.Ordinal);
         Assert.Contains("\"selectedBodyIndex\"", json, StringComparison.Ordinal);
         Assert.Contains("\"drawingFiles\"", json, StringComparison.Ordinal);
     }
@@ -420,6 +428,11 @@ public sealed class QuoteEngineSourceTests
             FileName = "local-bracket.stl",
             ProcessId = "cnc",
             MaterialId = "al6061",
+            ProcessOptionValues =
+            {
+                ["paint_color_hex"] = "#f5f5f5",
+                ["paint_color_reference"] = "RAL 9016"
+            },
             Quantity = 1,
             VolumeCc = 27.122m,
             SurfaceAreaCm2 = 84.5m,
@@ -468,6 +481,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Equal(1, root.GetProperty("cncReport").GetProperty("sharpCornerCount").GetInt32());
         Assert.Equal("LOCAL_SHARP_CORNER", root.GetProperty("cncReport").GetProperty("issues")[0].GetProperty("code").GetString());
         Assert.Equal("blob:https://quote.local/overlay", root.GetProperty("overlayGlbUrls")[0].GetString());
+        Assert.Equal("RAL 9016", root.GetProperty("processOptionValues").GetProperty("paint_color_reference").GetString());
     }
 
 
@@ -1605,6 +1619,36 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains(".qe-pcs-roughness-card", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pcs-roughness-card .qe-pcs-choice-swatch", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QeConfigSidebar_uses_ProjectNew_finish_options_contract()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var viewModel = ReadRepoFile("Maliev.QuoteEngine.Client", "Models", "QuotePartViewModel.cs");
+        var dto = ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs");
+        var store = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteEnginePrototypeStore.cs");
+        var controller = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "QuoteController.cs");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+
+        Assert.Contains("data-config-section=\"finish-options\"", src, StringComparison.Ordinal);
+        Assert.Contains("FinishColorOptions", src, StringComparison.Ordinal);
+        Assert.Contains("StandardPaintColors", src, StringComparison.Ordinal);
+        Assert.Contains("SetStandardPaintColor", src, StringComparison.Ordinal);
+        Assert.Contains("SetCustomPaintColorReference", src, StringComparison.Ordinal);
+        Assert.Contains("SetProcessOptionValue", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-options-stack\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-native-color\"", src, StringComparison.Ordinal);
+
+        Assert.Contains("Dictionary<string, string> ProcessOptionValues", dto, StringComparison.Ordinal);
+        Assert.Contains("ProcessOptionValues = new(ProcessOptionValues", viewModel, StringComparison.Ordinal);
+        Assert.Contains("ProcessOptionValues = new(part.ProcessOptionValues", workspace, StringComparison.Ordinal);
+        Assert.Contains("ProcessOptionValues = new(source.ProcessOptionValues", store, StringComparison.Ordinal);
+        Assert.Contains("process options", controller, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-pcs-options-stack", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-native-color", styles, StringComparison.Ordinal);
     }
 
     [Fact]
