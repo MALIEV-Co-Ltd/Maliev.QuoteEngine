@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Chatbot;
@@ -173,6 +174,30 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     public Task<CustomerDocumentDto> UploadDocumentAsync(CustomerDocumentUploadRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<CustomerDocumentUploadRequest, CustomerDocumentDto>("quote/v1/account/documents", request, cancellationToken);
+    }
+
+    public async Task<CustomerDocumentDto> UploadDocumentFileAsync(
+        IBrowserFile file,
+        string kind,
+        string? orderNumber,
+        CancellationToken cancellationToken = default)
+    {
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent(string.IsNullOrWhiteSpace(kind) ? "PurchaseOrder" : kind), "Kind");
+        if (!string.IsNullOrWhiteSpace(orderNumber))
+        {
+            content.Add(new StringContent(orderNumber.Trim()), "OrderNumber");
+        }
+
+        var streamContent = new StreamContent(file.OpenReadStream(50_000_000, cancellationToken));
+        streamContent.Headers.ContentType = MediaTypeHeaderValue.Parse(
+            string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType);
+        content.Add(streamContent, "File", file.Name);
+
+        using var response = await httpClient.PostAsync("quote/v1/account/documents/upload", content, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<CustomerDocumentDto>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("The QuoteEngine API returned an empty document upload response.");
     }
 
     public async Task<CustomerDocumentDownloadResponse> GetDocumentDownloadAsync(Guid documentId, CancellationToken cancellationToken = default)

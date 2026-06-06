@@ -99,6 +99,15 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
     {
         public IReadOnlyDictionary<string, string>? LastMetadataTags { get; private set; }
+        public string? LastInitiatedFileName { get; private set; }
+        public string? LastInitiatedContentType { get; private set; }
+        public long LastInitiatedTotalSize { get; private set; }
+        public string? LastInitiatedStoragePath { get; private set; }
+        public string? LastStreamedContentRange { get; private set; }
+        public string? LastStreamedUploadId { get; private set; }
+        public string? LastStreamedStoragePath { get; private set; }
+        public long LastStreamedContentLength { get; private set; }
+        public byte[] LastStreamedBytes { get; private set; } = [];
 
         public override Task<string> InitiateResumableUploadAsync(
             string fileName,
@@ -108,8 +117,30 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             IReadOnlyDictionary<string, string>? metadataTags,
             CancellationToken ct)
         {
+            LastInitiatedFileName = fileName;
+            LastInitiatedContentType = contentType;
+            LastInitiatedTotalSize = totalSize;
+            LastInitiatedStoragePath = storagePath;
             LastMetadataTags = metadataTags;
-            return Task.FromResult($"downstream-{Guid.NewGuid():N}");
+            return Task.FromResult("downstream-document-upload");
+        }
+
+        public override async Task StreamUploadAsync(
+            Stream body,
+            string contentType,
+            long contentLength,
+            string contentRange,
+            string downstreamUploadId,
+            string storagePath,
+            CancellationToken ct)
+        {
+            LastStreamedContentRange = contentRange;
+            LastStreamedUploadId = downstreamUploadId;
+            LastStreamedStoragePath = storagePath;
+            LastStreamedContentLength = contentLength;
+            using var memory = new MemoryStream();
+            await body.CopyToAsync(memory, ct);
+            LastStreamedBytes = memory.ToArray();
         }
     }
 
@@ -1631,6 +1662,49 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Account_documents_upload_streams_file_bytes_to_upload_service()
+    {
+        var recordingUploadClient = new QuoteEngineWebApplicationFactory.RecordingQuoteUploadServiceClient();
+        using var client = await CreateSignedInClientAsync(
+            "documents-file-upload@example.com",
+            services =>
+            {
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(recordingUploadClient);
+            });
+
+        using var content = new MultipartFormDataContent();
+        content.Add(new StringContent("PurchaseOrder"), "Kind");
+        content.Add(new StringContent("ORD-PO-UPLOAD"), "OrderNumber");
+        content.Add(
+            new ByteArrayContent("signed purchase order"u8.ToArray())
+            {
+                Headers = { ContentType = MediaTypeHeaderValue.Parse("application/pdf") }
+            },
+            "File",
+            "po-upload.pdf");
+
+        var response = await client.PostAsync("/quote/v1/account/documents/upload", content);
+
+        response.EnsureSuccessStatusCode();
+        var uploaded = await response.Content.ReadFromJsonAsync<CustomerDocumentDto>();
+        Assert.NotNull(uploaded);
+        Assert.Equal("PurchaseOrder", uploaded.Kind);
+        Assert.Equal("po-upload.pdf", uploaded.FileName);
+        Assert.Equal("ORD-PO-UPLOAD", uploaded.OrderNumber);
+        Assert.StartsWith("customer-documents/", uploaded.StoragePath, StringComparison.Ordinal);
+        Assert.Equal("po-upload.pdf", recordingUploadClient.LastInitiatedFileName);
+        Assert.Equal("application/pdf", recordingUploadClient.LastInitiatedContentType);
+        Assert.Equal("customer-document", recordingUploadClient.LastMetadataTags!["quoteEngine.documentRole"]);
+        Assert.Equal("PurchaseOrder", recordingUploadClient.LastMetadataTags["quoteEngine.documentKind"]);
+        Assert.Equal("ORD-PO-UPLOAD", recordingUploadClient.LastMetadataTags["quoteEngine.orderNumber"]);
+        Assert.Equal("bytes 0-20/21", recordingUploadClient.LastStreamedContentRange);
+        Assert.Equal("downstream-document-upload", recordingUploadClient.LastStreamedUploadId);
+        Assert.Equal(uploaded.StoragePath, recordingUploadClient.LastStreamedStoragePath);
+        Assert.Equal("signed purchase order"u8.ToArray(), recordingUploadClient.LastStreamedBytes);
+    }
+
+    [Fact]
     public async Task Address_google_config_is_available_for_signed_in_customer()
     {
         using var client = await CreateSignedInClientAsync("address-config@example.com");
@@ -2011,6 +2085,18 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     private async Task<HttpClient> CreateSignedInClientAsync(string email = "customer@example.com")
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(email)}");
+        signIn.EnsureSuccessStatusCode();
+        return client;
+    }
+
+    private async Task<HttpClient> CreateSignedInClientAsync(
+        string email,
+        Action<IServiceCollection> configureServices)
+    {
+        var scopedFactory = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(configureServices));
+        var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
         var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(email)}");
         signIn.EnsureSuccessStatusCode();
         return client;

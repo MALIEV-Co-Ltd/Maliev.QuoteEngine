@@ -1079,10 +1079,9 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("InputFile", documents, StringComparison.Ordinal);
         Assert.Contains("@inject NavigationManager Navigation", documents, StringComparison.Ordinal);
-        Assert.Contains("CustomerDocumentUploadRequest", documents, StringComparison.Ordinal);
         Assert.Contains("UploadDocumentAsync", documents, StringComparison.Ordinal);
+        Assert.Contains("UploadDocumentFileAsync(file, _selectedKind, NormalizeOrderNumber(_orderNumber))", documents, StringComparison.Ordinal);
         Assert.Contains("ApplyDocumentRouteContext", documents, StringComparison.Ordinal);
-        Assert.Contains("OrderNumber = NormalizeOrderNumber(_orderNumber)", documents, StringComparison.Ordinal);
         Assert.Contains("VisibleDocuments", documents, StringComparison.Ordinal);
         Assert.Contains("HasOrderContext", documents, StringComparison.Ordinal);
         Assert.Contains("ClearOrderContext", documents, StringComparison.Ordinal);
@@ -1109,10 +1108,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"documents-order-field\"", documents, StringComparison.Ordinal);
 
         Assert.Contains("UploadDocumentAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("UploadDocumentFileAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("MultipartFormDataContent", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/account/documents/upload", apiClient, StringComparison.Ordinal);
         Assert.Contains("GetDocumentDownloadAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/account/documents/{documentId:D}/download", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/account/documents", apiClient, StringComparison.Ordinal);
         Assert.Contains("[HttpPost(\"documents\")]", accountController, StringComparison.Ordinal);
+        Assert.Contains("[HttpPost(\"documents/upload\")]", accountController, StringComparison.Ordinal);
+        Assert.Contains("InitiateResumableUploadAsync", accountController, StringComparison.Ordinal);
+        Assert.Contains("StreamUploadAsync", accountController, StringComparison.Ordinal);
         Assert.Contains("[HttpGet(\"documents/{documentId:guid}/download\")]", accountController, StringComparison.Ordinal);
         Assert.Contains("GetDownloadUrlByPathAsync", accountController, StringComparison.Ordinal);
         Assert.Contains("UploadDocument(customerId", accountController, StringComparison.Ordinal);

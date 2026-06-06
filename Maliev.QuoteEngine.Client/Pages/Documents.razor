@@ -150,17 +150,7 @@
     private async Task UploadDocumentAsync(InputFileChangeEventArgs args)
     {
         var file = args.File;
-        var request = new CustomerDocumentUploadRequest
-        {
-            FileName = file.Name,
-            Kind = _selectedKind,
-            StoragePath = $"customer-documents/{Guid.NewGuid():N}/{Uri.EscapeDataString(file.Name)}",
-            ContentType = string.IsNullOrWhiteSpace(file.ContentType) ? "application/octet-stream" : file.ContentType,
-            FileSizeBytes = file.Size,
-            OrderNumber = NormalizeOrderNumber(_orderNumber)
-        };
-
-        var uploaded = await Api.UploadDocumentAsync(request);
+        var uploaded = await Api.UploadDocumentFileAsync(file, _selectedKind, NormalizeOrderNumber(_orderNumber));
         _documents = [uploaded, .. _documents];
         _status = Text("Document uploaded.", "อัปโหลดเอกสารแล้ว");
     }

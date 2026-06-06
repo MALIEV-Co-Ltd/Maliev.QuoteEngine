@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using System.ComponentModel.DataAnnotations;
 using Asp.Versioning;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
@@ -176,6 +177,75 @@ public sealed class AccountController(
         return Ok(store.UploadDocument(customerId, request));
     }
 
+    [HttpPost("documents/upload")]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(52_000_000)]
+    public async Task<IActionResult> UploadDocumentFile(
+        [FromForm] CustomerDocumentFileUploadRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        if (!ModelState.IsValid || request.File is null)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var fileName = NormalizeDocumentFileName(request.File.FileName);
+        var contentType = string.IsNullOrWhiteSpace(request.File.ContentType)
+            ? "application/octet-stream"
+            : request.File.ContentType.Trim();
+        var storagePath = $"customer-documents/{customerId:N}/{Guid.NewGuid():N}/{Uri.EscapeDataString(fileName)}";
+        var uploadRequest = new CustomerDocumentUploadRequest
+        {
+            FileName = fileName,
+            Kind = request.Kind,
+            StoragePath = storagePath,
+            ContentType = contentType,
+            FileSizeBytes = request.File.Length,
+            OrderNumber = string.IsNullOrWhiteSpace(request.OrderNumber) ? null : request.OrderNumber.Trim()
+        };
+
+        var validationProblem = ValidateDocumentUpload(uploadRequest);
+        if (validationProblem is not null)
+        {
+            return validationProblem;
+        }
+
+        var metadataTags = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["quoteEngine.documentRole"] = "customer-document",
+            ["quoteEngine.documentKind"] = uploadRequest.Kind.Trim()
+        };
+        if (!string.IsNullOrWhiteSpace(uploadRequest.OrderNumber))
+        {
+            metadataTags["quoteEngine.orderNumber"] = uploadRequest.OrderNumber;
+        }
+
+        var downstreamUploadId = await uploadClient.InitiateResumableUploadAsync(
+            uploadRequest.FileName,
+            uploadRequest.ContentType,
+            uploadRequest.FileSizeBytes,
+            uploadRequest.StoragePath,
+            metadataTags,
+            cancellationToken);
+
+        await using var stream = request.File.OpenReadStream();
+        await uploadClient.StreamUploadAsync(
+            stream,
+            uploadRequest.ContentType,
+            uploadRequest.FileSizeBytes,
+            $"bytes 0-{uploadRequest.FileSizeBytes - 1}/{uploadRequest.FileSizeBytes}",
+            downstreamUploadId,
+            uploadRequest.StoragePath,
+            cancellationToken);
+
+        return Ok(store.UploadDocument(customerId, uploadRequest));
+    }
+
     [HttpGet("documents/{documentId:guid}/download")]
     public async Task<IActionResult> DownloadDocument(Guid documentId, CancellationToken cancellationToken)
     {
@@ -247,6 +317,12 @@ public sealed class AccountController(
 
         return normalized.StartsWith("customer-documents/", StringComparison.OrdinalIgnoreCase)
             || normalized.StartsWith("customers/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeDocumentFileName(string fileName)
+    {
+        var normalized = Path.GetFileName(fileName);
+        return string.IsNullOrWhiteSpace(normalized) ? "customer-document" : normalized.Trim();
     }
 
     private bool CanUsePrototypeAddressFallback(HttpResponseMessage response)
@@ -405,4 +481,17 @@ public sealed class AccountController(
 
         return null;
     }
+}
+
+public sealed class CustomerDocumentFileUploadRequest
+{
+    [Required]
+    public IFormFile? File { get; set; }
+
+    [Required]
+    [MaxLength(80)]
+    public string Kind { get; set; } = "PurchaseOrder";
+
+    [MaxLength(80)]
+    public string? OrderNumber { get; set; }
 }
