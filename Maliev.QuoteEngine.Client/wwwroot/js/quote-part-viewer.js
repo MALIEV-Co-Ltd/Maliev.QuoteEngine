@@ -135,17 +135,92 @@ const CONFIG = {
         alpha: 1.0,       // Fully opaque
     },
 
-    /** Realistic PBR material presets mirrored from Project New for customer-visible clear materials. */
+    /** Realistic PBR material presets mirrored from Project New for customer-visible manufactured materials. */
     MATERIAL_REALISTIC: {
         'aluminum': {
             albedoColor: { r: 0.82, g: 0.82, b: 0.80 },
             metallic: 0.95,
             roughness: 0.34,
         },
+        'steel': {
+            albedoColor: { r: 0.58, g: 0.59, b: 0.58 },
+            metallic: 0.98,
+            roughness: 0.27,
+        },
+        'stainless-steel': {
+            albedoColor: { r: 0.72, g: 0.73, b: 0.70 },
+            metallic: 0.98,
+            roughness: 0.24,
+        },
+        'black-pom': {
+            albedoColor: { r: 0.06, g: 0.06, b: 0.06 },
+            metallic: 0.0,
+            roughness: 0.30,
+        },
+        'white-pom': {
+            albedoColor: { r: 0.96, g: 0.95, b: 0.94 },
+            metallic: 0.0,
+            roughness: 0.32,
+        },
+        'blue-pom': {
+            albedoColor: { r: 0.08, g: 0.28, b: 0.62 },
+            metallic: 0.0,
+            roughness: 0.34,
+        },
+        'brass': {
+            albedoColor: { r: 0.85, g: 0.70, b: 0.30 },
+            metallic: 0.95,
+            roughness: 0.28,
+        },
+        'copper': {
+            albedoColor: { r: 0.84, g: 0.42, b: 0.30 },
+            metallic: 0.95,
+            roughness: 0.30,
+        },
+        'bronze': {
+            albedoColor: { r: 0.67, g: 0.45, b: 0.22 },
+            metallic: 0.92,
+            roughness: 0.35,
+        },
+        'titanium': {
+            albedoColor: { r: 0.55, g: 0.53, b: 0.50 },
+            metallic: 0.85,
+            roughness: 0.18,
+        },
         'pla': {
             albedoColor: { r: 0.85, g: 0.85, b: 0.80 },
             metallic: 0.0,
             roughness: 0.34,
+        },
+        'abs': {
+            albedoColor: { r: 0.80, g: 0.80, b: 0.78 },
+            metallic: 0.0,
+            roughness: 0.42,
+        },
+        'petg': {
+            albedoColor: { r: 0.88, g: 0.87, b: 0.84 },
+            metallic: 0.0,
+            roughness: 0.40,
+        },
+        'nylon': {
+            albedoColor: { r: 0.92, g: 0.90, b: 0.86 },
+            metallic: 0.0,
+            roughness: 0.52,
+        },
+        'nylon-powder': {
+            albedoColor: { r: 0.56, g: 0.57, b: 0.55 },
+            metallic: 0.0,
+            roughness: 0.84,
+        },
+        'peek': {
+            albedoColor: { r: 0.64, g: 0.53, b: 0.38 },
+            metallic: 0.0,
+            roughness: 0.48,
+        },
+        'carbon-fiber': {
+            albedoColor: { r: 0.12, g: 0.12, b: 0.13 },
+            metallic: 0.0,
+            roughness: 0.72,
         },
         'resin': {
             albedoColor: { r: 0.78, g: 0.78, b: 0.78 },
@@ -2942,9 +3017,27 @@ function resolveRealisticMaterialKey(processId, materialId, finishCode) {
     const finishKey = normalizeMaterialToken(finishCode);
     const processKey = normalizeMaterialToken(processId);
 
+    if (materialKey.includes('pom') || materialKey.includes('delrin') || materialKey.includes('acetal')) {
+        if (materialKey.includes('blue')) return 'blue-pom';
+        if (materialKey.includes('black')) return 'black-pom';
+        return 'white-pom';
+    }
+
     if (materialKey.includes('petg') && materialKey.includes('clear')) return 'petg-clear';
-    if ((materialKey.includes('acrylic') || materialKey.includes('pmma')) && materialKey.includes('clear')) return 'acrylic-clear';
-    if (materialKey.includes('resin') && materialKey.includes('clear')) return 'resin-clear';
+    if ((materialKey.includes('acrylic') || materialKey.includes('pmma') || materialKey.includes('plexiglass')) && (materialKey.includes('clear') || processKey.includes('cnc'))) return 'acrylic-clear';
+    if ((materialKey.includes('resin') && materialKey.includes('clear')) || (processKey === 'sla' && finishKey.includes('clear'))) return 'resin-clear';
+    if (materialKey.includes('peek')) return 'peek';
+    if (materialKey.includes('brass')) return 'brass';
+    if (materialKey.includes('copper')) return 'copper';
+    if (materialKey.includes('bronze')) return 'bronze';
+    if (materialKey.includes('titanium')) return 'titanium';
+    if (materialKey.includes('stainless') && materialKey.includes('steel')) return 'stainless-steel';
+    if (materialKey.includes('steel')) return 'steel';
+    if (materialKey.includes('carbon')) return 'carbon-fiber';
+    if (processKey === 'sls' || processKey === 'sls-pa' || processKey === 'mjf' || processKey === 'sjs') return 'nylon-powder';
+    if (materialKey.includes('abs')) return 'abs';
+    if (materialKey.includes('petg')) return 'petg';
+    if (materialKey.includes('nylon') || materialKey.includes('pa-') || materialKey === 'pa') return 'nylon';
     if (materialKey.includes('al6061') || materialKey.includes('aluminum') || processKey === 'cnc') return 'aluminum';
     if (materialKey.includes('resin') || processKey === 'sla') return 'resin';
     if (materialKey.includes('pla') || processKey === 'fdm') return 'pla';
