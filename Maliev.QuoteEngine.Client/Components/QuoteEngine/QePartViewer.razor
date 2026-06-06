@@ -1,4 +1,5 @@
 @* Maliev.QuoteEngine.Client/Components/QuoteEngine/QePartViewer.razor *@
+@using Maliev.QuoteEngine.Shared.Quotes
 @implements IAsyncDisposable
 @inject IJSRuntime JSRuntime
 
@@ -157,6 +158,7 @@
     [Parameter] public string? StoragePath { get; set; }
     [Parameter] public string? FinishCode { get; set; }
     [Parameter] public string? RoughnessCode { get; set; }
+    [Parameter] public QuotePartViewerSettingsDto? ViewerSettings { get; set; }
     [Parameter] public EventCallback<string> OnViewerError { get; set; }
     [Parameter] public Func<LocalGeometryRuntimeResult, Task<bool>>? OnLocalGeometryRuntimeCompleted { get; set; }
     [Parameter] public Func<LocalGeometryRuntimeStarted, Task>? OnLocalGeometryRuntimeStarted { get; set; }
@@ -176,12 +178,12 @@
     private string? _loadError;
     private string? _lastMeasurement;
     private string _cameraPreset = "iso";
-    private string _renderMode = "solid";
+    private string _renderMode = "realistic";
     private string _sectionAxis = "z";
     private double _sectionOffsetMm;
     private bool _sectionOn;
     private bool _sectionInverted = false;
-    private bool _ortho;
+    private bool _ortho = true;
     private bool _edgesOn = true;
     private bool _gridOn = true;
     private bool _boundingBoxOn;
@@ -209,6 +211,7 @@
         {
             _lastGlbUrl = GlbUrl;
             _lastFileExtension = FileExtension;
+            ApplyViewerSettings();
             _lastPartColor = PartColor;
             _lastProcessId = ProcessId;
             _lastMaterialId = MaterialId;
@@ -277,6 +280,34 @@
         MaterialId != _lastMaterialId ||
         FinishCode != _lastFinishCode ||
         RoughnessCode != _lastRoughnessCode;
+
+    private void ApplyViewerSettings()
+    {
+        if (ViewerSettings is null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ViewerSettings.CameraPreset))
+        {
+            _cameraPreset = ViewerSettings.CameraPreset;
+        }
+
+        if (!string.IsNullOrWhiteSpace(ViewerSettings.RenderMode))
+        {
+            _renderMode = ViewerSettings.RenderMode.Equals("wireframe", StringComparison.OrdinalIgnoreCase)
+                ? "wireframe"
+                : ViewerSettings.RenderMode.Equals("transparent", StringComparison.OrdinalIgnoreCase)
+                    ? "transparent"
+                    : ViewerSettings.RenderMode.Equals("solid", StringComparison.OrdinalIgnoreCase)
+                        ? "solid"
+                        : "realistic";
+        }
+
+        _edgesOn = ViewerSettings.EdgesEnabled && _renderMode != "wireframe";
+        _gridOn = ViewerSettings.GridEnabled;
+        _ortho = !string.Equals(ViewerSettings.CameraProjection, "perspective", StringComparison.OrdinalIgnoreCase);
+    }
 
     private async Task InitializeViewerAsync()
     {

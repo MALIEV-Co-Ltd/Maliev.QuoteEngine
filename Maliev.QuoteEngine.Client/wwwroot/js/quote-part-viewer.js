@@ -642,7 +642,7 @@ const loadGenerations       = {};   // canvasId → number (incremented on each 
 const shadowGenerators      = {};   // canvasId → BABYLON.ShadowGenerator
 const analysisModelMeshIds  = {};   // canvasId → Set<mesh.uniqueId> for real model geometry
 const analysisCameraButtons = {};   // canvasId → previous ArcRotate pointer buttons while analysis tools are active
-const activeRenderModes     = {};   // canvasId → 'solid' | 'wireframe' | 'transparent'
+const activeRenderModes     = {};   // canvasId → 'solid' | 'wireframe' | 'transparent' | 'realistic'
 const localAdvisoryRuns     = {};   // canvasId → latest local advisory run id
 const localAdvisoryWorkers  = {};   // canvasId → active geometry worker
 let localAdvisoryWorkerQueue = Promise.resolve();
@@ -700,9 +700,11 @@ function toWorldPoint(point) {
 function normalizeViewerSettings(viewerSettings) {
     const settings = viewerSettings && typeof viewerSettings === 'object' ? viewerSettings : {};
     const firstString = (...values) => values.find(value => typeof value === 'string' && value.trim()) ?? null;
-    const renderMode = settings.renderMode === 'wireframe' || settings.renderMode === 'transparent'
+    const renderMode = settings.renderMode === 'wireframe'
+        || settings.renderMode === 'transparent'
+        || settings.renderMode === 'realistic'
         ? settings.renderMode
-        : 'solid';
+        : 'realistic';
     const cameraMode = settings.cameraProjection === 'perspective'
         ? 'perspective'
         : 'orthographic';
@@ -3137,7 +3139,9 @@ export function setPartMaterial(canvasId, processId, finishCode, roughnessCode, 
     const albedo  = parseCssHexColor(cssColor);
     const defMap  = defaultSolidMaterials[canvasId];
     const bodyMap = perCanvasBodyMap[canvasId];
-    const isSolid = !activeRenderModes[canvasId] || activeRenderModes[canvasId] === 'solid';
+    const isMaterialAppliedMode = !activeRenderModes[canvasId]
+        || activeRenderModes[canvasId] === 'solid'
+        || activeRenderModes[canvasId] === 'realistic';
 
     const profile = getMaterialProfile(processId, finishCode, roughnessCode);
     const realisticKey = resolveRealisticMaterialKey(processId, materialId, finishCode);
@@ -3161,7 +3165,7 @@ export function setPartMaterial(canvasId, processId, finishCode, roughnessCode, 
             }
         }
 
-        if (isSolid) mesh.material = mat;
+        if (isMaterialAppliedMode) mesh.material = mat;
     });
 }
 

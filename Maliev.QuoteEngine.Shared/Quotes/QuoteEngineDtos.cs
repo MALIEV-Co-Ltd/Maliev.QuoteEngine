@@ -155,7 +155,12 @@ public sealed record QuotePartViewerSettingsDto(
     string CameraPreset,
     bool EdgesEnabled,
     bool GridEnabled,
-    bool DfmOverlayEnabled);
+    bool DfmOverlayEnabled)
+{
+    public string RenderMode { get; init; } = "realistic";
+
+    public string CameraProjection { get; init; } = "orthographic";
+}
 
 public sealed class QuoteAnalysisStatusResponse
 {

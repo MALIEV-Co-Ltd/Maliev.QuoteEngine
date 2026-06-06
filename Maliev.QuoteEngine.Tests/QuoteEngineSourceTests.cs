@@ -449,6 +449,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Single(deserialized.DrawingFiles);
         Assert.Equal("Drawing", deserialized.DrawingFiles[0].Kind);
         Assert.Equal("iso", deserialized.ViewerSettings.CameraPreset);
+        Assert.Equal("realistic", deserialized.ViewerSettings.RenderMode);
+        Assert.Equal("orthographic", deserialized.ViewerSettings.CameraProjection);
         Assert.True(deserialized.ViewerSettings.EdgesEnabled);
         Assert.False(deserialized.ViewerSettings.GridEnabled);
         Assert.True(deserialized.ViewerSettings.DfmOverlayEnabled);
@@ -2184,6 +2186,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("aria-label=\"Rotate model 90 degrees\"", viewer, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Toggle section cut\"", viewer, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.FlipCameraIos", viewer, StringComparison.Ordinal);
+        Assert.Contains("private string _renderMode = \"realistic\";", viewer, StringComparison.Ordinal);
+        Assert.Contains("private bool _ortho = true;", viewer, StringComparison.Ordinal);
+        Assert.Contains("[Parameter] public QuotePartViewerSettingsDto?", viewer, StringComparison.Ordinal);
+        Assert.Contains("ViewerSettings=\"@Part.ViewerSettings\"", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor"), StringComparison.Ordinal);
+        Assert.Contains("public string RenderMode", ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs"), StringComparison.Ordinal);
+        Assert.Contains("public string CameraProjection", ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs"), StringComparison.Ordinal);
+        Assert.Contains("renderMode = _renderMode", viewer, StringComparison.Ordinal);
+        Assert.Contains("cameraProjection = _ortho ? \"orthographic\" : \"perspective\"", viewer, StringComparison.Ordinal);
+        Assert.Contains("settings.renderMode === 'realistic'", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js"), StringComparison.Ordinal);
+        Assert.Contains(": 'realistic';", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js"), StringComparison.Ordinal);
+        Assert.Contains("activeRenderModes[canvasId] === 'realistic'", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js"), StringComparison.Ordinal);
+        Assert.Contains("if (isMaterialAppliedMode) mesh.material = mat;", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js"), StringComparison.Ordinal);
         Assert.Contains(".qe-viewer-loading-orbit", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-vt-subtools", styles, StringComparison.Ordinal);
     }
