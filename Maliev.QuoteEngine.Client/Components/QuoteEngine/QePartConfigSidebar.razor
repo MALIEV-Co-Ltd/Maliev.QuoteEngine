@@ -45,7 +45,7 @@
             </div>
         </section>
 
-        <section class="qe-pcs-section">
+        <section class="qe-pcs-section" data-config-section="material">
             <div class="qe-pcs-section-header">
                 <span class="qe-pcs-section-title">@Text("Material", "วัสดุ")</span>
                 <span class="qe-pcs-section-count">@FormatOptionCount(MaterialsFor(Part.ProcessId).Count())</span>
@@ -72,6 +72,36 @@
                 }
             </div>
         </section>
+
+        @{
+            var materialColorOptions = MaterialColorOptions.ToArray();
+        }
+        @if (materialColorOptions.Length > 0)
+        {
+            <section class="qe-pcs-section" data-config-section="material-color">
+                <div class="qe-pcs-section-header">
+                    <span class="qe-pcs-section-title">@Text("Material Color", "สีวัสดุ")</span>
+                    <span class="qe-pcs-section-count">@FormatOptionCount(materialColorOptions.Length)</span>
+                </div>
+                <div class="qe-pcs-color-choice-grid">
+                    @foreach (var color in materialColorOptions)
+                    {
+                        var active = Part.Color == color.Code;
+                        <button type="button"
+                                title="@color.Name"
+                                class="qe-pcs-color-choice @(active ? "qe-pcs-color-choice--active" : "")"
+                                @onclick="@(() => SetMaterialColor(color.Code))">
+                            <span class="qe-pcs-color-chip" style="background:@color.CssValue"></span>
+                            <span>@color.Name</span>
+                            @if (active)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            }
+                        </button>
+                    }
+                </div>
+            </section>
+        }
 
         <section class="qe-pcs-section">
             <div class="qe-pcs-section-header">
@@ -103,7 +133,7 @@
             </div>
         </section>
 
-        <section class="qe-pcs-section">
+        <section class="qe-pcs-section" data-config-section="surface-finish">
             @{
                 var finishes = FinishesFor(Part.ProcessId).ToArray();
             }
@@ -144,23 +174,6 @@
                 }
             </div>
 
-            <div class="qe-pcs-color-choice-grid">
-                @foreach (var color in ColorsFor(Part.MaterialId))
-                {
-                    var active = Part.Color == color.Code;
-                    <button type="button"
-                            title="@color.Name"
-                            class="qe-pcs-color-choice @(active ? "qe-pcs-color-choice--active" : "")"
-                            @onclick="@(() => SetColor(color.Code))">
-                        <span class="qe-pcs-color-chip" style="background:@color.CssValue"></span>
-                        <span>@color.Name</span>
-                        @if (active)
-                        {
-                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
-                        }
-                    </button>
-                }
-            </div>
         </section>
 
         <section class="qe-pcs-section">
@@ -448,6 +461,8 @@
             : colors;
     }
 
+    private IEnumerable<ColorOptionDto> MaterialColorOptions => ColorsFor(Part.MaterialId);
+
     private async Task SetProcess(ProcessOptionDto process)
     {
         Part.ProcessId = process.Id;
@@ -498,7 +513,7 @@
         await NotifyChanged();
     }
 
-    private async Task SetColor(string color)
+    private async Task SetMaterialColor(string color)
     {
         Part.Color = color;
         await NotifyChanged();

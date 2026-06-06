@@ -1512,6 +1512,26 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeConfigSidebar_uses_ProjectNew_dedicated_material_color_section()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
+
+        Assert.Contains("data-config-section=\"material-color\"", src, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Material Color\"", src, StringComparison.Ordinal);
+        Assert.Contains("MaterialColorOptions", src, StringComparison.Ordinal);
+        Assert.Contains("SetMaterialColor", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-color-choice", src, StringComparison.Ordinal);
+
+        var materialIndex = src.IndexOf("data-config-section=\"material\"", StringComparison.Ordinal);
+        var colorIndex = src.IndexOf("data-config-section=\"material-color\"", StringComparison.Ordinal);
+        var finishIndex = src.IndexOf("data-config-section=\"surface-finish\"", StringComparison.Ordinal);
+
+        Assert.True(materialIndex >= 0, "Material section must declare the Project New material data marker.");
+        Assert.True(colorIndex > materialIndex, "Material Color must appear after Material.");
+        Assert.True(finishIndex > colorIndex, "Surface Finish must appear after Material Color.");
+    }
+
+    [Fact]
     public void QeDetailCard_retains_viewer_and_exposes_body_tree_and_dfm_overlay()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
