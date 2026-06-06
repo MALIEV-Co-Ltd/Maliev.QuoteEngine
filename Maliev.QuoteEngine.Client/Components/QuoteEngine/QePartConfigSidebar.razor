@@ -667,25 +667,15 @@
 
     private async Task SetProcess(ProcessOptionDto process)
     {
-        Part.ProcessId = process.Id;
-        Part.LocalDfmRuntimeUnavailable = false;
-        Part.LocalDfmRuntimeUnavailableReason = null;
-        Part.LocalDfmRuntimeRunningProcessId = null;
-        Part.LocalDfmRuntimeStartedAtUtc = null;
-        var material = MaterialsFor(process.Id).FirstOrDefault();
-        if (material is not null)
-        {
-            Part.MaterialId = material.Id;
-        }
-
-        ApplyCatalogDefaults();
+        Part.ApplyProjectNewProcessSelection(process.Id, ReferenceData);
+        ApplyFinishOptionDefaults();
         await NotifyChanged();
     }
 
     private async Task SetMaterial(MaterialOptionDto material)
     {
-        Part.MaterialId = material.Id;
-        Part.Color = ColorsFor(Part.MaterialId).FirstOrDefault()?.Code;
+        Part.ApplyProjectNewMaterialSelection(material.Id, ReferenceData);
+        ApplyFinishOptionDefaults();
         await NotifyChanged();
     }
 

@@ -59,6 +59,136 @@ public sealed class QuotePartViewModel
     public List<QuotePartAttachmentDto> DrawingFiles { get; set; } = [];
     public QuotePartViewerSettingsDto ViewerSettings { get; set; } = new("iso", true, true, false);
 
+    public void ApplyProjectNewProcessSelection(string? processId, QuoteReferenceDataResponse? referenceData)
+    {
+        if (string.IsNullOrWhiteSpace(processId))
+        {
+            return;
+        }
+
+        ProcessId = processId.Trim();
+        ClearProcessDependentConfiguration();
+        ClearLocalDfmRuntimeState();
+
+        var material = referenceData?.Materials.FirstOrDefault(item =>
+            string.Equals(item.ProcessId, ProcessId, StringComparison.OrdinalIgnoreCase));
+        MaterialId = material?.Id ?? string.Empty;
+
+        ApplyProjectNewCatalogDefaults(referenceData);
+    }
+
+    public void ApplyProjectNewMaterialSelection(string? materialId, QuoteReferenceDataResponse? referenceData)
+    {
+        if (string.IsNullOrWhiteSpace(materialId))
+        {
+            return;
+        }
+
+        MaterialId = materialId.Trim();
+        FinishId = null;
+        FinishCode = null;
+        Color = DefaultColorForMaterial(referenceData, MaterialId);
+        ProcessOptionValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        UnitPriceTHB = null;
+
+        ApplyProjectNewCatalogDefaults(referenceData);
+    }
+
+    private void ClearProcessDependentConfiguration()
+    {
+        MaterialId = string.Empty;
+        FinishId = null;
+        FinishCode = null;
+        ToleranceId = null;
+        ToleranceCode = null;
+        InspectionLevel = "STANDARD";
+        RoughnessCode = null;
+        Color = null;
+        ProcessOptionValues = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        UnitPriceTHB = null;
+    }
+
+    private void ClearLocalDfmRuntimeState()
+    {
+        LocalDfmRuntimeUnavailable = false;
+        LocalDfmRuntimeUnavailableReason = null;
+        LocalDfmRuntimeRunningProcessId = null;
+        LocalDfmRuntimeStartedAtUtc = null;
+        DfmAcknowledged = false;
+    }
+
+    private void ApplyProjectNewCatalogDefaults(QuoteReferenceDataResponse? referenceData)
+    {
+        if (referenceData is null)
+        {
+            return;
+        }
+
+        var finish = referenceData.Finishes.FirstOrDefault(item =>
+            string.Equals(item.ProcessId, ProcessId, StringComparison.OrdinalIgnoreCase));
+        FinishId = finish?.Id;
+        FinishCode = finish?.Code;
+
+        var tolerance = SelectDefaultTolerance(referenceData.Tolerances.Where(item =>
+            string.Equals(item.ProcessId, ProcessId, StringComparison.OrdinalIgnoreCase)));
+        ToleranceId = tolerance?.Id;
+        ToleranceCode = tolerance?.Code;
+
+        InspectionLevel = referenceData.InspectionLevels.FirstOrDefault()?.Code ?? "STANDARD";
+        RoughnessCode = SelectDefaultRoughness(referenceData.RoughnessOptions.Where(item =>
+            string.Equals(item.ProcessId, ProcessId, StringComparison.OrdinalIgnoreCase)))?.Code;
+        Color = DefaultColorForMaterial(referenceData, MaterialId);
+    }
+
+    private ToleranceOptionDto? SelectDefaultTolerance(IEnumerable<ToleranceOptionDto> tolerances)
+    {
+        var ordered = tolerances.ToList();
+        if (IsCncProcess(ProcessId))
+        {
+            var medium = ordered.FirstOrDefault(item =>
+                $"{item.Id} {item.Code} {item.Name}".Contains("ISO2768_M", StringComparison.OrdinalIgnoreCase)
+                || $"{item.Id} {item.Code} {item.Name}".Contains("ISO_2768_M", StringComparison.OrdinalIgnoreCase)
+                || $"{item.Id} {item.Code} {item.Name}".Contains("ISO 2768-m", StringComparison.OrdinalIgnoreCase)
+                || $"{item.Id} {item.Code} {item.Name}".Contains("ISO 2768 m", StringComparison.OrdinalIgnoreCase));
+            if (medium is not null)
+            {
+                return medium;
+            }
+        }
+
+        return ordered.FirstOrDefault();
+    }
+
+    private RoughnessOptionDto? SelectDefaultRoughness(IEnumerable<RoughnessOptionDto> roughnessOptions)
+    {
+        var ordered = roughnessOptions.ToList();
+        if (IsCncProcess(ProcessId))
+        {
+            var standard = ordered.FirstOrDefault(item =>
+                string.Equals(item.Code, "RA_3_2", StringComparison.OrdinalIgnoreCase));
+            if (standard is not null)
+            {
+                return standard;
+            }
+        }
+
+        return ordered.FirstOrDefault();
+    }
+
+    private static string? DefaultColorForMaterial(QuoteReferenceDataResponse? referenceData, string? materialId) =>
+        referenceData?.Colors.FirstOrDefault(item =>
+            item.MaterialIds.Count == 0
+            || (!string.IsNullOrWhiteSpace(materialId) && item.MaterialIds.Contains(materialId, StringComparer.OrdinalIgnoreCase)))?.Code;
+
+    private static bool IsCncProcess(string? processId) =>
+        string.Equals(processId, "cnc", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(processId, "cnc_mill", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(processId, "cnc-turn", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(processId, "cnc_turn", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(processId, "CNC", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(processId, "CNC_MILL", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(processId, "CNC_TURN", StringComparison.OrdinalIgnoreCase);
+
     public QuotePartDraftDto ToDraft() => new()
     {
         PartId = PartId,

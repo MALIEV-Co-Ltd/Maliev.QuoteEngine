@@ -341,17 +341,7 @@
 
         foreach (var part in SelectedParts())
         {
-            part.ProcessId = processId;
-            part.LocalDfmRuntimeUnavailable = false;
-            part.LocalDfmRuntimeUnavailableReason = null;
-            part.LocalDfmRuntimeRunningProcessId = null;
-            part.LocalDfmRuntimeStartedAtUtc = null;
-            var material = Materials.FirstOrDefault(item => item.ProcessId == processId);
-            if (material is not null)
-            {
-                part.MaterialId = material.Id;
-            }
-
+            part.ApplyProjectNewProcessSelection(processId, ReferenceData());
             await OnPartChanged.InvokeAsync(part);
         }
     }
@@ -363,7 +353,7 @@
 
         foreach (var part in SelectedParts())
         {
-            part.MaterialId = materialId;
+            part.ApplyProjectNewMaterialSelection(materialId, ReferenceData());
             await OnPartChanged.InvokeAsync(part);
         }
     }
@@ -461,24 +451,14 @@
     private async Task ChangeProcessAsync(QuotePartViewModel part, string? processId)
     {
         if (string.IsNullOrWhiteSpace(processId)) return;
-        part.ProcessId = processId;
-        part.LocalDfmRuntimeUnavailable = false;
-        part.LocalDfmRuntimeUnavailableReason = null;
-        part.LocalDfmRuntimeRunningProcessId = null;
-        part.LocalDfmRuntimeStartedAtUtc = null;
-        var material = Materials.FirstOrDefault(item => item.ProcessId == processId);
-        if (material is not null)
-        {
-            part.MaterialId = material.Id;
-        }
-
+        part.ApplyProjectNewProcessSelection(processId, ReferenceData());
         await OnPartChanged.InvokeAsync(part);
     }
 
     private async Task ChangeMaterialAsync(QuotePartViewModel part, string? materialId)
     {
         if (string.IsNullOrWhiteSpace(materialId)) return;
-        part.MaterialId = materialId;
+        part.ApplyProjectNewMaterialSelection(materialId, ReferenceData());
         await OnPartChanged.InvokeAsync(part);
     }
 
@@ -511,6 +491,18 @@
     }
 
     private IEnumerable<QuotePartViewModel> SelectedParts() => Parts.Where(IsPartSelected).ToArray();
+
+    private QuoteReferenceDataResponse ReferenceData() => new(
+        Processes,
+        Materials,
+        Finishes,
+        Tolerances,
+        InspectionLevels,
+        RoughnessOptions,
+        [],
+        [],
+        [],
+        []);
 
     private string ProcessName(string id) => Processes.FirstOrDefault(item => item.Id == id)?.Name ?? id;
 

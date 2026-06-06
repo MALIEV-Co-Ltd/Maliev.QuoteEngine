@@ -81,6 +81,47 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewModel_process_selection_clears_stale_ProjectNew_configuration()
+    {
+        var part = new QuotePartViewModel
+        {
+            ProcessId = "fdm",
+            MaterialId = "pla-black",
+            FinishId = "fdm-matte",
+            FinishCode = "MATTE",
+            ToleranceId = "fdm-standard",
+            ToleranceCode = "FDM_STANDARD",
+            RoughnessCode = "RA_1_6",
+            Color = "black",
+            LocalDfmRuntimeUnavailable = true,
+            LocalDfmRuntimeUnavailableReason = "process_code_missing",
+            LocalDfmRuntimeRunningProcessId = "fdm",
+            LocalDfmRuntimeStartedAtUtc = DateTimeOffset.UtcNow,
+            UnitPriceTHB = 120m
+        };
+        part.ProcessOptionValues["paint_color"] = "RAL 9005";
+
+        var reference = BuildConfigurationReferenceData();
+
+        part.ApplyProjectNewProcessSelection("cnc", reference);
+
+        Assert.Equal("cnc", part.ProcessId);
+        Assert.Equal("al6061", part.MaterialId);
+        Assert.Equal("cnc-as-machined", part.FinishId);
+        Assert.Equal("AS_MACHINED", part.FinishCode);
+        Assert.Equal("iso-2768-m", part.ToleranceId);
+        Assert.Equal("ISO2768_M", part.ToleranceCode);
+        Assert.Equal("RA_3_2", part.RoughnessCode);
+        Assert.Equal("natural", part.Color);
+        Assert.Empty(part.ProcessOptionValues);
+        Assert.False(part.LocalDfmRuntimeUnavailable);
+        Assert.Null(part.LocalDfmRuntimeUnavailableReason);
+        Assert.Null(part.LocalDfmRuntimeRunningProcessId);
+        Assert.Null(part.LocalDfmRuntimeStartedAtUtc);
+        Assert.Null(part.UnitPriceTHB);
+    }
+
+    [Fact]
     public void QeGlbReadyPayload_round_trip_through_json()
     {
         var payload = new QeGlbReadyPayload(
@@ -2539,18 +2580,18 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Quote_process_changes_clear_terminal_local_dfm_unavailable_state()
     {
+        var model = ReadRepoFile("Maliev.QuoteEngine.Client", "Models", "QuotePartViewModel.cs");
         var sidebar = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
         var bulkTable = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeBulkTable.razor");
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
 
-        Assert.Contains("Part.LocalDfmRuntimeUnavailable = false", sidebar, StringComparison.Ordinal);
-        Assert.Contains("Part.LocalDfmRuntimeUnavailableReason = null", sidebar, StringComparison.Ordinal);
-        Assert.Contains("Part.LocalDfmRuntimeRunningProcessId = null", sidebar, StringComparison.Ordinal);
-        Assert.Contains("Part.LocalDfmRuntimeStartedAtUtc = null", sidebar, StringComparison.Ordinal);
-        Assert.Contains("part.LocalDfmRuntimeUnavailable = false", bulkTable, StringComparison.Ordinal);
-        Assert.Contains("part.LocalDfmRuntimeUnavailableReason = null", bulkTable, StringComparison.Ordinal);
-        Assert.Contains("part.LocalDfmRuntimeRunningProcessId = null", bulkTable, StringComparison.Ordinal);
-        Assert.Contains("part.LocalDfmRuntimeStartedAtUtc = null", bulkTable, StringComparison.Ordinal);
+        Assert.Contains("ClearLocalDfmRuntimeState", model, StringComparison.Ordinal);
+        Assert.Contains("LocalDfmRuntimeUnavailable = false", model, StringComparison.Ordinal);
+        Assert.Contains("LocalDfmRuntimeUnavailableReason = null", model, StringComparison.Ordinal);
+        Assert.Contains("LocalDfmRuntimeRunningProcessId = null", model, StringComparison.Ordinal);
+        Assert.Contains("LocalDfmRuntimeStartedAtUtc = null", model, StringComparison.Ordinal);
+        Assert.Contains("Part.ApplyProjectNewProcessSelection(process.Id, ReferenceData)", sidebar, StringComparison.Ordinal);
+        Assert.Contains("part.ApplyProjectNewProcessSelection(processId, ReferenceData())", bulkTable, StringComparison.Ordinal);
         Assert.Contains("part.LocalDfmRuntimeUnavailable = false", workspace, StringComparison.Ordinal);
         Assert.Contains("part.LocalDfmRuntimeUnavailableReason = null", workspace, StringComparison.Ordinal);
         Assert.Contains("part.LocalDfmRuntimeRunningProcessId = null", workspace, StringComparison.Ordinal);
@@ -2618,6 +2659,38 @@ public sealed class QuoteEngineSourceTests
             }
         };
     }
+
+    private static QuoteReferenceDataResponse BuildConfigurationReferenceData() => new(
+        Processes:
+        [
+            new("fdm", "FDM", "Fused filament fabrication", ["stl"]),
+            new("cnc", "CNC machining", "Machined parts", ["step"])
+        ],
+        Materials:
+        [
+            new("pla-black", "fdm", "PLA Black", "PLA", 1.24m, "Matte"),
+            new("al6061", "cnc", "Aluminum 6061", "6061-T6", 2.70m, "Natural")
+        ],
+        Finishes:
+        [
+            new("fdm-matte", "fdm", "MATTE", "Matte", "Printed matte finish", 1.0m),
+            new("cnc-as-machined", "cnc", "AS_MACHINED", "As machined", "Standard machined finish", 1.0m)
+        ],
+        Tolerances:
+        [
+            new("iso-2768-c", "cnc", "ISO2768_C", "ISO 2768-c", "Coarse machining tolerance", 1.0m),
+            new("iso-2768-m", "cnc", "ISO2768_M", "ISO 2768-m", "Medium machining tolerance", 1.1m)
+        ],
+        InspectionLevels: [new("STANDARD", "Standard", "Standard inspection", 1.0m)],
+        RoughnessOptions:
+        [
+            new("RA_3_2", "cnc", "Ra 3.2", "Standard machined roughness", 1.0m),
+            new("RA_1_6", "cnc", "Ra 1.6", "Fine machined roughness", 1.08m)
+        ],
+        Colors: [new("natural", "Natural", "#d6d2c8", ["al6061"])],
+        LeadTimes: [],
+        ProcessOptions: [new("paint_color", "fdm", "Paint color", "text", string.Empty, "Paint color", [])],
+        SupportedExtensions: ["stl", "step"]);
 
     private static string ReadRepoFile(params string[] pathParts)
     {
