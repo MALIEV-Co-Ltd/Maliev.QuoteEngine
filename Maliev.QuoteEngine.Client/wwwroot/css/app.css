@@ -2367,6 +2367,35 @@ p {
     line-height: 1.4;
 }
 
+.documents-order-context {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    width: min(100%, 980px);
+    margin: 0 auto 12px;
+    padding: 12px;
+    border-radius: var(--maliev-radius-md);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.documents-order-context div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.documents-order-context strong {
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+.documents-order-context small {
+    color: var(--muted);
+    line-height: 1.35;
+}
+
 .documents-library {
     width: min(100%, 980px);
     margin: 0 auto;

@@ -950,6 +950,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("UploadDocumentAsync", documents, StringComparison.Ordinal);
         Assert.Contains("ApplyDocumentRouteContext", documents, StringComparison.Ordinal);
         Assert.Contains("OrderNumber = NormalizeOrderNumber(_orderNumber)", documents, StringComparison.Ordinal);
+        Assert.Contains("VisibleDocuments", documents, StringComparison.Ordinal);
+        Assert.Contains("HasOrderContext", documents, StringComparison.Ordinal);
+        Assert.Contains("ClearOrderContext", documents, StringComparison.Ordinal);
+        Assert.Contains("data-documents-section=\"order-context\"", documents, StringComparison.Ordinal);
+        Assert.Contains("_documents.Where(document => string.Equals(document.OrderNumber, _orderNumber", documents, StringComparison.Ordinal);
         Assert.Contains("document.OrderNumber", documents, StringComparison.Ordinal);
         Assert.Contains("PurchaseOrder", documents, StringComparison.Ordinal);
         Assert.Contains("Invoice", documents, StringComparison.Ordinal);
@@ -969,6 +974,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".documents-upload-panel", styles, StringComparison.Ordinal);
         Assert.Contains(".documents-kind-grid", styles, StringComparison.Ordinal);
         Assert.Contains(".documents-order-field", styles, StringComparison.Ordinal);
+        Assert.Contains(".documents-order-context", styles, StringComparison.Ordinal);
     }
 
     [Fact]

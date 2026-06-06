@@ -51,8 +51,20 @@
     }
 </section>
 
+@if (HasOrderContext)
+{
+    <section class="documents-order-context" data-documents-section="order-context">
+        <div>
+            <span class="eyebrow">@Text("Order context", "บริบทคำสั่งซื้อ")</span>
+            <strong>@_orderNumber</strong>
+            <small>@Text("Showing documents linked to this order. New uploads will be attached to the same order number.", "กำลังแสดงเอกสารที่ผูกกับคำสั่งซื้อนี้ เอกสารใหม่จะถูกผูกกับเลขคำสั่งซื้อนี้เช่นกัน")</small>
+        </div>
+        <button type="button" class="qe-secondary-btn" @onclick="ClearOrderContext">@Text("Show all documents", "แสดงเอกสารทั้งหมด")</button>
+    </section>
+}
+
 <div class="documents-library data-list">
-    @foreach (var document in _documents)
+    @foreach (var document in VisibleDocuments)
     {
         <div class="data-row documents-row">
             <span>@document.FileName</span>
@@ -62,10 +74,10 @@
     }
 </div>
 
-@if (!_documents.Any())
+@if (!VisibleDocuments.Any())
 {
     <div class="empty-state">
-        <p>@Text("No customer documents yet.", "ยังไม่มีเอกสารลูกค้า")</p>
+        <p>@(HasOrderContext ? Text("No documents are attached to this order yet.", "ยังไม่มีเอกสารที่ผูกกับคำสั่งซื้อนี้") : Text("No customer documents yet.", "ยังไม่มีเอกสารลูกค้า"))</p>
     </div>
 }
 
@@ -91,6 +103,12 @@
         ApplyDocumentRouteContext();
         _documents = await Api.GetDocumentsAsync();
     }
+
+    private bool HasOrderContext => !string.IsNullOrWhiteSpace(_orderNumber);
+
+    private IReadOnlyList<CustomerDocumentDto> VisibleDocuments => HasOrderContext
+        ? _documents.Where(document => string.Equals(document.OrderNumber, _orderNumber, StringComparison.OrdinalIgnoreCase)).ToArray()
+        : _documents;
 
     private async Task UploadDocumentAsync(InputFileChangeEventArgs args)
     {
@@ -143,6 +161,11 @@
     private void OnOrderNumberChanged(ChangeEventArgs args)
     {
         _orderNumber = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void ClearOrderContext()
+    {
+        _orderNumber = string.Empty;
     }
 
     private static string? NormalizeOrderNumber(string value)
