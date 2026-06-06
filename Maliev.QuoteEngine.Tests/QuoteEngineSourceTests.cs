@@ -936,6 +936,28 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Orders_page_groups_active_and_completed_customer_orders()
+    {
+        var orders = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Orders.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("@page \"/orders\"", orders, StringComparison.Ordinal);
+        Assert.Contains("GetOrdersAsync", orders, StringComparison.Ordinal);
+        Assert.Contains("ActiveOrders", orders, StringComparison.Ordinal);
+        Assert.Contains("CompletedOrders", orders, StringComparison.Ordinal);
+        Assert.Contains("IsCompletedOrder", orders, StringComparison.Ordinal);
+        Assert.Contains("class=\"orders-dashboard\"", orders, StringComparison.Ordinal);
+        Assert.Contains("data-orders-section=\"active\"", orders, StringComparison.Ordinal);
+        Assert.Contains("data-orders-section=\"completed\"", orders, StringComparison.Ordinal);
+        Assert.Contains("FormatDate(order.UpdatedAt)", orders, StringComparison.Ordinal);
+        Assert.Contains("href=\"/orders/@Uri.EscapeDataString(order.OrderNumber)\"", orders, StringComparison.Ordinal);
+
+        Assert.Contains(".orders-dashboard", styles, StringComparison.Ordinal);
+        Assert.Contains(".orders-summary-grid", styles, StringComparison.Ordinal);
+        Assert.Contains(".orders-section", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Documents_page_supports_customer_purchase_order_invoice_receipt_uploads()
     {
         var documents = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Documents.razor");

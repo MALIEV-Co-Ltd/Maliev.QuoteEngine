@@ -2262,6 +2262,64 @@ p {
     font-size: var(--maliev-font-small);
 }
 
+.orders-dashboard {
+    display: grid;
+    gap: 16px;
+    width: min(100%, 980px);
+    margin: 0 auto;
+}
+
+.orders-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.orders-summary-grid article,
+.orders-section {
+    padding: 14px;
+    border-radius: var(--maliev-radius-md);
+    background: #ffffff;
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.orders-summary-grid span,
+.orders-section-heading span {
+    color: var(--muted);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    text-transform: uppercase;
+}
+
+.orders-summary-grid strong {
+    display: block;
+    margin-top: 4px;
+    color: var(--ink);
+    font-size: var(--maliev-font-card);
+}
+
+.orders-section {
+    display: grid;
+    gap: 10px;
+}
+
+.orders-section-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.orders-section-heading h2 {
+    margin: 0;
+    font-size: var(--maliev-font-card);
+    letter-spacing: 0;
+}
+
+.orders-row small {
+    overflow-wrap: anywhere;
+}
+
 .order-status-timeline {
     display: grid;
     gap: 12px;
