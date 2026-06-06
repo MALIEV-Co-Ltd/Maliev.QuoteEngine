@@ -1570,6 +1570,27 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeConfigSidebar_uses_ProjectNew_grouped_tolerance_layout()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("class=\"qe-pcs-tolerance-groups\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-tolerance-group", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-tolerance-group-header\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-tolerance-group-title\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-tolerance-group-standard\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-tolerance-group-count\"", src, StringComparison.Ordinal);
+        Assert.Contains("ToleranceGroupTitle", src, StringComparison.Ordinal);
+        Assert.Contains("ToleranceGroupStandard", src, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-pcs-tolerance-groups", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-tolerance-group", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-tolerance-group-header", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-tolerance-group-title", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeDetailCard_retains_viewer_and_exposes_body_tree_and_dfm_overlay()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");

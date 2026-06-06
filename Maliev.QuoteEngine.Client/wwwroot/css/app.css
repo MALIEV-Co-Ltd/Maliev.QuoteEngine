@@ -6020,6 +6020,47 @@ body.mud-blazor {
     margin-top: 8px;
 }
 
+.qe-pcs-tolerance-groups {
+    display: grid;
+    gap: 8px;
+}
+
+.qe-pcs-tolerance-group {
+    display: grid;
+    gap: 8px;
+}
+
+.qe-pcs-tolerance-group-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 9px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--maliev-panel-2);
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.qe-pcs-tolerance-group-title,
+.qe-pcs-tolerance-group-standard,
+.qe-pcs-tolerance-group-count {
+    display: block;
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-nano);
+    font-weight: 500;
+    line-height: 1.25;
+    text-transform: uppercase;
+}
+
+.qe-pcs-tolerance-group-title {
+    color: var(--maliev-ink);
+}
+
+.qe-pcs-tolerance-group-standard,
+.qe-pcs-tolerance-group-count {
+    color: var(--maliev-muted);
+}
+
 .qe-pcs-color-choice {
     display: flex;
     align-items: center;

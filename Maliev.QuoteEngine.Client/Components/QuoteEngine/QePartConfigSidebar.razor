@@ -154,32 +154,43 @@
                 <span class="qe-pcs-section-title">@Text("Tolerance", "ค่าความคลาดเคลื่อน")</span>
                 <span class="qe-pcs-section-count">@FormatOptionCount(tolerances.Length + 1)</span>
             </div>
-            <div class="qe-pcs-tol-grid">
-                <button type="button"
-                        class="qe-pcs-tol-card @(Part.ToleranceId is null ? "qe-pcs-tol-card--active" : "")"
-                        @onclick="@(() => SetTolerance((ToleranceOptionDto?)null))">
-                    <span class="qe-pcs-tol-name">@Text("Default", "มาตรฐาน")</span>
-                    <span class="qe-pcs-tol-grade">@Text("Process", "กระบวนการ")</span>
-                    <span class="qe-pcs-tol-range">@Text("Base", "พื้นฐาน")</span>
-                </button>
-                @foreach (var tolerance in tolerances)
-                {
-                    var active = Part.ToleranceId == tolerance.Id || Part.ToleranceCode == tolerance.Code;
-                    <button type="button"
-                            class="qe-pcs-tol-card @(active ? "qe-pcs-tol-card--active" : "")"
-                            title="@tolerance.Description"
-                            @onclick="@(() => SetTolerance(tolerance))">
-                        <span class="qe-pcs-tol-name">@tolerance.Name</span>
-                        <span class="qe-pcs-tol-grade">@tolerance.Code</span>
-                        <span class="qe-pcs-tol-range" title="@Text("Price multiplier over base cost", "ตัวคูณราคาจากราคาพื้นฐาน")">@FormatMultiplier(tolerance.PriceMultiplier)</span>
-                        @if (active)
+            <div class="qe-pcs-tolerance-groups">
+                <div class="qe-pcs-tolerance-group">
+                    <div class="qe-pcs-tolerance-group-header">
+                        <div>
+                            <span class="qe-pcs-tolerance-group-title">@ToleranceGroupTitle()</span>
+                            <span class="qe-pcs-tolerance-group-standard">@ToleranceGroupStandard()</span>
+                        </div>
+                        <span class="qe-pcs-tolerance-group-count">@FormatOptionCount(tolerances.Length + 1)</span>
+                    </div>
+                    <div class="qe-pcs-tol-grid">
+                        <button type="button"
+                                class="qe-pcs-tol-card @(Part.ToleranceId is null ? "qe-pcs-tol-card--active" : "")"
+                                @onclick="@(() => SetTolerance((ToleranceOptionDto?)null))">
+                            <span class="qe-pcs-tol-name">@Text("Default", "มาตรฐาน")</span>
+                            <span class="qe-pcs-tol-grade">@Text("Process", "กระบวนการ")</span>
+                            <span class="qe-pcs-tol-range">@Text("Base", "พื้นฐาน")</span>
+                        </button>
+                        @foreach (var tolerance in tolerances)
                         {
-                            <span class="qe-pcs-tol-check">
-                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
-                            </span>
+                            var active = Part.ToleranceId == tolerance.Id || Part.ToleranceCode == tolerance.Code;
+                            <button type="button"
+                                    class="qe-pcs-tol-card @(active ? "qe-pcs-tol-card--active" : "")"
+                                    title="@tolerance.Description"
+                                    @onclick="@(() => SetTolerance(tolerance))">
+                                <span class="qe-pcs-tol-name">@tolerance.Name</span>
+                                <span class="qe-pcs-tol-grade">@tolerance.Code</span>
+                                <span class="qe-pcs-tol-range" title="@Text("Price multiplier over base cost", "ตัวคูณราคาจากราคาพื้นฐาน")">@FormatMultiplier(tolerance.PriceMultiplier)</span>
+                                @if (active)
+                                {
+                                    <span class="qe-pcs-tol-check">
+                                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                    </span>
+                                }
+                            </button>
                         }
-                    </button>
-                }
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -643,6 +654,17 @@
         1m => Text("Base", "พื้นฐาน"),
         > 1m => $"+{Math.Round((multiplier - 1m) * 100m)}%",
         < 1m => $"-{Math.Round((1m - multiplier) * 100m)}%"
+    };
+
+    private string ToleranceGroupTitle() => IsCnc
+        ? Text("Machining tolerance", "ค่าความคลาดเคลื่อนงานกลึงกัด")
+        : Text("Process tolerance", "ค่าความคลาดเคลื่อนตามกระบวนการ");
+
+    private string ToleranceGroupStandard() => Part.ProcessId.ToLowerInvariant() switch
+    {
+        "cnc" => "ISO 2768",
+        "sla" => Text("Resin print standard", "มาตรฐานงานพิมพ์เรซิน"),
+        _ => Text("Manufacturing standard", "มาตรฐานการผลิต")
     };
 
     private string Text(string en, string th)
