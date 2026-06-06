@@ -1591,6 +1591,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeConfigSidebar_uses_ProjectNew_roughness_section_contract()
+    {
+        var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("data-config-section=\"surface-roughness\"", src, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-pcs-choice-card qe-pcs-roughness-card", src, StringComparison.Ordinal);
+        Assert.Contains("RoughnessFor(Part.ProcessId)", src, StringComparison.Ordinal);
+        Assert.Contains("SetRoughness(roughness.Code)", src, StringComparison.Ordinal);
+        Assert.Contains("GetRoughnessImageUrl(roughness.Code)", src, StringComparison.Ordinal);
+        Assert.Contains("FormatOptionCount(roughnessOptions.Length)", src, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-pcs-roughness-card", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-roughness-card .qe-pcs-choice-swatch", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeDetailCard_retains_viewer_and_exposes_body_tree_and_dfm_overlay()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");

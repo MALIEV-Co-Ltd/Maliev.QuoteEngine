@@ -196,33 +196,23 @@
 
         @if (IsCnc)
         {
-            <section class="qe-pcs-section">
+            <section class="qe-pcs-section" data-config-section="surface-roughness">
                 @{
                     var roughnessOptions = RoughnessFor(Part.ProcessId).ToArray();
                 }
                 <div class="qe-pcs-section-header">
                     <span class="qe-pcs-section-title">@Text("Surface Roughness", "ความหยาบผิว")</span>
-                    <span class="qe-pcs-section-count">@FormatOptionCount(roughnessOptions.Length + 1)</span>
+                    <span class="qe-pcs-section-count">@FormatOptionCount(roughnessOptions.Length)</span>
                 </div>
                 <div class="qe-pcs-cards">
-                    <button type="button"
-                            class="qe-pcs-choice-card @(Part.RoughnessCode is null ? "qe-pcs-choice-card--active" : "")"
-                            @onclick="@(() => SetRoughness(null))">
-                        <span class="qe-pcs-choice-swatch qe-pcs-choice-swatch--metal">
-                            <MudIcon Icon="@Icons.Material.Outlined.Grain" Size="Size.Small" />
-                        </span>
-                        <span class="qe-pcs-choice-info">
-                            <span class="qe-pcs-choice-name">@Text("Default roughness", "ความหยาบผิวมาตรฐาน")</span>
-                            <span class="qe-pcs-choice-sub">@Text("Use the standard machined surface.", "ใช้ผิวงานกลึงกัดมาตรฐาน")</span>
-                        </span>
-                    </button>
                     @foreach (var roughness in roughnessOptions)
                     {
                         var active = Part.RoughnessCode == roughness.Code;
                         <button type="button"
-                                class="qe-pcs-choice-card @(active ? "qe-pcs-choice-card--active" : "")"
+                                class="qe-pcs-choice-card qe-pcs-roughness-card @(active ? "qe-pcs-choice-card--active" : "")"
                                 @onclick="@(() => SetRoughness(roughness.Code))">
-                            <span class="qe-pcs-choice-swatch qe-pcs-choice-swatch--metal">
+                            <span class="qe-pcs-choice-swatch qe-pcs-roughness-swatch"
+                                  style="background-image:url('@GetRoughnessImageUrl(roughness.Code)')">
                                 <MudIcon Icon="@Icons.Material.Outlined.Grain" Size="Size.Small" />
                             </span>
                             <span class="qe-pcs-choice-info">
@@ -667,6 +657,15 @@
         _ => Text("Manufacturing standard", "มาตรฐานการผลิต")
     };
 
+    private static string GetRoughnessImageUrl(string code) =>
+        "/images/materials/" + (NormalizeOptionText(code) switch
+        {
+            var normalized when normalized.Contains("ra04", StringComparison.Ordinal) => "roughness-ra-0-4-part-surface.webp",
+            var normalized when normalized.Contains("ra08", StringComparison.Ordinal) => "roughness-ra-0-8-part-surface.webp",
+            var normalized when normalized.Contains("ra16", StringComparison.Ordinal) => "roughness-ra-1-6-part-surface.webp",
+            _ => "roughness-ra-3-2-part-surface.webp",
+        });
+
     private string Text(string en, string th)
     {
         return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
@@ -705,6 +704,20 @@
             "sheetmetal" => "sheet_metal",
             _ => normalized
         };
+    }
+
+    private static string NormalizeOptionText(string value)
+    {
+        var builder = new System.Text.StringBuilder(value.Length);
+        foreach (var ch in value.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                builder.Append(ch);
+            }
+        }
+
+        return builder.ToString();
     }
 
     private static string MaterialSwatch(string materialId) => materialId switch

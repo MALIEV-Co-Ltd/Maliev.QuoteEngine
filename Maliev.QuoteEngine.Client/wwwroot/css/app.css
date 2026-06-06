@@ -5962,6 +5962,22 @@ body.mud-blazor {
     grid-template-columns: 32px minmax(0, 1fr);
 }
 
+.qe-pcs-roughness-card {
+    min-height: 56px;
+}
+
+.qe-pcs-roughness-card .qe-pcs-choice-swatch {
+    overflow: hidden;
+    color: transparent;
+    background-color: var(--maliev-panel-3);
+    background-position: center;
+    background-size: cover;
+}
+
+.qe-pcs-roughness-card .mud-icon-root {
+    opacity: 0;
+}
+
 .qe-pcs-dfm-review-card {
     cursor: pointer;
 }
