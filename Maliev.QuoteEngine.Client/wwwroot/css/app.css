@@ -2138,6 +2138,66 @@ p {
     justify-content: center;
 }
 
+.quote-detail-shell {
+    display: grid;
+    gap: 14px;
+    width: min(100%, 980px);
+    margin: 0 auto;
+}
+
+.quote-detail-header {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 14px;
+    align-items: start;
+}
+
+.quote-detail-header h1 {
+    margin: 2px 0 4px;
+    font-size: clamp(24px, 3vw, 40px);
+    letter-spacing: 0;
+}
+
+.quote-detail-header p {
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.45;
+}
+
+.quote-detail-card {
+    padding: 16px;
+    border-radius: var(--maliev-radius-md);
+    background: #ffffff;
+    box-shadow: var(--maliev-shadow-card);
+}
+
+.quote-detail-card dl {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin: 12px 0 0;
+}
+
+.quote-detail-card dt {
+    color: var(--muted);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    text-transform: uppercase;
+}
+
+.quote-detail-card dd {
+    margin: 3px 0 0;
+    color: var(--ink);
+    font-weight: 650;
+}
+
+.quote-detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+}
+
 .order-status-timeline {
     display: grid;
     gap: 12px;

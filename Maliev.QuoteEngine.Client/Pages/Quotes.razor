@@ -1,12 +1,74 @@
 @page "/quotes/{QuoteId:guid}"
+@using System.Globalization
+@inject QuoteEngineApiClient Api
 
 <PageTitle>@Text("Quote detail - MALIEV", "รายละเอียดใบเสนอราคา - MALIEV")</PageTitle>
 
-<div class="empty-state">
-    <h1>@Text("Quote detail", "รายละเอียดใบเสนอราคา")</h1>
-    <p>@Text($"Quote {QuoteId} is ready to connect to QuotationService detail and PDF history.", $"ใบเสนอราคา {QuoteId} พร้อมเชื่อมต่อรายละเอียดจาก QuotationService และประวัติ PDF")</p>
-    <a class="primary-button" href="/quotes/new">@Text("Start another quote", "เริ่มขอราคาใหม่")</a>
-</div>
+@if (_loading)
+{
+    <div class="empty-state">
+        <p>@Text("Loading quote detail...", "กำลังโหลดรายละเอียดใบเสนอราคา...")</p>
+    </div>
+}
+else if (_quote is null)
+{
+    <div class="empty-state">
+        <h1>@Text("Quote not found", "ไม่พบใบเสนอราคา")</h1>
+        <p>@Text("This quote is unavailable or does not belong to your account.", "ใบเสนอราคานี้ไม่พร้อมใช้งานหรือไม่ได้อยู่ในบัญชีของคุณ")</p>
+        <a class="primary-button" href="/quotes/new">@Text("Start another quote", "เริ่มขอราคาใหม่")</a>
+    </div>
+}
+else
+{
+    <main class="quote-detail-shell">
+        <header class="quote-detail-header">
+            <a class="qe-secondary-btn" href="/profile">@Text("Back to account", "กลับไปที่บัญชี")</a>
+            <div>
+                <span class="eyebrow">@Text("Formal quote", "ใบเสนอราคาอย่างเป็นทางการ")</span>
+                <h1>@_quote.QuoteNumber</h1>
+                <p>@Text("Review quote value, status, and PDF documents before placing or tracking an order.", "ตรวจสอบมูลค่า สถานะ และเอกสาร PDF ก่อนสั่งซื้อหรือติดตามคำสั่งซื้อ")</p>
+            </div>
+            <strong class="order-status-pill">@_quote.Status</strong>
+        </header>
+
+        <section class="quote-detail-card" data-quote-section="summary">
+            <div class="order-panel-head">
+                <span>@Text("Quote summary", "สรุปใบเสนอราคา")</span>
+                <strong>@FormatMoney(_quote.Total, _quote.Currency)</strong>
+            </div>
+            <dl>
+                <div>
+                    <dt>@Text("Quote number", "เลขที่ใบเสนอราคา")</dt>
+                    <dd>@_quote.QuoteNumber</dd>
+                </div>
+                <div>
+                    <dt>@Text("Status", "สถานะ")</dt>
+                    <dd>@_quote.Status</dd>
+                </div>
+                <div>
+                    <dt>@Text("Updated", "อัปเดตเมื่อ")</dt>
+                    <dd>@FormatDate(_quote.UpdatedAt)</dd>
+                </div>
+            </dl>
+        </section>
+
+        <section class="quote-detail-card" data-quote-section="actions">
+            <div class="order-panel-head">
+                <span>@Text("Quote actions", "การดำเนินการกับใบเสนอราคา")</span>
+                <strong>@_quote.Currency</strong>
+            </div>
+            <div class="quote-detail-actions">
+                @if (!string.IsNullOrWhiteSpace(_quote.PdfUrl))
+                {
+                    <a class="qe-primary-btn" href="@_quote.PdfUrl" target="_blank" rel="noopener">@Text("Open quote PDF", "เปิด PDF ใบเสนอราคา")</a>
+                }
+                <a class="qe-secondary-btn" href="/orders">@Text("Track orders", "ติดตามคำสั่งซื้อ")</a>
+                <a class="qe-secondary-btn" href="/documents">@Text("Customer documents", "เอกสารลูกค้า")</a>
+                <a class="qe-secondary-btn" href="/quotes/new">@Text("Start another quote", "เริ่มขอราคาใหม่")</a>
+            </div>
+        </section>
+    </main>
+}
 
 @code {
     [Parameter]
@@ -14,6 +76,27 @@
 
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
+    private CustomerQuoteSummaryDto? _quote;
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        var quotes = await Api.GetQuotesAsync();
+        _quote = quotes.FirstOrDefault(quote => quote.QuoteId == QuoteId);
+        _loading = false;
+    }
+
+    private string FormatMoney(decimal amount, string currency)
+    {
+        return $"{amount.ToString("N2", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)))} {currency}";
+    }
+
+    private string FormatDate(DateTimeOffset value)
+    {
+        return value.ToLocalTime().ToString("d MMM yyyy", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)));
+    }
 
     private string Text(string en, string th)
     {

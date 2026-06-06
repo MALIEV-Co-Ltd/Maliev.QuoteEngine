@@ -984,6 +984,32 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Quote_detail_page_loads_customer_quote_summary_and_pdf_actions()
+    {
+        var quoteDetail = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Quotes.razor");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("@page \"/quotes/{QuoteId:guid}\"", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("@inject QuoteEngineApiClient Api", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("GetQuotesAsync", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("CustomerQuoteSummaryDto", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("_quote = quotes.FirstOrDefault", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("data-quote-section=\"summary\"", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("data-quote-section=\"actions\"", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("@_quote.QuoteNumber", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("@_quote.Status", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("FormatMoney(_quote.Total, _quote.Currency)", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("href=\"@_quote.PdfUrl\"", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("Start another quote", quoteDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("ready to connect to QuotationService", quoteDetail, StringComparison.Ordinal);
+
+        Assert.Contains("GetQuotesAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains(".quote-detail-shell", styles, StringComparison.Ordinal);
+        Assert.Contains(".quote-detail-actions", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Quote_workspace_is_single_viewport_application_shell()
     {
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
