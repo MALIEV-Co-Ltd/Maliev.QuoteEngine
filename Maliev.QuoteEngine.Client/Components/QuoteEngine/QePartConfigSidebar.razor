@@ -308,6 +308,36 @@
             }
         </section>
 
+        <section class="qe-pcs-section" data-config-section="inspection">
+            <div class="qe-pcs-section-header">
+                <span class="qe-pcs-section-title">@Text("Inspection", "การตรวจสอบ")</span>
+                <span class="qe-pcs-section-count">@FormatOptionCount((ReferenceData?.InspectionLevels.Count ?? 0))</span>
+            </div>
+            <div class="qe-pcs-cards">
+                @foreach (var inspection in ReferenceData?.InspectionLevels ?? [])
+                {
+                    var active = string.Equals(Part.InspectionLevel, inspection.Code, StringComparison.OrdinalIgnoreCase);
+                    <button type="button"
+                            class="qe-pcs-choice-card @(active ? "qe-pcs-choice-card--active" : "")"
+                            @onclick="@(() => SetInspection(inspection.Code))">
+                        <span class="qe-pcs-choice-swatch">
+                            <MudIcon Icon="@Icons.Material.Outlined.FactCheck" Size="Size.Small" />
+                        </span>
+                        <span class="qe-pcs-choice-info">
+                            <span class="qe-pcs-choice-name">@inspection.Name</span>
+                            <span class="qe-pcs-choice-sub">@inspection.Description</span>
+                        </span>
+                        @if (active)
+                        {
+                            <span class="qe-pcs-card-check">
+                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                            </span>
+                        }
+                    </button>
+                }
+            </div>
+        </section>
+
         <section class="qe-pcs-section" data-config-section="quantity">
             <div class="qe-pcs-section-header">
                 <span class="qe-pcs-section-title">@Text("Quantity", "จำนวน")</span>
@@ -336,45 +366,6 @@
                     }
                 </div>
             </div>
-        </section>
-
-        <section class="qe-pcs-section">
-            <button type="button" class="qe-pcs-advanced-toggle" @onclick="@(() => _advancedOpen = !_advancedOpen)">
-                <span class="qe-pcs-section-title">@Text("Advanced options", "ตัวเลือกขั้นสูง")</span>
-                <MudIcon Icon="@(_advancedOpen ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)" Size="Size.Small" />
-            </button>
-            @if (_advancedOpen)
-            {
-                <div class="qe-pcs-advanced-content">
-                    <div class="qe-pcs-section-header">
-                        <span class="qe-pcs-section-title">@Text("Inspection", "การตรวจสอบ")</span>
-                        <span class="qe-pcs-section-count">@FormatOptionCount((ReferenceData?.InspectionLevels.Count ?? 0))</span>
-                    </div>
-                    <div class="qe-pcs-cards">
-                        @foreach (var inspection in ReferenceData?.InspectionLevels ?? [])
-                        {
-                            var active = string.Equals(Part.InspectionLevel, inspection.Code, StringComparison.OrdinalIgnoreCase);
-                            <button type="button"
-                                    class="qe-pcs-choice-card @(active ? "qe-pcs-choice-card--active" : "")"
-                                    @onclick="@(() => SetInspection(inspection.Code))">
-                                <span class="qe-pcs-choice-swatch">
-                                    <MudIcon Icon="@Icons.Material.Outlined.FactCheck" Size="Size.Small" />
-                                </span>
-                                <span class="qe-pcs-choice-info">
-                                    <span class="qe-pcs-choice-name">@inspection.Name</span>
-                                    <span class="qe-pcs-choice-sub">@inspection.Description</span>
-                                </span>
-                                @if (active)
-                                {
-                                    <span class="qe-pcs-card-check">
-                                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
-                                    </span>
-                                }
-                            </button>
-                        }
-                    </div>
-                </div>
-            }
         </section>
 
         <section class="qe-pcs-section">
@@ -426,8 +417,6 @@
 
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
-
-    private bool _advancedOpen;
 
     private bool IsCnc => Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase);
     private bool HasSelectedProcess => !string.IsNullOrWhiteSpace(Part.ProcessId);
