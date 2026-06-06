@@ -103,6 +103,35 @@ else
             </article>
         </section>
 
+        <section class="order-detail-card" data-order-section="documents">
+            <div class="order-panel-head">
+                <span>@Text("Order documents", "เอกสารคำสั่งซื้อ")</span>
+                <strong>@OrderDocuments.Count</strong>
+            </div>
+            @if (OrderDocuments.Count > 0)
+            {
+                <div class="order-documents-list">
+                    @foreach (var document in OrderDocuments)
+                    {
+                        <div class="order-document-row">
+                            <span>@document.FileName</span>
+                            <strong>@document.Kind</strong>
+                            <small>@DocumentMeta(document)</small>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="order-documents-empty">@Text("No purchase order, invoice, or receipt is attached to this order yet.", "ยังไม่มีใบสั่งซื้อ ใบแจ้งหนี้ หรือใบเสร็จที่ผูกกับคำสั่งซื้อนี้")</p>
+            }
+            <div class="order-detail-actions">
+                <a class="qe-secondary-btn" href="@DocumentHref("PurchaseOrder")">@Text("Add PO", "เพิ่ม PO")</a>
+                <a class="qe-secondary-btn" href="@DocumentHref("Invoice")">@Text("Add invoice", "เพิ่มใบแจ้งหนี้")</a>
+                <a class="qe-secondary-btn" href="@DocumentHref("Receipt")">@Text("Add receipt", "เพิ่มใบเสร็จ")</a>
+            </div>
+        </section>
+
         <section class="order-detail-card" data-order-section="timeline">
             <div class="order-panel-head">
                 <span>@Text("Status timeline", "ไทม์ไลน์สถานะ")</span>
@@ -138,6 +167,7 @@ else
     private bool _loading = true;
     private bool _paymentBusy;
     private string? _paymentError;
+    private IReadOnlyList<CustomerDocumentDto> _documents = [];
     private HubConnection? _notificationConnection;
     private string? _joinedOrderNumber;
 
@@ -162,6 +192,13 @@ else
         _order.QuotedAmount is > 0 &&
         !string.Equals(_order.PaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase);
 
+    private IReadOnlyList<CustomerDocumentDto> OrderDocuments => _order is null
+        ? []
+        : _documents
+            .Where(document => string.Equals(document.OrderNumber, _order.OrderNumber, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(document => document.UploadedAt)
+            .ToArray();
+
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
@@ -173,7 +210,12 @@ else
 
         if (_order is not null)
         {
+            _documents = await Api.GetDocumentsAsync();
             await EnsureOrderNotificationConnectionAsync(_order.OrderNumber);
+        }
+        else
+        {
+            _documents = [];
         }
     }
 
@@ -234,6 +276,23 @@ else
         return _order is null
             ? "/documents"
             : $"/documents?kind={Uri.EscapeDataString(kind)}&orderNumber={Uri.EscapeDataString(_order.OrderNumber)}";
+    }
+
+    private string DocumentMeta(CustomerDocumentDto document)
+    {
+        return $"{FormatDate(document.UploadedAt)} · {FormatFileSize(document.FileSizeBytes)}";
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return "0 KB";
+        }
+
+        return bytes >= 1_000_000
+            ? $"{bytes / 1_000_000m:N1} MB"
+            : $"{Math.Max(1, bytes / 1_000)} KB";
     }
 
     private async Task EnsureOrderNotificationConnectionAsync(string orderNumber)

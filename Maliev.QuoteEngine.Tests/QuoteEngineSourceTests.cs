@@ -869,6 +869,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@inject QuoteEngineApiClient Api", detail, StringComparison.Ordinal);
         Assert.Contains("@inject NavigationManager Navigation", detail, StringComparison.Ordinal);
         Assert.Contains("GetOrderDetailAsync(OrderNumber)", detail, StringComparison.Ordinal);
+        Assert.Contains("GetDocumentsAsync", detail, StringComparison.Ordinal);
+        Assert.Contains("OrderDocuments", detail, StringComparison.Ordinal);
+        Assert.Contains("data-order-section=\"documents\"", detail, StringComparison.Ordinal);
+        Assert.Contains("CustomerDocumentDto", detail, StringComparison.Ordinal);
+        Assert.Contains("document.OrderNumber", detail, StringComparison.Ordinal);
+        Assert.Contains("document.Kind", detail, StringComparison.Ordinal);
+        Assert.Contains("document.FileName", detail, StringComparison.Ordinal);
         Assert.Contains("IAsyncDisposable", detail, StringComparison.Ordinal);
         Assert.Contains("HubConnectionBuilder", detail, StringComparison.Ordinal);
         Assert.Contains(".WithUrl(Navigation.ToAbsoluteUri(\"/hubs/quote-notifications\"))", detail, StringComparison.Ordinal);
@@ -903,10 +910,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("kind={Uri.EscapeDataString(kind)}&orderNumber={Uri.EscapeDataString(_order.OrderNumber)}", detail, StringComparison.Ordinal);
 
         Assert.Contains("GetOrderDetailAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("GetDocumentsAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/account/orders/{Uri.EscapeDataString(orderNumber)}", apiClient, StringComparison.Ordinal);
 
         Assert.Contains(".order-detail-shell", styles, StringComparison.Ordinal);
         Assert.Contains(".order-progress-track", styles, StringComparison.Ordinal);
+        Assert.Contains(".order-documents-list", styles, StringComparison.Ordinal);
     }
 
     [Fact]

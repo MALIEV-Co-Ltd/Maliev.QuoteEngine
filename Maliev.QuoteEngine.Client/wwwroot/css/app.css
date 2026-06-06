@@ -2093,6 +2093,42 @@ p {
     line-height: 1.4;
 }
 
+.order-documents-list {
+    display: grid;
+    gap: 8px;
+}
+
+.order-document-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 12px;
+    align-items: center;
+    padding: 10px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.order-document-row span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--ink);
+    font-weight: 650;
+}
+
+.order-document-row strong {
+    color: var(--primary);
+    font-size: var(--maliev-font-micro);
+    text-transform: uppercase;
+}
+
+.order-document-row small,
+.order-documents-empty {
+    grid-column: 1 / -1;
+    color: var(--muted);
+    font-size: var(--maliev-font-small);
+}
+
 .payment-return-state {
     width: min(100%, 720px);
     margin: 44px auto;
