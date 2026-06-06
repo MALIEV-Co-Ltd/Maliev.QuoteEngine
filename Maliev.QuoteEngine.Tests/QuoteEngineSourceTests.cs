@@ -867,6 +867,31 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Ndas_page_exposes_customer_confidentiality_status_and_actions()
+    {
+        var ndas = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Ndas.razor");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("@page \"/ndas\"", ndas, StringComparison.Ordinal);
+        Assert.Contains("GetNdasAsync", ndas, StringComparison.Ordinal);
+        Assert.Contains("CustomerNdaDto", ndas, StringComparison.Ordinal);
+        Assert.Contains("ActiveNdas", ndas, StringComparison.Ordinal);
+        Assert.Contains("ExpiringNdas", ndas, StringComparison.Ordinal);
+        Assert.Contains("NdaStatusClass", ndas, StringComparison.Ordinal);
+        Assert.Contains("data-nda-section=\"summary\"", ndas, StringComparison.Ordinal);
+        Assert.Contains("data-nda-section=\"documents\"", ndas, StringComparison.Ordinal);
+        Assert.Contains("href=\"/documents?kind=Requirement\"", ndas, StringComparison.Ordinal);
+        Assert.Contains("href=\"/quotes/new\"", ndas, StringComparison.Ordinal);
+        Assert.Contains("NdaDateLine(nda)", ndas, StringComparison.Ordinal);
+
+        Assert.Contains("GetNdasAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains(".nda-dashboard", styles, StringComparison.Ordinal);
+        Assert.Contains(".nda-summary-grid", styles, StringComparison.Ordinal);
+        Assert.Contains(".nda-status-pill", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Order_detail_page_is_customer_manufacturing_progress_surface()
     {
         var orders = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Orders.razor");
