@@ -297,6 +297,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 _ => [summary],
                 (_, list) => { lock (list) { list.Add(summary); return list; } });
 
+            var receivedAt = DateTimeOffset.UtcNow;
             var detail = new CustomerOrderDetailDto(
                 OrderId: orderId,
                 OrderNumber: orderNumber,
@@ -308,9 +309,35 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 ActualDeliveryDate: null,
                 CustomerPoNumber: request.CustomerPoNumber,
                 Requirements: request.Requirements,
-                CreatedAt: DateTimeOffset.UtcNow,
-                UpdatedAt: DateTimeOffset.UtcNow,
-                StatusHistory: [new OrderStatusEntryDto("Pending", "Your order has been received.", DateTimeOffset.UtcNow)]);
+                CreatedAt: receivedAt,
+                UpdatedAt: receivedAt,
+                StatusHistory: [new OrderStatusEntryDto("Pending", "Your order has been received.", receivedAt)])
+            {
+                ManufacturingMilestones =
+                [
+                    new CustomerManufacturingMilestoneDto(
+                        "order-received",
+                        "Order received",
+                        "We have received the order and attached customer requirements.",
+                        "complete",
+                        15,
+                        receivedAt),
+                    new CustomerManufacturingMilestoneDto(
+                        "quote-payment",
+                        "Quote and payment",
+                        "Formal quote and payment confirmation are tracked before production starts.",
+                        "current",
+                        35,
+                        null),
+                    new CustomerManufacturingMilestoneDto(
+                        "manufacturing",
+                        "Manufacturing",
+                        "The parts are queued or active on the selected manufacturing process.",
+                        "pending",
+                        55,
+                        null)
+                ]
+            };
             _ordersByNumber[orderNumber] = detail;
 
             return Task.FromResult<OrderCreatedResult?>(new OrderCreatedResult
@@ -1814,6 +1841,15 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("Pending", detailResp.CurrentStatus);
         Assert.NotEmpty(detailResp.StatusHistory);
         Assert.Contains(detailResp.StatusHistory, s => s.Status == "Pending");
+        Assert.NotEmpty(detailResp.ManufacturingMilestones);
+        Assert.Contains(detailResp.ManufacturingMilestones, milestone =>
+            milestone.Key == "order-received" &&
+            milestone.State == "complete" &&
+            milestone.Percent == 15);
+        Assert.Contains(detailResp.ManufacturingMilestones, milestone =>
+            milestone.Key == "manufacturing" &&
+            milestone.State == "pending" &&
+            milestone.Percent == 55);
     }
 
     [Fact]

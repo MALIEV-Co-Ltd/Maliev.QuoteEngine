@@ -976,6 +976,8 @@ public sealed class QuoteEngineSourceTests
         var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "OrderDetail.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
         var accountController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "AccountController.cs");
+        var accountDtos = ReadRepoFile("Maliev.QuoteEngine.Shared", "Account", "AccountDtos.cs");
+        var orderServiceClient = ReadRepoFile("Maliev.QuoteEngine.Bff", "Clients", "OrderServiceClient.cs");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
         Assert.Contains("href=\"/orders/@Uri.EscapeDataString(order.OrderNumber)\"", orders, StringComparison.Ordinal);
@@ -1022,11 +1024,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("data-order-section=\"timeline\"", detail, StringComparison.Ordinal);
         Assert.Contains("CustomerPoNumber", detail, StringComparison.Ordinal);
         Assert.Contains("StatusHistory", detail, StringComparison.Ordinal);
+        Assert.Contains("ManufacturingMilestones", detail, StringComparison.Ordinal);
+        Assert.Contains("CustomerManufacturingMilestoneDto", accountDtos, StringComparison.Ordinal);
+        Assert.Contains("BuildCustomerManufacturingMilestones", orderServiceClient, StringComparison.Ordinal);
         Assert.Contains("PromisedDeliveryDate", detail, StringComparison.Ordinal);
         Assert.Contains("ActualDeliveryDate", detail, StringComparison.Ordinal);
         Assert.Contains("DeliveryStatusText", detail, StringComparison.Ordinal);
         Assert.Contains("DeliveryTrackingText", detail, StringComparison.Ordinal);
         Assert.Contains("ManufacturingProgressPercent", detail, StringComparison.Ordinal);
+        Assert.Contains("milestone.State", detail, StringComparison.Ordinal);
+        Assert.Contains("MilestoneTimestamp", detail, StringComparison.Ordinal);
         Assert.Contains("DocumentHref(\"PurchaseOrder\")", detail, StringComparison.Ordinal);
         Assert.Contains("DocumentHref(\"Receipt\")", detail, StringComparison.Ordinal);
         Assert.Contains("DocumentHref(\"Invoice\")", detail, StringComparison.Ordinal);
@@ -1042,6 +1049,8 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains(".order-detail-shell", styles, StringComparison.Ordinal);
         Assert.Contains(".order-progress-track", styles, StringComparison.Ordinal);
+        Assert.Contains(".order-milestone-list", styles, StringComparison.Ordinal);
+        Assert.Contains(".order-milestone-current", styles, StringComparison.Ordinal);
         Assert.Contains(".order-documents-list", styles, StringComparison.Ordinal);
         Assert.Contains(".order-delivery-list", styles, StringComparison.Ordinal);
     }

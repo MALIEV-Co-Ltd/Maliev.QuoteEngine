@@ -167,6 +167,13 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 statusEntries = entries?.AsReadOnly() ?? (IReadOnlyList<OsOrderStatusEntry>)[];
             }
 
+            var customerStatusEntries = statusEntries
+                .Select(s => new OrderStatusEntryDto(
+                    s.Status,
+                    s.CustomerNotes,
+                    new DateTimeOffset(s.Timestamp, TimeSpan.Zero)))
+                .ToArray();
+
             return new CustomerOrderDetailDto(
                 OrderId: DeterministicGuid(detail.OrderId),
                 OrderNumber: detail.OrderId,
@@ -184,12 +191,19 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 Requirements: detail.Requirements,
                 CreatedAt: new DateTimeOffset(detail.CreatedAt, TimeSpan.Zero),
                 UpdatedAt: new DateTimeOffset(detail.UpdatedAt, TimeSpan.Zero),
-                StatusHistory: statusEntries
-                    .Select(s => new OrderStatusEntryDto(
-                        s.Status,
-                        s.CustomerNotes,
-                        new DateTimeOffset(s.Timestamp, TimeSpan.Zero)))
-                    .ToArray());
+                StatusHistory: customerStatusEntries)
+            {
+                ManufacturingMilestones = BuildCustomerManufacturingMilestones(
+                    detail.CurrentStatus ?? "Pending",
+                    detail.PaymentStatus,
+                    detail.PromisedDeliveryDate.HasValue
+                        ? new DateTimeOffset(detail.PromisedDeliveryDate.Value, TimeSpan.Zero)
+                        : null,
+                    detail.ActualDeliveryDate.HasValue
+                        ? new DateTimeOffset(detail.ActualDeliveryDate.Value, TimeSpan.Zero)
+                        : null,
+                    customerStatusEntries)
+            };
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -225,6 +239,102 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
             logger.LogWarning(ex, "OrderService AddStatus {Status} failed for {OrderId}.", status, orderId);
             return false;
         }
+    }
+
+    private static IReadOnlyList<CustomerManufacturingMilestoneDto> BuildCustomerManufacturingMilestones(
+        string currentStatus,
+        string paymentStatus,
+        DateTimeOffset? promisedDeliveryDate,
+        DateTimeOffset? actualDeliveryDate,
+        IReadOnlyList<OrderStatusEntryDto> statusHistory)
+    {
+        var normalizedStatus = currentStatus.ToLowerInvariant();
+        var paid = paymentStatus.Contains("paid", StringComparison.OrdinalIgnoreCase);
+        var delivered = actualDeliveryDate.HasValue || normalizedStatus.Contains("delivered", StringComparison.Ordinal);
+        var shipped = delivered || normalizedStatus.Contains("shipped", StringComparison.Ordinal);
+        var inspected = shipped ||
+            normalizedStatus.Contains("quality", StringComparison.Ordinal) ||
+            normalizedStatus.Contains("inspection", StringComparison.Ordinal);
+        var manufacturing = inspected ||
+            normalizedStatus.Contains("manufacturing", StringComparison.Ordinal) ||
+            normalizedStatus.Contains("production", StringComparison.Ordinal);
+        var accepted = manufacturing ||
+            paid ||
+            normalizedStatus.Contains("accepted", StringComparison.Ordinal) ||
+            normalizedStatus.Contains("quoted", StringComparison.Ordinal) ||
+            normalizedStatus.Contains("reviewed", StringComparison.Ordinal);
+
+        var milestones = new[]
+        {
+            CreateMilestone(
+                "order-received",
+                "Order received",
+                "We have received the order and attached customer requirements.",
+                15,
+                true,
+                !accepted && !manufacturing && !inspected && !shipped && !delivered,
+                FindStatusTimestamp(statusHistory, "pending", "new", "received")),
+            CreateMilestone(
+                "quote-payment",
+                "Quote and payment",
+                "Formal quote and payment confirmation are tracked before production starts.",
+                35,
+                accepted,
+                !accepted,
+                FindStatusTimestamp(statusHistory, "accepted", "paid", "quoted", "reviewed")),
+            CreateMilestone(
+                "manufacturing",
+                "Manufacturing",
+                "The parts are queued or active on the selected manufacturing process.",
+                55,
+                manufacturing,
+                accepted && !manufacturing,
+                FindStatusTimestamp(statusHistory, "manufacturing", "production")),
+            CreateMilestone(
+                "quality-inspection",
+                "Quality inspection",
+                "Finished parts move through quality review before delivery handoff.",
+                75,
+                inspected,
+                manufacturing && !inspected,
+                FindStatusTimestamp(statusHistory, "quality", "inspection")),
+            CreateMilestone(
+                "delivery",
+                "Delivery",
+                promisedDeliveryDate.HasValue
+                    ? $"Delivery target: {promisedDeliveryDate.Value:yyyy-MM-dd}."
+                    : "Shipment tracking appears after delivery handoff.",
+                100,
+                delivered,
+                inspected && !delivered,
+                actualDeliveryDate ?? FindStatusTimestamp(statusHistory, "delivered", "shipped"))
+        };
+
+        return milestones;
+    }
+
+    private static CustomerManufacturingMilestoneDto CreateMilestone(
+        string key,
+        string label,
+        string description,
+        int percent,
+        bool isComplete,
+        bool isCurrent,
+        DateTimeOffset? timestamp)
+    {
+        var state = isComplete ? "complete" : isCurrent ? "current" : "pending";
+        return new CustomerManufacturingMilestoneDto(key, label, description, state, percent, timestamp);
+    }
+
+    private static DateTimeOffset? FindStatusTimestamp(
+        IReadOnlyList<OrderStatusEntryDto> statusHistory,
+        params string[] terms)
+    {
+        return statusHistory
+            .Where(entry => terms.Any(term => entry.Status.Contains(term, StringComparison.OrdinalIgnoreCase)))
+            .OrderByDescending(entry => entry.Timestamp)
+            .Select(entry => (DateTimeOffset?)entry.Timestamp)
+            .FirstOrDefault();
     }
 }
 

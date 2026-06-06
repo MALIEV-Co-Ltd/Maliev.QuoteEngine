@@ -244,7 +244,7 @@ b {
     display: grid;
     place-items: center;
     z-index: 1000;
-    background: #ffffff;
+    background: var(--panel);
     color: #171717;
     transition: opacity 180ms ease, visibility 180ms ease;
 }
@@ -1333,7 +1333,7 @@ body.quote-ready .startup-screen {
     min-height: 0;
     padding: 18px;
     overflow-y: auto;
-    background: #ffffff;
+    background: var(--panel);
 }
 
 .customer-chatbot-message {
@@ -2034,6 +2034,72 @@ p {
     height: 100%;
     border-radius: inherit;
     background: var(--primary);
+}
+
+.order-milestone-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    margin: 14px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.order-milestone {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 8px;
+    align-items: start;
+    padding: 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--maliev-radius-sm);
+    background: #ffffff;
+}
+
+.order-milestone-marker {
+    width: 12px;
+    height: 12px;
+    margin-top: 3px;
+    border-radius: var(--maliev-radius-pill);
+    border: 2px solid var(--line-strong);
+    background: #ffffff;
+}
+
+.order-milestone-complete .order-milestone-marker,
+.order-milestone-current .order-milestone-marker {
+    border-color: var(--primary);
+    background: var(--primary);
+}
+
+.order-milestone-current {
+    border-color: color-mix(in srgb, var(--primary) 48%, var(--line));
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.order-milestone strong,
+.order-milestone p,
+.order-milestone small {
+    overflow-wrap: anywhere;
+}
+
+.order-milestone strong {
+    display: block;
+    color: var(--ink);
+    font-size: var(--maliev-font-small);
+}
+
+.order-milestone p {
+    margin: 4px 0;
+    color: var(--muted);
+    font-size: var(--maliev-font-small);
+    line-height: 1.35;
+}
+
+.order-milestone small {
+    color: var(--muted);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
 }
 
 .order-progress-meta,
@@ -3344,6 +3410,10 @@ textarea::placeholder {
         position: static;
     }
 
+    .order-milestone-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
     .order-detail-header,
     .order-progress-meta,
     .order-detail-grid,
@@ -3374,6 +3444,10 @@ textarea::placeholder {
 
     .order-detail-header {
         align-items: start;
+    }
+
+    .order-milestone-list {
+        grid-template-columns: 1fr;
     }
 
     .quote-topbar-inner {

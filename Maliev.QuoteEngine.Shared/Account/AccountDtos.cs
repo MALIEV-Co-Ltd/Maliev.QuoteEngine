@@ -39,8 +39,17 @@ public sealed record OrderStatusEntryDto(
     string? CustomerNote,
     DateTimeOffset Timestamp);
 
+/// <summary>A customer-visible manufacturing milestone for order progress tracking.</summary>
+public sealed record CustomerManufacturingMilestoneDto(
+    string Key,
+    string Label,
+    string Description,
+    string State,
+    int Percent,
+    DateTimeOffset? Timestamp);
+
 /// <summary>Full detail view of a manufacturing order for the customer portal.</summary>
-public sealed record CustomerOrderDetailDto(
+public sealed partial record CustomerOrderDetailDto(
     Guid OrderId,
     string OrderNumber,
     string CurrentStatus,
@@ -54,6 +63,11 @@ public sealed record CustomerOrderDetailDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     IReadOnlyList<OrderStatusEntryDto> StatusHistory);
+
+public sealed partial record CustomerOrderDetailDto
+{
+    public IReadOnlyList<CustomerManufacturingMilestoneDto> ManufacturingMilestones { get; init; } = [];
+}
 
 public sealed record CustomerNdaDto(
     Guid NdaId,

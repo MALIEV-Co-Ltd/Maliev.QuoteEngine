@@ -42,6 +42,22 @@ else
             <div class="order-progress-track" role="progressbar" aria-valuenow="@ManufacturingProgressPercent" aria-valuemin="0" aria-valuemax="100">
                 <span style="width:@ManufacturingProgressPercent%"></span>
             </div>
+            @if (_order.ManufacturingMilestones.Count > 0)
+            {
+                <ol class="order-milestone-list">
+                    @foreach (var milestone in _order.ManufacturingMilestones)
+                    {
+                        <li class="order-milestone order-milestone-@milestone.State">
+                            <span class="order-milestone-marker"></span>
+                            <div>
+                                <strong>@milestone.Label</strong>
+                                <p>@milestone.Description</p>
+                                <small>@MilestoneTimestamp(milestone)</small>
+                            </div>
+                        </li>
+                    }
+                </ol>
+            }
             <div class="order-progress-meta">
                 <span>@Text("Current status", "สถานะปัจจุบัน"): <strong>@_order.CurrentStatus</strong></span>
                 <span>@Text("Promised delivery", "กำหนดส่ง"): <strong>@FormatDate(_order.PromisedDeliveryDate)</strong></span>
@@ -199,18 +215,41 @@ else
     private HubConnection? _notificationConnection;
     private string? _joinedOrderNumber;
 
-    private int ManufacturingProgressPercent => _order?.CurrentStatus.ToLowerInvariant() switch
+    private int ManufacturingProgressPercent
     {
-        null => 0,
-        var status when status.Contains("delivered", StringComparison.Ordinal) => 100,
-        var status when status.Contains("shipped", StringComparison.Ordinal) => 90,
-        var status when status.Contains("quality", StringComparison.Ordinal) || status.Contains("inspection", StringComparison.Ordinal) => 75,
-        var status when status.Contains("manufacturing", StringComparison.Ordinal) || status.Contains("production", StringComparison.Ordinal) => 55,
-        var status when status.Contains("paid", StringComparison.Ordinal) => 35,
-        var status when status.Contains("accepted", StringComparison.Ordinal) => 25,
-        var status when status.Contains("pending", StringComparison.Ordinal) => 15,
-        _ => 10
-    };
+        get
+        {
+            if (_order is null)
+            {
+                return 0;
+            }
+
+            var milestonePercent = _order.ManufacturingMilestones
+                .Where(milestone =>
+                    string.Equals(milestone.State, "complete", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(milestone.State, "current", StringComparison.OrdinalIgnoreCase))
+                .Select(milestone => milestone.Percent)
+                .DefaultIfEmpty(0)
+                .Max();
+
+            if (milestonePercent > 0)
+            {
+                return Math.Max(milestonePercent, StatusPercent(_order.CurrentStatus));
+            }
+
+            return _order.CurrentStatus.ToLowerInvariant() switch
+            {
+                var status when status.Contains("delivered", StringComparison.Ordinal) => 100,
+                var status when status.Contains("shipped", StringComparison.Ordinal) => 90,
+                var status when status.Contains("quality", StringComparison.Ordinal) || status.Contains("inspection", StringComparison.Ordinal) => 75,
+                var status when status.Contains("manufacturing", StringComparison.Ordinal) || status.Contains("production", StringComparison.Ordinal) => 55,
+                var status when status.Contains("paid", StringComparison.Ordinal) => 35,
+                var status when status.Contains("accepted", StringComparison.Ordinal) => 25,
+                var status when status.Contains("pending", StringComparison.Ordinal) => 15,
+                _ => 10
+            };
+        }
+    }
 
     private string PoStatusText => string.IsNullOrWhiteSpace(_order?.CustomerPoNumber)
         ? Text("Missing", "ยังไม่มี")
@@ -330,6 +369,18 @@ else
         return $"{FormatDate(document.UploadedAt)} · {FormatFileSize(document.FileSizeBytes)}";
     }
 
+    private string MilestoneTimestamp(CustomerManufacturingMilestoneDto milestone)
+    {
+        if (milestone.Timestamp.HasValue)
+        {
+            return FormatDate(milestone.Timestamp);
+        }
+
+        return string.Equals(milestone.State, "current", StringComparison.OrdinalIgnoreCase)
+            ? Text("In progress", "กำลังดำเนินการ")
+            : Text("Pending", "รอดำเนินการ");
+    }
+
     private async Task OpenDocumentAsync(CustomerDocumentDto document)
     {
         _openingDocumentIds.Add(document.DocumentId);
@@ -414,7 +465,8 @@ else
         {
             CurrentStatus = payload.NewStatus,
             UpdatedAt = payload.ChangedAt,
-            StatusHistory = [entry, .. _order.StatusHistory]
+            StatusHistory = [entry, .. _order.StatusHistory],
+            ManufacturingMilestones = BuildRealtimeMilestones(payload.NewStatus, payload.ChangedAt)
         };
     }
 
@@ -429,8 +481,77 @@ else
         _order = _order with
         {
             PaymentStatus = "Paid",
-            UpdatedAt = DateTimeOffset.UtcNow
+            UpdatedAt = DateTimeOffset.UtcNow,
+            ManufacturingMilestones = BuildRealtimeMilestones("Paid", DateTimeOffset.UtcNow)
         };
+    }
+
+    private IReadOnlyList<CustomerManufacturingMilestoneDto> BuildRealtimeMilestones(string status, DateTimeOffset changedAt)
+    {
+        if (_order is null || _order.ManufacturingMilestones.Count == 0)
+        {
+            return [];
+        }
+
+        var statusPercent = StatusPercent(status);
+        return _order.ManufacturingMilestones
+            .Select(milestone =>
+            {
+                if (milestone.Percent < statusPercent)
+                {
+                    return milestone with
+                    {
+                        State = "complete",
+                        Timestamp = milestone.Timestamp ?? changedAt
+                    };
+                }
+
+                if (milestone.Percent == statusPercent)
+                {
+                    return milestone with
+                    {
+                        State = "current",
+                        Timestamp = milestone.Timestamp ?? changedAt
+                    };
+                }
+
+                return milestone with { State = "pending" };
+            })
+            .ToArray();
+    }
+
+    private static int StatusPercent(string status)
+    {
+        var normalized = status.ToLowerInvariant();
+        if (normalized.Contains("delivered", StringComparison.Ordinal))
+        {
+            return 100;
+        }
+
+        if (normalized.Contains("shipped", StringComparison.Ordinal))
+        {
+            return 90;
+        }
+
+        if (normalized.Contains("quality", StringComparison.Ordinal) || normalized.Contains("inspection", StringComparison.Ordinal))
+        {
+            return 75;
+        }
+
+        if (normalized.Contains("manufacturing", StringComparison.Ordinal) || normalized.Contains("production", StringComparison.Ordinal))
+        {
+            return 55;
+        }
+
+        if (normalized.Contains("paid", StringComparison.Ordinal) ||
+            normalized.Contains("accepted", StringComparison.Ordinal) ||
+            normalized.Contains("quoted", StringComparison.Ordinal) ||
+            normalized.Contains("reviewed", StringComparison.Ordinal))
+        {
+            return 35;
+        }
+
+        return normalized.Contains("pending", StringComparison.Ordinal) ? 15 : 10;
     }
 
     public async ValueTask DisposeAsync()
