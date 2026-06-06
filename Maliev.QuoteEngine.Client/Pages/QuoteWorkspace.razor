@@ -772,7 +772,10 @@
             return;
         }
 
-        _order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_formalQuote.QuoteId, string.Empty, "Customer accepted quote."));
+        _order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_formalQuote.QuoteId, string.Empty, "Customer accepted quote.")
+        {
+            Parts = _parts.Select(x => x.ToDraft()).ToArray()
+        });
         _payment = null;
     }
 

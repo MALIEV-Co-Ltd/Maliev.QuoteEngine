@@ -1235,6 +1235,8 @@ public sealed class QuoteEngineSourceTests
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var detailCard = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
+        var quoteController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "QuoteController.cs");
+        var quoteDtos = ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
         Assert.Contains("<QePartsListPanel", workspace, StringComparison.Ordinal);
@@ -1248,6 +1250,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_isPartsDrawerOpen", workspace, StringComparison.Ordinal);
         Assert.Contains("_centerMode", workspace, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"@Text(\"Quantity\"", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor"), StringComparison.Ordinal);
+        Assert.Contains("Parts = _parts.Select(x => x.ToDraft()).ToArray()", workspace, StringComparison.Ordinal);
+        Assert.Contains("BuildOrderRequirements", quoteController, StringComparison.Ordinal);
+        Assert.Contains("BuildConfiguredPartSummary", quoteController, StringComparison.Ordinal);
+        Assert.Contains("IReadOnlyList<QuotePartDraftDto> Parts", quoteDtos, StringComparison.Ordinal);
         Assert.DoesNotContain("<span class=\"qe-zone-label\">Bill To</span>", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("CustomerPicker", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("internal pricing override", workspace, StringComparison.OrdinalIgnoreCase);

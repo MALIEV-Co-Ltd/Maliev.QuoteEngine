@@ -575,10 +575,9 @@ public sealed class QuoteController(
             CustomerId = customerId.ToString("D"),
             OrderedQuantity = 1,
             CustomerPoNumber = string.IsNullOrWhiteSpace(request.CustomerPoNumber) ? null : request.CustomerPoNumber,
-            Requirements = request.Notes
+            Requirements = BuildOrderRequirements(request)
         };
-        // Default to 3D Printing (FDM); actual process comes from the quotation line items
-        orderRequest.SetProcessFromCode("fdm");
+        orderRequest.SetProcessFromCode(request.Parts.FirstOrDefault()?.ProcessId ?? "fdm");
 
         var result = await orderClient.CreateAsync(orderRequest, cancellationToken);
         if (result is null)
@@ -610,6 +609,99 @@ public sealed class QuoteController(
         }
 
         return sessionResolver.TryResolveCustomerId(out var customerId) && upload.CustomerId == customerId;
+    }
+
+    private static string BuildOrderRequirements(CreateManufacturingOrderRequest request)
+    {
+        var requirements = new List<string>();
+        if (!string.IsNullOrWhiteSpace(request.Notes))
+        {
+            requirements.Add(request.Notes.Trim());
+        }
+
+        if (request.Parts.Count > 0)
+        {
+            requirements.Add("Configured quote parts:");
+            requirements.AddRange(request.Parts.Select(BuildConfiguredPartSummary));
+        }
+
+        return string.Join(Environment.NewLine, requirements);
+    }
+
+    private static string BuildConfiguredPartSummary(QuotePartDraftDto part)
+    {
+        var summary = new List<string>
+        {
+            part.FileName,
+            $"process {part.ProcessId.ToUpperInvariant()}",
+            $"material {part.MaterialId}",
+            $"qty {part.Quantity}"
+        };
+
+        AddIfPresent(summary, "finish", part.FinishCode ?? part.FinishId);
+        AddIfPresent(summary, "tolerance", part.ToleranceCode ?? part.ToleranceId);
+        AddIfPresent(summary, "inspection", part.InspectionLevel);
+        AddIfPresent(summary, "roughness", part.RoughnessCode);
+        AddIfPresent(summary, "color", part.Color);
+
+        if (part.ProcessOptionValues.Count > 0)
+        {
+            summary.Add("process options " + string.Join(", ", part.ProcessOptionValues
+                .OrderBy(option => option.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(option => $"{option.Key}={option.Value}")));
+        }
+
+        if (part.HasThreadedHoles || part.ThreadedHoleCount > 0)
+        {
+            var threadSummary = $"threaded holes {Math.Max(part.ThreadedHoleCount, 1)}";
+            if (!string.IsNullOrWhiteSpace(part.ThreadSpecification))
+            {
+                threadSummary += $" {part.ThreadSpecification.Trim()}";
+            }
+
+            summary.Add(threadSummary);
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.InsertType) && !part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            summary.Add($"inserts {Math.Max(part.InsertCount, 1)} {part.InsertType.Trim()}");
+        }
+
+        foreach (var drawing in part.DrawingFiles)
+        {
+            summary.Add($"drawing {drawing.FileName}");
+        }
+
+        if (part.BodyCount.HasValue)
+        {
+            summary.Add($"body count {part.BodyCount.Value}");
+        }
+
+        if (part.SelectedBodyIndex.HasValue)
+        {
+            summary.Add($"selected body {part.SelectedBodyIndex.Value}");
+        }
+
+        if (part.DfmAcknowledged)
+        {
+            summary.Add("DFM acknowledged");
+        }
+
+        if (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason))
+        {
+            summary.Add($"DFM issue {part.NonManifoldReason.Trim()}");
+        }
+
+        AddIfPresent(summary, "notes", part.PartNotes);
+        return "- " + string.Join("; ", summary);
+    }
+
+    private static void AddIfPresent(List<string> values, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            values.Add($"{label} {value.Trim()}");
+        }
     }
 
     private bool CanUsePrototypeUploadFallback =>

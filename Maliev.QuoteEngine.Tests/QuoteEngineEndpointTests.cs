@@ -1789,6 +1789,86 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Order_creation_carries_configured_part_summary_to_customer_requirements()
+    {
+        using var client = await CreateSignedInClientAsync("configured-order@example.com");
+        var part = new QuotePartDraftDto
+        {
+            PartId = Guid.NewGuid(),
+            FileId = Guid.NewGuid(),
+            UploadId = "upload-configured-order",
+            FileName = "cnc-bracket.step",
+            ProcessId = "cnc",
+            MaterialId = "al6061",
+            FinishCode = "BEAD_BLAST_CLEAR",
+            ToleranceCode = "ISO2768_M",
+            InspectionLevel = "FAI",
+            RoughnessCode = "RA_1_6",
+            Quantity = 12,
+            VolumeCc = 24.5m,
+            SurfaceAreaCm2 = 88.25m,
+            HasThreadedHoles = true,
+            ThreadSpecification = "M3x0.5",
+            ThreadedHoleCount = 4,
+            InsertType = "HeatSet",
+            InsertCount = 2,
+            BodyCount = 2,
+            SelectedBodyIndex = 1,
+            DfmAcknowledged = true,
+            PartNotes = "Keep cosmetic face A scratch-free."
+        };
+        part.ProcessOptionValues["machine"] = "3-axis";
+        part.DrawingFiles.Add(new QuotePartAttachmentDto(
+            "cnc-bracket-drawing.pdf",
+            "customers/configured-order/drawing.pdf",
+            "application/pdf",
+            42_000,
+            "Drawing"));
+
+        var quoteResponse = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-configured-order", [part], "Configured order quote."));
+        quoteResponse.EnsureSuccessStatusCode();
+        var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResponse = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(
+                quote.QuoteId,
+                "PO-CONFIGURED",
+                "Customer accepted configured quote.")
+            {
+                Parts = [part]
+            });
+        orderResponse.EnsureSuccessStatusCode();
+        var order = await orderResponse.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        var detail = await client.GetFromJsonAsync<CustomerOrderDetailDto>(
+            $"/quote/v1/account/orders/{Uri.EscapeDataString(order.OrderNumber)}");
+
+        Assert.NotNull(detail);
+        Assert.Equal("PO-CONFIGURED", detail.CustomerPoNumber);
+        Assert.Contains("Customer accepted configured quote.", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("cnc-bracket.step", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("process CNC", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("material al6061", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("finish BEAD_BLAST_CLEAR", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("tolerance ISO2768_M", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("inspection FAI", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("roughness RA_1_6", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("qty 12", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("threaded holes 4 M3x0.5", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("inserts 2 HeatSet", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("drawing cnc-bracket-drawing.pdf", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("body count 2", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("selected body 1", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("DFM acknowledged", detail.Requirements, StringComparison.Ordinal);
+        Assert.Contains("notes Keep cosmetic face A scratch-free.", detail.Requirements, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Quote_approval_is_scoped_to_signed_in_customer()
     {
         using var customerA = await CreateSignedInClientAsync("quote-approve-owner@example.com");
