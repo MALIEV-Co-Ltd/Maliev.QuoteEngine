@@ -1,6 +1,7 @@
 @page "/orders/{OrderNumber}"
 @using System.Globalization
 @inject QuoteEngineApiClient Api
+@inject NavigationManager Navigation
 
 <PageTitle>@Text("Order detail - MALIEV", "รายละเอียดคำสั่งซื้อ - MALIEV")</PageTitle>
 
@@ -67,9 +68,16 @@ else
                     </div>
                 </dl>
                 <div class="order-detail-actions">
+                    <button type="button" class="qe-primary-btn" disabled="@(!CanPay || _paymentBusy)" @onclick="InitiatePaymentAsync">
+                        @(_paymentBusy ? Text("Opening payment...", "กำลังเปิดหน้าชำระเงิน...") : Text("Pay this order", "ชำระเงินคำสั่งซื้อนี้"))
+                    </button>
                     <a class="qe-secondary-btn" href="@DocumentHref("Receipt")">@Text("Receipts", "ใบเสร็จ")</a>
                     <a class="qe-secondary-btn" href="@DocumentHref("Invoice")">@Text("Invoices", "ใบแจ้งหนี้")</a>
                 </div>
+                @if (!string.IsNullOrWhiteSpace(_paymentError))
+                {
+                    <p class="order-payment-error">@_paymentError</p>
+                }
             </article>
 
             <article class="order-detail-card" data-order-section="purchase-order">
@@ -126,6 +134,8 @@ else
 
     private CustomerOrderDetailDto? _order;
     private bool _loading = true;
+    private bool _paymentBusy;
+    private string? _paymentError;
 
     private int ManufacturingProgressPercent => _order?.CurrentStatus.ToLowerInvariant() switch
     {
@@ -144,13 +154,56 @@ else
         ? Text("Missing", "ยังไม่มี")
         : Text("Received", "ได้รับแล้ว");
 
+    private bool CanPay => _order is not null &&
+        _order.QuotedAmount is > 0 &&
+        !string.Equals(_order.PaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase);
+
     protected override async Task OnParametersSetAsync()
     {
         _loading = true;
+        _paymentError = null;
         _order = string.IsNullOrWhiteSpace(OrderNumber)
             ? null
             : await Api.GetOrderDetailAsync(OrderNumber);
         _loading = false;
+    }
+
+    private async Task InitiatePaymentAsync()
+    {
+        if (_order is null || _order.QuotedAmount is not > 0)
+        {
+            return;
+        }
+
+        _paymentBusy = true;
+        _paymentError = null;
+        try
+        {
+            var payment = await Api.InitiatePaymentAsync(new InitiatePaymentRequest
+            {
+                OrderId = _order.OrderId,
+                OrderNumber = _order.OrderNumber,
+                Amount = _order.QuotedAmount.Value,
+                Currency = _order.QuoteCurrency ?? "THB"
+            });
+
+            if (!string.IsNullOrWhiteSpace(payment.PaymentUrl))
+            {
+                Navigation.NavigateTo(payment.PaymentUrl, forceLoad: true);
+            }
+            else
+            {
+                _paymentError = Text("Payment checkout is not available for this order yet.", "ยังไม่สามารถเปิดหน้าชำระเงินสำหรับคำสั่งซื้อนี้ได้");
+            }
+        }
+        catch (Exception)
+        {
+            _paymentError = Text("Payment checkout failed. Please try again.", "เปิดหน้าชำระเงินไม่สำเร็จ กรุณาลองใหม่");
+        }
+        finally
+        {
+            _paymentBusy = false;
+        }
     }
 
     private string FormatMoney(decimal? amount, string? currency)

@@ -2086,6 +2086,13 @@ p {
     margin-top: 14px;
 }
 
+.order-payment-error {
+    margin: 10px 0 0;
+    color: #b42318;
+    font-size: var(--maliev-font-small);
+    line-height: 1.4;
+}
+
 .order-status-timeline {
     display: grid;
     gap: 12px;

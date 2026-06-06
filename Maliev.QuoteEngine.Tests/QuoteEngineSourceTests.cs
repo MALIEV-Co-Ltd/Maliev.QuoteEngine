@@ -867,7 +867,16 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("@page \"/orders/{OrderNumber}\"", detail, StringComparison.Ordinal);
         Assert.Contains("@inject QuoteEngineApiClient Api", detail, StringComparison.Ordinal);
+        Assert.Contains("@inject NavigationManager Navigation", detail, StringComparison.Ordinal);
         Assert.Contains("GetOrderDetailAsync(OrderNumber)", detail, StringComparison.Ordinal);
+        Assert.Contains("InitiatePaymentAsync", detail, StringComparison.Ordinal);
+        Assert.Contains("new InitiatePaymentRequest", detail, StringComparison.Ordinal);
+        Assert.Contains("OrderId = _order.OrderId", detail, StringComparison.Ordinal);
+        Assert.Contains("OrderNumber = _order.OrderNumber", detail, StringComparison.Ordinal);
+        Assert.Contains("Amount = _order.QuotedAmount.Value", detail, StringComparison.Ordinal);
+        Assert.Contains("Currency = _order.QuoteCurrency ?? \"THB\"", detail, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(payment.PaymentUrl, forceLoad: true)", detail, StringComparison.Ordinal);
+        Assert.Contains("CanPay", detail, StringComparison.Ordinal);
         Assert.Contains("class=\"order-detail-shell\"", detail, StringComparison.Ordinal);
         Assert.Contains("data-order-section=\"payment\"", detail, StringComparison.Ordinal);
         Assert.Contains("data-order-section=\"purchase-order\"", detail, StringComparison.Ordinal);
