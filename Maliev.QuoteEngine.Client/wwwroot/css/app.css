@@ -2093,6 +2093,32 @@ p {
     line-height: 1.4;
 }
 
+.order-delivery-list {
+    display: grid;
+    gap: 8px;
+}
+
+.order-delivery-list div {
+    display: grid;
+    gap: 4px;
+    padding: 10px;
+    border-radius: var(--maliev-radius-sm);
+    background: var(--panel);
+    box-shadow: var(--maliev-shadow-ring);
+}
+
+.order-delivery-list span {
+    color: var(--muted);
+    font-family: var(--maliev-font-mono);
+    font-size: var(--maliev-font-micro);
+    text-transform: uppercase;
+}
+
+.order-delivery-list strong {
+    color: var(--ink);
+    line-height: 1.35;
+}
+
 .order-documents-list {
     display: grid;
     gap: 8px;

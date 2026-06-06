@@ -101,6 +101,27 @@ else
                     <a class="qe-secondary-btn" href="@DocumentHref("PurchaseOrder")">@Text("Upload purchase order", "อัปโหลดใบสั่งซื้อ")</a>
                 </div>
             </article>
+
+            <article class="order-detail-card" data-order-section="delivery">
+                <div class="order-panel-head">
+                    <span>@Text("Delivery", "การจัดส่ง")</span>
+                    <strong>@DeliveryStatusText</strong>
+                </div>
+                <div class="order-delivery-list">
+                    <div>
+                        <span>@Text("Promised delivery", "กำหนดส่ง")</span>
+                        <strong>@FormatDate(_order.PromisedDeliveryDate)</strong>
+                    </div>
+                    <div>
+                        <span>@Text("Actual delivery", "ส่งจริง")</span>
+                        <strong>@FormatDate(_order.ActualDeliveryDate)</strong>
+                    </div>
+                    <div>
+                        <span>@Text("Tracking", "การติดตาม")</span>
+                        <strong>@DeliveryTrackingText</strong>
+                    </div>
+                </div>
+            </article>
         </section>
 
         <section class="order-detail-card" data-order-section="documents">
@@ -187,6 +208,25 @@ else
     private string PoStatusText => string.IsNullOrWhiteSpace(_order?.CustomerPoNumber)
         ? Text("Missing", "ยังไม่มี")
         : Text("Received", "ได้รับแล้ว");
+
+    private string DeliveryStatusText => _order switch
+    {
+        null => Text("Pending", "รอดำเนินการ"),
+        { ActualDeliveryDate: not null } => Text("Delivered", "ส่งมอบแล้ว"),
+        var order when order.CurrentStatus.Contains("shipped", StringComparison.OrdinalIgnoreCase) => Text("In transit", "อยู่ระหว่างจัดส่ง"),
+        var order when order.CurrentStatus.Contains("quality", StringComparison.OrdinalIgnoreCase) ||
+                       order.CurrentStatus.Contains("inspection", StringComparison.OrdinalIgnoreCase) => Text("Preparing delivery", "เตรียมจัดส่ง"),
+        _ => Text("Scheduled", "วางแผนจัดส่ง")
+    };
+
+    private string DeliveryTrackingText => _order switch
+    {
+        null => Text("Pending", "รอดำเนินการ"),
+        { ActualDeliveryDate: not null } => Text("Delivered to customer", "ส่งมอบให้ลูกค้าแล้ว"),
+        var order when order.CurrentStatus.Contains("shipped", StringComparison.OrdinalIgnoreCase) => Text("Shipment is on the way.", "พัสดุกำลังอยู่ระหว่างจัดส่ง"),
+        var order when order.PromisedDeliveryDate.HasValue => Text("Tracking will appear after shipment handoff.", "ข้อมูลติดตามจะแสดงหลังส่งมอบให้ขนส่ง"),
+        _ => Text("Delivery schedule is pending.", "กำลังรอกำหนดการจัดส่ง")
+    };
 
     private bool CanPay => _order is not null &&
         _order.QuotedAmount is > 0 &&

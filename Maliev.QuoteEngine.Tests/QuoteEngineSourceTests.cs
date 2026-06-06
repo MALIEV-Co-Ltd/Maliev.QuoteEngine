@@ -911,10 +911,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("data-order-section=\"payment\"", detail, StringComparison.Ordinal);
         Assert.Contains("data-order-section=\"purchase-order\"", detail, StringComparison.Ordinal);
         Assert.Contains("data-order-section=\"manufacturing-progress\"", detail, StringComparison.Ordinal);
+        Assert.Contains("data-order-section=\"delivery\"", detail, StringComparison.Ordinal);
         Assert.Contains("data-order-section=\"timeline\"", detail, StringComparison.Ordinal);
         Assert.Contains("CustomerPoNumber", detail, StringComparison.Ordinal);
         Assert.Contains("StatusHistory", detail, StringComparison.Ordinal);
         Assert.Contains("PromisedDeliveryDate", detail, StringComparison.Ordinal);
+        Assert.Contains("ActualDeliveryDate", detail, StringComparison.Ordinal);
+        Assert.Contains("DeliveryStatusText", detail, StringComparison.Ordinal);
+        Assert.Contains("DeliveryTrackingText", detail, StringComparison.Ordinal);
         Assert.Contains("ManufacturingProgressPercent", detail, StringComparison.Ordinal);
         Assert.Contains("DocumentHref(\"PurchaseOrder\")", detail, StringComparison.Ordinal);
         Assert.Contains("DocumentHref(\"Receipt\")", detail, StringComparison.Ordinal);
@@ -928,6 +932,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".order-detail-shell", styles, StringComparison.Ordinal);
         Assert.Contains(".order-progress-track", styles, StringComparison.Ordinal);
         Assert.Contains(".order-documents-list", styles, StringComparison.Ordinal);
+        Assert.Contains(".order-delivery-list", styles, StringComparison.Ordinal);
     }
 
     [Fact]
