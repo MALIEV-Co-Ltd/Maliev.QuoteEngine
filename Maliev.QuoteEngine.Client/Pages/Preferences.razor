@@ -60,16 +60,93 @@
     </div>
 </section>
 
+<section class="preferences-panel" data-preferences-section="quote-defaults">
+    <div class="preferences-panel-heading">
+        <div>
+            <span class="eyebrow">@Text("Quote defaults", "ค่าเริ่มต้นใบเสนอราคา")</span>
+            <h2>@Text("Manufacturing defaults", "ค่าเริ่มต้นการผลิต")</h2>
+        </div>
+        <p>@Text("New uploaded parts use these defaults when the selected process supports the file type.", "ชิ้นงานที่อัปโหลดใหม่จะใช้ค่าเริ่มต้นเหล่านี้เมื่อกระบวนการที่เลือกเข้ากับชนิดไฟล์")</p>
+    </div>
+
+    <div class="preferences-default-grid">
+        <label class="preferences-field">
+            <span>@Text("Default manufacturing process", "กระบวนการผลิตเริ่มต้น")</span>
+            <select class="preferences-select"
+                    value="@_defaultProcessId"
+                    @onchange="HandleDefaultProcessChanged"
+                    aria-label="@Text("Default manufacturing process", "กระบวนการผลิตเริ่มต้น")">
+                @foreach (var process in _referenceData?.Processes ?? [])
+                {
+                    <option value="@process.Id">@process.Name</option>
+                }
+            </select>
+        </label>
+
+        <label class="preferences-field">
+            <span>@Text("Default tolerance", "ค่าคลาดเคลื่อนเริ่มต้น")</span>
+            <select class="preferences-select"
+                    value="@_defaultToleranceId"
+                    @onchange="HandleDefaultToleranceChanged"
+                    aria-label="@Text("Default tolerance", "ค่าคลาดเคลื่อนเริ่มต้น")">
+                @foreach (var tolerance in TolerancesForDefaultProcess)
+                {
+                    <option value="@tolerance.Id">@tolerance.Name</option>
+                }
+            </select>
+        </label>
+
+        <label class="preferences-field">
+            <span>@Text("Default inspection", "การตรวจสอบเริ่มต้น")</span>
+            <select class="preferences-select"
+                    value="@_defaultInspectionCode"
+                    @onchange="HandleDefaultInspectionChanged"
+                    aria-label="@Text("Default inspection", "การตรวจสอบเริ่มต้น")">
+                @foreach (var inspection in _referenceData?.InspectionLevels ?? [])
+                {
+                    <option value="@inspection.Code">@inspection.Name</option>
+                }
+            </select>
+        </label>
+
+        <label class="preferences-field">
+            <span>@Text("Default delivery speed", "ความเร็วการจัดส่งเริ่มต้น")</span>
+            <select class="preferences-select"
+                    value="@_defaultLeadTimeCode"
+                    @onchange="HandleDefaultLeadTimeChanged"
+                    aria-label="@Text("Default delivery speed", "ความเร็วการจัดส่งเริ่มต้น")">
+                @foreach (var leadTime in _referenceData?.LeadTimes ?? [])
+                {
+                    <option value="@leadTime.Code">@leadTime.Name</option>
+                }
+            </select>
+        </label>
+    </div>
+</section>
+
 @code {
+    private const string QuoteDefaultProcessKey = "maliev.quote.default.process";
+    private const string QuoteDefaultToleranceKey = "maliev.quote.default.tolerance";
+    private const string QuoteDefaultInspectionKey = "maliev.quote.default.inspection";
+    private const string QuoteDefaultLeadTimeKey = "maliev.quote.default.leadTime";
     private static readonly CurrencyOptionDto FallbackCurrency = new("THB", "฿", "Thai Baht", true, true);
     private bool _isDarkMode;
     private List<CurrencyOptionDto> _currencyOptions = [FallbackCurrency];
+    private QuoteReferenceDataResponse? _referenceData;
     private string _selectedCurrency = "THB";
     private string _selectedCulture = SupportedCultures.DefaultCulture;
+    private string _defaultProcessId = "fdm";
+    private string? _defaultToleranceId;
+    private string _defaultInspectionCode = "STANDARD";
+    private string _defaultLeadTimeCode = "STANDARD";
+
+    private IEnumerable<ToleranceOptionDto> TolerancesForDefaultProcess =>
+        (_referenceData?.Tolerances ?? []).Where(tolerance => string.Equals(tolerance.ProcessId, _defaultProcessId, StringComparison.OrdinalIgnoreCase));
 
     protected override async Task OnInitializedAsync()
     {
         PreferenceState.Changed += OnPreferencesChanged;
+        await LoadQuoteReferenceDataAsync();
         await LoadCurrencyOptionsAsync();
     }
 
@@ -84,6 +161,7 @@
         _isDarkMode = PreferenceState.IsDarkMode;
         _selectedCulture = PreferenceState.Culture;
         _selectedCurrency = NormalizeCurrency(PreferenceState.Currency);
+        await LoadQuoteDefaultsAsync();
         StateHasChanged();
     }
 
@@ -101,6 +179,57 @@
     {
         _selectedCurrency = NormalizeCurrency(args.Value?.ToString());
         await PreferenceState.SetCurrencyAsync(_selectedCurrency);
+    }
+
+    private async Task HandleDefaultProcessChanged(ChangeEventArgs args)
+    {
+        _defaultProcessId = NormalizeDefaultProcess(args.Value?.ToString());
+        _defaultToleranceId = NormalizeDefaultTolerance(null);
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultProcessKey, _defaultProcessId);
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultToleranceKey, _defaultToleranceId);
+    }
+
+    private async Task HandleDefaultToleranceChanged(ChangeEventArgs args)
+    {
+        _defaultToleranceId = NormalizeDefaultTolerance(args.Value?.ToString());
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultToleranceKey, _defaultToleranceId);
+    }
+
+    private async Task HandleDefaultInspectionChanged(ChangeEventArgs args)
+    {
+        _defaultInspectionCode = NormalizeDefaultInspection(args.Value?.ToString());
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultInspectionKey, _defaultInspectionCode);
+    }
+
+    private async Task HandleDefaultLeadTimeChanged(ChangeEventArgs args)
+    {
+        _defaultLeadTimeCode = NormalizeDefaultLeadTime(args.Value?.ToString());
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultLeadTimeKey, _defaultLeadTimeCode);
+    }
+
+    private async Task LoadQuoteReferenceDataAsync()
+    {
+        try
+        {
+            _referenceData = await Api.GetReferenceDataAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _referenceData = null;
+        }
+
+        _defaultProcessId = NormalizeDefaultProcess(_defaultProcessId);
+        _defaultToleranceId = NormalizeDefaultTolerance(_defaultToleranceId);
+        _defaultInspectionCode = NormalizeDefaultInspection(_defaultInspectionCode);
+        _defaultLeadTimeCode = NormalizeDefaultLeadTime(_defaultLeadTimeCode);
+    }
+
+    private async Task LoadQuoteDefaultsAsync()
+    {
+        _defaultProcessId = NormalizeDefaultProcess(await PreferenceState.GetPreferenceAsync(QuoteDefaultProcessKey));
+        _defaultToleranceId = NormalizeDefaultTolerance(await PreferenceState.GetPreferenceAsync(QuoteDefaultToleranceKey));
+        _defaultInspectionCode = NormalizeDefaultInspection(await PreferenceState.GetPreferenceAsync(QuoteDefaultInspectionKey));
+        _defaultLeadTimeCode = NormalizeDefaultLeadTime(await PreferenceState.GetPreferenceAsync(QuoteDefaultLeadTimeKey));
     }
 
     private async Task LoadCurrencyOptionsAsync()
@@ -159,6 +288,34 @@
             ?? _currencyOptions.FirstOrDefault(candidate => candidate.Code.Equals("THB", StringComparison.OrdinalIgnoreCase))?.Code
             ?? _currencyOptions.FirstOrDefault()?.Code
             ?? "THB";
+    }
+
+    private string NormalizeDefaultProcess(string? processId)
+    {
+        return _referenceData?.Processes.FirstOrDefault(candidate => string.Equals(candidate.Id, processId, StringComparison.OrdinalIgnoreCase))?.Id
+            ?? _referenceData?.Processes.FirstOrDefault()?.Id
+            ?? "fdm";
+    }
+
+    private string? NormalizeDefaultTolerance(string? toleranceId)
+    {
+        return TolerancesForDefaultProcess.FirstOrDefault(candidate => string.Equals(candidate.Id, toleranceId, StringComparison.OrdinalIgnoreCase))?.Id
+            ?? TolerancesForDefaultProcess.FirstOrDefault()?.Id;
+    }
+
+    private string NormalizeDefaultInspection(string? inspectionCode)
+    {
+        return _referenceData?.InspectionLevels.FirstOrDefault(candidate => string.Equals(candidate.Code, inspectionCode, StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _referenceData?.InspectionLevels.FirstOrDefault()?.Code
+            ?? "STANDARD";
+    }
+
+    private string NormalizeDefaultLeadTime(string? leadTimeCode)
+    {
+        return _referenceData?.LeadTimes.FirstOrDefault(candidate => string.Equals(candidate.Code, leadTimeCode, StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _referenceData?.LeadTimes.FirstOrDefault(candidate => string.Equals(candidate.Code, "STANDARD", StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _referenceData?.LeadTimes.FirstOrDefault()?.Code
+            ?? "STANDARD";
     }
 
     private static string CurrencyOptionLabel(CurrencyOptionDto currency)

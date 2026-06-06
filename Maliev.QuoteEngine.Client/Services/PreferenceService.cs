@@ -85,6 +85,17 @@ public sealed class PreferenceService(IJSRuntime js)
         Changed?.Invoke();
     }
 
+    public Task<string?> GetPreferenceAsync(string key)
+    {
+        return js.InvokeAsync<string?>("quoteEnginePreferences.getPreference", key).AsTask();
+    }
+
+    public async Task SetPreferenceAsync(string key, string? value)
+    {
+        await js.InvokeVoidAsync("quoteEnginePreferences.setPreference", key, value ?? string.Empty);
+        Changed?.Invoke();
+    }
+
     public string Text(string en, string th)
     {
         return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;

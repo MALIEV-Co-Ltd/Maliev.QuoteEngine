@@ -838,6 +838,43 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Preferences_page_persists_customer_quote_defaults_for_new_workspace_parts()
+    {
+        var preferences = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Preferences.razor");
+        var service = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "PreferenceService.cs");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("data-preferences-section=\"quote-defaults\"", preferences, StringComparison.Ordinal);
+        Assert.Contains("Default manufacturing process", preferences, StringComparison.Ordinal);
+        Assert.Contains("Default tolerance", preferences, StringComparison.Ordinal);
+        Assert.Contains("Default inspection", preferences, StringComparison.Ordinal);
+        Assert.Contains("Default delivery speed", preferences, StringComparison.Ordinal);
+        Assert.Contains("QuoteDefaultProcessKey", preferences, StringComparison.Ordinal);
+        Assert.Contains("QuoteDefaultToleranceKey", preferences, StringComparison.Ordinal);
+        Assert.Contains("QuoteDefaultInspectionKey", preferences, StringComparison.Ordinal);
+        Assert.Contains("QuoteDefaultLeadTimeKey", preferences, StringComparison.Ordinal);
+        Assert.Contains("SetPreferenceAsync(QuoteDefaultProcessKey", preferences, StringComparison.Ordinal);
+        Assert.Contains("GetPreferenceAsync(QuoteDefaultProcessKey", preferences, StringComparison.Ordinal);
+
+        Assert.Contains("Task<string?> GetPreferenceAsync(string key)", service, StringComparison.Ordinal);
+        Assert.Contains("Task SetPreferenceAsync(string key, string? value)", service, StringComparison.Ordinal);
+        Assert.Contains("quoteEnginePreferences.getPreference", service, StringComparison.Ordinal);
+        Assert.Contains("quoteEnginePreferences.setPreference", service, StringComparison.Ordinal);
+
+        Assert.Contains("@inject PreferenceService PreferenceState", workspace, StringComparison.Ordinal);
+        Assert.Contains("await PreferenceState.InitializeAsync();", workspace, StringComparison.Ordinal);
+        Assert.Contains("LoadQuoteDefaultsAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("ApplyCustomerQuoteDefaults(part);", workspace, StringComparison.Ordinal);
+        Assert.Contains("NormalizeQuoteDefaultProcess", workspace, StringComparison.Ordinal);
+        Assert.Contains("QuoteDefaultLeadTimeKey", workspace, StringComparison.Ordinal);
+        Assert.Contains("part.LocalDfmRuntimeUnavailable = false;", workspace, StringComparison.Ordinal);
+
+        Assert.Contains(".preferences-default-grid", styles, StringComparison.Ordinal);
+        Assert.Contains(".preferences-select", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Profile_page_requires_signed_in_customer_session()
     {
         var profile = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Profile.razor");

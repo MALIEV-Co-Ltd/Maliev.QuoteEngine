@@ -10,6 +10,7 @@
 @inject QuoteEngineApiClient Api
 @inject IJSRuntime Js
 @inject NavigationManager Navigation
+@inject PreferenceService PreferenceState
 
 <PageTitle>@Text("New manufacturing quote - MALIEV", "ขอราคาการผลิตใหม่ - MALIEV")</PageTitle>
 
@@ -189,6 +190,10 @@
     private const string CompactDropzoneId = "quote-compact-dropzone";
     private const string MobileDropzoneId = "quote-mobile-dropzone";
     private const string HeroDropzoneId = "quote-hero-dropzone";
+    private const string QuoteDefaultProcessKey = "maliev.quote.default.process";
+    private const string QuoteDefaultToleranceKey = "maliev.quote.default.tolerance";
+    private const string QuoteDefaultInspectionKey = "maliev.quote.default.inspection";
+    private const string QuoteDefaultLeadTimeKey = "maliev.quote.default.leadTime";
     private string _quoteSessionId = Guid.NewGuid().ToString("N");
     private readonly List<QuotePartViewModel> _parts = [];
     private QuoteReferenceDataResponse? _reference;
@@ -213,6 +218,10 @@
     private HashSet<string>? _runtimeBrowserViewerExtensions;
     private Task<HashSet<string>?>? _runtimeBrowserViewerExtensionsTask;
     private string _leadTimeCode = "STANDARD";
+    private string _defaultProcessId = "fdm";
+    private string? _defaultToleranceId;
+    private string _defaultInspectionCode = "STANDARD";
+    private string _defaultLeadTimeCode = "STANDARD";
     private string _title = "Untitled quote";
     private int _selectedPartIndex;
     private string _centerMode = "model";
@@ -267,6 +276,8 @@
     {
         _reference = await Api.GetReferenceDataAsync();
         _authStatus = await Api.GetAuthStatusAsync();
+        await PreferenceState.InitializeAsync();
+        await LoadQuoteDefaultsAsync();
 
         await SynchronizeRouteStateAsync(force: true);
         _routeStateInitialized = true;
@@ -388,7 +399,7 @@
         _payment = null;
         _draftProjectId = null;
         _liveNotifications.Clear();
-        _leadTimeCode = "STANDARD";
+        _leadTimeCode = NormalizeQuoteDefaultLeadTime(_defaultLeadTimeCode);
         _title = "Untitled quote";
         _selectedPartIndex = 0;
         _centerMode = "model";
@@ -1190,7 +1201,10 @@
     private void ApplyDefaultRouting(QuotePartViewModel part, string fileName)
     {
         var extension = Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant();
-        var process = _reference?.Processes.FirstOrDefault(candidate =>
+        var preferredProcess = _reference?.Processes.FirstOrDefault(candidate =>
+            string.Equals(candidate.Id, _defaultProcessId, StringComparison.OrdinalIgnoreCase)
+            && candidate.SupportedFileTypes.Any(type => type.Equals(extension, StringComparison.OrdinalIgnoreCase)));
+        var process = preferredProcess ?? _reference?.Processes.FirstOrDefault(candidate =>
             candidate.SupportedFileTypes.Any(type => type.Equals(extension, StringComparison.OrdinalIgnoreCase)));
         if (process is null)
         {
@@ -1209,6 +1223,7 @@
         }
 
         ApplyCatalogDefaults(part);
+        ApplyCustomerQuoteDefaults(part);
     }
 
     private void ApplyCatalogDefaults(QuotePartViewModel part)
@@ -1225,6 +1240,59 @@
         part.RoughnessCode = _reference?.RoughnessOptions.FirstOrDefault(item => item.ProcessId == part.ProcessId)?.Code;
         part.Color = _reference?.Colors.FirstOrDefault(item =>
             item.MaterialIds.Count == 0 || item.MaterialIds.Contains(part.MaterialId, StringComparer.OrdinalIgnoreCase))?.Code;
+    }
+
+    private async Task LoadQuoteDefaultsAsync()
+    {
+        _defaultProcessId = NormalizeQuoteDefaultProcess(await PreferenceState.GetPreferenceAsync(QuoteDefaultProcessKey));
+        _defaultToleranceId = NormalizeQuoteDefaultTolerance(_defaultProcessId, await PreferenceState.GetPreferenceAsync(QuoteDefaultToleranceKey));
+        _defaultInspectionCode = NormalizeQuoteDefaultInspection(await PreferenceState.GetPreferenceAsync(QuoteDefaultInspectionKey));
+        _defaultLeadTimeCode = NormalizeQuoteDefaultLeadTime(await PreferenceState.GetPreferenceAsync(QuoteDefaultLeadTimeKey));
+        _leadTimeCode = _defaultLeadTimeCode;
+    }
+
+    private void ApplyCustomerQuoteDefaults(QuotePartViewModel part)
+    {
+        var toleranceId = NormalizeQuoteDefaultTolerance(part.ProcessId, _defaultToleranceId);
+        if (!string.IsNullOrWhiteSpace(toleranceId))
+        {
+            var tolerance = _reference?.Tolerances.FirstOrDefault(candidate =>
+                string.Equals(candidate.Id, toleranceId, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(candidate.ProcessId, part.ProcessId, StringComparison.OrdinalIgnoreCase));
+            part.ToleranceId = tolerance?.Id;
+            part.ToleranceCode = tolerance?.Code;
+        }
+
+        part.InspectionLevel = NormalizeQuoteDefaultInspection(_defaultInspectionCode);
+    }
+
+    private string NormalizeQuoteDefaultProcess(string? processId)
+    {
+        return _reference?.Processes.FirstOrDefault(candidate => string.Equals(candidate.Id, processId, StringComparison.OrdinalIgnoreCase))?.Id
+            ?? _reference?.Processes.FirstOrDefault()?.Id
+            ?? "fdm";
+    }
+
+    private string? NormalizeQuoteDefaultTolerance(string processId, string? toleranceId)
+    {
+        var tolerances = (_reference?.Tolerances ?? []).Where(candidate => string.Equals(candidate.ProcessId, processId, StringComparison.OrdinalIgnoreCase)).ToArray();
+        return tolerances.FirstOrDefault(candidate => string.Equals(candidate.Id, toleranceId, StringComparison.OrdinalIgnoreCase))?.Id
+            ?? tolerances.FirstOrDefault()?.Id;
+    }
+
+    private string NormalizeQuoteDefaultInspection(string? inspectionCode)
+    {
+        return _reference?.InspectionLevels.FirstOrDefault(candidate => string.Equals(candidate.Code, inspectionCode, StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _reference?.InspectionLevels.FirstOrDefault()?.Code
+            ?? "STANDARD";
+    }
+
+    private string NormalizeQuoteDefaultLeadTime(string? leadTimeCode)
+    {
+        return _reference?.LeadTimes.FirstOrDefault(candidate => string.Equals(candidate.Code, leadTimeCode, StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _reference?.LeadTimes.FirstOrDefault(candidate => string.Equals(candidate.Code, "STANDARD", StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _reference?.LeadTimes.FirstOrDefault()?.Code
+            ?? "STANDARD";
     }
 
     private IEnumerable<MaterialOptionDto> MaterialsFor(string processId)
