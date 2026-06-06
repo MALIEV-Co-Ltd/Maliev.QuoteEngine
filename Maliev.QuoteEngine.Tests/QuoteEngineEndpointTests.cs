@@ -1760,10 +1760,24 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     {
         using var client = await CreateSignedInClientAsync("payer@example.com");
 
+        var quoteResp = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment", [], "Payment test."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-001", "Payment test order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
         var response = await client.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
         {
-            OrderId = Guid.NewGuid(),
-            OrderNumber = "ORD-2026-99999",
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
             Amount = 1250.00m,
             Currency = "THB"
         });
@@ -1789,6 +1803,47 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Payment_initiation_is_scoped_to_signed_in_customer_order()
+    {
+        using var customerA = await CreateSignedInClientAsync("payment-owner@example.com");
+
+        var quoteResp = await customerA.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-owner", [], "Owner payment scope."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await customerA.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-OWNER", "Owner payment order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        using var customerB = await CreateSignedInClientAsync("payment-other@example.com");
+        var crossCustomerPayment = await customerB.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1250.00m,
+            Currency = "THB"
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, crossCustomerPayment.StatusCode);
+
+        var ownerPayment = await customerA.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1250.00m,
+            Currency = "THB"
+        });
+
+        ownerPayment.EnsureSuccessStatusCode();
     }
 
     [Fact]

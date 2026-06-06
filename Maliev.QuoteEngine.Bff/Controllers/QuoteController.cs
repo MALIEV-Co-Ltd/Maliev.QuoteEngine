@@ -472,6 +472,14 @@ public sealed class QuoteController(
             return Unauthorized();
         }
 
+        var customerOrders = await orderClient.GetByCustomerAsync(customerId.ToString("D"), cancellationToken);
+        if (!customerOrders.Any(order =>
+            order.OrderId == request.OrderId &&
+            string.Equals(order.OrderNumber, request.OrderNumber, StringComparison.OrdinalIgnoreCase)))
+        {
+            return NotFound();
+        }
+
         // Build return/cancel URLs from the current request so the redirect lands back in the SPA.
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
         var returnUrl = $"{baseUrl}/payment/success?orderId={Uri.EscapeDataString(request.OrderNumber)}";
