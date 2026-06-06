@@ -1,14 +1,173 @@
-@page "/orders/{OrderId:guid}"
+@page "/orders/{OrderNumber}"
+@using System.Globalization
+@inject QuoteEngineApiClient Api
 
-<PageTitle>Order detail - MALIEV</PageTitle>
+<PageTitle>@Text("Order detail - MALIEV", "รายละเอียดคำสั่งซื้อ - MALIEV")</PageTitle>
 
-<div class="empty-state">
-    <h1>Order detail</h1>
-    <p>Order @OrderId will show production milestones, files, payment, delivery, and support notes.</p>
-    <a class="primary-button" href="/orders">Back to orders</a>
-</div>
+@if (_loading)
+{
+    <div class="empty-state">
+        <p>@Text("Loading order detail...", "กำลังโหลดรายละเอียดคำสั่งซื้อ...")</p>
+    </div>
+}
+else if (_order is null)
+{
+    <div class="empty-state">
+        <h1>@Text("Order not found", "ไม่พบคำสั่งซื้อ")</h1>
+        <p>@Text("This order is unavailable or does not belong to your account.", "คำสั่งซื้อนี้ไม่พร้อมใช้งานหรือไม่ได้อยู่ในบัญชีของคุณ")</p>
+        <a class="primary-button" href="/orders">@Text("Back to orders", "กลับไปที่คำสั่งซื้อ")</a>
+    </div>
+}
+else
+{
+    <main class="order-detail-shell">
+        <header class="order-detail-header">
+            <a class="qe-secondary-btn" href="/orders">@Text("Back to orders", "กลับไปที่คำสั่งซื้อ")</a>
+            <div>
+                <span class="eyebrow">@Text("Manufacturing order", "คำสั่งผลิต")</span>
+                <h1>@_order.OrderNumber</h1>
+                <p>@_order.Requirements</p>
+            </div>
+            <strong class="order-status-pill">@_order.CurrentStatus</strong>
+        </header>
+
+        <section class="order-progress-card" data-order-section="manufacturing-progress">
+            <div class="order-panel-head">
+                <span>@Text("Manufacturing progress", "ความคืบหน้าการผลิต")</span>
+                <strong>@ManufacturingProgressPercent%</strong>
+            </div>
+            <div class="order-progress-track" role="progressbar" aria-valuenow="@ManufacturingProgressPercent" aria-valuemin="0" aria-valuemax="100">
+                <span style="width:@ManufacturingProgressPercent%"></span>
+            </div>
+            <div class="order-progress-meta">
+                <span>@Text("Current status", "สถานะปัจจุบัน"): <strong>@_order.CurrentStatus</strong></span>
+                <span>@Text("Promised delivery", "กำหนดส่ง"): <strong>@FormatDate(_order.PromisedDeliveryDate)</strong></span>
+                <span>@Text("Actual delivery", "ส่งจริง"): <strong>@FormatDate(_order.ActualDeliveryDate)</strong></span>
+            </div>
+        </section>
+
+        <section class="order-detail-grid">
+            <article class="order-detail-card" data-order-section="payment">
+                <div class="order-panel-head">
+                    <span>@Text("Payment", "การชำระเงิน")</span>
+                    <strong>@_order.PaymentStatus</strong>
+                </div>
+                <dl>
+                    <div>
+                        <dt>@Text("Quoted amount", "ยอดใบเสนอราคา")</dt>
+                        <dd>@FormatMoney(_order.QuotedAmount, _order.QuoteCurrency)</dd>
+                    </div>
+                    <div>
+                        <dt>@Text("Created", "สร้างเมื่อ")</dt>
+                        <dd>@FormatDate(_order.CreatedAt)</dd>
+                    </div>
+                    <div>
+                        <dt>@Text("Updated", "อัปเดตเมื่อ")</dt>
+                        <dd>@FormatDate(_order.UpdatedAt)</dd>
+                    </div>
+                </dl>
+                <div class="order-detail-actions">
+                    <a class="qe-secondary-btn" href="/documents">@Text("Receipts and invoices", "ใบเสร็จและใบแจ้งหนี้")</a>
+                </div>
+            </article>
+
+            <article class="order-detail-card" data-order-section="purchase-order">
+                <div class="order-panel-head">
+                    <span>@Text("Purchase order", "ใบสั่งซื้อ")</span>
+                    <strong>@PoStatusText</strong>
+                </div>
+                <dl>
+                    <div>
+                        <dt>@Text("PO number", "เลขที่ PO")</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(_order.CustomerPoNumber) ? Text("Not uploaded", "ยังไม่ได้อัปโหลด") : _order.CustomerPoNumber)</dd>
+                    </div>
+                    <div>
+                        <dt>@Text("Requirements", "ข้อกำหนด")</dt>
+                        <dd>@(string.IsNullOrWhiteSpace(_order.Requirements) ? Text("No customer requirements recorded.", "ยังไม่มีข้อกำหนดจากลูกค้า") : _order.Requirements)</dd>
+                    </div>
+                </dl>
+                <div class="order-detail-actions">
+                    <a class="qe-secondary-btn" href="/documents">@Text("Upload purchase order", "อัปโหลดใบสั่งซื้อ")</a>
+                </div>
+            </article>
+        </section>
+
+        <section class="order-detail-card" data-order-section="timeline">
+            <div class="order-panel-head">
+                <span>@Text("Status timeline", "ไทม์ไลน์สถานะ")</span>
+                <strong>@_order.StatusHistory.Count</strong>
+            </div>
+            <ol class="order-status-timeline">
+                @foreach (var entry in _order.StatusHistory.OrderBy(entry => entry.Timestamp))
+                {
+                    <li>
+                        <span></span>
+                        <div>
+                            <strong>@entry.Status</strong>
+                            <small>@FormatDate(entry.Timestamp)</small>
+                            @if (!string.IsNullOrWhiteSpace(entry.CustomerNote))
+                            {
+                                <p>@entry.CustomerNote</p>
+                            }
+                        </div>
+                    </li>
+                }
+            </ol>
+        </section>
+    </main>
+}
 
 @code {
-    [Parameter]
-    public Guid OrderId { get; set; }
+    [Parameter] public string OrderNumber { get; set; } = string.Empty;
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
+    private CustomerOrderDetailDto? _order;
+    private bool _loading = true;
+
+    private int ManufacturingProgressPercent => _order?.CurrentStatus.ToLowerInvariant() switch
+    {
+        null => 0,
+        var status when status.Contains("delivered", StringComparison.Ordinal) => 100,
+        var status when status.Contains("shipped", StringComparison.Ordinal) => 90,
+        var status when status.Contains("quality", StringComparison.Ordinal) || status.Contains("inspection", StringComparison.Ordinal) => 75,
+        var status when status.Contains("manufacturing", StringComparison.Ordinal) || status.Contains("production", StringComparison.Ordinal) => 55,
+        var status when status.Contains("paid", StringComparison.Ordinal) => 35,
+        var status when status.Contains("accepted", StringComparison.Ordinal) => 25,
+        var status when status.Contains("pending", StringComparison.Ordinal) => 15,
+        _ => 10
+    };
+
+    private string PoStatusText => string.IsNullOrWhiteSpace(_order?.CustomerPoNumber)
+        ? Text("Missing", "ยังไม่มี")
+        : Text("Received", "ได้รับแล้ว");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _order = string.IsNullOrWhiteSpace(OrderNumber)
+            ? null
+            : await Api.GetOrderDetailAsync(OrderNumber);
+        _loading = false;
+    }
+
+    private string FormatMoney(decimal? amount, string? currency)
+    {
+        return amount is null
+            ? Text("Pending", "รอดำเนินการ")
+            : $"{amount.Value.ToString("N2", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)))} {currency ?? "THB"}";
+    }
+
+    private string FormatDate(DateTimeOffset? value)
+    {
+        return value is null
+            ? Text("Pending", "รอดำเนินการ")
+            : value.Value.ToString("d MMM yyyy", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)));
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
 }

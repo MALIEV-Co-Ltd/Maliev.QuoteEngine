@@ -855,6 +855,37 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Order_detail_page_is_customer_manufacturing_progress_surface()
+    {
+        var orders = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Orders.razor");
+        var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "OrderDetail.razor");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("href=\"/orders/@Uri.EscapeDataString(order.OrderNumber)\"", orders, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"/orders/@order.OrderId\"", orders, StringComparison.Ordinal);
+
+        Assert.Contains("@page \"/orders/{OrderNumber}\"", detail, StringComparison.Ordinal);
+        Assert.Contains("@inject QuoteEngineApiClient Api", detail, StringComparison.Ordinal);
+        Assert.Contains("GetOrderDetailAsync(OrderNumber)", detail, StringComparison.Ordinal);
+        Assert.Contains("class=\"order-detail-shell\"", detail, StringComparison.Ordinal);
+        Assert.Contains("data-order-section=\"payment\"", detail, StringComparison.Ordinal);
+        Assert.Contains("data-order-section=\"purchase-order\"", detail, StringComparison.Ordinal);
+        Assert.Contains("data-order-section=\"manufacturing-progress\"", detail, StringComparison.Ordinal);
+        Assert.Contains("data-order-section=\"timeline\"", detail, StringComparison.Ordinal);
+        Assert.Contains("CustomerPoNumber", detail, StringComparison.Ordinal);
+        Assert.Contains("StatusHistory", detail, StringComparison.Ordinal);
+        Assert.Contains("PromisedDeliveryDate", detail, StringComparison.Ordinal);
+        Assert.Contains("ManufacturingProgressPercent", detail, StringComparison.Ordinal);
+
+        Assert.Contains("GetOrderDetailAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/account/orders/{Uri.EscapeDataString(orderNumber)}", apiClient, StringComparison.Ordinal);
+
+        Assert.Contains(".order-detail-shell", styles, StringComparison.Ordinal);
+        Assert.Contains(".order-progress-track", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Quote_workspace_is_single_viewport_application_shell()
     {
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");

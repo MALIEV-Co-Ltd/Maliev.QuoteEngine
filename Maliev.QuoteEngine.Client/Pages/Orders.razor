@@ -11,7 +11,7 @@
 <div class="data-list">
     @foreach (var order in _orders)
     {
-        <a class="data-row" href="/orders/@order.OrderId">
+        <a class="data-row" href="/orders/@Uri.EscapeDataString(order.OrderNumber)">
             <span>@order.OrderNumber</span>
             <strong>@order.Status</strong>
             <small>@order.TrackingLabel</small>

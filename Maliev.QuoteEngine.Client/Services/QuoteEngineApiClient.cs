@@ -153,6 +153,13 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerOrderSummaryDto>>("quote/v1/account/orders", cancellationToken) ?? [];
     }
 
+    public async Task<CustomerOrderDetailDto?> GetOrderDetailAsync(string orderNumber, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<CustomerOrderDetailDto>(
+            $"quote/v1/account/orders/{Uri.EscapeDataString(orderNumber)}",
+            cancellationToken);
+    }
+
     public async Task<IReadOnlyList<CustomerNdaDto>> GetNdasAsync(CancellationToken cancellationToken = default)
     {
         return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerNdaDto>>("quote/v1/account/ndas", cancellationToken) ?? [];
