@@ -4870,12 +4870,8 @@ textarea::placeholder {
 
 .qe-pcs-process-row {
     display: flex;
-    gap: 8px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding: 0 0 8px;
-    scroll-snap-type: x proximity;
-    scrollbar-width: thin;
+    flex-direction: column;
+    gap: 6px;
 }
 
 .qe-pcs-process-card,
@@ -4892,18 +4888,23 @@ textarea::placeholder {
 }
 
 .qe-pcs-process-card {
-    flex: 0 0 112px;
-    width: 112px;
-    display: grid;
-    grid-template-rows: 78px auto auto;
-    align-content: start;
-    gap: 6px;
-    min-height: 152px;
-    padding: 0 0 9px;
+    width: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    padding: 0;
     overflow: hidden;
     text-align: left;
-    scroll-snap-align: start;
-    transition: opacity 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    transition: opacity 0.15s ease, box-shadow 0.15s ease;
+}
+
+.qe-pcs-process-copy {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
 }
 
 .qe-pcs-process-card strong {
@@ -6779,13 +6780,13 @@ body.mud-blazor {
 
 .qe-pcs-process-photo {
     display: block;
-    width: 100%;
-    height: 78px;
+    flex: 0 0 112px;
+    height: 80px;
     background-color: var(--maliev-panel-3);
     background-position: center;
     background-repeat: no-repeat;
     background-size: cover;
-    border-bottom: 1px solid var(--maliev-border);
+    border-radius: var(--maliev-radius-md) 0 0 var(--maliev-radius-md);
 }
 
 .qe-pcs-process-name,
@@ -6805,15 +6806,14 @@ body.mud-blazor {
 }
 
 .qe-pcs-process-name {
-    padding: 0 9px;
+    padding: 0;
     font-weight: 700;
     line-height: 1.15;
 }
 
 .qe-pcs-process-description {
     display: -webkit-box;
-    min-height: 28px;
-    padding: 0 9px;
+    padding: 0;
     overflow: hidden;
     color: var(--maliev-muted);
     font-size: var(--maliev-font-micro);
@@ -6821,6 +6821,75 @@ body.mud-blazor {
     line-height: 1.25;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+}
+
+/* ── Process Selected Pill (collapsed state) ─────────────────────────── */
+.qe-pcs-process-selected {
+    display: flex;
+    align-items: center;
+    border-radius: var(--maliev-radius-md);
+    overflow: hidden;
+    box-shadow: inset 0 0 0 1.5px var(--maliev-accent, #3b82f6);
+    background: color-mix(in oklch, var(--maliev-accent, #3b82f6) 8%, var(--maliev-panel));
+}
+
+.qe-pcs-process-selected-photo {
+    display: block;
+    width: 52px;
+    height: 52px;
+    flex-shrink: 0;
+    background-color: var(--maliev-panel-3);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    border-radius: var(--maliev-radius-md) 0 0 var(--maliev-radius-md);
+}
+
+.qe-pcs-process-selected-copy {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    padding: 6px 10px;
+}
+
+.qe-pcs-process-selected-name {
+    overflow: hidden;
+    color: var(--maliev-ink);
+    font-size: var(--maliev-font-sm);
+    font-weight: 700;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-pcs-process-selected-desc {
+    overflow: hidden;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-micro);
+    font-weight: 400;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-pcs-process-change-btn {
+    flex-shrink: 0;
+    margin-right: 8px;
+    padding: 4px 10px;
+    border: 1px solid var(--maliev-accent, #3b82f6);
+    border-radius: var(--maliev-radius-sm);
+    background: transparent;
+    color: var(--maliev-accent, #3b82f6);
+    font-size: var(--maliev-font-micro);
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.qe-pcs-process-change-btn:hover {
+    background: color-mix(in oklch, var(--maliev-accent, #3b82f6) 14%, transparent);
 }
 
 .qe-pcs-mat-info,
@@ -8140,5 +8209,55 @@ button.qe-dfm-overlay-header {
     .qe-qsb-root {
         position: sticky;
         bottom: 0;
+    }
+}
+
+/* ── QE Process picker: fill available vertical space (desktop ≥1201px) ───── */
+@media (min-width: 1201px) {
+    /* Make scroll area a flex column so child sections can be flex items */
+    .qe-pcs-scroll {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* When manufacturing process section shows the expanded picker (.qe-pcs-process-row visible),
+       grow it to fill all available scroll height */
+    .qe-pcs-section:has(.qe-pcs-process-row) {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+    }
+
+    .qe-pcs-section:has(.qe-pcs-process-row) .qe-pcs-section-header {
+        flex-shrink: 0;
+    }
+
+    /* Process row takes remaining height; scrolls if more cards than space */
+    .qe-pcs-section:has(.qe-pcs-process-row) .qe-pcs-process-row {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+    }
+
+    /* Cards share height equally, capped so many cards stay comfortable */
+    .qe-pcs-section:has(.qe-pcs-process-row) .qe-pcs-process-card {
+        flex: 1;
+        max-height: 160px;
+        align-items: stretch;
+    }
+
+    /* Photo fills full card height (not fixed 80px) */
+    .qe-pcs-section:has(.qe-pcs-process-row) .qe-pcs-process-photo {
+        height: auto;
+        flex: 0 0 96px;
+    }
+
+    /* Copy text centred vertically in taller cards */
+    .qe-pcs-section:has(.qe-pcs-process-row) .qe-pcs-process-copy {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
 }

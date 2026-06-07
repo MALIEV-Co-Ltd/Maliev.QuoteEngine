@@ -159,7 +159,26 @@ public sealed record QuotePartViewerSettingsDto(
 {
     public string RenderMode { get; init; } = "realistic";
 
+    public string InitialRenderMode { get; init; } = "realistic";
+
+    public string TargetRenderMode { get; init; } = "realistic";
+
+    public RenderModeTransitionSettings RenderModeTransition { get; init; } = new();
+
     public string CameraProjection { get; init; } = "orthographic";
+
+    public bool CuttingMatEnabled { get; init; } = false;
+}
+
+public sealed class RenderModeTransitionSettings
+{
+    public bool Enabled { get; init; } = true;
+
+    public string Trigger { get; init; } = "runtime_complete";
+
+    public int FallbackDelayMs { get; init; } = 1200;
+
+    public int TransitionMs { get; init; } = 250;
 }
 
 public sealed class QuoteAnalysisStatusResponse

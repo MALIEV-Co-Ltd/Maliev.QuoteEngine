@@ -8,41 +8,72 @@
 
     <div class="qe-pcs-scroll">
         <section class="qe-pcs-section"
-                 data-config-section="manufacturing-process"
-                 data-horizontal-wheel="true"
-                 onwheel="const row = this.querySelector('.qe-pcs-process-row'); if (row && Math.abs(event.deltaY) >= Math.abs(event.deltaX)) { row.scrollLeft += event.deltaY; event.preventDefault(); }">
+                 data-config-section="manufacturing-process">
             <div class="qe-pcs-section-header">
                 <span class="qe-pcs-section-title">@Text("Manufacturing Process", "กระบวนการผลิต")</span>
             </div>
-            <div class="qe-pcs-process-row">
-                @foreach (var process in ReferenceData?.Processes ?? [])
+
+            @if (HasSelectedProcess && !_processPickerOpen)
+            {
+                @* ── Collapsed: selected process pill ── *@
+                var selProc = (ReferenceData?.Processes ?? []).FirstOrDefault(p => p.Id == Part.ProcessId);
+                @if (selProc != null)
                 {
-                    var active = Part.ProcessId == process.Id;
-                    var cardClass = active
-                        ? "qe-pcs-process-card qe-pcs-process-card--active"
-                        : HasSelectedProcess ? "qe-pcs-process-card qe-pcs-process-card--dimmed" : "qe-pcs-process-card";
-                    <button type="button"
-                            class="@cardClass"
-                            data-process-code="@process.Id"
-                            aria-pressed="@active"
-                            title="@process.Name"
-                            @onclick="@(() => SetProcess(process))">
-                        @if (active)
-                        {
-                            <span class="qe-pcs-process-check">
-                                <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
-                            </span>
-                        }
-                        <span class="qe-pcs-process-photo"
-                              style="background-image:url('/images/processes/@ProcessImageFile(process.Id)')"
+                    <div class="qe-pcs-process-selected" role="group" aria-label="@Text("Selected manufacturing process", "กระบวนการผลิตที่เลือก")">
+                        <span class="qe-pcs-process-selected-photo"
+                              style="background-image:url('/images/processes/@ProcessImageFile(selProc.Id)')"
                               role="img"
-                              aria-label="@process.Name">
+                              aria-label="@selProc.Name">
                         </span>
-                        <span class="qe-pcs-process-name">@process.Name</span>
-                        <span class="qe-pcs-process-description">@ProcessDescription(process.Id)</span>
-                    </button>
+                        <span class="qe-pcs-process-selected-copy">
+                            <span class="qe-pcs-process-selected-name">@selProc.Name</span>
+                            <span class="qe-pcs-process-selected-desc">@ProcessDescription(selProc.Id)</span>
+                        </span>
+                        <button type="button"
+                                class="qe-pcs-process-change-btn"
+                                aria-label="@Text("Change manufacturing process", "เปลี่ยนกระบวนการผลิต")"
+                                @onclick="@(() => _processPickerOpen = true)">
+                            @Text("Change", "เปลี่ยน")
+                        </button>
+                    </div>
                 }
-            </div>
+            }
+            else
+            {
+                @* ── Expanded: show all process cards ── *@
+                <div class="qe-pcs-process-row">
+                    @foreach (var process in ReferenceData?.Processes ?? [])
+                    {
+                        var active = Part.ProcessId == process.Id;
+                        var cardClass = active
+                            ? "qe-pcs-process-card qe-pcs-process-card--active"
+                            : HasSelectedProcess ? "qe-pcs-process-card qe-pcs-process-card--dimmed" : "qe-pcs-process-card";
+                        <button type="button"
+                                class="@cardClass"
+                                data-process-code="@process.Id"
+                                aria-pressed="@active"
+                                title="@process.Name"
+                                @onclick="@(() => SetProcess(process))">
+                            @if (active)
+                            {
+                                <span class="qe-pcs-process-check">
+                                    <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                                </span>
+                            }
+                            <span class="qe-pcs-process-photo"
+                                  style="background-image:url('/images/processes/@ProcessImageFile(process.Id)')"
+                                  role="img"
+                                  aria-label="@process.Name">
+                            </span>
+                            <span class="qe-pcs-process-copy">
+                                <span class="qe-pcs-process-name">@process.Name</span>
+                                <span class="qe-pcs-process-description">@ProcessDescription(process.Id)</span>
+                            </span>
+                        </button>
+                    }
+                </div>
+            }
+
         </section>
 
         <section class="qe-pcs-section" data-config-section="material">
@@ -601,6 +632,54 @@
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
+    /// <summary>When true the full process card list is shown; false = collapsed to the selected pill.</summary>
+    private bool _processPickerOpen = true;
+    private string? _lastPartId;
+    private string _processSearch = "";
+    private ElementReference _processSearchInput;
+    private bool _shouldFocusSearch;
+
+    protected override void OnParametersSet()
+    {
+        // Detect part switch: auto-collapse if process already set, auto-expand if not.
+        var currentId = Part.FileName + Part.ProcessId;
+        if (currentId != _lastPartId)
+        {
+            _lastPartId = currentId;
+            _processPickerOpen = !HasSelectedProcess;
+            if (_processPickerOpen)
+            {
+                _processSearch = "";
+                _shouldFocusSearch = true;
+            }
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_shouldFocusSearch && _processPickerOpen)
+        {
+            _shouldFocusSearch = false;
+            try { await _processSearchInput.FocusAsync(); }
+            catch { /* element not yet in DOM — safe to ignore */ }
+        }
+    }
+
+    private void OpenProcessPicker()
+    {
+        _processPickerOpen = true;
+        _processSearch = "";
+        _shouldFocusSearch = true;
+    }
+
+    private IEnumerable<ProcessOptionDto> FilteredProcesses =>
+        string.IsNullOrWhiteSpace(_processSearch)
+            ? (ReferenceData?.Processes ?? [])
+            : (ReferenceData?.Processes ?? []).Where(p =>
+                p.Name.Contains(_processSearch, StringComparison.OrdinalIgnoreCase)
+                || p.Id.Contains(_processSearch, StringComparison.OrdinalIgnoreCase)
+                || ProcessDescription(p.Id).Contains(_processSearch, StringComparison.OrdinalIgnoreCase));
+
     private bool IsCnc => Part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase);
     private bool HasSelectedProcess => !string.IsNullOrWhiteSpace(Part.ProcessId);
     private bool HasInserts => !string.IsNullOrWhiteSpace(Part.InsertType)
@@ -667,6 +746,7 @@
 
     private async Task SetProcess(ProcessOptionDto process)
     {
+        _processPickerOpen = false;  // collapse to selected-process pill
         Part.ApplyProjectNewProcessSelection(process.Id, ReferenceData);
         ApplyFinishOptionDefaults();
         await NotifyChanged();

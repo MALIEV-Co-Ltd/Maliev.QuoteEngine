@@ -643,6 +643,9 @@ const shadowGenerators      = {};   // canvasId → BABYLON.ShadowGenerator
 const analysisModelMeshIds  = {};   // canvasId → Set<mesh.uniqueId> for real model geometry
 const analysisCameraButtons = {};   // canvasId → previous ArcRotate pointer buttons while analysis tools are active
 const activeRenderModes     = {};   // canvasId → 'solid' | 'wireframe' | 'transparent' | 'realistic'
+const targetRenderModes     = {};   // canvasId → target render mode for staged transition
+const renderModeTransitionTimers = {}; // canvasId → fallback timer handle
+const renderModeTransitionState = {}; // canvasId → transition state
 const localAdvisoryRuns     = {};   // canvasId → latest local advisory run id
 const localAdvisoryWorkers  = {};   // canvasId → active geometry worker
 let localAdvisoryWorkerQueue = Promise.resolve();
@@ -700,11 +703,30 @@ function toWorldPoint(point) {
 function normalizeViewerSettings(viewerSettings) {
     const settings = viewerSettings && typeof viewerSettings === 'object' ? viewerSettings : {};
     const firstString = (...values) => values.find(value => typeof value === 'string' && value.trim()) ?? null;
-    const renderMode = settings.renderMode === 'wireframe'
-        || settings.renderMode === 'transparent'
-        || settings.renderMode === 'realistic'
-        ? settings.renderMode
-        : 'realistic';
+
+    const normalizeMode = (mode) =>
+        mode === 'solid' || mode === 'wireframe' || mode === 'transparent' || mode === 'realistic'
+            ? mode
+            : 'realistic';
+
+    const renderMode = normalizeMode(settings.renderMode);
+    const initialRenderMode = normalizeMode(settings.initialRenderMode);
+    const targetRenderMode = normalizeMode(settings.targetRenderMode);
+
+    const transition = settings.renderModeTransition && typeof settings.renderModeTransition === 'object'
+        ? settings.renderModeTransition
+        : {};
+    const transitionEnabled = transition.enabled !== false;
+    const transitionTrigger = typeof transition.trigger === 'string' && transition.trigger.trim()
+        ? transition.trigger.trim()
+        : 'runtime_complete';
+    const fallbackDelayMs = Number.isFinite(Number(transition.fallbackDelayMs))
+        ? Number(transition.fallbackDelayMs)
+        : 1200;
+    const transitionMs = Number.isFinite(Number(transition.transitionMs))
+        ? Number(transition.transitionMs)
+        : 250;
+
     const cameraMode = settings.cameraProjection === 'perspective'
         ? 'perspective'
         : 'orthographic';
@@ -714,6 +736,14 @@ function normalizeViewerSettings(viewerSettings) {
 
     return {
         renderMode,
+        initialRenderMode,
+        targetRenderMode,
+        renderModeTransition: {
+            enabled: transitionEnabled,
+            trigger: transitionTrigger,
+            fallbackDelayMs,
+            transitionMs
+        },
         cameraProjection: cameraMode,
         edgesEnabled: !!settings.edgesEnabled && renderMode !== 'wireframe',
         gridEnabled: !!settings.gridEnabled,
@@ -2296,7 +2326,28 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                 ro.observe(canvas);
                 resizeObservers[canvasId] = ro;
 
-                setRenderMode(canvasId, viewerSettings.renderMode);
+                // Staged rendering: apply initialRenderMode immediately if target is realistic
+                // This ensures fast first paint (CAD-style solid) before realistic upgrade
+                const initialMode = viewerSettings.initialRenderMode;
+                const targetMode = viewerSettings.targetRenderMode;
+                const transition = viewerSettings.renderModeTransition;
+
+                targetRenderModes[canvasId] = targetMode;
+                renderModeTransitionState[canvasId] = {
+                    enabled: transition.enabled,
+                    trigger: transition.trigger,
+                    fallbackDelayMs: transition.fallbackDelayMs,
+                    transitionMs: transition.transitionMs,
+                    completed: false,
+                    fallbackTimer: null
+                };
+
+                // If target is realistic but initial is not, start with solid for fast first paint
+                const effectiveInitialMode = (targetMode === 'realistic' && initialMode !== 'realistic')
+                    ? initialMode
+                    : initialMode;
+                setRenderMode(canvasId, effectiveInitialMode);
+
                 if (viewerSettings.partColor || viewerSettings.processId) {
                     setPartMaterial(canvasId,
                         viewerSettings.processId,
@@ -2315,6 +2366,12 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
                     viewerSettings.sectionOffsetMm,
                     !!viewerSettings.sectionInverted
                 );
+
+                // Schedule fallback transition if enabled and target is realistic
+                if (transition.enabled && targetMode === 'realistic' && effectiveInitialMode !== 'realistic') {
+                    scheduleRenderModeFallback(canvasId, transition.fallbackDelayMs, transition.transitionMs);
+                }
+
                 runLocalAdvisoryGeometry(canvasId, {
                     processCode: viewerSettings.processCode ?? viewerSettings.processId,
                     storagePath: viewerSettings.storagePath,
@@ -4127,6 +4184,23 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         if (accepted) {
             clearLocalAdvisoryPanel(canvasId);
         }
+
+        // Trigger render mode transition if configured (trigger: runtime_complete)
+        const transitionState = renderModeTransitionState[canvasId];
+        if (transitionState && transitionState.enabled && !transitionState.completed) {
+            const targetMode = targetRenderModes[canvasId];
+            if (transitionState.trigger === 'runtime_complete' && targetMode === 'realistic') {
+                // Clear fallback timer since runtime completed
+                if (transitionState.fallbackTimer) {
+                    clearTimeout(transitionState.fallbackTimer);
+                    transitionState.fallbackTimer = null;
+                }
+                debugLog('[BabylonViewer] Runtime complete - transitioning to realistic', { canvasId });
+                transitionToRealistic(canvasId, transitionState.transitionMs);
+                transitionState.completed = true;
+            }
+        }
+
         return result;
     } catch (_) {
         if (localAdvisoryRuns[canvasId] === runId) {
@@ -4290,6 +4364,90 @@ function animateMaterialAlpha(material, fromAlpha, toAlpha, scene, duration = CO
     });
 }
 
+/**
+ * Schedules a fallback transition to realistic mode after a delay.
+ * This ensures the viewer transitions to realistic even if local advisory never completes.
+ * @param {string} canvasId
+ * @param {number} delayMs - Delay before transition (default: 1200ms)
+ * @param {number} transitionMs - Transition animation duration (default: 250ms)
+ */
+function scheduleRenderModeFallback(canvasId, delayMs = 1200, transitionMs = 250) {
+    const state = renderModeTransitionState[canvasId];
+    if (!state || state.completed) return;
+
+    // Clear any existing fallback timer
+    if (state.fallbackTimer) {
+        clearTimeout(state.fallbackTimer);
+    }
+
+    state.fallbackTimer = setTimeout(() => {
+        const currentState = renderModeTransitionState[canvasId];
+        if (!currentState || currentState.completed) return;
+
+        // Only transition if we're still in initial mode (not already realistic)
+        const currentMode = activeRenderModes[canvasId];
+        const targetMode = targetRenderModes[canvasId];
+        if (currentMode !== 'realistic' && targetMode === 'realistic') {
+            debugLog('[BabylonViewer] Fallback transition to realistic mode', { canvasId, delayMs });
+            transitionToRealistic(canvasId, transitionMs);
+        }
+        currentState.completed = true;
+    }, delayMs);
+}
+
+/**
+ * Transitions from current render mode to realistic with a smooth fade.
+ * @param {string} canvasId
+ * @param {number} transitionMs - Transition animation duration
+ */
+function transitionToRealistic(canvasId, transitionMs = 250) {
+    const scene = scenes[canvasId];
+    if (!scene) return;
+
+    const currentMode = activeRenderModes[canvasId];
+    if (currentMode === 'realistic') return;
+
+    debugLog('[BabylonViewer] Transitioning to realistic mode', { canvasId, from: currentMode, transitionMs });
+
+    // Apply realistic materials with alpha fade transition
+    const materialType = materialTypes[canvasId] || 'aluminum';
+    const preset = CONFIG.MATERIAL_REALISTIC[materialType] || CONFIG.MATERIAL_REALISTIC['aluminum'];
+    const finishMod = perCanvasFinishModifiers[canvasId] || { roughnessOffset: 0, metallicOffset: 0 };
+    const sharedRealisticMaterial = getRealisticMaterial(scene, canvasId, materialType);
+    syncRealisticMaterialProperties(
+        sharedRealisticMaterial,
+        preset,
+        customAlbedoColors[canvasId],
+        finishMod,
+        resolveRealisticNodeMaterialProfile(canvasId, materialType));
+
+    // If transition duration > 0, animate alpha from current to 1.0
+    if (transitionMs > 0) {
+        // Set initial alpha to 0 for fade-in
+        sharedRealisticMaterial.alpha = 0;
+        sharedRealisticMaterial.needDepthPrePass = true;
+
+        // Animate alpha
+        animateMaterialAlpha(sharedRealisticMaterial, 0, 1, scene, transitionMs);
+    }
+
+    // Apply to all model meshes
+    scene.meshes.forEach(mesh => {
+        if (isSystemMesh(mesh)) return;
+        mesh.material = sharedRealisticMaterial;
+        safeDisableEdges(mesh);
+    });
+
+    // Re-apply edges if they were enabled
+    if (edgesEnabled[canvasId]) {
+        toggleEdges(canvasId, true);
+    }
+
+    activeRenderModes[canvasId] = 'realistic';
+    _syncCuttingMatRenderMode(canvasId);
+    syncSceneShadowParticipation(canvasId);
+}
+
 // ── setRenderMode ─────────────────────────────────────────────────────────────
 
 export function setRenderMode(canvasId, mode) {
@@ -4349,6 +4507,21 @@ export function setRenderMode(canvasId, mode) {
     // Wireframe uses StandardMaterial.wireframe and disables edge rendering.
     if (mode !== 'wireframe' && edgesEnabled[canvasId]) {
         toggleEdges(canvasId, true);
+    }
+
+    // Handle render mode transition state
+    const transitionState = renderModeTransitionState[canvasId];
+    if (transitionState && transitionState.enabled && !transitionState.completed) {
+        // If user manually switches to realistic, mark transition as completed
+        if (mode === 'realistic') {
+            if (transitionState.fallbackTimer) {
+                clearTimeout(transitionState.fallbackTimer);
+                transitionState.fallbackTimer = null;
+            }
+            transitionState.completed = true;
+        }
+        // If user switches away from initial mode before transition, update target
+        targetRenderModes[canvasId] = mode;
     }
 }
 

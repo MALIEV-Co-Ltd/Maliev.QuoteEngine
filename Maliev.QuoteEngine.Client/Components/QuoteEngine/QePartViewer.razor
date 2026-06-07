@@ -309,6 +309,64 @@
         _ortho = !string.Equals(ViewerSettings.CameraProjection, "perspective", StringComparison.OrdinalIgnoreCase);
     }
 
+    private object CaptureViewerRuntimeSettings()
+    {
+        var initialRenderMode = string.IsNullOrWhiteSpace(ViewerSettings?.InitialRenderMode)
+            ? _renderMode
+            : ViewerSettings.InitialRenderMode.Equals("wireframe", StringComparison.OrdinalIgnoreCase)
+                ? "wireframe"
+                : ViewerSettings.InitialRenderMode.Equals("transparent", StringComparison.OrdinalIgnoreCase)
+                    ? "transparent"
+                    : ViewerSettings.InitialRenderMode.Equals("solid", StringComparison.OrdinalIgnoreCase)
+                        ? "solid"
+                        : "realistic";
+
+        var targetRenderMode = string.IsNullOrWhiteSpace(ViewerSettings?.TargetRenderMode)
+            ? _renderMode
+            : ViewerSettings.TargetRenderMode.Equals("wireframe", StringComparison.OrdinalIgnoreCase)
+                ? "wireframe"
+                : ViewerSettings.TargetRenderMode.Equals("transparent", StringComparison.OrdinalIgnoreCase)
+                    ? "transparent"
+                    : ViewerSettings.TargetRenderMode.Equals("solid", StringComparison.OrdinalIgnoreCase)
+                        ? "solid"
+                        : "realistic";
+
+        var transition = ViewerSettings?.RenderModeTransition ?? new RenderModeTransitionSettings();
+
+        return new
+        {
+            cameraPreset = _cameraPreset,
+            renderMode = _renderMode,
+            initialRenderMode,
+            targetRenderMode,
+            renderModeTransition = new
+            {
+                enabled = transition.Enabled,
+                trigger = transition.Trigger ?? "runtime_complete",
+                fallbackDelayMs = transition.FallbackDelayMs,
+                transitionMs = transition.TransitionMs
+            },
+            edgesEnabled = _edgesOn,
+            gridEnabled = _gridOn,
+            boundingBoxEnabled = _boundingBoxOn,
+            cameraProjection = _ortho ? "orthographic" : "perspective",
+            sectionEnabled = _sectionOn,
+            sectionAxis = _sectionAxis,
+            sectionOffsetMm = _sectionOffsetMm,
+            sectionInverted = _sectionInverted,
+            partColor = PartColor,
+            processId = ProcessId,
+            processCode = ProcessId,
+            materialId = MaterialId,
+            storagePath = StoragePath,
+            browserFileClientId = BrowserFileClientId,
+            browserFileName = BrowserFileName,
+            fileBytesProvider = "quoteEngineUploads",
+            finishCode = FinishCode,
+            roughnessCode = RoughnessCode
+        };
+    }
+
     private async Task InitializeViewerAsync()
     {
         try
@@ -321,29 +379,7 @@
                 _canvasId, GlbUrl, FileExtension, IsDarkMode,
                 null,
                 _dotNetRef,
-                new
-                {
-                    cameraPreset = _cameraPreset,
-                    renderMode = _renderMode,
-                    edgesEnabled = _edgesOn,
-                    gridEnabled = _gridOn,
-                    boundingBoxEnabled = _boundingBoxOn,
-                    cameraProjection = _ortho ? "orthographic" : "perspective",
-                    sectionEnabled = _sectionOn,
-                    sectionAxis = _sectionAxis,
-                    sectionOffsetMm = _sectionOffsetMm,
-                    sectionInverted = _sectionInverted,
-                    partColor = PartColor,
-                    processId = ProcessId,
-                    processCode = ProcessId,
-                    materialId = MaterialId,
-                    storagePath = StoragePath,
-                    browserFileClientId = BrowserFileClientId,
-                    browserFileName = BrowserFileName,
-                    fileBytesProvider = "quoteEngineUploads",
-                    finishCode = FinishCode,
-                    roughnessCode = RoughnessCode
-                });
+                CaptureViewerRuntimeSettings());
         }
         catch (Exception ex)
         {
