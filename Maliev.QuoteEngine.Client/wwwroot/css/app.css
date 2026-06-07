@@ -6789,6 +6789,38 @@ body.mud-blazor {
     border-radius: var(--maliev-radius-md) 0 0 var(--maliev-radius-md);
 }
 
+.qe-pcs-process-search {
+    flex-shrink: 0;
+    padding: 0 0 6px;
+}
+
+.qe-pcs-process-search-input {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--maliev-panel-3);
+    border: 1px solid var(--maliev-border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: var(--maliev-font-small);
+    font-family: inherit;
+    color: var(--maliev-ink);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.qe-pcs-process-search-input::placeholder {
+    color: var(--maliev-muted);
+    opacity: 0.6;
+}
+
+.qe-pcs-process-search-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 18%, transparent);
+}
+
+.qe-pcs-process-search-input::-webkit-search-cancel-button { display: none; }
+.qe-pcs-process-search-input::-ms-clear { display: none; }
+
 .qe-pcs-process-name,
 .qe-pcs-mat-name,
 .qe-pcs-fin-name,

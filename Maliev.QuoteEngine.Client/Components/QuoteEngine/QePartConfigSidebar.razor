@@ -32,7 +32,7 @@
                         <button type="button"
                                 class="qe-pcs-process-change-btn"
                                 aria-label="@Text("Change manufacturing process", "เปลี่ยนกระบวนการผลิต")"
-                                @onclick="@(() => _processPickerOpen = true)">
+                                @onclick="OpenProcessPicker">
                             @Text("Change", "เปลี่ยน")
                         </button>
                     </div>
@@ -40,7 +40,16 @@
             }
             else
             {
-                @* ── Expanded: show all process cards ── *@
+                @* ── Expanded: search + process cards ── *@
+                <div class="qe-pcs-process-search">
+                    <input @ref="_processSearchInput"
+                           type="search"
+                           class="qe-pcs-process-search-input"
+                           placeholder="@Text("Search processes…", "ค้นหากระบวนการผลิต…")"
+                           autocomplete="off"
+                           @bind="_processSearch"
+                           @bind:event="oninput" />
+                </div>
                 <div class="qe-pcs-process-row">
                     @foreach (var process in ReferenceData?.Processes ?? [])
                     {
