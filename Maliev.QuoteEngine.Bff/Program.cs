@@ -71,6 +71,7 @@ builder.AddAuthenticatedServiceClient<ICountryServiceClient, CountryServiceClien
 builder.AddAuthenticatedServiceClient<ICurrencyServiceClient, CurrencyServiceClient>("CurrencyService");
 builder.AddAuthenticatedServiceClient<IRegistryServiceClient, RegistryServiceClient>("RegistryService");
 builder.AddAuthenticatedServiceClient<IPaymentServiceClient, PaymentServiceClient>("PaymentService");
+builder.AddAuthenticatedServiceClient<IQePricingServiceClient, PricingServiceClient>("PricingService");
 builder.Services.AddHttpClient<IQuoteGeometryRuntimeClient, QuoteGeometryRuntimeClient>(client =>
     {
         client.BaseAddress = new Uri("https+http://GeometryService");

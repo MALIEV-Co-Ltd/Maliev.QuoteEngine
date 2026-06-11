@@ -68,6 +68,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             services.RemoveAll<IPaymentServiceClient>();
             services.AddSingleton<IPaymentServiceClient>(new FakePaymentServiceClient());
 
+            services.RemoveAll<IQePricingServiceClient>();
+            services.AddSingleton<IQePricingServiceClient>(new FakePricingServiceClient());
+
             // Test-only sign-in endpoint: issues the shared identity cookie with customer_id claim.
             // Replaces the removed /quote/v1/auth/sign-in endpoint for test authentication.
             services.AddTransient<IStartupFilter, TestSignInStartupFilter>();
@@ -635,6 +638,41 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 TransactionId = Guid.NewGuid(),
                 PaymentUrl = $"https://pay.test.example.com/hosted/{Guid.NewGuid():N}",
                 Status = "1"
+            });
+        }
+    }
+
+    private sealed class FakePricingServiceClient : IQePricingServiceClient
+    {
+        public Task<PricingCalculationResult?> CalculateAsync(
+            QuotePartDraftDto part,
+            Guid customerId,
+            Guid materialId,
+            Guid manufacturingProcessId,
+            string leadTimeCode,
+            decimal? toleranceAdditionalCostPercent,
+            CancellationToken ct = default)
+        {
+            var processRate = part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase)
+                ? 520m
+                : part.ProcessId.Equals("sla", StringComparison.OrdinalIgnoreCase) ? 180m : 95m;
+            var setup = part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase) ? 850m : 120m;
+            var leadTimeMultiplier = leadTimeCode.Equals("EXPRESS", StringComparison.OrdinalIgnoreCase)
+                ? 1.35m
+                : leadTimeCode.Equals("ECONOMY", StringComparison.OrdinalIgnoreCase) ? 0.90m : 1m;
+            var toleranceMultiplier = 1m + ((toleranceAdditionalCostPercent ?? 0m) / 100m);
+            var unitPrice = Math.Round((setup + Math.Max(part.VolumeCc, 1m) * processRate) * leadTimeMultiplier * toleranceMultiplier, 2);
+            return Task.FromResult<PricingCalculationResult?>(new PricingCalculationResult
+            {
+                UnitPrice = unitPrice,
+                TotalAmount = Math.Round(unitPrice * part.Quantity, 2),
+                UnitPriceBeforeVolumeDiscount = unitPrice,
+                VolumeDiscountUnitAmount = 0m,
+                VolumeDiscountPercent = 0m,
+                ConfidenceScore = 0.92m,
+                EngineName = "test-pricing",
+                AuditId = Guid.NewGuid(),
+                EstimatedLeadTimeDays = leadTimeCode.Equals("EXPRESS", StringComparison.OrdinalIgnoreCase) ? 3 : 6
             });
         }
     }

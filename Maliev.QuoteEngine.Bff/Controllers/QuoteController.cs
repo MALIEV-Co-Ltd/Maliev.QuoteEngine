@@ -26,6 +26,7 @@ public sealed class QuoteController(
     IQuotationServiceClient quotationClient,
     IOrderServiceClient orderClient,
     IPaymentServiceClient paymentClient,
+    IQePricingServiceClient pricingClient,
     IHostEnvironment environment,
     ILogger<QuoteController> logger) : ControllerBase
 {
@@ -277,14 +278,170 @@ public sealed class QuoteController(
     }
 
     [HttpPost("estimate")]
-    public ActionResult<QuoteEstimateResponse> Estimate([FromBody] QuoteEstimateRequest request)
+    public async Task<ActionResult<QuoteEstimateResponse>> Estimate(
+        [FromBody] QuoteEstimateRequest request,
+        CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
             return ValidationProblem(ModelState);
         }
 
-        return Ok(store.Estimate(request));
+        var pricingEstimate = await TryEstimateWithPricingServiceAsync(request, cancellationToken);
+        return Ok(pricingEstimate ?? store.Estimate(request));
+    }
+
+    private async Task<QuoteEstimateResponse?> TryEstimateWithPricingServiceAsync(
+        QuoteEstimateRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (request.Parts.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var customerId = sessionResolver.TryResolveCustomerId(out var resolvedCustomerId)
+                ? resolvedCustomerId
+                : Guid.Empty;
+            var lines = new List<QuoteLineEstimateDto>(request.Parts.Count);
+
+            foreach (var part in request.Parts)
+            {
+                var processId = await materialCatalog.ResolveProcessIdAsync(part.ProcessId, cancellationToken);
+                var materialId = await materialCatalog.ResolveMaterialIdAsync(
+                    part.ProcessId,
+                    part.MaterialId,
+                    cancellationToken);
+                var toleranceAdditionalCostPercent = ResolveToleranceAdditionalCostPercent(part);
+                var serviceResult = await pricingClient.CalculateAsync(
+                    part,
+                    customerId,
+                    materialId,
+                    processId,
+                    request.LeadTimeCode,
+                    toleranceAdditionalCostPercent,
+                    cancellationToken);
+
+                if (serviceResult is null)
+                {
+                    return null;
+                }
+
+                var adjustment = BuildQuoteEngineConfigurationAdjustment(part);
+                var unitPrice = Math.Round(serviceResult.UnitPrice * adjustment.Multiplier + adjustment.Additive, 2);
+                var lineTotal = Math.Round(unitPrice * part.Quantity, 2);
+                lines.Add(new QuoteLineEstimateDto(
+                    part.PartId,
+                    part.FileName,
+                    unitPrice,
+                    lineTotal,
+                    "THB",
+                    adjustment.Notes));
+            }
+
+            var subtotal = lines.Sum(line => line.LineTotal);
+            var discount = subtotal >= 25_000m ? Math.Round(subtotal * 0.05m, 2) : 0m;
+            return new QuoteEstimateResponse(
+                request.QuoteSessionId,
+                subtotal,
+                discount,
+                subtotal - discount,
+                "THB",
+                true,
+                lines);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "PricingService estimate failed for quote session {QuoteSessionId}; using local fallback.", request.QuoteSessionId);
+            return null;
+        }
+    }
+
+    private decimal? ResolveToleranceAdditionalCostPercent(QuotePartDraftDto part)
+    {
+        var tolerance = store.ReferenceData.Tolerances.FirstOrDefault(option =>
+            Matches(option.Id, part.ToleranceId) || Matches(option.Code, part.ToleranceCode));
+        if (tolerance is null || tolerance.PriceMultiplier <= 1m)
+        {
+            return null;
+        }
+
+        return Math.Round((tolerance.PriceMultiplier - 1m) * 100m, 2);
+    }
+
+    private (decimal Multiplier, decimal Additive, string Notes) BuildQuoteEngineConfigurationAdjustment(
+        QuotePartDraftDto part)
+    {
+        var multiplier = 1m;
+        var additive = 0m;
+        var notes = new List<string> { "PricingService estimate" };
+
+        var finish = store.ReferenceData.Finishes.FirstOrDefault(option =>
+            Matches(option.Id, part.FinishId) || Matches(option.Code, part.FinishCode));
+        if (finish is not null && finish.PriceMultiplier != 1m)
+        {
+            multiplier *= finish.PriceMultiplier;
+            notes.Add($"finish {finish.Name}");
+        }
+
+        var tolerance = store.ReferenceData.Tolerances.FirstOrDefault(option =>
+            Matches(option.Id, part.ToleranceId) || Matches(option.Code, part.ToleranceCode));
+        if (tolerance is not null)
+        {
+            notes.Add($"tolerance {tolerance.Code}");
+        }
+
+        var inspection = store.ReferenceData.InspectionLevels.FirstOrDefault(option =>
+            Matches(option.Code, part.InspectionLevel));
+        if (inspection is not null)
+        {
+            notes.Add($"inspection {inspection.Name}");
+            if (inspection.PriceMultiplier != 1m)
+            {
+                multiplier *= inspection.PriceMultiplier;
+            }
+        }
+
+        var roughness = store.ReferenceData.RoughnessOptions.FirstOrDefault(option =>
+            Matches(option.Code, part.RoughnessCode));
+        if (roughness is not null && roughness.PriceMultiplier != 1m)
+        {
+            multiplier *= roughness.PriceMultiplier;
+            notes.Add($"roughness {roughness.Name}");
+        }
+
+        if (part.HasThreadedHoles || part.ThreadedHoleCount > 0)
+        {
+            var count = Math.Max(part.ThreadedHoleCount, 1);
+            additive += count * 85m;
+            notes.Add($"threaded holes {count}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.InsertType) &&
+            !part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            var count = Math.Max(part.InsertCount, 1);
+            additive += count * 120m;
+            notes.Add($"thread inserts {count}");
+        }
+
+        if (part.DrawingFiles.Count > 0)
+        {
+            notes.Add("drawing reviewed");
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.PartNotes))
+        {
+            notes.Add("customer notes supplied");
+        }
+
+        return (multiplier, additive, string.Join("; ", notes) + ".");
     }
 
     [HttpPost("projects/draft")]
@@ -456,6 +613,12 @@ public sealed class QuoteController(
         if (part.BodyCount.HasValue) notes.Add($"body count {part.BodyCount.Value}");
         if (part.SelectedBodyIndex.HasValue) notes.Add($"selected body {part.SelectedBodyIndex.Value}");
         return string.Join("; ", notes);
+    }
+
+    private static bool Matches(string candidate, string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) &&
+            candidate.Equals(value.Trim(), StringComparison.OrdinalIgnoreCase);
     }
 
     [HttpPost("payments")]
