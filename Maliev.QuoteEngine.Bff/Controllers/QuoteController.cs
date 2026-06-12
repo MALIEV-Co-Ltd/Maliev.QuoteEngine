@@ -952,6 +952,12 @@ public sealed class QuoteController(
             return NotFound();
         }
 
+        var dfmReviewError = ValidateDfmReviewAcknowledgement(request.Parts);
+        if (dfmReviewError is not null)
+        {
+            return dfmReviewError;
+        }
+
         var productionItems = new List<OrderProductionItemRequest>(request.Parts.Count);
         foreach (var part in request.Parts)
         {
@@ -993,6 +999,33 @@ public sealed class QuoteController(
 
         return Ok(new CreateManufacturingOrderResponse(result.OrderId, result.OrderNumber, result.Status));
     }
+
+    private static ActionResult? ValidateDfmReviewAcknowledgement(IReadOnlyList<QuotePartDraftDto> parts)
+    {
+        var blockedPart = parts.FirstOrDefault(RequiresDfmAcknowledgement);
+        if (blockedPart is null)
+        {
+            return null;
+        }
+
+        var fileName = string.IsNullOrWhiteSpace(blockedPart.FileName) ? "the selected part" : blockedPart.FileName.Trim();
+        return new BadRequestObjectResult(new ProblemDetails
+        {
+            Title = "DFM review is required before checkout.",
+            Detail = $"Review and acknowledge DFM issues for {fileName} before creating an order.",
+            Status = StatusCodes.Status400BadRequest
+        });
+    }
+
+    private static bool RequiresDfmAcknowledgement(QuotePartDraftDto part) =>
+        !part.DfmAcknowledged && HasDfmIssues(part);
+
+    private static bool HasDfmIssues(QuotePartDraftDto part) =>
+        part.Findings.Count > 0
+        || part.FdmReport?.Issues.Count > 0
+        || part.SlaReport?.Issues.Count > 0
+        || part.CncReport?.Issues.Count > 0
+        || (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason));
 
     private bool CanAccessUpload(UploadState upload)
     {

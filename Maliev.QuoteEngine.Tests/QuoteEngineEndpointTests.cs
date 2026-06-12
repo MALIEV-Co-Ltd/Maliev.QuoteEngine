@@ -2047,6 +2047,56 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Order_creation_rejects_parts_with_unacknowledged_dfm_issues()
+    {
+        using var client = await CreateSignedInClientAsync("dfm-blocked-order@example.com");
+        var part = new QuotePartDraftDto
+        {
+            PartId = Guid.NewGuid(),
+            FileId = Guid.NewGuid(),
+            UploadId = "upload-dfm-blocked-order",
+            FileName = "thin-wall-bracket.stl",
+            ProcessId = "fdm",
+            MaterialId = "pla-black",
+            Quantity = 2,
+            VolumeCc = 14.25m,
+            SurfaceAreaCm2 = 52.4m,
+            Status = "DfmAnalysisReady",
+            DfmAcknowledged = false,
+            Findings = [new DfmFindingDto("warning", "THIN_WALL", "Wall thickness is below the process minimum.")],
+            FdmReport = new QeFdmDfmReport(
+                1,
+                0,
+                0m,
+                false,
+                0,
+                [new QeDfmIssueItem("warning", "THIN_WALL", "Wall thickness is below the process minimum.")])
+        };
+
+        var quoteResponse = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-dfm-blocked-order", [part], "DFM blocked order quote."));
+        quoteResponse.EnsureSuccessStatusCode();
+        var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResponse = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(
+                quote.QuoteId,
+                "PO-DFM-BLOCK",
+                "Customer attempted order before DFM acknowledgement.")
+            {
+                Parts = [part]
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, orderResponse.StatusCode);
+        var body = await orderResponse.Content.ReadAsStringAsync();
+        Assert.Contains("DFM review is required", body, StringComparison.Ordinal);
+        Assert.Contains("thin-wall-bracket.stl", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Quote_approval_is_scoped_to_signed_in_customer()
     {
         using var customerA = await CreateSignedInClientAsync("quote-approve-owner@example.com");
