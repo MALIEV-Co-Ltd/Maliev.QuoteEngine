@@ -88,7 +88,7 @@
                     <input type="checkbox" checked="@TermsAccepted" @onchange="OnTermsChanged" />
                     <span>@Text("I accept checkout terms", "ฉันยอมรับเงื่อนไขการชำระเงิน")</span>
                 </label>
-                <button type="button" class="qe-primary-btn" disabled="@(!CanPay || !TermsAccepted)" @onclick="OnPaymentRequested">
+                <button type="button" class="qe-primary-btn" disabled="@(!CanPay || !TermsAccepted || PaymentBusy)" @onclick="OnPaymentRequested">
                     @Text("Pay now", "ชำระเงินตอนนี้")
                     <MudIcon Icon="@Icons.Material.Outlined.Payments" Size="Size.Small" />
                 </button>
@@ -159,6 +159,7 @@
     [Parameter] public bool CanCreateOrder { get; set; }
     [Parameter] public bool CanPay { get; set; }
     [Parameter] public bool TermsAccepted { get; set; }
+    [Parameter] public bool PaymentBusy { get; set; }
     [Parameter] public string QuoteButtonLabel { get; set; } = "Quote";
     [Parameter] public string BillingName { get; set; } = "Customer account";
     [Parameter] public string BillingHint { get; set; } = "Private order";

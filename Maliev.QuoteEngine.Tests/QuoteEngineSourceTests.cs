@@ -2128,6 +2128,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("BillingHint=\"@BillingSummaryHint\"", workspace, StringComparison.Ordinal);
         Assert.Contains("ApproveQuoteAsync", workspace, StringComparison.Ordinal);
         Assert.Contains("InitiatePaymentAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("PaymentBusy=\"@_paymentBusy\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("_paymentBusy = true", workspace, StringComparison.Ordinal);
+        Assert.Contains("_paymentBusy = false", workspace, StringComparison.Ordinal);
+        Assert.Contains("disabled=\"@(!CanPay || !TermsAccepted || PaymentBusy)\"", src, StringComparison.Ordinal);
         Assert.Contains("ApproveQuoteAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("InitiatePaymentAsync", apiClient, StringComparison.Ordinal);
     }
