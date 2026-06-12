@@ -418,6 +418,8 @@ public sealed class InitiatePaymentRequest
     public Guid? ShippingAddressId { get; set; }
 
     public bool AcceptedTerms { get; set; }
+
+    public Guid CheckoutAttemptId { get; set; } = Guid.NewGuid();
 }
 
 public sealed record InitiatePaymentResponse(

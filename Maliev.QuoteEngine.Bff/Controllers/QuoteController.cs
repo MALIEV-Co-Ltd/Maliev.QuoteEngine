@@ -647,6 +647,16 @@ public sealed class QuoteController(
             });
         }
 
+        if (request.CheckoutAttemptId == Guid.Empty)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Checkout attempt id is required.",
+                Detail = "Refresh the checkout and try again.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
         var addressValidation = await ValidateCheckoutAddressesAsync(customerId, request, cancellationToken);
         if (addressValidation is not null)
         {
@@ -688,7 +698,7 @@ public sealed class QuoteController(
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
         var returnUrl = $"{baseUrl}/payment/success?orderId={Uri.EscapeDataString(request.OrderNumber)}";
         var cancelUrl = $"{baseUrl}/payment/cancel?orderId={Uri.EscapeDataString(request.OrderNumber)}";
-        var idempotencyKey = $"{customerId:D}:{request.OrderId:D}";
+        var idempotencyKey = $"{customerId:D}:{request.OrderId:D}:{request.CheckoutAttemptId:D}";
 
         // Advance order to Accepted (customer accepted the quoted price) so that when
         // PaymentService fires PaymentCompletedEvent, OrderService can apply Accepted → Paid.

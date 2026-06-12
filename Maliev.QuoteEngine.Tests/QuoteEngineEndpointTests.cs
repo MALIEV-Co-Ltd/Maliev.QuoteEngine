@@ -32,6 +32,15 @@ namespace Maliev.QuoteEngine.Tests;
 /// </summary>
 public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Program>
 {
+    public IReadOnlyList<string> PaymentIdempotencyKeys => FakePaymentServiceClient.IdempotencyKeys.ToArray();
+
+    public void ClearPaymentIdempotencyKeys()
+    {
+        while (FakePaymentServiceClient.IdempotencyKeys.TryDequeue(out _))
+        {
+        }
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -665,6 +674,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     private sealed class FakePaymentServiceClient : IPaymentServiceClient
     {
+        public static ConcurrentQueue<string> IdempotencyKeys { get; } = new();
+
         public Task<PaymentInitiatedResult?> InitiateAsync(
             string customerId, string orderId, string orderNumber,
             decimal amount, string currency,
@@ -672,6 +683,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             Guid? billingAddressId, Guid? shippingAddressId, bool acceptedTerms,
             CancellationToken ct = default)
         {
+            IdempotencyKeys.Enqueue(idempotencyKey);
             return Task.FromResult<PaymentInitiatedResult?>(new PaymentInitiatedResult
             {
                 TransactionId = Guid.NewGuid(),
@@ -2060,6 +2072,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     [Fact]
     public async Task Payment_initiation_returns_hosted_payment_url_for_signed_in_customer()
     {
+        factory.ClearPaymentIdempotencyKeys();
         using var client = await CreateSignedInClientAsync("payer@example.com");
 
         var quoteResp = await client.PostAsJsonAsync(
@@ -2092,6 +2105,62 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(body);
         Assert.NotEqual(Guid.Empty, body.TransactionId);
         Assert.StartsWith("https://pay.test.example.com/hosted/", body.PaymentUrl);
+    }
+
+    [Fact]
+    public async Task Payment_initiation_uses_checkout_attempt_id_in_idempotency_key()
+    {
+        factory.ClearPaymentIdempotencyKeys();
+        using var client = await CreateSignedInClientAsync("payer-attempt@example.com");
+
+        var quoteResp = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-attempt", [], "Payment attempt test."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-ATTEMPT", "Payment attempt order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        var firstAttemptId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        var secondAttemptId = Guid.Parse("22222222-2222-2222-2222-222222222222");
+
+        var firstResponse = await client.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1500.00m,
+            Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
+            AcceptedTerms = true,
+            CheckoutAttemptId = firstAttemptId
+        });
+        firstResponse.EnsureSuccessStatusCode();
+
+        var secondResponse = await client.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1500.00m,
+            Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
+            AcceptedTerms = true,
+            CheckoutAttemptId = secondAttemptId
+        });
+        secondResponse.EnsureSuccessStatusCode();
+
+        var keys = factory.PaymentIdempotencyKeys;
+        Assert.Equal(2, keys.Count);
+        Assert.Contains(keys, key => key.EndsWith(firstAttemptId.ToString("D"), StringComparison.Ordinal));
+        Assert.Contains(keys, key => key.EndsWith(secondAttemptId.ToString("D"), StringComparison.Ordinal));
+        Assert.NotEqual(keys[0], keys[1]);
     }
 
     [Fact]
