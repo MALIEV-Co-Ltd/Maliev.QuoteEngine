@@ -1219,6 +1219,45 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     public async Task UploadHandoff_imports_web_uploaded_files_into_active_workspace()
     {
         using var client = factory.CreateClient();
+        var token = CreateSignedWebUploadHandoffToken(new
+        {
+            quoteSessionId = "web-session-1",
+            files = new[]
+            {
+                new
+                {
+                    uploadId = "web-upload-1",
+                    fileId = Guid.NewGuid(),
+                    fileName = "web-dropped-part.step",
+                    storagePath = "quotes/temp/web-session-1/123/web-dropped-part.step",
+                    contentType = "application/step",
+                    fileSizeBytes = 420_000,
+                    status = "Completed"
+                }
+            },
+            issuedAt = DateTimeOffset.UtcNow,
+            expiresAt = DateTimeOffset.UtcNow.AddMinutes(15)
+        });
+
+        var response = await client.PostAsJsonAsync("/quote/v1/uploads/handoff", new QuoteUploadHandoffRequest
+        {
+            HandoffToken = token
+        });
+
+        response.EnsureSuccessStatusCode();
+        var handoff = await response.Content.ReadFromJsonAsync<QuoteUploadHandoffResponse>();
+        Assert.NotNull(handoff);
+        Assert.Equal("web-session-1", handoff.QuoteSessionId);
+        var part = Assert.Single(handoff.Parts);
+        Assert.Equal("web-upload-1", part.UploadId);
+        Assert.Equal("Analyzed", part.Status);
+        Assert.True(part.VolumeCc > 0);
+    }
+
+    [Fact]
+    public async Task UploadHandoff_rejects_unsigned_web_uploaded_files()
+    {
+        using var client = factory.CreateClient();
 
         var response = await client.PostAsJsonAsync("/quote/v1/uploads/handoff", new QuoteUploadHandoffRequest
         {
@@ -1238,14 +1277,16 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             ]
         });
 
-        response.EnsureSuccessStatusCode();
-        var handoff = await response.Content.ReadFromJsonAsync<QuoteUploadHandoffResponse>();
-        Assert.NotNull(handoff);
-        Assert.Equal("web-session-1", handoff.QuoteSessionId);
-        var part = Assert.Single(handoff.Parts);
-        Assert.Equal("web-upload-1", part.UploadId);
-        Assert.Equal("Analyzed", part.Status);
-        Assert.True(part.VolumeCc > 0);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    private static string CreateSignedWebUploadHandoffToken<TPayload>(TPayload payload)
+    {
+        var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var encodedPayload = Microsoft.AspNetCore.WebUtilities.Base64UrlTextEncoder.Encode(Encoding.UTF8.GetBytes(json));
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes("maliev-local-development-quote-upload-handoff-key"));
+        var encodedSignature = Microsoft.AspNetCore.WebUtilities.Base64UrlTextEncoder.Encode(hmac.ComputeHash(Encoding.UTF8.GetBytes(encodedPayload)));
+        return $"{encodedPayload}.{encodedSignature}";
     }
 
     [Fact]

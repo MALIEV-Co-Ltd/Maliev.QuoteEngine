@@ -3,6 +3,7 @@ using Asp.Versioning;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Options;
+using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Mvc;
@@ -29,6 +30,7 @@ public sealed class QuoteController(
     ICustomerServiceClient customerClient,
     IPaymentServiceClient paymentClient,
     IQePricingServiceClient pricingClient,
+    QuoteUploadHandoffToken handoffToken,
     IHostEnvironment environment,
     ILogger<QuoteController> logger) : ControllerBase
 {
@@ -235,10 +237,20 @@ public sealed class QuoteController(
             return ValidationProblem(ModelState);
         }
 
+        if (!handoffToken.TryRead(request.HandoffToken, out var verifiedRequest))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid upload handoff.",
+                Detail = "The website upload handoff could not be verified. Please upload the files again.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
         var customerId = sessionResolver.TryResolveCustomerId(out var resolvedCustomerId)
             ? resolvedCustomerId
             : (Guid?)null;
-        return Ok(store.ImportHandoff(request, customerId));
+        return Ok(store.ImportHandoff(verifiedRequest, customerId));
     }
 
     [HttpGet("uploads/{uploadId}/analysis-status")]

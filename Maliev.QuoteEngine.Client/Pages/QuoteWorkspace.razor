@@ -3,7 +3,6 @@
 @page "/projects/new"
 @page "/demo"
 @using System.Net.Http
-@using System.Text
 @using System.Text.Json
 @using Maliev.QuoteEngine.Shared.Account
 @using Microsoft.AspNetCore.SignalR.Client
@@ -582,18 +581,9 @@
     {
         try
         {
-            var json = Encoding.UTF8.GetString(DecodeBase64Url(encodedHandoff));
-            var request = JsonSerializer.Deserialize<QuoteUploadHandoffRequest>(
-                json,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-            if (request is null || request.Files.Count == 0)
-            {
-                return;
-            }
-
-            _quoteSessionId = string.IsNullOrWhiteSpace(request.QuoteSessionId) ? _quoteSessionId : request.QuoteSessionId;
+            var request = new QuoteUploadHandoffRequest { HandoffToken = encodedHandoff };
             var response = await Api.ImportHandoffAsync(request);
+            _quoteSessionId = string.IsNullOrWhiteSpace(response.QuoteSessionId) ? _quoteSessionId : response.QuoteSessionId;
             await ClearRetainedBrowserUploadFilesAsync("handoff-import");
             _parts.Clear();
             foreach (var part in response.Parts)
@@ -618,7 +608,7 @@
                 await CalculateAsync();
             }
         }
-        catch (Exception ex) when (ex is FormatException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
             _error = Text("We could not import the files from the website upload. Please drop them here again.", "เราไม่สามารถนำเข้าไฟล์จากการอัปโหลดบนเว็บไซต์ได้ กรุณาลากไฟล์มาวางอีกครั้ง");
         }
@@ -1467,10 +1457,4 @@
         public long FileSizeBytes { get; set; }
     }
 
-    private static byte[] DecodeBase64Url(string value)
-    {
-        var padded = value.Replace('-', '+').Replace('_', '/');
-        padded = padded.PadRight(padded.Length + (4 - padded.Length % 4) % 4, '=');
-        return Convert.FromBase64String(padded);
-    }
 }

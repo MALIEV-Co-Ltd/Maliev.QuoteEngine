@@ -94,11 +94,15 @@ public sealed record CompleteQuoteUploadResponse(
 
 public sealed class QuoteUploadHandoffRequest
 {
-    [Required]
+    /// <summary>Gets or sets the signed Web-to-QuoteEngine handoff token.</summary>
+    [MaxLength(20000)]
+    public string? HandoffToken { get; set; }
+
+    /// <summary>Gets or sets the Web quote session id from a verified handoff token.</summary>
     [MaxLength(80)]
     public string QuoteSessionId { get; set; } = string.Empty;
 
-    [MinLength(1)]
+    /// <summary>Gets or sets the uploaded files from a verified handoff token.</summary>
     public List<QuoteUploadHandoffFileDto> Files { get; set; } = [];
 }
 
