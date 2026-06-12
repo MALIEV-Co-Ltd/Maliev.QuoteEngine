@@ -1017,6 +1017,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Amount = _order.QuotedAmount.Value", detail, StringComparison.Ordinal);
         Assert.Contains("Currency = _order.QuoteCurrency ?? \"THB\"", detail, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(payment.PaymentUrl, forceLoad: true)", detail, StringComparison.Ordinal);
+        Assert.Contains("catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)", detail, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo($\"/auth/sign-in?returnUrl={Uri.EscapeDataString($\"/orders/{_order.OrderNumber}\")}\"", detail, StringComparison.Ordinal);
         Assert.Contains("CanPay", detail, StringComparison.Ordinal);
         Assert.Contains("class=\"order-detail-shell\"", detail, StringComparison.Ordinal);
         Assert.Contains("data-order-section=\"payment\"", detail, StringComparison.Ordinal);
@@ -2800,103 +2802,103 @@ public sealed class QuoteEngineSourceTests
 
     private static string GetSourceDirectory([CallerFilePath] string sourceFile = "") => Path.GetDirectoryName(sourceFile) ?? Directory.GetCurrentDirectory();
 
-[Fact]
-public void QuotePartViewerJs_NormalizeViewerSettings_IncludesInitialRenderModeAndTransition()
-{
-    var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
+    [Fact]
+    public void QuotePartViewerJs_NormalizeViewerSettings_IncludesInitialRenderModeAndTransition()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
 
-    // Verify normalizeViewerSettings parses initialRenderMode, targetRenderMode, and renderModeTransition
-    Assert.Contains("const initialRenderMode = normalizeMode(settings.initialRenderMode);", js, StringComparison.Ordinal);
-    Assert.Contains("const targetRenderMode = normalizeMode(settings.targetRenderMode);", js, StringComparison.Ordinal);
-    Assert.Contains("const transition = settings.renderModeTransition", js, StringComparison.Ordinal);
-    Assert.Contains("transitionEnabled", js, StringComparison.Ordinal);
-    Assert.Contains("fallbackDelayMs", js, StringComparison.Ordinal);
-    Assert.Contains("transitionMs", js, StringComparison.Ordinal);
-}
+        // Verify normalizeViewerSettings parses initialRenderMode, targetRenderMode, and renderModeTransition
+        Assert.Contains("const initialRenderMode = normalizeMode(settings.initialRenderMode);", js, StringComparison.Ordinal);
+        Assert.Contains("const targetRenderMode = normalizeMode(settings.targetRenderMode);", js, StringComparison.Ordinal);
+        Assert.Contains("const transition = settings.renderModeTransition", js, StringComparison.Ordinal);
+        Assert.Contains("transitionEnabled", js, StringComparison.Ordinal);
+        Assert.Contains("fallbackDelayMs", js, StringComparison.Ordinal);
+        Assert.Contains("transitionMs", js, StringComparison.Ordinal);
+    }
 
-[Fact]
-public void QuotePartViewerJs_StagedRender_InitialRenderModeDefaultsToSolidWhenTargetIsRealistic()
-{
-    var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
+    [Fact]
+    public void QuotePartViewerJs_StagedRender_InitialRenderModeDefaultsToSolidWhenTargetIsRealistic()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
 
-    // Verify that when target is realistic and initial is not realistic, solid is used for first paint
-    Assert.Contains("const effectiveInitialMode = (targetMode === 'realistic' && initialMode !== 'realistic')", js, StringComparison.Ordinal);
-    Assert.Contains("setRenderMode(canvasId, effectiveInitialMode);", js, StringComparison.Ordinal);
-}
+        // Verify that when target is realistic and initial is not realistic, solid is used for first paint
+        Assert.Contains("const effectiveInitialMode = (targetMode === 'realistic' && initialMode !== 'realistic')", js, StringComparison.Ordinal);
+        Assert.Contains("setRenderMode(canvasId, effectiveInitialMode);", js, StringComparison.Ordinal);
+    }
 
-[Fact]
-public void QuotePartViewerJs_StagedRender_ScheduleFallbackTransition_UsesConfiguredDelayAndDuration()
-{
-    var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
+    [Fact]
+    public void QuotePartViewerJs_StagedRender_ScheduleFallbackTransition_UsesConfiguredDelayAndDuration()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
 
-    // Verify fallback scheduling with configurable delay and transition duration
-    Assert.Contains("function scheduleRenderModeFallback(canvasId, delayMs = 1200, transitionMs = 250)", js, StringComparison.Ordinal);
-    Assert.Contains("clearTimeout(state.fallbackTimer);", js, StringComparison.Ordinal);
-    Assert.Contains("state.fallbackTimer = setTimeout(() =>", js, StringComparison.Ordinal);
-}
+        // Verify fallback scheduling with configurable delay and transition duration
+        Assert.Contains("function scheduleRenderModeFallback(canvasId, delayMs = 1200, transitionMs = 250)", js, StringComparison.Ordinal);
+        Assert.Contains("clearTimeout(state.fallbackTimer);", js, StringComparison.Ordinal);
+        Assert.Contains("state.fallbackTimer = setTimeout(() =>", js, StringComparison.Ordinal);
+    }
 
-[Fact]
-public void QuotePartViewerJs_StagedRender_TransitionToRealistic_AnimatesAlphaFade()
-{
-    var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
+    [Fact]
+    public void QuotePartViewerJs_StagedRender_TransitionToRealistic_AnimatesAlphaFade()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
 
-    // Verify transition animates material alpha from 0 to 1
-    Assert.Contains("function transitionToRealistic(canvasId, transitionMs = 250)", js, StringComparison.Ordinal);
-    Assert.Contains("sharedRealisticMaterial.alpha = 0;", js, StringComparison.Ordinal);
-    Assert.Contains("animateMaterialAlpha(sharedRealisticMaterial, 0, 1, scene, transitionMs);", js, StringComparison.Ordinal);
-    Assert.Contains("activeRenderModes[canvasId] = 'realistic';", js, StringComparison.Ordinal);
-}
+        // Verify transition animates material alpha from 0 to 1
+        Assert.Contains("function transitionToRealistic(canvasId, transitionMs = 250)", js, StringComparison.Ordinal);
+        Assert.Contains("sharedRealisticMaterial.alpha = 0;", js, StringComparison.Ordinal);
+        Assert.Contains("animateMaterialAlpha(sharedRealisticMaterial, 0, 1, scene, transitionMs);", js, StringComparison.Ordinal);
+        Assert.Contains("activeRenderModes[canvasId] = 'realistic';", js, StringComparison.Ordinal);
+    }
 
-[Fact]
-public void QuotePartViewerJs_StagedRender_RuntimeComplete_CancelsFallbackAndTransitions()
-{
-    var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
+    [Fact]
+    public void QuotePartViewerJs_StagedRender_RuntimeComplete_CancelsFallbackAndTransitions()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
 
-    // Verify that on runtime complete, fallback timer is cleared and transition occurs
-    Assert.Contains("if (transitionState.fallbackTimer) {", js, StringComparison.Ordinal);
-    Assert.Contains("clearTimeout(transitionState.fallbackTimer);", js, StringComparison.Ordinal);
-    Assert.Contains("transitionState.fallbackTimer = null;", js, StringComparison.Ordinal);
-    Assert.Contains("transitionToRealistic(canvasId, transitionState.transitionMs);", js, StringComparison.Ordinal);
-    Assert.Contains("transitionState.completed = true;", js, StringComparison.Ordinal);
-}
+        // Verify that on runtime complete, fallback timer is cleared and transition occurs
+        Assert.Contains("if (transitionState.fallbackTimer) {", js, StringComparison.Ordinal);
+        Assert.Contains("clearTimeout(transitionState.fallbackTimer);", js, StringComparison.Ordinal);
+        Assert.Contains("transitionState.fallbackTimer = null;", js, StringComparison.Ordinal);
+        Assert.Contains("transitionToRealistic(canvasId, transitionState.transitionMs);", js, StringComparison.Ordinal);
+        Assert.Contains("transitionState.completed = true;", js, StringComparison.Ordinal);
+    }
 
-[Fact]
-public void QuotePartViewerJs_StagedRender_ManualModeChange_UpdatesTransitionState()
-{
-    var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
+    [Fact]
+    public void QuotePartViewerJs_StagedRender_ManualModeChange_UpdatesTransitionState()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
 
-    // Verify that manual render mode change updates transition state
-    Assert.Contains("const transitionState = renderModeTransitionState[canvasId];", js, StringComparison.Ordinal);
-    Assert.Contains("if (mode === 'realistic') {", js, StringComparison.Ordinal);
-    Assert.Contains("targetRenderModes[canvasId] = mode;", js, StringComparison.Ordinal);
-}
+        // Verify that manual render mode change updates transition state
+        Assert.Contains("const transitionState = renderModeTransitionState[canvasId];", js, StringComparison.Ordinal);
+        Assert.Contains("if (mode === 'realistic') {", js, StringComparison.Ordinal);
+        Assert.Contains("targetRenderModes[canvasId] = mode;", js, StringComparison.Ordinal);
+    }
 
-[Fact]
-public void QuotePartViewerSettingsDto_IncludesRenderModeTransitionFields()
-{
-    var dtoSource = ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs");
+    [Fact]
+    public void QuotePartViewerSettingsDto_IncludesRenderModeTransitionFields()
+    {
+        var dtoSource = ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs");
 
-    Assert.Contains("public string InitialRenderMode", dtoSource, StringComparison.Ordinal);
-    Assert.Contains("public string TargetRenderMode", dtoSource, StringComparison.Ordinal);
-    Assert.Contains("public RenderModeTransitionSettings RenderModeTransition", dtoSource, StringComparison.Ordinal);
-    Assert.Contains("public bool Enabled", dtoSource, StringComparison.Ordinal);
-    Assert.Contains("public string Trigger", dtoSource, StringComparison.Ordinal);
-    Assert.Contains("public int FallbackDelayMs", dtoSource, StringComparison.Ordinal);
-    Assert.Contains("public int TransitionMs", dtoSource, StringComparison.Ordinal);
-}
+        Assert.Contains("public string InitialRenderMode", dtoSource, StringComparison.Ordinal);
+        Assert.Contains("public string TargetRenderMode", dtoSource, StringComparison.Ordinal);
+        Assert.Contains("public RenderModeTransitionSettings RenderModeTransition", dtoSource, StringComparison.Ordinal);
+        Assert.Contains("public bool Enabled", dtoSource, StringComparison.Ordinal);
+        Assert.Contains("public string Trigger", dtoSource, StringComparison.Ordinal);
+        Assert.Contains("public int FallbackDelayMs", dtoSource, StringComparison.Ordinal);
+        Assert.Contains("public int TransitionMs", dtoSource, StringComparison.Ordinal);
+    }
 
-[Fact]
-public void QePartViewer_CaptureViewerRuntimeSettings_IncludesNewFields()
-{
-    var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor").ReplaceLineEndings("\n");
+    [Fact]
+    public void QePartViewer_CaptureViewerRuntimeSettings_IncludesNewFields()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor").ReplaceLineEndings("\n");
 
-    Assert.Contains("initialRenderMode", viewer, StringComparison.Ordinal);
-    Assert.Contains("targetRenderMode", viewer, StringComparison.Ordinal);
-    Assert.Contains("renderModeTransition", viewer, StringComparison.Ordinal);
-    Assert.Contains("enabled = transition.Enabled", viewer, StringComparison.Ordinal);
-    Assert.Contains("fallbackDelayMs = transition.FallbackDelayMs", viewer, StringComparison.Ordinal);
-    Assert.Contains("transitionMs = transition.TransitionMs", viewer, StringComparison.Ordinal);
-}
+        Assert.Contains("initialRenderMode", viewer, StringComparison.Ordinal);
+        Assert.Contains("targetRenderMode", viewer, StringComparison.Ordinal);
+        Assert.Contains("renderModeTransition", viewer, StringComparison.Ordinal);
+        Assert.Contains("enabled = transition.Enabled", viewer, StringComparison.Ordinal);
+        Assert.Contains("fallbackDelayMs = transition.FallbackDelayMs", viewer, StringComparison.Ordinal);
+        Assert.Contains("transitionMs = transition.TransitionMs", viewer, StringComparison.Ordinal);
+    }
 }
 
 // ── Test helpers for consumer tests ─────────────────────────────────────────

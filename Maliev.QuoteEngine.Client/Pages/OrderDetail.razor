@@ -1,5 +1,6 @@
 @page "/orders/{OrderNumber}"
 @using System.Globalization
+@using System.Net
 @using Maliev.QuoteEngine.Shared.Account
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
@@ -349,6 +350,10 @@ else
             {
                 _paymentError = Text("Payment checkout is not available for this order yet.", "ยังไม่สามารถเปิดหน้าชำระเงินสำหรับคำสั่งซื้อนี้ได้");
             }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            Navigation.NavigateTo($"/auth/sign-in?returnUrl={Uri.EscapeDataString($"/orders/{_order.OrderNumber}")}", forceLoad: true);
         }
         catch (Exception)
         {
