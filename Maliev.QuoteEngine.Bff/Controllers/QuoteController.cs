@@ -762,6 +762,17 @@ public sealed class QuoteController(
             });
         }
 
+        if (!string.Equals(billingAddress.Type, "Billing", StringComparison.OrdinalIgnoreCase) ||
+            !string.Equals(shippingAddress.Type, "Shipping", StringComparison.OrdinalIgnoreCase))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Selected checkout address roles are invalid.",
+                Detail = "Use a billing address for billing and a shipping address for delivery before payment.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
         if (string.IsNullOrWhiteSpace(shippingAddress.RecipientPhone))
         {
             return BadRequest(new ProblemDetails

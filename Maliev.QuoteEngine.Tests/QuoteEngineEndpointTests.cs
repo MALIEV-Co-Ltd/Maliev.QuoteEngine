@@ -2159,6 +2159,39 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Payment_initiation_rejects_swapped_billing_and_shipping_addresses_before_checkout()
+    {
+        using var client = await CreateSignedInClientAsync("payer-address-role@example.com");
+
+        var quoteResp = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-address-role", [], "Payment address role test."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-ADDRESS-ROLE", "Payment address role order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1500.00m,
+            Currency = "THB",
+            BillingAddressId = TestShippingAddressId,
+            ShippingAddressId = TestBillingAddressId,
+            AcceptedTerms = true
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Payment_initiation_returns_401_for_anonymous_user()
     {
         using var client = factory.CreateClient();
