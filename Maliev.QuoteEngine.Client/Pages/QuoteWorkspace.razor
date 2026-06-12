@@ -283,6 +283,9 @@
     private string BillingSummaryHint => IsSignedIn ? Text("Private order", "คำสั่งซื้อส่วนตัว") : Text("Sign in to save projects", "เข้าสู่ระบบเพื่อบันทึกโปรเจกต์");
     private string? BillingCompanyName => string.IsNullOrWhiteSpace(_profile?.CompanyName) ? null : _profile.CompanyName;
     private string? BillingVatNumber => string.IsNullOrWhiteSpace(_profile?.VatNumber) ? null : _profile.VatNumber;
+    private string CheckoutReturnUrl => _order is null
+        ? "/quote/new"
+        : $"/orders/{Uri.EscapeDataString(_order.OrderNumber)}";
 
     private QuotePartViewModel? SelectedPart => _parts.Count == 0 ? null : _parts[Math.Min(_selectedPartIndex, _parts.Count - 1)];
 
@@ -706,7 +709,7 @@
     {
         if (!IsSignedIn || IsDemoMode)
         {
-            Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
+            Navigation.NavigateTo($"/auth/sign-in?returnUrl={Uri.EscapeDataString(CheckoutReturnUrl)}");
             return;
         }
 

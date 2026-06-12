@@ -2140,6 +2140,17 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspace_payment_auth_redirect_returns_to_order_checkout_context()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+
+        Assert.Contains("CheckoutReturnUrl", workspace, StringComparison.Ordinal);
+        Assert.Contains("$\"/orders/{Uri.EscapeDataString(_order.OrderNumber)}\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo($\"/auth/sign-in?returnUrl={Uri.EscapeDataString(CheckoutReturnUrl)}\")", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigation.NavigateTo(\"/auth/sign-in?returnUrl=/quote/new\");\r\n            return;\r\n        }\r\n\r\n        _paymentBusy = true", workspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeDfmTabRazor_exists_and_references_all_three_report_types()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeDfmTab.razor");
