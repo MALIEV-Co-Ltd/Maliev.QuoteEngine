@@ -73,6 +73,8 @@ public sealed class PaymentServiceClientContractTests
         Assert.Equal("Manufacturing order ORD-2026-0001", body.GetProperty("description").GetString());
         Assert.Equal("https://quote.example.com/payment/success?orderId=ORD-2026-0001", body.GetProperty("returnUrl").GetString());
         Assert.Equal("https://quote.example.com/payment/cancel?orderId=ORD-2026-0001", body.GetProperty("cancelUrl").GetString());
+        Assert.False(body.TryGetProperty("preferredProvider", out _));
+        Assert.False(body.TryGetProperty("selectedProvider", out _));
         Assert.Equal("ORD-2026-0001", body.GetProperty("metadata").GetProperty("orderNumber").GetString());
         Assert.Equal(BillingAddressId.ToString("D"), body.GetProperty("metadata").GetProperty("billingAddressId").GetString());
         Assert.Equal(ShippingAddressId.ToString("D"), body.GetProperty("metadata").GetProperty("shippingAddressId").GetString());
