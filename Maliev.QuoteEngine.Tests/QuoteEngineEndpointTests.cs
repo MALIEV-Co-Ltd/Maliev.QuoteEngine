@@ -38,6 +38,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     public CapturedOrderDeliverySnapshot? LastOrderDeliverySnapshot => _fakeOrderServiceClient.LastDeliverySnapshot;
 
+    public void FailNextOrderStatus(string status) => _fakeOrderServiceClient.FailNextStatus(status);
+
     public void ClearPaymentIdempotencyKeys()
     {
         while (FakePaymentServiceClient.IdempotencyKeys.TryDequeue(out _))
@@ -316,8 +318,11 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     {
         private readonly ConcurrentDictionary<string, List<CustomerOrderSummaryDto>> _ordersByCustomer = new();
         private readonly ConcurrentDictionary<string, CustomerOrderDetailDto> _ordersByNumber = new();
+        private string? _statusToFailOnce;
 
         public CapturedOrderDeliverySnapshot? LastDeliverySnapshot { get; private set; }
+
+        public void FailNextStatus(string status) => _statusToFailOnce = status;
 
         public Task<OrderCreatedResult?> CreateAsync(OrderCreateRequest request, CancellationToken ct = default)
         {
@@ -392,8 +397,16 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         public Task<CustomerOrderDetailDto?> GetDetailAsync(string orderNumber, CancellationToken ct = default) =>
             Task.FromResult(_ordersByNumber.TryGetValue(orderNumber, out var detail) ? detail : null);
 
-        public Task<bool> AddStatusAsync(string orderId, string status, CancellationToken ct = default) =>
-            Task.FromResult(true);
+        public Task<bool> AddStatusAsync(string orderId, string status, CancellationToken ct = default)
+        {
+            if (string.Equals(_statusToFailOnce, status, StringComparison.OrdinalIgnoreCase))
+            {
+                _statusToFailOnce = null;
+                return Task.FromResult(false);
+            }
+
+            return Task.FromResult(true);
+        }
 
         public Task<bool> UpdateDeliverySnapshotAsync(
             OrderDeliverySnapshotRequest request,
@@ -2212,6 +2225,43 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("TH-0123456789012", snapshot.BillingVatNumber);
         Assert.Equal("Receiving", snapshot.DeliveryContactName);
         Assert.Equal("+66810000002", snapshot.DeliveryContactPhone);
+    }
+
+    [Fact]
+    public async Task Payment_initiation_blocks_when_order_cannot_be_accepted_before_checkout()
+    {
+        factory.ClearPaymentIdempotencyKeys();
+        using var client = await CreateSignedInClientAsync("payer-acceptance@example.com");
+
+        var quoteResp = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-acceptance", [], "Payment acceptance failure test."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-ACCEPT", "Payment acceptance failure order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        factory.FailNextOrderStatus("Accepted");
+
+        var paymentResp = await client.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1500m,
+            Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
+            AcceptedTerms = true
+        });
+
+        Assert.Equal(HttpStatusCode.BadGateway, paymentResp.StatusCode);
+        Assert.Empty(factory.PaymentIdempotencyKeys);
     }
 
     [Fact]

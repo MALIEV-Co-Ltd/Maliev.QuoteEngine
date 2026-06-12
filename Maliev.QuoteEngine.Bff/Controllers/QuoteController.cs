@@ -737,9 +737,17 @@ public sealed class QuoteController(
         // PaymentService fires PaymentCompletedEvent, OrderService can apply Accepted → Paid.
         var accepted = await orderClient.AddStatusAsync(request.OrderNumber, "Accepted", cancellationToken);
         if (!accepted)
+        {
             logger.LogWarning(
-                "Could not advance order {OrderNumber} to Accepted before payment initiation; PaymentCompletedEvent may fail.",
+                "Could not advance order {OrderNumber} to Accepted before payment initiation; checkout blocked.",
                 request.OrderNumber);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Order could not be accepted for checkout.",
+                Detail = "Checkout cannot start until the order acceptance state is saved.",
+                Status = StatusCodes.Status502BadGateway
+            });
+        }
 
         var result = await paymentClient.InitiateAsync(
             customerId.ToString("D"),
