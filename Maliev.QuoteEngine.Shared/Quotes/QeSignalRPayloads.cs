@@ -49,6 +49,18 @@ public sealed record QePaymentFailedPayload(
     DateTimeOffset FailedAt);
 
 /// <summary>
+/// Pushed to the client via SignalR "PaymentCancelled" when a hosted checkout is cancelled before completion.
+/// </summary>
+public sealed record QePaymentCancelledPayload(
+    string OrderNumber,
+    Guid PaymentId,
+    decimal Amount,
+    string Currency,
+    string Reason,
+    string ProviderEventCode,
+    DateTimeOffset CancelledAt);
+
+/// <summary>
 /// Pushed to the client via SignalR "DfmAnalysisReady" when DFM analysis is ready.
 /// Always reflects the merged state of all process reports received so far.
 /// </summary>

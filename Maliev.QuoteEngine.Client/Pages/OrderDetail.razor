@@ -471,6 +471,15 @@ else
                     StateHasChanged();
                 });
             });
+
+            _notificationConnection.On<QePaymentCancelledPayload>("PaymentCancelled", payload =>
+            {
+                _ = InvokeAsync(() =>
+                {
+                    ApplyPaymentCancelled(payload);
+                    StateHasChanged();
+                });
+            });
         }
 
         if (_notificationConnection.State == HubConnectionState.Disconnected)
@@ -540,6 +549,25 @@ else
         {
             PaymentStatus = "Failed",
             UpdatedAt = payload.FailedAt
+        };
+    }
+
+    private void ApplyPaymentCancelled(QePaymentCancelledPayload payload)
+    {
+        if (_order is null ||
+            !string.Equals(_order.OrderNumber, payload.OrderNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _paymentError = string.IsNullOrWhiteSpace(payload.Reason)
+            ? Text("Payment was cancelled before completion.", "การชำระเงินถูกยกเลิกก่อนเสร็จสมบูรณ์")
+            : Text($"Payment was cancelled: {payload.Reason}", $"การชำระเงินถูกยกเลิก: {payload.Reason}");
+
+        _order = _order with
+        {
+            PaymentStatus = "Cancelled",
+            UpdatedAt = payload.CancelledAt
         };
     }
 

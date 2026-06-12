@@ -105,6 +105,7 @@ builder.AddMassTransitWithRabbitMq(cfg =>
     cfg.AddConsumer<QuoteDfmAnalysisReadyConsumer>();
     cfg.AddConsumer<QuotePaymentCompletedConsumer>();
     cfg.AddConsumer<QuotePaymentFailedConsumer>();
+    cfg.AddConsumer<QuotePaymentCancelledConsumer>();
     cfg.AddConsumer<QuoteOrderStatusChangedConsumer>();
 });
 

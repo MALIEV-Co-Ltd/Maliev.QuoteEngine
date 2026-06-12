@@ -1009,12 +1009,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OrderStatusChanged", detail, StringComparison.Ordinal);
         Assert.Contains("PaymentCompleted", detail, StringComparison.Ordinal);
         Assert.Contains("PaymentFailed", detail, StringComparison.Ordinal);
+        Assert.Contains("PaymentCancelled", detail, StringComparison.Ordinal);
         Assert.Contains("QeOrderStatusChangedPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentCompletedPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentFailedPayload", detail, StringComparison.Ordinal);
+        Assert.Contains("QePaymentCancelledPayload", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyOrderStatusChanged", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentCompleted", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentFailed", detail, StringComparison.Ordinal);
+        Assert.Contains("ApplyPaymentCancelled", detail, StringComparison.Ordinal);
         Assert.Contains("InitiatePaymentAsync", detail, StringComparison.Ordinal);
         Assert.Contains("new InitiatePaymentRequest", detail, StringComparison.Ordinal);
         Assert.Contains("OrderId = _order.OrderId", detail, StringComparison.Ordinal);
@@ -1576,6 +1579,64 @@ public sealed class QuoteEngineSourceTests
         Assert.Equal("card_declined", payload.ErrorMessage);
         Assert.Equal("failed_fraud_check", payload.ProviderErrorCode);
         Assert.Equal(failedAt, payload.FailedAt);
+    }
+
+    [Fact]
+    public async Task PaymentCancelledConsumer_pushes_provider_neutral_cancellation_to_order_group()
+    {
+        var hubClients = Substitute.For<IHubClients>();
+        var hubGroup = Substitute.For<IClientProxy>();
+        hubClients.Group(Arg.Any<string>()).Returns(hubGroup);
+        var hubCtx = Substitute.For<IHubContext<QuoteNotificationsHub>>();
+        hubCtx.Clients.Returns(hubClients);
+        var consumer = new QuotePaymentCancelledConsumer(
+            hubCtx,
+            NullLogger<QuotePaymentCancelledConsumer>.Instance);
+        var transactionId = Guid.Parse("ac72691e-d6a0-4f2b-91ac-4a3108082ba7");
+        var cancelledAt = DateTimeOffset.Parse("2026-06-13T08:20:00Z");
+        var @event = new PaymentCancelledEvent(
+            MessageId: Guid.NewGuid(),
+            MessageName: nameof(PaymentCancelledEvent),
+            MessageType: MessageType.Event,
+            MessageVersion: "1.0.0",
+            PublishedBy: "PaymentService",
+            ConsumedBy: ["QuoteEngine"],
+            CorrelationId: Guid.NewGuid(),
+            CausationId: null,
+            OccurredAtUtc: cancelledAt,
+            IsPublic: false,
+            Payload: new PaymentCancelledEventPayload(
+                TransactionId: transactionId,
+                IdempotencyKey: "customer:order:attempt",
+                Amount: 1500.00,
+                Currency: "THB",
+                CustomerId: "customer-1",
+                OrderId: "ORD-2026-0002",
+                ProviderName: "stripe",
+                Reason: "Customer returned from cancel URL",
+                ProviderEventCode: "checkout.session.expired",
+                CancelledAt: cancelledAt));
+        var consumeCtx = Substitute.For<ConsumeContext<PaymentCancelledEvent>>();
+        consumeCtx.Message.Returns(@event);
+        consumeCtx.CancellationToken.Returns(CancellationToken.None);
+
+        await consumer.Consume(consumeCtx);
+
+        hubClients.Received(1).Group(QuoteNotificationsHub.OrderGroup("ORD-2026-0002"));
+        var call = Assert.Single(
+            hubGroup.ReceivedCalls(),
+            c => c.GetMethodInfo().Name == "SendCoreAsync");
+        var args = call.GetArguments();
+        Assert.Equal("PaymentCancelled", args[0]);
+        var payloadArgs = (object?[])args[1]!;
+        var payload = Assert.IsType<QePaymentCancelledPayload>(payloadArgs[0]);
+        Assert.Equal("ORD-2026-0002", payload.OrderNumber);
+        Assert.Equal(transactionId, payload.PaymentId);
+        Assert.Equal(1500.00m, payload.Amount);
+        Assert.Equal("THB", payload.Currency);
+        Assert.Equal("Customer returned from cancel URL", payload.Reason);
+        Assert.Equal("checkout.session.expired", payload.ProviderEventCode);
+        Assert.Equal(cancelledAt, payload.CancelledAt);
     }
 
     [Fact]
