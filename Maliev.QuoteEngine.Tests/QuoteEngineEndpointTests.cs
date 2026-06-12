@@ -100,6 +100,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         string? ShippingProvince,
         string? ShippingPostalCode,
         string? ShippingCountry,
+        string? BillingCompanyName,
+        string? BillingVatNumber,
         string? DeliveryContactName,
         string? DeliveryContactPhone,
         string? DeliveryContactEmail);
@@ -407,6 +409,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 request.ShippingProvince,
                 request.ShippingPostalCode,
                 request.ShippingCountry,
+                request.BillingCompanyName,
+                request.BillingVatNumber,
                 request.DeliveryContactName,
                 request.DeliveryContactPhone,
                 request.DeliveryContactEmail);
@@ -2138,6 +2142,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             Currency = "THB",
             BillingAddressId = TestBillingAddressId,
             ShippingAddressId = TestShippingAddressId,
+            BillingCompanyName = "MALIEV Test Buyer Co., Ltd.",
+            BillingVatNumber = "TH-0123456789012",
             AcceptedTerms = true
         });
 
@@ -2175,6 +2181,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             Currency = "THB",
             BillingAddressId = TestBillingAddressId,
             ShippingAddressId = TestShippingAddressId,
+            BillingCompanyName = "MALIEV Test Buyer Co., Ltd.",
+            BillingVatNumber = "TH-0123456789012",
             AcceptedTerms = true
         });
 
@@ -2189,6 +2197,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("Bangkok", snapshot.ShippingProvince);
         Assert.Equal("10110", snapshot.ShippingPostalCode);
         Assert.Equal("11111111-1111-1111-1111-111111111111", snapshot.ShippingCountry);
+        Assert.Equal("MALIEV Test Buyer Co., Ltd.", snapshot.BillingCompanyName);
+        Assert.Equal("TH-0123456789012", snapshot.BillingVatNumber);
         Assert.Equal("Receiving", snapshot.DeliveryContactName);
         Assert.Equal("+66810000002", snapshot.DeliveryContactPhone);
     }

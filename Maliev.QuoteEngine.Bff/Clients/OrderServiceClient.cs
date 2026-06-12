@@ -281,6 +281,8 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                     shippingProvince = request.ShippingProvince,
                     shippingPostalCode = request.ShippingPostalCode,
                     shippingCountry = request.ShippingCountry,
+                    billingCompanyName = request.BillingCompanyName,
+                    billingVatNumber = request.BillingVatNumber,
                     deliveryContactName = request.DeliveryContactName,
                     deliveryContactPhone = request.DeliveryContactPhone,
                     deliveryContactEmail = request.DeliveryContactEmail
@@ -451,6 +453,8 @@ public sealed record OrderDeliverySnapshotRequest(
     string? ShippingProvince,
     string? ShippingPostalCode,
     string? ShippingCountry,
+    string? BillingCompanyName,
+    string? BillingVatNumber,
     string? DeliveryContactName,
     string? DeliveryContactPhone,
     string? DeliveryContactEmail);

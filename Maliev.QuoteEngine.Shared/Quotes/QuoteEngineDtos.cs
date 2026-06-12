@@ -417,6 +417,12 @@ public sealed class InitiatePaymentRequest
 
     public Guid? ShippingAddressId { get; set; }
 
+    [MaxLength(200)]
+    public string? BillingCompanyName { get; set; }
+
+    [MaxLength(50)]
+    public string? BillingVatNumber { get; set; }
+
     public bool AcceptedTerms { get; set; }
 
     public Guid CheckoutAttemptId { get; set; } = Guid.NewGuid();

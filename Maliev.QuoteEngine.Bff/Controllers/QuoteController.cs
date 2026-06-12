@@ -707,6 +707,8 @@ public sealed class QuoteController(
                 addressValidation.ShippingAddress.ShippingProvince,
                 addressValidation.ShippingAddress.ShippingPostalCode,
                 addressValidation.ShippingAddress.ShippingCountry,
+                request.BillingCompanyName,
+                request.BillingVatNumber,
                 addressValidation.ShippingAddress.DeliveryContactName,
                 addressValidation.ShippingAddress.DeliveryContactPhone,
                 addressValidation.ShippingAddress.DeliveryContactEmail),
