@@ -1,6 +1,8 @@
 using System.Diagnostics.Metrics;
 using MassTransit;
 using Maliev.MessagingContracts.Contracts.Geometry;
+using Maliev.MessagingContracts.Contracts.Payments;
+using Maliev.MessagingContracts.Contracts.Shared;
 using Maliev.QuoteEngine.Bff;
 using Maliev.QuoteEngine.Client.Components;
 using Maliev.QuoteEngine.Client.Components.QuoteEngine;
@@ -1006,10 +1008,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("LeaveOrderGroup", detail, StringComparison.Ordinal);
         Assert.Contains("OrderStatusChanged", detail, StringComparison.Ordinal);
         Assert.Contains("PaymentCompleted", detail, StringComparison.Ordinal);
+        Assert.Contains("PaymentFailed", detail, StringComparison.Ordinal);
         Assert.Contains("QeOrderStatusChangedPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentCompletedPayload", detail, StringComparison.Ordinal);
+        Assert.Contains("QePaymentFailedPayload", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyOrderStatusChanged", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentCompleted", detail, StringComparison.Ordinal);
+        Assert.Contains("ApplyPaymentFailed", detail, StringComparison.Ordinal);
         Assert.Contains("InitiatePaymentAsync", detail, StringComparison.Ordinal);
         Assert.Contains("new InitiatePaymentRequest", detail, StringComparison.Ordinal);
         Assert.Contains("OrderId = _order.OrderId", detail, StringComparison.Ordinal);
@@ -1513,6 +1518,64 @@ public sealed class QuoteEngineSourceTests
         Assert.Null(glbPayload.ErrorCode);
         Assert.Equal(1, glbPayload.BodyCount);
         Assert.True(glbPayload.IsManifold);
+    }
+
+    [Fact]
+    public async Task PaymentFailedConsumer_pushes_provider_neutral_failure_to_order_group()
+    {
+        var hubClients = Substitute.For<IHubClients>();
+        var hubGroup = Substitute.For<IClientProxy>();
+        hubClients.Group(Arg.Any<string>()).Returns(hubGroup);
+        var hubCtx = Substitute.For<IHubContext<QuoteNotificationsHub>>();
+        hubCtx.Clients.Returns(hubClients);
+        var consumer = new QuotePaymentFailedConsumer(
+            hubCtx,
+            NullLogger<QuotePaymentFailedConsumer>.Instance);
+        var transactionId = Guid.Parse("e84059a4-53a6-4f4d-a76e-c118f646c027");
+        var failedAt = DateTimeOffset.Parse("2026-06-13T07:15:00Z");
+        var @event = new PaymentFailedEvent(
+            MessageId: Guid.NewGuid(),
+            MessageName: nameof(PaymentFailedEvent),
+            MessageType: MessageType.Event,
+            MessageVersion: "1.0.0",
+            PublishedBy: "PaymentService",
+            ConsumedBy: ["QuoteEngine"],
+            CorrelationId: Guid.NewGuid(),
+            CausationId: null,
+            OccurredAtUtc: failedAt,
+            IsPublic: false,
+            Payload: new PaymentFailedEventPayload(
+                TransactionId: transactionId,
+                IdempotencyKey: "customer:order:attempt",
+                Amount: 1500.00,
+                Currency: "THB",
+                CustomerId: "customer-1",
+                OrderId: "ORD-2026-0001",
+                ProviderName: "omise",
+                ErrorMessage: "card_declined",
+                ProviderErrorCode: "failed_fraud_check",
+                FailedAt: failedAt));
+        var consumeCtx = Substitute.For<ConsumeContext<PaymentFailedEvent>>();
+        consumeCtx.Message.Returns(@event);
+        consumeCtx.CancellationToken.Returns(CancellationToken.None);
+
+        await consumer.Consume(consumeCtx);
+
+        hubClients.Received(1).Group(QuoteNotificationsHub.OrderGroup("ORD-2026-0001"));
+        var call = Assert.Single(
+            hubGroup.ReceivedCalls(),
+            c => c.GetMethodInfo().Name == "SendCoreAsync");
+        var args = call.GetArguments();
+        Assert.Equal("PaymentFailed", args[0]);
+        var payloadArgs = (object?[])args[1]!;
+        var payload = Assert.IsType<QePaymentFailedPayload>(payloadArgs[0]);
+        Assert.Equal("ORD-2026-0001", payload.OrderNumber);
+        Assert.Equal(transactionId, payload.PaymentId);
+        Assert.Equal(1500.00m, payload.Amount);
+        Assert.Equal("THB", payload.Currency);
+        Assert.Equal("card_declined", payload.ErrorMessage);
+        Assert.Equal("failed_fraud_check", payload.ProviderErrorCode);
+        Assert.Equal(failedAt, payload.FailedAt);
     }
 
     [Fact]

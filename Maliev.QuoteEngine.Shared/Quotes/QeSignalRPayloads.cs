@@ -37,6 +37,18 @@ public sealed record QePaymentCompletedPayload(
     string Currency);
 
 /// <summary>
+/// Pushed to the client via SignalR "PaymentFailed" when the payment gateway rejects or cancels a payment.
+/// </summary>
+public sealed record QePaymentFailedPayload(
+    string OrderNumber,
+    Guid PaymentId,
+    decimal Amount,
+    string Currency,
+    string ErrorMessage,
+    string ProviderErrorCode,
+    DateTimeOffset FailedAt);
+
+/// <summary>
 /// Pushed to the client via SignalR "DfmAnalysisReady" when DFM analysis is ready.
 /// Always reflects the merged state of all process reports received so far.
 /// </summary>

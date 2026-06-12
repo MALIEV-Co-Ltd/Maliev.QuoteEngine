@@ -462,6 +462,15 @@ else
                     StateHasChanged();
                 });
             });
+
+            _notificationConnection.On<QePaymentFailedPayload>("PaymentFailed", payload =>
+            {
+                _ = InvokeAsync(() =>
+                {
+                    ApplyPaymentFailed(payload);
+                    StateHasChanged();
+                });
+            });
         }
 
         if (_notificationConnection.State == HubConnectionState.Disconnected)
@@ -512,6 +521,25 @@ else
             PaymentStatus = "Paid",
             UpdatedAt = DateTimeOffset.UtcNow,
             ManufacturingMilestones = BuildRealtimeMilestones("Paid", DateTimeOffset.UtcNow)
+        };
+    }
+
+    private void ApplyPaymentFailed(QePaymentFailedPayload payload)
+    {
+        if (_order is null ||
+            !string.Equals(_order.OrderNumber, payload.OrderNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _paymentError = string.IsNullOrWhiteSpace(payload.ErrorMessage)
+            ? Text("Payment was not completed. Please try another payment method.", "การชำระเงินยังไม่เสร็จสมบูรณ์ กรุณาลองวิธีชำระเงินอื่น")
+            : Text($"Payment was not completed: {payload.ErrorMessage}", $"การชำระเงินยังไม่เสร็จสมบูรณ์: {payload.ErrorMessage}");
+
+        _order = _order with
+        {
+            PaymentStatus = "Failed",
+            UpdatedAt = payload.FailedAt
         };
     }
 
