@@ -412,6 +412,12 @@ public sealed class InitiatePaymentRequest
     [Required]
     [StringLength(3, MinimumLength = 3)]
     public string Currency { get; set; } = "THB";
+
+    public Guid? BillingAddressId { get; set; }
+
+    public Guid? ShippingAddressId { get; set; }
+
+    public bool AcceptedTerms { get; set; }
 }
 
 public sealed record InitiatePaymentResponse(

@@ -85,8 +85,12 @@ else
                         <dd>@FormatDate(_order.UpdatedAt)</dd>
                     </div>
                 </dl>
+                <label class="order-payment-consent">
+                    <input type="checkbox" @bind="_acceptedCheckoutTerms" />
+                    <span>@Text("I accept the checkout terms and consent to MALIEV processing this order.", "ฉันยอมรับเงื่อนไขการชำระเงินและยินยอมให้ MALIEV ดำเนินการคำสั่งซื้อนี้")</span>
+                </label>
                 <div class="order-detail-actions">
-                    <button type="button" class="qe-primary-btn" disabled="@(!CanPay || _paymentBusy)" @onclick="InitiatePaymentAsync">
+                    <button type="button" class="qe-primary-btn" disabled="@(!CanPay || !_acceptedCheckoutTerms || _paymentBusy)" @onclick="InitiatePaymentAsync">
                         @(_paymentBusy ? Text("Opening payment...", "กำลังเปิดหน้าชำระเงิน...") : Text("Pay this order", "ชำระเงินคำสั่งซื้อนี้"))
                     </button>
                     <a class="qe-secondary-btn" href="@DocumentHref("Receipt")">@Text("Receipts", "ใบเสร็จ")</a>
@@ -209,6 +213,7 @@ else
     private CustomerOrderDetailDto? _order;
     private bool _loading = true;
     private bool _paymentBusy;
+    private bool _acceptedCheckoutTerms;
     private string? _paymentError;
     private IReadOnlyList<CustomerDocumentDto> _documents = [];
     private readonly HashSet<Guid> _openingDocumentIds = [];
@@ -321,7 +326,8 @@ else
                 OrderId = _order.OrderId,
                 OrderNumber = _order.OrderNumber,
                 Amount = _order.QuotedAmount.Value,
-                Currency = _order.QuoteCurrency ?? "THB"
+                Currency = _order.QuoteCurrency ?? "THB",
+                AcceptedTerms = _acceptedCheckoutTerms
             });
 
             if (!string.IsNullOrWhiteSpace(payment.PaymentUrl))

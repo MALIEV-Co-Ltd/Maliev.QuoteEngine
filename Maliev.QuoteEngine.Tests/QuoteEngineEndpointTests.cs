@@ -681,6 +681,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory factory)
     : IClassFixture<QuoteEngineWebApplicationFactory>
 {
+    private static readonly Guid TestBillingAddressId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static readonly Guid TestShippingAddressId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
     [Fact]
     public async Task Root_landing_is_server_rendered_without_loading_wasm_bundle()
     {
@@ -2039,7 +2042,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
             Amount = 1500.00m,
-            Currency = "THB"
+            Currency = "THB",
+            AcceptedTerms = true
         });
 
         response.EnsureSuccessStatusCode();
@@ -2047,6 +2051,39 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(body);
         Assert.NotEqual(Guid.Empty, body.TransactionId);
         Assert.StartsWith("https://pay.test.example.com/hosted/", body.PaymentUrl);
+    }
+
+    [Fact]
+    public async Task Payment_initiation_rejects_missing_terms_acceptance_before_checkout()
+    {
+        using var client = await CreateSignedInClientAsync("payer-terms@example.com");
+
+        var quoteResp = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-terms", [], "Payment terms test."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-TERMS", "Payment terms order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/payments", new
+        {
+            orderId = order.OrderId,
+            orderNumber = order.OrderNumber,
+            amount = 1500.00m,
+            currency = "THB",
+            billingAddressId = TestBillingAddressId,
+            shippingAddressId = TestShippingAddressId,
+            acceptedTerms = false
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -2059,7 +2096,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderId = Guid.NewGuid(),
             OrderNumber = "ORD-2026-00001",
             Amount = 500m,
-            Currency = "THB"
+            Currency = "THB",
+            AcceptedTerms = true
         });
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -2090,7 +2128,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
             Amount = 1500.00m,
-            Currency = "THB"
+            Currency = "THB",
+            AcceptedTerms = true
         });
 
         Assert.Equal(HttpStatusCode.NotFound, crossCustomerPayment.StatusCode);
@@ -2100,7 +2139,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
             Amount = 1500.00m,
-            Currency = "THB"
+            Currency = "THB",
+            AcceptedTerms = true
         });
 
         ownerPayment.EnsureSuccessStatusCode();
@@ -2130,7 +2170,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
             Amount = 1.00m,
-            Currency = "THB"
+            Currency = "THB",
+            AcceptedTerms = true
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, underpayment.StatusCode);
@@ -2140,7 +2181,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
             Amount = 1500.00m,
-            Currency = "THB"
+            Currency = "THB",
+            AcceptedTerms = true
         });
 
         matchingPayment.EnsureSuccessStatusCode();
@@ -2176,7 +2218,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderId = order.OrderId,
             OrderNumber = order.OrderNumber,
             Amount = 1500m,
-            Currency = "THB"
+            Currency = "THB",
+            AcceptedTerms = true
         });
         paymentResp.EnsureSuccessStatusCode();
         var payment = await paymentResp.Content.ReadFromJsonAsync<InitiatePaymentResponse>();

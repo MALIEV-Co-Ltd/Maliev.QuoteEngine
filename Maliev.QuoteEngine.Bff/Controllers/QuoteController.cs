@@ -635,6 +635,16 @@ public sealed class QuoteController(
             return Unauthorized();
         }
 
+        if (!request.AcceptedTerms)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Terms acceptance is required before checkout.",
+                Detail = "Accept the checkout terms and consent requirements before starting payment.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
         var customerOrders = await orderClient.GetByCustomerAsync(customerId.ToString("D"), cancellationToken);
         if (!customerOrders.Any(order =>
             order.OrderId == request.OrderId &&

@@ -172,6 +172,7 @@
                            CanApproveQuote="@CanApproveQuote"
                            CanCreateOrder="@CanCreateOrder"
                            CanPay="@CanPay"
+                           TermsAccepted="@_acceptedCheckoutTerms"
                            QuoteButtonLabel="@QuoteButtonLabel"
                            BillingName="@BillingSummaryName"
                            BillingHint="@BillingSummaryHint"
@@ -180,7 +181,8 @@
                            OnQuoteRequested="@SubmitQuoteAsync"
                            OnApproveQuoteRequested="@ApproveQuoteAsync"
                            OnOrderRequested="@CreateOrderAsync"
-                           OnPaymentRequested="@InitiatePaymentAsync" />
+                           OnPaymentRequested="@InitiatePaymentAsync"
+                           TermsAcceptedChanged="@((accepted) => _acceptedCheckoutTerms = accepted)" />
     }
 </div>
 
@@ -202,6 +204,7 @@
     private GenerateFormalQuoteResponse? _formalQuote;
     private CreateManufacturingOrderResponse? _order;
     private InitiatePaymentResponse? _payment;
+    private bool _acceptedCheckoutTerms;
     private Guid? _draftProjectId;
     private HubConnection? _notificationConnection;
     private DotNetObjectReference<QuoteWorkspace>? _dotNetRef;
@@ -777,6 +780,7 @@
             Parts = _parts.Select(x => x.ToDraft()).ToArray()
         });
         _payment = null;
+        _acceptedCheckoutTerms = false;
     }
 
     private async Task InitiatePaymentAsync()
@@ -797,7 +801,8 @@
             OrderId = _order.OrderId,
             OrderNumber = _order.OrderNumber,
             Amount = _estimate.Total,
-            Currency = _estimate.Currency
+            Currency = _estimate.Currency,
+            AcceptedTerms = _acceptedCheckoutTerms
         });
 
         if (!string.IsNullOrWhiteSpace(_payment.PaymentUrl))
