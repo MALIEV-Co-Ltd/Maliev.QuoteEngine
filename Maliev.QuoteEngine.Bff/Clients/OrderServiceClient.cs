@@ -96,7 +96,8 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 processTypeId = (int?)request.ProcessTypeId,
                 orderedQuantity = request.OrderedQuantity,
                 customerPoNumber = request.CustomerPoNumber,
-                requirements = request.Requirements
+                requirements = request.Requirements,
+                productionItems = request.ProductionItems
             }, ct);
 
             if (!response.IsSuccessStatusCode)
@@ -418,6 +419,8 @@ public sealed class OrderCreateRequest
     public int OrderedQuantity { get; set; } = 1;
     public string? CustomerPoNumber { get; set; }
     public string? Requirements { get; set; }
+    /// <summary>Gets or sets structured production items used by JobService after payment.</summary>
+    public IReadOnlyList<OrderProductionItemRequest> ProductionItems { get; set; } = [];
 
     // ── Process → OrderService ID mapping ────────────────────────────────────
     // ServiceCategoryId=1 "3D Printing" (FDM ProcessTypeId=1, SLA ProcessTypeId=2)
@@ -440,6 +443,40 @@ public sealed class OrderCreateRequest
             ProcessTypeId = ids.ProcessTypeId;
         }
     }
+}
+
+/// <summary>Structured production item snapshot sent to OrderService for downstream job creation.</summary>
+public sealed class OrderProductionItemRequest
+{
+    /// <summary>Gets or sets the source project or quote identifier.</summary>
+    public Guid? SourceProjectId { get; set; }
+
+    /// <summary>Gets or sets the source part identifier.</summary>
+    public Guid? SourceProjectPartId { get; set; }
+
+    /// <summary>Gets or sets the resolved production material identifier.</summary>
+    public Guid MaterialId { get; set; }
+
+    /// <summary>Gets or sets the locked material snapshot JSON.</summary>
+    public string MaterialSnapshotJson { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the locked configuration snapshot JSON.</summary>
+    public string ConfigurationSnapshotJson { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the manufacturing technology.</summary>
+    public string Technology { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the per-unit volume in cubic centimeters.</summary>
+    public decimal VolumeCm3 { get; set; }
+
+    /// <summary>Gets or sets the ordered quantity.</summary>
+    public int Quantity { get; set; } = 1;
+
+    /// <summary>Gets or sets the per-unit estimated print time in minutes.</summary>
+    public int EstimatedPrintTimeMinutes { get; set; }
+
+    /// <summary>Gets or sets the promised delivery date for this item.</summary>
+    public DateTime? DeliveryDate { get; set; }
 }
 
 /// <summary>Checkout shipping and contact snapshot persisted on the order before payment.</summary>

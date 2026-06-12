@@ -38,6 +38,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     public CapturedOrderDeliverySnapshot? LastOrderDeliverySnapshot => _fakeOrderServiceClient.LastDeliverySnapshot;
 
+    public OrderCreateRequest? LastOrderCreateRequest => _fakeOrderServiceClient.LastCreateRequest;
+
     public void FailNextOrderStatus(string status) => _fakeOrderServiceClient.FailNextStatus(status);
 
     public void ClearPaymentIdempotencyKeys()
@@ -322,10 +324,13 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
         public CapturedOrderDeliverySnapshot? LastDeliverySnapshot { get; private set; }
 
+        public OrderCreateRequest? LastCreateRequest { get; private set; }
+
         public void FailNextStatus(string status) => _statusToFailOnce = status;
 
         public Task<OrderCreatedResult?> CreateAsync(OrderCreateRequest request, CancellationToken ct = default)
         {
+            LastCreateRequest = request;
             var orderId = Guid.NewGuid();
             var orderNumber = $"ORD-TEST-{orderId:N}"[..16];
             var summary = new CustomerOrderSummaryDto(
@@ -2027,6 +2032,18 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Contains("selected body 1", detail.Requirements, StringComparison.Ordinal);
         Assert.Contains("DFM acknowledged", detail.Requirements, StringComparison.Ordinal);
         Assert.Contains("notes Keep cosmetic face A scratch-free.", detail.Requirements, StringComparison.Ordinal);
+
+        var createRequest = factory.LastOrderCreateRequest;
+        Assert.NotNull(createRequest);
+        var productionItem = Assert.Single(createRequest.ProductionItems);
+        Assert.Equal(part.PartId, productionItem.SourceProjectPartId);
+        Assert.NotEqual(Guid.Empty, productionItem.MaterialId);
+        Assert.Equal("CNC", productionItem.Technology);
+        Assert.Equal(part.VolumeCc, productionItem.VolumeCm3);
+        Assert.Equal(part.Quantity, productionItem.Quantity);
+        Assert.Contains("al6061", productionItem.MaterialSnapshotJson, StringComparison.Ordinal);
+        Assert.Contains("cnc-bracket.step", productionItem.ConfigurationSnapshotJson, StringComparison.Ordinal);
+        Assert.Contains("BEAD_BLAST_CLEAR", productionItem.ConfigurationSnapshotJson, StringComparison.Ordinal);
     }
 
     [Fact]

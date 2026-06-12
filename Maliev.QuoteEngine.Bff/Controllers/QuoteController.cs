@@ -33,6 +33,8 @@ public sealed class QuoteController(
     ILogger<QuoteController> logger) : ControllerBase
 {
     private const string PrototypeUploadPrefix = "prototype-local:";
+    private static readonly JsonSerializerOptions SnapshotJsonOptions = new(JsonSerializerDefaults.Web);
+
     private static readonly HashSet<string> BrowserViewerSourceExtensions = new(
         [".3mf", ".glb", ".gltf", ".obj", ".stl"],
         StringComparer.OrdinalIgnoreCase);
@@ -950,12 +952,23 @@ public sealed class QuoteController(
             return NotFound();
         }
 
+        var productionItems = new List<OrderProductionItemRequest>(request.Parts.Count);
+        foreach (var part in request.Parts)
+        {
+            var materialGuid = await materialCatalog.ResolveMaterialIdAsync(
+                part.ProcessId,
+                part.MaterialId,
+                cancellationToken);
+            productionItems.Add(BuildProductionItem(request.QuoteId, part, materialGuid));
+        }
+
         var orderRequest = new OrderCreateRequest
         {
             CustomerId = customerId.ToString("D"),
-            OrderedQuantity = 1,
+            OrderedQuantity = request.Parts.Count == 0 ? 1 : request.Parts.Sum(part => Math.Max(1, part.Quantity)),
             CustomerPoNumber = string.IsNullOrWhiteSpace(request.CustomerPoNumber) ? null : request.CustomerPoNumber,
-            Requirements = BuildOrderRequirements(request)
+            Requirements = BuildOrderRequirements(request),
+            ProductionItems = productionItems
         };
         orderRequest.SetProcessFromCode(request.Parts.FirstOrDefault()?.ProcessId ?? "fdm");
 
@@ -1006,6 +1019,61 @@ public sealed class QuoteController(
         }
 
         return string.Join(Environment.NewLine, requirements);
+    }
+
+    private static OrderProductionItemRequest BuildProductionItem(Guid quoteId, QuotePartDraftDto part, Guid materialGuid)
+    {
+        return new OrderProductionItemRequest
+        {
+            SourceProjectId = quoteId,
+            SourceProjectPartId = part.PartId,
+            MaterialId = materialGuid,
+            MaterialSnapshotJson = JsonSerializer.Serialize(new
+            {
+                sourceMaterialId = part.MaterialId,
+                resolvedMaterialId = materialGuid,
+                finishId = part.FinishId,
+                finishCode = part.FinishCode,
+                color = part.Color
+            }, SnapshotJsonOptions),
+            ConfigurationSnapshotJson = JsonSerializer.Serialize(new
+            {
+                part.PartId,
+                part.FileId,
+                part.UploadId,
+                part.FileName,
+                part.ProcessId,
+                part.MaterialId,
+                part.FinishId,
+                part.FinishCode,
+                part.Color,
+                part.Quantity,
+                part.VolumeCc,
+                part.SurfaceAreaCm2,
+                part.ToleranceId,
+                part.ToleranceCode,
+                part.InspectionLevel,
+                part.RoughnessCode,
+                part.ProcessOptionValues,
+                part.HasThreadedHoles,
+                part.ThreadSpecification,
+                part.ThreadedHoleCount,
+                part.InsertType,
+                part.InsertCount,
+                part.BodyCount,
+                part.SelectedBodyIndex,
+                part.DfmAcknowledged,
+                part.PartNotes,
+                part.DrawingFiles,
+                part.StoragePath,
+                part.ViewerStoragePath,
+                part.ViewerFileExtension
+            }, SnapshotJsonOptions),
+            Technology = part.ProcessId.ToUpperInvariant(),
+            VolumeCm3 = part.VolumeCc,
+            Quantity = Math.Max(1, part.Quantity),
+            EstimatedPrintTimeMinutes = 0
+        };
     }
 
     private static string BuildConfiguredPartSummary(QuotePartDraftDto part)
