@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Asp.Versioning;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Hubs;
@@ -25,6 +26,7 @@ public sealed class QuoteController(
     IMaterialCatalogClient materialCatalog,
     IQuotationServiceClient quotationClient,
     IOrderServiceClient orderClient,
+    ICustomerServiceClient customerClient,
     IPaymentServiceClient paymentClient,
     IQePricingServiceClient pricingClient,
     IHostEnvironment environment,
@@ -645,6 +647,12 @@ public sealed class QuoteController(
             });
         }
 
+        var addressValidation = await ValidateCheckoutAddressesAsync(customerId, request, cancellationToken);
+        if (addressValidation is not null)
+        {
+            return addressValidation;
+        }
+
         var customerOrders = await orderClient.GetByCustomerAsync(customerId.ToString("D"), cancellationToken);
         if (!customerOrders.Any(order =>
             order.OrderId == request.OrderId &&
@@ -709,6 +717,101 @@ public sealed class QuoteController(
 
         return Ok(new InitiatePaymentResponse(result.TransactionId, result.PaymentUrl, result.Status));
     }
+
+    private async Task<ActionResult?> ValidateCheckoutAddressesAsync(
+        Guid customerId,
+        InitiatePaymentRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!request.BillingAddressId.HasValue || !request.ShippingAddressId.HasValue)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Billing and shipping addresses are required before checkout.",
+                Detail = "Select a billing address and a shipping address before starting payment.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        using var response = await customerClient.GetCustomerAddressesAsync(customerId, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "Customer addresses are temporarily unavailable.",
+                Detail = "Checkout cannot start until billing and shipping addresses can be verified.",
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        var addresses = document.RootElement.ValueKind == JsonValueKind.Array
+            ? document.RootElement.EnumerateArray().Select(ReadCheckoutAddress).ToList()
+            : [];
+
+        var billingAddress = addresses.FirstOrDefault(address => address.Id == request.BillingAddressId.Value);
+        var shippingAddress = addresses.FirstOrDefault(address => address.Id == request.ShippingAddressId.Value);
+        if (billingAddress is null || shippingAddress is null)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Selected checkout address was not found.",
+                Detail = "Billing and shipping addresses must belong to the signed-in customer.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(shippingAddress.RecipientPhone))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Shipping phone is required before checkout.",
+                Detail = "Select or update a shipping address with a recipient phone number before payment.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        return null;
+    }
+
+    private static CheckoutAddressSnapshot ReadCheckoutAddress(JsonElement root)
+    {
+        return new CheckoutAddressSnapshot(
+            Id: GetGuid(root, "id", "Id") ?? Guid.Empty,
+            Type: GetString(root, "type", "Type") ?? string.Empty,
+            RecipientPhone: GetString(root, "recipientPhone", "RecipientPhone"));
+    }
+
+    private static string? GetString(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String)
+            {
+                return value.GetString();
+            }
+        }
+
+        return null;
+    }
+
+    private static Guid? GetGuid(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (root.TryGetProperty(name, out var value) &&
+                value.ValueKind == JsonValueKind.String &&
+                Guid.TryParse(value.GetString(), out var id))
+            {
+                return id;
+            }
+        }
+
+        return null;
+    }
+
+    private sealed record CheckoutAddressSnapshot(Guid Id, string Type, string? RecipientPhone);
 
     [HttpPost("quotes/{quoteId:guid}/approve")]
     public async Task<ActionResult<GenerateFormalQuoteResponse>> ApproveQuote(Guid quoteId, CancellationToken cancellationToken)

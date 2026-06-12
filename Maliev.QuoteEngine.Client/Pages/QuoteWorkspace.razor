@@ -5,6 +5,7 @@
 @using System.Net.Http
 @using System.Text
 @using System.Text.Json
+@using Maliev.QuoteEngine.Shared.Account
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
@@ -205,6 +206,7 @@
     private CreateManufacturingOrderResponse? _order;
     private InitiatePaymentResponse? _payment;
     private bool _acceptedCheckoutTerms;
+    private IReadOnlyList<CustomerAddressDto> _addresses = [];
     private Guid? _draftProjectId;
     private HubConnection? _notificationConnection;
     private DotNetObjectReference<QuoteWorkspace>? _dotNetRef;
@@ -250,7 +252,14 @@
     private bool CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode;
     private bool CanApproveQuote => _formalQuote is not null && IsSignedIn && !IsDemoMode && !_formalQuote.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase);
     private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode;
-    private bool CanPay => _order is not null && _estimate is not null && IsSignedIn && !IsDemoMode;
+    private Guid? BillingAddressId => SelectAddressId("Billing");
+    private Guid? ShippingAddressId => SelectAddressId("Shipping");
+    private bool CanPay => _order is not null &&
+        _estimate is not null &&
+        IsSignedIn &&
+        !IsDemoMode &&
+        BillingAddressId.HasValue &&
+        ShippingAddressId.HasValue;
     private bool ShowDemoSampleCard => !IsSignedIn && !IsDemoMode;
     private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;
     private string EmptyStateGridClass => "qe-empty-state-grid qe-empty-state-grid--solo";
@@ -279,6 +288,11 @@
     {
         _reference = await Api.GetReferenceDataAsync();
         _authStatus = await Api.GetAuthStatusAsync();
+        if (IsSignedIn)
+        {
+            _addresses = await Api.GetAddressesAsync();
+        }
+
         await PreferenceState.InitializeAsync();
         await LoadQuoteDefaultsAsync();
 
@@ -802,6 +816,8 @@
             OrderNumber = _order.OrderNumber,
             Amount = _estimate.Total,
             Currency = _estimate.Currency,
+            BillingAddressId = BillingAddressId,
+            ShippingAddressId = ShippingAddressId,
             AcceptedTerms = _acceptedCheckoutTerms
         });
 
@@ -827,6 +843,15 @@
     private static void ApplyAnalysisStatus(QuotePartViewModel part, QuoteAnalysisStatusResponse status)
     {
         QeLocalDfmMapper.ApplyAnalysisStatus(part, status);
+    }
+
+    private Guid? SelectAddressId(string addressType)
+    {
+        return _addresses.FirstOrDefault(address =>
+                   address.IsDefault &&
+                   string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase))?.Id
+               ?? _addresses.FirstOrDefault(address =>
+                   string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase))?.Id;
     }
 
     private async Task<bool> TryCompleteBrowserPrimaryViewerLocallyAsync(QuotePartViewModel part)

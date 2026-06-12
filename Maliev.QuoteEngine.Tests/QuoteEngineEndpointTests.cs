@@ -367,6 +367,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     private sealed class FakeCustomerServiceClient : ICustomerServiceClient
     {
+        private static readonly Guid DefaultBillingAddressId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+        private static readonly Guid DefaultShippingAddressId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
         private readonly ConcurrentDictionary<Guid, List<CustomerAddressDto>> _addressesByCustomer = new();
         private uint _nextVersion = 1;
 
@@ -385,9 +387,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
         public Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken)
         {
-            IReadOnlyList<CustomerAddressDto> addresses = _addressesByCustomer.TryGetValue(customerId, out var list)
-                ? [.. list]
-                : [];
+            var list = _addressesByCustomer.GetOrAdd(customerId, _ => CreateDefaultAddresses());
+            IReadOnlyList<CustomerAddressDto> addresses = [.. list];
             return Task.FromResult(JsonResponse(addresses));
         }
 
@@ -516,6 +517,43 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             {
                 address.IsDefault = false;
             }
+        }
+
+        private static List<CustomerAddressDto> CreateDefaultAddresses()
+        {
+            return
+            [
+                new CustomerAddressDto
+                {
+                    Id = DefaultBillingAddressId,
+                    Type = "Billing",
+                    IsDefault = true,
+                    AddressLine1 = "12 Billing Road",
+                    City = "Bangkok",
+                    StateProvince = "Bangkok",
+                    PostalCode = "10110",
+                    CountryId = FakeCountryServiceClient.ThailandCountryId,
+                    RecipientName = "Accounts Payable",
+                    RecipientPhone = "+66810000001",
+                    AddressSource = "Manual",
+                    Version = 1
+                },
+                new CustomerAddressDto
+                {
+                    Id = DefaultShippingAddressId,
+                    Type = "Shipping",
+                    IsDefault = true,
+                    AddressLine1 = "34 Shipping Road",
+                    City = "Bangkok",
+                    StateProvince = "Bangkok",
+                    PostalCode = "10110",
+                    CountryId = FakeCountryServiceClient.ThailandCountryId,
+                    RecipientName = "Receiving",
+                    RecipientPhone = "+66810000002",
+                    AddressSource = "Manual",
+                    Version = 1
+                }
+            ];
         }
 
         private static string? GetString(JsonElement root, params string[] names)
@@ -2043,6 +2081,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderNumber = order.OrderNumber,
             Amount = 1500.00m,
             Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
             AcceptedTerms = true
         });
 
@@ -2087,6 +2127,38 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Payment_initiation_rejects_missing_billing_or_shipping_address_before_checkout()
+    {
+        using var client = await CreateSignedInClientAsync("payer-address@example.com");
+
+        var quoteResp = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-address", [], "Payment address test."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-ADDRESS", "Payment address order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/payments", new
+        {
+            orderId = order.OrderId,
+            orderNumber = order.OrderNumber,
+            amount = 1500.00m,
+            currency = "THB",
+            billingAddressId = TestBillingAddressId,
+            acceptedTerms = true
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Payment_initiation_returns_401_for_anonymous_user()
     {
         using var client = factory.CreateClient();
@@ -2097,6 +2169,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderNumber = "ORD-2026-00001",
             Amount = 500m,
             Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
             AcceptedTerms = true
         });
 
@@ -2129,6 +2203,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderNumber = order.OrderNumber,
             Amount = 1500.00m,
             Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
             AcceptedTerms = true
         });
 
@@ -2140,6 +2216,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderNumber = order.OrderNumber,
             Amount = 1500.00m,
             Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
             AcceptedTerms = true
         });
 
@@ -2171,6 +2249,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderNumber = order.OrderNumber,
             Amount = 1.00m,
             Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
             AcceptedTerms = true
         });
 
@@ -2182,6 +2262,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderNumber = order.OrderNumber,
             Amount = 1500.00m,
             Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
             AcceptedTerms = true
         });
 
@@ -2219,6 +2301,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             OrderNumber = order.OrderNumber,
             Amount = 1500m,
             Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
             AcceptedTerms = true
         });
         paymentResp.EnsureSuccessStatusCode();

@@ -1,5 +1,6 @@
 @page "/orders/{OrderNumber}"
 @using System.Globalization
+@using Maliev.QuoteEngine.Shared.Account
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
@@ -215,6 +216,7 @@ else
     private bool _paymentBusy;
     private bool _acceptedCheckoutTerms;
     private string? _paymentError;
+    private IReadOnlyList<CustomerAddressDto> _addresses = [];
     private IReadOnlyList<CustomerDocumentDto> _documents = [];
     private readonly HashSet<Guid> _openingDocumentIds = [];
     private HubConnection? _notificationConnection;
@@ -279,8 +281,13 @@ else
         _ => Text("Delivery schedule is pending.", "กำลังรอกำหนดการจัดส่ง")
     };
 
+    private Guid? BillingAddressId => SelectAddressId("Billing");
+    private Guid? ShippingAddressId => SelectAddressId("Shipping");
+
     private bool CanPay => _order is not null &&
         _order.QuotedAmount is > 0 &&
+        BillingAddressId.HasValue &&
+        ShippingAddressId.HasValue &&
         !string.Equals(_order.PaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase);
 
     private IReadOnlyList<CustomerDocumentDto> OrderDocuments => _order is null
@@ -301,11 +308,13 @@ else
 
         if (_order is not null)
         {
+            _addresses = await Api.GetAddressesAsync();
             _documents = await Api.GetDocumentsAsync();
             await EnsureOrderNotificationConnectionAsync(_order.OrderNumber);
         }
         else
         {
+            _addresses = [];
             _documents = [];
         }
     }
@@ -327,6 +336,8 @@ else
                 OrderNumber = _order.OrderNumber,
                 Amount = _order.QuotedAmount.Value,
                 Currency = _order.QuoteCurrency ?? "THB",
+                BillingAddressId = BillingAddressId,
+                ShippingAddressId = ShippingAddressId,
                 AcceptedTerms = _acceptedCheckoutTerms
             });
 
@@ -574,6 +585,15 @@ else
         }
 
         await _notificationConnection.DisposeAsync();
+    }
+
+    private Guid? SelectAddressId(string addressType)
+    {
+        return _addresses.FirstOrDefault(address =>
+                   address.IsDefault &&
+                   string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase))?.Id
+               ?? _addresses.FirstOrDefault(address =>
+                   string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase))?.Id;
     }
 
     private string Text(string en, string th)
