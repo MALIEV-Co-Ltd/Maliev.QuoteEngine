@@ -8,6 +8,9 @@ namespace Maliev.QuoteEngine.Tests;
 
 public sealed class PaymentServiceClientContractTests
 {
+    private static readonly Guid BillingAddressId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static readonly Guid ShippingAddressId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+
     [Fact]
     public async Task InitiateAsync_SendsPaymentServiceWireContractAndMapsResponse()
     {
@@ -42,7 +45,10 @@ public sealed class PaymentServiceClientContractTests
             "THB",
             "https://quote.example.com/payment/success?orderId=ORD-2026-0001",
             "https://quote.example.com/payment/cancel?orderId=ORD-2026-0001",
-            "customer-1:order-1");
+            "customer-1:order-1",
+            BillingAddressId,
+            ShippingAddressId,
+            acceptedTerms: true);
 
         Assert.NotNull(result);
         Assert.Equal(transactionId, result.TransactionId);
@@ -68,6 +74,9 @@ public sealed class PaymentServiceClientContractTests
         Assert.Equal("https://quote.example.com/payment/success?orderId=ORD-2026-0001", body.GetProperty("returnUrl").GetString());
         Assert.Equal("https://quote.example.com/payment/cancel?orderId=ORD-2026-0001", body.GetProperty("cancelUrl").GetString());
         Assert.Equal("ORD-2026-0001", body.GetProperty("metadata").GetProperty("orderNumber").GetString());
+        Assert.Equal(BillingAddressId.ToString("D"), body.GetProperty("metadata").GetProperty("billingAddressId").GetString());
+        Assert.Equal(ShippingAddressId.ToString("D"), body.GetProperty("metadata").GetProperty("shippingAddressId").GetString());
+        Assert.Equal("true", body.GetProperty("metadata").GetProperty("acceptedTerms").GetString());
     }
 
     private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler

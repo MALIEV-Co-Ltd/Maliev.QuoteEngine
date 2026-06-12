@@ -669,6 +669,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             string customerId, string orderId, string orderNumber,
             decimal amount, string currency,
             string returnUrl, string cancelUrl, string idempotencyKey,
+            Guid? billingAddressId, Guid? shippingAddressId, bool acceptedTerms,
             CancellationToken ct = default)
         {
             return Task.FromResult<PaymentInitiatedResult?>(new PaymentInitiatedResult

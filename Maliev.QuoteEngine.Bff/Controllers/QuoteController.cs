@@ -707,6 +707,9 @@ public sealed class QuoteController(
             returnUrl,
             cancelUrl,
             idempotencyKey,
+            request.BillingAddressId,
+            request.ShippingAddressId,
+            request.AcceptedTerms,
             cancellationToken);
 
         if (result is null)

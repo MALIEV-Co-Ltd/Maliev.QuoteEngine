@@ -21,6 +21,9 @@ public interface IPaymentServiceClient
         string returnUrl,
         string cancelUrl,
         string idempotencyKey,
+        Guid? billingAddressId,
+        Guid? shippingAddressId,
+        bool acceptedTerms,
         CancellationToken ct = default);
 }
 
@@ -46,6 +49,9 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
         string returnUrl,
         string cancelUrl,
         string idempotencyKey,
+        Guid? billingAddressId,
+        Guid? shippingAddressId,
+        bool acceptedTerms,
         CancellationToken ct = default)
     {
         try
@@ -63,7 +69,10 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
                     cancelUrl,
                     metadata = new Dictionary<string, string>
                     {
-                        ["orderNumber"] = orderNumber
+                        ["orderNumber"] = orderNumber,
+                        ["billingAddressId"] = billingAddressId?.ToString("D") ?? string.Empty,
+                        ["shippingAddressId"] = shippingAddressId?.ToString("D") ?? string.Empty,
+                        ["acceptedTerms"] = acceptedTerms ? "true" : "false"
                     }
                 })
             };
