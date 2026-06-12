@@ -47,6 +47,7 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         public string Email { get; set; } = string.Empty;
         public string? Mobile { get; set; }
         public string? CompanyName { get; set; }
+        public string? VatNumber { get; set; }
         public string PreferredLanguage { get; set; } = "en";
         public string? ProfileImageUrl { get; set; }
         public string PreferredCurrency { get; set; } = "THB";
@@ -201,7 +202,8 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
             string.IsNullOrWhiteSpace(result.Segment) ? "Self-service manufacturing" : result.Segment,
             string.IsNullOrWhiteSpace(result.Tier) ? "Customer" : result.Tier,
             string.IsNullOrWhiteSpace(result.NdaStatus) ? "Active" : result.NdaStatus,
-            result.NdaExpiresAt ?? DateTimeOffset.UtcNow.AddDays(90));
+            result.NdaExpiresAt ?? DateTimeOffset.UtcNow.AddDays(90),
+            result.VatNumber ?? string.Empty);
     }
 
     private static string NormalizeEmail(string email)

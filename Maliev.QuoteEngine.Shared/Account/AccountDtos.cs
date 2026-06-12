@@ -15,7 +15,8 @@ public sealed record CustomerProfileResponse(
     string Segment = "Self-service manufacturing",
     string Tier = "Customer",
     string NdaStatus = "Active",
-    DateTimeOffset? NdaExpiresAt = null);
+    DateTimeOffset? NdaExpiresAt = null,
+    string VatNumber = "");
 
 public sealed record CustomerQuoteSummaryDto(
     Guid QuoteId,

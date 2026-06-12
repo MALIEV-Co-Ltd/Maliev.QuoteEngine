@@ -423,21 +423,22 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     {
         private static readonly Guid DefaultBillingAddressId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         private static readonly Guid DefaultShippingAddressId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        private readonly ConcurrentDictionary<Guid, CustomerProfileResponse> _profilesById = new();
         private readonly ConcurrentDictionary<Guid, List<CustomerAddressDto>> _addressesByCustomer = new();
         private uint _nextVersion = 1;
 
         public Task<CustomerProfileResponse?> GetByIdAsync(Guid customerId, CancellationToken ct = default) =>
-            Task.FromResult<CustomerProfileResponse?>(null);
+            Task.FromResult(_profilesById.TryGetValue(customerId, out var profile) ? profile : null);
 
         public Task<CustomerProfileResponse?> GetByEmailAsync(string email, CancellationToken ct = default) =>
-            Task.FromResult<CustomerProfileResponse?>(CreateProfile(email));
+            Task.FromResult<CustomerProfileResponse?>(StoreProfile(CreateProfile(email)));
 
         public Task<CustomerProfileResponse?> EnsureCustomerAsync(
             string email,
             string displayName,
             string phone = "",
             CancellationToken ct = default) =>
-            Task.FromResult<CustomerProfileResponse?>(CreateProfile(email, displayName, phone));
+            Task.FromResult<CustomerProfileResponse?>(StoreProfile(CreateProfile(email, displayName, phone)));
 
         public Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken)
         {
@@ -556,8 +557,16 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 string.IsNullOrWhiteSpace(displayName) ? normalizedEmail : displayName,
                 normalizedEmail,
                 phone,
-                string.Empty,
-                "en");
+                "MALIEV Test Buyer Co., Ltd.",
+                "en",
+                NdaExpiresAt: DateTimeOffset.UtcNow.AddDays(90),
+                VatNumber: "TH-0123456789012");
+        }
+
+        private CustomerProfileResponse StoreProfile(CustomerProfileResponse profile)
+        {
+            _profilesById[profile.CustomerId] = profile;
+            return profile;
         }
 
         private static void ResetSameRoleDefault(List<CustomerAddressDto> addresses, CustomerAddressDto current)
@@ -1480,6 +1489,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(profile);
         Assert.NotEqual(Guid.Empty, profile.CustomerId);
         Assert.Equal("profile-owner@example.com", profile.Email);
+        Assert.Equal("MALIEV Test Buyer Co., Ltd.", profile.CompanyName);
+        Assert.Equal("TH-0123456789012", profile.VatNumber);
         Assert.Equal("THB", profile.PreferredCurrency);
         Assert.NotEmpty(profile.Timezone);
         Assert.Equal("Active", profile.NdaStatus);
@@ -2688,6 +2699,11 @@ internal sealed class TestSignInStartupFilter : IStartupFilter
 
                     var store = context.RequestServices.GetRequiredService<QuoteEnginePrototypeStore>();
                     store.UpsertCustomer(customerId, normalizedEmail, "Test Customer", string.Empty, string.Empty, "en");
+                    var customerClient = context.RequestServices.GetService<ICustomerServiceClient>();
+                    if (customerClient is not null)
+                    {
+                        await customerClient.EnsureCustomerAsync(normalizedEmail, "Test Customer", ct: context.RequestAborted);
+                    }
 
                     var claims = new[]
                     {

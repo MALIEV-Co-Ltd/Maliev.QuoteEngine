@@ -217,6 +217,7 @@ else
     private bool _paymentBusy;
     private bool _acceptedCheckoutTerms;
     private string? _paymentError;
+    private CustomerProfileResponse? _profile;
     private IReadOnlyList<CustomerAddressDto> _addresses = [];
     private IReadOnlyList<CustomerDocumentDto> _documents = [];
     private readonly HashSet<Guid> _openingDocumentIds = [];
@@ -284,6 +285,8 @@ else
 
     private Guid? BillingAddressId => SelectAddressId("Billing");
     private Guid? ShippingAddressId => SelectAddressId("Shipping");
+    private string? BillingCompanyName => string.IsNullOrWhiteSpace(_profile?.CompanyName) ? null : _profile.CompanyName;
+    private string? BillingVatNumber => string.IsNullOrWhiteSpace(_profile?.VatNumber) ? null : _profile.VatNumber;
 
     private bool CanPay => _order is not null &&
         _order.QuotedAmount is > 0 &&
@@ -309,12 +312,14 @@ else
 
         if (_order is not null)
         {
+            _profile = await Api.GetProfileAsync();
             _addresses = await Api.GetAddressesAsync();
             _documents = await Api.GetDocumentsAsync();
             await EnsureOrderNotificationConnectionAsync(_order.OrderNumber);
         }
         else
         {
+            _profile = null;
             _addresses = [];
             _documents = [];
         }
@@ -339,6 +344,8 @@ else
                 Currency = _order.QuoteCurrency ?? "THB",
                 BillingAddressId = BillingAddressId,
                 ShippingAddressId = ShippingAddressId,
+                BillingCompanyName = BillingCompanyName,
+                BillingVatNumber = BillingVatNumber,
                 AcceptedTerms = _acceptedCheckoutTerms
             });
 

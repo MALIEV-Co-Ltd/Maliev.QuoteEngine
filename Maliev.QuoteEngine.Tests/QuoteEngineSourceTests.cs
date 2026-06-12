@@ -1016,6 +1016,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OrderNumber = _order.OrderNumber", detail, StringComparison.Ordinal);
         Assert.Contains("Amount = _order.QuotedAmount.Value", detail, StringComparison.Ordinal);
         Assert.Contains("Currency = _order.QuoteCurrency ?? \"THB\"", detail, StringComparison.Ordinal);
+        Assert.Contains("BillingCompanyName = BillingCompanyName", detail, StringComparison.Ordinal);
+        Assert.Contains("BillingVatNumber = BillingVatNumber", detail, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(payment.PaymentUrl, forceLoad: true)", detail, StringComparison.Ordinal);
         Assert.Contains("catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)", detail, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo($\"/auth/sign-in?returnUrl={Uri.EscapeDataString($\"/orders/{_order.OrderNumber}\")}\"", detail, StringComparison.Ordinal);
@@ -2121,6 +2123,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OnPaymentRequested", src, StringComparison.Ordinal);
 
         Assert.Contains("BillingName=\"@BillingSummaryName\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("BillingCompanyName = BillingCompanyName", workspace, StringComparison.Ordinal);
+        Assert.Contains("BillingVatNumber = BillingVatNumber", workspace, StringComparison.Ordinal);
         Assert.Contains("BillingHint=\"@BillingSummaryHint\"", workspace, StringComparison.Ordinal);
         Assert.Contains("ApproveQuoteAsync", workspace, StringComparison.Ordinal);
         Assert.Contains("InitiatePaymentAsync", workspace, StringComparison.Ordinal);

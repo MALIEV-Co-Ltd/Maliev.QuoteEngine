@@ -205,6 +205,7 @@
     private GenerateFormalQuoteResponse? _formalQuote;
     private CreateManufacturingOrderResponse? _order;
     private InitiatePaymentResponse? _payment;
+    private CustomerProfileResponse? _profile;
     private bool _acceptedCheckoutTerms;
     private IReadOnlyList<CustomerAddressDto> _addresses = [];
     private Guid? _draftProjectId;
@@ -274,9 +275,11 @@
         : $"{QuoteUploadConstraints.SupportedCadExtensionLabel} / {Text("max", "สูงสุด")} {QuoteUploadConstraints.MaxFileSizeMegabytes} MB {Text("per file", "ต่อไฟล์")}";
     private string QuoteButtonLabel => IsDemoMode ? Text("Demo only", "ตัวอย่างเท่านั้น") : IsSignedIn ? Text("Quote", "ขอราคา") : Text("Sign in to quote", "เข้าสู่ระบบเพื่อขอราคา");
     private string BillingSummaryName => IsSignedIn
-        ? _authStatus.DisplayName ?? Text("Customer account", "บัญชีลูกค้า")
+        ? BillingCompanyName ?? _authStatus.DisplayName ?? Text("Customer account", "บัญชีลูกค้า")
         : Text("Guest checkout", "ขอราคาแบบผู้เยี่ยมชม");
     private string BillingSummaryHint => IsSignedIn ? Text("Private order", "คำสั่งซื้อส่วนตัว") : Text("Sign in to save projects", "เข้าสู่ระบบเพื่อบันทึกโปรเจกต์");
+    private string? BillingCompanyName => string.IsNullOrWhiteSpace(_profile?.CompanyName) ? null : _profile.CompanyName;
+    private string? BillingVatNumber => string.IsNullOrWhiteSpace(_profile?.VatNumber) ? null : _profile.VatNumber;
 
     private QuotePartViewModel? SelectedPart => _parts.Count == 0 ? null : _parts[Math.Min(_selectedPartIndex, _parts.Count - 1)];
 
@@ -290,6 +293,7 @@
         _authStatus = await Api.GetAuthStatusAsync();
         if (IsSignedIn)
         {
+            _profile = await Api.GetProfileAsync();
             _addresses = await Api.GetAddressesAsync();
         }
 
@@ -818,6 +822,8 @@
             Currency = _estimate.Currency,
             BillingAddressId = BillingAddressId,
             ShippingAddressId = ShippingAddressId,
+            BillingCompanyName = BillingCompanyName,
+            BillingVatNumber = BillingVatNumber,
             AcceptedTerms = _acceptedCheckoutTerms
         });
 
