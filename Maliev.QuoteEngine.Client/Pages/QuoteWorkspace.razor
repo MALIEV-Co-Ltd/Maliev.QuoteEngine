@@ -252,9 +252,10 @@
     private bool IsSignedIn => _authStatus.IsSignedIn;
     private bool IsWorkspaceReady => _parts.Count > 0;
     private string WorkspaceRootClass => IsWorkspaceReady ? "qe-pn-root is-workspace-ready" : "qe-pn-root is-launch-screen";
-    private bool CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode;
+    private bool CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged;
     private bool CanApproveQuote => _formalQuote is not null && IsSignedIn && !IsDemoMode && !_formalQuote.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase);
-    private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode;
+    private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged;
+    private bool AllDfmIssuesAcknowledged => _parts.All(part => part.DfmAcknowledged || !HasDfmIssues(part));
     private Guid? BillingAddressId => SelectAddressId("Billing");
     private Guid? ShippingAddressId => SelectAddressId("Shipping");
     private bool CanPay => _order is not null &&
@@ -709,6 +710,12 @@
             return;
         }
 
+        if (!AllDfmIssuesAcknowledged)
+        {
+            _error = Text("Review and acknowledge DFM issues before requesting a formal quote.", "ตรวจสอบและรับทราบปัญหา DFM ก่อนขอใบเสนอราคาอย่างเป็นทางการ");
+            return;
+        }
+
         var draft = await Api.CreateDraftProjectAsync(new CreateDraftProjectRequest(
             _quoteSessionId,
             _parts.Select(x => x.ToDraft()).ToArray(),
@@ -792,6 +799,12 @@
         if (!IsSignedIn || IsDemoMode)
         {
             Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
+            return;
+        }
+
+        if (!AllDfmIssuesAcknowledged)
+        {
+            _error = Text("Review and acknowledge DFM issues before creating an order.", "ตรวจสอบและรับทราบปัญหา DFM ก่อนสร้างคำสั่งซื้อ");
             return;
         }
 
@@ -1057,6 +1070,13 @@
 
         return ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
     }
+
+    private static bool HasDfmIssues(QuotePartViewModel part) =>
+        part.Findings.Count > 0
+        || part.FdmDfmReport?.Issues.Count > 0
+        || part.SlaDfmReport?.Issues.Count > 0
+        || part.CncDfmReport?.Issues.Count > 0
+        || (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason));
 
     private static QuotePartViewModel CreatePartViewModel(QuotePartDraftDto part)
     {

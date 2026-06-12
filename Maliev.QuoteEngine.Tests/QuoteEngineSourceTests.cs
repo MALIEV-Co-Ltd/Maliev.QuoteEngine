@@ -1259,6 +1259,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Parts = _parts.Select(x => x.ToDraft()).ToArray()", workspace, StringComparison.Ordinal);
         Assert.Contains("BuildOrderRequirements", quoteController, StringComparison.Ordinal);
         Assert.Contains("BuildConfiguredPartSummary", quoteController, StringComparison.Ordinal);
+        Assert.Contains("AllDfmIssuesAcknowledged", workspace, StringComparison.Ordinal);
+        Assert.Contains("CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged", workspace, StringComparison.Ordinal);
+        Assert.Contains("CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged", workspace, StringComparison.Ordinal);
         Assert.Contains("IReadOnlyList<QuotePartDraftDto> Parts", quoteDtos, StringComparison.Ordinal);
         Assert.DoesNotContain("<span class=\"qe-zone-label\">Bill To</span>", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("CustomerPicker", workspace, StringComparison.Ordinal);
