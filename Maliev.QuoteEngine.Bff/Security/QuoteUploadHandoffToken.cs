@@ -41,7 +41,9 @@ public sealed class QuoteUploadHandoffToken(IConfiguration configuration, IHostE
         {
             var json = Encoding.UTF8.GetString(Base64UrlTextEncoder.Decode(encodedPayload));
             var payload = JsonSerializer.Deserialize<QuoteUploadHandoffTokenPayload>(json, JsonOptions);
-            if (payload is null || payload.ExpiresAt <= DateTimeOffset.UtcNow || payload.Files.Count == 0)
+            if (payload is null ||
+                payload.ExpiresAt <= DateTimeOffset.UtcNow ||
+                !IsValidPayload(payload))
             {
                 return false;
             }
@@ -70,6 +72,23 @@ public sealed class QuoteUploadHandoffToken(IConfiguration configuration, IHostE
         var actualBytes = Encoding.UTF8.GetBytes(encodedSignature);
         return expectedBytes.Length == actualBytes.Length
             && CryptographicOperations.FixedTimeEquals(expectedBytes, actualBytes);
+    }
+
+    private static bool IsValidPayload(QuoteUploadHandoffTokenPayload payload)
+    {
+        if (!Guid.TryParse(payload.QuoteSessionId, out var quoteSessionId) || payload.Files.Count == 0)
+        {
+            return false;
+        }
+
+        var expectedPrefix = $"quotes/temp/{quoteSessionId:N}/";
+        return payload.Files.All(file =>
+            !string.IsNullOrWhiteSpace(file.UploadId) &&
+            QuoteUploadConstraints.IsSupportedCadFileName(file.FileName) &&
+            file.FileSizeBytes is > 0 and <= QuoteUploadConstraints.MaxFileSizeBytes &&
+            file.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(file.StoragePath) &&
+            file.StoragePath.Replace('\\', '/').StartsWith(expectedPrefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private string Sign(string encodedPayload)

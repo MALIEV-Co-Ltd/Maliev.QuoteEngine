@@ -1219,9 +1219,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     public async Task UploadHandoff_imports_web_uploaded_files_into_active_workspace()
     {
         using var client = factory.CreateClient();
+        var quoteSessionId = Guid.NewGuid();
         var token = CreateSignedWebUploadHandoffToken(new
         {
-            quoteSessionId = "web-session-1",
+            quoteSessionId = quoteSessionId.ToString("D"),
             files = new[]
             {
                 new
@@ -1229,7 +1230,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
                     uploadId = "web-upload-1",
                     fileId = Guid.NewGuid(),
                     fileName = "web-dropped-part.step",
-                    storagePath = "quotes/temp/web-session-1/123/web-dropped-part.step",
+                    storagePath = $"quotes/temp/{quoteSessionId:N}/123/web-dropped-part.step",
                     contentType = "application/step",
                     fileSizeBytes = 420_000,
                     status = "Completed"
@@ -1247,7 +1248,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         response.EnsureSuccessStatusCode();
         var handoff = await response.Content.ReadFromJsonAsync<QuoteUploadHandoffResponse>();
         Assert.NotNull(handoff);
-        Assert.Equal("web-session-1", handoff.QuoteSessionId);
+        Assert.Equal(quoteSessionId.ToString("D"), handoff.QuoteSessionId);
         var part = Assert.Single(handoff.Parts);
         Assert.Equal("web-upload-1", part.UploadId);
         Assert.Equal("Analyzed", part.Status);
@@ -1275,6 +1276,39 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
                     Status = "Completed"
                 }
             ]
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UploadHandoff_rejects_signed_storage_paths_outside_web_quote_session()
+    {
+        using var client = factory.CreateClient();
+        var quoteSessionId = Guid.NewGuid();
+        var token = CreateSignedWebUploadHandoffToken(new
+        {
+            quoteSessionId = quoteSessionId.ToString("D"),
+            files = new[]
+            {
+                new
+                {
+                    uploadId = "web-upload-1",
+                    fileId = Guid.NewGuid(),
+                    fileName = "web-dropped-part.step",
+                    storagePath = "customer-documents/web-dropped-part.step",
+                    contentType = "application/step",
+                    fileSizeBytes = 420_000,
+                    status = "Completed"
+                }
+            },
+            issuedAt = DateTimeOffset.UtcNow,
+            expiresAt = DateTimeOffset.UtcNow.AddMinutes(15)
+        });
+
+        var response = await client.PostAsJsonAsync("/quote/v1/uploads/handoff", new QuoteUploadHandoffRequest
+        {
+            HandoffToken = token
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
