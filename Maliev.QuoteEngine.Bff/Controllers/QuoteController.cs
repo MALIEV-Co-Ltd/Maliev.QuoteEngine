@@ -490,6 +490,12 @@ public sealed class QuoteController(
             return Unauthorized();
         }
 
+        var dfmReviewError = ValidateDfmReviewAcknowledgement(request.Parts);
+        if (dfmReviewError is not null)
+        {
+            return dfmReviewError;
+        }
+
         // Build line items: resolve material Guid via MaterialService, price via store estimate
         var lineItems = new List<QuotationLineItemCreate>();
         foreach (var part in request.Parts)
