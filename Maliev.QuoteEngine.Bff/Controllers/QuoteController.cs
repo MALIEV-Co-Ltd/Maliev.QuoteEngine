@@ -658,9 +658,9 @@ public sealed class QuoteController(
         }
 
         var addressValidation = await ValidateCheckoutAddressesAsync(customerId, request, cancellationToken);
-        if (addressValidation is not null)
+        if (addressValidation.Error is not null)
         {
-            return addressValidation;
+            return addressValidation.Error;
         }
 
         var customerOrders = await orderClient.GetByCustomerAsync(customerId.ToString("D"), cancellationToken);
@@ -692,6 +692,37 @@ public sealed class QuoteController(
 
             paymentAmount = quotedAmount;
             paymentCurrency = quotedCurrency;
+        }
+
+        var billingAddressId = request.BillingAddressId.GetValueOrDefault();
+        var shippingAddressId = request.ShippingAddressId.GetValueOrDefault();
+        var deliverySnapshotUpdated = await orderClient.UpdateDeliverySnapshotAsync(
+            new OrderDeliverySnapshotRequest(
+                request.OrderNumber,
+                billingAddressId,
+                shippingAddressId,
+                addressValidation.ShippingAddress.ShippingAddressLine1,
+                addressValidation.ShippingAddress.ShippingAddressLine2,
+                addressValidation.ShippingAddress.ShippingCity,
+                addressValidation.ShippingAddress.ShippingProvince,
+                addressValidation.ShippingAddress.ShippingPostalCode,
+                addressValidation.ShippingAddress.ShippingCountry,
+                addressValidation.ShippingAddress.DeliveryContactName,
+                addressValidation.ShippingAddress.DeliveryContactPhone,
+                addressValidation.ShippingAddress.DeliveryContactEmail),
+            cancellationToken);
+
+        if (!deliverySnapshotUpdated)
+        {
+            logger.LogWarning(
+                "Could not persist delivery snapshot for order {OrderNumber}; payment initiation blocked.",
+                request.OrderNumber);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Order delivery details could not be saved.",
+                Detail = "Checkout cannot start until the selected delivery address is saved on the order.",
+                Status = StatusCodes.Status502BadGateway
+            });
         }
 
         // Build return/cancel URLs from the current request so the redirect lands back in the SPA.
@@ -731,30 +762,30 @@ public sealed class QuoteController(
         return Ok(new InitiatePaymentResponse(result.TransactionId, result.PaymentUrl, result.Status));
     }
 
-    private async Task<ActionResult?> ValidateCheckoutAddressesAsync(
+    private async Task<CheckoutAddressValidationResult> ValidateCheckoutAddressesAsync(
         Guid customerId,
         InitiatePaymentRequest request,
         CancellationToken cancellationToken)
     {
         if (!request.BillingAddressId.HasValue || !request.ShippingAddressId.HasValue)
         {
-            return BadRequest(new ProblemDetails
+            return new CheckoutAddressValidationResult(BadRequest(new ProblemDetails
             {
                 Title = "Billing and shipping addresses are required before checkout.",
                 Detail = "Select a billing address and a shipping address before starting payment.",
                 Status = StatusCodes.Status400BadRequest
-            });
+            }), null!);
         }
 
         using var response = await customerClient.GetCustomerAddressesAsync(customerId, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            return new CheckoutAddressValidationResult(StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
             {
                 Title = "Customer addresses are temporarily unavailable.",
                 Detail = "Checkout cannot start until billing and shipping addresses can be verified.",
                 Status = StatusCodes.Status503ServiceUnavailable
-            });
+            }), null!);
         }
 
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
@@ -767,36 +798,36 @@ public sealed class QuoteController(
         var shippingAddress = addresses.FirstOrDefault(address => address.Id == request.ShippingAddressId.Value);
         if (billingAddress is null || shippingAddress is null)
         {
-            return BadRequest(new ProblemDetails
+            return new CheckoutAddressValidationResult(BadRequest(new ProblemDetails
             {
                 Title = "Selected checkout address was not found.",
                 Detail = "Billing and shipping addresses must belong to the signed-in customer.",
                 Status = StatusCodes.Status400BadRequest
-            });
+            }), null!);
         }
 
         if (!string.Equals(billingAddress.Type, "Billing", StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(shippingAddress.Type, "Shipping", StringComparison.OrdinalIgnoreCase))
         {
-            return BadRequest(new ProblemDetails
+            return new CheckoutAddressValidationResult(BadRequest(new ProblemDetails
             {
                 Title = "Selected checkout address roles are invalid.",
                 Detail = "Use a billing address for billing and a shipping address for delivery before payment.",
                 Status = StatusCodes.Status400BadRequest
-            });
+            }), null!);
         }
 
         if (string.IsNullOrWhiteSpace(shippingAddress.RecipientPhone))
         {
-            return BadRequest(new ProblemDetails
+            return new CheckoutAddressValidationResult(BadRequest(new ProblemDetails
             {
                 Title = "Shipping phone is required before checkout.",
                 Detail = "Select or update a shipping address with a recipient phone number before payment.",
                 Status = StatusCodes.Status400BadRequest
-            });
+            }), null!);
         }
 
-        return null;
+        return new CheckoutAddressValidationResult(null, shippingAddress);
     }
 
     private static CheckoutAddressSnapshot ReadCheckoutAddress(JsonElement root)
@@ -804,7 +835,32 @@ public sealed class QuoteController(
         return new CheckoutAddressSnapshot(
             Id: GetGuid(root, "id", "Id") ?? Guid.Empty,
             Type: GetString(root, "type", "Type") ?? string.Empty,
-            RecipientPhone: GetString(root, "recipientPhone", "RecipientPhone"));
+            RecipientPhone: GetString(root, "recipientPhone", "RecipientPhone"),
+            ShippingAddressLine1: GetString(root, "addressLine1", "AddressLine1"),
+            ShippingAddressLine2: BuildAddressLine2(root),
+            ShippingCity: GetString(root, "city", "City"),
+            ShippingProvince: GetString(root, "stateProvince", "StateProvince"),
+            ShippingPostalCode: GetString(root, "postalCode", "PostalCode"),
+            ShippingCountry: GetString(root, "countryCode", "CountryCode", "country", "Country") ??
+                GetGuid(root, "countryId", "CountryId")?.ToString("D"),
+            DeliveryContactName: GetString(root, "recipientName", "RecipientName"),
+            DeliveryContactPhone: GetString(root, "recipientPhone", "RecipientPhone"),
+            DeliveryContactEmail: GetString(root, "recipientEmail", "RecipientEmail"));
+    }
+
+    private static string? BuildAddressLine2(JsonElement root)
+    {
+        var parts = new[]
+        {
+            GetString(root, "addressLine2", "AddressLine2"),
+            GetString(root, "addressLine3", "AddressLine3"),
+            GetString(root, "district", "District")
+        }
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .ToArray();
+
+        return parts.Length == 0 ? null : string.Join(", ", parts);
     }
 
     private static string? GetString(JsonElement root, params string[] names)
@@ -835,7 +891,21 @@ public sealed class QuoteController(
         return null;
     }
 
-    private sealed record CheckoutAddressSnapshot(Guid Id, string Type, string? RecipientPhone);
+    private sealed record CheckoutAddressValidationResult(ActionResult? Error, CheckoutAddressSnapshot ShippingAddress);
+
+    private sealed record CheckoutAddressSnapshot(
+        Guid Id,
+        string Type,
+        string? RecipientPhone,
+        string? ShippingAddressLine1,
+        string? ShippingAddressLine2,
+        string? ShippingCity,
+        string? ShippingProvince,
+        string? ShippingPostalCode,
+        string? ShippingCountry,
+        string? DeliveryContactName,
+        string? DeliveryContactPhone,
+        string? DeliveryContactEmail);
 
     [HttpPost("quotes/{quoteId:guid}/approve")]
     public async Task<ActionResult<GenerateFormalQuoteResponse>> ApproveQuote(Guid quoteId, CancellationToken cancellationToken)

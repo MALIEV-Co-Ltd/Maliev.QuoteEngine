@@ -23,6 +23,9 @@ public interface IOrderServiceClient
 
     /// <summary>Appends a status entry to an order. Returns false on non-success (caller logs and continues).</summary>
     Task<bool> AddStatusAsync(string orderId, string status, CancellationToken ct = default);
+
+    /// <summary>Persists the checkout delivery snapshot on an existing order.</summary>
+    Task<bool> UpdateDeliverySnapshotAsync(OrderDeliverySnapshotRequest request, CancellationToken ct = default);
 }
 
 internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceClient> logger) : IOrderServiceClient
@@ -54,6 +57,7 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
         public DateTime? ActualDeliveryDate { get; set; }
         public string? CustomerPoNumber { get; set; }
         public string? Requirements { get; set; }
+        public string Version { get; set; } = string.Empty;
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
     }
@@ -241,6 +245,69 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
         }
     }
 
+    public async Task<bool> UpdateDeliverySnapshotAsync(OrderDeliverySnapshotRequest request, CancellationToken ct = default)
+    {
+        try
+        {
+            using var detailResponse = await http.GetAsync($"/order/v1/orders/{Uri.EscapeDataString(request.OrderNumber)}", ct);
+            if (!detailResponse.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "OrderService GetDetail before delivery snapshot update returned {Status} for {OrderNumber}.",
+                    detailResponse.StatusCode,
+                    request.OrderNumber);
+                return false;
+            }
+
+            var detail = await detailResponse.Content.ReadFromJsonAsync<OsOrderDetailResponse>(cancellationToken: ct);
+            if (detail is null || string.IsNullOrWhiteSpace(detail.Version))
+            {
+                logger.LogWarning(
+                    "OrderService GetDetail returned no concurrency version for delivery snapshot update on {OrderNumber}.",
+                    request.OrderNumber);
+                return false;
+            }
+
+            using var updateResponse = await http.PutAsJsonAsync(
+                $"/order/v1/orders/{Uri.EscapeDataString(request.OrderNumber)}",
+                new
+                {
+                    version = detail.Version,
+                    billingAddressId = request.BillingAddressId,
+                    shippingAddressId = request.ShippingAddressId,
+                    shippingAddressLine1 = request.ShippingAddressLine1,
+                    shippingAddressLine2 = request.ShippingAddressLine2,
+                    shippingCity = request.ShippingCity,
+                    shippingProvince = request.ShippingProvince,
+                    shippingPostalCode = request.ShippingPostalCode,
+                    shippingCountry = request.ShippingCountry,
+                    deliveryContactName = request.DeliveryContactName,
+                    deliveryContactPhone = request.DeliveryContactPhone,
+                    deliveryContactEmail = request.DeliveryContactEmail
+                },
+                ct);
+
+            if (updateResponse.IsSuccessStatusCode)
+            {
+                return true;
+            }
+
+            var body = await updateResponse.Content.ReadAsStringAsync(ct);
+            logger.LogWarning(
+                "OrderService delivery snapshot update returned {Status} for {OrderNumber}: {Body}",
+                updateResponse.StatusCode,
+                request.OrderNumber,
+                body);
+            return false;
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "OrderService delivery snapshot update failed for {OrderNumber}.", request.OrderNumber);
+            return false;
+        }
+    }
+
     private static IReadOnlyList<CustomerManufacturingMilestoneDto> BuildCustomerManufacturingMilestones(
         string currentStatus,
         string paymentStatus,
@@ -372,6 +439,21 @@ public sealed class OrderCreateRequest
         }
     }
 }
+
+/// <summary>Checkout shipping and contact snapshot persisted on the order before payment.</summary>
+public sealed record OrderDeliverySnapshotRequest(
+    string OrderNumber,
+    Guid BillingAddressId,
+    Guid ShippingAddressId,
+    string? ShippingAddressLine1,
+    string? ShippingAddressLine2,
+    string? ShippingCity,
+    string? ShippingProvince,
+    string? ShippingPostalCode,
+    string? ShippingCountry,
+    string? DeliveryContactName,
+    string? DeliveryContactPhone,
+    string? DeliveryContactEmail);
 
 /// <summary>Result returned after a manufacturing order is created.</summary>
 public sealed class OrderCreatedResult

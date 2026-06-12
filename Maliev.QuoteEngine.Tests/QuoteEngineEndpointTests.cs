@@ -32,7 +32,11 @@ namespace Maliev.QuoteEngine.Tests;
 /// </summary>
 public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Program>
 {
+    private readonly FakeOrderServiceClient _fakeOrderServiceClient = new();
+
     public IReadOnlyList<string> PaymentIdempotencyKeys => FakePaymentServiceClient.IdempotencyKeys.ToArray();
+
+    public CapturedOrderDeliverySnapshot? LastOrderDeliverySnapshot => _fakeOrderServiceClient.LastDeliverySnapshot;
 
     public void ClearPaymentIdempotencyKeys()
     {
@@ -61,7 +65,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             services.AddSingleton<IQuotationServiceClient>(new FakeQuotationServiceClient());
 
             services.RemoveAll<IOrderServiceClient>();
-            services.AddSingleton<IOrderServiceClient>(new FakeOrderServiceClient());
+            services.AddSingleton<IOrderServiceClient>(_fakeOrderServiceClient);
 
             // Returns null → AccountController falls back to PrototypeStore for profile
             services.RemoveAll<ICustomerServiceClient>();
@@ -85,6 +89,20 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             services.AddTransient<IStartupFilter, TestSignInStartupFilter>();
         });
     }
+
+    public sealed record CapturedOrderDeliverySnapshot(
+        string OrderNumber,
+        Guid BillingAddressId,
+        Guid ShippingAddressId,
+        string? ShippingAddressLine1,
+        string? ShippingAddressLine2,
+        string? ShippingCity,
+        string? ShippingProvince,
+        string? ShippingPostalCode,
+        string? ShippingCountry,
+        string? DeliveryContactName,
+        string? DeliveryContactPhone,
+        string? DeliveryContactEmail);
 
     // ── Upload no-op ──────────────────────────────────────────────────────────
 
@@ -297,6 +315,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         private readonly ConcurrentDictionary<string, List<CustomerOrderSummaryDto>> _ordersByCustomer = new();
         private readonly ConcurrentDictionary<string, CustomerOrderDetailDto> _ordersByNumber = new();
 
+        public CapturedOrderDeliverySnapshot? LastDeliverySnapshot { get; private set; }
+
         public Task<OrderCreatedResult?> CreateAsync(OrderCreateRequest request, CancellationToken ct = default)
         {
             var orderId = Guid.NewGuid();
@@ -372,6 +392,27 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
         public Task<bool> AddStatusAsync(string orderId, string status, CancellationToken ct = default) =>
             Task.FromResult(true);
+
+        public Task<bool> UpdateDeliverySnapshotAsync(
+            OrderDeliverySnapshotRequest request,
+            CancellationToken ct = default)
+        {
+            LastDeliverySnapshot = new CapturedOrderDeliverySnapshot(
+                request.OrderNumber,
+                request.BillingAddressId,
+                request.ShippingAddressId,
+                request.ShippingAddressLine1,
+                request.ShippingAddressLine2,
+                request.ShippingCity,
+                request.ShippingProvince,
+                request.ShippingPostalCode,
+                request.ShippingCountry,
+                request.DeliveryContactName,
+                request.DeliveryContactPhone,
+                request.DeliveryContactEmail);
+
+            return Task.FromResult(true);
+        }
     }
 
     private sealed class FakeCustomerServiceClient : ICustomerServiceClient
@@ -2105,6 +2146,51 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(body);
         Assert.NotEqual(Guid.Empty, body.TransactionId);
         Assert.StartsWith("https://pay.test.example.com/hosted/", body.PaymentUrl);
+    }
+
+    [Fact]
+    public async Task Payment_initiation_persists_checkout_shipping_snapshot_on_order()
+    {
+        using var client = await CreateSignedInClientAsync("payer-snapshot@example.com");
+
+        var quoteResp = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-snapshot", [], "Payment snapshot test."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-SNAPSHOT", "Payment snapshot order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1500.00m,
+            Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
+            AcceptedTerms = true
+        });
+
+        response.EnsureSuccessStatusCode();
+        var snapshot = factory.LastOrderDeliverySnapshot;
+        Assert.NotNull(snapshot);
+        Assert.Equal(order.OrderNumber, snapshot.OrderNumber);
+        Assert.Equal(TestBillingAddressId, snapshot.BillingAddressId);
+        Assert.Equal(TestShippingAddressId, snapshot.ShippingAddressId);
+        Assert.Equal("34 Shipping Road", snapshot.ShippingAddressLine1);
+        Assert.Equal("Bangkok", snapshot.ShippingCity);
+        Assert.Equal("Bangkok", snapshot.ShippingProvince);
+        Assert.Equal("10110", snapshot.ShippingPostalCode);
+        Assert.Equal("11111111-1111-1111-1111-111111111111", snapshot.ShippingCountry);
+        Assert.Equal("Receiving", snapshot.DeliveryContactName);
+        Assert.Equal("+66810000002", snapshot.DeliveryContactPhone);
     }
 
     [Fact]
