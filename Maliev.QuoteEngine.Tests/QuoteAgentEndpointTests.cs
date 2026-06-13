@@ -17,6 +17,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     : IClassFixture<QuoteEngineWebApplicationFactory>
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly Guid CheckoutBillingAddressId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static readonly Guid CheckoutShippingAddressId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     [Fact]
     public async Task Agent_message_starts_anonymous_quote_engine_session_with_gate_state()
@@ -476,6 +478,22 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.NotNull(orderResult.State);
         Assert.Contains(orderResult.State.Gates, gate => gate.Code == "order_created" && gate.Status == "passed");
 
+        var checkoutState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_checkout_details",
+            new Dictionary<string, JsonElement>
+            {
+                ["billing_address_id"] = JsonSerializer.SerializeToElement(CheckoutBillingAddressId.ToString("D"), JsonOptions),
+                ["shipping_address_id"] = JsonSerializer.SerializeToElement(CheckoutShippingAddressId.ToString("D"), JsonOptions),
+                ["phone"] = JsonSerializer.SerializeToElement("+66 2 555 0100", JsonOptions),
+                ["company"] = JsonSerializer.SerializeToElement("MALIEV Buyer Co.", JsonOptions),
+                ["vat_number"] = JsonSerializer.SerializeToElement("TH1234567890", JsonOptions),
+                ["accepted_terms"] = JsonSerializer.SerializeToElement(true, JsonOptions),
+                ["consent"] = JsonSerializer.SerializeToElement(true, JsonOptions)
+            });
+        Assert.Contains(checkoutState.Gates, gate => gate.Code == "checkout_ready" && gate.Status == "passed");
+
         var paymentState = await ExecuteToolForStateAsync(client, sessionId, "quote_start_payment");
         var paymentAction = Assert.Single(paymentState.ProposedActions);
         Assert.Equal("start_payment", paymentAction.ActionType);
@@ -489,6 +507,65 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             artifact.ArtifactType == "payment" &&
             artifact.Status == "pending" &&
             !string.IsNullOrWhiteSpace(artifact.Url));
+    }
+
+    [Fact]
+    public async Task Agent_start_payment_blocks_until_checkout_details_are_collected()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-payment-checkout@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_start_payment");
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("checkout_ready", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("start_payment", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Contains(
+            "Billing",
+            document.RootElement.GetProperty("error").GetString(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_update_checkout_details_records_required_payment_context()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-checkout-details@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var state = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_checkout_details",
+            new Dictionary<string, JsonElement>
+            {
+                ["billing_address_id"] = JsonSerializer.SerializeToElement(CheckoutBillingAddressId.ToString("D"), JsonOptions),
+                ["shipping_address_id"] = JsonSerializer.SerializeToElement(CheckoutShippingAddressId.ToString("D"), JsonOptions),
+                ["phone"] = JsonSerializer.SerializeToElement("+66 2 555 0100", JsonOptions),
+                ["company"] = JsonSerializer.SerializeToElement("MALIEV Buyer Co.", JsonOptions),
+                ["vat_number"] = JsonSerializer.SerializeToElement("TH1234567890", JsonOptions),
+                ["accepted_terms"] = JsonSerializer.SerializeToElement(true, JsonOptions),
+                ["consent"] = JsonSerializer.SerializeToElement(true, JsonOptions)
+            });
+
+        Assert.Contains(state.Gates, gate => gate.Code == "checkout_ready" && gate.Status == "pending");
+        var checkout = Assert.Single(state.Artifacts, artifact => artifact.ArtifactType == "checkout");
+        Assert.Equal("ready", checkout.Status);
+        Assert.Equal(CheckoutBillingAddressId.ToString("D"), checkout.Metadata["billingAddressId"]);
+        Assert.Equal(CheckoutShippingAddressId.ToString("D"), checkout.Metadata["shippingAddressId"]);
+        Assert.Equal("+66 2 555 0100", checkout.Metadata["phone"]);
+        Assert.Equal("MALIEV Buyer Co.", checkout.Metadata["company"]);
+        Assert.Equal("TH1234567890", checkout.Metadata["vatNumber"]);
+        Assert.Equal("true", checkout.Metadata["acceptedTerms"]);
+        Assert.Equal("true", checkout.Metadata["consent"]);
     }
 
     [Fact]
@@ -823,6 +900,61 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             connector.GetProperty("connectorId").GetString() == "freecad" &&
             connector.GetProperty("category").GetString() == "cad_sender" &&
             connector.GetProperty("status").GetString() == "future");
+    }
+
+    [Fact]
+    public async Task Agent_auth_handoff_lists_google_passkey_and_email_fallback_for_anonymous_customer()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_get_auth_handoff",
+            new Dictionary<string, JsonElement>
+            {
+                ["intent"] = JsonSerializer.SerializeToElement("sign-up", JsonOptions),
+                ["return_url"] = JsonSerializer.SerializeToElement("/quotes", JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+        var methods = document.RootElement.GetProperty("methods").EnumerateArray().ToArray();
+
+        Assert.Equal(sessionId, document.RootElement.GetProperty("sessionId").GetGuid());
+        Assert.False(document.RootElement.GetProperty("isAuthenticated").GetBoolean());
+        Assert.Equal("sign-up", document.RootElement.GetProperty("intent").GetString());
+        Assert.Equal("/quotes", document.RootElement.GetProperty("returnUrl").GetString());
+        Assert.Equal("customer_authenticated", document.RootElement.GetProperty("requiredGateCode").GetString());
+
+        var google = Assert.Single(methods, method => method.GetProperty("methodId").GetString() == "google");
+        Assert.Equal("Google", google.GetProperty("displayName").GetString());
+        Assert.Equal("preferred", google.GetProperty("status").GetString());
+        Assert.Equal("/auth/sign-up?returnUrl=%2Fquotes", google.GetProperty("url").GetString());
+
+        var passkey = Assert.Single(methods, method => method.GetProperty("methodId").GetString() == "passkey");
+        Assert.Equal("available_when_supported", passkey.GetProperty("status").GetString());
+        Assert.True(passkey.GetProperty("requiresBrowserSupport").GetBoolean());
+
+        var email = Assert.Single(methods, method => method.GetProperty("methodId").GetString() == "email-password");
+        Assert.Equal("fallback", email.GetProperty("status").GetString());
+        Assert.Equal("/auth/sign-up?returnUrl=%2Fquotes", email.GetProperty("url").GetString());
+    }
+
+    [Fact]
+    public async Task Agent_auth_handoff_reports_existing_authenticated_customer()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-auth-handoff@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_get_auth_handoff");
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal(sessionId, document.RootElement.GetProperty("sessionId").GetGuid());
+        Assert.True(document.RootElement.GetProperty("isAuthenticated").GetBoolean());
+        Assert.NotEqual(Guid.Empty, document.RootElement.GetProperty("customerId").GetGuid());
+        Assert.Equal("already_authenticated", document.RootElement.GetProperty("status").GetString());
+        Assert.Empty(document.RootElement.GetProperty("methods").EnumerateArray());
     }
 
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)

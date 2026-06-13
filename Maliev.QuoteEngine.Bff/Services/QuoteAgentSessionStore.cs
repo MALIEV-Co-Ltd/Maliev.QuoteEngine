@@ -157,6 +157,13 @@ internal sealed class QuoteAgentSessionStore
                 part.Quantity > 0) &&
             !string.IsNullOrWhiteSpace(state.LeadTimeCode);
 
+        var checkoutReady = state.Order is not null &&
+            isAuthenticated &&
+            state.CheckoutBillingAddressId.HasValue &&
+            state.CheckoutShippingAddressId.HasValue &&
+            state.CheckoutAcceptedTerms &&
+            state.CheckoutConsent;
+
         return
         [
             Gate("geometry_required", "Usable 3D/CAD geometry", hasGeometry ? "passed" : "blocked",
@@ -179,8 +186,10 @@ internal sealed class QuoteAgentSessionStore
                 state.QuoteApproved ? "Customer approved the quote." : "Customer approval is still pending."),
             Gate("order_created", "Order created", state.Order is not null ? "passed" : "pending",
                 state.Order is not null ? "Manufacturing order exists." : "Order creation waits for quote approval and confirmation."),
-            Gate("checkout_ready", "Checkout ready", state.Order is not null && isAuthenticated ? "passed" : "pending",
-                "Billing, shipping, terms, and ownership must be verified before payment."),
+            Gate("checkout_ready", "Checkout ready", checkoutReady ? "passed" : "pending",
+                checkoutReady
+                    ? "Billing, shipping, terms, consent, and ownership are ready for payment."
+                    : "Billing and shipping addresses, phone, company/VAT if applicable, terms, and consent must be verified before payment."),
             Gate("payment_started_or_completed", "Payment started or completed", state.Payment is not null ? "passed" : "pending",
                 state.Payment is not null ? "Payment handoff exists." : "Payment has not started.")
         ];
@@ -359,6 +368,20 @@ internal sealed class QuoteAgentSessionState
     public bool QuoteApproved { get; set; }
 
     public CreateManufacturingOrderResponse? Order { get; set; }
+
+    public Guid? CheckoutBillingAddressId { get; set; }
+
+    public Guid? CheckoutShippingAddressId { get; set; }
+
+    public string? CheckoutPhone { get; set; }
+
+    public string? CheckoutCompany { get; set; }
+
+    public string? CheckoutVatNumber { get; set; }
+
+    public bool CheckoutAcceptedTerms { get; set; }
+
+    public bool CheckoutConsent { get; set; }
 
     public InitiatePaymentResponse? Payment { get; set; }
 

@@ -116,6 +116,7 @@ internal sealed class QuoteAgentService(
             "quote_resume_project" => ResumeProjectOrGateError(state, request.Arguments),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
             "quote_calculate_estimate" => CalculateEstimate(state),
+            "quote_update_checkout_details" => UpdateCheckoutDetailsOrGateError(state, request.Arguments),
             "quote_prepare_draft_project" => PrepareActionOrGateError(
                 state,
                 "draft_project",
@@ -400,6 +401,77 @@ internal sealed class QuoteAgentService(
         }
 
         return ToStateResponse(state);
+    }
+
+    private object UpdateCheckoutDetailsOrGateError(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments)
+    {
+        if (!(ResolveCustomerId() ?? state.CustomerId).HasValue)
+        {
+            return new
+            {
+                error = "Sign in before saving checkout details.",
+                requiredGateCode = "customer_authenticated",
+                actionType = "update_checkout_details",
+                state = ToStateResponse(state)
+            };
+        }
+
+        if (!TryReadGuid(arguments, "billing_address_id", out var billingAddressId) &&
+            !TryReadGuid(arguments, "billingAddressId", out billingAddressId))
+        {
+            return CheckoutDetailsGateError(state, "Billing address is required before checkout.");
+        }
+
+        if (!TryReadGuid(arguments, "shipping_address_id", out var shippingAddressId) &&
+            !TryReadGuid(arguments, "shippingAddressId", out shippingAddressId))
+        {
+            return CheckoutDetailsGateError(state, "Shipping address is required before checkout.");
+        }
+
+        var acceptedTerms = ReadBool(arguments, "accepted_terms") || ReadBool(arguments, "acceptedTerms");
+        var consent = ReadBool(arguments, "consent") || ReadBool(arguments, "accepted_consent") || ReadBool(arguments, "acceptedConsent");
+        if (!acceptedTerms || !consent)
+        {
+            return CheckoutDetailsGateError(state, "Terms acceptance and consent are required before checkout.");
+        }
+
+        lock (state.SyncRoot)
+        {
+            state.CheckoutBillingAddressId = billingAddressId;
+            state.CheckoutShippingAddressId = shippingAddressId;
+            state.CheckoutPhone = ReadString(arguments, "phone") ?? ReadString(arguments, "recipient_phone") ?? ReadString(arguments, "recipientPhone");
+            state.CheckoutCompany = ReadString(arguments, "company") ?? ReadString(arguments, "billing_company") ?? ReadString(arguments, "billingCompanyName");
+            state.CheckoutVatNumber = ReadString(arguments, "vat_number") ?? ReadString(arguments, "vatNumber") ?? ReadString(arguments, "billingVatNumber");
+            state.CheckoutAcceptedTerms = true;
+            state.CheckoutConsent = true;
+
+            UpsertArtifact(state, "checkout", "Checkout details", "ready", null, null);
+            SetArtifactMetadata(state, "checkout", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["billingAddressId"] = billingAddressId.ToString("D"),
+                ["shippingAddressId"] = shippingAddressId.ToString("D"),
+                ["phone"] = state.CheckoutPhone ?? string.Empty,
+                ["company"] = state.CheckoutCompany ?? string.Empty,
+                ["vatNumber"] = state.CheckoutVatNumber ?? string.Empty,
+                ["acceptedTerms"] = "true",
+                ["consent"] = "true"
+            });
+        }
+
+        return ToStateResponse(state);
+    }
+
+    private object CheckoutDetailsGateError(QuoteAgentSessionState state, string error)
+    {
+        return new
+        {
+            error,
+            requiredGateCode = "checkout_ready",
+            actionType = "update_checkout_details",
+            state = ToStateResponse(state)
+        };
     }
 
     private object BuildAccountContext(QuoteAgentSessionState state)
@@ -1472,6 +1544,25 @@ Customer message:
         return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : fallback;
+    }
+
+    private static bool ReadBool(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        string key)
+    {
+        if (!arguments.TryGetValue(key, out var value))
+        {
+            return false;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => bool.TryParse(value.GetString(), out var parsed) && parsed,
+            JsonValueKind.Number => value.TryGetInt32(out var number) && number != 0,
+            _ => false
+        };
     }
 
     private static string NormalizeLanguage(string? language, string message = "")
