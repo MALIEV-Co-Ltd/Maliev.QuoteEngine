@@ -36,6 +36,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     public IReadOnlyList<string> PaymentIdempotencyKeys => FakePaymentServiceClient.IdempotencyKeys.ToArray();
 
+    public IReadOnlyList<CapturedPaymentInitiation> PaymentInitiations => FakePaymentServiceClient.Initiations.ToArray();
+
     public CapturedOrderDeliverySnapshot? LastOrderDeliverySnapshot => _fakeOrderServiceClient.LastDeliverySnapshot;
 
     public OrderCreateRequest? LastOrderCreateRequest => _fakeOrderServiceClient.LastCreateRequest;
@@ -45,6 +47,10 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     public void ClearPaymentIdempotencyKeys()
     {
         while (FakePaymentServiceClient.IdempotencyKeys.TryDequeue(out _))
+        {
+        }
+
+        while (FakePaymentServiceClient.Initiations.TryDequeue(out _))
         {
         }
     }
@@ -109,6 +115,12 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         string? DeliveryContactName,
         string? DeliveryContactPhone,
         string? DeliveryContactEmail);
+
+    public sealed record CapturedPaymentInitiation(
+        string OrderNumber,
+        string ReturnUrl,
+        string CancelUrl,
+        string IdempotencyKey);
 
     // ── Upload no-op ──────────────────────────────────────────────────────────
 
@@ -748,6 +760,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     {
         public static ConcurrentQueue<string> IdempotencyKeys { get; } = new();
 
+        public static ConcurrentQueue<CapturedPaymentInitiation> Initiations { get; } = new();
+
         public Task<PaymentInitiatedResult?> InitiateAsync(
             string customerId, string orderId, string orderNumber,
             decimal amount, string currency,
@@ -756,6 +770,11 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             CancellationToken ct = default)
         {
             IdempotencyKeys.Enqueue(idempotencyKey);
+            Initiations.Enqueue(new CapturedPaymentInitiation(
+                orderNumber,
+                returnUrl,
+                cancelUrl,
+                idempotencyKey));
             return Task.FromResult<PaymentInitiatedResult?>(new PaymentInitiatedResult
             {
                 TransactionId = Guid.NewGuid(),
@@ -2493,6 +2512,46 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Contains(keys, key => key.EndsWith(firstAttemptId.ToString("D"), StringComparison.Ordinal));
         Assert.Contains(keys, key => key.EndsWith(secondAttemptId.ToString("D"), StringComparison.Ordinal));
         Assert.NotEqual(keys[0], keys[1]);
+    }
+
+    [Fact]
+    public async Task Payment_initiation_uses_forwarded_https_scheme_for_provider_callbacks()
+    {
+        factory.ClearPaymentIdempotencyKeys();
+        using var client = await CreateSignedInClientAsync("payer-forwarded-scheme@example.com");
+        client.DefaultRequestHeaders.Add("X-Forwarded-Proto", "https");
+
+        var quoteResp = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-forwarded", [], "Payment forwarded scheme test."));
+        quoteResp.EnsureSuccessStatusCode();
+        var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResp = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(quote.QuoteId, "PO-PAY-FORWARDED", "Payment forwarded scheme order."));
+        orderResp.EnsureSuccessStatusCode();
+        var order = await orderResp.Content.ReadFromJsonAsync<CreateManufacturingOrderResponse>();
+        Assert.NotNull(order);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/payments", new InitiatePaymentRequest
+        {
+            OrderId = order.OrderId,
+            OrderNumber = order.OrderNumber,
+            Amount = 1500.00m,
+            Currency = "THB",
+            BillingAddressId = TestBillingAddressId,
+            ShippingAddressId = TestShippingAddressId,
+            AcceptedTerms = true
+        });
+
+        response.EnsureSuccessStatusCode();
+        var initiation = Assert.Single(factory.PaymentInitiations);
+        Assert.StartsWith("https://", initiation.ReturnUrl, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("https://", initiation.CancelUrl, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/payment/success", initiation.ReturnUrl, StringComparison.Ordinal);
+        Assert.Contains("/payment/cancel", initiation.CancelUrl, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -10,6 +10,7 @@ using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
@@ -28,6 +29,12 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 builder.Services.AddSingleton<BffMetrics>();
 builder.AddMalievIdentityCookie(options =>
 {
@@ -114,6 +121,7 @@ builder.AddMassTransitWithRabbitMq(cfg =>
 var app = builder.Build();
 
 app.MapDefaultEndpoints("quote");
+app.UseForwardedHeaders();
 app.UseStaticFiles();
 app.MapStaticAssets().ShortCircuit();
 
