@@ -66,7 +66,10 @@ builder.Services.AddSingleton<QuoteEnginePrototypeStore>();
 builder.Services.AddScoped<CustomerSessionResolver>();
 builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
 builder.Services.AddScoped<QuoteUploadHandoffToken>();
+builder.Services.AddScoped<QuoteAgentContextToken>();
 builder.Services.AddScoped<ICustomerChatbotService, CustomerChatbotService>();
+builder.Services.AddSingleton<QuoteAgentSessionStore>();
+builder.Services.AddScoped<IQuoteAgentService, QuoteAgentService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(45));
 
@@ -147,11 +150,15 @@ app.MapFallback(async context =>
     var isAuthenticated = user.Identity?.IsAuthenticated == true
         && Guid.TryParse(customerId, out _);
 
-    // /demo is the only public WASM route — everything else requires a valid session.
+    // Quote-start routes are public so customers can try the chat-based intake before signing in.
     // Redirecting unauthenticated users here (server-side, before WASM loads) avoids the
     // 15-30 second WASM cold-start just to end up showing a sign-in redirect anyway.
-    var isDemoRoute = context.Request.Path.StartsWithSegments("/demo");
-    if (!isAuthenticated && !isDemoRoute)
+    var isPublicQuoteStartRoute =
+        context.Request.Path.StartsWithSegments("/demo") ||
+        context.Request.Path.StartsWithSegments("/quote/new") ||
+        context.Request.Path.StartsWithSegments("/quotes/new") ||
+        context.Request.Path.StartsWithSegments("/projects/new");
+    if (!isAuthenticated && !isPublicQuoteStartRoute)
     {
         var config = context.RequestServices.GetRequiredService<IConfiguration>();
         var webBaseUrl = config["Web:BaseUrl"]?.TrimEnd('/') ?? "https://www.maliev.com";

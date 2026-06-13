@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Chatbot;
 
 namespace Maliev.QuoteEngine.Bff.Clients;
@@ -147,8 +148,39 @@ public sealed class ChatbotSendMessageRequest
     /// <summary>Gets or sets the message content.</summary>
     public string Content { get; set; } = string.Empty;
 
+    /// <summary>Gets or sets the requested response language.</summary>
+    public string? Language { get; set; }
+
+    /// <summary>Gets or sets message attachments.</summary>
+    public List<ChatbotMessageAttachmentRequest>? Attachments { get; set; }
+
     /// <summary>Gets or sets the optional requested response MIME type.</summary>
     public string? ResponseMimeType { get; set; }
+
+    /// <summary>Gets or sets an optional thinking-step callback URL.</summary>
+    public string? CallbackUrl { get; set; }
+
+    /// <summary>Gets or sets the signed QuoteEngine agent context token.</summary>
+    public string? QuoteAgentContextToken { get; set; }
+}
+
+/// <summary>ChatbotService message attachment request.</summary>
+public sealed class ChatbotMessageAttachmentRequest
+{
+    /// <summary>Gets or sets the attachment type.</summary>
+    public string Type { get; set; } = "image";
+
+    /// <summary>Gets or sets the attachment URL or data reference.</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the MIME type.</summary>
+    public string? MimeType { get; set; }
+
+    /// <summary>Gets or sets the filename.</summary>
+    public string? Filename { get; set; }
+
+    /// <summary>Gets or sets the size in bytes.</summary>
+    public long? SizeBytes { get; set; }
 }
 
 /// <summary>ChatbotService message response.</summary>
@@ -171,6 +203,9 @@ public sealed class ChatbotMessageResponse
 
     /// <summary>Gets or sets suggested actions.</summary>
     public List<CustomerChatbotActionDto> SuggestedActions { get; set; } = [];
+
+    /// <summary>Gets or sets agent thinking steps returned by ChatbotService.</summary>
+    public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
 }
 
 /// <summary>ChatbotService conversation message history response.</summary>

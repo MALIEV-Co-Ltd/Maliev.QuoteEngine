@@ -24,6 +24,16 @@ public sealed class QuoteNotificationsHub : Hub
         return Groups.RemoveFromGroupAsync(Context.ConnectionId, OrderGroup(orderNumber));
     }
 
+    public Task JoinQuoteSessionGroup(Guid sessionId)
+    {
+        return Groups.AddToGroupAsync(Context.ConnectionId, QuoteSessionGroup(sessionId));
+    }
+
+    public Task LeaveQuoteSessionGroup(Guid sessionId)
+    {
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, QuoteSessionGroup(sessionId));
+    }
+
     internal static string FileGroup(string storagePath)
     {
         return $"quote-file:{storagePath}";
@@ -32,5 +42,10 @@ public sealed class QuoteNotificationsHub : Hub
     internal static string OrderGroup(string orderNumber)
     {
         return $"quote-order:{orderNumber}";
+    }
+
+    internal static string QuoteSessionGroup(Guid sessionId)
+    {
+        return $"quote-agent:{sessionId:D}";
     }
 }

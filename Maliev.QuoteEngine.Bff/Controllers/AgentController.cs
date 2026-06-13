@@ -1,0 +1,113 @@
+using Asp.Versioning;
+using Maliev.QuoteEngine.Bff.Security;
+using Maliev.QuoteEngine.Bff.Services;
+using Maliev.QuoteEngine.Shared.Agent;
+using Microsoft.AspNetCore.Mvc;
+
+namespace Maliev.QuoteEngine.Bff.Controllers;
+
+/// <summary>
+/// Chat-based QuoteEngine agent boundary.
+/// </summary>
+[ApiController]
+[ApiVersion("1.0")]
+[Route("quote/v{version:apiVersion}/agent")]
+public sealed class AgentController(
+    IQuoteAgentService agentService,
+    QuoteAgentContextToken contextToken) : ControllerBase
+{
+    private const string AgentContextHeader = "X-Maliev-Agent-Context";
+
+    /// <summary>
+    /// Sends a customer message through the QuoteEngine agent workflow.
+    /// </summary>
+    [HttpPost("messages")]
+    [ProducesResponseType(typeof(QuoteAgentTurnResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<QuoteAgentTurnResponse>> Send(
+        [FromBody] QuoteAgentMessageRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(await agentService.SendAsync(request, cancellationToken));
+    }
+
+    /// <summary>
+    /// Gets the current agent state for a QuoteEngine session.
+    /// </summary>
+    [HttpGet("sessions/{sessionId:guid}")]
+    [ProducesResponseType(typeof(QuoteAgentStateResponse), StatusCodes.Status200OK)]
+    public ActionResult<QuoteAgentStateResponse> GetState(Guid sessionId)
+    {
+        return Ok(agentService.GetState(sessionId));
+    }
+
+    /// <summary>
+    /// Executes an internal allowlisted QuoteEngine agent tool call.
+    /// </summary>
+    [HttpPost("tools/{toolName}")]
+    [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<object>> ExecuteTool(
+        string toolName,
+        [FromBody] QuoteAgentToolRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!contextToken.TryRead(Request.Headers[AgentContextHeader].ToString(), out var context))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Signed QuoteEngine agent context is required.",
+                Detail = "Tool calls must be made by ChatbotService with a BFF-issued agent context token."
+            });
+        }
+
+        var result = await agentService.ExecuteToolAsync(toolName, request, context, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Confirms and executes a pending server-stored agent action.
+    /// </summary>
+    [HttpPost("actions/{actionId:guid}/confirm")]
+    [ProducesResponseType(typeof(QuoteAgentActionResultResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<QuoteAgentActionResultResponse>> ConfirmAction(
+        Guid actionId,
+        [FromBody] QuoteAgentConfirmActionRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var result = await agentService.ConfirmActionAsync(actionId, request, cancellationToken);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = ex.Message
+            });
+        }
+    }
+
+    /// <summary>
+    /// Receives thinking-step callbacks and relays them to the quote notification hub.
+    /// </summary>
+    [HttpPost("sessions/{sessionId:guid}/thinking")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    public async Task<IActionResult> RelayThinkingStep(
+        Guid sessionId,
+        [FromBody] QuoteAgentThinkingStepDto step,
+        CancellationToken cancellationToken)
+    {
+        await agentService.RelayThinkingStepAsync(sessionId, step, cancellationToken);
+        return Accepted();
+    }
+}
