@@ -667,6 +667,7 @@ public sealed class QuoteEngineSourceTests
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+        var composerScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-agent-composer.js");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var agentStyles = ExtractSourceBlock(styles, "/* Quote agent chat-first shell */", "/* End quote agent chat-first shell */");
         var primaryNav = ExtractSourceBlock(component, "<nav class=\"qe-agent-primary-nav\"", "</nav>");
@@ -717,10 +718,17 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ConfirmAgentActionAsync", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentGateDto", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentProposedActionDto", component, StringComparison.Ordinal);
+        Assert.Contains("@ref=\"_composerTextarea\"", component, StringComparison.Ordinal);
+        Assert.Contains("quote-agent-composer.js", component, StringComparison.Ordinal);
+        Assert.Contains("SubmitComposerFromKeyboardAsync", component, StringComparison.Ordinal);
         Assert.Contains("Task HandleSubmitAsync()", component, StringComparison.Ordinal);
 
         Assert.Contains("Task<QuoteAgentTurnResponse> SendAgentMessageAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("event.key !== \"Enter\"", composerScript, StringComparison.Ordinal);
+        Assert.Contains("event.shiftKey", composerScript, StringComparison.Ordinal);
+        Assert.Contains("event.preventDefault();", composerScript, StringComparison.Ordinal);
+        Assert.Contains("SubmitComposerFromKeyboardAsync", composerScript, StringComparison.Ordinal);
 
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-shell", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);

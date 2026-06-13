@@ -145,7 +145,8 @@
                 <button type="button" class="qe-agent-round-btn" title="@Text("Attach files", "แนบไฟล์")" @onclick="RequestUploadAsync">
                     <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
                 </button>
-                <textarea @bind="_draftMessage"
+                <textarea @ref="_composerTextarea"
+                          @bind="_draftMessage"
                           rows="1"
                           maxlength="4000"
                           placeholder="@Text("Describe your part, paste dimensions, or attach files...", "อธิบายชิ้นงาน วางขนาด หรือแนบไฟล์...")"
@@ -315,6 +316,9 @@
     private string _sketchTitle = "Untitled sketch";
     private string _sketchColor = "#161616";
     private string? _lastSketchDataUrl;
+    private ElementReference _composerTextarea;
+    private DotNetObjectReference<QuoteAgentLaunchShell>? _composerDotNetRef;
+    private IJSObjectReference? _composerModule;
     private IJSObjectReference? _sketchModule;
     private string SketchCanvasId { get; } = $"qe-agent-sketch-{Guid.NewGuid():N}";
     private static readonly SketchColorOption[] SketchColors =
@@ -365,6 +369,13 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            _composerDotNetRef = DotNetObjectReference.Create(this);
+            _composerModule = await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-composer.js");
+            await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef);
+        }
+
         if (!_sketchInitPending)
         {
             return;
@@ -387,6 +398,12 @@
         {
             _error = ex.Message;
         }
+    }
+
+    [JSInvokable]
+    public Task SubmitComposerFromKeyboardAsync()
+    {
+        return HandleSubmitAsync();
     }
 
     private async Task HandleSubmitAsync()
@@ -566,6 +583,14 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_composerModule is not null)
+        {
+            await _composerModule.InvokeVoidAsync("disposeComposer", _composerTextarea);
+            await _composerModule.DisposeAsync();
+        }
+
+        _composerDotNetRef?.Dispose();
+
         if (_sketchModule is not null)
         {
             await _sketchModule.DisposeAsync();
