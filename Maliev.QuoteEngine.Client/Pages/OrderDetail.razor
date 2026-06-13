@@ -480,6 +480,15 @@ else
                     StateHasChanged();
                 });
             });
+
+            _notificationConnection.On<QePaymentExpiredPayload>("PaymentExpired", payload =>
+            {
+                _ = InvokeAsync(() =>
+                {
+                    ApplyPaymentExpired(payload);
+                    StateHasChanged();
+                });
+            });
         }
 
         if (_notificationConnection.State == HubConnectionState.Disconnected)
@@ -568,6 +577,25 @@ else
         {
             PaymentStatus = "Cancelled",
             UpdatedAt = payload.CancelledAt
+        };
+    }
+
+    private void ApplyPaymentExpired(QePaymentExpiredPayload payload)
+    {
+        if (_order is null ||
+            !string.Equals(_order.OrderNumber, payload.OrderNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _paymentError = string.IsNullOrWhiteSpace(payload.Reason)
+            ? Text("Payment checkout expired. Start payment again to continue.", "หน้าชำระเงินหมดอายุ กรุณาเริ่มชำระเงินใหม่อีกครั้ง")
+            : Text($"Payment checkout expired: {payload.Reason}", $"หน้าชำระเงินหมดอายุ: {payload.Reason}");
+
+        _order = _order with
+        {
+            PaymentStatus = "Expired",
+            UpdatedAt = payload.ExpiredAt
         };
     }
 

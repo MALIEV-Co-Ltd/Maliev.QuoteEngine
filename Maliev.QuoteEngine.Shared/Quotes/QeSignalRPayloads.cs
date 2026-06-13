@@ -61,6 +61,18 @@ public sealed record QePaymentCancelledPayload(
     DateTimeOffset CancelledAt);
 
 /// <summary>
+/// Pushed to the client via SignalR "PaymentExpired" when a hosted checkout expires before completion.
+/// </summary>
+public sealed record QePaymentExpiredPayload(
+    string OrderNumber,
+    Guid PaymentId,
+    decimal Amount,
+    string Currency,
+    string Reason,
+    string ProviderEventCode,
+    DateTimeOffset ExpiredAt);
+
+/// <summary>
 /// Pushed to the client via SignalR "DfmAnalysisReady" when DFM analysis is ready.
 /// Always reflects the merged state of all process reports received so far.
 /// </summary>

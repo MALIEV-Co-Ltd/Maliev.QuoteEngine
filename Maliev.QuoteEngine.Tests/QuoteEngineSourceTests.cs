@@ -1010,14 +1010,17 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("PaymentCompleted", detail, StringComparison.Ordinal);
         Assert.Contains("PaymentFailed", detail, StringComparison.Ordinal);
         Assert.Contains("PaymentCancelled", detail, StringComparison.Ordinal);
+        Assert.Contains("PaymentExpired", detail, StringComparison.Ordinal);
         Assert.Contains("QeOrderStatusChangedPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentCompletedPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentFailedPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentCancelledPayload", detail, StringComparison.Ordinal);
+        Assert.Contains("QePaymentExpiredPayload", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyOrderStatusChanged", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentCompleted", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentFailed", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentCancelled", detail, StringComparison.Ordinal);
+        Assert.Contains("ApplyPaymentExpired", detail, StringComparison.Ordinal);
         Assert.Contains("InitiatePaymentAsync", detail, StringComparison.Ordinal);
         Assert.Contains("new InitiatePaymentRequest", detail, StringComparison.Ordinal);
         Assert.Contains("OrderId = _order.OrderId", detail, StringComparison.Ordinal);
@@ -1637,6 +1640,64 @@ public sealed class QuoteEngineSourceTests
         Assert.Equal("Customer returned from cancel URL", payload.Reason);
         Assert.Equal("checkout.session.expired", payload.ProviderEventCode);
         Assert.Equal(cancelledAt, payload.CancelledAt);
+    }
+
+    [Fact]
+    public async Task PaymentExpiredConsumer_pushes_provider_neutral_expiry_to_order_group()
+    {
+        var hubClients = Substitute.For<IHubClients>();
+        var hubGroup = Substitute.For<IClientProxy>();
+        hubClients.Group(Arg.Any<string>()).Returns(hubGroup);
+        var hubCtx = Substitute.For<IHubContext<QuoteNotificationsHub>>();
+        hubCtx.Clients.Returns(hubClients);
+        var consumer = new QuotePaymentExpiredConsumer(
+            hubCtx,
+            NullLogger<QuotePaymentExpiredConsumer>.Instance);
+        var transactionId = Guid.Parse("a81a7c84-1b35-4626-bc0b-a74d55e224a4");
+        var expiredAt = DateTimeOffset.Parse("2026-06-13T09:10:00Z");
+        var @event = new PaymentExpiredEvent(
+            MessageId: Guid.NewGuid(),
+            MessageName: nameof(PaymentExpiredEvent),
+            MessageType: MessageType.Event,
+            MessageVersion: "1.0.0",
+            PublishedBy: "PaymentService",
+            ConsumedBy: ["QuoteEngine"],
+            CorrelationId: Guid.NewGuid(),
+            CausationId: null,
+            OccurredAtUtc: expiredAt,
+            IsPublic: false,
+            Payload: new PaymentExpiredEventPayload(
+                TransactionId: transactionId,
+                IdempotencyKey: "customer:order:attempt",
+                Amount: 1500.00,
+                Currency: "THB",
+                CustomerId: "customer-1",
+                OrderId: "ORD-2026-0003",
+                ProviderName: "stripe",
+                Reason: "Hosted checkout expired",
+                ProviderEventCode: "checkout.session.expired",
+                ExpiredAt: expiredAt));
+        var consumeCtx = Substitute.For<ConsumeContext<PaymentExpiredEvent>>();
+        consumeCtx.Message.Returns(@event);
+        consumeCtx.CancellationToken.Returns(CancellationToken.None);
+
+        await consumer.Consume(consumeCtx);
+
+        hubClients.Received(1).Group(QuoteNotificationsHub.OrderGroup("ORD-2026-0003"));
+        var call = Assert.Single(
+            hubGroup.ReceivedCalls(),
+            c => c.GetMethodInfo().Name == "SendCoreAsync");
+        var args = call.GetArguments();
+        Assert.Equal("PaymentExpired", args[0]);
+        var payloadArgs = (object?[])args[1]!;
+        var payload = Assert.IsType<QePaymentExpiredPayload>(payloadArgs[0]);
+        Assert.Equal("ORD-2026-0003", payload.OrderNumber);
+        Assert.Equal(transactionId, payload.PaymentId);
+        Assert.Equal(1500.00m, payload.Amount);
+        Assert.Equal("THB", payload.Currency);
+        Assert.Equal("Hosted checkout expired", payload.Reason);
+        Assert.Equal("checkout.session.expired", payload.ProviderEventCode);
+        Assert.Equal(expiredAt, payload.ExpiredAt);
     }
 
     [Fact]
