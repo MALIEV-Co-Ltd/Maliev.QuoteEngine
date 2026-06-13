@@ -56,6 +56,9 @@
         </div>
         <div class="ms-hud">
             <p id="startup-status" class="ms-status">Preparing Make Studio</p>
+            <button id="startup-skip" class="ms-skip" type="button" disabled hidden aria-disabled="true" onclick="window.quoteEngineLoader.skipStory()">
+                Skip
+            </button>
             <span id="startup-percent" class="ms-percent">0%</span>
             <div class="ms-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="startup-status">
                 <span class="ms-progress-fill"></span>

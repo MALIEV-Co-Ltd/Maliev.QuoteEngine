@@ -51,6 +51,7 @@
   let bootStartedAt = 0;
   let minVisibleMs = FINALE_HOLD_MS;
   let runtimeReady = false;
+  let canSkipStory = false;
 
   function clamp(value) {
     return Math.max(0, Math.min(100, value));
@@ -129,6 +130,7 @@
     runtimeReady = true;
     setProgress(100, true);
     setStatus(currentStrings.status.ready);
+    enableSkipStory();
     maybeFinish();
   }
 
@@ -187,9 +189,33 @@
       return;
     }
     if (Date.now() - bootStartedAt >= minVisibleMs) {
-      stopBootTick();
-      document.body.classList.add("quote-ready");
+      finishStartupStory();
     }
+  }
+
+  function finishStartupStory() {
+    stopBootTick();
+    document.body.classList.add("quote-ready");
+  }
+
+  function enableSkipStory() {
+    canSkipStory = true;
+    document.body.classList.add("quote-skip-ready");
+
+    const skip = document.getElementById("startup-skip");
+    if (skip) {
+      skip.hidden = false;
+      skip.disabled = false;
+      skip.setAttribute("aria-disabled", "false");
+    }
+  }
+
+  function skipStory() {
+    if (!canSkipStory) {
+      return;
+    }
+
+    finishStartupStory();
   }
 
   function prefersReducedMotion() {
@@ -365,7 +391,8 @@
     markReady,
     markFailed,
     setProgress,
-    startBlazor
+    startBlazor,
+    skipStory
   };
 
   window.quoteEnginePreferences = {

@@ -1513,6 +1513,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("role=\"progressbar\"", index, StringComparison.Ordinal);
         Assert.Contains("id=\"startup-status\"", index, StringComparison.Ordinal);
         Assert.Contains("id=\"startup-percent\"", index, StringComparison.Ordinal);
+        Assert.Contains("id=\"startup-skip\"", index, StringComparison.Ordinal);
+        Assert.Contains("disabled hidden aria-disabled=\"true\"", index, StringComparison.Ordinal);
         Assert.Contains("class=\"ms-progress\"", index, StringComparison.Ordinal);
         Assert.DoesNotContain("maliev-logo-loader", index, StringComparison.Ordinal);
         Assert.DoesNotContain("aria-label=\"MALIEV\"", index, StringComparison.Ordinal);
@@ -1520,6 +1522,7 @@ public sealed class QuoteEngineSourceTests
         // Styling: scoped startup screen, dismissal contract, theming, reduced motion.
         Assert.Contains(".startup-screen {", styles, StringComparison.Ordinal);
         Assert.Contains("body.quote-ready .startup-screen", styles, StringComparison.Ordinal);
+        Assert.Contains("body.quote-skip-ready:not(.quote-ready) .ms-skip", styles, StringComparison.Ordinal);
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .startup-screen", styles, StringComparison.Ordinal);
         Assert.Contains(".ms-beat {", styles, StringComparison.Ordinal);
         Assert.Contains(".ms-progress-fill {", styles, StringComparison.Ordinal);
@@ -1536,6 +1539,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("let displayedProgress = 0", loaderScript, StringComparison.Ordinal);
         Assert.Contains("Math.max(displayedProgress, progress)", loaderScript, StringComparison.Ordinal);
         Assert.Contains("markRuntimeReady", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("enableSkipStory();", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("function skipStory()", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("if (!canSkipStory)", loaderScript, StringComparison.Ordinal);
         Assert.Contains("beginBoot(isWorkspaceHandoff);", loaderScript.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.DoesNotContain(
             "minVisibleMs = 0;\n    document.body.classList.add(\"quote-ready\");",
