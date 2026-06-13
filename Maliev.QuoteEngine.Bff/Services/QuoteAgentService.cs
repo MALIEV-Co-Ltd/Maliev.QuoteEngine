@@ -112,6 +112,7 @@ internal sealed class QuoteAgentService(
             "quote_get_account_context" => BuildAccountContext(state),
             "quote_get_connectors" => BuildConnectorRegistry(state),
             "quote_search_customer_data" => SearchCustomerDataOrGateError(state, request.Arguments),
+            "quote_register_uploads" => RegisterUploadsOrGateError(state, request.Arguments),
             "quote_resume_project" => ResumeProjectOrGateError(state, request.Arguments),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
             "quote_calculate_estimate" => CalculateEstimate(state),
@@ -412,6 +413,60 @@ internal sealed class QuoteAgentService(
             signUpUrl = "/auth/sign-up?returnUrl=/quote/new",
             gates = QuoteAgentSessionStore.BuildGates(state, customerId.HasValue)
         };
+    }
+
+    private object RegisterUploadsOrGateError(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments)
+    {
+        var attachments = ReadUploadAttachments(arguments).ToList();
+        if (attachments.Count == 0)
+        {
+            return new
+            {
+                error = "Provide at least one uploaded manufacturing file to register.",
+                requiredGateCode = "upload_required",
+                actionType = "register_uploads",
+                state = ToStateResponse(state)
+            };
+        }
+
+        foreach (var attachment in attachments)
+        {
+            if (!QuoteUploadConstraints.IsSupportedAttachmentFileName(attachment.FileName))
+            {
+                return new
+                {
+                    error = $"Upload {QuoteUploadConstraints.SupportedAttachmentExtensionLabel} files.",
+                    requiredGateCode = "unsupported_upload_type",
+                    actionType = "register_uploads",
+                    state = ToStateResponse(state)
+                };
+            }
+
+            if (attachment.FileSizeBytes <= 0 || attachment.FileSizeBytes > QuoteUploadConstraints.MaxFileSizeBytes)
+            {
+                return new
+                {
+                    error = $"Quote Engine accepts files up to {QuoteUploadConstraints.MaxFileSizeMegabytes} MB.",
+                    requiredGateCode = "upload_file_size",
+                    actionType = "register_uploads",
+                    state = ToStateResponse(state)
+                };
+            }
+        }
+
+        var requirements = ReadString(arguments, "requirements") ?? "Register uploaded manufacturing files.";
+        var request = new QuoteAgentMessageRequest
+        {
+            Message = requirements,
+            Attachments = attachments
+        };
+
+        sessionStore.AddAttachments(state, attachments);
+        MaterializeSupplementalAnalysis(state, request);
+        MaterializePrototypeParts(state, request);
+        return ToStateResponse(state);
     }
 
     private static QuoteAgentConnectorRegistryResponse BuildConnectorRegistry(QuoteAgentSessionState state)
@@ -1311,6 +1366,92 @@ Customer message:
             JsonValueKind.False => "false",
             _ => null
         };
+    }
+
+    private static IReadOnlyList<QuoteAgentAttachmentDto> ReadUploadAttachments(
+        IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        if (arguments.TryGetValue("files", out var files) && files.ValueKind == JsonValueKind.Array)
+        {
+            return files.EnumerateArray()
+                .Select(ReadUploadAttachment)
+                .Where(attachment => !string.IsNullOrWhiteSpace(attachment.FileName))
+                .ToArray();
+        }
+
+        var single = ReadUploadAttachment(arguments);
+        return string.IsNullOrWhiteSpace(single.FileName) ? [] : [single];
+    }
+
+    private static QuoteAgentAttachmentDto ReadUploadAttachment(IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        return new QuoteAgentAttachmentDto
+        {
+            FileName = ReadString(arguments, "file_name") ?? ReadString(arguments, "fileName") ?? string.Empty,
+            ContentType = ReadString(arguments, "content_type") ?? ReadString(arguments, "contentType") ?? "application/octet-stream",
+            FileSizeBytes = ReadLong(arguments, "file_size_bytes", 0) is var snakeSize && snakeSize > 0
+                ? snakeSize
+                : ReadLong(arguments, "fileSizeBytes", 0),
+            Kind = ReadString(arguments, "kind") ?? "supplemental",
+            UploadId = ReadString(arguments, "upload_id") ?? ReadString(arguments, "uploadId"),
+            StoragePath = ReadString(arguments, "storage_path") ?? ReadString(arguments, "storagePath"),
+            Url = ReadString(arguments, "url")
+        };
+    }
+
+    private static QuoteAgentAttachmentDto ReadUploadAttachment(JsonElement element)
+    {
+        return new QuoteAgentAttachmentDto
+        {
+            FileName = ReadElementString(element, "file_name", "fileName") ?? string.Empty,
+            ContentType = ReadElementString(element, "content_type", "contentType") ?? "application/octet-stream",
+            FileSizeBytes = ReadElementLong(element, "file_size_bytes", "fileSizeBytes"),
+            Kind = ReadElementString(element, "kind") ?? "supplemental",
+            UploadId = ReadElementString(element, "upload_id", "uploadId"),
+            StoragePath = ReadElementString(element, "storage_path", "storagePath"),
+            Url = ReadElementString(element, "url")
+        };
+    }
+
+    private static long ReadLong(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        string key,
+        long fallback)
+    {
+        var value = ReadString(arguments, key);
+        return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
+    }
+
+    private static string? ReadElementString(JsonElement element, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!element.TryGetProperty(key, out var value))
+            {
+                continue;
+            }
+
+            return value.ValueKind switch
+            {
+                JsonValueKind.String => value.GetString(),
+                JsonValueKind.Number => value.GetRawText(),
+                JsonValueKind.True => "true",
+                JsonValueKind.False => "false",
+                _ => null
+            };
+        }
+
+        return null;
+    }
+
+    private static long ReadElementLong(JsonElement element, params string[] keys)
+    {
+        var value = ReadElementString(element, keys);
+        return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : 0;
     }
 
     private static bool TryReadGuid(

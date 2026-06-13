@@ -248,6 +248,85 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_register_uploads_tool_materializes_geometry_and_supplemental_context()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var state = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement("Quote this CNC housing as 10 aluminum pieces.", JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "housing.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "agent-upload-cad",
+                        storage_path = "quotes/temp/session/agent-upload-cad/housing.step"
+                    },
+                    new
+                    {
+                        file_name = "housing-drawing.pdf",
+                        content_type = "application/pdf",
+                        file_size_bytes = 88_000,
+                        kind = "drawing",
+                        upload_id = "agent-upload-drawing",
+                        storage_path = "quotes/temp/session/agent-upload-drawing/housing-drawing.pdf"
+                    }
+                }, JsonOptions)
+            });
+
+        Assert.Equal(sessionId, state.SessionId);
+        Assert.Equal(2, state.Attachments.Count);
+        var part = Assert.Single(state.Parts);
+        Assert.Equal("housing.step", part.FileName);
+        Assert.Equal("agent-upload-cad", part.UploadId);
+        Assert.Single(part.DrawingFiles);
+        Assert.Contains(state.Gates, gate => gate.Code == "geometry_required" && gate.Status == "passed");
+        Assert.Contains(state.Gates, gate => gate.Code == "analysis_complete" && gate.Status == "passed");
+        Assert.Contains(state.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "viewer" && artifact.Status == "ready");
+        Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "dfm" && artifact.Status == "ready");
+        Assert.NotNull(state.Estimate);
+    }
+
+    [Fact]
+    public async Task Agent_register_uploads_tool_rejects_unsupported_attachment_extension()
+    {
+        using var client = factory.CreateClient();
+
+        var json = await ExecuteToolAsync(
+            client,
+            Guid.NewGuid(),
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "macro.xlsm",
+                        content_type = "application/vnd.ms-excel.sheet.macroEnabled.12",
+                        file_size_bytes = 42_000,
+                        kind = "supplemental"
+                    }
+                }, JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("unsupported_upload_type", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("register_uploads", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Contains("STEP", document.RootElement.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Agent_tool_endpoint_rejects_missing_signed_context()
     {
         using var client = factory.CreateClient();
