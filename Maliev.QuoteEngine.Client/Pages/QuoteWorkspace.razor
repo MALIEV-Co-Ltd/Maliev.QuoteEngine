@@ -87,52 +87,14 @@
 
             @if (SelectedPart is null)
             {
-                <section class="qe-empty-state">
-                    <div class="@EmptyStateGridClass">
-                        <button id="@HeroDropzoneId" type="button" class="qe-dropzone qe-dropzone--hero">
-                            <span class="qe-dropzone-icon" aria-hidden="true">
-                                <MudIcon Icon="@Icons.Material.Outlined.CloudUpload" Size="Size.Small" />
-                            </span>
-                            <span>@UploadHeroLabel</span>
-                            <small>@UploadHeroHint</small>
-                        </button>
-                        @if (ShowDemoSampleCard)
-                        {
-                            <article class="qe-demo-sample-card">
-                                <span class="qe-launch-card-icon qe-launch-card-icon--file" aria-hidden="true">
-                                    <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
-                                </span>
-                                <div class="qe-launch-card-body">
-                                    <strong>@Text("Try the Quote Engine", "ทดลองใช้ Quote Engine")</strong>
-                                    <p>@Text("Use our sample file to see how it works.", "ใช้ไฟล์ตัวอย่างของเราเพื่อดูขั้นตอนการทำงาน")</p>
-                                    <button type="button" class="qe-secondary-btn" @onclick="LoadSampleFileAsync">
-                                        <span>@Text("Use sample file", "ใช้ไฟล์ตัวอย่าง")</span>
-                                        <MudIcon Icon="@Icons.Material.Outlined.ArrowForward" Size="Size.Small" />
-                                    </button>
-                                </div>
-                            </article>
-                        }
-                        @if (ShowLaunchAccountCard)
-                        {
-                            <article class="qe-launch-account-card">
-                                <span class="qe-launch-card-icon qe-launch-card-icon--account" aria-hidden="true">
-                                    <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Small" />
-                                </span>
-                                <div class="qe-launch-card-body">
-                                    <strong>@Text("Already have an account?", "มีบัญชีอยู่แล้ว?")</strong>
-                                    <p>@Text("Sign in to save quotes, track orders, and manage your projects.", "เข้าสู่ระบบเพื่อบันทึกราคา ติดตามคำสั่งซื้อ และจัดการโปรเจกต์")</p>
-                                    <div class="qe-launch-actions">
-                                        <a class="qe-primary-btn qe-launch-signin" href="/auth/sign-in?returnUrl=/quote/new">@Text("Sign in", "เข้าสู่ระบบ")</a>
-                                        <button type="button" class="qe-secondary-btn qe-launch-assistant" @onclick="OpenAssistantAsync">
-                                            <MudIcon Icon="@Icons.Material.Filled.SupportAgent" Size="Size.Small" />
-                                            @Text("Ask assistant", "ถามผู้ช่วย")
-                                        </button>
-                                    </div>
-                                </div>
-                            </article>
-                        }
-                    </div>
-                </section>
+                <QuoteAgentLaunchShell SessionId="@AgentSessionId"
+                                       IsSignedIn="@IsSignedIn"
+                                       IsDemoMode="@IsDemoMode"
+                                       ShowDemoSampleCard="@ShowDemoSampleCard"
+                                       ShowLaunchAccountCard="@ShowLaunchAccountCard"
+                                       Culture="@Culture"
+                                       OnUploadRequested="OpenFilePickerAsync"
+                                       OnSampleRequested="LoadSampleFileAsync" />
             }
             else
             {
@@ -266,6 +228,7 @@
     private bool ShowDemoSampleCard => !IsSignedIn && !IsDemoMode;
     private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;
     private string EmptyStateGridClass => "qe-empty-state-grid qe-empty-state-grid--solo";
+    private Guid AgentSessionId => Guid.TryParse(_quoteSessionId, out var parsed) ? parsed : Guid.Empty;
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 

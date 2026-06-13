@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Maliev.QuoteEngine.Shared.Account;
+using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Chatbot;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Maliev.QuoteEngine.Shared.ReferenceData;
@@ -233,6 +234,30 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     {
         return await httpClient.GetFromJsonAsync<CustomerChatbotSessionResponse>("quote/v1/chatbot/session", cancellationToken)
             ?? new CustomerChatbotSessionResponse();
+    }
+
+    public Task<QuoteAgentTurnResponse> SendAgentMessageAsync(QuoteAgentMessageRequest request, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<QuoteAgentMessageRequest, QuoteAgentTurnResponse>("quote/v1/agent/messages", request, cancellationToken);
+    }
+
+    public async Task<QuoteAgentStateResponse> GetAgentStateAsync(Guid sessionId, CancellationToken cancellationToken = default)
+    {
+        return await GetFromJsonOrFallbackAsync(
+            $"quote/v1/agent/sessions/{sessionId:D}",
+            new QuoteAgentStateResponse { SessionId = sessionId },
+            cancellationToken);
+    }
+
+    public Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync(
+        Guid actionId,
+        QuoteAgentConfirmActionRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return PostAsync<QuoteAgentConfirmActionRequest, QuoteAgentActionResultResponse>(
+            $"quote/v1/agent/actions/{actionId:D}/confirm",
+            request,
+            cancellationToken);
     }
 
     private async Task<TResponse> PostAsync<TRequest, TResponse>(string uri, TRequest request, CancellationToken cancellationToken)

@@ -588,22 +588,21 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void New_quote_workspace_gives_anonymous_users_demo_and_help_actions()
+    public void New_quote_workspace_uses_chat_first_agent_shell_for_anonymous_start()
     {
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var script = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
 
         Assert.DoesNotContain("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
-        Assert.Contains("Use sample file", source, StringComparison.Ordinal);
+        Assert.Contains("<QuoteAgentLaunchShell", source, StringComparison.Ordinal);
+        Assert.Contains("SessionId=\"@AgentSessionId\"", source, StringComparison.Ordinal);
+        Assert.Contains("OnUploadRequested=\"OpenFilePickerAsync\"", source, StringComparison.Ordinal);
+        Assert.Contains("OnSampleRequested=\"LoadSampleFileAsync\"", source, StringComparison.Ordinal);
         Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
         Assert.Contains("await LoadDemoProjectAsync();", source, StringComparison.Ordinal);
         Assert.Contains("private bool ShowDemoSampleCard => !IsSignedIn && !IsDemoMode;", source, StringComparison.Ordinal);
         Assert.Contains("private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;", source, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-launch-account-card\"", source, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-primary-btn qe-launch-signin\"", source, StringComparison.Ordinal);
-        Assert.Contains("href=\"/auth/sign-in?returnUrl=/quote/new\"", source, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-secondary-btn qe-launch-assistant\"", source, StringComparison.Ordinal);
-        Assert.Contains("OpenAssistantAsync", source, StringComparison.Ordinal);
+        Assert.Contains("private Guid AgentSessionId", source, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
         Assert.Contains("private bool IsWorkspaceReady => _parts.Count > 0;", source, StringComparison.Ordinal);
         Assert.Contains("qe-pn-root is-launch-screen", source, StringComparison.Ordinal);
@@ -615,12 +614,9 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("fetch(sampleUrl", script, StringComparison.Ordinal);
         Assert.Contains("HandleDroppedFilesAsync", script, StringComparison.Ordinal);
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
-        Assert.Contains(".qe-dropzone::before", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-dropzone-icon", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-dropzone-icon .mud-icon-root", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-launch-account-card", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-launch-actions", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-launch-assistant .mud-icon-root", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-shell", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-workbench", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pdc-container {\n    position: relative;", styles, StringComparison.Ordinal);
         Assert.Contains("3D Model", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor"), StringComparison.Ordinal);
         Assert.Contains(".qe-dfm-tab {\n    flex: 1 1 0;", styles, StringComparison.Ordinal);
@@ -649,6 +645,37 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("Temporary upload storage until you sign in", source, StringComparison.Ordinal);
         Assert.DoesNotContain("max 10 GB per file", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Sign in before uploading customer-owned manufacturing files.", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_has_monochrome_chatgpt_like_contract()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var agentStyles = ExtractSourceBlock(styles, "/* Quote agent chat-first shell */", "/* End quote agent chat-first shell */");
+
+        Assert.Contains("class=\"qe-agent-shell\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-rail\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-composer\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-workbench\"", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.AttachFile", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Filled.Send", component, StringComparison.Ordinal);
+        Assert.Contains("SendAgentMessageAsync", component, StringComparison.Ordinal);
+        Assert.Contains("ConfirmAgentActionAsync", component, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentGateDto", component, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentProposedActionDto", component, StringComparison.Ordinal);
+        Assert.Contains("Task HandleSubmitAsync()", component, StringComparison.Ordinal);
+
+        Assert.Contains("Task<QuoteAgentTurnResponse> SendAgentMessageAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync", apiClient, StringComparison.Ordinal);
+
+        Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-shell", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: 220px minmax(0, 1fr) 340px;", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("#0a72ef", agentStyles, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("#0072f5", agentStyles, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("var(--accent", agentStyles, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("blue", agentStyles, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
