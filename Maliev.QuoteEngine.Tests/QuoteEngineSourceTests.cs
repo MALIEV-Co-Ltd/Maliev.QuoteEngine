@@ -2387,11 +2387,12 @@ public sealed class QuoteEngineSourceTests
     public void QuoteWorkspace_payment_auth_redirect_returns_to_order_checkout_context()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var initiatePayment = ExtractSourceBlock(workspace, "private async Task InitiatePaymentAsync()", "private async Task RequestFreshViewerUrlAsync");
 
         Assert.Contains("CheckoutReturnUrl", workspace, StringComparison.Ordinal);
         Assert.Contains("$\"/orders/{Uri.EscapeDataString(_order.OrderNumber)}\"", workspace, StringComparison.Ordinal);
-        Assert.Contains("Navigation.NavigateTo($\"/auth/sign-in?returnUrl={Uri.EscapeDataString(CheckoutReturnUrl)}\")", workspace, StringComparison.Ordinal);
-        Assert.DoesNotContain("Navigation.NavigateTo(\"/auth/sign-in?returnUrl=/quote/new\");\r\n            return;\r\n        }\r\n\r\n        _paymentBusy = true", workspace, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo($\"/auth/sign-in?returnUrl={Uri.EscapeDataString(CheckoutReturnUrl)}\")", initiatePayment, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigation.NavigateTo(\"/auth/sign-in?returnUrl=/quote/new\")", initiatePayment, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -3164,6 +3165,17 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("enabled = transition.Enabled", viewer, StringComparison.Ordinal);
         Assert.Contains("fallbackDelayMs = transition.FallbackDelayMs", viewer, StringComparison.Ordinal);
         Assert.Contains("transitionMs = transition.TransitionMs", viewer, StringComparison.Ordinal);
+    }
+
+    private static string ExtractSourceBlock(string source, string startMarker, string endMarker)
+    {
+        var start = source.IndexOf(startMarker, StringComparison.Ordinal);
+        Assert.True(start >= 0, $"Start marker was not found: {startMarker}");
+
+        var end = source.IndexOf(endMarker, start, StringComparison.Ordinal);
+        Assert.True(end > start, $"End marker was not found after start marker: {endMarker}");
+
+        return source[start..end];
     }
 }
 

@@ -699,7 +699,7 @@
     {
         if (!IsSignedIn || IsDemoMode)
         {
-            Navigation.NavigateTo($"/auth/sign-in?returnUrl={Uri.EscapeDataString(CheckoutReturnUrl)}");
+            Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
         }
 
@@ -818,7 +818,7 @@
 
         if (!IsSignedIn || IsDemoMode)
         {
-            Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
+            Navigation.NavigateTo($"/auth/sign-in?returnUrl={Uri.EscapeDataString(CheckoutReturnUrl)}");
             return;
         }
 
