@@ -29,7 +29,10 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
 
     public async Task<QuoteEngineDemoProjectResponse?> GetDemoProjectAsync(CancellationToken cancellationToken = default)
     {
-        return await httpClient.GetFromJsonAsync<QuoteEngineDemoProjectResponse>("quote/v1/demo/project", cancellationToken);
+        return await GetFromJsonOrFallbackAsync<QuoteEngineDemoProjectResponse?>(
+            "quote/v1/demo/project",
+            null,
+            cancellationToken);
     }
 
     public async Task<QuoteAuthStatusResponse> GetAuthStatusAsync(CancellationToken cancellationToken = default)

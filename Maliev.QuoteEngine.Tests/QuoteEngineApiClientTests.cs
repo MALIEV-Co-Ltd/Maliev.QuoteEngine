@@ -38,6 +38,16 @@ public sealed class QuoteEngineApiClientTests
         Assert.Null(authStatus.DisplayName);
     }
 
+    [Fact]
+    public async Task GetDemoProjectAsync_WhenApiReturnsHtml_FallsBackToNull()
+    {
+        var client = CreateClient("<!doctype html><html><body>Client shell</body></html>");
+
+        var demoProject = await client.GetDemoProjectAsync();
+
+        Assert.Null(demoProject);
+    }
+
     private static QuoteEngineApiClient CreateClient(string responseBody)
     {
         var httpClient = new HttpClient(new StaticResponseHandler(responseBody))
