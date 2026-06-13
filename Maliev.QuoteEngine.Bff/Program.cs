@@ -5,7 +5,6 @@ using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Consumers;
 using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Options;
-using Maliev.QuoteEngine.Bff.Pages;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
@@ -131,7 +130,7 @@ app.MapStaticAssets().ShortCircuit();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/", LandingPageRenderer.RenderAsync).ExcludeFromDescription();
+app.MapGet("/", RenderClientAppAsync).ExcludeFromDescription();
 // Auth pages redirect to Maliev.Web — QuoteEngine has no own sign-in surface.
 app.MapGet("/auth/sign-in", (HttpContext context) => RedirectToWebAuth(context, "sign-in")).ExcludeFromDescription();
 app.MapGet("/auth/sign-up", (HttpContext context) => RedirectToWebAuth(context, "sign-up")).ExcludeFromDescription();
@@ -167,30 +166,7 @@ app.MapFallback(async context =>
         return;
     }
 
-    var indexPath = Program.ResolveStaticWebAssetPath("index.html");
-    if (indexPath is null)
-    {
-        context.Response.StatusCode = StatusCodes.Status404NotFound;
-        return;
-    }
-
-    // Inject auth state into the page so Blazor pre-hydrates on first paint — no API round-trip needed.
-    // Authenticated users see their account info in the header immediately; unauthenticated (/demo)
-    // see the sign-in button immediately. Both cases eliminate the sign-in button flash.
-    var displayName = user.FindFirst(ClaimTypes.Name)?.Value
-        ?? user.FindFirst(ClaimTypes.Email)?.Value
-        ?? string.Empty;
-    var authJson = isAuthenticated
-        ? $"{{\"isSignedIn\":true,\"customerId\":{JsonSerializer.Serialize(customerId)},\"displayName\":{JsonSerializer.Serialize(displayName)}}}"
-        : "{\"isSignedIn\":false,\"customerId\":null,\"displayName\":null}";
-
-    var html = await File.ReadAllTextAsync(indexPath, context.RequestAborted);
-    html = html.Replace("</head>",
-        $"<script>window.getMalievAuth=function(){{return {authJson};}};</script></head>",
-        StringComparison.OrdinalIgnoreCase);
-
-    context.Response.ContentType = "text/html; charset=utf-8";
-    await context.Response.WriteAsync(html, context.RequestAborted);
+    await RenderClientAppAsync(context);
 });
 
 app.Run();
@@ -236,6 +212,37 @@ static bool IsSameOriginReturnUrl(HttpContext context, Uri returnUrl)
            && (requestPort.HasValue
                ? returnUrl.Port == requestPort.Value
                : returnUrl.IsDefaultPort);
+}
+
+static async Task RenderClientAppAsync(HttpContext context)
+{
+    var indexPath = Program.ResolveStaticWebAssetPath("index.html");
+    if (indexPath is null)
+    {
+        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        return;
+    }
+
+    var user = context.User;
+    var customerId = user.FindFirst("customer_id")?.Value;
+    var isAuthenticated = user.Identity?.IsAuthenticated == true
+        && Guid.TryParse(customerId, out _);
+
+    // Inject auth state into the page so Blazor pre-hydrates on first paint.
+    var displayName = user.FindFirst(ClaimTypes.Name)?.Value
+        ?? user.FindFirst(ClaimTypes.Email)?.Value
+        ?? string.Empty;
+    var authJson = isAuthenticated
+        ? $"{{\"isSignedIn\":true,\"customerId\":{JsonSerializer.Serialize(customerId)},\"displayName\":{JsonSerializer.Serialize(displayName)}}}"
+        : "{\"isSignedIn\":false,\"customerId\":null,\"displayName\":null}";
+
+    var html = await File.ReadAllTextAsync(indexPath, context.RequestAborted);
+    html = html.Replace("</head>",
+        $"<script>window.getMalievAuth=function(){{return {authJson};}};</script></head>",
+        StringComparison.OrdinalIgnoreCase);
+
+    context.Response.ContentType = "text/html; charset=utf-8";
+    await context.Response.WriteAsync(html, context.RequestAborted);
 }
 
 public partial class Program

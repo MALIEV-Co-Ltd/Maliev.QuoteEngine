@@ -827,21 +827,18 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     private static readonly Guid TestShippingAddressId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     [Fact]
-    public async Task Root_landing_is_server_rendered_without_loading_wasm_bundle()
+    public async Task Root_loads_chat_workspace_app_shell_anonymously()
     {
         using var client = factory.CreateClient();
 
         var html = await client.GetStringAsync("/");
 
-        Assert.Contains("class=\"landing-shell\"", html, StringComparison.Ordinal);
-        Assert.Contains("data-landing-appbar", html, StringComparison.Ordinal);
-        Assert.Contains("href=\"/demo\"", html, StringComparison.Ordinal);
-        Assert.Contains("href=\"/demo\" data-wasm-entry", html, StringComparison.Ordinal);
-        Assert.Contains("href=\"/auth/sign-in?returnUrl=/quote/new\"", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("href=\"/auth/sign-in?returnUrl=/quote/new\" data-wasm-entry", html, StringComparison.Ordinal);
-        Assert.Contains("sessionStorage.setItem(\"maliev.quote.workspace.handoff\"", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("_framework/blazor.webassembly.js", html, StringComparison.Ordinal);
-        Assert.DoesNotContain("_content/MudBlazor", html, StringComparison.Ordinal);
+        Assert.Contains("<div id=\"app\"></div>", html, StringComparison.Ordinal);
+        Assert.Contains("<div id=\"quote-startup\"", html, StringComparison.Ordinal);
+        Assert.Contains("_framework/blazor.webassembly.js", html, StringComparison.Ordinal);
+        Assert.Contains("window.getMalievAuth=function(){return {\"isSignedIn\":false", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"landing-shell\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("Get manufacturing quotes", html, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -689,34 +689,24 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void Landing_page_is_server_rendered_and_hands_workspace_routes_to_wasm()
+    public void Root_route_is_chat_workspace_and_auth_routes_redirect_to_web()
     {
         var program = ReadRepoFile("Maliev.QuoteEngine.Bff", "Program.cs");
-        var landingPath = RepoPath("Maliev.QuoteEngine.Bff", "Pages", "LandingPageRenderer.cs");
         var authPath = RepoPath("Maliev.QuoteEngine.Bff", "Pages", "AuthPageRenderer.cs");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var loader = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
         var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
 
-        Assert.Contains("app.MapGet(\"/\", LandingPageRenderer.RenderAsync)", program, StringComparison.Ordinal);
+        Assert.Contains("app.MapGet(\"/\", RenderClientAppAsync)", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("LandingPageRenderer.RenderAsync", program, StringComparison.Ordinal);
+        Assert.Contains("@page \"/\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("@page \"/quote/new\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("<QuoteAgentLaunchShell", workspace, StringComparison.Ordinal);
         // Auth routes redirect to Maliev.Web — QuoteEngine has no own sign-in surface.
         Assert.Contains("app.MapGet(\"/auth/sign-in\"", program, StringComparison.Ordinal);
         Assert.Contains("app.MapGet(\"/auth/sign-up\"", program, StringComparison.Ordinal);
         Assert.Contains("RedirectToWebAuth", program, StringComparison.Ordinal);
-        Assert.True(File.Exists(landingPath), "The BFF should own a server-rendered landing page for /.");
         Assert.True(File.Exists(authPath), "The BFF should own server-rendered auth pages before the WASM fallback.");
-
-        var landing = File.ReadAllText(landingPath);
-        Assert.Contains("class=\"landing-shell\"", landing, StringComparison.Ordinal);
-        Assert.Contains("data-landing-appbar", landing, StringComparison.Ordinal);
-        Assert.Contains("@keyframes landing-brand-inset", landing, StringComparison.Ordinal);
-        Assert.Contains("@keyframes landing-actions-inset", landing, StringComparison.Ordinal);
-        Assert.Contains("\"/auth/sign-in?returnUrl=/quote/new\"", landing, StringComparison.Ordinal);
-        Assert.Contains("WorkspaceLinkAttribute(primaryHref)", landing, StringComparison.Ordinal);
-        Assert.Contains("WorkspaceLinkAttribute(topActionHref)", landing, StringComparison.Ordinal);
-        Assert.Contains("href=\"/demo\"", landing, StringComparison.Ordinal);
-        Assert.Contains("sessionStorage.setItem(\"maliev.quote.workspace.handoff\"", landing, StringComparison.Ordinal);
-        Assert.DoesNotContain("_framework/blazor.webassembly.js", landing, StringComparison.Ordinal);
-        Assert.DoesNotContain("MudBlazor", landing, StringComparison.Ordinal);
 
         var auth = File.ReadAllText(authPath);
         Assert.Contains("class=\"auth-shell\"", auth, StringComparison.Ordinal);
