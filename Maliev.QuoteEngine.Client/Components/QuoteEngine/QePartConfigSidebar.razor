@@ -26,6 +26,7 @@
                               aria-label="@selProc.Name">
                         </span>
                         <span class="qe-pcs-process-selected-copy">
+                            <span class="qe-pcs-process-category">@ProcessCategory(selProc.Id)</span>
                             <span class="qe-pcs-process-selected-name">@selProc.Name</span>
                             <span class="qe-pcs-process-selected-desc">@ProcessDescription(selProc.Id)</span>
                         </span>
@@ -51,7 +52,7 @@
                            @bind:event="oninput" />
                 </div>
                 <div class="qe-pcs-process-row">
-                    @foreach (var process in ReferenceData?.Processes ?? [])
+                    @foreach (var process in FilteredProcesses)
                     {
                         var active = Part.ProcessId == process.Id;
                         var cardClass = active
@@ -75,10 +76,15 @@
                                   aria-label="@process.Name">
                             </span>
                             <span class="qe-pcs-process-copy">
+                                <span class="qe-pcs-process-category">@ProcessCategory(process.Id)</span>
                                 <span class="qe-pcs-process-name">@process.Name</span>
                                 <span class="qe-pcs-process-description">@ProcessDescription(process.Id)</span>
                             </span>
                         </button>
+                    }
+                    @if (!FilteredProcesses.Any())
+                    {
+                        <div class="qe-pcs-process-no-results">@Text("No processes match", "ไม่พบกระบวนการที่ตรงกับ") "@_processSearch"</div>
                     }
                 </div>
             }
@@ -756,6 +762,7 @@
     private async Task SetProcess(ProcessOptionDto process)
     {
         _processPickerOpen = false;  // collapse to selected-process pill
+        _processSearch = "";
         Part.ApplyProjectNewProcessSelection(process.Id, ReferenceData);
         ApplyFinishOptionDefaults();
         await NotifyChanged();
@@ -1146,6 +1153,23 @@
                 _ => Text("Custom manufacturing route", "กระบวนการผลิตแบบกำหนดเอง")
             };
     }
+
+    private string ProcessCategory(string processId) =>
+        NormalizeProcessAssetCode(processId) switch
+        {
+            "cnc" or "cnc_mill" => Text("CNC Machining", "การกัดซีเอ็นซี"),
+            "cnc_turn" => Text("CNC Machining", "การกลึงซีเอ็นซี"),
+            "fdm" => Text("3D Printing · FDM", "พิมพ์ 3 มิติ · FDM"),
+            "sla_dlp" => Text("3D Printing · Resin", "พิมพ์ 3 มิติ · เรซิน"),
+            "sls" => Text("3D Printing · SLS", "พิมพ์ 3 มิติ · SLS"),
+            "mjf" => Text("3D Printing · MJF", "พิมพ์ 3 มิติ · MJF"),
+            "mj" => Text("3D Printing · Material Jet", "พิมพ์ 3 มิติ · Material Jet"),
+            "bj" => Text("3D Printing · Binder Jet", "พิมพ์ 3 มิติ · Binder Jet"),
+            "dmls" => Text("Metal AM · DMLS", "โลหะ AM · DMLS"),
+            "sheet_metal" => Text("Sheet Metal", "โลหะแผ่น"),
+            "injection_mold" => Text("Injection Molding", "การฉีดขึ้นรูป"),
+            _ => Text("Manufacturing", "การผลิต"),
+        };
 
     private static string NormalizeProcessAssetCode(string processId)
     {

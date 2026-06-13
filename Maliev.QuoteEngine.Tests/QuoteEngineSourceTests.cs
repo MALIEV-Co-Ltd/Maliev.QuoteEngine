@@ -2129,10 +2129,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("aria-pressed=\"@active\"", src, StringComparison.Ordinal);
         Assert.Contains("qe-pcs-process-card--dimmed", src, StringComparison.Ordinal);
         Assert.Contains("ProcessDescription(process.Id)", src, StringComparison.Ordinal);
+        Assert.Contains("ProcessCategory(process.Id)", src, StringComparison.Ordinal);
+        Assert.Contains("ProcessCategory(selProc.Id)", src, StringComparison.Ordinal);
+        Assert.Contains("qe-pcs-process-no-results", src, StringComparison.Ordinal);
+        Assert.Contains("FilteredProcesses", src, StringComparison.Ordinal);
 
         Assert.Contains(".qe-pcs-process-row", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pcs-process-photo", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-process-category", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pcs-process-description", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-pcs-process-no-results", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pcs-process-card--dimmed", styles, StringComparison.Ordinal);
         Assert.Contains("flex: 0 0 112px;", styles, StringComparison.Ordinal);
     }

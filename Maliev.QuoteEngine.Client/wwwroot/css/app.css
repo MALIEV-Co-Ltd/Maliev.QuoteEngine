@@ -6843,6 +6843,20 @@ body.mud-blazor {
     line-height: 1.15;
 }
 
+.qe-pcs-process-category {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--maliev-accent, #3b82f6);
+    opacity: 0.72;
+    margin-bottom: 1px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
 .qe-pcs-process-description {
     display: -webkit-box;
     padding: 0;
@@ -6850,9 +6864,18 @@ body.mud-blazor {
     color: var(--maliev-muted);
     font-size: var(--maliev-font-micro);
     font-weight: 500;
-    line-height: 1.25;
+    line-height: 1.35;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
+    margin-top: 2px;
+}
+
+.qe-pcs-process-no-results {
+    text-align: center;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-small);
+    padding: 24px 8px;
+    opacity: 0.7;
 }
 
 /* ── Process Selected Pill (collapsed state) ─────────────────────────── */
@@ -8273,17 +8296,27 @@ button.qe-dfm-overlay-header {
         overflow-y: auto;
     }
 
-    /* Cards share height equally, capped so many cards stay comfortable */
+    /* Search input must not grow — it sits between header and card list */
+    .qe-pcs-section:has(.qe-pcs-process-row) .qe-pcs-process-search {
+        flex-shrink: 0;
+    }
+
+    /* Cards share height equally, capped at 220px for richer content */
     .qe-pcs-section:has(.qe-pcs-process-row) .qe-pcs-process-card {
         flex: 1;
-        max-height: 160px;
+        max-height: 220px;
         align-items: stretch;
     }
 
     /* Photo fills full card height (not fixed 80px) */
     .qe-pcs-section:has(.qe-pcs-process-row) .qe-pcs-process-photo {
         height: auto;
-        flex: 0 0 96px;
+        flex: 0 0 100px;
+    }
+
+    /* Allow up to 3 description lines in desktop sidebar mode */
+    .qe-pcs-section:has(.qe-pcs-process-row) .qe-pcs-process-description {
+        -webkit-line-clamp: 3;
     }
 
     /* Copy text centred vertically in taller cards */
