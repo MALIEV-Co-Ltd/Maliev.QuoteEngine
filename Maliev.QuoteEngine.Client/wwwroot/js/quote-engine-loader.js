@@ -223,10 +223,6 @@
       window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
 
-  function hasSeenStory() {
-    return getPreference("maliev.makestudio.story.seen") === "1";
-  }
-
   function beginBoot(isWorkspaceHandoff) {
     const stage = document.getElementById("quote-startup");
     storyBeats = stage
@@ -234,13 +230,12 @@
       : [];
     bootStartedAt = Date.now();
 
-    // Tell the full story only on the Web → Studio handoff. Organic visits stay
+    // Tell the full story on every Web → Studio handoff. Organic visits stay
     // quiet so the chat workspace remains the first real experience.
-    const wantsStory = isWorkspaceHandoff && !hasSeenStory();
+    const wantsStory = isWorkspaceHandoff;
     storyMode = wantsStory && !prefersReducedMotion() ? "full" : "quiet";
 
     if (storyMode === "full") {
-      setPreference("maliev.makestudio.story.seen", "1");
       minVisibleMs = STORY_BEAT_MS.reduce(function (sum, ms) { return sum + ms; }, 0) + FINALE_HOLD_MS;
       showBeat(0);
     } else {
@@ -292,6 +287,15 @@
   }
 
   function consumeWorkspaceHandoff() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("handoff") || params.get("source") === "web") {
+        return true;
+      }
+    } catch {
+      // URLSearchParams can fail in very old or constrained browser contexts.
+    }
+
     try {
       const handoff = window.sessionStorage.getItem("maliev.quote.workspace.handoff");
       if (handoff) {

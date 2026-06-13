@@ -1549,12 +1549,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("function skipStory()", loaderScript, StringComparison.Ordinal);
         Assert.Contains("if (!canSkipStory)", loaderScript, StringComparison.Ordinal);
         Assert.Contains("beginBoot(isWorkspaceHandoff);", loaderScript.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("params.has(\"handoff\")", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("params.get(\"source\") === \"web\"", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("const wantsStory = isWorkspaceHandoff;", loaderScript, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "minVisibleMs = 0;\n    document.body.classList.add(\"quote-ready\");",
             loaderScript.ReplaceLineEndings("\n"),
             StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "function markRuntimeReady() {\n    enableSkipStory();",
+            loaderScript.ReplaceLineEndings("\n"),
+            StringComparison.Ordinal);
         Assert.Contains("ms-beat--on", loaderScript, StringComparison.Ordinal);
-        Assert.Contains("maliev.makestudio.story.seen", loaderScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("maliev.makestudio.story.seen", loaderScript, StringComparison.Ordinal);
         Assert.Contains("Preparing Make Studio", loaderScript, StringComparison.Ordinal);
 
         // Localization: Thai display language carried from Maliev.Web survives the
