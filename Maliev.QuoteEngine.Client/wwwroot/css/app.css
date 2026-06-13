@@ -1016,6 +1016,348 @@
     color: var(--qe-agent-ink);
 }
 
+.qe-agent-message--workbench,
+.qe-agent-message--workbench .qe-agent-bubble {
+    max-width: min(860px, 100%);
+}
+
+.qe-agent-workflow {
+    display: grid;
+    gap: 14px;
+    margin-top: 18px;
+}
+
+.qe-agent-flow-card {
+    display: grid;
+    gap: 14px;
+    padding: 16px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 14px;
+    background: var(--qe-agent-raised);
+}
+
+.qe-agent-flow-card > header {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.qe-agent-flow-card > header strong {
+    display: block;
+    color: var(--qe-agent-ink);
+    font-size: 16px;
+    line-height: 1.25;
+}
+
+.qe-agent-flow-card > header small,
+.qe-agent-flow-card > header b {
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.qe-agent-analysis-card > div,
+.qe-agent-dfm-card > div,
+.qe-agent-price-lines,
+.qe-agent-order-card > div {
+    display: grid;
+    gap: 8px;
+}
+
+.qe-agent-analysis-step {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-analysis-step.is-complete {
+    color: #16a34a;
+}
+
+.qe-agent-analysis-step.is-active {
+    color: var(--qe-agent-primary);
+}
+
+.qe-agent-analysis-step span {
+    display: block;
+    color: var(--qe-agent-ink);
+    font-size: 14px;
+}
+
+.qe-agent-analysis-step small {
+    color: var(--qe-agent-muted);
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-size: 12px;
+}
+
+.qe-agent-spec-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.qe-agent-spec-summary div {
+    display: grid;
+    gap: 4px;
+    padding: 13px;
+    border-right: 1px solid var(--qe-agent-line);
+}
+
+.qe-agent-spec-summary div:last-child {
+    border-right: 0;
+}
+
+.qe-agent-spec-summary span,
+.qe-agent-options-card section > header {
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.qe-agent-spec-summary strong {
+    color: var(--qe-agent-ink);
+    font-size: 15px;
+}
+
+.qe-agent-requirements-card table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.qe-agent-requirements-card th,
+.qe-agent-requirements-card td {
+    padding: 10px;
+    border-bottom: 1px solid var(--qe-agent-line);
+    color: var(--qe-agent-ink);
+    font-size: 13px;
+    text-align: left;
+}
+
+.qe-agent-requirements-card th {
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+}
+
+.qe-agent-source-pill {
+    display: inline-flex;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(22, 163, 74, .12);
+    color: #15803d;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.qe-agent-source-pill.is-assumed {
+    background: rgba(217, 119, 6, .14);
+    color: #b45309;
+}
+
+.qe-agent-source-pill.is-history {
+    background: color-mix(in srgb, var(--qe-agent-primary) 14%, transparent);
+    color: var(--qe-agent-primary);
+}
+
+.qe-agent-dfm-issue {
+    display: grid;
+    gap: 8px;
+    padding: 14px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 12px;
+}
+
+.qe-agent-dfm-issue.is-blocker {
+    border-color: rgba(220, 38, 38, .42);
+    background: rgba(220, 38, 38, .06);
+}
+
+.qe-agent-dfm-issue.is-confirm {
+    border-color: rgba(217, 119, 6, .38);
+    background: rgba(217, 119, 6, .06);
+}
+
+.qe-agent-dfm-issue.is-pass {
+    border-color: rgba(22, 163, 74, .34);
+    background: rgba(22, 163, 74, .05);
+}
+
+.qe-agent-dfm-issue header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.qe-agent-dfm-issue header span {
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: var(--qe-agent-soft);
+    color: var(--qe-agent-muted);
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.qe-agent-dfm-issue p,
+.qe-agent-dfm-issue small {
+    margin: 0;
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-dfm-issue small {
+    color: var(--qe-agent-primary);
+}
+
+.qe-agent-model-stage {
+    display: grid;
+    place-items: center;
+    min-height: 270px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 14px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--qe-agent-soft) 78%, transparent), transparent);
+    overflow: hidden;
+}
+
+.qe-agent-model-stage svg {
+    width: min(100%, 560px);
+    height: auto;
+}
+
+.qe-agent-model-stage ellipse:first-child {
+    fill: rgba(0, 0, 0, .12);
+}
+
+.qe-agent-model-stage polygon {
+    fill: #7ba4e8;
+    stroke: #4f76c7;
+    stroke-width: 2;
+}
+
+.qe-agent-model-stage rect,
+.qe-agent-model-stage ellipse:not(:first-child) {
+    fill: color-mix(in srgb, #111827 70%, #7ba4e8);
+}
+
+.qe-agent-model-stage path {
+    fill: none;
+    stroke: var(--qe-agent-primary);
+    stroke-width: 2;
+}
+
+.qe-agent-model-stage text {
+    fill: var(--qe-agent-primary);
+    font: 700 16px ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.qe-agent-model-tools,
+.qe-agent-quantity-breaks,
+.qe-agent-option-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.qe-agent-model-tools {
+    justify-content: center;
+}
+
+.qe-agent-model-tools span {
+    padding: 7px 12px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 10px;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+}
+
+.qe-agent-options-card section {
+    display: grid;
+    gap: 8px;
+}
+
+.qe-agent-option-grid button,
+.qe-agent-quantity-breaks button {
+    display: grid;
+    gap: 3px;
+    min-width: 130px;
+    padding: 12px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 12px;
+    background: transparent;
+    color: var(--qe-agent-ink);
+    cursor: pointer;
+    text-align: left;
+}
+
+.qe-agent-option-grid button.selected,
+.qe-agent-quantity-breaks button.selected {
+    border-color: var(--qe-agent-primary);
+    background: color-mix(in srgb, var(--qe-agent-primary) 12%, transparent);
+}
+
+.qe-agent-option-grid small,
+.qe-agent-quantity-breaks small {
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-price-total {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.qe-agent-price-total strong {
+    font-size: clamp(32px, 5vw, 44px);
+    line-height: 1;
+}
+
+.qe-agent-price-total span {
+    color: var(--qe-agent-primary);
+    font-weight: 700;
+}
+
+.qe-agent-price-lines div,
+.qe-agent-order-card section {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--qe-agent-line);
+}
+
+.qe-agent-price-lines span,
+.qe-agent-order-card span {
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-order-card footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.qe-agent-order-card footer button {
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--qe-agent-ink);
+    cursor: pointer;
+}
+
+.qe-agent-order-card footer button:first-child {
+    border-color: var(--qe-agent-primary);
+    background: var(--qe-agent-primary);
+    color: #ffffff;
+}
+
 .qe-agent-composer-wrap {
     display: grid;
     gap: 16px;

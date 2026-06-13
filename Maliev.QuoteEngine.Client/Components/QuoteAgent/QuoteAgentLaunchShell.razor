@@ -125,10 +125,244 @@
             {
                 @foreach (var message in _messages)
                 {
-                    <article class="@($"qe-agent-message qe-agent-message--{message.Role}")">
+                    <article class="@($"qe-agent-message qe-agent-message--{message.Role} {(message.Workbench is not null ? "qe-agent-message--workbench" : string.Empty)}")">
                         <div class="qe-agent-bubble">
                             <span>@RoleLabel(message.Role)</span>
                             <p>@message.Content</p>
+                            @if (message.Workbench is not null)
+                            {
+                                <section class="qe-agent-workflow" aria-label="@Text("Quote analysis artifacts", "ไฟล์วิเคราะห์ใบเสนอราคา")">
+                                    @if (message.Workbench.AnalysisSteps.Count > 0)
+                                    {
+                                        <article class="qe-agent-flow-card qe-agent-analysis-card">
+                                            <header>
+                                                <div>
+                                                    <strong>@Text("Analyzing attached files", "กำลังวิเคราะห์ไฟล์ที่แนบ")</strong>
+                                                    <small>@message.Workbench.AnalysisSummary</small>
+                                                </div>
+                                                <b>@message.Workbench.AnalysisProgress</b>
+                                            </header>
+                                            <div>
+                                                @foreach (var step in message.Workbench.AnalysisSteps)
+                                                {
+                                                    <div class="@($"qe-agent-analysis-step is-{step.Status}")">
+                                                        <MudIcon Icon="@StepIcon(step.Status)" Size="Size.Small" />
+                                                        <span>@Text(step.LabelEn, step.LabelTh)</span>
+                                                        <small>@step.Detail</small>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </article>
+                                    }
+
+                                    @if (message.Workbench.Requirements.Count > 0)
+                                    {
+                                        <article class="qe-agent-flow-card qe-agent-requirements-card">
+                                            <header>
+                                                <div>
+                                                    <strong>@Text("What I understood", "สิ่งที่เข้าใจจากข้อมูล")</strong>
+                                                    <small>@Text("Extracted from attachments and chat", "ดึงจากไฟล์แนบและบทสนทนา")</small>
+                                                </div>
+                                                <b>@message.Workbench.ProcessLabel</b>
+                                            </header>
+                                            <div class="qe-agent-spec-summary">
+                                                <div>
+                                                    <span>@Text("Part type", "ประเภทชิ้นงาน")</span>
+                                                    <strong>@message.Workbench.PartType</strong>
+                                                </div>
+                                                <div>
+                                                    <span>@Text("Material", "วัสดุ")</span>
+                                                    <strong>@message.Workbench.Material</strong>
+                                                </div>
+                                                <div>
+                                                    <span>@Text("Quantity", "จำนวน")</span>
+                                                    <strong>@message.Workbench.Quantity</strong>
+                                                </div>
+                                            </div>
+                                            <table>
+                                                <thead>
+                                                    <tr>
+                                                        <th>@Text("Feature", "คุณลักษณะ")</th>
+                                                        <th>@Text("Value", "ค่า")</th>
+                                                        <th>@Text("Source", "แหล่งที่มา")</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    @foreach (var requirement in message.Workbench.Requirements)
+                                                    {
+                                                        <tr>
+                                                            <td>@requirement.Feature</td>
+                                                            <td>@requirement.Value</td>
+                                                            <td><span class="@($"qe-agent-source-pill is-{requirement.SourceKind}")">@requirement.Source</span></td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </article>
+                                    }
+
+                                    @if (message.Workbench.DfmIssues.Count > 0)
+                                    {
+                                        <article class="qe-agent-flow-card qe-agent-dfm-card">
+                                            <header>
+                                                <div>
+                                                    <strong>@Text("Manufacturability (DFM)", "ความสามารถในการผลิต (DFM)")</strong>
+                                                    <small>@Text("Action needed before formal order", "ต้องดำเนินการก่อนสั่งผลิตจริง")</small>
+                                                </div>
+                                                <b>@Text("Action needed", "ต้องตรวจสอบ")</b>
+                                            </header>
+                                            <div>
+                                                @foreach (var issue in message.Workbench.DfmIssues)
+                                                {
+                                                    <section class="@($"qe-agent-dfm-issue is-{issue.Severity}")">
+                                                        <header>
+                                                            <MudIcon Icon="@DfmIcon(issue.Severity)" Size="Size.Small" />
+                                                            <strong>@issue.Title</strong>
+                                                            <span>@issue.Badge</span>
+                                                        </header>
+                                                        <p>@issue.Detail</p>
+                                                        @if (!string.IsNullOrWhiteSpace(issue.Resolution))
+                                                        {
+                                                            <small>@issue.Resolution</small>
+                                                        }
+                                                    </section>
+                                                }
+                                            </div>
+                                        </article>
+                                    }
+
+                                    @if (message.Workbench.ShowModelPreview)
+                                    {
+                                        <article class="qe-agent-flow-card qe-agent-model-card">
+                                            <header>
+                                                <div>
+                                                    <strong>@Text("3D model preview", "ตัวอย่างโมเดล 3D")</strong>
+                                                    <small>@Text("Viewer artifact will use the uploaded CAD/mesh when available", "ไฟล์ viewer จะใช้ CAD/mesh ที่อัปโหลดเมื่อพร้อม")</small>
+                                                </div>
+                                                <b>STEP / STL</b>
+                                            </header>
+                                            <div class="qe-agent-model-stage" aria-hidden="true">
+                                                <svg viewBox="0 0 520 320" role="img">
+                                                    <title>L bracket model preview</title>
+                                                    <ellipse cx="260" cy="254" rx="158" ry="32"></ellipse>
+                                                    <polygon points="126,184 288,110 382,146 218,226"></polygon>
+                                                    <polygon points="288,110 288,36 382,72 382,146"></polygon>
+                                                    <polygon points="218,226 382,146 382,171 218,252"></polygon>
+                                                    <ellipse cx="208" cy="192" rx="21" ry="12"></ellipse>
+                                                    <ellipse cx="284" cy="172" rx="21" ry="12"></ellipse>
+                                                    <rect x="313" y="69" width="24" height="56" rx="12"></rect>
+                                                    <path d="M126 184 L100 214 M218 252 L190 284 M100 214 L190 284"></path>
+                                                    <path d="M394 80 L422 80 M394 146 L422 146 M422 80 L422 146"></path>
+                                                    <text x="82" y="218">t 3.0</text>
+                                                    <text x="196" y="298">50.0</text>
+                                                    <text x="431" y="118">30.0</text>
+                                                </svg>
+                                            </div>
+                                            <div class="qe-agent-model-tools">
+                                                <span>Orbit</span>
+                                                <span>Pan</span>
+                                                <span>Zoom</span>
+                                                <span>Dims</span>
+                                                <span>Section</span>
+                                            </div>
+                                        </article>
+                                    }
+
+                                    @if (message.Workbench.OptionGroups.Count > 0)
+                                    {
+                                        <article class="qe-agent-flow-card qe-agent-options-card">
+                                            <header>
+                                                <div>
+                                                    <strong>@Text("Build options", "ตัวเลือกการผลิต")</strong>
+                                                    <small>@Text("Change options here or ask in chat", "ปรับที่นี่หรือสั่งผ่านแชท")</small>
+                                                </div>
+                                                <b>@Text("Editable", "แก้ไขได้")</b>
+                                            </header>
+                                            @foreach (var group in message.Workbench.OptionGroups)
+                                            {
+                                                <section>
+                                                    <header>@group.Label</header>
+                                                    <div class="qe-agent-option-grid">
+                                                        @foreach (var option in group.Options)
+                                                        {
+                                                            <button type="button" class="@(option.Selected ? "selected" : string.Empty)" @onclick="@(() => ApplyWorkbenchPrompt(option.FollowUpPrompt))">
+                                                                <span>@option.Label</span>
+                                                                <small>@option.Detail</small>
+                                                            </button>
+                                                        }
+                                                    </div>
+                                                </section>
+                                            }
+                                        </article>
+                                    }
+
+                                    @if (message.Workbench.PriceLines.Count > 0)
+                                    {
+                                        <article class="qe-agent-flow-card qe-agent-price-card">
+                                            <header>
+                                                <div>
+                                                    <strong>@Text("Instant quote", "ราคาเบื้องต้นทันที")</strong>
+                                                    <small>@message.Workbench.PriceSubtitle</small>
+                                                </div>
+                                                <b>@Text("Rates live", "ราคา live")</b>
+                                            </header>
+                                            <div class="qe-agent-price-total">
+                                                <strong>@message.Workbench.TotalPrice</strong>
+                                                <span>@message.Workbench.UnitPrice</span>
+                                            </div>
+                                            <div class="qe-agent-quantity-breaks">
+                                                @foreach (var quote in message.Workbench.QuantityBreaks)
+                                                {
+                                                    <button type="button" class="@(quote.Selected ? "selected" : string.Empty)" @onclick="@(() => ApplyWorkbenchPrompt(quote.FollowUpPrompt))">
+                                                        <span>@quote.Label</span>
+                                                        <strong>@quote.Price</strong>
+                                                        <small>@quote.Detail</small>
+                                                    </button>
+                                                }
+                                            </div>
+                                            <div class="qe-agent-price-lines">
+                                                @foreach (var line in message.Workbench.PriceLines)
+                                                {
+                                                    <div>
+                                                        <span>@line.Label</span>
+                                                        <strong>@line.Value</strong>
+                                                    </div>
+                                                }
+                                            </div>
+                                        </article>
+                                    }
+
+                                    @if (message.Workbench.OrderLines.Count > 0)
+                                    {
+                                        <article class="qe-agent-flow-card qe-agent-order-card">
+                                            <header>
+                                                <div>
+                                                    <strong>@Text("Order summary", "สรุปคำสั่งซื้อ")</strong>
+                                                    <small>@Text("Requires sign in and confirmation before durable actions", "ต้องเข้าสู่ระบบและยืนยันก่อนสร้างข้อมูลถาวร")</small>
+                                                </div>
+                                                <b>@message.Workbench.TotalPrice</b>
+                                            </header>
+                                            <div>
+                                                @foreach (var line in message.Workbench.OrderLines)
+                                                {
+                                                    <section>
+                                                        <span>@line.Label</span>
+                                                        <strong>@line.Value</strong>
+                                                    </section>
+                                                }
+                                            </div>
+                                            <footer>
+                                                <button type="button" @onclick="@(() => ApplyWorkbenchPrompt("Place this order after I sign in"))">
+                                                    @Text("Place order", "สั่งผลิต")
+                                                </button>
+                                                <button type="button" @onclick="@(() => ApplyWorkbenchPrompt("Save this as a formal quote"))">
+                                                    @Text("Save quote", "บันทึกใบเสนอราคา")
+                                                </button>
+                                            </footer>
+                                        </article>
+                                    }
+                                </section>
+                            }
                         </div>
                     </article>
                 }
@@ -470,7 +704,14 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
-            _error = ex.Message;
+            if (TryBuildLocalDemoTurn(message, out var demoTurn))
+            {
+                AddLocalDemoTurn(demoTurn);
+            }
+            else
+            {
+                _error = ex.Message;
+            }
         }
         finally
         {
@@ -557,9 +798,7 @@
         }
 
         _messages.Add(new AgentMessageRow("user", Text($"Attached hand sketch: {_sketchTitle}", $"แนบสเก็ตช์มือ: {_sketchTitle}")));
-        _messages.Add(new AgentMessageRow("assistant", Text(
-            "I received the sketch. Add dimensions, material, and any critical tolerances, or attach CAD when geometry is ready for DFM and pricing.",
-            "ได้รับสเก็ตช์แล้ว โปรดเพิ่มขนาด วัสดุ และค่าความเผื่อที่สำคัญ หรือแนบ CAD เมื่อพร้อมสำหรับ DFM และการคำนวณราคา")));
+        AddLocalDemoTurn(BuildSketchDemoTurn());
         _sketchOpen = false;
     }
 
@@ -574,12 +813,150 @@
     {
         return artifactType.ToLowerInvariant() switch
         {
+            "analysis" => Icons.Material.Outlined.AutoAwesome,
+            "dfm" => Icons.Material.Outlined.FactCheck,
             "pricing" => Icons.Material.Outlined.Calculate,
             "formal_quote" => Icons.Material.Outlined.PictureAsPdf,
             "order" => Icons.Material.Outlined.PrecisionManufacturing,
             "viewer" => Icons.Material.Outlined.ViewInAr,
             _ => Icons.Material.Outlined.Inventory2
         };
+    }
+
+    private static string StepIcon(string status)
+    {
+        return status.Equals("pending", StringComparison.OrdinalIgnoreCase)
+            ? Icons.Material.Outlined.RadioButtonUnchecked
+            : Icons.Material.Outlined.CheckCircle;
+    }
+
+    private static string DfmIcon(string severity)
+    {
+        return severity.ToLowerInvariant() switch
+        {
+            "blocker" => Icons.Material.Outlined.ErrorOutline,
+            "confirm" => Icons.Material.Outlined.WarningAmber,
+            _ => Icons.Material.Outlined.CheckCircle
+        };
+    }
+
+    private void ApplyWorkbenchPrompt(string prompt)
+    {
+        _draftMessage = prompt;
+    }
+
+    private bool TryBuildLocalDemoTurn(string message, out LocalDemoTurn turn)
+    {
+        var normalized = message.ToLowerInvariant();
+        if (normalized.Contains("bracket", StringComparison.Ordinal) ||
+            normalized.Contains("sketch", StringComparison.Ordinal) ||
+            normalized.Contains("photo", StringComparison.Ordinal) ||
+            normalized.Contains("drawing", StringComparison.Ordinal) ||
+            normalized.Contains("price", StringComparison.Ordinal) ||
+            normalized.Contains("quote", StringComparison.Ordinal) ||
+            normalized.Contains("order", StringComparison.Ordinal) ||
+            normalized.Contains("step", StringComparison.Ordinal) ||
+            normalized.Contains("stl", StringComparison.Ordinal) ||
+            normalized.Contains("cad", StringComparison.Ordinal))
+        {
+            turn = BuildSketchDemoTurn();
+            return true;
+        }
+
+        turn = default!;
+        return false;
+    }
+
+    private void AddLocalDemoTurn(LocalDemoTurn turn)
+    {
+        _messages.Add(new AgentMessageRow("assistant", Text(turn.TextEn, turn.TextTh), turn.Workbench));
+        _artifacts = turn.Artifacts;
+        _proposedActions = [];
+    }
+
+    private static LocalDemoTurn BuildSketchDemoTurn()
+    {
+        var workbench = new AgentWorkbenchSnapshot(
+            "2 images · OCR + edge detection · 92% confidence",
+            "67%",
+            "sheet metal",
+            "L-bracket bent sheet",
+            "6061-T6 aluminum",
+            "50 pcs",
+            [
+                new("complete", "Reading sketch and workbench photo", "อ่านสเก็ตช์และรูปถ่าย", "OCR + edge detection"),
+                new("complete", "Extracting geometry", "ดึงรูปทรง", "L-profile, 2 holes, 1 slot"),
+                new("complete", "Detecting features and material", "ตรวจคุณลักษณะและวัสดุ", "3 mm 6061"),
+                new("active", "Running DFM checks", "กำลังตรวจ DFM", "18 rules"),
+                new("pending", "Generating viewer artifact", "กำลังสร้างไฟล์ viewer", "CAD required for final DFM")
+            ],
+            [
+                new("Overall length", "50.0 mm", "read", "read"),
+                new("Flange height", "30.0 mm", "read", "read"),
+                new("Sheet thickness", "3.0 mm", "read", "read"),
+                new("Mounting holes", "2x Ø6.0 mm", "read", "read"),
+                new("Slot", "8.0 x 16.0 mm", "read", "read"),
+                new("Bend angle", "90°", "assumed", "assumed"),
+                new("Tolerance", "±0.1 mm", "history", "PN-2041")
+            ],
+            [
+                new("blocker", "Hole too close to bend", "BLOCKER", "Right hole sits 4 mm from the bend line. With 3 mm 6061 it may deform during forming; minimum safe distance is 8 mm.", "Fix: shift hole +4 mm from the bend, or add a relief notch."),
+                new("confirm", "Bend radius not specified", "CONFIRM", "No inside radius called out. Defaulting to R3.0 mm, one material thickness.", "Ask for a tighter radius if the mating part requires it."),
+                new("confirm", "Slot tolerance not specified", "CONFIRM", "Slot width is untoleranced. Applying standard ±0.1 mm.", null),
+                new("pass", "Material in stock", "PASS", "3 mm 6061-T6 sheet is available; no MOQ surcharge for 50 pcs.", null)
+            ],
+            true,
+            [
+                new("Material",
+                [
+                    new("6061-T6", "aluminum · in stock", true, "Use 6061-T6 aluminum"),
+                    new("5052-H32", "aluminum · formable", false, "Compare with 5052-H32"),
+                    new("304 SS", "stainless", false, "Compare with 304 stainless")
+                ]),
+                new("Finish",
+                [
+                    new("Clear anodize", "Type II", true, "Use clear anodize"),
+                    new("As-machined", "raw", false, "Use as-machined finish"),
+                    new("Black anodize", "Type II", false, "Use black anodize")
+                ]),
+                new("Quantity",
+                [
+                    new("25", "$12.80/ea", false, "Price 25 pieces"),
+                    new("50", "$9.40/ea", true, "Price 50 pieces"),
+                    new("100", "$6.95/ea", false, "Price 100 pieces")
+                ])
+            ],
+            "$470.00",
+            "$9.40 / pc at 50 pcs",
+            "6061-T6 · 3 mm · clear anodize · ±0.1 mm",
+            [
+                new("25 pcs", "$12.80", "prototype run", false, "Price 25 pieces"),
+                new("50 pcs", "$9.40", "usual break", true, "Price 50 pieces"),
+                new("100 pcs", "$6.95", "best value", false, "Price 100 pieces")
+            ],
+            [
+                new("Laser cut + form", "$265.00"),
+                new("Clear anodize", "$55.00"),
+                new("Setup and programming", "$150.00")
+            ],
+            [
+                new("Part", "Aluminum sensor bracket · 6061-T6, 3 mm, clear anodize, ±0.1 mm"),
+                new("Quantity and price", "50 pcs @ $9.40 = $470.00"),
+                new("Lead time", "Standard · 8 business days"),
+                new("Billing", "Sign in required before formal order")
+            ]);
+
+        return new LocalDemoTurn(
+            "Got it. I read this as a bent sheet-metal L-bracket, found one DFM blocker to review, pre-filled build options, and prepared a live quote preview.",
+            "รับทราบ ผมอ่านข้อมูลนี้เป็นขายึดแผ่นโลหะพับ พบปัญหา DFM ที่ต้องตรวจหนึ่งรายการ เติมตัวเลือกการผลิต และเตรียมราคาตัวอย่างให้แล้ว",
+            workbench,
+            [
+                new QuoteAgentArtifactDto { ArtifactType = "analysis", Title = "Image and requirement analysis", Status = "Ready" },
+                new QuoteAgentArtifactDto { ArtifactType = "dfm", Title = "DFM review", Status = "Action needed" },
+                new QuoteAgentArtifactDto { ArtifactType = "viewer", Title = "3D model preview", Status = "Preview" },
+                new QuoteAgentArtifactDto { ArtifactType = "pricing", Title = "Instant quote", Status = "$470.00" },
+                new QuoteAgentArtifactDto { ArtifactType = "order", Title = "Order summary", Status = "Confirmation required" }
+            ]);
     }
 
     private string Text(string en, string th)
@@ -602,7 +979,48 @@
         _draftMessage = Text(useCase.PromptEn, useCase.PromptTh);
     }
 
-    private sealed record AgentMessageRow(string Role, string Content);
+    private sealed record AgentMessageRow(string Role, string Content, AgentWorkbenchSnapshot? Workbench = null);
+
+    private sealed record LocalDemoTurn(
+        string TextEn,
+        string TextTh,
+        AgentWorkbenchSnapshot Workbench,
+        List<QuoteAgentArtifactDto> Artifacts);
+
+    private sealed record AgentWorkbenchSnapshot(
+        string AnalysisSummary,
+        string AnalysisProgress,
+        string ProcessLabel,
+        string PartType,
+        string Material,
+        string Quantity,
+        IReadOnlyList<AgentAnalysisStep> AnalysisSteps,
+        IReadOnlyList<AgentRequirement> Requirements,
+        IReadOnlyList<AgentDfmIssue> DfmIssues,
+        bool ShowModelPreview,
+        IReadOnlyList<AgentOptionGroup> OptionGroups,
+        string TotalPrice,
+        string UnitPrice,
+        string PriceSubtitle,
+        IReadOnlyList<AgentQuantityBreak> QuantityBreaks,
+        IReadOnlyList<AgentPriceLine> PriceLines,
+        IReadOnlyList<AgentOrderLine> OrderLines);
+
+    private sealed record AgentAnalysisStep(string Status, string LabelEn, string LabelTh, string Detail);
+
+    private sealed record AgentRequirement(string Feature, string Value, string SourceKind, string Source);
+
+    private sealed record AgentDfmIssue(string Severity, string Title, string Badge, string Detail, string? Resolution);
+
+    private sealed record AgentOptionGroup(string Label, IReadOnlyList<AgentOption> Options);
+
+    private sealed record AgentOption(string Label, string Detail, bool Selected, string FollowUpPrompt);
+
+    private sealed record AgentQuantityBreak(string Label, string Price, string Detail, bool Selected, string FollowUpPrompt);
+
+    private sealed record AgentPriceLine(string Label, string Value);
+
+    private sealed record AgentOrderLine(string Label, string Value);
 
     private sealed record SketchColorOption(string Name, string ThaiName, string Hex);
 

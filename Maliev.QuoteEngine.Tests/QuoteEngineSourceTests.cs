@@ -730,6 +730,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Turn a sketch into requirements", component, StringComparison.Ordinal);
         Assert.Contains("Compare material and finish options", component, StringComparison.Ordinal);
         Assert.Contains("Task HandleSubmitAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-workflow\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-flow-card qe-agent-analysis-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-flow-card qe-agent-requirements-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-flow-card qe-agent-dfm-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-flow-card qe-agent-model-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-flow-card qe-agent-options-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-flow-card qe-agent-price-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-flow-card qe-agent-order-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("TryBuildLocalDemoTurn", component, StringComparison.Ordinal);
+        Assert.Contains("BuildSketchDemoTurn", component, StringComparison.Ordinal);
+        Assert.Contains("Hole too close to bend", component, StringComparison.Ordinal);
+        Assert.Contains("6061-T6 aluminum", component, StringComparison.Ordinal);
+        Assert.Contains("$470.00", component, StringComparison.Ordinal);
 
         Assert.Contains("Task<QuoteAgentTurnResponse> SendAgentMessageAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync", apiClient, StringComparison.Ordinal);
@@ -743,6 +756,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-workflow", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-flow-card", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-analysis-card", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-requirements-card table", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-dfm-issue.is-blocker", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-model-stage", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-options-card", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-price-total", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-order-card footer button:first-child", agentStyles, StringComparison.Ordinal);
         Assert.Contains("-webkit-line-clamp: 2;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap", agentStyles, StringComparison.Ordinal);
         Assert.Contains("top: 50%;", agentStyles, StringComparison.Ordinal);
