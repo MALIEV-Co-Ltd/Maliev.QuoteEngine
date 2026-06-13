@@ -412,6 +412,62 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             !string.IsNullOrWhiteSpace(artifact.Url));
     }
 
+    [Fact]
+    public async Task Agent_duplicate_project_uses_confirmed_customer_draft_project()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-duplicate@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var draftState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_draft_project");
+        var draftAction = Assert.Single(draftState.ProposedActions);
+        Assert.Equal("draft_project", draftAction.ActionType);
+
+        var draftResult = await ConfirmActionAsync(client, draftAction.ActionId);
+        Assert.NotNull(draftResult.State);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var sourceProjectId));
+
+        var duplicateState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_duplicate_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["title"] = JsonSerializer.SerializeToElement("Duplicate from agent", JsonOptions)
+            });
+        var duplicateAction = Assert.Single(duplicateState.ProposedActions);
+        Assert.Equal("duplicate_project", duplicateAction.ActionType);
+
+        var duplicateResult = await ConfirmActionAsync(client, duplicateAction.ActionId);
+
+        Assert.NotNull(duplicateResult.State);
+        Assert.Contains("duplicated", duplicateResult.Message, StringComparison.OrdinalIgnoreCase);
+        var duplicateArtifact = Assert.Single(duplicateResult.State.Artifacts, artifact => artifact.ArtifactType == "duplicate_project");
+        Assert.Equal(sourceProjectId.ToString("D"), duplicateArtifact.Metadata["sourceProjectId"]);
+        Assert.True(Guid.TryParse(duplicateArtifact.Metadata["projectId"], out var duplicateProjectId));
+        Assert.NotEqual(sourceProjectId, duplicateProjectId);
+        Assert.Equal("Duplicate from agent", duplicateArtifact.Title);
+    }
+
+    [Fact]
+    public async Task Agent_duplicate_project_blocks_until_draft_project_exists()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-duplicate-blocked@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_duplicate_project");
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("draft_project", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("duplicate_project", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Contains(
+            "draft project",
+            document.RootElement.GetProperty("error").GetString(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)
     {
         var now = DateTimeOffset.UtcNow;
@@ -469,9 +525,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     private static async Task<QuoteAgentStateResponse> ExecuteToolForStateAsync(
         HttpClient client,
         Guid sessionId,
-        string toolName)
+        string toolName,
+        Dictionary<string, JsonElement>? arguments = null)
     {
-        var json = await ExecuteToolAsync(client, sessionId, toolName);
+        var json = await ExecuteToolAsync(client, sessionId, toolName, arguments);
         var state = JsonSerializer.Deserialize<QuoteAgentStateResponse>(json, JsonOptions);
         Assert.NotNull(state);
         return state;
@@ -480,11 +537,15 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     private static async Task<string> ExecuteToolAsync(
         HttpClient client,
         Guid sessionId,
-        string toolName)
+        string toolName,
+        Dictionary<string, JsonElement>? arguments = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/quote/v1/agent/tools/{toolName}")
         {
-            Content = JsonContent.Create(new QuoteAgentToolRequest(), options: JsonOptions)
+            Content = JsonContent.Create(new QuoteAgentToolRequest
+            {
+                Arguments = arguments ?? []
+            }, options: JsonOptions)
         };
         request.Headers.TryAddWithoutValidation(
             "X-Maliev-Agent-Context",

@@ -119,6 +119,13 @@ internal sealed class QuoteAgentService(
                 ReadString(request.Arguments, "title") ?? "Create a customer draft project from this quote session.",
                 requiresAuthentication: true,
                 request.Arguments),
+            "quote_duplicate_project" => PrepareActionOrGateError(
+                state,
+                "duplicate_project",
+                "Duplicate project",
+                ReadString(request.Arguments, "title") ?? "Duplicate the current customer draft project.",
+                requiresAuthentication: true,
+                request.Arguments),
             "quote_prepare_formal_quote" => PrepareActionOrGateError(
                 state,
                 "formal_quote",
@@ -180,6 +187,7 @@ internal sealed class QuoteAgentService(
         var message = action.ActionType switch
         {
             "draft_project" => ExecuteDraftProject(state, customerId!.Value, action),
+            "duplicate_project" => ExecuteDuplicateProject(state, customerId!.Value, action),
             "formal_quote" => ExecuteFormalQuote(state, customerId!.Value, action),
             "quote_approval" => ExecuteQuoteApproval(state),
             "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
@@ -290,6 +298,11 @@ internal sealed class QuoteAgentService(
         return actionType switch
         {
             "draft_project" => FirstBlockingGate(gates, "geometry_required", "analysis_complete"),
+            "duplicate_project" => TryGetCurrentDraftProjectId(state, out _) ? null : new QuoteAgentGateDto(
+                "draft_project",
+                "Draft project ready",
+                "blocked",
+                "Create a customer draft project before duplicating it."),
             "formal_quote" => FirstBlockingGate(
                 gates,
                 "geometry_required",
@@ -392,7 +405,38 @@ internal sealed class QuoteAgentService(
             ReadString(action.Arguments, "requirements") ?? ReadString(action.Arguments, "notes") ?? string.Empty,
             ReadString(action.Arguments, "title") ?? "Chat-created quote"));
         UpsertArtifact(state, "draft_project", response.Title, response.Status, null, null);
+        SetArtifactMetadata(state, "draft_project", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["projectId"] = response.ProjectId.ToString("D"),
+            ["projectNumber"] = response.ProjectNumber
+        });
         return $"Draft project {response.ProjectNumber} is ready.";
+    }
+
+    private string ExecuteDuplicateProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    {
+        if (!TryGetCurrentDraftProjectId(state, out var sourceProjectId))
+        {
+            throw new InvalidOperationException("A draft project is required before duplicating it.");
+        }
+
+        var response = prototypeStore.DuplicateDraftProject(
+            customerId,
+            sourceProjectId,
+            new DuplicateDraftProjectRequest(ReadString(action.Arguments, "title")));
+        if (response is null)
+        {
+            throw new KeyNotFoundException("The current draft project was not found for the signed-in customer.");
+        }
+
+        UpsertArtifact(state, "duplicate_project", response.Title, response.Status, null, null);
+        SetArtifactMetadata(state, "duplicate_project", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["projectId"] = response.ProjectId.ToString("D"),
+            ["projectNumber"] = response.ProjectNumber,
+            ["sourceProjectId"] = sourceProjectId.ToString("D")
+        });
+        return $"Project {response.ProjectNumber} was duplicated from the current draft.";
     }
 
     private string ExecuteFormalQuote(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
@@ -492,6 +536,34 @@ internal sealed class QuoteAgentService(
             PartId = partId,
             Url = url
         });
+    }
+
+    private static void SetArtifactMetadata(
+        QuoteAgentSessionState state,
+        string artifactType,
+        IReadOnlyDictionary<string, string> metadata)
+    {
+        var artifact = state.Artifacts.FirstOrDefault(item =>
+            item.ArtifactType.Equals(artifactType, StringComparison.OrdinalIgnoreCase));
+        if (artifact is null)
+        {
+            return;
+        }
+
+        foreach (var (key, value) in metadata)
+        {
+            artifact.Metadata[key] = value;
+        }
+    }
+
+    private static bool TryGetCurrentDraftProjectId(QuoteAgentSessionState state, out Guid projectId)
+    {
+        projectId = Guid.Empty;
+        var artifact = state.Artifacts
+            .LastOrDefault(item => item.ArtifactType.Equals("draft_project", StringComparison.OrdinalIgnoreCase));
+        return artifact is not null &&
+            artifact.Metadata.TryGetValue("projectId", out var rawProjectId) &&
+            Guid.TryParse(rawProjectId, out projectId);
     }
 
     private void MaterializePrototypeParts(
