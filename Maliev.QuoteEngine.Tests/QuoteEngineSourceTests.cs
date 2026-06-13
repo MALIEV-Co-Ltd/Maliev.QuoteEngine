@@ -748,6 +748,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-box", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-search-panel,", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-search-panel *", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-height: none;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("overflow: visible;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: 18px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("display: -webkit-box;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-shell--rail-collapsed", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-shell--artifacts-open", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-rail-group-toggle", agentStyles, StringComparison.Ordinal);
@@ -787,7 +793,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 380px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("height: 100dvh;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("max-height: min(36dvh, 320px);", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("max-height: min(36dvh, 320px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-workflow", agentStyles, StringComparison.Ordinal);
