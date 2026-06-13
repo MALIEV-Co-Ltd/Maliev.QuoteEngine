@@ -57,6 +57,7 @@ internal sealed class QuoteAgentService(
         var customerId = ResolveCustomerId();
         state.CustomerId = customerId ?? state.CustomerId;
         sessionStore.AddAttachments(state, request.Attachments);
+        MaterializeSupplementalAnalysis(state, request);
         MaterializePrototypeParts(state, request);
 
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
@@ -111,35 +112,35 @@ internal sealed class QuoteAgentService(
             "quote_get_account_context" => BuildAccountContext(state),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
             "quote_calculate_estimate" => CalculateEstimate(state),
-            "quote_prepare_draft_project" => PrepareAction(
+            "quote_prepare_draft_project" => PrepareActionOrGateError(
                 state,
                 "draft_project",
                 "Create draft project",
                 ReadString(request.Arguments, "title") ?? "Create a customer draft project from this quote session.",
                 requiresAuthentication: true,
                 request.Arguments),
-            "quote_prepare_formal_quote" => PrepareAction(
+            "quote_prepare_formal_quote" => PrepareActionOrGateError(
                 state,
                 "formal_quote",
                 "Generate formal quote",
                 ReadString(request.Arguments, "requirements") ?? "Generate a formal quote artifact from the reviewed quote session.",
                 requiresAuthentication: true,
                 request.Arguments),
-            "quote_acknowledge_dfm" => PrepareAction(
+            "quote_acknowledge_dfm" => PrepareActionOrGateError(
                 state,
                 "dfm_acknowledgement",
                 "Acknowledge DFM review",
                 ReadString(request.Arguments, "note") ?? "Record customer acknowledgement of DFM risks.",
                 requiresAuthentication: false,
                 request.Arguments),
-            "quote_create_order" => PrepareAction(
+            "quote_create_order" => PrepareActionOrGateError(
                 state,
                 "create_order",
                 "Create manufacturing order",
                 ReadString(request.Arguments, "requirements") ?? "Create a manufacturing order from the approved quote.",
                 requiresAuthentication: true,
                 request.Arguments),
-            "quote_start_payment" => PrepareAction(
+            "quote_start_payment" => PrepareActionOrGateError(
                 state,
                 "start_payment",
                 "Start payment",
@@ -240,6 +241,74 @@ internal sealed class QuoteAgentService(
     {
         sessionStore.AddAction(state, actionType, title, summary, requiresAuthentication, arguments);
         return ToStateResponse(state);
+    }
+
+    private object PrepareActionOrGateError(
+        QuoteAgentSessionState state,
+        string actionType,
+        string title,
+        string summary,
+        bool requiresAuthentication,
+        Dictionary<string, JsonElement> arguments)
+    {
+        var blocker = GetActionBlocker(state, actionType, requiresAuthentication);
+        return blocker is null
+            ? PrepareAction(state, actionType, title, summary, requiresAuthentication, arguments)
+            : new
+            {
+                error = blocker.Detail,
+                requiredGateCode = blocker.Code,
+                actionType,
+                state = ToStateResponse(state)
+            };
+    }
+
+    private QuoteAgentGateDto? GetActionBlocker(
+        QuoteAgentSessionState state,
+        string actionType,
+        bool requiresAuthentication)
+    {
+        var isAuthenticated = ResolveCustomerId().HasValue || state.CustomerId.HasValue;
+        var gates = QuoteAgentSessionStore.BuildGates(state, isAuthenticated);
+        if (requiresAuthentication)
+        {
+            var auth = gates.FirstOrDefault(gate => gate.Code == "customer_authenticated");
+            if (auth is not null && !auth.Status.Equals("passed", StringComparison.OrdinalIgnoreCase))
+            {
+                return auth;
+            }
+        }
+
+        return actionType switch
+        {
+            "draft_project" => FirstBlockingGate(gates, "geometry_required", "analysis_complete"),
+            "formal_quote" => FirstBlockingGate(
+                gates,
+                "geometry_required",
+                "analysis_complete",
+                "dfm_reviewed",
+                "configuration_complete",
+                "priced"),
+            "dfm_acknowledgement" => state.Parts.Count == 0
+                ? gates.FirstOrDefault(gate => gate.Code == "geometry_required")
+                : null,
+            "create_order" => state.FormalQuote is null
+                ? gates.FirstOrDefault(gate => gate.Code == "quote_artifact_ready")
+                : null,
+            "start_payment" => state.Order is null
+                ? gates.FirstOrDefault(gate => gate.Code == "order_created")
+                : null,
+            _ => null
+        };
+    }
+
+    private static QuoteAgentGateDto? FirstBlockingGate(
+        IReadOnlyCollection<QuoteAgentGateDto> gates,
+        params string[] codes)
+    {
+        return codes
+            .Select(code => gates.FirstOrDefault(gate => gate.Code == code))
+            .FirstOrDefault(gate => gate is not null && !gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase));
     }
 
     private QuoteAgentStateResponse UpdatePartConfiguration(
@@ -345,6 +414,7 @@ internal sealed class QuoteAgentService(
             throw new InvalidOperationException("A formal quote is required before creating an order.");
         }
 
+        state.QuoteApproved = true;
         state.Order = prototypeStore.CreateOrder(customerId, state.FormalQuote.QuoteId);
         UpsertArtifact(state, "order", state.Order.OrderNumber, state.Order.Status, null, null);
         return $"Manufacturing order {state.Order.OrderNumber} is created.";
@@ -421,6 +491,7 @@ internal sealed class QuoteAgentService(
                 }
 
                 var part = BuildPrototypeAnalyzedPart(attachment, uploadId, request.Message);
+                AttachSupplementalFiles(part, state.Attachments);
                 state.Parts.Add(part);
                 UpsertArtifact(state, "viewer", $"3D viewer - {part.FileName}", "ready", part.PartId, part.ViewerGlbUrl);
                 UpsertArtifact(state, "dfm", $"DFM analysis - {part.FileName}", "ready", part.PartId, null);
@@ -438,6 +509,94 @@ internal sealed class QuoteAgentService(
                 });
                 UpsertArtifact(state, "pricing", "Pricing estimate", "ready", null, null);
             }
+        }
+    }
+
+    private static void MaterializeSupplementalAnalysis(
+        QuoteAgentSessionState state,
+        QuoteAgentMessageRequest request)
+    {
+        var supplemental = request.Attachments
+            .Where(IsSupplementalManufacturingAttachment)
+            .ToList();
+        if (supplemental.Count == 0)
+        {
+            return;
+        }
+
+        lock (state.SyncRoot)
+        {
+            var artifact = state.Artifacts.FirstOrDefault(item =>
+                item.ArtifactType.Equals("analysis", StringComparison.OrdinalIgnoreCase));
+            if (artifact is null)
+            {
+                artifact = new QuoteAgentArtifactDto
+                {
+                    ArtifactType = "analysis",
+                    Title = "Supplemental requirement analysis",
+                    Status = "needs_geometry"
+                };
+                state.Artifacts.Add(artifact);
+            }
+
+            artifact.Metadata["fileCount"] = supplemental.Count.ToString(CultureInfo.InvariantCulture);
+            artifact.Metadata["fileNames"] = string.Join(", ", supplemental.Select(item => item.FileName).Take(5));
+            artifact.Metadata["geometryGate"] = "not_satisfied_by_supplemental_files";
+            artifact.Metadata["summary"] = BuildSupplementalSummary(request.Message, supplemental);
+
+            foreach (var part in state.Parts)
+            {
+                AttachSupplementalFiles(part, supplemental);
+            }
+        }
+    }
+
+    private static bool IsSupplementalManufacturingAttachment(QuoteAgentAttachmentDto attachment)
+    {
+        if (attachment.SatisfiesGeometryGate)
+        {
+            return false;
+        }
+
+        return attachment.Kind.Equals("drawing", StringComparison.OrdinalIgnoreCase) ||
+            attachment.Kind.Equals("photo", StringComparison.OrdinalIgnoreCase) ||
+            attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase) ||
+            attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+            attachment.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string BuildSupplementalSummary(
+        string message,
+        IReadOnlyCollection<QuoteAgentAttachmentDto> supplemental)
+    {
+        var kinds = supplemental
+            .Select(item => string.IsNullOrWhiteSpace(item.Kind) ? item.ContentType : item.Kind)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(4);
+        var quantity = InferQuantity(message);
+        var process = InferProcessFromMessage(message) ?? "unknown";
+        return $"Captured {supplemental.Count} supplemental file(s): {string.Join(", ", kinds)}. Inferred quantity {quantity} and process {process}; CAD/3D geometry is still required for final DFM, pricing, order, and payment.";
+    }
+
+    private static void AttachSupplementalFiles(
+        QuotePartDraftDto part,
+        IEnumerable<QuoteAgentAttachmentDto> attachments)
+    {
+        foreach (var attachment in attachments.Where(IsSupplementalManufacturingAttachment))
+        {
+            if (part.DrawingFiles.Any(file =>
+                file.StoragePath.Equals(attachment.StoragePath ?? string.Empty, StringComparison.OrdinalIgnoreCase) ||
+                file.FileName.Equals(attachment.FileName, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            part.DrawingFiles.Add(new QuotePartAttachmentDto(
+                attachment.FileName,
+                attachment.StoragePath ?? attachment.Url ?? attachment.AttachmentId.ToString("N"),
+                attachment.ContentType,
+                attachment.FileSizeBytes,
+                attachment.Kind));
         }
     }
 

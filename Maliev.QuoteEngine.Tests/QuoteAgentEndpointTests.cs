@@ -102,6 +102,106 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_with_supplemental_drawing_keeps_geometry_gate_blocked()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "I need 50 aluminum brackets from this hand sketch.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "bracket-sketch.jpg",
+                    ContentType = "image/jpeg",
+                    FileSizeBytes = 1_500_000,
+                    Kind = "sketch",
+                    Url = "https://files.example.test/bracket-sketch.jpg"
+                }
+            ]
+        });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(body.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
+        Assert.Contains(body.Artifacts, artifact =>
+            artifact.ArtifactType == "analysis" &&
+            artifact.Status == "needs_geometry" &&
+            artifact.Metadata["geometryGate"] == "not_satisfied_by_supplemental_files");
+
+        var state = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
+            $"/quote/v1/agent/sessions/{body.SessionId:D}");
+        Assert.NotNull(state);
+        Assert.Empty(state.Parts);
+        Assert.Single(state.Attachments);
+    }
+
+    [Fact]
+    public async Task Agent_message_with_cad_and_drawing_attaches_supplemental_file_to_part()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Quote this STEP with the attached drawing for 10 pieces in 6061.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "housing.step",
+                    ContentType = "model/step",
+                    FileSizeBytes = 250_000,
+                    Kind = "cad",
+                    StoragePath = "quotes/temp/housing.step"
+                },
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "housing-drawing.pdf",
+                    ContentType = "application/pdf",
+                    FileSizeBytes = 300_000,
+                    Kind = "drawing",
+                    StoragePath = "quotes/temp/housing-drawing.pdf"
+                }
+            ]
+        });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        var state = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
+            $"/quote/v1/agent/sessions/{body.SessionId:D}");
+
+        Assert.NotNull(state);
+        var part = Assert.Single(state.Parts);
+        var drawing = Assert.Single(part.DrawingFiles);
+        Assert.Equal("housing-drawing.pdf", drawing.FileName);
+        Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "analysis");
+        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+    }
+
+    [Fact]
     public async Task Agent_tool_endpoint_rejects_missing_signed_context()
     {
         using var client = factory.CreateClient();
@@ -135,7 +235,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task Agent_confirmation_requires_authentication_for_formal_quote_action()
+    public async Task Agent_formal_quote_tool_blocks_until_customer_is_authenticated()
     {
         using var client = factory.CreateClient();
         var quoteSessionId = Guid.NewGuid();
@@ -154,14 +254,42 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             CreateSignedAgentContextToken(quoteSessionId, Guid.NewGuid(), null));
 
         using var prepareResponse = await client.SendAsync(prepareRequest);
-        var state = await prepareResponse.Content.ReadFromJsonAsync<QuoteAgentStateResponse>();
-        var action = Assert.Single(state!.ProposedActions);
+        using var document = await JsonDocument.ParseAsync(await prepareResponse.Content.ReadAsStreamAsync());
 
-        var confirmResponse = await client.PostAsJsonAsync(
-            $"/quote/v1/agent/actions/{action.ActionId:D}/confirm",
-            new QuoteAgentConfirmActionRequest());
+        Assert.Equal(HttpStatusCode.OK, prepareResponse.StatusCode);
+        Assert.Equal("customer_authenticated", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("formal_quote", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Equal(0, document.RootElement.GetProperty("state").GetProperty("proposedActions").GetArrayLength());
+    }
 
-        Assert.Equal(HttpStatusCode.Unauthorized, confirmResponse.StatusCode);
+    [Fact]
+    public async Task Agent_formal_quote_tool_blocks_until_geometry_and_pricing_gates_pass()
+    {
+        using var client = factory.CreateClient();
+        using var prepareRequest = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/tools/quote_prepare_formal_quote")
+        {
+            Content = JsonContent.Create(new QuoteAgentToolRequest
+            {
+                Arguments = new Dictionary<string, JsonElement>
+                {
+                    ["requirements"] = JsonSerializer.SerializeToElement("Need a formal quote.", JsonOptions)
+                }
+            }, options: JsonOptions)
+        };
+        prepareRequest.Headers.TryAddWithoutValidation(
+            "X-Maliev-Agent-Context",
+            CreateSignedAgentContextToken(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
+
+        using var prepareResponse = await client.SendAsync(prepareRequest);
+        using var document = await JsonDocument.ParseAsync(await prepareResponse.Content.ReadAsStreamAsync());
+
+        Assert.Equal(HttpStatusCode.OK, prepareResponse.StatusCode);
+        Assert.Equal("geometry_required", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("formal_quote", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Contains(
+            "Upload STEP",
+            document.RootElement.GetProperty("error").GetString(),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)
