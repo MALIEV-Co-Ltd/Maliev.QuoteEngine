@@ -857,6 +857,36 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Quotes_route_injects_static_asset_map_for_fingerprinted_dotnet_module()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync("/quotes");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("window.malievStaticAssetMap", html, StringComparison.Ordinal);
+        Assert.Contains("\"_framework/dotnet.js\"", html, StringComparison.Ordinal);
+        Assert.Contains("\"_framework/dotnet.", html, StringComparison.Ordinal);
+
+        var mapJsonStart = html.IndexOf("window.malievStaticAssetMap=", StringComparison.Ordinal);
+        Assert.True(mapJsonStart >= 0);
+        mapJsonStart += "window.malievStaticAssetMap=".Length;
+        var mapJsonEnd = html.IndexOf(";window.getMalievAuth", mapJsonStart, StringComparison.Ordinal);
+        Assert.True(mapJsonEnd > mapJsonStart);
+        using var document = JsonDocument.Parse(html[mapJsonStart..mapJsonEnd]);
+        var dotnetModule = document.RootElement.GetProperty("_framework/dotnet.js").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(dotnetModule));
+
+        var moduleResponse = await client.GetAsync($"/{dotnetModule}");
+        var moduleBody = await moduleResponse.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal(HttpStatusCode.OK, moduleResponse.StatusCode);
+        Assert.Equal("text/javascript", moduleResponse.Content.Headers.ContentType?.MediaType);
+        Assert.True(moduleBody.Length > 10_000);
+    }
+
+    [Fact]
     public async Task Quote_detail_route_stays_customer_scoped_for_anonymous_users()
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });

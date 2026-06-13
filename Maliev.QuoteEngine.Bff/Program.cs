@@ -237,10 +237,11 @@ static async Task RenderClientAppAsync(HttpContext context)
     var authJson = isAuthenticated
         ? $"{{\"isSignedIn\":true,\"customerId\":{JsonSerializer.Serialize(customerId)},\"displayName\":{JsonSerializer.Serialize(displayName)}}}"
         : "{\"isSignedIn\":false,\"customerId\":null,\"displayName\":null}";
+    var staticAssetMapJson = Program.ResolveStaticWebAssetMapJson();
 
     var html = await File.ReadAllTextAsync(indexPath, context.RequestAborted);
     html = html.Replace("</head>",
-        $"<script>window.getMalievAuth=function(){{return {authJson};}};</script></head>",
+        $"<script>window.malievStaticAssetMap={staticAssetMapJson};window.getMalievAuth=function(){{return {authJson};}};</script></head>",
         StringComparison.OrdinalIgnoreCase);
 
     context.Response.ContentType = "text/html; charset=utf-8";
@@ -276,6 +277,63 @@ public partial class Program
             {
                 return candidate;
             }
+        }
+
+        return null;
+    }
+
+    internal static string ResolveStaticWebAssetMapJson()
+    {
+        var map = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        foreach (var manifestPath in Directory.EnumerateFiles(AppContext.BaseDirectory, "*.staticwebassets.endpoints.json"))
+        {
+            using var manifest = JsonDocument.Parse(File.ReadAllText(manifestPath));
+            if (!manifest.RootElement.TryGetProperty("Endpoints", out var endpoints))
+            {
+                continue;
+            }
+
+            foreach (var endpoint in endpoints.EnumerateArray())
+            {
+                if (!endpoint.TryGetProperty("Route", out var routeProperty))
+                {
+                    continue;
+                }
+
+                var route = routeProperty.GetString();
+                var label = ResolveStaticWebAssetLabel(endpoint);
+                if (string.IsNullOrWhiteSpace(route) ||
+                    string.IsNullOrWhiteSpace(label) ||
+                    string.Equals(route, label, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                map[label] = route;
+            }
+        }
+
+        return JsonSerializer.Serialize(map);
+    }
+
+    private static string? ResolveStaticWebAssetLabel(JsonElement endpoint)
+    {
+        if (!endpoint.TryGetProperty("EndpointProperties", out var properties))
+        {
+            return null;
+        }
+
+        foreach (var property in properties.EnumerateArray())
+        {
+            if (!property.TryGetProperty("Name", out var nameProperty) ||
+                !string.Equals(nameProperty.GetString(), "label", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return property.TryGetProperty("Value", out var valueProperty)
+                ? valueProperty.GetString()
+                : null;
         }
 
         return null;

@@ -12,7 +12,7 @@
             </a>
             <button type="button"
                     class="qe-agent-collapse"
-                    aria-expanded="@(!_railCollapsed)"
+                    aria-expanded="@AriaExpanded(!_railCollapsed)"
                     title="@(_railCollapsed ? Text("Expand sidebar", "ขยายแถบด้านข้าง") : Text("Collapse sidebar", "ยุบแถบด้านข้าง"))"
                     @onclick="ToggleRail">
                 <MudIcon Icon="@(_railCollapsed ? Icons.Material.Outlined.Menu : Icons.Material.Outlined.MenuOpen)" Size="Size.Small" />
@@ -26,7 +26,7 @@
             </a>
             <button type="button"
                     class="@(_searchOpen ? "active" : string.Empty)"
-                    aria-expanded="@_searchOpen"
+                    aria-expanded="@AriaExpanded(_searchOpen)"
                     @onclick="ToggleSearch">
                 <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
                 <span>@Text("Search", "ค้นหา")</span>
@@ -79,7 +79,7 @@
                 <section class="@RailGroupClass(_pinnedProjectsCollapsed)" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
                     <button type="button"
                             class="qe-agent-rail-group-toggle"
-                            aria-expanded="@(!_pinnedProjectsCollapsed)"
+                            aria-expanded="@AriaExpanded(!_pinnedProjectsCollapsed)"
                             @onclick="TogglePinnedProjects">
                         <span>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</span>
                         <MudIcon Icon="@(_pinnedProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
@@ -109,7 +109,7 @@
             <section class="@RailGroupClass(_projectsCollapsed)" aria-label="@Text("Projects", "โปรเจกต์")">
                 <button type="button"
                         class="qe-agent-rail-group-toggle"
-                        aria-expanded="@(!_projectsCollapsed)"
+                        aria-expanded="@AriaExpanded(!_projectsCollapsed)"
                         @onclick="ToggleProjects">
                     <span>@Text("Projects", "โปรเจกต์")</span>
                     <MudIcon Icon="@(_projectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
@@ -160,7 +160,7 @@
             </div>
             <button type="button"
                     class="qe-agent-artifact-toggle"
-                    aria-expanded="@_artifactPanelOpen"
+                    aria-expanded="@AriaExpanded(_artifactPanelOpen)"
                     @onclick="ToggleArtifactPanel">
                 <MudIcon Icon="@Icons.Material.Outlined.Inventory2" Size="Size.Small" />
                 <span>@Text("Artifacts", "ไฟล์งาน")</span>
@@ -858,6 +858,11 @@
     private static string RailGroupClass(bool collapsed)
     {
         return collapsed ? "qe-agent-rail-group is-collapsed" : "qe-agent-rail-group";
+    }
+
+    private static string AriaExpanded(bool value)
+    {
+        return value ? "true" : "false";
     }
 
     private Task ToggleThemeAsync()

@@ -793,11 +793,13 @@
 .qe-agent-search-panel {
     display: grid;
     gap: 8px;
-    margin: 0 0 8px;
-    padding: 8px;
-    border: 1px solid var(--qe-agent-line);
-    border-radius: 12px;
-    background: var(--qe-agent-raised);
+    width: 100%;
+    min-width: 0;
+    margin: 4px 0 12px;
+    padding: 0 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     overflow: hidden;
 }
 
@@ -810,12 +812,13 @@
 
 .qe-agent-search-box {
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
+    grid-template-columns: 20px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    min-height: 36px;
-    padding: 0 10px;
-    border-radius: 10px;
+    min-height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 12px;
     background: var(--qe-agent-soft);
     color: var(--qe-agent-muted);
     min-width: 0;
@@ -839,9 +842,10 @@
 .qe-agent-search-results {
     display: grid;
     gap: 4px;
-    max-height: min(42dvh, 420px);
+    max-height: min(36dvh, 320px);
     overflow: auto;
-    padding-right: 2px;
+    padding: 2px 0;
+    min-width: 0;
 }
 
 .qe-agent-search-results button {
@@ -849,7 +853,7 @@
     gap: 2px;
     width: 100%;
     min-height: 54px;
-    padding: 8px 10px;
+    padding: 8px;
     border: 0;
     border-radius: 10px;
     background: transparent;
@@ -879,7 +883,7 @@
 }
 
 .qe-agent-search-results p {
-    margin: 4px;
+    margin: 4px 8px;
     line-height: 1.35;
 }
 

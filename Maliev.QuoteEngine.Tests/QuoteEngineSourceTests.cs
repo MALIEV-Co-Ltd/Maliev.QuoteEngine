@@ -685,6 +685,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("TogglePinnedProjects", component, StringComparison.Ordinal);
         Assert.Contains("ToggleProjects", component, StringComparison.Ordinal);
         Assert.Contains("RailGroupClass", component, StringComparison.Ordinal);
+        Assert.Contains("AriaExpanded", component, StringComparison.Ordinal);
         Assert.Contains("_pinnedProjectsCollapsed", component, StringComparison.Ordinal);
         Assert.Contains("_projectsCollapsed", component, StringComparison.Ordinal);
         Assert.Contains("MainClass => _messages.Count == 0 ? \"qe-agent-main qe-agent-main--empty\" : \"qe-agent-main qe-agent-main--chat\"", component, StringComparison.Ordinal);
@@ -786,7 +787,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 380px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("height: 100dvh;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("max-height: min(42dvh, 420px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-height: min(36dvh, 320px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-workflow", agentStyles, StringComparison.Ordinal);
@@ -1530,6 +1531,8 @@ public sealed class QuoteEngineSourceTests
         // Loader: real WASM progress contract + story timeline + dismissal gate.
         Assert.Contains("startBlazor", loaderScript, StringComparison.Ordinal);
         Assert.Contains("loadBootResource", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("if (type === \"dotnetjs\")", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("resolveStaticAsset(defaultUri)", loaderScript, StringComparison.Ordinal);
         Assert.Contains("let displayedProgress = 0", loaderScript, StringComparison.Ordinal);
         Assert.Contains("Math.max(displayedProgress, progress)", loaderScript, StringComparison.Ordinal);
         Assert.Contains("markRuntimeReady", loaderScript, StringComparison.Ordinal);

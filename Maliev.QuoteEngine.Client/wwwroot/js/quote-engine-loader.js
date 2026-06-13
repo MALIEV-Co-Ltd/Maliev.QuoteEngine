@@ -89,9 +89,14 @@
     setProgress(Math.min((loadedResources / estimatedTotal) * 100, 95));
   }
 
+  function resolveStaticAsset(defaultUri) {
+    const map = window.malievStaticAssetMap || {};
+    return map[defaultUri] || defaultUri;
+  }
+
   function loadBootResource(type, name, defaultUri, integrity) {
     if (type === "dotnetjs") {
-      return null;
+      return resolveStaticAsset(defaultUri);
     }
 
     const key = `${type}:${name}:${defaultUri}`;
