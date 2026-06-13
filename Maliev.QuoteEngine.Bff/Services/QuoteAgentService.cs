@@ -126,6 +126,13 @@ internal sealed class QuoteAgentService(
                 ReadString(request.Arguments, "requirements") ?? "Generate a formal quote artifact from the reviewed quote session.",
                 requiresAuthentication: true,
                 request.Arguments),
+            "quote_approve_quote" => PrepareActionOrGateError(
+                state,
+                "quote_approval",
+                "Approve formal quote",
+                ReadString(request.Arguments, "note") ?? "Approve the formal quote and allow order creation.",
+                requiresAuthentication: true,
+                request.Arguments),
             "quote_acknowledge_dfm" => PrepareActionOrGateError(
                 state,
                 "dfm_acknowledgement",
@@ -174,9 +181,10 @@ internal sealed class QuoteAgentService(
         {
             "draft_project" => ExecuteDraftProject(state, customerId!.Value, action),
             "formal_quote" => ExecuteFormalQuote(state, customerId!.Value, action),
+            "quote_approval" => ExecuteQuoteApproval(state),
             "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
             "create_order" => ExecuteCreateOrder(state, customerId!.Value, action),
-            "start_payment" => "Payment confirmation is queued. Checkout details must be verified before PaymentService handoff.",
+            "start_payment" => ExecuteStartPayment(state, customerId!.Value),
             _ => $"Action {action.ActionType} completed."
         };
 
@@ -289,15 +297,12 @@ internal sealed class QuoteAgentService(
                 "dfm_reviewed",
                 "configuration_complete",
                 "priced"),
+            "quote_approval" => FirstBlockingGate(gates, "quote_artifact_ready"),
             "dfm_acknowledgement" => state.Parts.Count == 0
                 ? gates.FirstOrDefault(gate => gate.Code == "geometry_required")
                 : null,
-            "create_order" => state.FormalQuote is null
-                ? gates.FirstOrDefault(gate => gate.Code == "quote_artifact_ready")
-                : null,
-            "start_payment" => state.Order is null
-                ? gates.FirstOrDefault(gate => gate.Code == "order_created")
-                : null,
+            "create_order" => FirstBlockingGate(gates, "quote_artifact_ready", "quote_approved"),
+            "start_payment" => FirstBlockingGate(gates, "order_created", "checkout_ready"),
             _ => null
         };
     }
@@ -397,6 +402,18 @@ internal sealed class QuoteAgentService(
         return $"Formal quote {state.FormalQuote.QuoteNumber} is ready.";
     }
 
+    private static string ExecuteQuoteApproval(QuoteAgentSessionState state)
+    {
+        if (state.FormalQuote is null)
+        {
+            throw new InvalidOperationException("A formal quote is required before quote approval.");
+        }
+
+        state.QuoteApproved = true;
+        UpsertArtifact(state, "quote_approval", "Quote approval", "approved", null, state.FormalQuote.PdfUrl);
+        return $"Formal quote {state.FormalQuote.QuoteNumber} is approved.";
+    }
+
     private static string ExecuteDfmAcknowledgement(QuoteAgentSessionState state)
     {
         foreach (var part in state.Parts)
@@ -414,10 +431,21 @@ internal sealed class QuoteAgentService(
             throw new InvalidOperationException("A formal quote is required before creating an order.");
         }
 
-        state.QuoteApproved = true;
         state.Order = prototypeStore.CreateOrder(customerId, state.FormalQuote.QuoteId);
         UpsertArtifact(state, "order", state.Order.OrderNumber, state.Order.Status, null, null);
         return $"Manufacturing order {state.Order.OrderNumber} is created.";
+    }
+
+    private string ExecuteStartPayment(QuoteAgentSessionState state, Guid customerId)
+    {
+        if (state.Order is null)
+        {
+            throw new InvalidOperationException("A manufacturing order is required before payment.");
+        }
+
+        state.Payment = prototypeStore.StartPayment(customerId, state.Order.OrderId);
+        UpsertArtifact(state, "payment", "Payment handoff", state.Payment.Status, null, state.Payment.PaymentUrl);
+        return $"Payment handoff is ready for {state.Order.OrderNumber}.";
     }
 
     private static QuotePartDraftDto? ResolvePart(

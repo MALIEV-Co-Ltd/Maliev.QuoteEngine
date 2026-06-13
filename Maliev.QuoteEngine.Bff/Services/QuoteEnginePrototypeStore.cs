@@ -625,6 +625,19 @@ public sealed class QuoteEnginePrototypeStore
         return new CreateManufacturingOrderResponse(order.OrderId, order.OrderNumber, order.Status);
     }
 
+    public InitiatePaymentResponse StartPayment(Guid customerId, Guid orderId)
+    {
+        if (!_orders.TryGetValue(orderId, out var order) || order.CustomerId != customerId)
+        {
+            throw new KeyNotFoundException($"Order '{orderId}' was not found for the signed-in customer.");
+        }
+
+        return new InitiatePaymentResponse(
+            Guid.NewGuid(),
+            $"/quote/v1/payments/prototype-checkout?orderId={orderId:D}",
+            "pending");
+    }
+
     private static string NormalizeEmail(string email)
     {
         return string.IsNullOrWhiteSpace(email) ? "customer@example.com" : email.Trim().ToLowerInvariant();

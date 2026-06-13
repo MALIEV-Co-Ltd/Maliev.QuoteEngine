@@ -295,6 +295,80 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Agent_quote_approval_requires_formal_quote_then_sets_quote_approved_gate()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-approval@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var blocked = await ExecuteToolAsync(client, sessionId, "quote_approve_quote");
+        using (var blockedDocument = JsonDocument.Parse(blocked))
+        {
+            Assert.Equal("quote_artifact_ready", blockedDocument.RootElement.GetProperty("requiredGateCode").GetString());
+            Assert.Equal("quote_approval", blockedDocument.RootElement.GetProperty("actionType").GetString());
+        }
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        var formalQuoteAction = Assert.Single(formalQuoteState.ProposedActions);
+        Assert.Equal("formal_quote", formalQuoteAction.ActionType);
+
+        var formalQuoteResult = await ConfirmActionAsync(client, formalQuoteAction.ActionId);
+        Assert.NotNull(formalQuoteResult.State);
+        Assert.Contains(formalQuoteResult.State.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
+        Assert.Contains(formalQuoteResult.State.Gates, gate => gate.Code == "quote_artifact_ready" && gate.Status == "passed");
+        Assert.Contains(formalQuoteResult.State.Gates, gate => gate.Code == "quote_approved" && gate.Status == "pending");
+
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        var approvalAction = Assert.Single(approvalState.ProposedActions);
+        Assert.Equal("quote_approval", approvalAction.ActionType);
+
+        var approvalResult = await ConfirmActionAsync(client, approvalAction.ActionId);
+
+        Assert.NotNull(approvalResult.State);
+        Assert.Contains(approvalResult.State.Gates, gate => gate.Code == "quote_approved" && gate.Status == "passed");
+        Assert.Contains(approvalResult.State.Artifacts, artifact =>
+            artifact.ArtifactType == "quote_approval" &&
+            artifact.Status == "approved");
+    }
+
+    [Fact]
+    public async Task Agent_payment_confirmation_after_order_sets_payment_gate_and_artifact()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-payment@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        var formalQuoteAction = Assert.Single(formalQuoteState.ProposedActions);
+        await ConfirmActionAsync(client, formalQuoteAction.ActionId);
+
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        var approvalAction = Assert.Single(approvalState.ProposedActions);
+        await ConfirmActionAsync(client, approvalAction.ActionId);
+
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        var orderAction = Assert.Single(orderState.ProposedActions);
+        Assert.Equal("create_order", orderAction.ActionType);
+        var orderResult = await ConfirmActionAsync(client, orderAction.ActionId);
+        Assert.NotNull(orderResult.State);
+        Assert.Contains(orderResult.State.Gates, gate => gate.Code == "order_created" && gate.Status == "passed");
+
+        var paymentState = await ExecuteToolForStateAsync(client, sessionId, "quote_start_payment");
+        var paymentAction = Assert.Single(paymentState.ProposedActions);
+        Assert.Equal("start_payment", paymentAction.ActionType);
+
+        var paymentResult = await ConfirmActionAsync(client, paymentAction.ActionId);
+
+        Assert.NotNull(paymentResult.State);
+        Assert.Contains("Payment handoff", paymentResult.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(paymentResult.State.Gates, gate => gate.Code == "payment_started_or_completed" && gate.Status == "passed");
+        Assert.Contains(paymentResult.State.Artifacts, artifact =>
+            artifact.ArtifactType == "payment" &&
+            artifact.Status == "pending" &&
+            !string.IsNullOrWhiteSpace(artifact.Url));
+    }
+
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)
     {
         var now = DateTimeOffset.UtcNow;
@@ -311,6 +385,102 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes("maliev-local-development-quote-agent-context-key"));
         var signature = Base64UrlTextEncoder.Encode(hmac.ComputeHash(Encoding.UTF8.GetBytes(encodedPayload)));
         return $"{encodedPayload}.{signature}";
+    }
+
+    private static async Task<HttpClient> CreateSignedInClientAsync(
+        WebApplicationFactory<Program> scopedFactory,
+        string email)
+    {
+        var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(email)}");
+        signIn.EnsureSuccessStatusCode();
+        return client;
+    }
+
+    private async Task<Guid> StartPricedCadSessionAsync(HttpClient client)
+    {
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Quote this STEP as 25 aluminum pieces with standard lead time.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "fixture.step",
+                    ContentType = "model/step",
+                    FileSizeBytes = 250_000,
+                    Kind = "cad",
+                    StoragePath = "quotes/temp/fixture.step"
+                }
+            ]
+        });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        return body.SessionId;
+    }
+
+    private static async Task<QuoteAgentStateResponse> ExecuteToolForStateAsync(
+        HttpClient client,
+        Guid sessionId,
+        string toolName)
+    {
+        var json = await ExecuteToolAsync(client, sessionId, toolName);
+        var state = JsonSerializer.Deserialize<QuoteAgentStateResponse>(json, JsonOptions);
+        Assert.NotNull(state);
+        return state;
+    }
+
+    private static async Task<string> ExecuteToolAsync(
+        HttpClient client,
+        Guid sessionId,
+        string toolName)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/quote/v1/agent/tools/{toolName}")
+        {
+            Content = JsonContent.Create(new QuoteAgentToolRequest(), options: JsonOptions)
+        };
+        request.Headers.TryAddWithoutValidation(
+            "X-Maliev-Agent-Context",
+            CreateSignedAgentContextToken(sessionId, Guid.NewGuid(), null));
+
+        using var response = await client.SendAsync(request);
+        var json = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return json;
+    }
+
+    private static async Task<QuoteAgentActionResultResponse> ConfirmActionAsync(
+        HttpClient client,
+        Guid actionId)
+    {
+        var response = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{actionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest
+            {
+                ConfirmationNote = "Customer confirmed from the quote agent test."
+            });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentActionResultResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        return body;
+    }
+
+    private WebApplicationFactory<Program> CreateAgentFactory()
+    {
+        return factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient, RecordingChatbotServiceClient>();
+            });
+        });
     }
 
     private sealed class RecordingChatbotServiceClient : IChatbotServiceClient
