@@ -2418,6 +2418,17 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspace_payment_failure_uses_problem_details_from_api_client()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var initiatePayment = ExtractSourceBlock(workspace, "private async Task InitiatePaymentAsync()", "private async Task RequestFreshViewerUrlAsync");
+
+        Assert.Contains("catch (QuoteEngineApiException ex)", initiatePayment, StringComparison.Ordinal);
+        Assert.Contains("_error = ex.UserMessage", initiatePayment, StringComparison.Ordinal);
+        Assert.DoesNotContain("catch (Exception)", initiatePayment, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeDfmTabRazor_exists_and_references_all_three_report_types()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeDfmTab.razor");

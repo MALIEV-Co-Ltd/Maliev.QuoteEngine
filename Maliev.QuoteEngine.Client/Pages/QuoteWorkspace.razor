@@ -853,7 +853,19 @@
                 _error = Text("Payment checkout is not available for this order yet.", "ยังไม่สามารถเปิดหน้าชำระเงินสำหรับคำสั่งซื้อนี้ได้");
             }
         }
-        catch (Exception)
+        catch (QuoteEngineApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (HttpRequestException)
+        {
+            _error = Text("Payment checkout failed. Please try again.", "เปิดหน้าชำระเงินไม่สำเร็จ กรุณาลองใหม่");
+        }
+        catch (InvalidOperationException)
+        {
+            _error = Text("Payment checkout failed. Please try again.", "เปิดหน้าชำระเงินไม่สำเร็จ กรุณาลองใหม่");
+        }
+        catch (JsonException)
         {
             _error = Text("Payment checkout failed. Please try again.", "เปิดหน้าชำระเงินไม่สำเร็จ กรุณาลองใหม่");
         }

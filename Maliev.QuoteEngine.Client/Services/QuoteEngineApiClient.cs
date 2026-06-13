@@ -1,5 +1,6 @@
-using System.Net.Http.Json;
+using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Chatbot;
@@ -237,10 +238,57 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     private async Task<TResponse> PostAsync<TRequest, TResponse>(string uri, TRequest request, CancellationToken cancellationToken)
     {
         using var response = await httpClient.PostAsJsonAsync(uri, request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(uri, response, cancellationToken);
+        }
+
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException($"The QuoteEngine API returned an empty response for {uri}.");
     }
+
+    private static async Task ThrowApiExceptionAsync(
+        string uri,
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        var fallbackMessage = $"The QuoteEngine API returned {(int)response.StatusCode} for {uri}.";
+        var detail = await TryReadProblemDetailAsync(response, cancellationToken);
+        throw new QuoteEngineApiException(
+            response.StatusCode,
+            string.IsNullOrWhiteSpace(detail) ? fallbackMessage : detail,
+            uri);
+    }
+
+    private static async Task<string?> TryReadProblemDetailAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var detail = ReadJsonString(root, "detail");
+            return !string.IsNullOrWhiteSpace(detail)
+                ? detail
+                : ReadJsonString(root, "title");
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static string? ReadJsonString(JsonElement root, string propertyName) =>
+        root.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
 
     private async Task<TResponse> GetFromJsonOrFallbackAsync<TResponse>(
         string uri,
@@ -262,4 +310,17 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return !cancellationToken.IsCancellationRequested
             && exception is HttpRequestException or JsonException or NotSupportedException or TaskCanceledException;
     }
+}
+
+/// <summary>Represents a QuoteEngine API failure with a customer-safe message from ProblemDetails.</summary>
+public sealed class QuoteEngineApiException(
+    HttpStatusCode statusCode,
+    string userMessage,
+    string requestUri) : HttpRequestException(userMessage, null, statusCode)
+{
+    /// <summary>Gets the message that can be shown to the customer.</summary>
+    public string UserMessage { get; } = userMessage;
+
+    /// <summary>Gets the relative request URI that failed.</summary>
+    public string RequestUri { get; } = requestUri;
 }

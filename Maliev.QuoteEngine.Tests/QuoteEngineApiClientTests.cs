@@ -1,4 +1,5 @@
 using System.Net;
+using Maliev.QuoteEngine.Shared.Quotes;
 using Maliev.QuoteEngine.Client.Services;
 using Xunit;
 
@@ -48,9 +49,40 @@ public sealed class QuoteEngineApiClientTests
         Assert.Null(demoProject);
     }
 
-    private static QuoteEngineApiClient CreateClient(string responseBody)
+    [Fact]
+    public async Task InitiatePaymentAsync_WhenApiReturnsProblemDetails_IncludesServerDetailInExceptionMessage()
     {
-        var httpClient = new HttpClient(new StaticResponseHandler(responseBody))
+        var client = CreateClient(
+            """
+            {
+              "title": "Billing and shipping addresses are required before checkout.",
+              "detail": "Select a billing address and a shipping address before starting payment.",
+              "status": 400
+            }
+            """,
+            HttpStatusCode.BadRequest,
+            "application/problem+json");
+
+        var exception = await Assert.ThrowsAsync<QuoteEngineApiException>(() => client.InitiatePaymentAsync(new InitiatePaymentRequest
+        {
+            OrderId = Guid.NewGuid(),
+            OrderNumber = "ORD-2026-0001",
+            Amount = 1500m,
+            Currency = "THB",
+            AcceptedTerms = true
+        }));
+
+        Assert.Contains("Select a billing address and a shipping address before starting payment.", exception.Message, StringComparison.Ordinal);
+        Assert.Equal("Select a billing address and a shipping address before starting payment.", exception.UserMessage);
+        Assert.Equal(HttpStatusCode.BadRequest, exception.StatusCode);
+    }
+
+    private static QuoteEngineApiClient CreateClient(
+        string responseBody,
+        HttpStatusCode statusCode = HttpStatusCode.OK,
+        string contentType = "text/html")
+    {
+        var httpClient = new HttpClient(new StaticResponseHandler(responseBody, statusCode, contentType))
         {
             BaseAddress = new Uri("http://localhost/")
         };
@@ -58,16 +90,19 @@ public sealed class QuoteEngineApiClientTests
         return new QuoteEngineApiClient(httpClient);
     }
 
-    private sealed class StaticResponseHandler(string responseBody) : HttpMessageHandler
+    private sealed class StaticResponseHandler(
+        string responseBody,
+        HttpStatusCode statusCode,
+        string contentType) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            var response = new HttpResponseMessage(statusCode)
             {
                 Content = new StringContent(responseBody)
             };
 
-            response.Content.Headers.ContentType = new("text/html");
+            response.Content.Headers.ContentType = new(contentType);
             return Task.FromResult(response);
         }
     }
