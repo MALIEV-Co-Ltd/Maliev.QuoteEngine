@@ -37,6 +37,17 @@ public sealed record QePaymentCompletedPayload(
     string Currency);
 
 /// <summary>
+/// Pushed to the client via SignalR "PaymentPending" when the payment provider keeps a transaction open.
+/// </summary>
+public sealed record QePaymentPendingPayload(
+    string OrderNumber,
+    Guid PaymentId,
+    decimal Amount,
+    string Currency,
+    string ProviderEventCode,
+    DateTimeOffset PendingAt);
+
+/// <summary>
 /// Pushed to the client via SignalR "PaymentFailed" when the payment gateway rejects or cancels a payment.
 /// </summary>
 public sealed record QePaymentFailedPayload(

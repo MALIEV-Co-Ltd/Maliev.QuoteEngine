@@ -463,6 +463,15 @@ else
                 });
             });
 
+            _notificationConnection.On<QePaymentPendingPayload>("PaymentPending", payload =>
+            {
+                _ = InvokeAsync(() =>
+                {
+                    ApplyPaymentPending(payload);
+                    StateHasChanged();
+                });
+            });
+
             _notificationConnection.On<QePaymentFailedPayload>("PaymentFailed", payload =>
             {
                 _ = InvokeAsync(() =>
@@ -539,6 +548,22 @@ else
             PaymentStatus = "Paid",
             UpdatedAt = DateTimeOffset.UtcNow,
             ManufacturingMilestones = BuildRealtimeMilestones("Paid", DateTimeOffset.UtcNow)
+        };
+    }
+
+    private void ApplyPaymentPending(QePaymentPendingPayload payload)
+    {
+        if (_order is null ||
+            !string.Equals(_order.OrderNumber, payload.OrderNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _paymentError = null;
+        _order = _order with
+        {
+            PaymentStatus = "Pending",
+            UpdatedAt = payload.PendingAt
         };
     }
 

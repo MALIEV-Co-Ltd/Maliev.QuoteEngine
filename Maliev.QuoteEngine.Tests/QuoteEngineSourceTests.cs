@@ -1008,16 +1008,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("LeaveOrderGroup", detail, StringComparison.Ordinal);
         Assert.Contains("OrderStatusChanged", detail, StringComparison.Ordinal);
         Assert.Contains("PaymentCompleted", detail, StringComparison.Ordinal);
+        Assert.Contains("PaymentPending", detail, StringComparison.Ordinal);
         Assert.Contains("PaymentFailed", detail, StringComparison.Ordinal);
         Assert.Contains("PaymentCancelled", detail, StringComparison.Ordinal);
         Assert.Contains("PaymentExpired", detail, StringComparison.Ordinal);
         Assert.Contains("QeOrderStatusChangedPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentCompletedPayload", detail, StringComparison.Ordinal);
+        Assert.Contains("QePaymentPendingPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentFailedPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentCancelledPayload", detail, StringComparison.Ordinal);
         Assert.Contains("QePaymentExpiredPayload", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyOrderStatusChanged", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentCompleted", detail, StringComparison.Ordinal);
+        Assert.Contains("ApplyPaymentPending", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentFailed", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentCancelled", detail, StringComparison.Ordinal);
         Assert.Contains("ApplyPaymentExpired", detail, StringComparison.Ordinal);
@@ -1582,6 +1585,62 @@ public sealed class QuoteEngineSourceTests
         Assert.Equal("card_declined", payload.ErrorMessage);
         Assert.Equal("failed_fraud_check", payload.ProviderErrorCode);
         Assert.Equal(failedAt, payload.FailedAt);
+    }
+
+    [Fact]
+    public async Task PaymentPendingConsumer_pushes_provider_neutral_pending_to_order_group()
+    {
+        var hubClients = Substitute.For<IHubClients>();
+        var hubGroup = Substitute.For<IClientProxy>();
+        hubClients.Group(Arg.Any<string>()).Returns(hubGroup);
+        var hubCtx = Substitute.For<IHubContext<QuoteNotificationsHub>>();
+        hubCtx.Clients.Returns(hubClients);
+        var consumer = new QuotePaymentPendingConsumer(
+            hubCtx,
+            NullLogger<QuotePaymentPendingConsumer>.Instance);
+        var transactionId = Guid.Parse("0fd63cdb-3de4-4f8e-8792-98b32aa329a7");
+        var pendingAt = DateTimeOffset.Parse("2026-06-13T10:05:00Z");
+        var @event = new PaymentPendingEvent(
+            MessageId: Guid.NewGuid(),
+            MessageName: nameof(PaymentPendingEvent),
+            MessageType: MessageType.Event,
+            MessageVersion: "1.0.0",
+            PublishedBy: "PaymentService",
+            ConsumedBy: ["QuoteEngine"],
+            CorrelationId: Guid.NewGuid(),
+            CausationId: null,
+            OccurredAtUtc: pendingAt,
+            IsPublic: true,
+            Payload: new PaymentPendingEventPayload(
+                TransactionId: transactionId,
+                IdempotencyKey: "customer:order:attempt",
+                Amount: 1500.00,
+                Currency: "THB",
+                CustomerId: "customer-1",
+                OrderId: "ORD-2026-0004",
+                ProviderName: "opn",
+                ProviderEventCode: "payment.processing",
+                PendingAt: pendingAt));
+        var consumeCtx = Substitute.For<ConsumeContext<PaymentPendingEvent>>();
+        consumeCtx.Message.Returns(@event);
+        consumeCtx.CancellationToken.Returns(CancellationToken.None);
+
+        await consumer.Consume(consumeCtx);
+
+        hubClients.Received(1).Group(QuoteNotificationsHub.OrderGroup("ORD-2026-0004"));
+        var call = Assert.Single(
+            hubGroup.ReceivedCalls(),
+            c => c.GetMethodInfo().Name == "SendCoreAsync");
+        var args = call.GetArguments();
+        Assert.Equal("PaymentPending", args[0]);
+        var payloadArgs = (object?[])args[1]!;
+        var payload = Assert.IsType<QePaymentPendingPayload>(payloadArgs[0]);
+        Assert.Equal("ORD-2026-0004", payload.OrderNumber);
+        Assert.Equal(transactionId, payload.PaymentId);
+        Assert.Equal(1500.00m, payload.Amount);
+        Assert.Equal("THB", payload.Currency);
+        Assert.Equal("payment.processing", payload.ProviderEventCode);
+        Assert.Equal(pendingAt, payload.PendingAt);
     }
 
     [Fact]
