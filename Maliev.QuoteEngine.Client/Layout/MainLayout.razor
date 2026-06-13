@@ -43,7 +43,7 @@
                         class="@LanguageButtonClass(SupportedCultures.ThaiCulture)"
                         @onclick="() => ChangeCultureAsync(SupportedCultures.ThaiCulture)">TH</button>
             </div>
-            @if (!IsHomePage)
+            @if (!IsQuoteWorkspace && !IsHomePage)
             {
                 <MudAutocomplete T="CurrencyOptionDto"
                                  Value="@SelectedCurrencyDto"
@@ -74,17 +74,20 @@
                     </ItemTemplate>
                 </MudAutocomplete>
             }
-            <button type="button"
-                    class="topbar-chat-toggle"
-                    title="@Text("MALIEV assistant", "ผู้ช่วย MALIEV")"
-                    aria-label="@Text("Open MALIEV assistant", "เปิดผู้ช่วย MALIEV")"
-                    @onclick="ToggleChatDrawerAsync">
-                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="topbar-chat-icon">
-                    <path d="M5 13a7 7 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
-                    <path d="M4 13h3v5H5a1 1 0 0 1-1-1v-4Zm13 0h3v4a1 1 0 0 1-1 1h-2v-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
-                    <path d="M17 18c-.8 1.4-2.2 2-4 2h-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
-                </svg>
-            </button>
+            @if (!IsQuoteWorkspace)
+            {
+                <button type="button"
+                        class="topbar-chat-toggle"
+                        title="@Text("MALIEV assistant", "ผู้ช่วย MALIEV")"
+                        aria-label="@Text("Open MALIEV assistant", "เปิดผู้ช่วย MALIEV")"
+                        @onclick="ToggleChatDrawerAsync">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="topbar-chat-icon">
+                        <path d="M5 13a7 7 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+                        <path d="M4 13h3v5H5a1 1 0 0 1-1-1v-4Zm13 0h3v4a1 1 0 0 1-1 1h-2v-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
+                        <path d="M17 18c-.8 1.4-2.2 2-4 2h-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
+                    </svg>
+                </button>
+            }
             @if (_authStatus.IsSignedIn)
             {
                 <details class="billing-account-menu">
@@ -260,7 +263,7 @@
     private static readonly CurrencyOptionDto FallbackCurrency = new("THB", "฿", "Thai Baht", true, true);
     private static readonly string[] PriorityCodes = ["THB", "USD", "EUR", "GBP", "JPY", "CNY", "SGD", "AUD", "CAD", "CHF"];
     private bool IsQuoteWorkspace => IsQuoteWorkspacePath(new Uri(Navigation.Uri).AbsolutePath);
-    private bool IsHomePage => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Length == 0;
+    private bool IsHomePage => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Length == 0 && !IsQuoteWorkspace;
     private string WorkspaceClass => IsQuoteWorkspace ? "workspace workspace--quote" : "workspace";
     private bool _chatDrawerOpen;
     private bool _isDarkMode;
@@ -272,7 +275,7 @@
     private CustomerProfileResponse? _profile;
     private string _selectedBillingAccountId = "personal";
     private string AppShellClass =>
-        $"app-shell{(_chatDrawerOpen ? " chatbot-open" : "")}{(IsHomePage ? " is-home" : "")}";
+        $"app-shell{(_chatDrawerOpen ? " chatbot-open" : "")}{(IsHomePage ? " is-home" : "")}{(IsQuoteWorkspace ? " is-quote-workspace" : "")}";
     private bool HasCompanyBillingAccount => !string.IsNullOrWhiteSpace(_profile?.CompanyName);
     private string PersonalBillingName => _profile?.DisplayName ?? _authStatus.DisplayName ?? Text("Customer account", "บัญชีลูกค้า");
     private string BillingAccountTitle => _selectedBillingAccountId == "company" && HasCompanyBillingAccount
@@ -292,7 +295,8 @@
     private static bool IsQuoteWorkspacePath(string path)
     {
         var normalized = path.TrimEnd('/');
-        return normalized.Equals("/projects/new", StringComparison.OrdinalIgnoreCase)
+        return normalized.Length == 0
+            || normalized.Equals("/projects/new", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("/quote/new", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("/quotes/new", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("/demo", StringComparison.OrdinalIgnoreCase);

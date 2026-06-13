@@ -1,56 +1,115 @@
 @namespace Maliev.QuoteEngine.Client.Components.QuoteAgent
 @inject QuoteEngineApiClient Api
+@inject PreferenceService Preferences
 
 <section class="qe-agent-shell" aria-label="@Text("Quote agent workspace", "พื้นที่ผู้ช่วยขอราคา")">
     <aside class="qe-agent-rail" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
-        <div class="qe-agent-rail-mark">
-            <strong>MALIEV</strong>
-            <span>QuoteEngine</span>
+        <div class="qe-agent-rail-head">
+            <a class="qe-agent-brand" href="/" aria-label="MALIEV">
+                <img src="/images/logo.svg" alt="MALIEV" />
+            </a>
+            <button type="button" class="qe-agent-collapse" title="@Text("Collapse sidebar", "ยุบแถบด้านข้าง")">
+                <MudIcon Icon="@Icons.Material.Outlined.MenuOpen" Size="Size.Small" />
+            </button>
         </div>
-        <nav class="qe-agent-rail-nav" aria-label="@Text("Workspace sections", "ส่วนพื้นที่ทำงาน")">
-            <a class="active" href="/quote/new">
-                <MudIcon Icon="@Icons.Material.Outlined.AddCircleOutline" Size="Size.Small" />
-                <span>@Text("New quote", "ขอราคาใหม่")</span>
+
+        <nav class="qe-agent-primary-nav" aria-label="@Text("Quote workspace", "พื้นที่ขอราคา")">
+            <a class="active" href="/">
+                <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
+                <span>@Text("New project", "โปรเจกต์ใหม่")</span>
             </a>
             <button type="button" @onclick="RequestUploadAsync">
                 <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
                 <span>@Text("Attach files", "แนบไฟล์")</span>
             </button>
-            @if (ShowDemoSampleCard)
-            {
-                <button type="button" @onclick="RequestSampleAsync">
-                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
-                    <span>@Text("Sample part", "ชิ้นงานตัวอย่าง")</span>
-                </button>
-            }
+            <button type="button">
+                <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
+                <span>@Text("Plugins", "ปลั๊กอิน")</span>
+            </button>
+            <a href="/quotes">
+                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
+                <span>@Text("Projects", "โปรเจกต์")</span>
+            </a>
         </nav>
+
+        <div class="qe-agent-rail-scroll">
+            <section class="qe-agent-rail-group" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
+                <header>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</header>
+                <a href="/quote/new">
+                    <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
+                    <span>@Text("Milling fixture quote", "ใบเสนอราคาจิ๊กกัด")</span>
+                </a>
+                <a href="/quote/new">
+                    <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
+                    <span>@Text("Nylon sensor housing", "กล่องเซนเซอร์ไนลอน")</span>
+                </a>
+            </section>
+
+            <section class="qe-agent-rail-group" aria-label="@Text("Projects", "โปรเจกต์")">
+                <header>@Text("Projects", "โปรเจกต์")</header>
+                <a href="/quote/new">
+                    <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
+                    <span>@Text("Aluminum mounting bracket", "ขายึดอะลูมิเนียม")</span>
+                </a>
+                <a href="/quote/new">
+                    <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
+                    <span>@Text("Injection mold insert", "อินเสิร์ตแม่พิมพ์")</span>
+                </a>
+                <a href="/quote/new">
+                    <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
+                    <span>@Text("CNC housing revision", "ปรับแบบกล่อง CNC")</span>
+                </a>
+            </section>
+        </div>
+
         <div class="qe-agent-rail-foot">
             @if (IsSignedIn)
             {
+                <span class="qe-agent-account-dot" aria-hidden="true">@Text("M", "ม")</span>
                 <span>@Text("Signed in", "เข้าสู่ระบบแล้ว")</span>
             }
             else
             {
-                <a href="/auth/sign-in?returnUrl=/quote/new">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                <a href="/auth/sign-in?returnUrl=/">@Text("Sign in", "เข้าสู่ระบบ")</a>
             }
         </div>
     </aside>
 
-    <div class="qe-agent-main">
+    <main class="qe-agent-main">
+        <div class="qe-agent-topline">
+            <div class="qe-agent-status">
+                <span aria-hidden="true"></span>
+                <strong>@Text("MALIEV Quote Agent", "ผู้ช่วยขอราคา MALIEV")</strong>
+            </div>
+            <button type="button"
+                    class="qe-agent-artifact-toggle"
+                    aria-expanded="@_artifactPanelOpen"
+                    @onclick="ToggleArtifactPanel">
+                <MudIcon Icon="@Icons.Material.Outlined.Inventory2" Size="Size.Small" />
+                <span>@Text("Artifacts", "ไฟล์งาน")</span>
+                <b>@_artifacts.Count</b>
+            </button>
+            <button type="button"
+                    class="qe-agent-round-btn"
+                    title="@Text("Toggle light or dark mode", "สลับโหมดสว่างหรือมืด")"
+                    aria-label="@Text("Toggle light or dark mode", "สลับโหมดสว่างหรือมืด")"
+                    @onclick="ToggleThemeAsync">
+                <MudIcon Icon="@ThemeIcon" Size="Size.Small" />
+            </button>
+        </div>
+
         <div class="qe-agent-thread" aria-live="polite">
             @if (_messages.Count == 0)
             {
                 <div class="qe-agent-prompt">
-                    <span>@Text("Custom manufacturing", "งานผลิตตามสั่ง")</span>
                     <h1>@Text("What do you want to make today?", "วันนี้ต้องการผลิตอะไร?")</h1>
-                    <p>@Text("Send requirements or attach CAD, drawings, photos, or sketches.", "ส่งรายละเอียดหรือแนบ CAD แบบ รูปภาพ หรือสเก็ตช์")</p>
                 </div>
             }
             else
             {
                 @foreach (var message in _messages)
                 {
-                    <article class="qe-agent-message @($"qe-agent-message--{message.Role}")">
+                    <article class="@($"qe-agent-message qe-agent-message--{message.Role}")">
                         <div class="qe-agent-avatar">@AvatarFor(message.Role)</div>
                         <div class="qe-agent-bubble">
                             <span>@RoleLabel(message.Role)</span>
@@ -66,97 +125,109 @@
             <div class="qe-agent-error" role="alert">@_error</div>
         }
 
-        <form class="qe-agent-composer" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
-            <button type="button" class="qe-agent-icon-btn" title="@Text("Attach files", "แนบไฟล์")" @onclick="RequestUploadAsync">
-                <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
-            </button>
-            <textarea @bind="_draftMessage"
-                      rows="1"
-                      maxlength="4000"
-                      placeholder="@Text("Ask about the part, material, tolerance, finish, quantity...", "ถามเรื่องชิ้นงาน วัสดุ พิกัดผิว จำนวน...")"
-                      aria-label="@Text("Message Mali", "ข้อความถึงมะลิ")"></textarea>
-            <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@_sending">
-                <MudIcon Icon="@Icons.Material.Filled.Send" Size="Size.Small" />
-            </button>
-        </form>
-    </div>
-
-    <aside class="qe-agent-workbench" aria-label="@Text("Live quote state", "สถานะขอราคาปัจจุบัน")">
-        <section class="qe-agent-panel">
-            <header>
-                <span>@Text("Gates", "เงื่อนไข")</span>
-                <strong>@PassedGateCount/@VisibleGates.Count</strong>
-            </header>
-            <div class="qe-agent-gates">
-                @foreach (var gate in VisibleGates)
+        <section class="qe-agent-composer-wrap" aria-label="@Text("Message composer", "กล่องข้อความ")">
+            <form class="qe-agent-composer" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
+                <button type="button" class="qe-agent-round-btn" title="@Text("Attach files", "แนบไฟล์")" @onclick="RequestUploadAsync">
+                    <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
+                </button>
+                <textarea @bind="_draftMessage"
+                          rows="1"
+                          maxlength="4000"
+                          placeholder="@Text("Describe your part, paste dimensions, or attach files...", "อธิบายชิ้นงาน วางขนาด หรือแนบไฟล์...")"
+                          aria-label="@Text("Message MALIEV Quote Agent", "ข้อความถึงผู้ช่วยขอราคา MALIEV")"></textarea>
+                <button type="button" class="qe-agent-round-btn" title="@Text("Attach CAD or drawing", "แนบ CAD หรือแบบ")" @onclick="RequestUploadAsync">
+                    <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
+                </button>
+                <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@_sending">
+                    <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" />
+                </button>
+            </form>
+            <div class="qe-agent-quick-actions" aria-label="@Text("Quick quote prompts", "คำสั่งลัดขอราคา")">
+                <button type="button" @onclick="RequestUploadAsync">
+                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+                    <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
+                </button>
+                <button type="button" @onclick="RequestUploadAsync">
+                    <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" Size="Size.Small" />
+                    <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
+                </button>
+                <button type="button" @onclick="RequestUploadAsync">
+                    <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
+                    <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
+                </button>
+                @if (ShowDemoSampleCard)
                 {
-                    <div class="@($"qe-agent-gate qe-agent-gate--{gate.Status}")">
-                        <MudIcon Icon="@GateIcon(gate.Status)" Size="Size.Small" />
-                        <div>
-                            <strong>@gate.Label</strong>
-                            <small>@gate.Detail</small>
-                        </div>
-                    </div>
+                    <button type="button" @onclick="RequestSampleAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.History" Size="Size.Small" />
+                        <span>@Text("Try sample part", "ลองชิ้นงานตัวอย่าง")</span>
+                    </button>
                 }
             </div>
         </section>
 
-        <section class="qe-agent-panel">
-            <header>
-                <span>@Text("Artifacts", "ไฟล์งาน")</span>
-                <strong>@_artifacts.Count</strong>
-            </header>
-            @if (_artifacts.Count == 0)
-            {
-                <p class="qe-agent-muted">@Text("Viewer, DFM, pricing, quote, and order artifacts appear here.", "โมเดล DFM ราคา ใบเสนอราคา และคำสั่งซื้อจะแสดงที่นี่")</p>
-            }
-            else
-            {
-                <div class="qe-agent-artifacts">
-                    @foreach (var artifact in _artifacts)
-                    {
-                        <div class="qe-agent-artifact">
-                            <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
-                            <div>
-                                <strong>@artifact.Title</strong>
-                                <small>@artifact.Status</small>
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-        </section>
-
-        @if (_proposedActions.Count > 0)
+        @if (_artifactPanelOpen)
         {
-            <section class="qe-agent-panel">
+            <button type="button"
+                    class="qe-agent-artifact-backdrop"
+                    aria-label="@Text("Close artifacts", "ปิดไฟล์งาน")"
+                    @onclick="ToggleArtifactPanel"></button>
+            <aside class="qe-agent-artifact-drawer" role="dialog" aria-modal="true" aria-label="@Text("Quote artifacts", "ไฟล์งานใบเสนอราคา")">
                 <header>
-                    <span>@Text("Confirm", "ยืนยัน")</span>
-                    <strong>@_proposedActions.Count</strong>
+                    <div>
+                        <span>@Text("Workbench", "พื้นที่งาน")</span>
+                        <strong>@Text("Artifacts", "ไฟล์งาน")</strong>
+                    </div>
+                    <button type="button" class="qe-agent-round-btn" @onclick="ToggleArtifactPanel" title="@Text("Close", "ปิด")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
                 </header>
-                <div class="qe-agent-actions">
-                    @foreach (var action in _proposedActions)
-                    {
-                        <article class="qe-agent-action">
-                            <strong>@action.Title</strong>
-                            <p>@action.Summary</p>
-                            @if (action.RequiresAuthentication && !IsSignedIn)
-                            {
-                                <a href="/auth/sign-in?returnUrl=/quote/new">@Text("Sign in", "เข้าสู่ระบบ")</a>
-                            }
-                            else
-                            {
-                                <button type="button" @onclick="@(() => ConfirmActionAsync(action))">
-                                    <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
-                                    <span>@Text("Confirm", "ยืนยัน")</span>
-                                </button>
-                            }
-                        </article>
-                    }
-                </div>
-            </section>
+                @if (_artifacts.Count == 0)
+                {
+                    <p class="qe-agent-muted">@Text("Viewer, DFM reports, estimates, quote PDFs, order records, and payment handoffs will appear here.", "โมเดล รายงาน DFM ราคา ใบเสนอราคา คำสั่งซื้อ และการชำระเงินจะแสดงที่นี่")</p>
+                }
+                else
+                {
+                    <div class="qe-agent-artifacts">
+                        @foreach (var artifact in _artifacts)
+                        {
+                            <div class="qe-agent-artifact">
+                                <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
+                                <div>
+                                    <strong>@artifact.Title</strong>
+                                    <small>@artifact.Status</small>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (_proposedActions.Count > 0)
+                {
+                    <section class="qe-agent-actions">
+                        <header>@Text("Confirm actions", "ยืนยันการทำงาน")</header>
+                        @foreach (var action in _proposedActions)
+                        {
+                            <article class="qe-agent-action">
+                                <strong>@action.Title</strong>
+                                <p>@action.Summary</p>
+                                @if (action.RequiresAuthentication && !IsSignedIn)
+                                {
+                                    <a href="/auth/sign-in?returnUrl=/">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                                }
+                                else
+                                {
+                                    <button type="button" @onclick="@(() => ConfirmActionAsync(action))">
+                                        <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
+                                        <span>@Text("Confirm", "ยืนยัน")</span>
+                                    </button>
+                                }
+                            </article>
+                        }
+                    </section>
+                }
+            </aside>
         }
-    </aside>
+    </main>
 </section>
 
 @code {
@@ -168,6 +239,7 @@
     private string _draftMessage = string.Empty;
     private string? _error;
     private bool _sending;
+    private bool _artifactPanelOpen;
 
     [Parameter]
     public Guid SessionId { get; set; }
@@ -193,19 +265,10 @@
     [Parameter]
     public EventCallback OnSampleRequested { get; set; }
 
-    private IReadOnlyList<QuoteAgentGateDto> VisibleGates => _gates.Count > 0 ? _gates : DefaultGates;
+    [CascadingParameter(Name = "IsDarkMode")]
+    private bool IsDarkMode { get; set; }
 
-    private int PassedGateCount => VisibleGates.Count(gate => gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase));
-
-    private static IReadOnlyList<QuoteAgentGateDto> DefaultGates { get; } =
-    [
-        new("geometry_required", "Usable 3D/CAD geometry", "blocked", "Upload CAD or 3D geometry."),
-        new("analysis_complete", "Analysis complete", "pending", "Geometry and DFM analysis will run after upload."),
-        new("dfm_reviewed", "DFM reviewed", "pending", "Review manufacturing issues before order."),
-        new("configuration_complete", "Configuration complete", "pending", "Choose process, material, tolerance, quantity, and lead time."),
-        new("priced", "Priced", "pending", "Estimate appears after required gates."),
-        new("customer_authenticated", "Signed in", "blocked", "Required before formal quote, order, and payment.")
-    ];
+    private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -296,6 +359,16 @@
         _proposedActions = state.ProposedActions;
     }
 
+    private void ToggleArtifactPanel()
+    {
+        _artifactPanelOpen = !_artifactPanelOpen;
+    }
+
+    private Task ToggleThemeAsync()
+    {
+        return Preferences.SetThemeAsync(IsDarkMode ? PreferenceService.LightTheme : PreferenceService.DarkTheme);
+    }
+
     private async Task RequestUploadAsync()
     {
         if (OnUploadRequested.HasDelegate)
@@ -322,16 +395,6 @@
         return role.Equals("user", StringComparison.OrdinalIgnoreCase)
             ? Text("You", "คุณ")
             : "Mali";
-    }
-
-    private static string GateIcon(string status)
-    {
-        return status.ToLowerInvariant() switch
-        {
-            "passed" => Icons.Material.Filled.CheckCircle,
-            "blocked" => Icons.Material.Filled.RadioButtonUnchecked,
-            _ => Icons.Material.Outlined.Pending
-        };
     }
 
     private static string ArtifactIcon(string artifactType)
