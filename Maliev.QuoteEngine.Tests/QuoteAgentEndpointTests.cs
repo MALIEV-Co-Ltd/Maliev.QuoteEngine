@@ -468,6 +468,74 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Agent_resume_project_hydrates_state_from_customer_project()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-resume@example.com");
+        var sourceSessionId = await StartPricedCadSessionAsync(client);
+
+        var draftState = await ExecuteToolForStateAsync(client, sourceSessionId, "quote_prepare_draft_project");
+        var draftAction = Assert.Single(draftState.ProposedActions);
+        var draftResult = await ConfirmActionAsync(client, draftAction.ActionId);
+        Assert.NotNull(draftResult.State);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var projectId));
+
+        var resumedSessionId = Guid.NewGuid();
+        var resumed = await ExecuteToolForStateAsync(
+            client,
+            resumedSessionId,
+            "quote_resume_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["project_id"] = JsonSerializer.SerializeToElement(projectId.ToString("D"), JsonOptions)
+            });
+
+        Assert.Equal(resumedSessionId, resumed.SessionId);
+        Assert.Single(resumed.Parts);
+        Assert.Contains("lead time STANDARD", resumed.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(resumed.Gates, gate => gate.Code == "geometry_required" && gate.Status == "passed");
+        Assert.Contains(resumed.Gates, gate => gate.Code == "analysis_complete" && gate.Status == "passed");
+        Assert.Contains(resumed.Artifacts, artifact =>
+            artifact.ArtifactType == "resumed_project" &&
+            artifact.Metadata["projectId"] == projectId.ToString("D"));
+        Assert.Contains(resumed.Artifacts, artifact => artifact.ArtifactType == "viewer" && artifact.Status == "ready");
+        Assert.NotNull(resumed.Estimate);
+    }
+
+    [Fact]
+    public async Task Agent_resume_project_rejects_project_owned_by_another_customer()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var ownerClient = await CreateSignedInClientAsync(scopedFactory, "agent-resume-owner@example.com");
+        var ownerSessionId = await StartPricedCadSessionAsync(ownerClient);
+        var draftState = await ExecuteToolForStateAsync(ownerClient, ownerSessionId, "quote_prepare_draft_project");
+        var draftAction = Assert.Single(draftState.ProposedActions);
+        var draftResult = await ConfirmActionAsync(ownerClient, draftAction.ActionId);
+        Assert.NotNull(draftResult.State);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var projectId));
+
+        using var otherClient = await CreateSignedInClientAsync(scopedFactory, "agent-resume-other@example.com");
+        var json = await ExecuteToolAsync(
+            otherClient,
+            Guid.NewGuid(),
+            "quote_resume_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["project_id"] = JsonSerializer.SerializeToElement(projectId.ToString("D"), JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("project_access", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("resume_project", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Contains(
+            "not found",
+            document.RootElement.GetProperty("error").GetString(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)
     {
         var now = DateTimeOffset.UtcNow;

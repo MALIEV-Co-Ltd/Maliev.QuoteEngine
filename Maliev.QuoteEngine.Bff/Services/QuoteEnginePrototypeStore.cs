@@ -574,6 +574,19 @@ public sealed class QuoteEnginePrototypeStore
             ClonePartsForResponse(duplicated.Parts));
     }
 
+    internal CustomerProjectRecord? GetProject(Guid customerId, Guid projectId)
+    {
+        if (!_projects.TryGetValue(projectId, out var project) || project.CustomerId != customerId)
+        {
+            return null;
+        }
+
+        return project with
+        {
+            Parts = ClonePartsForResponse(project.Parts)
+        };
+    }
+
     private static CustomerProjectRecord CreateProjectRecord(
         Guid customerId,
         string title,

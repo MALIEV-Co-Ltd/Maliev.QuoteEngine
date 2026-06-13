@@ -110,6 +110,7 @@ internal sealed class QuoteAgentService(
             "quote_get_state" => ToStateResponse(state),
             "quote_get_reference_data" => prototypeStore.ReferenceData,
             "quote_get_account_context" => BuildAccountContext(state),
+            "quote_resume_project" => ResumeProjectOrGateError(state, request.Arguments),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
             "quote_calculate_estimate" => CalculateEstimate(state),
             "quote_prepare_draft_project" => PrepareActionOrGateError(
@@ -395,6 +396,88 @@ internal sealed class QuoteAgentService(
             signUpUrl = "/auth/sign-up?returnUrl=/quote/new",
             gates = QuoteAgentSessionStore.BuildGates(state, customerId.HasValue)
         };
+    }
+
+    private object ResumeProjectOrGateError(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments)
+    {
+        var customerId = ResolveCustomerId() ?? state.CustomerId;
+        if (!customerId.HasValue)
+        {
+            return new
+            {
+                error = "Sign in before resuming customer projects.",
+                requiredGateCode = "customer_authenticated",
+                actionType = "resume_project",
+                state = ToStateResponse(state)
+            };
+        }
+
+        if (!TryReadGuid(arguments, "project_id", out var projectId) &&
+            !TryReadGuid(arguments, "projectId", out projectId))
+        {
+            return new
+            {
+                error = "A project_id is required to resume a customer project.",
+                requiredGateCode = "project_id",
+                actionType = "resume_project",
+                state = ToStateResponse(state)
+            };
+        }
+
+        var project = prototypeStore.GetProject(customerId.Value, projectId);
+        if (project is null)
+        {
+            return new
+            {
+                error = "The requested project was not found for the signed-in customer.",
+                requiredGateCode = "project_access",
+                actionType = "resume_project",
+                state = ToStateResponse(state)
+            };
+        }
+
+        lock (state.SyncRoot)
+        {
+            state.Parts.Clear();
+            state.Attachments.Clear();
+            state.Artifacts.Clear();
+            state.ProposedActions.Clear();
+            state.Estimate = null;
+            state.FormalQuote = null;
+            state.QuoteApproved = false;
+            state.Order = null;
+            state.Payment = null;
+
+            foreach (var part in project.Parts)
+            {
+                state.Parts.Add(part);
+                UpsertArtifact(state, "viewer", $"3D viewer - {part.FileName}", "ready", part.PartId, part.ViewerGlbUrl);
+                UpsertArtifact(state, "dfm", $"DFM analysis - {part.FileName}", "ready", part.PartId, null);
+            }
+
+            UpsertArtifact(state, "requirements_summary", "Project summary", "ready", null, null);
+            UpsertArtifact(state, "resumed_project", project.Title, project.Status, null, null);
+            SetArtifactMetadata(state, "resumed_project", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["projectId"] = project.ProjectId.ToString("D"),
+                ["projectNumber"] = project.ProjectNumber
+            });
+
+            if (HasPriceableConfiguration(state))
+            {
+                state.Estimate = prototypeStore.Estimate(new QuoteEstimateRequest
+                {
+                    QuoteSessionId = state.SessionId.ToString("N"),
+                    LeadTimeCode = state.LeadTimeCode,
+                    Parts = state.Parts
+                });
+                UpsertArtifact(state, "pricing", "Pricing estimate", "ready", null, null);
+            }
+        }
+
+        return ToStateResponse(state);
     }
 
     private string ExecuteDraftProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
@@ -990,6 +1073,15 @@ Customer message:
             JsonValueKind.False => "false",
             _ => null
         };
+    }
+
+    private static bool TryReadGuid(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        string key,
+        out Guid value)
+    {
+        value = Guid.Empty;
+        return Guid.TryParse(ReadString(arguments, key), out value);
     }
 
     private static string NormalizeLanguage(string? language, string message = "")
