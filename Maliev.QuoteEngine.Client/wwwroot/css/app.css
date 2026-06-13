@@ -4875,6 +4875,60 @@ textarea::placeholder {
     box-shadow: none;
 }
 
+.qe-page-drop-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    color: var(--maliev-ink);
+    background: color-mix(in srgb, var(--maliev-bg) 72%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 140ms ease;
+}
+
+.qe-pn-root.is-dragover .qe-page-drop-overlay {
+    opacity: 1;
+}
+
+.qe-page-drop-overlay-inner {
+    display: grid;
+    place-items: center;
+    width: min(520px, 100%);
+    padding: 34px 28px;
+    border: 1px dashed color-mix(in srgb, var(--maliev-ink) 32%, transparent);
+    border-radius: var(--maliev-radius-lg);
+    background: color-mix(in srgb, var(--maliev-panel) 84%, transparent);
+    box-shadow: var(--maliev-shadow-card);
+    text-align: center;
+}
+
+.qe-page-drop-overlay-inner .mud-icon-root {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 12px;
+    color: var(--maliev-ink);
+    font-size: 34px;
+}
+
+.qe-page-drop-overlay-inner strong {
+    font-size: var(--maliev-font-body-xl);
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.qe-page-drop-overlay-inner span {
+    max-width: 360px;
+    margin-top: 8px;
+    color: var(--maliev-muted);
+    font-size: var(--maliev-font-base);
+    line-height: 1.45;
+}
+
 .qe-pn-body {
     flex: 1 1 0;
     display: flex;

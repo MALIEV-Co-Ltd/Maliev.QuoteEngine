@@ -88,7 +88,7 @@ window.quoteEngineUploads = (() => {
     document.getElementById(inputId)?.click();
   }
 
-  function registerDropzone(dropzoneId, inputId, dotNetRef) {
+  function registerDropzone(dropzoneId, inputId, dotNetRef, options) {
     const dropzone = document.getElementById(dropzoneId);
     const input = document.getElementById(inputId);
     if (!dropzone || !input || !dotNetRef) {
@@ -96,6 +96,8 @@ window.quoteEngineUploads = (() => {
     }
 
     unregisterDropzone(dropzoneId);
+    const registrationOptions = options || {};
+    const clickToOpen = registrationOptions.clickToOpen !== false;
 
     const openPicker = event => {
       event.preventDefault();
@@ -116,6 +118,7 @@ window.quoteEngineUploads = (() => {
 
     const drop = async event => {
       event.preventDefault();
+      event.stopPropagation();
       dropzone.classList.remove("is-dragover");
       if (!event.dataTransfer?.files?.length) {
         return;
@@ -137,7 +140,10 @@ window.quoteEngineUploads = (() => {
       await dotNetRef.invokeMethodAsync("HandleDroppedFilesAsync", files);
     };
 
-    dropzone.addEventListener("click", openPicker);
+    if (clickToOpen) {
+      dropzone.addEventListener("click", openPicker);
+    }
+
     dropzone.addEventListener("dragover", dragOver);
     dropzone.addEventListener("dragleave", dragLeave);
     dropzone.addEventListener("drop", drop);
@@ -147,7 +153,8 @@ window.quoteEngineUploads = (() => {
       openPicker,
       dragOver,
       dragLeave,
-      drop
+      drop,
+      clickToOpen
     });
   }
 
@@ -157,7 +164,10 @@ window.quoteEngineUploads = (() => {
       return;
     }
 
-    registration.dropzone.removeEventListener("click", registration.openPicker);
+    if (registration.clickToOpen) {
+      registration.dropzone.removeEventListener("click", registration.openPicker);
+    }
+
     registration.dropzone.removeEventListener("dragover", registration.dragOver);
     registration.dropzone.removeEventListener("dragleave", registration.dragLeave);
     registration.dropzone.removeEventListener("drop", registration.drop);

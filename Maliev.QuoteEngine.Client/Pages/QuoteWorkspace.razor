@@ -16,9 +16,17 @@
 
 <PageTitle>@Text("New manufacturing quote - MALIEV", "ขอราคาการผลิตใหม่ - MALIEV")</PageTitle>
 
-<div class="@WorkspaceRootClass">
+<div id="@PageDropzoneId" class="@WorkspaceRootClass">
     <div id="@UploadContainerId">
         <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@QuoteUploadConstraints.SupportedCadAccept" disabled="@(!_routeStateInitialized || IsDemoMode)" />
+    </div>
+
+    <div class="qe-page-drop-overlay" aria-hidden="true">
+        <div class="qe-page-drop-overlay-inner">
+            <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Large" />
+            <strong>@Text("Drop files anywhere to start", "วางไฟล์ที่ใดก็ได้เพื่อเริ่ม")</strong>
+            <span>@Text("CAD, drawings, photos, and sketches will be attached to this project.", "แนบ CAD แบบ รูปถ่าย และสเก็ตช์เข้ากับโปรเจกต์นี้")</span>
+        </div>
     </div>
 
     <div class="qe-pn-body">
@@ -152,6 +160,7 @@
 @code {
     private const string UploadContainerId = "quote-upload-container";
     private const string UploadInputId = "quote-cad-files";
+    private const string PageDropzoneId = "quote-page-dropzone";
     private const string CompactDropzoneId = "quote-compact-dropzone";
     private const string MobileDropzoneId = "quote-mobile-dropzone";
     private const string HeroDropzoneId = "quote-hero-dropzone";
@@ -297,8 +306,8 @@
         }
 
         var activeDropzoneIds = IsWorkspaceReady
-            ? new[] { CompactDropzoneId, MobileDropzoneId }
-            : [HeroDropzoneId];
+            ? new[] { PageDropzoneId, CompactDropzoneId, MobileDropzoneId }
+            : [PageDropzoneId, HeroDropzoneId];
 
         if (_registeredDropzoneIds.SetEquals(activeDropzoneIds))
         {
@@ -315,7 +324,14 @@
         {
             if (_registeredDropzoneIds.Add(activeDropzoneId))
             {
-                await Js.InvokeVoidAsync("quoteEngineUploads.registerDropzone", activeDropzoneId, UploadInputId, _dotNetRef);
+                if (string.Equals(activeDropzoneId, PageDropzoneId, StringComparison.Ordinal))
+                {
+                    await Js.InvokeVoidAsync("quoteEngineUploads.registerDropzone", activeDropzoneId, UploadInputId, _dotNetRef, new { clickToOpen = false });
+                }
+                else
+                {
+                    await Js.InvokeVoidAsync("quoteEngineUploads.registerDropzone", activeDropzoneId, UploadInputId, _dotNetRef);
+                }
             }
         }
     }
@@ -1405,6 +1421,7 @@
         try
         {
             await ClearRetainedBrowserUploadFilesAsync("dispose");
+            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", PageDropzoneId);
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", CompactDropzoneId);
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", MobileDropzoneId);
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", HeroDropzoneId);
