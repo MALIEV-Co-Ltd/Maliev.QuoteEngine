@@ -666,8 +666,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OpenSketchAsync", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-sketch.js", component, StringComparison.Ordinal);
         Assert.Contains("initSketchCanvas", component, StringComparison.Ordinal);
+        Assert.Contains("setSketchBrushColor", component, StringComparison.Ordinal);
         Assert.Contains("exportSketchCanvas", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-sketch-canvas\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-sketch-tools\"", component, StringComparison.Ordinal);
+        Assert.Contains("SketchColorOption", component, StringComparison.Ordinal);
+        Assert.Contains("SelectSketchColorAsync", component, StringComparison.Ordinal);
+        Assert.Contains("new(\"Red\", \"แดง\", \"#dc2626\")", component, StringComparison.Ordinal);
+        Assert.Contains("new(\"Blue\", \"น้ำเงิน\", \"#2563eb\")", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-workbench\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-gates\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("<span>@Text(\"Gates\"", component, StringComparison.Ordinal);
@@ -698,12 +704,21 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("--qe-agent-primary: #0a72ef;", agentStyles, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("background: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-dialog", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-sketch-tools", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-sketch-color", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-paper", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border: 0 !important;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("background: var(--qe-agent-bg);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-right: 0;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("#0072f5", agentStyles, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("var(--accent", agentStyles, StringComparison.OrdinalIgnoreCase);
+
+        var sketchScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-agent-sketch.js");
+        Assert.Contains("function pressureFor(event)", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("event.pressure", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("quadraticCurveTo", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("drawSoftSegment", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("export function setSketchBrushColor", sketchScript, StringComparison.Ordinal);
     }
 
     [Fact]

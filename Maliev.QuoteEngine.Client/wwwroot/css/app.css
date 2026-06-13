@@ -1122,6 +1122,45 @@
     font-weight: 600;
 }
 
+.qe-agent-sketch-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 38px;
+    padding: 4px;
+    border-radius: 12px;
+    background: var(--qe-agent-raised);
+}
+
+.qe-agent-sketch-color {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    cursor: pointer;
+}
+
+.qe-agent-sketch-color span {
+    display: block;
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+    background: var(--sketch-color);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 22%, transparent);
+}
+
+.qe-agent-sketch-color:hover,
+.qe-agent-sketch-color.active {
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-sketch-color.active {
+    box-shadow: inset 0 0 0 2px var(--qe-agent-primary);
+}
+
 .qe-agent-sketch-paper {
     min-height: 0;
     overflow: hidden;
@@ -1222,6 +1261,12 @@
     .qe-agent-sketch-dialog > footer {
         flex-wrap: wrap;
         justify-content: flex-end;
+    }
+
+    .qe-agent-sketch-tools {
+        order: -1;
+        width: 100%;
+        justify-content: center;
     }
 
     .qe-agent-sketch-canvas {

@@ -185,6 +185,20 @@
                             aria-label="@Text("Draw your part sketch with a mouse or pen", "วาดสเก็ตช์ชิ้นงานด้วยเมาส์หรือปากกา")"></canvas>
                 </div>
                 <footer>
+                    <div class="qe-agent-sketch-tools" aria-label="@Text("Sketch colors", "สีสเก็ตช์")">
+                        @foreach (var swatch in SketchColors)
+                        {
+                            <button type="button"
+                                    class="@($"qe-agent-sketch-color {(swatch.Hex == _sketchColor ? "active" : string.Empty)}")"
+                                    style="@($"--sketch-color:{swatch.Hex}")"
+                                    title="@swatch.Name"
+                                    aria-label="@Text($"Use {swatch.Name} ink", $"ใช้สี{swatch.ThaiName}")"
+                                    aria-pressed="@(swatch.Hex == _sketchColor)"
+                                    @onclick="@(() => SelectSketchColorAsync(swatch.Hex))">
+                                <span></span>
+                            </button>
+                        }
+                    </div>
                     <button type="button" class="qe-agent-secondary-btn" @onclick="ClearSketchAsync">
                         <MudIcon Icon="@Icons.Material.Outlined.Backspace" Size="Size.Small" />
                         <span>@Text("Clear", "ล้าง")</span>
@@ -276,9 +290,19 @@
     private bool _sketchInitPending;
     private string _projectName = $"Manufacturing project {DateTimeOffset.Now:yyyy-MM-dd}";
     private string _sketchTitle = "Untitled sketch";
+    private string _sketchColor = "#161616";
     private string? _lastSketchDataUrl;
     private IJSObjectReference? _sketchModule;
     private string SketchCanvasId { get; } = $"qe-agent-sketch-{Guid.NewGuid():N}";
+    private static readonly SketchColorOption[] SketchColors =
+    [
+        new("Black", "ดำ", "#161616"),
+        new("Red", "แดง", "#dc2626"),
+        new("Blue", "น้ำเงิน", "#2563eb"),
+        new("Green", "เขียว", "#16a34a"),
+        new("Amber", "เหลืองอำพัน", "#d97706"),
+        new("White", "ขาว", "#ffffff")
+    ];
 
     [Parameter]
     public Guid SessionId { get; set; }
@@ -324,6 +348,7 @@
         _sketchInitPending = false;
         _sketchModule ??= await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-sketch.js");
         await _sketchModule.InvokeVoidAsync("initSketchCanvas", SketchCanvasId);
+        await _sketchModule.InvokeVoidAsync("setSketchBrushColor", SketchCanvasId, _sketchColor);
     }
 
     private async Task LoadStateAsync()
@@ -442,6 +467,15 @@
         }
     }
 
+    private async Task SelectSketchColorAsync(string color)
+    {
+        _sketchColor = color;
+        if (_sketchModule is not null)
+        {
+            await _sketchModule.InvokeVoidAsync("setSketchBrushColor", SketchCanvasId, _sketchColor);
+        }
+    }
+
     private async Task AttachSketchAsync()
     {
         if (_sketchModule is not null)
@@ -486,6 +520,8 @@
     }
 
     private sealed record AgentMessageRow(string Role, string Content);
+
+    private sealed record SketchColorOption(string Name, string ThaiName, string Hex);
 
     public async ValueTask DisposeAsync()
     {

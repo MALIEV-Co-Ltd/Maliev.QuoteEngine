@@ -20,6 +20,41 @@ function canvasPoint(canvas, event) {
     };
 }
 
+function pressureFor(event) {
+    if (event.pressure && event.pressure > 0) {
+        return Math.min(1, Math.max(0.08, event.pressure));
+    }
+
+    return event.pointerType === "mouse" ? 0.42 : 0.55;
+}
+
+function midpoint(a, b) {
+    return {
+        x: (a.x + b.x) / 2,
+        y: (a.y + b.y) / 2,
+        pressure: (a.pressure + b.pressure) / 2
+    };
+}
+
+function drawSoftSegment(ctx, from, control, to, color) {
+    const pressure = Math.max(0.08, Math.min(1, control.pressure));
+    const width = 1.2 + pressure * 7.2;
+
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.62 + pressure * 0.38;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = width;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = Math.max(0.4, width * 0.22);
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.quadraticCurveTo(control.x, control.y, to.x, to.y);
+    ctx.stroke();
+    ctx.restore();
+}
+
 function drawPaper(ctx, canvas) {
     ctx.save();
     ctx.fillStyle = "#ffffff";
@@ -56,8 +91,10 @@ export function initSketchCanvas(canvasId) {
     }
 
     const state = {
+        color: "#161616",
         drawing: false,
         lastPoint: null,
+        lastMidpoint: null,
         pointerId: null
     };
 
@@ -67,7 +104,8 @@ export function initSketchCanvas(canvasId) {
         event.preventDefault();
         state.drawing = true;
         state.pointerId = event.pointerId;
-        state.lastPoint = canvasPoint(canvas, event);
+        state.lastPoint = { ...canvasPoint(canvas, event), pressure: pressureFor(event) };
+        state.lastMidpoint = state.lastPoint;
         canvas.setPointerCapture(event.pointerId);
     };
 
@@ -77,21 +115,12 @@ export function initSketchCanvas(canvasId) {
         }
 
         event.preventDefault();
-        const point = canvasPoint(canvas, event);
-        const pressure = event.pressure && event.pressure > 0 ? event.pressure : 0.55;
-
-        ctx.save();
-        ctx.strokeStyle = "#161616";
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.lineWidth = Math.max(2, pressure * 5);
-        ctx.beginPath();
-        ctx.moveTo(state.lastPoint.x, state.lastPoint.y);
-        ctx.lineTo(point.x, point.y);
-        ctx.stroke();
-        ctx.restore();
+        const point = { ...canvasPoint(canvas, event), pressure: pressureFor(event) };
+        const nextMidpoint = midpoint(state.lastPoint, point);
+        drawSoftSegment(ctx, state.lastMidpoint, state.lastPoint, nextMidpoint, state.color);
 
         state.lastPoint = point;
+        state.lastMidpoint = nextMidpoint;
     };
 
     const stop = (event) => {
@@ -99,6 +128,7 @@ export function initSketchCanvas(canvasId) {
             state.drawing = false;
             state.pointerId = null;
             state.lastPoint = null;
+            state.lastMidpoint = null;
         }
     };
 
@@ -107,7 +137,16 @@ export function initSketchCanvas(canvasId) {
     canvas.addEventListener("pointerup", stop);
     canvas.addEventListener("pointercancel", stop);
     canvas.addEventListener("lostpointercapture", stop);
-    canvases.set(canvasId, { canvas, ctx, start, move, stop });
+    canvases.set(canvasId, { canvas, ctx, state, start, move, stop });
+}
+
+export function setSketchBrushColor(canvasId, color) {
+    const entry = canvases.get(canvasId);
+    if (!entry) {
+        return;
+    }
+
+    entry.state.color = color || "#161616";
 }
 
 export function clearSketchCanvas(canvasId) {
