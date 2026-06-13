@@ -496,6 +496,7 @@ internal sealed class QuoteAgentService(
                 UpsertArtifact(state, "viewer", $"3D viewer - {part.FileName}", "ready", part.PartId, part.ViewerGlbUrl);
                 UpsertArtifact(state, "dfm", $"DFM analysis - {part.FileName}", "ready", part.PartId, null);
                 UpsertArtifact(state, "requirements_summary", "Project summary", "ready", part.PartId, null);
+                MarkSupplementalAnalysisGeometrySatisfied(state);
             }
 
             ApplyMessageConfiguration(state, request.Message);
@@ -549,6 +550,19 @@ internal sealed class QuoteAgentService(
                 AttachSupplementalFiles(part, supplemental);
             }
         }
+    }
+
+    private static void MarkSupplementalAnalysisGeometrySatisfied(QuoteAgentSessionState state)
+    {
+        var artifact = state.Artifacts.FirstOrDefault(item =>
+            item.ArtifactType.Equals("analysis", StringComparison.OrdinalIgnoreCase));
+        if (artifact is null)
+        {
+            return;
+        }
+
+        artifact.Status = "ready";
+        artifact.Metadata["geometryGate"] = "satisfied_by_cad_attachment";
     }
 
     private static bool IsSupplementalManufacturingAttachment(QuoteAgentAttachmentDto attachment)

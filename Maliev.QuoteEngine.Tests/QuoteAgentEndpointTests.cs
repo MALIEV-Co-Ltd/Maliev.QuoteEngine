@@ -197,7 +197,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var part = Assert.Single(state.Parts);
         var drawing = Assert.Single(part.DrawingFiles);
         Assert.Equal("housing-drawing.pdf", drawing.FileName);
-        Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "analysis");
+        Assert.Contains(body.Artifacts, artifact =>
+            artifact.ArtifactType == "analysis" &&
+            artifact.Status == "ready" &&
+            artifact.Metadata["geometryGate"] == "satisfied_by_cad_attachment");
         Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
     }
 
