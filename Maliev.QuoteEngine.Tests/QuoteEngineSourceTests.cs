@@ -721,6 +721,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@ref=\"_composerTextarea\"", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-composer.js", component, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-use-cases\"", component, StringComparison.Ordinal);
+        Assert.Contains("Sample use cases", component, StringComparison.Ordinal);
+        Assert.Contains("SampleUseCases", component, StringComparison.Ordinal);
+        Assert.Contains("ApplyUseCase", component, StringComparison.Ordinal);
+        Assert.Contains("UseCaseOption", component, StringComparison.Ordinal);
+        Assert.Contains("Quote a 3D printed enclosure", component, StringComparison.Ordinal);
+        Assert.Contains("Turn a sketch into requirements", component, StringComparison.Ordinal);
+        Assert.Contains("Compare material and finish options", component, StringComparison.Ordinal);
         Assert.Contains("Task HandleSubmitAsync()", component, StringComparison.Ordinal);
 
         Assert.Contains("Task<QuoteAgentTurnResponse> SendAgentMessageAsync", apiClient, StringComparison.Ordinal);
@@ -734,6 +742,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("-webkit-line-clamp: 2;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap", agentStyles, StringComparison.Ordinal);
         Assert.Contains("top: 50%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--chat .qe-agent-thread", agentStyles, StringComparison.Ordinal);

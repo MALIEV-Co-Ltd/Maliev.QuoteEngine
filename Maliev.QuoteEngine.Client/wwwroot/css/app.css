@@ -1103,6 +1103,49 @@
     color: var(--qe-agent-ink);
 }
 
+.qe-agent-use-cases {
+    display: grid;
+    gap: 10px;
+    width: min(760px, 100%);
+    margin: 2px auto 0;
+}
+
+.qe-agent-use-cases header {
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.qe-agent-use-cases button {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+    padding: 15px 18px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 14px;
+    background: transparent;
+    color: var(--qe-agent-ink);
+    cursor: pointer;
+    text-align: left;
+}
+
+.qe-agent-use-cases button:hover {
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-use-cases span {
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+.qe-agent-use-cases small {
+    color: var(--qe-agent-muted);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
 .qe-agent-artifact-backdrop {
     position: fixed;
     inset: 0;
@@ -1371,6 +1414,21 @@
 
     .qe-agent-quick-actions button {
         white-space: nowrap;
+    }
+
+    .qe-agent-use-cases {
+        gap: 8px;
+    }
+
+    .qe-agent-use-cases button {
+        padding: 12px 14px;
+    }
+
+    .qe-agent-use-cases small {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
     }
 
     .qe-agent-sketch-dialog {

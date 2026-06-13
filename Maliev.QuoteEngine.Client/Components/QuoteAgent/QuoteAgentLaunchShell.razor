@@ -172,6 +172,19 @@
                     <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
                 </button>
             </div>
+            @if (_messages.Count == 0)
+            {
+                <section class="qe-agent-use-cases" aria-label="@Text("Sample use cases", "ตัวอย่างการใช้งาน")">
+                    <header>@Text("Sample use cases", "ตัวอย่างการใช้งาน")</header>
+                    @foreach (var useCase in SampleUseCases)
+                    {
+                        <button type="button" @onclick="@(() => ApplyUseCase(useCase))">
+                            <span>@Text(useCase.TitleEn, useCase.TitleTh)</span>
+                            <small>@Text(useCase.PromptEn, useCase.PromptTh)</small>
+                        </button>
+                    }
+                </section>
+            }
         </section>
 
         @if (_sketchOpen)
@@ -329,6 +342,24 @@
         new("Green", "เขียว", "#16a34a"),
         new("Amber", "เหลืองอำพัน", "#d97706"),
         new("White", "ขาว", "#ffffff")
+    ];
+    private static readonly UseCaseOption[] SampleUseCases =
+    [
+        new(
+            "Quote a 3D printed enclosure",
+            "ขอราคากล่องพิมพ์ 3D",
+            "I need 25 black nylon SLS enclosures from a STEP file. Please check wall thickness, threads, DFM risks, and quote a 7 day lead time.",
+            "ต้องการกล่องไนลอน SLS สีดำ 25 ชิ้นจากไฟล์ STEP ช่วยตรวจความหนาผนัง เกลียว ความเสี่ยง DFM และเสนอเวลานำส่ง 7 วัน"),
+        new(
+            "Turn a sketch into requirements",
+            "เปลี่ยนสเก็ตช์เป็นข้อกำหนด",
+            "I have a hand sketch for an aluminum mounting bracket. Help me identify missing dimensions, material, finish, tolerance, and the best manufacturing process.",
+            "มีสเก็ตช์มือของขายึดอะลูมิเนียม ช่วยหาขนาดที่ขาด วัสดุ ผิวสำเร็จ ความเผื่อ และกระบวนการผลิตที่เหมาะสม"),
+        new(
+            "Compare material and finish options",
+            "เปรียบเทียบวัสดุและผิวสำเร็จ",
+            "For this CNC part, compare 6061 aluminum clear anodized vs black anodized for 10, 50, and 100 pieces, including lead time and cost drivers.",
+            "สำหรับชิ้นงาน CNC นี้ ช่วยเปรียบเทียบอะลูมิเนียม 6061 อโนไดซ์ใสกับอโนไดซ์ดำ สำหรับ 10, 50 และ 100 ชิ้น พร้อมเวลานำส่งและปัจจัยต้นทุน")
     ];
 
     [Parameter]
@@ -566,9 +597,16 @@
         project.IsPinned = !project.IsPinned;
     }
 
+    private void ApplyUseCase(UseCaseOption useCase)
+    {
+        _draftMessage = Text(useCase.PromptEn, useCase.PromptTh);
+    }
+
     private sealed record AgentMessageRow(string Role, string Content);
 
     private sealed record SketchColorOption(string Name, string ThaiName, string Hex);
+
+    private sealed record UseCaseOption(string TitleEn, string TitleTh, string PromptEn, string PromptTh);
 
     private sealed class ProjectNavItem(string id, string nameEn, string nameTh, bool isPinned)
     {
