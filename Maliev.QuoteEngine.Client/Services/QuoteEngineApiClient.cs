@@ -13,13 +13,18 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
 {
     public async Task<QuoteReferenceDataResponse> GetReferenceDataAsync(CancellationToken cancellationToken = default)
     {
-        return await httpClient.GetFromJsonAsync<QuoteReferenceDataResponse>("quote/v1/reference-data", cancellationToken)
-            ?? new QuoteReferenceDataResponse([], [], [], [], [], [], [], [], [], []);
+        return await GetFromJsonOrFallbackAsync(
+            "quote/v1/reference-data",
+            new QuoteReferenceDataResponse([], [], [], [], [], [], [], [], [], []),
+            cancellationToken);
     }
 
     public async Task<IReadOnlyList<CurrencyOptionDto>> GetCurrenciesAsync(CancellationToken cancellationToken = default)
     {
-        return await httpClient.GetFromJsonAsync<IReadOnlyList<CurrencyOptionDto>>("quote/v1/reference-data/currencies", cancellationToken) ?? [];
+        return await GetFromJsonOrFallbackAsync<IReadOnlyList<CurrencyOptionDto>>(
+            "quote/v1/reference-data/currencies",
+            [],
+            cancellationToken);
     }
 
     public async Task<QuoteEngineDemoProjectResponse?> GetDemoProjectAsync(CancellationToken cancellationToken = default)
@@ -29,8 +34,10 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
 
     public async Task<QuoteAuthStatusResponse> GetAuthStatusAsync(CancellationToken cancellationToken = default)
     {
-        return await httpClient.GetFromJsonAsync<QuoteAuthStatusResponse>("quote/v1/auth/session", cancellationToken)
-            ?? new QuoteAuthStatusResponse(false, null, null);
+        return await GetFromJsonOrFallbackAsync(
+            "quote/v1/auth/session",
+            new QuoteAuthStatusResponse(false, null, null),
+            cancellationToken);
     }
 
     public Task<InitiateQuoteUploadResponse> InitiateUploadAsync(string quoteSessionId, IBrowserFile file, CancellationToken cancellationToken = default)
@@ -230,5 +237,26 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<TResponse>(cancellationToken: cancellationToken)
             ?? throw new InvalidOperationException($"The QuoteEngine API returned an empty response for {uri}.");
+    }
+
+    private async Task<TResponse> GetFromJsonOrFallbackAsync<TResponse>(
+        string uri,
+        TResponse fallback,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await httpClient.GetFromJsonAsync<TResponse>(uri, cancellationToken) ?? fallback;
+        }
+        catch (Exception ex) when (IsRecoverableStartupReadFailure(ex, cancellationToken))
+        {
+            return fallback;
+        }
+    }
+
+    private static bool IsRecoverableStartupReadFailure(Exception exception, CancellationToken cancellationToken)
+    {
+        return !cancellationToken.IsCancellationRequested
+            && exception is HttpRequestException or JsonException or NotSupportedException or TaskCanceledException;
     }
 }
