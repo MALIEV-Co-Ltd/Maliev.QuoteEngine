@@ -804,7 +804,16 @@
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     padding: 0;
+    overflow: hidden;
     background: var(--qe-agent-bg);
+}
+
+.qe-agent-main--empty {
+    display: block;
+}
+
+.qe-agent-main--chat {
+    grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .qe-agent-topline {
@@ -888,6 +897,24 @@
     padding: 40px 20px;
 }
 
+.qe-agent-main--empty .qe-agent-thread {
+    position: absolute;
+    top: 42%;
+    left: 50%;
+    width: min(820px, calc(100% - 32px));
+    padding: 0;
+    transform: translate(-50%, -100%);
+}
+
+.qe-agent-main--chat .qe-agent-thread {
+    align-content: start;
+    display: grid;
+    gap: 28px;
+    max-width: 880px;
+    padding: 34px 20px 24px;
+    overflow: auto;
+}
+
 .qe-agent-prompt {
     max-width: 820px;
 }
@@ -904,30 +931,39 @@
 }
 
 .qe-agent-message {
-    grid-template-columns: 34px minmax(0, 1fr);
-    justify-content: stretch;
+    display: flex;
+    justify-content: flex-start;
     max-width: 760px;
     width: 100%;
     margin: 0 auto;
 }
 
 .qe-agent-message--user {
-    grid-template-columns: minmax(0, 1fr) 34px;
-}
-
-.qe-agent-avatar {
-    background: var(--qe-agent-ink);
-    color: var(--qe-agent-bg);
+    justify-content: flex-end;
 }
 
 .qe-agent-bubble {
+    max-width: min(720px, 78%);
+    padding: 0;
     box-shadow: none;
     background: transparent;
-    font-size: 15px;
+    font-size: 16px;
+    line-height: 1.55;
+}
+
+.qe-agent-bubble span {
+    display: none;
 }
 
 .qe-agent-message--user .qe-agent-bubble {
-    background: var(--qe-agent-soft);
+    padding: 10px 16px;
+    border-radius: 22px;
+    background: var(--qe-agent-primary);
+    color: #ffffff;
+}
+
+.qe-agent-message--assistant .qe-agent-bubble {
+    color: var(--qe-agent-ink);
 }
 
 .qe-agent-composer-wrap {
@@ -936,6 +972,20 @@
     width: min(780px, calc(100% - 32px));
     margin: 0 auto;
     padding: 0 0 36px;
+    transition: transform 220ms ease, width 220ms ease, bottom 220ms ease, top 220ms ease;
+}
+
+.qe-agent-main--empty .qe-agent-composer-wrap {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: min(820px, calc(100% - 32px));
+    padding: 0;
+    transform: translate(-50%, -4px);
+}
+
+.qe-agent-main--chat .qe-agent-composer-wrap {
+    align-self: end;
 }
 
 .qe-agent-composer {
@@ -959,8 +1009,8 @@
     background: transparent !important;
     box-shadow: none !important;
     resize: none;
-    font-size: 16px;
-    line-height: 1.5;
+    font-size: 16px !important;
+    line-height: 1.5 !important;
 }
 
 .qe-agent-send-btn {

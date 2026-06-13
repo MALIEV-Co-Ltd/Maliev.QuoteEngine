@@ -72,7 +72,7 @@
         </div>
     </aside>
 
-    <main class="qe-agent-main">
+    <main class="@MainClass">
         <div class="qe-agent-topline">
             <div class="qe-agent-status">
                 <span aria-hidden="true"></span>
@@ -110,7 +110,6 @@
                 @foreach (var message in _messages)
                 {
                     <article class="@($"qe-agent-message qe-agent-message--{message.Role}")">
-                        <div class="qe-agent-avatar">@AvatarFor(message.Role)</div>
                         <div class="qe-agent-bubble">
                             <span>@RoleLabel(message.Role)</span>
                             <p>@message.Content</p>
@@ -326,6 +325,7 @@
     private bool IsDarkMode { get; set; }
 
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
+    private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -488,11 +488,6 @@
             "I received the sketch. Add dimensions, material, and any critical tolerances, or attach CAD when geometry is ready for DFM and pricing.",
             "ได้รับสเก็ตช์แล้ว โปรดเพิ่มขนาด วัสดุ และค่าความเผื่อที่สำคัญ หรือแนบ CAD เมื่อพร้อมสำหรับ DFM และการคำนวณราคา")));
         _sketchOpen = false;
-    }
-
-    private static string AvatarFor(string role)
-    {
-        return role.Equals("user", StringComparison.OrdinalIgnoreCase) ? "U" : "M";
     }
 
     private string RoleLabel(string role)

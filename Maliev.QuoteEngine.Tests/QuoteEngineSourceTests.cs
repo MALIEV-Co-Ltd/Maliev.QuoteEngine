@@ -661,6 +661,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-composer\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-toggle\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-drawer\"", component, StringComparison.Ordinal);
+        Assert.Contains("MainClass => _messages.Count == 0 ? \"qe-agent-main qe-agent-main--empty\" : \"qe-agent-main qe-agent-main--chat\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-signin-btn\"", component, StringComparison.Ordinal);
         Assert.Contains("@bind=\"_projectName\"", component, StringComparison.Ordinal);
@@ -702,9 +704,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("top: 50%;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--chat .qe-agent-thread", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("justify-content: flex-end;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("font-size: 16px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("line-height: 1.5;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("font-size: 16px !important;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("line-height: 1.5 !important;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-agent-primary: #0a72ef;", agentStyles, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("background: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-dialog", agentStyles, StringComparison.Ordinal);
