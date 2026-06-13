@@ -2205,6 +2205,48 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Order_creation_sends_quote_total_to_order_service()
+    {
+        using var client = await CreateSignedInClientAsync("quoted-total-order@example.com");
+        var part = new QuotePartDraftDto
+        {
+            PartId = Guid.NewGuid(),
+            FileId = Guid.NewGuid(),
+            UploadId = "upload-quoted-total-order",
+            FileName = "quoted-total-bracket.stl",
+            ProcessId = "fdm",
+            MaterialId = "pla-black",
+            Quantity = 2,
+            VolumeCc = 10m,
+            SurfaceAreaCm2 = 40m,
+            DfmAcknowledged = true
+        };
+
+        var quoteResponse = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-quoted-total-order", [part], "Quoted total order."));
+        quoteResponse.EnsureSuccessStatusCode();
+        var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        var orderResponse = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(
+                quote.QuoteId,
+                "PO-QUOTE-TOTAL",
+                "Customer accepted quoted total.")
+            {
+                Parts = [part]
+            });
+        orderResponse.EnsureSuccessStatusCode();
+
+        var createRequest = factory.LastOrderCreateRequest;
+        Assert.NotNull(createRequest);
+        Assert.Equal(2140.00m, createRequest.QuotedAmount);
+        Assert.Equal("THB", createRequest.QuoteCurrency);
+    }
+
+    [Fact]
     public async Task Formal_quote_rejects_parts_with_unacknowledged_dfm_issues()
     {
         using var client = await CreateSignedInClientAsync("dfm-blocked-quote@example.com");

@@ -97,6 +97,8 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 orderedQuantity = request.OrderedQuantity,
                 customerPoNumber = request.CustomerPoNumber,
                 requirements = request.Requirements,
+                quotedAmount = request.QuotedAmount,
+                quoteCurrency = request.QuoteCurrency,
                 productionItems = request.ProductionItems
             }, ct);
 
@@ -419,6 +421,10 @@ public sealed class OrderCreateRequest
     public int OrderedQuantity { get; set; } = 1;
     public string? CustomerPoNumber { get; set; }
     public string? Requirements { get; set; }
+    /// <summary>Gets or sets the quoted order total that checkout must match.</summary>
+    public decimal? QuotedAmount { get; set; }
+    /// <summary>Gets or sets the quote currency code.</summary>
+    public string? QuoteCurrency { get; set; }
     /// <summary>Gets or sets structured production items used by JobService after payment.</summary>
     public IReadOnlyList<OrderProductionItemRequest> ProductionItems { get; set; } = [];
 

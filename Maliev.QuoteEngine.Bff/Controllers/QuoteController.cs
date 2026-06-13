@@ -992,6 +992,8 @@ public sealed class QuoteController(
             OrderedQuantity = request.Parts.Count == 0 ? 1 : request.Parts.Sum(part => Math.Max(1, part.Quantity)),
             CustomerPoNumber = string.IsNullOrWhiteSpace(request.CustomerPoNumber) ? null : request.CustomerPoNumber,
             Requirements = BuildOrderRequirements(request),
+            QuotedAmount = CalculateOrderQuotedTotal(request.Parts),
+            QuoteCurrency = "THB",
             ProductionItems = productionItems
         };
         orderRequest.SetProcessFromCode(request.Parts.FirstOrDefault()?.ProcessId ?? "fdm");
@@ -1070,6 +1072,18 @@ public sealed class QuoteController(
         }
 
         return string.Join(Environment.NewLine, requirements);
+    }
+
+    private static decimal CalculateOrderQuotedTotal(IReadOnlyList<QuotePartDraftDto> parts)
+    {
+        if (parts.Count == 0)
+        {
+            return 0m;
+        }
+
+        var subtotal = parts.Sum(part => EstimateUnitPrice(part) * Math.Max(1, part.Quantity));
+        var discount = subtotal >= 25_000m ? Math.Round(subtotal * 0.05m, 2) : 0m;
+        return Math.Round(subtotal - discount, 2);
     }
 
     private static OrderProductionItemRequest BuildProductionItem(Guid quoteId, QuotePartDraftDto part, Guid materialGuid)
