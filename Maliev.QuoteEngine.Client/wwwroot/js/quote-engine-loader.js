@@ -186,6 +186,10 @@
   function startBlazor() {
     const isWorkspaceHandoff = consumeWorkspaceHandoff();
     setProgress(0, true);
+    // The QuoteEngine landing page is the chat workspace itself. Keep the
+    // loader plumbing for boot progress, but do not block first paint with a
+    // narrative splash screen.
+    document.body.classList.add("quote-ready");
     setStatus(isWorkspaceHandoff ? "Starting quote workspace" : "Preparing quote engine");
 
     if (!window.Blazor || typeof window.Blazor.start !== "function") {
