@@ -110,6 +110,7 @@ internal sealed class QuoteAgentService(
             "quote_get_state" => ToStateResponse(state),
             "quote_get_reference_data" => prototypeStore.ReferenceData,
             "quote_get_account_context" => BuildAccountContext(state),
+            "quote_get_auth_handoff" => BuildAuthHandoff(state, request.Arguments),
             "quote_get_connectors" => BuildConnectorRegistry(state),
             "quote_search_customer_data" => SearchCustomerDataOrGateError(state, request.Arguments),
             "quote_register_uploads" => RegisterUploadsOrGateError(state, request.Arguments),
@@ -477,13 +478,87 @@ internal sealed class QuoteAgentService(
     private object BuildAccountContext(QuoteAgentSessionState state)
     {
         var customerId = ResolveCustomerId();
+        var authHandoff = BuildAuthHandoff(state, []);
         return new
         {
             isAuthenticated = customerId.HasValue,
             customerId,
             signInUrl = "/auth/sign-in?returnUrl=/quote/new",
             signUpUrl = "/auth/sign-up?returnUrl=/quote/new",
+            authHandoff,
             gates = QuoteAgentSessionStore.BuildGates(state, customerId.HasValue)
+        };
+    }
+
+    private QuoteAgentAuthHandoffResponse BuildAuthHandoff(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments)
+    {
+        var customerId = ResolveCustomerId() ?? state.CustomerId;
+        var intent = NormalizeAuthIntent(ReadString(arguments, "intent"));
+        var returnUrl = NormalizeAuthReturnUrl(
+            ReadString(arguments, "return_url") ??
+            ReadString(arguments, "returnUrl") ??
+            "/quotes");
+
+        if (customerId.HasValue)
+        {
+            return new QuoteAgentAuthHandoffResponse
+            {
+                SessionId = state.SessionId,
+                IsAuthenticated = true,
+                CustomerId = customerId,
+                Intent = intent,
+                ReturnUrl = returnUrl,
+                Status = "already_authenticated",
+                RequiredGateCode = "customer_authenticated"
+            };
+        }
+
+        var authPath = intent.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
+            ? "/auth/sign-up"
+            : "/auth/sign-in";
+        var authUrl = $"{authPath}?returnUrl={Uri.EscapeDataString(returnUrl)}";
+
+        return new QuoteAgentAuthHandoffResponse
+        {
+            SessionId = state.SessionId,
+            IsAuthenticated = false,
+            Intent = intent,
+            ReturnUrl = returnUrl,
+            Status = "authentication_required",
+            RequiredGateCode = "customer_authenticated",
+            Methods =
+            [
+                new QuoteAgentAuthMethodDto
+                {
+                    MethodId = "google",
+                    DisplayName = "Google",
+                    Status = "preferred",
+                    Url = authUrl,
+                    Description = "Continue through the trusted MALIEV sign-in surface with Google.",
+                    RequiresBrowserSupport = false
+                },
+                new QuoteAgentAuthMethodDto
+                {
+                    MethodId = "passkey",
+                    DisplayName = "Passkey",
+                    Status = "available_when_supported",
+                    Url = authUrl,
+                    Description = "Use a passkey when the browser and account support it, without sharing credentials with the agent.",
+                    RequiresBrowserSupport = true,
+                    FallbackMethodId = "email-password"
+                },
+                new QuoteAgentAuthMethodDto
+                {
+                    MethodId = "email-password",
+                    DisplayName = "Email and password",
+                    Status = "fallback",
+                    Url = authUrl,
+                    Description = "Fallback sign-in or sign-up through the trusted MALIEV auth page.",
+                    RequiresBrowserSupport = false
+                }
+            ]
         };
     }
 
@@ -1353,6 +1428,35 @@ internal sealed class QuoteAgentService(
         }
 
         return "STANDARD";
+    }
+
+    private static string NormalizeAuthIntent(string? intent)
+    {
+        return string.Equals(intent, "sign-up", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(intent, "signup", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(intent, "register", StringComparison.OrdinalIgnoreCase)
+                ? "sign-up"
+                : "sign-in";
+    }
+
+    private static string NormalizeAuthReturnUrl(string? returnUrl)
+    {
+        if (string.IsNullOrWhiteSpace(returnUrl))
+        {
+            return "/quotes";
+        }
+
+        var trimmed = returnUrl.Trim();
+        if (!trimmed.StartsWith("/", StringComparison.Ordinal) ||
+            trimmed.StartsWith("//", StringComparison.Ordinal) ||
+            trimmed.Contains("\\", StringComparison.Ordinal) ||
+            trimmed.Contains("\r", StringComparison.Ordinal) ||
+            trimmed.Contains("\n", StringComparison.Ordinal))
+        {
+            return "/quotes";
+        }
+
+        return trimmed.Length > 512 ? "/quotes" : trimmed;
     }
 
     private static string ComposeAgentMessage(

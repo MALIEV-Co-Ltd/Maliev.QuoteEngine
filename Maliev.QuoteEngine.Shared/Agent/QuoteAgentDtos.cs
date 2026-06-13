@@ -333,6 +333,63 @@ public sealed class QuoteAgentConnectorDto
 }
 
 /// <summary>
+/// Customer-safe authentication handoff response for agent-assisted sign-in and sign-up.
+/// </summary>
+public sealed class QuoteAgentAuthHandoffResponse
+{
+    /// <summary>Gets or sets the QuoteEngine agent session ID that requested auth help.</summary>
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets whether the current request already has a customer session.</summary>
+    public bool IsAuthenticated { get; set; }
+
+    /// <summary>Gets or sets the signed-in customer ID, when known.</summary>
+    public Guid? CustomerId { get; set; }
+
+    /// <summary>Gets or sets the requested auth intent, such as sign-in or sign-up.</summary>
+    public string Intent { get; set; } = "sign-in";
+
+    /// <summary>Gets or sets the local return URL after authentication completes.</summary>
+    public string ReturnUrl { get; set; } = "/quotes";
+
+    /// <summary>Gets or sets the current auth handoff status.</summary>
+    public string Status { get; set; } = "authentication_required";
+
+    /// <summary>Gets or sets the gate code satisfied by a completed customer session.</summary>
+    public string RequiredGateCode { get; set; } = "customer_authenticated";
+
+    /// <summary>Gets or sets customer-safe authentication methods the agent may present.</summary>
+    public List<QuoteAgentAuthMethodDto> Methods { get; set; } = [];
+}
+
+/// <summary>
+/// Customer-safe sign-in or sign-up method available through the trusted auth surface.
+/// </summary>
+public sealed class QuoteAgentAuthMethodDto
+{
+    /// <summary>Gets or sets the stable auth method ID.</summary>
+    public string MethodId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the customer-visible auth method name.</summary>
+    public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the method status, such as preferred, fallback, or available_when_supported.</summary>
+    public string Status { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the safe navigation URL for this auth handoff.</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets a short customer-safe description.</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets whether the method depends on browser platform support.</summary>
+    public bool RequiresBrowserSupport { get; set; }
+
+    /// <summary>Gets or sets the fallback method ID when this method is not available.</summary>
+    public string? FallbackMethodId { get; set; }
+}
+
+/// <summary>
 /// Request to confirm a server-stored proposed action.
 /// </summary>
 public sealed class QuoteAgentConfirmActionRequest
