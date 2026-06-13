@@ -5,6 +5,53 @@
   let totalResources = 0;
   let displayedProgress = 0;
 
+  // ── Localized copy (runs before Blazor, so it can't come from .resx) ──
+  const STRINGS = {
+    "en-US": {
+      beats: [
+        "For years, getting a custom part made meant one thing.",
+        "Upload files. Send emails. Wait days for a quote.",
+        "That ends here.",
+        "Describe what you want to make — Make Studio quotes it, reviews it, and orders it in minutes."
+      ],
+      tagline: "Agentic manufacturing",
+      status: {
+        preparing: "Preparing Make Studio",
+        loading: "Loading Make Studio",
+        starting: "Starting your studio",
+        ready: "Make Studio ready",
+        failed: "Make Studio failed to start"
+      }
+    },
+    "th-TH": {
+      beats: [
+        "หลายปีที่ผ่านมา การสั่งทำชิ้นงานมีอยู่ทางเดียว",
+        "อัปโหลดไฟล์ ส่งอีเมลไปมา รอใบเสนอราคาหลายวัน",
+        "ยุคนั้นจบลงแล้ว",
+        "แค่บอกว่าคุณอยากผลิตอะไร แล้ว Make Studio จะเสนอราคา ตรวจ DFM และสั่งผลิตให้ ภายในไม่กี่นาที"
+      ],
+      tagline: "การผลิตยุคเอเจนต์",
+      status: {
+        preparing: "กำลังเตรียม Make Studio",
+        loading: "กำลังโหลด Make Studio",
+        starting: "กำลังเปิดสตูดิโอของคุณ",
+        ready: "Make Studio พร้อมแล้ว",
+        failed: "เริ่ม Make Studio ไม่สำเร็จ"
+      }
+    }
+  };
+  let currentStrings = STRINGS["en-US"];
+
+  // ── Make Studio story / dismissal state ───────────────────────────────
+  const STORY_BEAT_MS = [1500, 1900, 1200, 2400];
+  const FINALE_HOLD_MS = 600;
+  let storyBeats = [];
+  let storyMode = "full"; // "full" plays the narrative; "quiet" shows the finale only
+  let bootTick = null;
+  let bootStartedAt = 0;
+  let minVisibleMs = FINALE_HOLD_MS;
+  let runtimeReady = false;
+
   function clamp(value) {
     return Math.max(0, Math.min(100, value));
   }
@@ -23,26 +70,17 @@
       : Math.max(displayedProgress, progress);
 
     const roundedProgress = Math.floor(displayedProgress);
-    const progressText = `${displayedProgress}%`;
-    const roundedProgressText = `${roundedProgress}%`;
 
-    root.style.setProperty("--blazor-load-percentage", `${progress}%`);
-    root.style.setProperty("--blazor-load-percentage-text", `"${roundedProgressText}"`);
-    root.style.setProperty("--wasm-logo-progress", progressText);
-    root.style.setProperty("--wasm-loader-progress", progressText);
+    root.style.setProperty("--ms-progress", `${displayedProgress}%`);
 
-    document.querySelectorAll(".maliev-logo-loader").forEach(function (loader) {
-      loader.style.setProperty("--wasm-logo-progress", progressText);
-    });
-
-    const progressBar = document.querySelector(".startup-progress");
+    const progressBar = document.querySelector(".ms-progress");
     if (progressBar) {
       progressBar.setAttribute("aria-valuenow", roundedProgress.toString());
     }
 
     const percent = document.getElementById("startup-percent");
     if (percent) {
-      percent.textContent = roundedProgressText;
+      percent.textContent = `${roundedProgress}%`;
     }
   }
 
@@ -60,7 +98,7 @@
     if (!seenResources.has(key)) {
       seenResources.add(key);
       totalResources += 1;
-      setStatus("Loading quote engine resources");
+      setStatus(currentStrings.status.loading);
       updateResourceProgress();
     }
 
@@ -79,19 +117,113 @@
 
   function markRuntimeReady() {
     setProgress(100, true);
-    setStatus("Starting quote workspace");
+    setStatus(currentStrings.status.starting);
   }
 
   function markReady() {
-    markRuntimeReady();
-    setStatus("Quote engine ready");
-    document.body.classList.add("quote-ready");
+    runtimeReady = true;
+    setProgress(100, true);
+    setStatus(currentStrings.status.ready);
+    maybeFinish();
   }
 
   function markFailed(error) {
-    console.error("MALIEV Quote Engine startup failed", error);
-    setStatus("Quote engine failed to start");
+    console.error("MALIEV Make Studio startup failed", error);
+    setStatus(currentStrings.status.failed);
     document.body.classList.add("quote-loading-failed");
+    stopBootTick();
+  }
+
+  // ── story timeline ────────────────────────────────────────────────────
+  function stopBootTick() {
+    if (bootTick) {
+      window.clearInterval(bootTick);
+      bootTick = null;
+    }
+  }
+
+  function applyStoryStrings() {
+    const stage = document.getElementById("quote-startup");
+    if (!stage) {
+      return;
+    }
+    const setText = function (selector, text) {
+      const el = stage.querySelector(selector);
+      if (el && text) {
+        el.textContent = text;
+      }
+    };
+    setText('[data-ms-beat="0"]', currentStrings.beats[0]);
+    setText('[data-ms-beat="1"] .ms-kill', currentStrings.beats[1]);
+    setText('[data-ms-beat="2"]', currentStrings.beats[2]);
+    setText('[data-ms-beat="3"]', currentStrings.beats[3]);
+    setText(".ms-tagline", currentStrings.tagline);
+  }
+
+  function showBeat(index) {
+    storyBeats.forEach(function (beat, i) {
+      beat.classList.toggle("ms-beat--on", i === index);
+    });
+  }
+
+  function activeBeatIndex(elapsed) {
+    let accumulated = 0;
+    for (let i = 0; i < STORY_BEAT_MS.length; i++) {
+      if (elapsed < accumulated + STORY_BEAT_MS[i]) {
+        return i;
+      }
+      accumulated += STORY_BEAT_MS[i];
+    }
+    return Math.max(0, storyBeats.length - 1); // finale, held until dismissal
+  }
+
+  function maybeFinish() {
+    if (!runtimeReady) {
+      return;
+    }
+    if (Date.now() - bootStartedAt >= minVisibleMs) {
+      stopBootTick();
+      document.body.classList.add("quote-ready");
+    }
+  }
+
+  function prefersReducedMotion() {
+    return Boolean(
+      window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+
+  function hasSeenStory() {
+    return getPreference("maliev.makestudio.story.seen") === "1";
+  }
+
+  function beginBoot(isWorkspaceHandoff) {
+    const stage = document.getElementById("quote-startup");
+    storyBeats = stage
+      ? Array.prototype.slice.call(stage.querySelectorAll(".ms-beat"))
+      : [];
+    bootStartedAt = Date.now();
+
+    // Tell the full story only on the Web → Studio handoff. Organic visits stay
+    // quiet so the chat workspace remains the first real experience.
+    const wantsStory = isWorkspaceHandoff && !hasSeenStory();
+    storyMode = wantsStory && !prefersReducedMotion() ? "full" : "quiet";
+
+    if (storyMode === "full") {
+      setPreference("maliev.makestudio.story.seen", "1");
+      minVisibleMs = STORY_BEAT_MS.reduce(function (sum, ms) { return sum + ms; }, 0) + FINALE_HOLD_MS;
+      showBeat(0);
+    } else {
+      minVisibleMs = prefersReducedMotion() ? 0 : 500;
+      showBeat(storyBeats.length - 1);
+    }
+
+    stopBootTick();
+    bootTick = window.setInterval(function () {
+      if (storyMode === "full") {
+        showBeat(activeBeatIndex(Date.now() - bootStartedAt));
+      }
+      maybeFinish();
+    }, 90);
   }
 
   function getPreference(key) {
@@ -142,6 +274,14 @@
     return false;
   }
 
+  function getQueryCulture() {
+    try {
+      return new URLSearchParams(window.location.search).get("culture");
+    } catch {
+      return null;
+    }
+  }
+
   function normalizeCulture(culture) {
     return culture && culture.toLowerCase().startsWith("th") ? "th-TH" : "en-US";
   }
@@ -154,7 +294,10 @@
   }
 
   function resolveCulture(fallback) {
+    // Query string wins — it is how Maliev.Web hands the chosen language across
+    // the subdomain hop, where its host-scoped cookie/localStorage can't reach.
     const storedCulture =
+      getQueryCulture() ||
       getPreference("maliev.quote.culture") ||
       getPreference("maliev.culture") ||
       getCookie("maliev.culture") ||
@@ -169,6 +312,9 @@
     setPreference("maliev.quote.culture", normalizedCulture);
     setPreference("maliev.culture", normalizedCulture);
     setCookie("maliev.culture", normalizedCulture, 60 * 60 * 24 * 365);
+    currentStrings = STRINGS[normalizedCulture] || STRINGS["en-US"];
+    applyStoryStrings();
+    return normalizedCulture;
   }
 
   function resolveTheme(fallback) {
@@ -186,11 +332,8 @@
   function startBlazor() {
     const isWorkspaceHandoff = consumeWorkspaceHandoff();
     setProgress(0, true);
-    // The QuoteEngine landing page is the chat workspace itself. Keep the
-    // loader plumbing for boot progress, but do not block first paint with a
-    // narrative splash screen.
-    document.body.classList.add("quote-ready");
-    setStatus(isWorkspaceHandoff ? "Starting quote workspace" : "Preparing quote engine");
+    beginBoot(isWorkspaceHandoff);
+    setStatus(isWorkspaceHandoff ? currentStrings.status.starting : currentStrings.status.preparing);
 
     if (!window.Blazor || typeof window.Blazor.start !== "function") {
       markFailed(new Error("Blazor startup script is not available."));
@@ -208,6 +351,7 @@
 
   setProgress(0, true);
   setCulture(resolveCulture("en-US"));
+  setStatus(currentStrings.status.preparing);
   setTheme(resolveTheme("light"));
 
   window.quoteEngineLoader = {

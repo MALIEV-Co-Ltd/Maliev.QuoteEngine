@@ -117,16 +117,8 @@
     --mud-palette-background-default: var(--paper);
     --mud-default-borderradius: var(--maliev-radius-sm);
 
-    /* WASM loader vars (unchanged) */
-    --blazor-load-percentage: 0%;
-    --blazor-load-percentage-text: "0%";
-    --wasm-logo-progress: 0%;
-    --wasm-loader-progress: 0%;
-    --wasm-logo-empty: #d7dde6;
-    --wasm-logo-fill: #000000;
-    --maliev-logo-loader-shadow:
-        drop-shadow(0 20px 32px rgba(10, 20, 40, 0.2))
-        drop-shadow(0 0 28px rgba(10, 20, 40, 0.1));
+    /* WASM startup progress (Make Studio story screen) */
+    --ms-progress: 0%;
 }
 
 /* Quote agent chat-first shell */
@@ -624,11 +616,25 @@
     --qe-agent-inverse: #0d0d0d;
     --qe-agent-inverse-text: #ffffff;
     --qe-agent-primary: #0a72ef;
+    display: grid;
     grid-template-columns: 260px minmax(0, 1fr);
     min-height: 100dvh;
     height: 100dvh;
     border-top: 0;
     background: var(--qe-agent-bg);
+    transition: grid-template-columns 180ms ease;
+}
+
+.qe-agent-shell--rail-collapsed {
+    grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.qe-agent-shell--artifacts-open {
+    grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 380px);
+}
+
+.qe-agent-shell--rail-collapsed.qe-agent-shell--artifacts-open {
+    grid-template-columns: 64px minmax(0, 1fr) minmax(320px, 380px);
 }
 
 :root[data-maliev-theme="dark"] .qe-agent-shell {
@@ -646,11 +652,13 @@
 }
 
 .qe-agent-rail {
+    display: grid;
     gap: 10px;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     padding: 12px 8px;
     background: var(--qe-agent-bg);
     border-right: 0;
+    min-width: 0;
 }
 
 .qe-agent-rail-head {
@@ -665,6 +673,39 @@
     display: block;
     width: 118px;
     height: auto;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-rail {
+    padding-inline: 8px;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-rail-head {
+    justify-content: center;
+    padding-inline: 0;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-brand,
+.qe-agent-shell--rail-collapsed .qe-agent-primary-nav span,
+.qe-agent-shell--rail-collapsed .qe-agent-rail-scroll,
+.qe-agent-shell--rail-collapsed .qe-agent-rail-foot span:not(.qe-agent-account-dot),
+.qe-agent-shell--rail-collapsed .qe-agent-signin-btn {
+    display: none;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-primary-nav {
+    padding-inline: 0;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-primary-nav a,
+.qe-agent-shell--rail-collapsed .qe-agent-primary-nav button {
+    grid-template-columns: 1fr;
+    justify-items: center;
+    padding-inline: 0;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-rail-foot {
+    justify-content: center;
+    padding-inline: 0;
 }
 
 :root[data-maliev-theme="dark"] .qe-agent-brand img {
@@ -748,10 +789,16 @@
     overflow: auto;
     padding: 4px;
 }
+
 .qe-agent-search-panel {
     display: grid;
     gap: 8px;
-    padding: 6px 6px 10px;
+    margin: 0 0 8px;
+    padding: 8px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 12px;
+    background: var(--qe-agent-raised);
+    overflow: hidden;
 }
 
 .qe-agent-search-panel label {
@@ -771,6 +818,7 @@
     border-radius: 10px;
     background: var(--qe-agent-soft);
     color: var(--qe-agent-muted);
+    min-width: 0;
 }
 
 .qe-agent-search-box input {
@@ -791,6 +839,9 @@
 .qe-agent-search-results {
     display: grid;
     gap: 4px;
+    max-height: min(42dvh, 420px);
+    overflow: auto;
+    padding-right: 2px;
 }
 
 .qe-agent-search-results button {
@@ -805,6 +856,7 @@
     color: var(--qe-agent-ink);
     cursor: pointer;
     text-align: left;
+    min-width: 0;
 }
 
 .qe-agent-search-results button:hover {
@@ -831,16 +883,36 @@
     line-height: 1.35;
 }
 
-
 .qe-agent-rail-group {
     margin-top: 14px;
 }
 
-.qe-agent-rail-group header {
-    padding: 7px 10px;
+.qe-agent-rail-group-toggle {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 18px;
+    align-items: center;
+    width: 100%;
+    min-height: 30px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
     color: var(--qe-agent-muted);
+    cursor: pointer;
     font-size: 12px;
     font-weight: 700;
+    text-align: left;
+}
+
+.qe-agent-rail-group-toggle:hover {
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-ink);
+}
+
+.qe-agent-rail-group-toggle span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .qe-agent-rail-group a {
@@ -937,6 +1009,7 @@
     position: relative;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
+    min-width: 0;
     padding: 0;
     overflow: hidden;
     background: var(--qe-agent-bg);
@@ -1579,30 +1652,23 @@
     line-height: 1.4;
 }
 
-.qe-agent-artifact-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 60;
-    border: 0;
-    background: rgba(0, 0, 0, .18);
-}
-
 .qe-agent-artifact-drawer {
-    position: fixed;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 61;
     display: grid;
     align-content: start;
     gap: 14px;
-    width: min(390px, 100vw);
+    min-width: 0;
+    width: 100%;
+    height: 100dvh;
     padding: 18px;
     overflow: auto;
     background: var(--qe-agent-surface);
     color: var(--qe-agent-ink);
     border-left: 1px solid var(--qe-agent-line);
-    box-shadow: -30px 0 80px rgba(0, 0, 0, .22);
+    box-shadow: none;
+}
+
+.qe-agent-artifact-backdrop {
+    display: none;
 }
 
 .qe-agent-artifact-drawer > header {
@@ -1775,7 +1841,10 @@
 }
 
 @media (max-width: 900px) {
-    .qe-agent-shell {
+    .qe-agent-shell,
+    .qe-agent-shell--rail-collapsed,
+    .qe-agent-shell--artifacts-open,
+    .qe-agent-shell--rail-collapsed.qe-agent-shell--artifacts-open {
         grid-template-columns: 1fr;
     }
 
@@ -1847,6 +1916,25 @@
 
     .qe-agent-quick-actions button {
         white-space: nowrap;
+    }
+
+    .qe-agent-artifact-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        display: block;
+        border: 0;
+        background: rgba(0, 0, 0, .42);
+    }
+
+    .qe-agent-artifact-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 61;
+        width: min(390px, 100vw);
+        box-shadow: -30px 0 80px rgba(0, 0, 0, .22);
     }
 
     .qe-agent-use-cases {
@@ -1995,15 +2083,27 @@ b {
     outline-offset: 2px;
 }
 
+/* ─── Make Studio startup story (Web → Studio handoff loading screen) ─── */
 .startup-screen {
+    --ms-bg2: #fbfbfc;
+    --ms-soft: rgba(0, 0, 0, 0.46);
+    --ms-track: rgba(0, 0, 0, 0.12);
     position: fixed;
     inset: 0;
+    z-index: 1000;
     display: grid;
     place-items: center;
-    z-index: 1000;
-    background: var(--panel);
-    color: #171717;
-    transition: opacity 180ms ease, visibility 180ms ease;
+    background: radial-gradient(120% 90% at 50% 32%, var(--ms-bg2), var(--paper) 78%);
+    color: var(--ink);
+    transition: opacity 320ms ease, visibility 320ms ease;
+}
+
+:root[data-maliev-theme="dark"] .startup-screen {
+    --ms-bg2: #101218;
+    --ms-soft: rgba(255, 255, 255, 0.5);
+    --ms-track: rgba(255, 255, 255, 0.16);
+    background: radial-gradient(120% 90% at 50% 32%, #101218, #0a0b0e 78%);
+    color: #e6e8ec;
 }
 
 body.quote-ready .startup-screen {
@@ -2012,80 +2112,197 @@ body.quote-ready .startup-screen {
     pointer-events: none;
 }
 
-.startup-mark {
-    display: grid;
-    gap: 16px;
-    width: min(320px, calc(100vw - 40px));
-    justify-items: start;
-}
-
-.maliev-logo-loader {
-    --logo-width: clamp(150px, 38vw, 236px);
-    --logo-empty: var(--wasm-logo-empty, #d7dde6);
-    --logo-fill: var(--wasm-logo-fill, #000000);
-    --logo-progress: var(--wasm-logo-progress, 0%);
-    --logo-shadow: var(--maliev-logo-loader-shadow,
-        drop-shadow(0 20px 32px rgba(10, 20, 40, 0.34))
-        drop-shadow(0 0 42px rgba(10, 20, 40, 0.18)));
-    position: relative;
-    width: var(--logo-width);
-    aspect-ratio: 449.33078 / 103.18751;
-    overflow: hidden;
-    color: transparent;
-    background: var(--logo-empty);
-    -webkit-mask: url('/images/logo.svg') center / contain no-repeat;
-    mask: url('/images/logo.svg') center / contain no-repeat;
-    filter: var(--logo-shadow);
-}
-
-.maliev-logo-loader::before {
-    content: "";
+.ms-tag {
     position: absolute;
-    inset: 0 auto 0 0;
-    width: var(--logo-progress);
-    background: var(--logo-fill);
-}
-
-.startup-progress-row {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    width: 100%;
-}
-
-.startup-progress {
-    flex: 1 1 auto;
-    height: 8px;
-    overflow: hidden;
-    background: #ebebeb;
-    border-radius: 9999px;
-    box-shadow: var(--maliev-shadow-ring);
-}
-
-.startup-progress span {
-    display: block;
-    width: var(--wasm-loader-progress);
-    height: 100%;
-    background: var(--accent);
-    border-radius: inherit;
-    transition: width 160ms ease;
-}
-
-.startup-percent {
-    min-width: 34px;
-    color: var(--muted);
+    left: clamp(18px, 4vw, 40px);
+    top: 22px;
     font-family: var(--maliev-font-mono);
-    font-size: var(--maliev-font-small);
-    text-align: right;
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    opacity: 0.42;
 }
 
-.startup-status {
+.ms-stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: min(820px, 90vw);
+    min-height: 180px;
+    text-align: center;
+}
+
+.ms-beat {
+    grid-area: 1 / 1;
     margin: 0;
-    color: var(--ink);
-    font-size: var(--maliev-font-body);
-    line-height: 1.5;
+    max-width: 24ch;
+    opacity: 0;
+    transform: translateY(14px);
+    transition: opacity 0.6s ease, transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+    font-family: var(--maliev-font-sans);
+    font-weight: 550;
+    font-size: clamp(21px, 3.4vw, 40px);
+    line-height: 1.28;
+    letter-spacing: -0.02em;
+}
+
+.ms-beat--on {
+    opacity: 1;
+    transform: none;
+}
+
+.ms-beat--dim {
+    color: var(--ms-soft);
     font-weight: 500;
+}
+
+.ms-kill {
+    /* a center line painted per line-box (clone), so wrapped lines all strike through */
+    background-image: linear-gradient(currentColor, currentColor);
+    background-repeat: no-repeat;
+    background-position: 0 56%;
+    background-size: 0% 2px;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+}
+
+.ms-beat--on .ms-kill {
+    animation: ms-strike 0.6s cubic-bezier(0.6, 0, 0.4, 1) 0.85s forwards;
+}
+
+@keyframes ms-strike {
+    to {
+        background-size: 100% 2px;
+    }
+}
+
+.ms-beat--finale {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    max-width: none;
+}
+
+.ms-wordmark {
+    position: relative;
+    font-weight: 600;
+    font-size: clamp(34px, 6vw, 68px);
+    letter-spacing: -0.03em;
+    color: currentColor;
+}
+
+/* Sheen is an additive glint overlay — the base wordmark above is always solid,
+   so if background-clip:text isn't painted we simply lose the glint, never the text. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+    .ms-wordmark::after {
+        content: "Make Studio";
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(100deg,
+            transparent 38%,
+            rgba(255, 255, 255, 0.85) 50%,
+            transparent 62%);
+        background-size: 220% 100%;
+        background-repeat: no-repeat;
+        background-position: 200% 0;
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        color: transparent;
+        animation: ms-sheen 2.8s cubic-bezier(0.5, 0, 0.5, 1) 0.9s infinite;
+    }
+}
+
+@keyframes ms-sheen {
+    0% {
+        background-position: 140% 0;
+    }
+    60%, 100% {
+        background-position: -40% 0;
+    }
+}
+
+.ms-tagline {
+    font-family: var(--maliev-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.42em;
+    text-transform: uppercase;
+    opacity: 0.5;
+    padding-left: 0.42em;
+}
+
+/* Thai script: no case, and wide tracking breaks word shaping — relax both,
+   and give the narrative lines room for tone marks. */
+:root[data-culture="th-TH"] .ms-tagline {
+    font-family: var(--maliev-font-sans);
+    letter-spacing: 0.08em;
+    text-transform: none;
+    padding-left: 0;
+}
+
+:root[data-culture="th-TH"] .ms-beat {
+    line-height: 1.5;
     letter-spacing: 0;
+}
+
+.ms-hud {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 0;
+}
+
+.ms-status {
+    position: absolute;
+    left: clamp(18px, 4vw, 40px);
+    bottom: 18px;
+    margin: 0;
+    font-family: var(--maliev-font-sans);
+    font-size: 13px;
+    opacity: 0.6;
+}
+
+.ms-percent {
+    position: absolute;
+    right: clamp(18px, 4vw, 40px);
+    bottom: 15px;
+    font-family: var(--maliev-font-mono);
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.ms-progress {
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 2px;
+    background: var(--ms-track);
+}
+
+.ms-progress-fill {
+    display: block;
+    width: var(--ms-progress, 0%);
+    height: 100%;
+    background: currentColor;
+    transition: width 0.18s ease;
+}
+
+body.quote-loading-failed .ms-stage {
+    opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ms-beat {
+        transition: opacity 0.2s ease;
+        transform: none;
+    }
+    .ms-beat--on .ms-kill {
+        animation: none;
+        background-size: 100% 2px;
+    }
+    .ms-wordmark::after {
+        animation: none;
+        background-position: 200% 0;
+    }
 }
 
 #components-reconnect-modal.maliev-reconnect-modal {

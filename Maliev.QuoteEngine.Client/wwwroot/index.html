@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MALIEV Quote Engine</title>
+    <title>Make Studio</title>
     <base href="/" />
     <meta name="description" content="MALIEV customer quote engine for custom manufacturing, CAD upload, DFM review, deterministic estimates, and order tracking." />
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -43,15 +43,23 @@
         </div>
     </div>
     <div id="quote-startup" class="startup-screen" aria-live="polite">
-        <div class="startup-mark">
-            <div class="maliev-logo-loader" style="--wasm-logo-progress: 0%" role="img" aria-label="MALIEV"></div>
-            <div class="startup-progress-row">
-                <div class="startup-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="startup-status">
-                    <span></span>
-                </div>
-                <span id="startup-percent" class="startup-percent">0%</span>
+        <span class="ms-tag">Make Studio</span>
+        <div class="ms-stage">
+            <p class="ms-beat" data-ms-beat="0">For years, getting a custom part made meant one thing.</p>
+            <p class="ms-beat ms-beat--dim" data-ms-beat="1"><span class="ms-kill">Upload files. Send emails. Wait days for a quote.</span></p>
+            <p class="ms-beat" data-ms-beat="2">That ends here.</p>
+            <p class="ms-beat" data-ms-beat="3">Describe what you want to make&nbsp;— Make&nbsp;Studio quotes&nbsp;it, reviews&nbsp;it, and orders&nbsp;it in minutes.</p>
+            <div class="ms-beat ms-beat--finale" data-ms-beat="4">
+                <span class="ms-wordmark">Make Studio</span>
+                <span class="ms-tagline">Agentic manufacturing</span>
             </div>
-            <p id="startup-status" class="startup-status">Preparing quote engine</p>
+        </div>
+        <div class="ms-hud">
+            <p id="startup-status" class="ms-status">Preparing Make Studio</p>
+            <span id="startup-percent" class="ms-percent">0%</span>
+            <div class="ms-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-describedby="startup-status">
+                <span class="ms-progress-fill"></span>
+            </div>
         </div>
     </div>
     <div id="app"></div>

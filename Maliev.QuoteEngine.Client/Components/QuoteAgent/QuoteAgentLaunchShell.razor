@@ -4,14 +4,18 @@
 @inject PreferenceService Preferences
 @inject IJSRuntime Js
 
-<section class="qe-agent-shell" aria-label="@Text("Quote agent workspace", "พื้นที่ผู้ช่วยขอราคา")">
+<section class="@ShellClass" aria-label="@Text("Quote agent workspace", "พื้นที่ผู้ช่วยขอราคา")">
     <aside class="qe-agent-rail" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
         <div class="qe-agent-rail-head">
             <a class="qe-agent-brand" href="/" aria-label="MALIEV">
                 <img src="/images/logo.svg" alt="MALIEV" />
             </a>
-            <button type="button" class="qe-agent-collapse" title="@Text("Collapse sidebar", "ยุบแถบด้านข้าง")">
-                <MudIcon Icon="@Icons.Material.Outlined.MenuOpen" Size="Size.Small" />
+            <button type="button"
+                    class="qe-agent-collapse"
+                    aria-expanded="@(!_railCollapsed)"
+                    title="@(_railCollapsed ? Text("Expand sidebar", "ขยายแถบด้านข้าง") : Text("Collapse sidebar", "ยุบแถบด้านข้าง"))"
+                    @onclick="ToggleRail">
+                <MudIcon Icon="@(_railCollapsed ? Icons.Material.Outlined.Menu : Icons.Material.Outlined.MenuOpen)" Size="Size.Small" />
             </button>
         </div>
 
@@ -72,44 +76,62 @@
 
             @if (PinnedProjects.Any())
             {
-                <section class="qe-agent-rail-group" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
-                    <header>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</header>
-                    @foreach (var project in PinnedProjects)
+                <section class="@RailGroupClass(_pinnedProjectsCollapsed)" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
+                    <button type="button"
+                            class="qe-agent-rail-group-toggle"
+                            aria-expanded="@(!_pinnedProjectsCollapsed)"
+                            @onclick="TogglePinnedProjects">
+                        <span>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</span>
+                        <MudIcon Icon="@(_pinnedProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                    </button>
+                    @if (!_pinnedProjectsCollapsed)
+                    {
+                        @foreach (var project in PinnedProjects)
+                        {
+                            <div class="qe-agent-project-row">
+                                <a href="/quote/new">
+                                    <span>@ProjectName(project)</span>
+                                </a>
+                                <button type="button"
+                                        class="qe-agent-pin-btn active"
+                                        title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
+                                        aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
+                                        aria-pressed="true"
+                                        @onclick="@(() => ToggleProjectPin(project))">
+                                    <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
+                                </button>
+                            </div>
+                        }
+                    }
+                </section>
+            }
+
+            <section class="@RailGroupClass(_projectsCollapsed)" aria-label="@Text("Projects", "โปรเจกต์")">
+                <button type="button"
+                        class="qe-agent-rail-group-toggle"
+                        aria-expanded="@(!_projectsCollapsed)"
+                        @onclick="ToggleProjects">
+                    <span>@Text("Projects", "โปรเจกต์")</span>
+                    <MudIcon Icon="@(_projectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                </button>
+                @if (!_projectsCollapsed)
+                {
+                    @foreach (var project in RegularProjects)
                     {
                         <div class="qe-agent-project-row">
                             <a href="/quote/new">
                                 <span>@ProjectName(project)</span>
                             </a>
                             <button type="button"
-                                    class="qe-agent-pin-btn active"
-                                    title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
-                                    aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
-                                    aria-pressed="true"
+                                    class="@($"qe-agent-pin-btn {(project.IsPinned ? "active" : string.Empty)}")"
+                                    title="@(project.IsPinned ? Text("Unpin project", "เลิกปักหมุดโปรเจกต์") : Text("Pin project", "ปักหมุดโปรเจกต์"))"
+                                    aria-label="@(project.IsPinned ? Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}") : Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}"))"
+                                    aria-pressed="@project.IsPinned"
                                     @onclick="@(() => ToggleProjectPin(project))">
-                                <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
+                                <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
                             </button>
                         </div>
                     }
-                </section>
-            }
-
-            <section class="qe-agent-rail-group" aria-label="@Text("Projects", "โปรเจกต์")">
-                <header>@Text("Projects", "โปรเจกต์")</header>
-                @foreach (var project in RegularProjects)
-                {
-                    <div class="qe-agent-project-row">
-                        <a href="/quote/new">
-                            <span>@ProjectName(project)</span>
-                        </a>
-                        <button type="button"
-                                class="@($"qe-agent-pin-btn {(project.IsPinned ? "active" : string.Empty)}")"
-                                title="@(project.IsPinned ? Text("Unpin project", "เลิกปักหมุดโปรเจกต์") : Text("Pin project", "ปักหมุดโปรเจกต์"))"
-                                aria-label="@(project.IsPinned ? Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}") : Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}"))"
-                                aria-pressed="@project.IsPinned"
-                                @onclick="@(() => ToggleProjectPin(project))">
-                            <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
-                        </button>
-                    </div>
                 }
             </section>
         </div>
@@ -122,7 +144,7 @@
             }
             else
             {
-                <a class="qe-agent-signin-btn" href="/auth/sign-in?returnUrl=/">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                <a class="qe-agent-signin-btn" href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
             }
         </div>
     </aside>
@@ -513,69 +535,74 @@
             </section>
         }
 
-        @if (_artifactPanelOpen)
-        {
-            <button type="button"
-                    class="qe-agent-artifact-backdrop"
-                    aria-label="@Text("Close artifacts", "ปิดไฟล์งาน")"
-                    @onclick="ToggleArtifactPanel"></button>
-            <aside class="qe-agent-artifact-drawer" role="dialog" aria-modal="true" aria-label="@Text("Quote artifacts", "ไฟล์งานใบเสนอราคา")">
-                <header>
-                    <div>
-                        <span>@Text("Workbench", "พื้นที่งาน")</span>
-                        <strong>@Text("Artifacts", "ไฟล์งาน")</strong>
-                    </div>
-                    <button type="button" class="qe-agent-round-btn" @onclick="ToggleArtifactPanel" title="@Text("Close", "ปิด")">
-                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
-                    </button>
-                </header>
-                @if (_artifacts.Count == 0)
-                {
-                    <p class="qe-agent-muted">@Text("Viewer, DFM reports, estimates, quote PDFs, order records, and payment handoffs will appear here.", "โมเดล รายงาน DFM ราคา ใบเสนอราคา คำสั่งซื้อ และการชำระเงินจะแสดงที่นี่")</p>
-                }
-                else
-                {
-                    <div class="qe-agent-artifacts">
-                        @foreach (var artifact in _artifacts)
-                        {
-                            <div class="qe-agent-artifact">
-                                <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
-                                <div>
-                                    <strong>@artifact.Title</strong>
-                                    <small>@artifact.Status</small>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                }
-
-                @if (_proposedActions.Count > 0)
-                {
-                    <section class="qe-agent-actions">
-                        <header>@Text("Confirm actions", "ยืนยันการทำงาน")</header>
-                        @foreach (var action in _proposedActions)
-                        {
-                            <article class="qe-agent-action">
-                                <strong>@action.Title</strong>
-                                <p>@action.Summary</p>
-                                @if (action.RequiresAuthentication && !IsSignedIn)
-                                {
-                                    <a href="/auth/sign-in?returnUrl=/">@Text("Sign in", "เข้าสู่ระบบ")</a>
-                                }
-                                else
-                                {
-                                    <button type="button" @onclick="@(() => ConfirmActionAsync(action))">
-                                        <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
-                                        <span>@Text("Confirm", "ยืนยัน")</span>
-                                    </button>
-                                }
-                            </article>
-                        }
-                    </section>
-                }
-            </aside>
-        }
     </main>
+
+    @if (_artifactPanelOpen)
+    {
+        <aside class="qe-agent-artifact-drawer" aria-label="@Text("Quote artifacts", "ไฟล์งานใบเสนอราคา")">
+            <header>
+                <div>
+                    <span>@Text("Workbench", "พื้นที่งาน")</span>
+                    <strong>@Text("Artifacts", "ไฟล์งาน")</strong>
+                </div>
+                <button type="button" class="qe-agent-round-btn" @onclick="ToggleArtifactPanel" title="@Text("Close", "ปิด")">
+                    <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                </button>
+            </header>
+            @if (_artifacts.Count == 0)
+            {
+                <p class="qe-agent-muted">@Text("Viewer, DFM reports, estimates, quote PDFs, order records, and payment handoffs will appear here.", "โมเดล รายงาน DFM ราคา ใบเสนอราคา คำสั่งซื้อ และการชำระเงินจะแสดงที่นี่")</p>
+            }
+            else
+            {
+                <div class="qe-agent-artifacts">
+                    @foreach (var artifact in _artifacts)
+                    {
+                        <div class="qe-agent-artifact">
+                            <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
+                            <div>
+                                <strong>@artifact.Title</strong>
+                                <small>@artifact.Status</small>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (_proposedActions.Count > 0)
+            {
+                <section class="qe-agent-actions">
+                    <header>@Text("Confirm actions", "ยืนยันการทำงาน")</header>
+                    @foreach (var action in _proposedActions)
+                    {
+                        <article class="qe-agent-action">
+                            <strong>@action.Title</strong>
+                            <p>@action.Summary</p>
+                            @if (action.RequiresAuthentication && !IsSignedIn)
+                            {
+                                <a href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                            }
+                            else
+                            {
+                                <button type="button" @onclick="@(() => ConfirmActionAsync(action))">
+                                    <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
+                                    <span>@Text("Confirm", "ยืนยัน")</span>
+                                </button>
+                            }
+                        </article>
+                    }
+                </section>
+            }
+        </aside>
+    }
+
+    @if (_artifactPanelOpen)
+    {
+        <button type="button"
+                class="qe-agent-artifact-backdrop"
+                aria-label="@Text("Close artifacts", "ปิดไฟล์งาน")"
+                @onclick="ToggleArtifactPanel"></button>
+    }
 </section>
 
 @code {
@@ -596,10 +623,13 @@
     private string? _error;
     private bool _sending;
     private bool _artifactPanelOpen;
+    private bool _railCollapsed;
     private bool _sketchOpen;
     private bool _sketchInitPending;
     private bool _searchOpen;
     private bool _focusSearchPending;
+    private bool _pinnedProjectsCollapsed;
+    private bool _projectsCollapsed;
     private string _projectName = $"Manufacturing project {DateTimeOffset.Now:yyyy-MM-dd}";
     private string _searchQuery = string.Empty;
     private string _sketchTitle = "Untitled sketch";
@@ -661,6 +691,7 @@
     private bool IsDarkMode { get; set; }
 
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
+    private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(_artifactPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned);
     private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned);
@@ -803,6 +834,30 @@
     private void ToggleArtifactPanel()
     {
         _artifactPanelOpen = !_artifactPanelOpen;
+    }
+
+    private void ToggleRail()
+    {
+        _railCollapsed = !_railCollapsed;
+        if (_railCollapsed)
+        {
+            _searchOpen = false;
+        }
+    }
+
+    private void TogglePinnedProjects()
+    {
+        _pinnedProjectsCollapsed = !_pinnedProjectsCollapsed;
+    }
+
+    private void ToggleProjects()
+    {
+        _projectsCollapsed = !_projectsCollapsed;
+    }
+
+    private static string RailGroupClass(bool collapsed)
+    {
+        return collapsed ? "qe-agent-rail-group is-collapsed" : "qe-agent-rail-group";
     }
 
     private Task ToggleThemeAsync()

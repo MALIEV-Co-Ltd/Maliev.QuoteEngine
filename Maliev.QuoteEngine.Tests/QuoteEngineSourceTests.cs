@@ -672,15 +672,26 @@ public sealed class QuoteEngineSourceTests
         var agentStyles = ExtractSourceBlock(styles, "/* Quote agent chat-first shell */", "/* End quote agent chat-first shell */");
         var primaryNav = ExtractSourceBlock(component, "<nav class=\"qe-agent-primary-nav\"", "</nav>");
 
-        Assert.Contains("class=\"qe-agent-shell\"", component, StringComparison.Ordinal);
+        Assert.Contains("<section class=\"@ShellClass\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-rail\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-composer\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-toggle\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-drawer\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-rail-group-toggle\"", component, StringComparison.Ordinal);
+        Assert.Contains("ShellClass", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-shell--rail-collapsed", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-shell--artifacts-open", component, StringComparison.Ordinal);
+        Assert.Contains("ToggleRail", component, StringComparison.Ordinal);
+        Assert.Contains("TogglePinnedProjects", component, StringComparison.Ordinal);
+        Assert.Contains("ToggleProjects", component, StringComparison.Ordinal);
+        Assert.Contains("RailGroupClass", component, StringComparison.Ordinal);
+        Assert.Contains("_pinnedProjectsCollapsed", component, StringComparison.Ordinal);
+        Assert.Contains("_projectsCollapsed", component, StringComparison.Ordinal);
         Assert.Contains("MainClass => _messages.Count == 0 ? \"qe-agent-main qe-agent-main--empty\" : \"qe-agent-main qe-agent-main--chat\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-signin-btn\"", component, StringComparison.Ordinal);
+        Assert.Contains("href=\"/auth/sign-in?returnUrl=/quotes\"", component, StringComparison.Ordinal);
         Assert.Contains("@bind=\"_projectName\"", component, StringComparison.Ordinal);
         Assert.Contains("OpenSketchAsync", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-sketch.js", component, StringComparison.Ordinal);
@@ -736,6 +747,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-box", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-shell--rail-collapsed", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-shell--artifacts-open", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-rail-group-toggle", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message--user .qe-agent-bubble p", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-radius: 999px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("Sample use cases", component, StringComparison.Ordinal);
@@ -770,6 +784,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-shell", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 380px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("height: 100dvh;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-height: min(42dvh, 420px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-workflow", agentStyles, StringComparison.Ordinal);
@@ -868,7 +885,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("MudBlazor", auth, StringComparison.Ordinal);
 
         Assert.Contains("sessionStorage.getItem(\"maliev.quote.workspace.handoff\")", loader, StringComparison.Ordinal);
-        Assert.Contains("Starting quote workspace", loader, StringComparison.Ordinal);
+        Assert.Contains("Starting your studio", loader, StringComparison.Ordinal);
         Assert.Contains("_framework/blazor.webassembly.js", index, StringComparison.Ordinal);
     }
 
@@ -1480,34 +1497,57 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void Startup_loader_uses_maliev_logo_progress_and_status_contract()
+    public void Startup_loader_tells_make_studio_story_with_progress_contract()
     {
         var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var loaderScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
 
-        Assert.Contains("class=\"maliev-logo-loader\"", index, StringComparison.Ordinal);
-        Assert.Contains("role=\"img\" aria-label=\"MALIEV\"", index, StringComparison.Ordinal);
-        Assert.Contains("class=\"startup-progress\"", index, StringComparison.Ordinal);
+        // The startup screen is the Make Studio narrative — no MALIEV logo in it.
+        Assert.Contains("id=\"quote-startup\"", index, StringComparison.Ordinal);
+        Assert.Contains("class=\"ms-beat\"", index, StringComparison.Ordinal);
+        Assert.Contains("data-ms-beat=\"4\"", index, StringComparison.Ordinal);
+        Assert.Contains("class=\"ms-wordmark\"", index, StringComparison.Ordinal);
+        Assert.Contains("Make Studio", index, StringComparison.Ordinal);
         Assert.Contains("role=\"progressbar\"", index, StringComparison.Ordinal);
         Assert.Contains("id=\"startup-status\"", index, StringComparison.Ordinal);
-        Assert.DoesNotContain("class=\"startup-logo\">MALIEV</div>", index, StringComparison.Ordinal);
+        Assert.Contains("id=\"startup-percent\"", index, StringComparison.Ordinal);
+        Assert.Contains("class=\"ms-progress\"", index, StringComparison.Ordinal);
+        Assert.DoesNotContain("maliev-logo-loader", index, StringComparison.Ordinal);
+        Assert.DoesNotContain("aria-label=\"MALIEV\"", index, StringComparison.Ordinal);
 
-        Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "images", "logo.svg")));
-        Assert.Contains("--wasm-logo-progress: 0%", styles, StringComparison.Ordinal);
-        Assert.Contains("--logo-empty: var(--wasm-logo-empty, #d7dde6)", styles, StringComparison.Ordinal);
-        Assert.Contains("--logo-progress: var(--wasm-logo-progress, 0%)", styles, StringComparison.Ordinal);
-        Assert.Contains("mask: url('/images/logo.svg') center / contain no-repeat", styles, StringComparison.Ordinal);
-        Assert.Contains(".maliev-logo-loader::before", styles, StringComparison.Ordinal);
-        Assert.Contains("width: var(--logo-progress)", styles, StringComparison.Ordinal);
-        Assert.Contains(".startup-progress span", styles, StringComparison.Ordinal);
-        Assert.Contains("width: var(--wasm-loader-progress)", styles, StringComparison.Ordinal);
+        // Styling: scoped startup screen, dismissal contract, theming, reduced motion.
+        Assert.Contains(".startup-screen {", styles, StringComparison.Ordinal);
+        Assert.Contains("body.quote-ready .startup-screen", styles, StringComparison.Ordinal);
+        Assert.Contains(":root[data-maliev-theme=\"dark\"] .startup-screen", styles, StringComparison.Ordinal);
+        Assert.Contains(".ms-beat {", styles, StringComparison.Ordinal);
+        Assert.Contains(".ms-progress-fill {", styles, StringComparison.Ordinal);
+        Assert.Contains("width: var(--ms-progress, 0%)", styles, StringComparison.Ordinal);
+        Assert.Contains("prefers-reduced-motion", styles, StringComparison.Ordinal);
+        Assert.Contains(":root[data-culture=\"th-TH\"] .ms-beat", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".maliev-logo-loader", styles, StringComparison.Ordinal);
 
+        // Loader: real WASM progress contract + story timeline + dismissal gate.
         Assert.Contains("startBlazor", loaderScript, StringComparison.Ordinal);
         Assert.Contains("loadBootResource", loaderScript, StringComparison.Ordinal);
         Assert.Contains("let displayedProgress = 0", loaderScript, StringComparison.Ordinal);
         Assert.Contains("Math.max(displayedProgress, progress)", loaderScript, StringComparison.Ordinal);
         Assert.Contains("markRuntimeReady", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("beginBoot(isWorkspaceHandoff);", loaderScript.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "minVisibleMs = 0;\n    document.body.classList.add(\"quote-ready\");",
+            loaderScript.ReplaceLineEndings("\n"),
+            StringComparison.Ordinal);
+        Assert.Contains("ms-beat--on", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("maliev.makestudio.story.seen", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("Preparing Make Studio", loaderScript, StringComparison.Ordinal);
+
+        // Localization: Thai display language carried from Maliev.Web survives the
+        // subdomain hop via the query string, and the story renders in Thai.
+        Assert.Contains("new URLSearchParams(window.location.search).get(\"culture\")", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("\"th-TH\"", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("applyStoryStrings", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("กำลังโหลด Make Studio", loaderScript, StringComparison.Ordinal);
     }
 
     [Fact]
