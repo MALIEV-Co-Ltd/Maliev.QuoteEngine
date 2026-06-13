@@ -3147,6 +3147,18 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuotePartViewerJs_UsesProjectNewCanvasFadeInContract()
+    {
+        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
+
+        Assert.Contains("canvas.style.opacity = '0';", js, StringComparison.Ordinal);
+        Assert.Contains("canvas.style.transition = `opacity ${CONFIG.ANIMATION_CANVAS_FADE_IN} ease-in`;", js, StringComparison.Ordinal);
+        Assert.Contains("requestAnimationFrame(() => { canvas.style.opacity = '1'; });", js, StringComparison.Ordinal);
+        Assert.DoesNotContain("engine.loadingScreen = { displayLoadingUI: () => {}, hideLoadingUI: () => {} };", js, StringComparison.Ordinal);
+        Assert.DoesNotContain("canvas.style.filter = 'blur(", js, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewerSettingsDto_IncludesRenderModeTransitionFields()
     {
         var dtoSource = ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs");
