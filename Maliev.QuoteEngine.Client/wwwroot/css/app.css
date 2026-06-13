@@ -772,6 +772,22 @@
     text-decoration: none;
 }
 
+.qe-agent-signin-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 8px 13px;
+    border-radius: 10px;
+    background: var(--qe-agent-ink);
+    color: var(--qe-agent-bg) !important;
+    font-weight: 600;
+}
+
+.qe-agent-signin-btn:hover {
+    background: color-mix(in srgb, var(--qe-agent-ink) 86%, var(--qe-agent-muted));
+}
+
 .qe-agent-account-dot {
     display: grid;
     place-items: center;
@@ -937,13 +953,14 @@
 .qe-agent-composer textarea {
     min-height: 40px;
     max-height: 170px;
-    padding: 9px 4px;
+    padding: 8px 4px;
     border: 0 !important;
     outline: 0 !important;
     background: transparent !important;
     box-shadow: none !important;
     resize: none;
-    font-size: 15px;
+    font-size: 16px;
+    line-height: 1.5;
 }
 
 .qe-agent-send-btn {
