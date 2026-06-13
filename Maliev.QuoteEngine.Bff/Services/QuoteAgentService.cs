@@ -676,7 +676,7 @@ internal sealed class QuoteAgentService(
             ThumbnailUrl = "/images/generated/sample-part.svg",
             Findings = [],
             IsManifold = true,
-            DfmAcknowledged = true,
+            DfmAcknowledged = false,
             PartNotes = "Prototype analysis generated from uploaded CAD/3D attachment metadata until GeometryService returns authoritative analysis.",
             BodyCount = 1,
             SelectedBodyIndex = 0

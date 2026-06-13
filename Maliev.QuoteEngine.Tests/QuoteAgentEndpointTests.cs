@@ -102,6 +102,49 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_with_cad_attachment_does_not_pre_acknowledge_dfm_review()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Quote this STEP as 10 pieces in aluminum.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "bracket.step",
+                    ContentType = "model/step",
+                    FileSizeBytes = 120_000,
+                    Kind = "cad",
+                    StoragePath = "quotes/temp/bracket.step"
+                }
+            ]
+        });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+
+        var state = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
+            $"/quote/v1/agent/sessions/{body.SessionId:D}");
+
+        Assert.NotNull(state);
+        var part = Assert.Single(state.Parts);
+        Assert.False(part.DfmAcknowledged);
+    }
+
+    [Fact]
     public async Task Agent_message_with_supplemental_drawing_keeps_geometry_gate_blocked()
     {
         var chatbot = new RecordingChatbotServiceClient();
