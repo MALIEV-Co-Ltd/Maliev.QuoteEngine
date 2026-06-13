@@ -288,15 +288,30 @@ internal sealed class QuoteAgentService(
         Dictionary<string, JsonElement> arguments)
     {
         var blocker = GetActionBlocker(state, actionType, requiresAuthentication);
-        return blocker is null
-            ? PrepareAction(state, actionType, title, summary, requiresAuthentication, arguments)
-            : new
+        if (blocker is null)
+        {
+            return PrepareAction(state, actionType, title, summary, requiresAuthentication, arguments);
+        }
+
+        if (blocker.Code.Equals("customer_authenticated", StringComparison.OrdinalIgnoreCase))
+        {
+            return new
             {
                 error = blocker.Detail,
                 requiredGateCode = blocker.Code,
                 actionType,
+                authHandoff = BuildAuthHandoff(state, arguments),
                 state = ToStateResponse(state)
             };
+        }
+
+        return new
+        {
+            error = blocker.Detail,
+            requiredGateCode = blocker.Code,
+            actionType,
+            state = ToStateResponse(state)
+        };
     }
 
     private QuoteAgentGateDto? GetActionBlocker(
@@ -415,6 +430,7 @@ internal sealed class QuoteAgentService(
                 error = "Sign in before saving checkout details.",
                 requiredGateCode = "customer_authenticated",
                 actionType = "update_checkout_details",
+                authHandoff = BuildAuthHandoff(state, arguments),
                 state = ToStateResponse(state)
             };
         }

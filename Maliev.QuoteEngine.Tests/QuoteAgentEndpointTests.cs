@@ -390,6 +390,41 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_auth_required_gate_error_includes_trusted_auth_handoff()
+    {
+        using var client = factory.CreateClient();
+        using var prepareRequest = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/tools/quote_prepare_formal_quote")
+        {
+            Content = JsonContent.Create(new QuoteAgentToolRequest
+            {
+                Arguments = new Dictionary<string, JsonElement>
+                {
+                    ["requirements"] = JsonSerializer.SerializeToElement("Need a formal quote.", JsonOptions),
+                    ["return_url"] = JsonSerializer.SerializeToElement("/quote/new?checkout=1", JsonOptions)
+                }
+            }, options: JsonOptions)
+        };
+        prepareRequest.Headers.TryAddWithoutValidation(
+            "X-Maliev-Agent-Context",
+            CreateSignedAgentContextToken(Guid.NewGuid(), Guid.NewGuid(), null));
+
+        using var prepareResponse = await client.SendAsync(prepareRequest);
+        using var document = await JsonDocument.ParseAsync(await prepareResponse.Content.ReadAsStreamAsync());
+
+        Assert.Equal(HttpStatusCode.OK, prepareResponse.StatusCode);
+        Assert.Equal("customer_authenticated", document.RootElement.GetProperty("requiredGateCode").GetString());
+
+        var authHandoff = document.RootElement.GetProperty("authHandoff");
+        Assert.False(authHandoff.GetProperty("isAuthenticated").GetBoolean());
+        Assert.Equal("/quote/new?checkout=1", authHandoff.GetProperty("returnUrl").GetString());
+        Assert.Equal("authentication_required", authHandoff.GetProperty("status").GetString());
+
+        var google = Assert.Single(authHandoff.GetProperty("methods").EnumerateArray(), method =>
+            method.GetProperty("methodId").GetString() == "google");
+        Assert.Equal("/auth/sign-in?returnUrl=%2Fquote%2Fnew%3Fcheckout%3D1", google.GetProperty("url").GetString());
+    }
+
+    [Fact]
     public async Task Agent_formal_quote_tool_blocks_until_geometry_and_pricing_gates_pass()
     {
         using var client = factory.CreateClient();
