@@ -1039,8 +1039,9 @@
 }
 
 .qe-agent-composer {
+    display: grid;
     grid-template-columns: 36px minmax(0, 1fr) 36px 42px;
-    align-items: center;
+    align-items: start;
     gap: 8px;
     width: 100%;
     padding: 7px;
@@ -1059,6 +1060,8 @@
     background: transparent !important;
     box-shadow: none !important;
     resize: none;
+    field-sizing: content;
+    overflow-y: auto;
     font-size: 16px !important;
     line-height: 1.5 !important;
 }

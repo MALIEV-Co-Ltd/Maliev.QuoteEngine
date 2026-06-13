@@ -720,6 +720,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-pin-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains("opacity: 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("field-sizing: content;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("overflow-y: auto;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("align-items: start;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("font-size: 16px !important;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("line-height: 1.5 !important;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-agent-primary: #0a72ef;", agentStyles, StringComparison.OrdinalIgnoreCase);
