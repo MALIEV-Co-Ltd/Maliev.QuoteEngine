@@ -536,6 +536,91 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Agent_search_customer_data_returns_customer_scoped_resources()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var ownerClient = await CreateSignedInClientAsync(scopedFactory, "agent-search-owner@example.com");
+        var ownerSessionId = await StartPricedCadSessionAsync(ownerClient);
+
+        var draftState = await ExecuteToolForStateAsync(
+            ownerClient,
+            ownerSessionId,
+            "quote_prepare_draft_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["title"] = JsonSerializer.SerializeToElement("Fixture search project", JsonOptions)
+            });
+        await ConfirmActionAsync(ownerClient, Assert.Single(draftState.ProposedActions).ActionId);
+
+        var quoteState = await ExecuteToolForStateAsync(ownerClient, ownerSessionId, "quote_prepare_formal_quote");
+        await ConfirmActionAsync(ownerClient, Assert.Single(quoteState.ProposedActions).ActionId);
+
+        var approvalState = await ExecuteToolForStateAsync(ownerClient, ownerSessionId, "quote_approve_quote");
+        await ConfirmActionAsync(ownerClient, Assert.Single(approvalState.ProposedActions).ActionId);
+
+        var orderState = await ExecuteToolForStateAsync(ownerClient, ownerSessionId, "quote_create_order");
+        await ConfirmActionAsync(ownerClient, Assert.Single(orderState.ProposedActions).ActionId);
+
+        using var otherClient = await CreateSignedInClientAsync(scopedFactory, "agent-search-other@example.com");
+        var otherSessionId = await StartPricedCadSessionAsync(otherClient);
+        var otherDraftState = await ExecuteToolForStateAsync(
+            otherClient,
+            otherSessionId,
+            "quote_prepare_draft_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["title"] = JsonSerializer.SerializeToElement("Other customer hidden fixture", JsonOptions)
+            });
+        await ConfirmActionAsync(otherClient, Assert.Single(otherDraftState.ProposedActions).ActionId);
+
+        var json = await ExecuteToolAsync(
+            ownerClient,
+            ownerSessionId,
+            "quote_search_customer_data",
+            new Dictionary<string, JsonElement>
+            {
+                ["query"] = JsonSerializer.SerializeToElement(string.Empty, JsonOptions),
+                ["limit"] = JsonSerializer.SerializeToElement(20, JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+        var results = document.RootElement.GetProperty("results").EnumerateArray().ToArray();
+
+        Assert.Equal(ownerSessionId, document.RootElement.GetProperty("sessionId").GetGuid());
+        Assert.Contains(results, result =>
+            result.GetProperty("resourceType").GetString() == "project" &&
+            result.GetProperty("title").GetString() == "Fixture search project");
+        Assert.Contains(results, result => result.GetProperty("resourceType").GetString() == "quote");
+        Assert.Contains(results, result => result.GetProperty("resourceType").GetString() == "order");
+        Assert.Contains(results, result =>
+            result.GetProperty("resourceType").GetString() == "document" &&
+            result.GetProperty("title").GetString() == "manufacturing-requirements.pdf");
+        Assert.DoesNotContain(results, result =>
+            result.GetProperty("title").GetString() == "Other customer hidden fixture");
+    }
+
+    [Fact]
+    public async Task Agent_search_customer_data_requires_customer_session()
+    {
+        using var client = factory.CreateClient();
+        var json = await ExecuteToolAsync(
+            client,
+            Guid.NewGuid(),
+            "quote_search_customer_data",
+            new Dictionary<string, JsonElement>
+            {
+                ["query"] = JsonSerializer.SerializeToElement("fixture", JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("customer_authenticated", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("search_customer_data", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Contains(
+            "Sign in",
+            document.RootElement.GetProperty("error").GetString(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)
     {
         var now = DateTimeOffset.UtcNow;

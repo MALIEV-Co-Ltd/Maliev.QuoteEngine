@@ -240,6 +240,51 @@ public sealed class QuoteAgentToolRequest
 }
 
 /// <summary>
+/// Customer-scoped search response returned to the QuoteEngine agent.
+/// </summary>
+public sealed class QuoteAgentSearchResponse
+{
+    /// <summary>Gets or sets the QuoteEngine agent session ID that requested the search.</summary>
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets the normalized query used for search.</summary>
+    public string Query { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets whether the search used a signed-in customer boundary.</summary>
+    public bool IsAuthenticated { get; set; }
+
+    /// <summary>Gets or sets the matched customer data results.</summary>
+    public List<QuoteAgentSearchResultDto> Results { get; set; } = [];
+}
+
+/// <summary>
+/// Customer-safe search result for projects, quotes, orders, documents, files, and artifacts.
+/// </summary>
+public sealed class QuoteAgentSearchResultDto
+{
+    /// <summary>Gets or sets the resource type such as project, quote, order, document, or artifact.</summary>
+    public string ResourceType { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the stable resource ID.</summary>
+    public string ResourceId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the customer-visible title.</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets compact customer-visible detail text.</summary>
+    public string Detail { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the action the agent can take next, such as resume_project.</summary>
+    public string ActionHint { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets optional resource URL for browser navigation or download.</summary>
+    public string? Url { get; set; }
+
+    /// <summary>Gets or sets optional compact metadata.</summary>
+    public Dictionary<string, string> Metadata { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+}
+
+/// <summary>
 /// Request to confirm a server-stored proposed action.
 /// </summary>
 public sealed class QuoteAgentConfirmActionRequest

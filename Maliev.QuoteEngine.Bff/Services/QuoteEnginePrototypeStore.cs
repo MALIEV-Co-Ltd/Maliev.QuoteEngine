@@ -1,8 +1,10 @@
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Shared.Account;
+using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
 
 namespace Maliev.QuoteEngine.Bff.Services;
@@ -182,6 +184,93 @@ public sealed class QuoteEnginePrototypeStore
             .Where(record => record.CustomerId == customerId)
             .Select(record => record.Order)
             .OrderByDescending(x => x.UpdatedAt)
+            .ToArray();
+    }
+
+    public IReadOnlyList<QuoteAgentSearchResultDto> SearchCustomerData(
+        Guid customerId,
+        string? query,
+        int limit)
+    {
+        var normalizedQuery = NormalizeSearchQuery(query);
+        var normalizedLimit = Math.Clamp(limit, 1, 50);
+        var results = new List<QuoteAgentSearchResultDto>();
+
+        foreach (var project in _projects.Values.Where(record => record.CustomerId == customerId))
+        {
+            AddIfMatches(results, normalizedQuery, new QuoteAgentSearchResultDto
+            {
+                ResourceType = "project",
+                ResourceId = project.ProjectId.ToString("D"),
+                Title = project.Title,
+                Detail = $"{project.ProjectNumber} · {project.Status} · {project.Parts.Count} part(s)",
+                ActionHint = "resume_project",
+                Url = $"/quotes?projectId={project.ProjectId:D}",
+                Metadata = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["projectNumber"] = project.ProjectNumber,
+                    ["status"] = project.Status
+                }
+            });
+        }
+
+        foreach (var quote in GetQuotes(customerId))
+        {
+            AddIfMatches(results, normalizedQuery, new QuoteAgentSearchResultDto
+            {
+                ResourceType = "quote",
+                ResourceId = quote.QuoteId.ToString("D"),
+                Title = quote.QuoteNumber,
+                Detail = $"{quote.Status} · {quote.Total:N2} {quote.Currency}",
+                ActionHint = "open_quote",
+                Url = quote.PdfUrl,
+                Metadata = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["status"] = quote.Status,
+                    ["currency"] = quote.Currency
+                }
+            });
+        }
+
+        foreach (var order in GetOrders(customerId))
+        {
+            AddIfMatches(results, normalizedQuery, new QuoteAgentSearchResultDto
+            {
+                ResourceType = "order",
+                ResourceId = order.OrderId.ToString("D"),
+                Title = order.OrderNumber,
+                Detail = $"{order.Status} · {order.TrackingLabel}",
+                ActionHint = "open_order",
+                Url = $"/orders/{order.OrderNumber}",
+                Metadata = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["status"] = order.Status
+                }
+            });
+        }
+
+        foreach (var document in GetDocuments(customerId))
+        {
+            AddIfMatches(results, normalizedQuery, new QuoteAgentSearchResultDto
+            {
+                ResourceType = "document",
+                ResourceId = document.DocumentId.ToString("D"),
+                Title = document.FileName,
+                Detail = $"{document.Kind} · {document.ContentType ?? "file"}",
+                ActionHint = "open_document",
+                Url = document.StoragePath,
+                Metadata = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["kind"] = document.Kind,
+                    ["fileSizeBytes"] = document.FileSizeBytes.ToString(CultureInfo.InvariantCulture)
+                }
+            });
+        }
+
+        return results
+            .OrderBy(result => SearchRank(result.ResourceType))
+            .ThenBy(result => result.Title, StringComparer.OrdinalIgnoreCase)
+            .Take(normalizedLimit)
             .ToArray();
     }
 
@@ -733,6 +822,49 @@ public sealed class QuoteEnginePrototypeStore
     private static IReadOnlyList<QuotePartDraftDto> ClonePartsForStorage(IReadOnlyList<QuotePartDraftDto> parts)
     {
         return parts.Select(part => ClonePart(part, Guid.NewGuid())).ToArray();
+    }
+
+    private static string NormalizeSearchQuery(string? query)
+    {
+        return string.IsNullOrWhiteSpace(query) ? string.Empty : query.Trim();
+    }
+
+    private static void AddIfMatches(
+        List<QuoteAgentSearchResultDto> results,
+        string query,
+        QuoteAgentSearchResultDto result)
+    {
+        if (string.IsNullOrWhiteSpace(query) || MatchesSearch(result, query))
+        {
+            results.Add(result);
+        }
+    }
+
+    private static bool MatchesSearch(QuoteAgentSearchResultDto result, string query)
+    {
+        return Contains(result.ResourceType, query) ||
+            Contains(result.ResourceId, query) ||
+            Contains(result.Title, query) ||
+            Contains(result.Detail, query) ||
+            result.Metadata.Values.Any(value => Contains(value, query));
+    }
+
+    private static bool Contains(string? value, string query)
+    {
+        return value?.Contains(query, StringComparison.OrdinalIgnoreCase) == true;
+    }
+
+    private static int SearchRank(string resourceType)
+    {
+        return resourceType.ToLowerInvariant() switch
+        {
+            "project" => 0,
+            "quote" => 1,
+            "order" => 2,
+            "document" => 3,
+            "artifact" => 4,
+            _ => 9
+        };
     }
 
     private static IReadOnlyList<QuotePartDraftDto> ClonePartsForResponse(IReadOnlyList<QuotePartDraftDto> parts)

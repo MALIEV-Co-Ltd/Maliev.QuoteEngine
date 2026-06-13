@@ -110,6 +110,7 @@ internal sealed class QuoteAgentService(
             "quote_get_state" => ToStateResponse(state),
             "quote_get_reference_data" => prototypeStore.ReferenceData,
             "quote_get_account_context" => BuildAccountContext(state),
+            "quote_search_customer_data" => SearchCustomerDataOrGateError(state, request.Arguments),
             "quote_resume_project" => ResumeProjectOrGateError(state, request.Arguments),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
             "quote_calculate_estimate" => CalculateEstimate(state),
@@ -396,6 +397,83 @@ internal sealed class QuoteAgentService(
             signUpUrl = "/auth/sign-up?returnUrl=/quote/new",
             gates = QuoteAgentSessionStore.BuildGates(state, customerId.HasValue)
         };
+    }
+
+    private object SearchCustomerDataOrGateError(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments)
+    {
+        var customerId = ResolveCustomerId() ?? state.CustomerId;
+        if (!customerId.HasValue)
+        {
+            return new
+            {
+                error = "Sign in before searching customer projects, orders, quotes, files, or documents.",
+                requiredGateCode = "customer_authenticated",
+                actionType = "search_customer_data",
+                state = ToStateResponse(state)
+            };
+        }
+
+        var query = ReadString(arguments, "query") ?? string.Empty;
+        var limit = ReadInt(arguments, "limit", 20);
+        var results = prototypeStore
+            .SearchCustomerData(customerId.Value, query, limit)
+            .ToList();
+        AddArtifactSearchResults(state, query, limit, results);
+
+        return new QuoteAgentSearchResponse
+        {
+            SessionId = state.SessionId,
+            Query = query.Trim(),
+            IsAuthenticated = true,
+            Results = results
+                .Take(Math.Clamp(limit, 1, 50))
+                .ToList()
+        };
+    }
+
+    private static void AddArtifactSearchResults(
+        QuoteAgentSessionState state,
+        string query,
+        int limit,
+        List<QuoteAgentSearchResultDto> results)
+    {
+        var normalizedLimit = Math.Clamp(limit, 1, 50);
+        lock (state.SyncRoot)
+        {
+            foreach (var artifact in state.Artifacts)
+            {
+                var result = new QuoteAgentSearchResultDto
+                {
+                    ResourceType = "artifact",
+                    ResourceId = artifact.ArtifactId.ToString("D"),
+                    Title = artifact.Title,
+                    Detail = $"{artifact.ArtifactType} · {artifact.Status}",
+                    ActionHint = "open_artifact",
+                    Url = artifact.Url,
+                    Metadata = new(artifact.Metadata, StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["artifactType"] = artifact.ArtifactType,
+                        ["status"] = artifact.Status
+                    }
+                };
+
+                if (results.Count >= normalizedLimit)
+                {
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(query) ||
+                    result.ResourceType.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    result.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    result.Detail.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    result.Metadata.Values.Any(value => value.Contains(query, StringComparison.OrdinalIgnoreCase)))
+                {
+                    results.Add(result);
+                }
+            }
+        }
     }
 
     private object ResumeProjectOrGateError(
@@ -1082,6 +1160,17 @@ Customer message:
     {
         value = Guid.Empty;
         return Guid.TryParse(ReadString(arguments, key), out value);
+    }
+
+    private static int ReadInt(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        string key,
+        int fallback)
+    {
+        var value = ReadString(arguments, key);
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : fallback;
     }
 
     private static string NormalizeLanguage(string? language, string message = "")
