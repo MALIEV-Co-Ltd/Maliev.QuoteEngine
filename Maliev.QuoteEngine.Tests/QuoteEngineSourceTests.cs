@@ -655,6 +655,7 @@ public sealed class QuoteEngineSourceTests
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var agentStyles = ExtractSourceBlock(styles, "/* Quote agent chat-first shell */", "/* End quote agent chat-first shell */");
+        var primaryNav = ExtractSourceBlock(component, "<nav class=\"qe-agent-primary-nav\"", "</nav>");
 
         Assert.Contains("class=\"qe-agent-shell\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-rail\"", component, StringComparison.Ordinal);
@@ -694,6 +695,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Pinned projects", component, StringComparison.Ordinal);
         Assert.Contains("Plugins", component, StringComparison.Ordinal);
         Assert.Contains("Projects", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Attach files", primaryNav, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequestUploadAsync", primaryNav, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.AttachFile", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.ArrowUpward", component, StringComparison.Ordinal);
         Assert.Contains("SendAgentMessageAsync", component, StringComparison.Ordinal);
