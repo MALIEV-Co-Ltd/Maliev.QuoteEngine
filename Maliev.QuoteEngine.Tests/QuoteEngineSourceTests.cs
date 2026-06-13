@@ -591,8 +591,11 @@ public sealed class QuoteEngineSourceTests
     public void New_quote_workspace_uses_chat_first_agent_shell_for_anonymous_start()
     {
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var legacyQuotes = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Quotes.razor");
         var script = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
 
+        Assert.Contains("@page \"/quotes\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("@page \"/quotes\"", legacyQuotes, StringComparison.Ordinal);
         Assert.DoesNotContain("Try the Quote Engine with a MALIEV sample file", source, StringComparison.Ordinal);
         Assert.Contains("<QuoteAgentLaunchShell", source, StringComparison.Ordinal);
         Assert.Contains("SessionId=\"@AgentSessionId\"", source, StringComparison.Ordinal);
@@ -897,6 +900,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".quote-topnav a:focus-visible", styles, StringComparison.Ordinal);
         Assert.Contains("IsQuoteWorkspacePath", layout, StringComparison.Ordinal);
         Assert.Contains("\"/projects/new\"", layout, StringComparison.Ordinal);
+        Assert.Contains("\"/quotes\"", layout, StringComparison.Ordinal);
         Assert.Contains("\"/quotes/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("@inject QuoteEngineApiClient Api", layout, StringComparison.Ordinal);
         Assert.Contains("@if (_authStatus.IsSignedIn)", layout, StringComparison.Ordinal);
@@ -1294,15 +1298,15 @@ public sealed class QuoteEngineSourceTests
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
         Assert.Contains("@page \"/quotes/{QuoteId:guid}\"", quoteDetail, StringComparison.Ordinal);
-        Assert.Contains("@page \"/quotes\"", quoteDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("@page \"/quotes\"", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("@inject QuoteEngineApiClient Api", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("GetQuotesAsync", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("CustomerQuoteSummaryDto", quoteDetail, StringComparison.Ordinal);
-        Assert.Contains("_quotes = [.. quotes]", quoteDetail, StringComparison.Ordinal);
-        Assert.Contains("IsHistoryRoute", quoteDetail, StringComparison.Ordinal);
-        Assert.Contains("data-quote-section=\"history\"", quoteDetail, StringComparison.Ordinal);
-        Assert.Contains("href=\"/quotes/@quote.QuoteId\"", quoteDetail, StringComparison.Ordinal);
-        Assert.Contains("quote.QuoteNumber", quoteDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("_quotes = [.. quotes]", quoteDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsHistoryRoute", quoteDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-quote-section=\"history\"", quoteDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote-history-list", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("_quote.QuoteNumber", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("_quote = quotes.FirstOrDefault", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("data-quote-section=\"summary\"", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("data-quote-section=\"actions\"", quoteDetail, StringComparison.Ordinal);
@@ -2097,6 +2101,7 @@ public sealed class QuoteEngineSourceTests
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
 
         Assert.Contains("@page \"/projects/new\"", src, StringComparison.Ordinal);
+        Assert.Contains("@page \"/quotes\"", src, StringComparison.Ordinal);
     }
 
     [Fact]

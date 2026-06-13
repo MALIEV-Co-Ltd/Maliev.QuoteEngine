@@ -1,5 +1,4 @@
 @page "/quotes/{QuoteId:guid}"
-@page "/quotes"
 @using System.Globalization
 @inject QuoteEngineApiClient Api
 @inject NavigationManager Navigation
@@ -14,61 +13,11 @@
 }
 else if (_quote is null)
 {
-    @if (IsHistoryRoute)
-    {
-        <main class="quote-detail-shell">
-            <header class="quote-detail-header">
-                <a class="qe-secondary-btn" href="/profile">@Text("Back to account", "กลับไปที่บัญชี")</a>
-                <div>
-                    <span class="eyebrow">@Text("Quotes", "ใบเสนอราคา")</span>
-                    <h1>@Text("Quote history", "ประวัติใบเสนอราคา")</h1>
-                    <p>@Text("Review formal quote status, totals, and PDF documents before ordering or re-quoting.", "ตรวจสอบสถานะ มูลค่า และเอกสาร PDF ของใบเสนอราคาก่อนสั่งซื้อหรือขอราคาใหม่")</p>
-                </div>
-                <a class="qe-primary-btn" href="/quotes/new">@Text("New quote", "ใบเสนอราคาใหม่")</a>
-            </header>
-
-            <section class="quote-detail-card" data-quote-section="history">
-                <div class="order-panel-head">
-                    <span>@Text("Customer quote history", "ประวัติใบเสนอราคาลูกค้า")</span>
-                    <strong>@_quotes.Count</strong>
-                </div>
-                @if (_quotes.Count == 0)
-                {
-                    <div class="empty-state">
-                        <p>@Text("No formal quotes yet.", "ยังไม่มีใบเสนอราคาอย่างเป็นทางการ")</p>
-                        <a class="primary-button" href="/quotes/new">@Text("Start a quote", "เริ่มขอราคา")</a>
-                    </div>
-                }
-                else
-                {
-                    <div class="quote-history-list">
-                        @foreach (var quote in _quotes)
-                        {
-                            <article class="quote-history-row">
-                                <a href="/quotes/@quote.QuoteId">
-                                    <span>@quote.QuoteNumber</span>
-                                    <strong>@FormatMoney(quote.Total, quote.Currency)</strong>
-                                    <small>@quote.Status · @FormatDate(quote.UpdatedAt)</small>
-                                </a>
-                                @if (!string.IsNullOrWhiteSpace(quote.PdfUrl))
-                                {
-                                    <a class="profile-quote-pdf" href="@quote.PdfUrl" target="_blank" rel="noopener">PDF</a>
-                                }
-                            </article>
-                        }
-                    </div>
-                }
-            </section>
-        </main>
-    }
-    else
-    {
-        <div class="empty-state">
+    <div class="empty-state">
         <h1>@Text("Quote not found", "ไม่พบใบเสนอราคา")</h1>
         <p>@Text("This quote is unavailable or does not belong to your account.", "ใบเสนอราคานี้ไม่พร้อมใช้งานหรือไม่ได้อยู่ในบัญชีของคุณ")</p>
         <a class="primary-button" href="/quotes/new">@Text("Start another quote", "เริ่มขอราคาใหม่")</a>
-        </div>
-    }
+    </div>
 }
 else
 {
@@ -150,11 +99,9 @@ else
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     private CustomerQuoteSummaryDto? _quote;
-    private List<CustomerQuoteSummaryDto> _quotes = [];
     private bool _loading = true;
     private bool _quoteActionBusy;
     private string? _quoteActionError;
-    private bool IsHistoryRoute => QuoteId == Guid.Empty;
     private bool CanApproveQuote => _quote is not null && !IsApprovedQuote(_quote.Status) && !IsTerminalQuote(_quote.Status);
     private bool CanCreateOrder => _quote is not null && !IsTerminalQuote(_quote.Status);
     private string ConversionStatus => _quote is null
@@ -168,12 +115,7 @@ else
         _loading = true;
         _quoteActionError = null;
         var quotes = await Api.GetQuotesAsync();
-        _quotes = [.. quotes];
-        _quote = null;
-        if (!IsHistoryRoute)
-        {
-            _quote = quotes.FirstOrDefault(quote => quote.QuoteId == QuoteId);
-        }
+        _quote = quotes.FirstOrDefault(quote => quote.QuoteId == QuoteId);
         _loading = false;
     }
 

@@ -297,6 +297,7 @@
         var normalized = path.TrimEnd('/');
         return normalized.Length == 0
             || normalized.Equals("/projects/new", StringComparison.OrdinalIgnoreCase)
+            || normalized.Equals("/quotes", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("/quote/new", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("/quotes/new", StringComparison.OrdinalIgnoreCase)
             || normalized.Equals("/demo", StringComparison.OrdinalIgnoreCase);
