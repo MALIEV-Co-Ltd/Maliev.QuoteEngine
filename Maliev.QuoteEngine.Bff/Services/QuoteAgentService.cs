@@ -191,6 +191,11 @@ internal sealed class QuoteAgentService(
     {
         if (!sessionStore.TryGetAction(actionId, out var action))
         {
+            if (sessionStore.TryGetCompletedAction(actionId, out var completed))
+            {
+                return Task.FromResult<QuoteAgentActionResultResponse?>(completed);
+            }
+
             return Task.FromResult<QuoteAgentActionResultResponse?>(null);
         }
 
@@ -216,14 +221,15 @@ internal sealed class QuoteAgentService(
             _ => $"Action {action.ActionType} completed."
         };
 
-        sessionStore.CompleteAction(state, actionId);
-        return Task.FromResult<QuoteAgentActionResultResponse?>(new QuoteAgentActionResultResponse
+        var result = new QuoteAgentActionResultResponse
         {
             ActionId = actionId,
             Status = "completed",
             Message = message,
             State = ToStateResponse(state)
-        });
+        };
+        sessionStore.CompleteAction(state, actionId, result);
+        return Task.FromResult<QuoteAgentActionResultResponse?>(result);
     }
 
     public Task RelayThinkingStepAsync(

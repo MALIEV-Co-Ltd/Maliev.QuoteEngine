@@ -9,6 +9,7 @@ internal sealed class QuoteAgentSessionStore
 {
     private readonly ConcurrentDictionary<Guid, QuoteAgentSessionState> _sessions = new();
     private readonly ConcurrentDictionary<Guid, QuoteAgentPendingAction> _actions = new();
+    private readonly ConcurrentDictionary<Guid, QuoteAgentActionResultResponse> _completedActions = new();
 
     public QuoteAgentSessionState GetOrCreate(Guid sessionId, string language = "en")
     {
@@ -101,9 +102,18 @@ internal sealed class QuoteAgentSessionStore
         return _actions.TryGetValue(actionId, out action!);
     }
 
-    public void CompleteAction(QuoteAgentSessionState state, Guid actionId)
+    public bool TryGetCompletedAction(Guid actionId, out QuoteAgentActionResultResponse result)
+    {
+        return _completedActions.TryGetValue(actionId, out result!);
+    }
+
+    public void CompleteAction(
+        QuoteAgentSessionState state,
+        Guid actionId,
+        QuoteAgentActionResultResponse result)
     {
         _actions.TryRemove(actionId, out _);
+        _completedActions[actionId] = result;
         lock (state.SyncRoot)
         {
             var action = state.ProposedActions.FirstOrDefault(item => item.ActionId == actionId);

@@ -722,6 +722,38 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_confirm_action_retry_returns_completed_result_without_reexecuting()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-confirm-retry@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var draftState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_draft_project");
+        var action = Assert.Single(draftState.ProposedActions);
+
+        var first = await ConfirmActionAsync(client, action.ActionId);
+        Assert.NotNull(first.State);
+        var firstArtifact = Assert.Single(first.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        var firstProjectId = firstArtifact.Metadata["projectId"];
+
+        var retryResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{action.ActionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest
+            {
+                ConfirmationNote = "Retry after a transient network failure."
+            });
+
+        Assert.Equal(HttpStatusCode.OK, retryResponse.StatusCode);
+        var retry = await retryResponse.Content.ReadFromJsonAsync<QuoteAgentActionResultResponse>();
+        Assert.NotNull(retry);
+        Assert.Equal(action.ActionId, retry.ActionId);
+        Assert.Equal("completed", retry.Status);
+        Assert.NotNull(retry.State);
+        var retryArtifact = Assert.Single(retry.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.Equal(firstProjectId, retryArtifact.Metadata["projectId"]);
+    }
+
+    [Fact]
     public async Task Agent_project_management_tool_rejects_project_owned_by_another_customer()
     {
         await using var scopedFactory = CreateAgentFactory();
