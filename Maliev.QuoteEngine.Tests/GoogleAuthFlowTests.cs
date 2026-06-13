@@ -27,6 +27,22 @@ public sealed class GoogleAuthFlowTests
     }
 
     [Fact]
+    public async Task Sign_in_route_does_not_forward_external_return_url()
+    {
+        await using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(builder => builder.UseEnvironment("Testing"));
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync("/auth/sign-in?returnUrl=https%3A%2F%2Fevil.example%2Fcheckout");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.NotNull(response.Headers.Location);
+        var location = response.Headers.Location.OriginalString;
+        Assert.Contains("/auth/sign-in", location, StringComparison.Ordinal);
+        Assert.DoesNotContain("evil.example", location, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Sign_up_route_redirects_to_web_sign_up_page()
     {
         await using var factory = new WebApplicationFactory<Program>()

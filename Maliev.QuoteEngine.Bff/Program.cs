@@ -198,19 +198,37 @@ static IResult RedirectToWebAuth(HttpContext context, string page)
     {
         absReturnUrl = string.Empty;
     }
-    else if (returnUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
-          || returnUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+    else if (Uri.TryCreate(returnUrl, UriKind.Absolute, out var absoluteReturnUrl))
     {
-        absReturnUrl = returnUrl;
+        absReturnUrl = IsSameOriginReturnUrl(context, absoluteReturnUrl)
+            ? absoluteReturnUrl.ToString()
+            : string.Empty;
+    }
+    else if (returnUrl.StartsWith("/", StringComparison.Ordinal)
+             && !returnUrl.StartsWith("//", StringComparison.Ordinal)
+             && !returnUrl.StartsWith("/\\", StringComparison.Ordinal))
+    {
+        absReturnUrl = $"{context.Request.Scheme}://{context.Request.Host}{returnUrl}";
     }
     else
     {
-        absReturnUrl = $"{context.Request.Scheme}://{context.Request.Host}{returnUrl}";
+        absReturnUrl = string.Empty;
     }
     var destination = string.IsNullOrWhiteSpace(absReturnUrl)
         ? $"{webBaseUrl}/auth/{page}"
         : $"{webBaseUrl}/auth/{page}?returnUrl={Uri.EscapeDataString(absReturnUrl)}";
     return Results.Redirect(destination);
+}
+
+static bool IsSameOriginReturnUrl(HttpContext context, Uri returnUrl)
+{
+    var requestPort = context.Request.Host.Port;
+    return (returnUrl.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase)
+            || returnUrl.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
+           && returnUrl.Host.Equals(context.Request.Host.Host, StringComparison.OrdinalIgnoreCase)
+           && (requestPort.HasValue
+               ? returnUrl.Port == requestPort.Value
+               : returnUrl.IsDefaultPort);
 }
 
 public partial class Program
