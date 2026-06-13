@@ -95,7 +95,7 @@
 
             <section class="qe-agent-rail-group" aria-label="@Text("Projects", "โปรเจกต์")">
                 <header>@Text("Projects", "โปรเจกต์")</header>
-                @foreach (var project in _projects)
+                @foreach (var project in RegularProjects)
                 {
                     <div class="qe-agent-project-row">
                         <a href="/quote/new">
@@ -663,6 +663,7 @@
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned);
+    private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
 
     protected override async Task OnParametersSetAsync()

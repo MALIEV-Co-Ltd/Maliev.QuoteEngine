@@ -702,6 +702,8 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("OnSampleRequested", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Icons.Material.Outlined.Description", component, StringComparison.Ordinal);
         Assert.Contains("@if (PinnedProjects.Any())", component, StringComparison.Ordinal);
+        Assert.Contains("private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned);", component, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var project in RegularProjects)", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-row\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-pin-btn active\"", component, StringComparison.Ordinal);
         Assert.Contains("ToggleProjectPin", component, StringComparison.Ordinal);
@@ -734,6 +736,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-box", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-message--user .qe-agent-bubble p", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 999px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("Sample use cases", component, StringComparison.Ordinal);
         Assert.Contains("SampleUseCases", component, StringComparison.Ordinal);
         Assert.Contains("ApplyUseCase", component, StringComparison.Ordinal);
