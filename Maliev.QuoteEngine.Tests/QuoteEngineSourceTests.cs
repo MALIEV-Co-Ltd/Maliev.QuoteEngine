@@ -684,8 +684,13 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("Try sample part", component, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowDemoSampleCard", component, StringComparison.Ordinal);
         Assert.DoesNotContain("OnSampleRequested", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Icons.Material.Outlined.Description", component, StringComparison.Ordinal);
+        Assert.Contains("@if (PinnedProjects.Any())", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-project-row\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-pin-btn active\"", component, StringComparison.Ordinal);
+        Assert.Contains("ToggleProjectPin", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Filled.PushPin", component, StringComparison.Ordinal);
         Assert.Contains("Pinned projects", component, StringComparison.Ordinal);
         Assert.Contains("Plugins", component, StringComparison.Ordinal);
         Assert.Contains("Projects", component, StringComparison.Ordinal);
@@ -708,6 +713,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("top: 50%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--chat .qe-agent-thread", agentStyles, StringComparison.Ordinal);
         Assert.Contains("justify-content: flex-end;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-project-row", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-pin-btn", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("opacity: 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains("font-size: 16px !important;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("line-height: 1.5 !important;", agentStyles, StringComparison.Ordinal);

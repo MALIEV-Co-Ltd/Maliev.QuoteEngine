@@ -35,27 +35,47 @@
         </nav>
 
         <div class="qe-agent-rail-scroll">
-            <section class="qe-agent-rail-group" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
-                <header>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</header>
-                <a href="/quote/new">
-                    <span>@Text("Milling fixture quote", "ใบเสนอราคาจิ๊กกัด")</span>
-                </a>
-                <a href="/quote/new">
-                    <span>@Text("Nylon sensor housing", "กล่องเซนเซอร์ไนลอน")</span>
-                </a>
-            </section>
+            @if (PinnedProjects.Any())
+            {
+                <section class="qe-agent-rail-group" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
+                    <header>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</header>
+                    @foreach (var project in PinnedProjects)
+                    {
+                        <div class="qe-agent-project-row">
+                            <a href="/quote/new">
+                                <span>@ProjectName(project)</span>
+                            </a>
+                            <button type="button"
+                                    class="qe-agent-pin-btn active"
+                                    title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
+                                    aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
+                                    aria-pressed="true"
+                                    @onclick="@(() => ToggleProjectPin(project))">
+                                <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
+                            </button>
+                        </div>
+                    }
+                </section>
+            }
 
             <section class="qe-agent-rail-group" aria-label="@Text("Projects", "โปรเจกต์")">
                 <header>@Text("Projects", "โปรเจกต์")</header>
-                <a href="/quote/new">
-                    <span>@Text("Aluminum mounting bracket", "ขายึดอะลูมิเนียม")</span>
-                </a>
-                <a href="/quote/new">
-                    <span>@Text("Injection mold insert", "อินเสิร์ตแม่พิมพ์")</span>
-                </a>
-                <a href="/quote/new">
-                    <span>@Text("CNC housing revision", "ปรับแบบกล่อง CNC")</span>
-                </a>
+                @foreach (var project in _projects)
+                {
+                    <div class="qe-agent-project-row">
+                        <a href="/quote/new">
+                            <span>@ProjectName(project)</span>
+                        </a>
+                        <button type="button"
+                                class="@($"qe-agent-pin-btn {(project.IsPinned ? "active" : string.Empty)}")"
+                                title="@(project.IsPinned ? Text("Unpin project", "เลิกปักหมุดโปรเจกต์") : Text("Pin project", "ปักหมุดโปรเจกต์"))"
+                                aria-label="@(project.IsPinned ? Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}") : Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}"))"
+                                aria-pressed="@project.IsPinned"
+                                @onclick="@(() => ToggleProjectPin(project))">
+                            <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
+                        </button>
+                    </div>
+                }
             </section>
         </div>
 
@@ -277,6 +297,14 @@
 
 @code {
     private readonly List<AgentMessageRow> _messages = [];
+    private readonly List<ProjectNavItem> _projects =
+    [
+        new("milling-fixture-quote", "Milling fixture quote", "ใบเสนอราคาจิ๊กกัด", true),
+        new("nylon-sensor-housing", "Nylon sensor housing", "กล่องเซนเซอร์ไนลอน", true),
+        new("aluminum-mounting-bracket", "Aluminum mounting bracket", "ขายึดอะลูมิเนียม", false),
+        new("injection-mold-insert", "Injection mold insert", "อินเสิร์ตแม่พิมพ์", false),
+        new("cnc-housing-revision", "CNC housing revision", "ปรับแบบกล่อง CNC", false)
+    ];
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -326,6 +354,7 @@
 
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
+    private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -514,9 +543,30 @@
         return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 
+    private string ProjectName(ProjectNavItem project)
+    {
+        return Text(project.NameEn, project.NameTh);
+    }
+
+    private static void ToggleProjectPin(ProjectNavItem project)
+    {
+        project.IsPinned = !project.IsPinned;
+    }
+
     private sealed record AgentMessageRow(string Role, string Content);
 
     private sealed record SketchColorOption(string Name, string ThaiName, string Hex);
+
+    private sealed class ProjectNavItem(string id, string nameEn, string nameTh, bool isPinned)
+    {
+        public string Id { get; } = id;
+
+        public string NameEn { get; } = nameEn;
+
+        public string NameTh { get; } = nameTh;
+
+        public bool IsPinned { get; set; } = isPinned;
+    }
 
     public async ValueTask DisposeAsync()
     {
