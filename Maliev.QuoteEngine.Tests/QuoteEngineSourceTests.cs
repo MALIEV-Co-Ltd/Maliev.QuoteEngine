@@ -597,10 +597,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("<QuoteAgentLaunchShell", source, StringComparison.Ordinal);
         Assert.Contains("SessionId=\"@AgentSessionId\"", source, StringComparison.Ordinal);
         Assert.Contains("OnUploadRequested=\"OpenFilePickerAsync\"", source, StringComparison.Ordinal);
-        Assert.Contains("OnSampleRequested=\"LoadSampleFileAsync\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnSampleRequested=\"LoadSampleFileAsync\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowDemoSampleCard", source, StringComparison.Ordinal);
         Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
         Assert.Contains("await LoadDemoProjectAsync();", source, StringComparison.Ordinal);
-        Assert.Contains("private bool ShowDemoSampleCard => !IsSignedIn && !IsDemoMode;", source, StringComparison.Ordinal);
         Assert.Contains("private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;", source, StringComparison.Ordinal);
         Assert.Contains("private Guid AgentSessionId", source, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
@@ -661,10 +661,22 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-composer\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-toggle\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-drawer\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
+        Assert.Contains("@bind=\"_projectName\"", component, StringComparison.Ordinal);
+        Assert.Contains("OpenSketchAsync", component, StringComparison.Ordinal);
+        Assert.Contains("quote-agent-sketch.js", component, StringComparison.Ordinal);
+        Assert.Contains("initSketchCanvas", component, StringComparison.Ordinal);
+        Assert.Contains("exportSketchCanvas", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-sketch-canvas\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-workbench\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-gates\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("<span>@Text(\"Gates\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-agent-gate", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Try sample part", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowDemoSampleCard", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnSampleRequested", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Icons.Material.Outlined.Description", component, StringComparison.Ordinal);
         Assert.Contains("Pinned projects", component, StringComparison.Ordinal);
         Assert.Contains("Plugins", component, StringComparison.Ordinal);
         Assert.Contains("Projects", component, StringComparison.Ordinal);
@@ -683,10 +695,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);
-        Assert.DoesNotContain("#0a72ef", agentStyles, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--qe-agent-primary: #0a72ef;", agentStyles, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("background: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-sketch-dialog", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-sketch-paper", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border: 0 !important;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("background: var(--qe-agent-bg);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border-right: 0;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("#0072f5", agentStyles, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("var(--accent", agentStyles, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("blue", agentStyles, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -2088,7 +2105,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SynchronizeRouteStateAsync", src, StringComparison.Ordinal);
         Assert.Contains("HasDemoWorkspace", src, StringComparison.Ordinal);
         Assert.Contains("ResetWorkspaceState", src, StringComparison.Ordinal);
-        Assert.Contains("ShowDemoSampleCard => !IsSignedIn && !IsDemoMode", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("ShowDemoSampleCard", src, StringComparison.Ordinal);
         Assert.Contains("ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode", src, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(\"/demo\")", src, StringComparison.Ordinal);
     }

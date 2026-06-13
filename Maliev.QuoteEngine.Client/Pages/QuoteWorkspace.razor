@@ -91,11 +91,9 @@
                 <QuoteAgentLaunchShell SessionId="@AgentSessionId"
                                        IsSignedIn="@IsSignedIn"
                                        IsDemoMode="@IsDemoMode"
-                                       ShowDemoSampleCard="@ShowDemoSampleCard"
                                        ShowLaunchAccountCard="@ShowLaunchAccountCard"
                                        Culture="@Culture"
-                                       OnUploadRequested="OpenFilePickerAsync"
-                                       OnSampleRequested="LoadSampleFileAsync" />
+                                       OnUploadRequested="OpenFilePickerAsync" />
             }
             else
             {
@@ -226,7 +224,6 @@
         !IsDemoMode &&
         BillingAddressId.HasValue &&
         ShippingAddressId.HasValue;
-    private bool ShowDemoSampleCard => !IsSignedIn && !IsDemoMode;
     private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;
     private string EmptyStateGridClass => "qe-empty-state-grid qe-empty-state-grid--solo";
     private Guid AgentSessionId => Guid.TryParse(_quoteSessionId, out var parsed) ? parsed : Guid.Empty;

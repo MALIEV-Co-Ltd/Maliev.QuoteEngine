@@ -623,6 +623,7 @@
     --qe-agent-hover: #f4f4f4;
     --qe-agent-inverse: #0d0d0d;
     --qe-agent-inverse-text: #ffffff;
+    --qe-agent-primary: #0a72ef;
     grid-template-columns: 260px minmax(0, 1fr);
     min-height: 100dvh;
     height: 100dvh;
@@ -641,14 +642,15 @@
     --qe-agent-hover: #191919;
     --qe-agent-inverse: #f7f7f7;
     --qe-agent-inverse-text: #111111;
+    --qe-agent-primary: #0a72ef;
 }
 
 .qe-agent-rail {
     gap: 10px;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     padding: 12px 8px;
-    background: var(--qe-agent-surface);
-    border-right: 1px solid var(--qe-agent-line);
+    background: var(--qe-agent-bg);
+    border-right: 0;
 }
 
 .qe-agent-rail-head {
@@ -752,6 +754,8 @@
 }
 
 .qe-agent-rail-group a {
+    grid-template-columns: minmax(0, 1fr);
+    padding-left: 10px;
     color: color-mix(in srgb, var(--qe-agent-ink) 82%, var(--qe-agent-muted));
 }
 
@@ -812,9 +816,22 @@
     background: #2f9e63;
 }
 
-.qe-agent-status strong {
+.qe-agent-project-name {
+    width: min(360px, 44vw);
+    min-width: 150px;
+    padding: 5px 0;
+    border: 0 !important;
+    border-radius: 0;
+    outline: 0;
+    background: transparent;
+    box-shadow: none !important;
     color: var(--qe-agent-ink);
+    font: inherit;
     font-weight: 600;
+}
+
+.qe-agent-project-name:focus {
+    box-shadow: 0 1px 0 var(--qe-agent-line);
 }
 
 .qe-agent-artifact-toggle {
@@ -921,6 +938,10 @@
     min-height: 40px;
     max-height: 170px;
     padding: 9px 4px;
+    border: 0 !important;
+    outline: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
     resize: none;
     font-size: 15px;
 }
@@ -929,6 +950,12 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
+    background: var(--qe-agent-primary);
+    color: #ffffff;
+}
+
+.qe-agent-send-btn:hover {
+    background: color-mix(in srgb, var(--qe-agent-primary) 88%, #000000);
 }
 
 .qe-agent-quick-actions {
@@ -1014,6 +1041,104 @@
     background: var(--qe-agent-raised);
 }
 
+.qe-agent-primary-btn,
+.qe-agent-secondary-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--qe-agent-line);
+    font: inherit;
+    cursor: pointer;
+}
+
+.qe-agent-primary-btn {
+    border-color: var(--qe-agent-primary);
+    background: var(--qe-agent-primary);
+    color: #ffffff;
+}
+
+.qe-agent-secondary-btn {
+    background: transparent;
+    color: var(--qe-agent-ink);
+}
+
+.qe-agent-sketch-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    border: 0;
+    background: rgba(0, 0, 0, .48);
+}
+
+.qe-agent-sketch-dialog {
+    position: fixed;
+    inset: 5vh max(18px, calc((100vw - 1040px) / 2));
+    z-index: 71;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 18px;
+    background: var(--qe-agent-surface);
+    color: var(--qe-agent-ink);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, .34);
+}
+
+.qe-agent-sketch-dialog > header,
+.qe-agent-sketch-dialog > footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.qe-agent-sketch-dialog > header div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.qe-agent-sketch-dialog > header span {
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.qe-agent-sketch-title {
+    min-width: 0;
+    width: min(520px, 64vw);
+    border: 0 !important;
+    outline: 0;
+    background: transparent;
+    box-shadow: none !important;
+    color: var(--qe-agent-ink);
+    font: inherit;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.qe-agent-sketch-paper {
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 12px;
+    background: #ffffff;
+    box-shadow: inset 0 0 0 1px #dadada;
+}
+
+.qe-agent-sketch-canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 380px;
+    touch-action: none;
+    cursor: crosshair;
+}
+
 @media (max-width: 900px) {
     .qe-agent-shell {
         grid-template-columns: 1fr;
@@ -1057,6 +1182,10 @@
         display: none;
     }
 
+    .qe-agent-project-name {
+        width: min(240px, 48vw);
+    }
+
     .qe-agent-thread {
         padding: 24px 16px;
     }
@@ -1083,6 +1212,20 @@
 
     .qe-agent-quick-actions button {
         white-space: nowrap;
+    }
+
+    .qe-agent-sketch-dialog {
+        inset: 12px;
+        border-radius: 14px;
+    }
+
+    .qe-agent-sketch-dialog > footer {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .qe-agent-sketch-canvas {
+        min-height: 420px;
     }
 }
 /* End quote agent chat-first shell */

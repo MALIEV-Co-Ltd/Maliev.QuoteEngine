@@ -1,6 +1,8 @@
 @namespace Maliev.QuoteEngine.Client.Components.QuoteAgent
+@implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject PreferenceService Preferences
+@inject IJSRuntime Js
 
 <section class="qe-agent-shell" aria-label="@Text("Quote agent workspace", "พื้นที่ผู้ช่วยขอราคา")">
     <aside class="qe-agent-rail" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
@@ -36,11 +38,9 @@
             <section class="qe-agent-rail-group" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
                 <header>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</header>
                 <a href="/quote/new">
-                    <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
                     <span>@Text("Milling fixture quote", "ใบเสนอราคาจิ๊กกัด")</span>
                 </a>
                 <a href="/quote/new">
-                    <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
                     <span>@Text("Nylon sensor housing", "กล่องเซนเซอร์ไนลอน")</span>
                 </a>
             </section>
@@ -48,15 +48,12 @@
             <section class="qe-agent-rail-group" aria-label="@Text("Projects", "โปรเจกต์")">
                 <header>@Text("Projects", "โปรเจกต์")</header>
                 <a href="/quote/new">
-                    <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
                     <span>@Text("Aluminum mounting bracket", "ขายึดอะลูมิเนียม")</span>
                 </a>
                 <a href="/quote/new">
-                    <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
                     <span>@Text("Injection mold insert", "อินเสิร์ตแม่พิมพ์")</span>
                 </a>
                 <a href="/quote/new">
-                    <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
                     <span>@Text("CNC housing revision", "ปรับแบบกล่อง CNC")</span>
                 </a>
             </section>
@@ -79,7 +76,10 @@
         <div class="qe-agent-topline">
             <div class="qe-agent-status">
                 <span aria-hidden="true"></span>
-                <strong>@Text("MALIEV Quote Agent", "ผู้ช่วยขอราคา MALIEV")</strong>
+                <input class="qe-agent-project-name"
+                       @bind="_projectName"
+                       maxlength="120"
+                       aria-label="@Text("Project name", "ชื่อโปรเจกต์")" />
             </div>
             <button type="button"
                     class="qe-agent-artifact-toggle"
@@ -151,19 +151,51 @@
                     <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" Size="Size.Small" />
                     <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
                 </button>
-                <button type="button" @onclick="RequestUploadAsync">
+                <button type="button" @onclick="OpenSketchAsync">
                     <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
                     <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
                 </button>
-                @if (ShowDemoSampleCard)
-                {
-                    <button type="button" @onclick="RequestSampleAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.History" Size="Size.Small" />
-                        <span>@Text("Try sample part", "ลองชิ้นงานตัวอย่าง")</span>
-                    </button>
-                }
             </div>
         </section>
+
+        @if (_sketchOpen)
+        {
+            <button type="button"
+                    class="qe-agent-sketch-backdrop"
+                    aria-label="@Text("Close hand sketch", "ปิดสเก็ตช์มือ")"
+                    @onclick="CloseSketch"></button>
+            <section class="qe-agent-sketch-dialog" role="dialog" aria-modal="true" aria-label="@Text("Hand sketch", "สเก็ตช์มือ")">
+                <header>
+                    <div>
+                        <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
+                        <input class="qe-agent-sketch-title"
+                               @bind="_sketchTitle"
+                               maxlength="80"
+                               aria-label="@Text("Sketch name", "ชื่อสเก็ตช์")" />
+                    </div>
+                    <button type="button" class="qe-agent-round-btn" @onclick="CloseSketch" title="@Text("Close", "ปิด")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
+                </header>
+                <div class="qe-agent-sketch-paper">
+                    <canvas id="@SketchCanvasId"
+                            class="qe-agent-sketch-canvas"
+                            width="1100"
+                            height="720"
+                            aria-label="@Text("Draw your part sketch with a mouse or pen", "วาดสเก็ตช์ชิ้นงานด้วยเมาส์หรือปากกา")"></canvas>
+                </div>
+                <footer>
+                    <button type="button" class="qe-agent-secondary-btn" @onclick="ClearSketchAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.Backspace" Size="Size.Small" />
+                        <span>@Text("Clear", "ล้าง")</span>
+                    </button>
+                    <button type="button" class="qe-agent-primary-btn" @onclick="AttachSketchAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.Check" Size="Size.Small" />
+                        <span>@Text("Attach sketch", "แนบสเก็ตช์")</span>
+                    </button>
+                </footer>
+            </section>
+        }
 
         @if (_artifactPanelOpen)
         {
@@ -240,6 +272,13 @@
     private string? _error;
     private bool _sending;
     private bool _artifactPanelOpen;
+    private bool _sketchOpen;
+    private bool _sketchInitPending;
+    private string _projectName = $"Manufacturing project {DateTimeOffset.Now:yyyy-MM-dd}";
+    private string _sketchTitle = "Untitled sketch";
+    private string? _lastSketchDataUrl;
+    private IJSObjectReference? _sketchModule;
+    private string SketchCanvasId { get; } = $"qe-agent-sketch-{Guid.NewGuid():N}";
 
     [Parameter]
     public Guid SessionId { get; set; }
@@ -251,9 +290,6 @@
     public bool IsDemoMode { get; set; }
 
     [Parameter]
-    public bool ShowDemoSampleCard { get; set; }
-
-    [Parameter]
     public bool ShowLaunchAccountCard { get; set; }
 
     [Parameter]
@@ -261,9 +297,6 @@
 
     [Parameter]
     public EventCallback OnUploadRequested { get; set; }
-
-    [Parameter]
-    public EventCallback OnSampleRequested { get; set; }
 
     [CascadingParameter(Name = "IsDarkMode")]
     private bool IsDarkMode { get; set; }
@@ -279,6 +312,18 @@
 
         _loadedSessionId = SessionId;
         await LoadStateAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_sketchInitPending)
+        {
+            return;
+        }
+
+        _sketchInitPending = false;
+        _sketchModule ??= await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-sketch.js");
+        await _sketchModule.InvokeVoidAsync("initSketchCanvas", SketchCanvasId);
     }
 
     private async Task LoadStateAsync()
@@ -377,12 +422,38 @@
         }
     }
 
-    private async Task RequestSampleAsync()
+    private Task OpenSketchAsync()
     {
-        if (OnSampleRequested.HasDelegate)
+        _sketchOpen = true;
+        _sketchInitPending = true;
+        return Task.CompletedTask;
+    }
+
+    private void CloseSketch()
+    {
+        _sketchOpen = false;
+    }
+
+    private async Task ClearSketchAsync()
+    {
+        if (_sketchModule is not null)
         {
-            await OnSampleRequested.InvokeAsync();
+            await _sketchModule.InvokeVoidAsync("clearSketchCanvas", SketchCanvasId);
         }
+    }
+
+    private async Task AttachSketchAsync()
+    {
+        if (_sketchModule is not null)
+        {
+            _lastSketchDataUrl = await _sketchModule.InvokeAsync<string>("exportSketchCanvas", SketchCanvasId);
+        }
+
+        _messages.Add(new AgentMessageRow("user", Text($"Attached hand sketch: {_sketchTitle}", $"แนบสเก็ตช์มือ: {_sketchTitle}")));
+        _messages.Add(new AgentMessageRow("assistant", Text(
+            "I received the sketch. Add dimensions, material, and any critical tolerances, or attach CAD when geometry is ready for DFM and pricing.",
+            "ได้รับสเก็ตช์แล้ว โปรดเพิ่มขนาด วัสดุ และค่าความเผื่อที่สำคัญ หรือแนบ CAD เมื่อพร้อมสำหรับ DFM และการคำนวณราคา")));
+        _sketchOpen = false;
     }
 
     private static string AvatarFor(string role)
@@ -415,4 +486,12 @@
     }
 
     private sealed record AgentMessageRow(string Role, string Content);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_sketchModule is not null)
+        {
+            await _sketchModule.DisposeAsync();
+        }
+    }
 }
