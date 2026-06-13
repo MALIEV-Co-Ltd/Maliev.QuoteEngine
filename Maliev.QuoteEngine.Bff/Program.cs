@@ -152,7 +152,9 @@ app.MapFallback(async context =>
     // Quote-start routes are public so customers can try the chat-based intake before signing in.
     // Redirecting unauthenticated users here (server-side, before WASM loads) avoids the
     // 15-30 second WASM cold-start just to end up showing a sign-in redirect anyway.
+    var normalizedPath = context.Request.Path.Value?.TrimEnd('/') ?? string.Empty;
     var isPublicQuoteStartRoute =
+        normalizedPath.Equals("/quotes", StringComparison.OrdinalIgnoreCase) ||
         context.Request.Path.StartsWithSegments("/demo") ||
         context.Request.Path.StartsWithSegments("/quote/new") ||
         context.Request.Path.StartsWithSegments("/quotes/new") ||

@@ -842,6 +842,33 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Quotes_route_loads_chat_workspace_app_shell_anonymously()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync("/quotes");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("<div id=\"app\"></div>", html, StringComparison.Ordinal);
+        Assert.Contains("<div id=\"quote-startup\"", html, StringComparison.Ordinal);
+        Assert.Contains("_framework/blazor.webassembly.js", html, StringComparison.Ordinal);
+        Assert.Contains("window.getMalievAuth=function(){return {\"isSignedIn\":false", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Quote_detail_route_stays_customer_scoped_for_anonymous_users()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync($"/quotes/{Guid.NewGuid():D}");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.NotNull(response.Headers.Location);
+        Assert.Contains("/auth/sign-in", response.Headers.Location.OriginalString, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Auth_pages_redirect_to_web_sign_in_without_loading_wasm_bundle()
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
