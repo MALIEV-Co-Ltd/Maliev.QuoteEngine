@@ -18,7 +18,7 @@
 
 <div id="@PageDropzoneId" class="@WorkspaceRootClass">
     <div id="@UploadContainerId">
-        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@QuoteUploadConstraints.SupportedCadAccept" disabled="@(!_routeStateInitialized || IsDemoMode)" />
+        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@QuoteUploadConstraints.SupportedAttachmentAccept" disabled="@(!_routeStateInitialized || IsDemoMode)" />
     </div>
 
     <div class="qe-page-drop-overlay" aria-hidden="true">
@@ -240,12 +240,12 @@
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
-    private string UploadCompactLabel => IsDemoMode ? Text("Demo sample only", "ไฟล์ตัวอย่างเท่านั้น") : Text("Drop CAD files to quote", "วางไฟล์ CAD เพื่อขอราคา");
+    private string UploadCompactLabel => IsDemoMode ? Text("Demo sample only", "ไฟล์ตัวอย่างเท่านั้น") : Text("Drop quote files here", "วางไฟล์สำหรับขอราคาที่นี่");
     private string UploadCompactHint => IsDemoMode ? Text("MALIEV-owned sample file", "ไฟล์ตัวอย่างของ MALIEV") : IsSignedIn ? Text("Customer-owned upload storage", "พื้นที่อัปโหลดของลูกค้า") : Text("Saved temporarily", "บันทึกชั่วคราว");
     private string UploadHeroLabel => IsDemoMode ? Text("Demo sample is ready", "ไฟล์ตัวอย่างพร้อมใช้งาน") : Text("Drop files here or click to upload", "ลากไฟล์มาวางหรือคลิกเพื่ออัปโหลด");
     private string UploadHeroHint => IsDemoMode
         ? Text("Demo mode cannot create projects, formal quotes, orders, uploads, or history", "โหมดตัวอย่างไม่สามารถสร้างโปรเจกต์ ใบเสนอราคาทางการ คำสั่งซื้อ การอัปโหลด หรือประวัติได้")
-        : $"{QuoteUploadConstraints.SupportedCadExtensionLabel} / {Text("max", "สูงสุด")} {QuoteUploadConstraints.MaxFileSizeMegabytes} MB {Text("per file", "ต่อไฟล์")}";
+        : $"{QuoteUploadConstraints.SupportedAttachmentExtensionLabel} / {Text("max", "สูงสุด")} {QuoteUploadConstraints.MaxFileSizeMegabytes} MB {Text("per file", "ต่อไฟล์")}";
     private string QuoteButtonLabel => IsDemoMode ? Text("Demo only", "ตัวอย่างเท่านั้น") : IsSignedIn ? Text("Quote", "ขอราคา") : Text("Sign in to quote", "เข้าสู่ระบบเพื่อขอราคา");
     private string BillingSummaryName => IsSignedIn
         ? BillingCompanyName ?? _authStatus.DisplayName ?? Text("Customer account", "บัญชีลูกค้า")
@@ -534,9 +534,9 @@
 
     private bool ValidateUploadCandidate(UploadCandidate candidate)
     {
-        if (!QuoteUploadConstraints.IsSupportedCadFileName(candidate.FileName))
+        if (!QuoteUploadConstraints.IsSupportedAttachmentFileName(candidate.FileName))
         {
-            _error = $"{candidate.FileName} is not a supported CAD format. Upload {QuoteUploadConstraints.SupportedCadExtensionLabel}.";
+            _error = $"{candidate.FileName} is not a supported quote attachment. Upload {QuoteUploadConstraints.SupportedAttachmentExtensionLabel}.";
             return false;
         }
 

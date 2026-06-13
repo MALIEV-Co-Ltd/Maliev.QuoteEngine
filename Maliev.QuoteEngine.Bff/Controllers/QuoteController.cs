@@ -72,12 +72,12 @@ public sealed class QuoteController(
             return ValidationProblem(ModelState);
         }
 
-        if (!QuoteUploadConstraints.IsSupportedCadFileName(request.FileName))
+        if (!QuoteUploadConstraints.IsSupportedAttachmentFileName(request.FileName))
         {
             return BadRequest(new ProblemDetails
             {
-                Title = "Unsupported CAD file type.",
-                Detail = $"Upload {QuoteUploadConstraints.SupportedCadExtensionLabel} files."
+                Title = "Unsupported quote attachment type.",
+                Detail = $"Upload {QuoteUploadConstraints.SupportedAttachmentExtensionLabel} files."
             });
         }
 

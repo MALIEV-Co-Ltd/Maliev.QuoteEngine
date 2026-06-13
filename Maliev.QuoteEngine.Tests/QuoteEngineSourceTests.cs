@@ -653,8 +653,8 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("CustomerBoundaryTitle", source, StringComparison.Ordinal);
         Assert.DoesNotContain("CustomerBoundaryHint", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<span class=\"qe-zone-label\">Bill To</span>", source, StringComparison.Ordinal);
-        Assert.Contains("QuoteUploadConstraints.SupportedCadAccept", source, StringComparison.Ordinal);
-        Assert.Contains("QuoteUploadConstraints.SupportedCadExtensionLabel", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedAttachmentAccept", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedAttachmentExtensionLabel", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadConstraints.MaxFileSizeMegabytes", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadHandoffRequest", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Temporary upload storage until you sign in", source, StringComparison.Ordinal);
