@@ -840,6 +840,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_surfaces_confirmation_cards_in_chat_when_artifacts_are_collapsed()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var threadBlock = ExtractSourceBlock(component, "<div class=\"qe-agent-thread\"", "<section class=\"qe-agent-composer-wrap\"");
+        var artifactDrawerBlock = ExtractSourceBlock(component, "<aside class=\"qe-agent-artifact-drawer\"", "</aside>");
+
+        Assert.Contains("class=\"qe-agent-chat-actions\"", threadBlock, StringComparison.Ordinal);
+        Assert.Contains("@if (_proposedActions.Count > 0)", threadBlock, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var action in _proposedActions)", threadBlock, StringComparison.Ordinal);
+        Assert.Contains("ConfirmActionAsync(action)", threadBlock, StringComparison.Ordinal);
+        Assert.Contains("action.RequiresAuthentication && !IsSignedIn", threadBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-chat-actions\"", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-chat-actions", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Web_and_quote_engine_boundaries_are_documented()
     {
         var readme = ReadRepoFile("README.md");
