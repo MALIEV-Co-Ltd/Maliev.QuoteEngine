@@ -108,6 +108,7 @@ internal sealed class QuoteAgentService(
         var result = toolName switch
         {
             "quote_get_state" => ToStateResponse(state),
+            "quote_get_project_summary" => BuildProjectSummary(state),
             "quote_get_reference_data" => prototypeStore.ReferenceData,
             "quote_get_account_context" => BuildAccountContext(state),
             "quote_get_auth_handoff" => BuildAuthHandoff(state, request.Arguments),
@@ -266,6 +267,78 @@ internal sealed class QuoteAgentService(
     {
         var customerId = ResolveCustomerId();
         return sessionStore.ToResponse(state, customerId.HasValue, customerId);
+    }
+
+    private QuoteAgentProjectSummaryResponse BuildProjectSummary(QuoteAgentSessionState state)
+    {
+        var currentState = ToStateResponse(state);
+        var blockingGates = currentState.Gates
+            .Where(gate => gate.Status.Equals("blocked", StringComparison.OrdinalIgnoreCase))
+            .Select(gate => gate.Code)
+            .ToList();
+
+        return new QuoteAgentProjectSummaryResponse
+        {
+            SessionId = currentState.SessionId,
+            Summary = currentState.Summary,
+            IsAuthenticated = currentState.IsAuthenticated,
+            AttachmentCount = currentState.Attachments.Count,
+            PartCount = currentState.Parts.Count,
+            ArtifactCount = currentState.Artifacts.Count,
+            EstimateTotal = currentState.Estimate?.Total,
+            EstimateCurrency = currentState.Estimate?.Currency,
+            PassedGateCodes = currentState.Gates
+                .Where(gate => gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase))
+                .Select(gate => gate.Code)
+                .ToList(),
+            BlockingGateCodes = blockingGates,
+            PendingActionTypes = currentState.ProposedActions
+                .Select(action => action.ActionType)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            NextActions = BuildNextActions(currentState, blockingGates)
+        };
+    }
+
+    private static List<string> BuildNextActions(
+        QuoteAgentStateResponse state,
+        IReadOnlyCollection<string> blockingGateCodes)
+    {
+        if (blockingGateCodes.Contains("geometry_required", StringComparer.OrdinalIgnoreCase))
+        {
+            return ["Ask the customer for a usable CAD or 3D file before DFM, pricing, order, or payment."];
+        }
+
+        if (state.Gates.Any(gate =>
+                gate.Code.Equals("configuration_complete", StringComparison.OrdinalIgnoreCase) &&
+                !gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ["Confirm process, material, finish or color, tolerance, quantity, and lead time."];
+        }
+
+        if (state.Estimate is null)
+        {
+            return ["Calculate the current estimate after geometry and configuration are ready."];
+        }
+
+        if (blockingGateCodes.Contains("customer_authenticated", StringComparer.OrdinalIgnoreCase))
+        {
+            return ["Offer the trusted sign-in or sign-up handoff before formal quote, order, or payment actions."];
+        }
+
+        if (state.ProposedActions.Count > 0)
+        {
+            return ["Ask the customer to review and confirm the pending action card."];
+        }
+
+        if (state.Gates.Any(gate =>
+                gate.Code.Equals("quote_artifact_ready", StringComparison.OrdinalIgnoreCase) &&
+                !gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ["Prepare the formal quote artifact after DFM, configuration, and pricing are accepted."];
+        }
+
+        return ["Continue the quote workflow from the current project state."];
     }
 
     private Guid? ResolveCustomerId()

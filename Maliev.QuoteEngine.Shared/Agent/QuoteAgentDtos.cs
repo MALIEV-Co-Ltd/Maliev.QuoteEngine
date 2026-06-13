@@ -285,6 +285,48 @@ public sealed class QuoteAgentSearchResultDto
 }
 
 /// <summary>
+/// Customer-safe compact project summary for the QuoteEngine agent.
+/// </summary>
+public sealed class QuoteAgentProjectSummaryResponse
+{
+    /// <summary>Gets or sets the QuoteEngine agent session ID.</summary>
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets the latest assistant-safe state summary.</summary>
+    public string Summary { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets whether the current request has a signed-in customer session.</summary>
+    public bool IsAuthenticated { get; set; }
+
+    /// <summary>Gets or sets the number of known attachments.</summary>
+    public int AttachmentCount { get; set; }
+
+    /// <summary>Gets or sets the number of quote parts in the session.</summary>
+    public int PartCount { get; set; }
+
+    /// <summary>Gets or sets the number of visible artifacts.</summary>
+    public int ArtifactCount { get; set; }
+
+    /// <summary>Gets or sets the current estimate total, when pricing exists.</summary>
+    public decimal? EstimateTotal { get; set; }
+
+    /// <summary>Gets or sets the current estimate currency, when pricing exists.</summary>
+    public string? EstimateCurrency { get; set; }
+
+    /// <summary>Gets or sets passed gate codes for agent reasoning.</summary>
+    public List<string> PassedGateCodes { get; set; } = [];
+
+    /// <summary>Gets or sets blocked gate codes for agent reasoning.</summary>
+    public List<string> BlockingGateCodes { get; set; } = [];
+
+    /// <summary>Gets or sets currently pending confirmation action types.</summary>
+    public List<string> PendingActionTypes { get; set; } = [];
+
+    /// <summary>Gets or sets concise next actions the assistant can explain to the customer.</summary>
+    public List<string> NextActions { get; set; } = [];
+}
+
+/// <summary>
 /// Customer-safe connector registry response for QuoteEngine plugins and integrations.
 /// </summary>
 public sealed class QuoteAgentConnectorRegistryResponse

@@ -300,6 +300,49 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_project_summary_tool_reports_progress_blockers_and_next_actions()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement("Quote this CNC housing as 10 aluminum pieces.", JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "housing.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "summary-upload-cad",
+                        storage_path = "quotes/temp/session/summary-upload-cad/housing.step"
+                    }
+                }, JsonOptions)
+            });
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_get_project_summary");
+        var summary = JsonSerializer.Deserialize<QuoteAgentProjectSummaryResponse>(json, JsonOptions);
+
+        Assert.NotNull(summary);
+        Assert.Equal(sessionId, summary.SessionId);
+        Assert.Equal(1, summary.AttachmentCount);
+        Assert.Equal(1, summary.PartCount);
+        Assert.True(summary.ArtifactCount >= 3);
+        Assert.NotNull(summary.EstimateTotal);
+        Assert.Equal("THB", summary.EstimateCurrency);
+        Assert.Contains("geometry_required", summary.PassedGateCodes);
+        Assert.Contains("priced", summary.PassedGateCodes);
+        Assert.Contains("customer_authenticated", summary.BlockingGateCodes);
+        Assert.Contains(summary.NextActions, action => action.Contains("sign-in", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Agent_register_uploads_tool_rejects_unsupported_attachment_extension()
     {
         using var client = factory.CreateClient();
