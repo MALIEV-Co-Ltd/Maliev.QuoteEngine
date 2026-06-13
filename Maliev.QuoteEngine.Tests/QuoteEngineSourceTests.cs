@@ -707,6 +707,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ToggleProjectPin", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.PushPin", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.Search", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-search-panel\"", component, StringComparison.Ordinal);
+        Assert.Contains("Search everything", component, StringComparison.Ordinal);
+        Assert.Contains("SearchResults", component, StringComparison.Ordinal);
+        Assert.Contains("BuildSearchResults", component, StringComparison.Ordinal);
+        Assert.Contains("ApplySearchResult", component, StringComparison.Ordinal);
+        Assert.Contains("SearchNavItem", component, StringComparison.Ordinal);
+        Assert.Contains("Google Drive", component, StringComparison.Ordinal);
+        Assert.Contains("projects, orders, files, or artifacts", component, StringComparison.Ordinal);
         Assert.Contains("Pinned projects", component, StringComparison.Ordinal);
         Assert.Contains("Plugins", component, StringComparison.Ordinal);
         Assert.Contains("Projects", component, StringComparison.Ordinal);
@@ -722,6 +731,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("quote-agent-composer.js", component, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-use-cases\"", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-search-box", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
         Assert.Contains("Sample use cases", component, StringComparison.Ordinal);
         Assert.Contains("SampleUseCases", component, StringComparison.Ordinal);
         Assert.Contains("ApplyUseCase", component, StringComparison.Ordinal);

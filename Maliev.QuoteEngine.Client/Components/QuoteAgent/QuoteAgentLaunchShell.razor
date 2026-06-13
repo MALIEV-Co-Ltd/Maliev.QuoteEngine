@@ -20,6 +20,13 @@
                 <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
                 <span>@Text("New project", "โปรเจกต์ใหม่")</span>
             </a>
+            <button type="button"
+                    class="@(_searchOpen ? "active" : string.Empty)"
+                    aria-expanded="@_searchOpen"
+                    @onclick="ToggleSearch">
+                <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+                <span>@Text("Search", "ค้นหา")</span>
+            </button>
             <button type="button">
                 <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
                 <span>@Text("Plugins", "ปลั๊กอิน")</span>
@@ -31,6 +38,38 @@
         </nav>
 
         <div class="qe-agent-rail-scroll">
+            @if (_searchOpen)
+            {
+                <section class="qe-agent-search-panel" aria-label="@Text("Search customer data", "ค้นหาข้อมูลลูกค้า")">
+                    <label for="qe-agent-search-input">@Text("Search everything", "ค้นหาทั้งหมด")</label>
+                    <div class="qe-agent-search-box">
+                        <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+                        <input id="qe-agent-search-input"
+                               @ref="_searchInput"
+                               @bind="_searchQuery"
+                               @bind:event="oninput"
+                               placeholder="@Text("Projects, orders, files, quotes...", "โปรเจกต์ ออเดอร์ ไฟล์ ใบเสนอราคา...")" />
+                    </div>
+                    <div class="qe-agent-search-results" aria-live="polite">
+                        @if (SearchResults.Any())
+                        {
+                            @foreach (var result in SearchResults)
+                            {
+                                <button type="button" @onclick="@(() => ApplySearchResult(result))">
+                                    <span>@Text(result.TypeEn, result.TypeTh)</span>
+                                    <strong>@Text(result.TitleEn, result.TitleTh)</strong>
+                                    <small>@Text(result.DetailEn, result.DetailTh)</small>
+                                </button>
+                            }
+                        }
+                        else
+                        {
+                            <p>@Text("No matching projects, orders, files, or artifacts yet.", "ยังไม่พบโปรเจกต์ ออเดอร์ ไฟล์ หรือไฟล์งานที่ตรงกัน")</p>
+                        }
+                    </div>
+                </section>
+            }
+
             @if (PinnedProjects.Any())
             {
                 <section class="qe-agent-rail-group" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
@@ -559,11 +598,15 @@
     private bool _artifactPanelOpen;
     private bool _sketchOpen;
     private bool _sketchInitPending;
+    private bool _searchOpen;
+    private bool _focusSearchPending;
     private string _projectName = $"Manufacturing project {DateTimeOffset.Now:yyyy-MM-dd}";
+    private string _searchQuery = string.Empty;
     private string _sketchTitle = "Untitled sketch";
     private string _sketchColor = "#161616";
     private string? _lastSketchDataUrl;
     private ElementReference _composerTextarea;
+    private ElementReference _searchInput;
     private DotNetObjectReference<QuoteAgentLaunchShell>? _composerDotNetRef;
     private IJSObjectReference? _composerModule;
     private IJSObjectReference? _sketchModule;
@@ -620,6 +663,7 @@
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned);
+    private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -643,6 +687,12 @@
 
         if (!_sketchInitPending)
         {
+            if (_focusSearchPending && _searchOpen)
+            {
+                _focusSearchPending = false;
+                await _searchInput.FocusAsync();
+            }
+
             return;
         }
 
@@ -650,6 +700,12 @@
         _sketchModule ??= await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-sketch.js");
         await _sketchModule.InvokeVoidAsync("initSketchCanvas", SketchCanvasId);
         await _sketchModule.InvokeVoidAsync("setSketchBrushColor", SketchCanvasId, _sketchColor);
+
+        if (_focusSearchPending && _searchOpen)
+        {
+            _focusSearchPending = false;
+            await _searchInput.FocusAsync();
+        }
     }
 
     private async Task LoadStateAsync()
@@ -974,6 +1030,60 @@
         project.IsPinned = !project.IsPinned;
     }
 
+    private void ToggleSearch()
+    {
+        _searchOpen = !_searchOpen;
+        _focusSearchPending = _searchOpen;
+    }
+
+    private IEnumerable<SearchNavItem> BuildSearchResults()
+    {
+        var items = new List<SearchNavItem>();
+
+        items.AddRange(_projects.Select(project => new SearchNavItem(
+            "Project",
+            "โปรเจกต์",
+            project.NameEn,
+            project.NameTh,
+            project.IsPinned ? "Pinned project" : "Recent project",
+            project.IsPinned ? "โปรเจกต์ที่ปักหมุด" : "โปรเจกต์ล่าสุด",
+            project.NameEn)));
+
+        items.AddRange(_artifacts.Select(artifact => new SearchNavItem(
+            "Artifact",
+            "ไฟล์งาน",
+            artifact.Title,
+            artifact.Title,
+            $"{artifact.ArtifactType} · {artifact.Status}",
+            $"{artifact.ArtifactType} · {artifact.Status}",
+            $"{artifact.Title} {artifact.ArtifactType} {artifact.Status}")));
+
+        items.Add(new("Order", "ออเดอร์", "SO-5573 aluminum bracket", "SO-5573 ขายึดอะลูมิเนียม", "$470.00 · Net-30 · Standard lead time", "$470.00 · Net-30 · เวลานำส่งมาตรฐาน", "SO-5573 aluminum bracket order payment lead time"));
+        items.Add(new("File", "ไฟล์", "bracket_sketch.jpg", "bracket_sketch.jpg", "Supplemental sketch context", "สเก็ตช์ประกอบข้อกำหนด", "bracket sketch jpg drawing photo"));
+        items.Add(new("Connector", "ตัวเชื่อมต่อ", "Google Drive", "Google Drive", "Planned plugin for customer file import", "ปลั๊กอินที่วางแผนไว้สำหรับนำเข้าไฟล์ลูกค้า", "google drive plugin connector files"));
+
+        var query = _searchQuery.Trim();
+        if (query.Length == 0)
+        {
+            return items.Take(6);
+        }
+
+        return items
+            .Where(item =>
+                item.SearchText.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || item.TitleEn.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || item.DetailEn.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || item.TypeEn.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(8);
+    }
+
+    private void ApplySearchResult(SearchNavItem item)
+    {
+        _draftMessage = item.TypeEn.Equals("Connector", StringComparison.OrdinalIgnoreCase)
+            ? Text("Help me connect Google Drive when the connector is available.", "ช่วยเชื่อมต่อ Google Drive เมื่อปลั๊กอินพร้อมใช้งาน")
+            : Text($"Open or continue {item.TitleEn}.", $"เปิดหรือทำต่อ {item.TitleTh}");
+    }
+
     private void ApplyUseCase(UseCaseOption useCase)
     {
         _draftMessage = Text(useCase.PromptEn, useCase.PromptTh);
@@ -1025,6 +1135,8 @@
     private sealed record SketchColorOption(string Name, string ThaiName, string Hex);
 
     private sealed record UseCaseOption(string TitleEn, string TitleTh, string PromptEn, string PromptTh);
+
+    private sealed record SearchNavItem(string TypeEn, string TypeTh, string TitleEn, string TitleTh, string DetailEn, string DetailTh, string SearchText);
 
     private sealed class ProjectNavItem(string id, string nameEn, string nameTh, bool isPinned)
     {
