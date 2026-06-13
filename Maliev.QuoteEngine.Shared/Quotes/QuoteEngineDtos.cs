@@ -142,7 +142,11 @@ public sealed record QuoteUploadHandoffPartDto(
     string Status,
     decimal VolumeCc,
     decimal SurfaceAreaCm2,
-    IReadOnlyList<DfmFindingDto> Findings);
+    IReadOnlyList<DfmFindingDto> Findings,
+    string? ViewerGlbUrl = null,
+    string? ViewerStoragePath = null,
+    string? ViewerFileExtension = null,
+    string? ThumbnailUrl = null);
 
 public sealed record QuoteUploadHandoffResponse(string QuoteSessionId, IReadOnlyList<QuoteUploadHandoffPartDto> Parts);
 

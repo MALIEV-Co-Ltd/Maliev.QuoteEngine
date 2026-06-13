@@ -1272,6 +1272,18 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("web-upload-1", part.UploadId);
         Assert.Equal("Analyzed", part.Status);
         Assert.True(part.VolumeCc > 0);
+
+        var json = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(json);
+        var partJson = document.RootElement.GetProperty("parts")[0];
+        Assert.True(partJson.TryGetProperty("viewerGlbUrl", out var viewerGlbUrl), "Handoff parts must include the viewer URL used by the canvas.");
+        Assert.Equal("/models/sample.glb", viewerGlbUrl.GetString());
+        Assert.True(partJson.TryGetProperty("viewerStoragePath", out var viewerStoragePath), "Handoff parts must include the viewer source storage path.");
+        Assert.Equal($"quotes/temp/{quoteSessionId:N}/123/web-dropped-part.step", viewerStoragePath.GetString());
+        Assert.True(partJson.TryGetProperty("viewerFileExtension", out var viewerFileExtension), "Handoff parts must include the viewer source extension.");
+        Assert.Equal(".step", viewerFileExtension.GetString());
+        Assert.True(partJson.TryGetProperty("thumbnailUrl", out var thumbnailUrl), "Handoff parts must include a thumbnail for the imported part list.");
+        Assert.Equal("/images/generated/sample-part.svg", thumbnailUrl.GetString());
     }
 
     [Fact]

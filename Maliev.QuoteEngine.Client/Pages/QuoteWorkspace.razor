@@ -596,6 +596,10 @@
                     FileName = part.FileName,
                     Status = part.Status,
                     StoragePath = part.StoragePath,
+                    GlbUrl = part.ViewerGlbUrl,
+                    ViewerStoragePath = part.ViewerStoragePath,
+                    ViewerFileExtension = NormalizeViewerFileExtension(part.ViewerFileExtension, part.ViewerStoragePath ?? part.StoragePath),
+                    ThumbnailUrl = part.ThumbnailUrl,
                     VolumeCc = part.VolumeCc,
                     SurfaceAreaCm2 = part.SurfaceAreaCm2,
                     Findings = part.Findings

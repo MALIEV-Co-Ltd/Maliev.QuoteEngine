@@ -433,7 +433,11 @@ public sealed class QuoteEnginePrototypeStore
                 analyzed.Status,
                 analyzed.VolumeCc,
                 analyzed.SurfaceAreaCm2,
-                analyzed.Findings));
+                analyzed.Findings,
+                analyzed.ViewerGlbUrl,
+                analyzed.StoragePath,
+                NormalizeViewerFileExtension(analyzed.StoragePath),
+                analyzed.ThumbnailUrl));
         }
 
         return new QuoteUploadHandoffResponse(request.QuoteSessionId, parts);
@@ -848,6 +852,17 @@ public sealed class QuoteEnginePrototypeStore
     private UploadState GetRequiredUpload(string uploadId)
     {
         return GetUpload(uploadId) ?? throw new KeyNotFoundException($"Upload '{uploadId}' was not found.");
+    }
+
+    private static string? NormalizeViewerFileExtension(string? storagePath)
+    {
+        if (string.IsNullOrWhiteSpace(storagePath))
+        {
+            return null;
+        }
+
+        var extension = Path.GetExtension(storagePath.Trim());
+        return string.IsNullOrWhiteSpace(extension) ? null : extension.ToLowerInvariant();
     }
 }
 

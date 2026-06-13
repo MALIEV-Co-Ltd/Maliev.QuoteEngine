@@ -719,6 +719,22 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspace_imports_handoff_viewer_fields_for_canvas_rendering()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var importStart = workspace.IndexOf("private async Task ImportHandoffAsync", StringComparison.Ordinal);
+        var selectStart = workspace.IndexOf("private void SelectPart", StringComparison.Ordinal);
+        Assert.True(importStart >= 0, "QuoteWorkspace must retain an explicit handoff import method.");
+        Assert.True(selectStart > importStart, "QuoteWorkspace handoff import method must precede part selection.");
+        var importMethod = workspace[importStart..selectStart];
+
+        Assert.Contains("GlbUrl = part.ViewerGlbUrl", importMethod, StringComparison.Ordinal);
+        Assert.Contains("ViewerStoragePath = part.ViewerStoragePath", importMethod, StringComparison.Ordinal);
+        Assert.Contains("ViewerFileExtension = NormalizeViewerFileExtension(part.ViewerFileExtension, part.ViewerStoragePath ?? part.StoragePath)", importMethod, StringComparison.Ordinal);
+        Assert.Contains("ThumbnailUrl = part.ThumbnailUrl", importMethod, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Customer_auth_pages_follow_maliev_web_sign_in_pattern()
     {
         var signIn = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignIn.razor");
