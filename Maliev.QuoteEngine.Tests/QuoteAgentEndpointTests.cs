@@ -52,6 +52,56 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_with_cad_attachment_materializes_prototype_analysis_and_price()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Quote this STL as 25 pieces, black PLA, standard lead time.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "fixture.stl",
+                    ContentType = "model/stl",
+                    FileSizeBytes = 24_000,
+                    Kind = "cad",
+                    StoragePath = "quotes/temp/fixture.stl"
+                }
+            ]
+        });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(body.Gates, gate => gate.Code == "geometry_required" && gate.Status == "passed");
+        Assert.Contains(body.Gates, gate => gate.Code == "analysis_complete" && gate.Status == "passed");
+        Assert.Contains(body.Gates, gate => gate.Code == "dfm_reviewed" && gate.Status == "passed");
+        Assert.Contains(body.Gates, gate => gate.Code == "configuration_complete" && gate.Status == "passed");
+        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "viewer" && artifact.Status == "ready");
+        Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "dfm" && artifact.Status == "ready");
+        Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "pricing" && artifact.Status == "ready");
+
+        var state = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
+            $"/quote/v1/agent/sessions/{body.SessionId:D}");
+        Assert.NotNull(state);
+        Assert.Single(state.Parts);
+        Assert.NotNull(state.Estimate);
+    }
+
+    [Fact]
     public async Task Agent_tool_endpoint_rejects_missing_signed_context()
     {
         using var client = factory.CreateClient();

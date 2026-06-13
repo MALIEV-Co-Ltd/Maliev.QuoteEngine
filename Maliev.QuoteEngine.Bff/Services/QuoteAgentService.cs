@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Security;
@@ -56,6 +57,7 @@ internal sealed class QuoteAgentService(
         var customerId = ResolveCustomerId();
         state.CustomerId = customerId ?? state.CustomerId;
         sessionStore.AddAttachments(state, request.Attachments);
+        MaterializePrototypeParts(state, request);
 
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
@@ -392,6 +394,244 @@ internal sealed class QuoteAgentService(
             PartId = partId,
             Url = url
         });
+    }
+
+    private void MaterializePrototypeParts(
+        QuoteAgentSessionState state,
+        QuoteAgentMessageRequest request)
+    {
+        var geometryAttachments = request.Attachments
+            .Where(attachment => attachment.SatisfiesGeometryGate)
+            .ToList();
+        if (geometryAttachments.Count == 0)
+        {
+            return;
+        }
+
+        lock (state.SyncRoot)
+        {
+            foreach (var attachment in geometryAttachments)
+            {
+                var uploadId = ResolveUploadId(attachment);
+                if (state.Parts.Any(part =>
+                    part.UploadId.Equals(uploadId, StringComparison.OrdinalIgnoreCase) ||
+                    part.FileName.Equals(attachment.FileName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                var part = BuildPrototypeAnalyzedPart(attachment, uploadId, request.Message);
+                state.Parts.Add(part);
+                UpsertArtifact(state, "viewer", $"3D viewer - {part.FileName}", "ready", part.PartId, part.ViewerGlbUrl);
+                UpsertArtifact(state, "dfm", $"DFM analysis - {part.FileName}", "ready", part.PartId, null);
+                UpsertArtifact(state, "requirements_summary", "Project summary", "ready", part.PartId, null);
+            }
+
+            ApplyMessageConfiguration(state, request.Message);
+            if (HasPriceableConfiguration(state))
+            {
+                state.Estimate = prototypeStore.Estimate(new QuoteEstimateRequest
+                {
+                    QuoteSessionId = state.SessionId.ToString("N"),
+                    LeadTimeCode = state.LeadTimeCode,
+                    Parts = state.Parts
+                });
+                UpsertArtifact(state, "pricing", "Pricing estimate", "ready", null, null);
+            }
+        }
+    }
+
+    private static QuotePartDraftDto BuildPrototypeAnalyzedPart(
+        QuoteAgentAttachmentDto attachment,
+        string uploadId,
+        string message)
+    {
+        var process = InferProcess(attachment, message);
+        var material = InferMaterial(process, message);
+        var quantity = InferQuantity(message);
+        var volume = Math.Clamp(Math.Round(Math.Max(attachment.FileSizeBytes, 1) / 10_000m, 2), 4m, 500m);
+
+        return new QuotePartDraftDto
+        {
+            PartId = Guid.NewGuid(),
+            FileId = Guid.TryParse(attachment.UploadId, out var fileId) ? fileId : Guid.NewGuid(),
+            UploadId = uploadId,
+            FileName = string.IsNullOrWhiteSpace(attachment.FileName) ? "uploaded-part.stl" : attachment.FileName,
+            ProcessId = process,
+            MaterialId = material,
+            FinishId = InferFinish(process, message),
+            FinishCode = InferFinish(process, message),
+            ToleranceId = InferTolerance(process, message),
+            ToleranceCode = InferTolerance(process, message),
+            InspectionLevel = "STANDARD",
+            Quantity = quantity,
+            VolumeCc = volume,
+            SurfaceAreaCm2 = Math.Round(volume * 6m, 2),
+            StoragePath = attachment.StoragePath,
+            Status = "DfmAnalysisReady",
+            ViewerGlbUrl = "/models/sample.glb",
+            ViewerStoragePath = attachment.StoragePath,
+            ViewerFileExtension = Path.GetExtension(attachment.FileName).TrimStart('.').ToLowerInvariant(),
+            ThumbnailUrl = "/images/generated/sample-part.svg",
+            Findings = [],
+            IsManifold = true,
+            DfmAcknowledged = true,
+            PartNotes = "Prototype analysis generated from uploaded CAD/3D attachment metadata until GeometryService returns authoritative analysis.",
+            BodyCount = 1,
+            SelectedBodyIndex = 0
+        };
+    }
+
+    private static void ApplyMessageConfiguration(QuoteAgentSessionState state, string message)
+    {
+        var leadTime = InferLeadTime(message);
+        if (!string.IsNullOrWhiteSpace(leadTime))
+        {
+            state.LeadTimeCode = leadTime;
+        }
+
+        foreach (var part in state.Parts)
+        {
+            part.Quantity = Math.Max(part.Quantity, InferQuantity(message));
+            part.ProcessId = InferProcessFromMessage(message) ?? part.ProcessId;
+            part.MaterialId = InferMaterial(part.ProcessId, message);
+            part.FinishId = InferFinish(part.ProcessId, message);
+            part.FinishCode = part.FinishId;
+            part.ToleranceId = InferTolerance(part.ProcessId, message);
+            part.ToleranceCode = part.ToleranceId;
+        }
+    }
+
+    private static bool HasPriceableConfiguration(QuoteAgentSessionState state)
+    {
+        return state.Parts.Count > 0 &&
+            state.Parts.All(part =>
+                !string.IsNullOrWhiteSpace(part.ProcessId) &&
+                !string.IsNullOrWhiteSpace(part.MaterialId) &&
+                part.Quantity > 0) &&
+            !string.IsNullOrWhiteSpace(state.LeadTimeCode);
+    }
+
+    private static string ResolveUploadId(QuoteAgentAttachmentDto attachment)
+    {
+        return !string.IsNullOrWhiteSpace(attachment.UploadId)
+            ? attachment.UploadId.Trim()
+            : attachment.AttachmentId.ToString("N");
+    }
+
+    private static int InferQuantity(string message)
+    {
+        var match = Regex.Match(message, @"\b(?<quantity>\d{1,5})\s*(pcs?|pieces?|parts?|units?)?\b", RegexOptions.IgnoreCase);
+        return match.Success &&
+            int.TryParse(match.Groups["quantity"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var quantity)
+            ? Math.Clamp(quantity, 1, 100_000)
+            : 1;
+    }
+
+    private static string InferProcess(QuoteAgentAttachmentDto attachment, string message)
+    {
+        return InferProcessFromMessage(message) ??
+            (QuoteUploadConstraints.MachiningFileExtensions.Any(ext => attachment.FileName.EndsWith(ext, StringComparison.OrdinalIgnoreCase))
+                ? "cnc"
+                : "fdm");
+    }
+
+    private static string? InferProcessFromMessage(string message)
+    {
+        if (message.Contains("cnc", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("machin", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("aluminum", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("aluminium", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("6061", StringComparison.OrdinalIgnoreCase))
+        {
+            return "cnc";
+        }
+
+        if (message.Contains("sla", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("resin", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sla";
+        }
+
+        if (message.Contains("3d print", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("fdm", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("nylon", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("pla", StringComparison.OrdinalIgnoreCase))
+        {
+            return "fdm";
+        }
+
+        return null;
+    }
+
+    private static string InferMaterial(string process, string message)
+    {
+        if (process.Equals("cnc", StringComparison.OrdinalIgnoreCase))
+        {
+            return "al6061";
+        }
+
+        if (process.Equals("sla", StringComparison.OrdinalIgnoreCase))
+        {
+            return "resin-gray";
+        }
+
+        if (message.Contains("clear", StringComparison.OrdinalIgnoreCase))
+        {
+            return "petg-clear";
+        }
+
+        return "pla-black";
+    }
+
+    private static string InferFinish(string process, string message)
+    {
+        if (process.Equals("cnc", StringComparison.OrdinalIgnoreCase))
+        {
+            return message.Contains("anod", StringComparison.OrdinalIgnoreCase)
+                ? "cnc-bead-blast-clear"
+                : "cnc-as-machined";
+        }
+
+        if (process.Equals("sla", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sla-standard-cure";
+        }
+
+        return message.Contains("smooth", StringComparison.OrdinalIgnoreCase)
+            ? "fdm-vapor-smooth"
+            : "fdm-matte";
+    }
+
+    private static string InferTolerance(string process, string message)
+    {
+        if (process.Equals("cnc", StringComparison.OrdinalIgnoreCase))
+        {
+            return message.Contains("tight", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("precision", StringComparison.OrdinalIgnoreCase)
+                    ? "iso-2768-f"
+                    : "iso-2768-m";
+        }
+
+        return process.Equals("sla", StringComparison.OrdinalIgnoreCase) ? "sla-standard" : "fdm-standard";
+    }
+
+    private static string? InferLeadTime(string message)
+    {
+        if (message.Contains("rush", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("expedite", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("urgent", StringComparison.OrdinalIgnoreCase))
+        {
+            return "EXPRESS";
+        }
+
+        if (message.Contains("economy", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("cheapest", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ECONOMY";
+        }
+
+        return "STANDARD";
     }
 
     private static string ComposeAgentMessage(
