@@ -209,7 +209,9 @@ public sealed class QuoteEnginePrototypeStore
                 Metadata = new(StringComparer.OrdinalIgnoreCase)
                 {
                     ["projectNumber"] = project.ProjectNumber,
-                    ["status"] = project.Status
+                    ["status"] = project.Status,
+                    ["isPinned"] = project.IsPinned.ToString().ToLowerInvariant(),
+                    ["isArchived"] = project.IsArchived.ToString().ToLowerInvariant()
                 }
             });
         }
@@ -676,6 +678,46 @@ public sealed class QuoteEnginePrototypeStore
         };
     }
 
+    internal ProjectManagementResponse? SetProjectPinned(Guid customerId, Guid projectId, bool isPinned)
+    {
+        return UpdateProject(customerId, projectId, project => project with
+        {
+            IsPinned = isPinned,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+    }
+
+    internal ProjectManagementResponse? SetProjectArchived(Guid customerId, Guid projectId, bool isArchived)
+    {
+        return UpdateProject(customerId, projectId, project => project with
+        {
+            Status = isArchived ? "Archived" : "Draft",
+            IsArchived = isArchived,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+    }
+
+    private ProjectManagementResponse? UpdateProject(
+        Guid customerId,
+        Guid projectId,
+        Func<CustomerProjectRecord, CustomerProjectRecord> update)
+    {
+        if (!_projects.TryGetValue(projectId, out var project) || project.CustomerId != customerId)
+        {
+            return null;
+        }
+
+        var updated = update(project);
+        _projects[projectId] = updated;
+        return new ProjectManagementResponse(
+            updated.ProjectId,
+            updated.ProjectNumber,
+            updated.Status,
+            updated.Title,
+            updated.IsPinned,
+            updated.IsArchived);
+    }
+
     private static CustomerProjectRecord CreateProjectRecord(
         Guid customerId,
         string title,
@@ -692,6 +734,8 @@ public sealed class QuoteEnginePrototypeStore
             title,
             notes,
             ClonePartsForStorage(parts),
+            IsPinned: false,
+            IsArchived: false,
             now,
             now);
     }
@@ -1036,6 +1080,8 @@ internal sealed record CustomerProjectRecord(
     string Title,
     string Notes,
     IReadOnlyList<QuotePartDraftDto> Parts,
+    bool IsPinned,
+    bool IsArchived,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 

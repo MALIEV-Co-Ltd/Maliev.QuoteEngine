@@ -285,6 +285,54 @@ public sealed class QuoteAgentSearchResultDto
 }
 
 /// <summary>
+/// Customer-safe connector registry response for QuoteEngine plugins and integrations.
+/// </summary>
+public sealed class QuoteAgentConnectorRegistryResponse
+{
+    /// <summary>Gets or sets the QuoteEngine agent session ID that requested the registry.</summary>
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets whether a customer must sign in just to list connector capabilities.</summary>
+    public bool RequiresAuthenticationToList { get; set; }
+
+    /// <summary>Gets or sets available, planned, and future connector definitions.</summary>
+    public List<QuoteAgentConnectorDto> Connectors { get; set; } = [];
+}
+
+/// <summary>
+/// Customer-safe connector definition for planned file import and CAD sender integrations.
+/// </summary>
+public sealed class QuoteAgentConnectorDto
+{
+    /// <summary>Gets or sets the stable connector ID.</summary>
+    public string ConnectorId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the customer-visible connector name.</summary>
+    public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the connector category such as file_import or cad_sender.</summary>
+    public string Category { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the connector status such as planned, future, available, or connected.</summary>
+    public string Status { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets a customer-safe summary of what the connector will do.</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets whether signing in is required before connecting this integration.</summary>
+    public bool RequiresAuthenticationToConnect { get; set; }
+
+    /// <summary>Gets or sets whether this connector is currently connected for the customer.</summary>
+    public bool IsConnected { get; set; }
+
+    /// <summary>Gets or sets supported file types or payload types.</summary>
+    public List<string> SupportedFileTypes { get; set; } = [];
+
+    /// <summary>Gets or sets the action hint the agent can use for next steps.</summary>
+    public string ActionHint { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Request to confirm a server-stored proposed action.
 /// </summary>
 public sealed class QuoteAgentConfirmActionRequest

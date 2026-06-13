@@ -390,6 +390,14 @@ public sealed record DuplicateDraftProjectResponse(
     string Title,
     IReadOnlyList<QuotePartDraftDto> Parts);
 
+public sealed record ProjectManagementResponse(
+    Guid ProjectId,
+    string ProjectNumber,
+    string Status,
+    string Title,
+    bool IsPinned,
+    bool IsArchived);
+
 public sealed record GenerateFormalQuoteRequest(Guid ProjectId, string QuoteSessionId, IReadOnlyList<QuotePartDraftDto> Parts, string Notes);
 
 public sealed record GenerateFormalQuoteResponse(Guid QuoteId, string QuoteNumber, string PdfUrl, string Status);

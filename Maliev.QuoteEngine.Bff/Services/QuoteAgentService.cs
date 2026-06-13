@@ -110,6 +110,7 @@ internal sealed class QuoteAgentService(
             "quote_get_state" => ToStateResponse(state),
             "quote_get_reference_data" => prototypeStore.ReferenceData,
             "quote_get_account_context" => BuildAccountContext(state),
+            "quote_get_connectors" => BuildConnectorRegistry(state),
             "quote_search_customer_data" => SearchCustomerDataOrGateError(state, request.Arguments),
             "quote_resume_project" => ResumeProjectOrGateError(state, request.Arguments),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
@@ -121,6 +122,18 @@ internal sealed class QuoteAgentService(
                 ReadString(request.Arguments, "title") ?? "Create a customer draft project from this quote session.",
                 requiresAuthentication: true,
                 request.Arguments),
+            "quote_pin_project" => PrepareProjectManagementActionOrGateError(
+                state,
+                request.Arguments,
+                "pin_project",
+                "Pin project",
+                "Pin this Make Studio project for quick access."),
+            "quote_archive_project" => PrepareProjectManagementActionOrGateError(
+                state,
+                request.Arguments,
+                "archive_project",
+                "Archive project",
+                "Archive this Make Studio project from the active project list."),
             "quote_duplicate_project" => PrepareActionOrGateError(
                 state,
                 "duplicate_project",
@@ -190,6 +203,8 @@ internal sealed class QuoteAgentService(
         {
             "draft_project" => ExecuteDraftProject(state, customerId!.Value, action),
             "duplicate_project" => ExecuteDuplicateProject(state, customerId!.Value, action),
+            "pin_project" => ExecutePinProject(state, customerId!.Value, action),
+            "archive_project" => ExecuteArchiveProject(state, customerId!.Value, action),
             "formal_quote" => ExecuteFormalQuote(state, customerId!.Value, action),
             "quote_approval" => ExecuteQuoteApproval(state),
             "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
@@ -399,6 +414,54 @@ internal sealed class QuoteAgentService(
         };
     }
 
+    private static QuoteAgentConnectorRegistryResponse BuildConnectorRegistry(QuoteAgentSessionState state)
+    {
+        return new QuoteAgentConnectorRegistryResponse
+        {
+            SessionId = state.SessionId,
+            RequiresAuthenticationToList = false,
+            Connectors =
+            [
+                new QuoteAgentConnectorDto
+                {
+                    ConnectorId = "google-drive",
+                    DisplayName = "Google Drive",
+                    Category = "file_import",
+                    Status = "planned",
+                    Description = "Import customer CAD, drawings, photos, and sketches from Google Drive once the connector is enabled.",
+                    RequiresAuthenticationToConnect = true,
+                    IsConnected = false,
+                    SupportedFileTypes = ["STEP", "STL", "3MF", "OBJ", "GLB", "PDF", "JPG", "PNG"],
+                    ActionHint = "connect_google_drive"
+                },
+                new QuoteAgentConnectorDto
+                {
+                    ConnectorId = "blender",
+                    DisplayName = "Blender",
+                    Category = "cad_sender",
+                    Status = "future",
+                    Description = "Send meshes or generated manufacturing previews from Blender to Make Studio in a future connector.",
+                    RequiresAuthenticationToConnect = true,
+                    IsConnected = false,
+                    SupportedFileTypes = ["STL", "OBJ", "GLB"],
+                    ActionHint = "explain_future_connector"
+                },
+                new QuoteAgentConnectorDto
+                {
+                    ConnectorId = "freecad",
+                    DisplayName = "FreeCAD",
+                    Category = "cad_sender",
+                    Status = "future",
+                    Description = "Send parametric CAD and exported STEP files from FreeCAD to Make Studio in a future connector.",
+                    RequiresAuthenticationToConnect = true,
+                    IsConnected = false,
+                    SupportedFileTypes = ["FCStd", "STEP", "STP"],
+                    ActionHint = "explain_future_connector"
+                }
+            ]
+        };
+    }
+
     private object SearchCustomerDataOrGateError(
         QuoteAgentSessionState state,
         Dictionary<string, JsonElement> arguments)
@@ -431,6 +494,55 @@ internal sealed class QuoteAgentService(
                 .Take(Math.Clamp(limit, 1, 50))
                 .ToList()
         };
+    }
+
+    private object PrepareProjectManagementActionOrGateError(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments,
+        string actionType,
+        string title,
+        string summary)
+    {
+        var customerId = ResolveCustomerId() ?? state.CustomerId;
+        if (!customerId.HasValue)
+        {
+            return new
+            {
+                error = "Sign in before managing customer projects.",
+                requiredGateCode = "customer_authenticated",
+                actionType,
+                state = ToStateResponse(state)
+            };
+        }
+
+        if (!TryResolveProjectId(state, arguments, out var projectId))
+        {
+            return new
+            {
+                error = "Create or select a customer draft project before managing it.",
+                requiredGateCode = "draft_project",
+                actionType,
+                state = ToStateResponse(state)
+            };
+        }
+
+        var project = prototypeStore.GetProject(customerId.Value, projectId);
+        if (project is null)
+        {
+            return new
+            {
+                error = "Project was not found for the signed-in customer.",
+                requiredGateCode = "project_access",
+                actionType,
+                state = ToStateResponse(state)
+            };
+        }
+
+        var actionArguments = new Dictionary<string, JsonElement>(arguments, StringComparer.OrdinalIgnoreCase)
+        {
+            ["project_id"] = JsonSerializer.SerializeToElement(projectId.ToString("D"), JsonOptions)
+        };
+        return PrepareAction(state, actionType, title, summary, requiresAuthentication: true, actionArguments);
     }
 
     private static void AddArtifactSearchResults(
@@ -600,6 +712,44 @@ internal sealed class QuoteAgentService(
         return $"Project {response.ProjectNumber} was duplicated from the current draft.";
     }
 
+    private string ExecutePinProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    {
+        if (!TryResolveProjectId(state, action.Arguments, out var projectId))
+        {
+            throw new InvalidOperationException("A project is required before pinning it.");
+        }
+
+        var response = prototypeStore.SetProjectPinned(customerId, projectId, isPinned: true)
+            ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
+        UpsertArtifact(state, "project_pin", response.Title, "pinned", null, null);
+        SetArtifactMetadata(state, "project_pin", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["projectId"] = response.ProjectId.ToString("D"),
+            ["projectNumber"] = response.ProjectNumber,
+            ["isPinned"] = response.IsPinned.ToString().ToLowerInvariant()
+        });
+        return $"Project {response.ProjectNumber} was pinned.";
+    }
+
+    private string ExecuteArchiveProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    {
+        if (!TryResolveProjectId(state, action.Arguments, out var projectId))
+        {
+            throw new InvalidOperationException("A project is required before archiving it.");
+        }
+
+        var response = prototypeStore.SetProjectArchived(customerId, projectId, isArchived: true)
+            ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
+        UpsertArtifact(state, "project_archive", response.Title, "archived", null, null);
+        SetArtifactMetadata(state, "project_archive", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["projectId"] = response.ProjectId.ToString("D"),
+            ["projectNumber"] = response.ProjectNumber,
+            ["isArchived"] = response.IsArchived.ToString().ToLowerInvariant()
+        });
+        return $"Project {response.ProjectNumber} was archived.";
+    }
+
     private string ExecuteFormalQuote(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
     {
         state.FormalQuote = prototypeStore.GenerateQuote(customerId);
@@ -725,6 +875,16 @@ internal sealed class QuoteAgentService(
         return artifact is not null &&
             artifact.Metadata.TryGetValue("projectId", out var rawProjectId) &&
             Guid.TryParse(rawProjectId, out projectId);
+    }
+
+    private static bool TryResolveProjectId(
+        QuoteAgentSessionState state,
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        out Guid projectId)
+    {
+        return TryReadGuid(arguments, "project_id", out projectId) ||
+            TryReadGuid(arguments, "projectId", out projectId) ||
+            TryGetCurrentDraftProjectId(state, out projectId);
     }
 
     private void MaterializePrototypeParts(

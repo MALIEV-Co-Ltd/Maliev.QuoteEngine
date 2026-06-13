@@ -468,6 +468,99 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("quote_pin_project", "pin_project", "project_pin", "pinned", "isPinned", "true")]
+    [InlineData("quote_archive_project", "archive_project", "project_archive", "archived", "isArchived", "true")]
+    public async Task Agent_project_management_tool_requires_confirmation_and_updates_customer_project(
+        string toolName,
+        string actionType,
+        string artifactType,
+        string expectedStatus,
+        string metadataKey,
+        string metadataValue)
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, $"agent-{actionType}@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var draftState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_prepare_draft_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["title"] = JsonSerializer.SerializeToElement($"Project {actionType}", JsonOptions)
+            });
+        var draftResult = await ConfirmActionAsync(client, Assert.Single(draftState.ProposedActions).ActionId);
+        Assert.NotNull(draftResult.State);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var projectId));
+
+        var pendingState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            toolName,
+            new Dictionary<string, JsonElement>
+            {
+                ["project_id"] = JsonSerializer.SerializeToElement(projectId.ToString("D"), JsonOptions)
+            });
+        var pendingAction = Assert.Single(pendingState.ProposedActions);
+        Assert.Equal(actionType, pendingAction.ActionType);
+
+        var result = await ConfirmActionAsync(client, pendingAction.ActionId);
+
+        Assert.NotNull(result.State);
+        var artifact = Assert.Single(result.State.Artifacts, item => item.ArtifactType == artifactType);
+        Assert.Equal(expectedStatus, artifact.Status);
+        Assert.Equal(projectId.ToString("D"), artifact.Metadata["projectId"]);
+        Assert.Equal(metadataValue, artifact.Metadata[metadataKey]);
+
+        var searchJson = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_search_customer_data",
+            new Dictionary<string, JsonElement>
+            {
+                ["query"] = JsonSerializer.SerializeToElement($"Project {actionType}", JsonOptions)
+            });
+        using var document = JsonDocument.Parse(searchJson);
+        var projectResult = Assert.Single(document.RootElement.GetProperty("results").EnumerateArray(), result =>
+            result.GetProperty("resourceType").GetString() == "project" &&
+            result.GetProperty("resourceId").GetString() == projectId.ToString("D"));
+        Assert.Equal(metadataValue, projectResult.GetProperty("metadata").GetProperty(metadataKey).GetString());
+    }
+
+    [Fact]
+    public async Task Agent_project_management_tool_rejects_project_owned_by_another_customer()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var ownerClient = await CreateSignedInClientAsync(scopedFactory, "agent-pin-owner@example.com");
+        var ownerSessionId = await StartPricedCadSessionAsync(ownerClient);
+        var draftState = await ExecuteToolForStateAsync(ownerClient, ownerSessionId, "quote_prepare_draft_project");
+        var draftResult = await ConfirmActionAsync(ownerClient, Assert.Single(draftState.ProposedActions).ActionId);
+        Assert.NotNull(draftResult.State);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var projectId));
+
+        using var otherClient = await CreateSignedInClientAsync(scopedFactory, "agent-pin-other@example.com");
+        var json = await ExecuteToolAsync(
+            otherClient,
+            Guid.NewGuid(),
+            "quote_pin_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["project_id"] = JsonSerializer.SerializeToElement(projectId.ToString("D"), JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("project_access", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("pin_project", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Contains(
+            "not found",
+            document.RootElement.GetProperty("error").GetString(),
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public async Task Agent_resume_project_hydrates_state_from_customer_project()
     {
@@ -619,6 +712,38 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             "Sign in",
             document.RootElement.GetProperty("error").GetString(),
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_connector_registry_lists_safe_planned_customer_connectors()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_get_connectors");
+        using var document = JsonDocument.Parse(json);
+        var connectors = document.RootElement.GetProperty("connectors").EnumerateArray().ToArray();
+
+        Assert.Equal(sessionId, document.RootElement.GetProperty("sessionId").GetGuid());
+        Assert.False(document.RootElement.GetProperty("requiresAuthenticationToList").GetBoolean());
+
+        var googleDrive = Assert.Single(connectors, connector =>
+            connector.GetProperty("connectorId").GetString() == "google-drive");
+        Assert.Equal("Google Drive", googleDrive.GetProperty("displayName").GetString());
+        Assert.Equal("planned", googleDrive.GetProperty("status").GetString());
+        Assert.Equal("file_import", googleDrive.GetProperty("category").GetString());
+        Assert.True(googleDrive.GetProperty("requiresAuthenticationToConnect").GetBoolean());
+        Assert.False(googleDrive.GetProperty("isConnected").GetBoolean());
+        Assert.Contains("STEP", googleDrive.GetProperty("supportedFileTypes").EnumerateArray().Select(item => item.GetString()));
+
+        Assert.Contains(connectors, connector =>
+            connector.GetProperty("connectorId").GetString() == "blender" &&
+            connector.GetProperty("category").GetString() == "cad_sender" &&
+            connector.GetProperty("status").GetString() == "future");
+        Assert.Contains(connectors, connector =>
+            connector.GetProperty("connectorId").GetString() == "freecad" &&
+            connector.GetProperty("category").GetString() == "cad_sender" &&
+            connector.GetProperty("status").GetString() == "future");
     }
 
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)
