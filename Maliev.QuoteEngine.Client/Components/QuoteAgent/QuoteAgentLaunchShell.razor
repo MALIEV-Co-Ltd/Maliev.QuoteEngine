@@ -116,8 +116,8 @@
             <div class="@AgentStatusClass"
                  title="@AgentStatusTooltip"
                  aria-label="@AgentStatusTooltip">
-                <span aria-hidden="true"></span>
-                <strong>@AgentStatusLabel</strong>
+                <span class="qe-agent-status-dot" aria-hidden="true"></span>
+                <span class="qe-agent-status-label">@AgentStatusLabel</span>
                 @if (!string.IsNullOrWhiteSpace(_projectName))
                 {
                     <input class="qe-agent-project-name"
@@ -736,22 +736,22 @@
                         <span>@Text("Plugins", "ปลั๊กอิน")</span>
                         <MudIcon Icon="@(_composerPluginsOpen ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ChevronRight)" Size="Size.Small" />
                     </button>
-                    @if (_composerPluginsOpen)
-                    {
-                        <div class="qe-agent-add-submenu" role="group" aria-label="@Text("Plugin connectors", "ตัวเชื่อมต่อปลั๊กอิน")">
-                            <button type="button" role="menuitem" @onclick="ApplyGoogleDriveConnectorAsync">
-                                <span class="qe-agent-google-drive-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" focusable="false">
-                                        <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
-                                        <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
-                                        <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
-                                    </svg>
-                                </span>
-                                <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
-                            </button>
-                        </div>
-                    }
                 </section>
+                @if (_composerPluginsOpen)
+                {
+                    <section class="qe-agent-add-submenu" role="group" aria-label="@Text("Plugin connectors", "ตัวเชื่อมต่อปลั๊กอิน")">
+                        <button type="button" role="menuitem" @onclick="ApplyGoogleDriveConnectorAsync">
+                            <span class="qe-agent-google-drive-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" focusable="false">
+                                    <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                    <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                    <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                                </svg>
+                            </span>
+                            <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
+                        </button>
+                    </section>
+                }
             }
             <form class="@($"qe-agent-composer {(_sending ? "is-sending" : string.Empty)}")" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
                 <button type="button"
