@@ -1755,6 +1755,36 @@
         }
     }
 
+    public async Task NotifyUploadStartedAsync(QuotePartViewModel part)
+    {
+        if (string.IsNullOrWhiteSpace(part.FileName))
+        {
+            return;
+        }
+
+        _messages.Add(new AgentMessageRow(
+            "user",
+            Text($"Attached file: {part.FileName}", $"แนบไฟล์: {part.FileName}")));
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async Task NotifyUploadCompletedAsync(QuotePartViewModel part)
+    {
+        if (string.IsNullOrWhiteSpace(part.FileName))
+        {
+            return;
+        }
+
+        var uploadKind = QuoteUploadConstraints.IsSupportedCadFileName(part.FileName)
+            ? Text("I can use this as the geometry source for DFM, viewer, and pricing.", "ฉันใช้ไฟล์นี้เป็นข้อมูลรูปทรงสำหรับ DFM, viewer และราคาได้")
+            : Text("I will use it as supplemental manufacturing context until CAD/3D geometry is available.", "ฉันจะใช้เป็นข้อมูลประกอบการผลิตจนกว่าจะมีไฟล์ CAD/3D");
+
+        _messages.Add(new AgentMessageRow(
+            "assistant",
+            Text($"Upload ready: {part.FileName}. {uploadKind}", $"ไฟล์พร้อมใช้: {part.FileName}. {uploadKind}")));
+        await InvokeAsync(StateHasChanged);
+    }
+
     private string UploadedPartStatus(QuotePartViewModel part)
     {
         var status = string.IsNullOrWhiteSpace(part.Status) ? Text("Attached", "แนบแล้ว") : part.Status;

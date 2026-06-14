@@ -617,6 +617,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
         Assert.Contains("private bool IsWorkspaceReady => _parts.Count > 0;", source, StringComparison.Ordinal);
         Assert.Contains("RegisterCompletedUploadWithAgentAsync(part, candidate)", source, StringComparison.Ordinal);
+        Assert.Contains("await _agentShell.NotifyUploadStartedAsync(part);", source, StringComparison.Ordinal);
+        Assert.Contains("await _agentShell.NotifyUploadCompletedAsync(part);", source, StringComparison.Ordinal);
         Assert.Contains("RegisterAgentAttachmentsAsync", source, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentAttachmentRegisterRequest", source, StringComparison.Ordinal);
         Assert.Contains("InferAgentAttachmentKind", source, StringComparison.Ordinal);
@@ -864,6 +866,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-add-backdrop\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-composer-attachments\"", component, StringComparison.Ordinal);
         Assert.Contains("IsUploadBusy(part)", component, StringComparison.Ordinal);
+        Assert.Contains("NotifyUploadStartedAsync", component, StringComparison.Ordinal);
+        Assert.Contains("NotifyUploadCompletedAsync", component, StringComparison.Ordinal);
+        Assert.Contains("Attached file:", component, StringComparison.Ordinal);
+        Assert.Contains("Upload ready:", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-send-spinner", component, StringComparison.Ordinal);
         Assert.Contains("Text(\"Processing\", \"กำลังประมวลผล\")", component, StringComparison.Ordinal);
         Assert.Contains("class=\"sr-only\"", component, StringComparison.Ordinal);

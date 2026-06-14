@@ -426,6 +426,11 @@
             ApplyDefaultRouting(part, candidate.FileName);
             _parts.Add(part);
             _selectedPartIndex = _parts.Count - 1;
+            if (_agentShell is not null)
+            {
+                await _agentShell.NotifyUploadStartedAsync(part);
+            }
+
             await InvokeAsync(StateHasChanged);
             try
             {
@@ -465,6 +470,11 @@
                 if (!ShouldRetainBrowserUploadFile(part))
                     await ScheduleBrowserUploadFileCleanupAsync(candidate.ClientFileId);
                 await RegisterCompletedUploadWithAgentAsync(part, candidate);
+                if (_agentShell is not null)
+                {
+                    await _agentShell.NotifyUploadCompletedAsync(part);
+                }
+
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
