@@ -1125,18 +1125,25 @@
 
 .qe-agent-auth-actions {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
     width: 100%;
 }
 
-.qe-agent-signin-btn {
+.qe-agent-signin-btn,
+.qe-agent-signup-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    width: 100%;
     min-height: 36px;
     padding: 8px 13px;
     border-radius: 10px;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+.qe-agent-signin-btn {
     background: var(--qe-agent-ink);
     color: var(--qe-agent-bg) !important;
     font-weight: 600;
@@ -1147,13 +1154,7 @@
 }
 
 .qe-agent-signup-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 36px;
-    padding: 8px 13px;
     border: 1px solid var(--qe-agent-line);
-    border-radius: 10px;
     background: transparent;
     color: var(--qe-agent-ink) !important;
     font-weight: 600;

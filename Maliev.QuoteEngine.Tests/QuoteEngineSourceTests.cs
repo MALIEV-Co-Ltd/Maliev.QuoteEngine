@@ -924,6 +924,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signup-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-auth-actions", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("white-space: nowrap;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-status.is-warning span", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-status.is-failed span", agentStyles, StringComparison.Ordinal);
         Assert.Contains("field-sizing: content;", agentStyles, StringComparison.Ordinal);
