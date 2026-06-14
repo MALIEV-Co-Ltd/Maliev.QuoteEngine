@@ -423,6 +423,56 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_calculate_estimate_tool_reports_geometry_gate_before_pricing()
+    {
+        using var client = factory.CreateClient();
+
+        var json = await ExecuteToolAsync(client, Guid.NewGuid(), "quote_calculate_estimate");
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("geometry_required", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("calculate_estimate", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("state").GetProperty("estimate").ValueKind);
+        Assert.Contains("Upload STEP", document.RootElement.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_calculate_estimate_tool_prices_after_geometry_analysis_and_configuration()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement("Quote this STEP as 10 aluminum pieces.", JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "priced-housing.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "estimate-upload-cad",
+                        storage_path = "quotes/temp/session/estimate-upload-cad/priced-housing.step"
+                    }
+                }, JsonOptions)
+            });
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_calculate_estimate");
+
+        Assert.NotNull(state.Estimate);
+        Assert.True(state.Estimate.Total > 0);
+        Assert.Equal("THB", state.Estimate.Currency);
+        Assert.Contains(state.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "pricing" && artifact.Status == "ready");
+    }
+
+    [Fact]
     public async Task Agent_tool_endpoint_rejects_missing_signed_context()
     {
         using var client = factory.CreateClient();

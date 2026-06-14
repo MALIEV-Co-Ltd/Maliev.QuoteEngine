@@ -117,7 +117,7 @@ internal sealed class QuoteAgentService(
             "quote_register_uploads" => RegisterUploadsOrGateError(state, request.Arguments),
             "quote_resume_project" => ResumeProjectOrGateError(state, request.Arguments),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
-            "quote_calculate_estimate" => CalculateEstimate(state),
+            "quote_calculate_estimate" => CalculateEstimateOrGateError(state),
             "quote_update_checkout_details" => UpdateCheckoutDetailsOrGateError(state, request.Arguments),
             "quote_prepare_draft_project" => PrepareActionOrGateError(
                 state,
@@ -477,6 +477,29 @@ internal sealed class QuoteAgentService(
         }
 
         return ToStateResponse(state);
+    }
+
+    private object CalculateEstimateOrGateError(QuoteAgentSessionState state)
+    {
+        var gates = QuoteAgentSessionStore.BuildGates(state, ResolveCustomerId().HasValue || state.CustomerId.HasValue);
+        var blocker = FirstBlockingGate(
+            gates,
+            "geometry_required",
+            "analysis_complete",
+            "dfm_reviewed",
+            "configuration_complete");
+        if (blocker is not null)
+        {
+            return new
+            {
+                error = blocker.Detail,
+                requiredGateCode = blocker.Code,
+                actionType = "calculate_estimate",
+                state = ToStateResponse(state)
+            };
+        }
+
+        return CalculateEstimate(state);
     }
 
     private QuoteAgentStateResponse CalculateEstimate(QuoteAgentSessionState state)
