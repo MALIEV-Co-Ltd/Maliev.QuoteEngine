@@ -300,6 +300,57 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_register_uploads_tool_accepts_supplemental_files_without_satisfying_geometry()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var state = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement("Need 50 aluminum brackets from these sketches and photos.", JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "bracket-sketch.jpg",
+                        content_type = "image/jpeg",
+                        file_size_bytes = 1_500_000,
+                        kind = "sketch",
+                        upload_id = "agent-upload-sketch",
+                        storage_path = "",
+                        url = "https://files.example.test/bracket-sketch.jpg"
+                    },
+                    new
+                    {
+                        file_name = "bracket-notes.pdf",
+                        content_type = "application/pdf",
+                        file_size_bytes = 210_000,
+                        kind = "drawing",
+                        upload_id = "agent-upload-drawing",
+                        storage_path = "quotes/temp/session/agent-upload-drawing/bracket-notes.pdf",
+                        url = ""
+                    }
+                }, JsonOptions)
+            });
+
+        Assert.Equal(sessionId, state.SessionId);
+        Assert.Equal(2, state.Attachments.Count);
+        Assert.All(state.Attachments, attachment => Assert.False(attachment.SatisfiesGeometryGate));
+        Assert.Empty(state.Parts);
+        Assert.Null(state.Estimate);
+        Assert.Contains(state.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
+        Assert.Contains(state.Gates, gate => gate.Code == "analysis_complete" && gate.Status == "blocked");
+        var analysisArtifact = Assert.Single(state.Artifacts, artifact => artifact.ArtifactType == "analysis");
+        Assert.Equal("needs_geometry", analysisArtifact.Status);
+        Assert.Equal("not_satisfied_by_supplemental_files", analysisArtifact.Metadata["geometryGate"]);
+        Assert.Contains("sketch", analysisArtifact.Metadata["summary"], StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Agent_project_summary_tool_reports_progress_blockers_and_next_actions()
     {
         using var client = factory.CreateClient();
