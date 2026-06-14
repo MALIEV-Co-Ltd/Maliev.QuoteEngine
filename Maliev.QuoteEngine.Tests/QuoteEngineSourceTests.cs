@@ -810,6 +810,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Archive project", component, StringComparison.Ordinal);
         Assert.Contains("Task<ProjectManagementResponse> ArchiveProjectAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/projects/{projectId:D}/archive", apiClient, StringComparison.Ordinal);
+        Assert.Contains("AchieveProjectAsync", component, StringComparison.Ordinal);
+        Assert.Contains("Api.AchieveProjectAsync(project.ProjectId)", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.TaskAlt", component, StringComparison.Ordinal);
+        Assert.Contains("Mark achieved", component, StringComparison.Ordinal);
+        Assert.Contains("Task<ProjectManagementResponse> AchieveProjectAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/projects/{projectId:D}/achieve", apiClient, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.PushPin", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.Search", primaryNav, StringComparison.Ordinal);

@@ -730,6 +730,16 @@ public sealed class QuoteEnginePrototypeStore
         });
     }
 
+    internal ProjectManagementResponse? SetProjectAchieved(Guid customerId, Guid projectId)
+    {
+        return UpdateProject(customerId, projectId, project => project with
+        {
+            Status = "Achieved",
+            IsArchived = true,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+    }
+
     private ProjectManagementResponse? UpdateProject(
         Guid customerId,
         Guid projectId,

@@ -289,6 +289,12 @@
                                                         @onclick="@(() => ArchiveProjectAsync(project))">
                                                     <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
                                                 </button>
+                                                <button type="button"
+                                                        title="@Text("Mark achieved", "ทำเครื่องหมายว่าสำเร็จ")"
+                                                        aria-label="@Text($"Mark {project.NameEn} achieved", $"ทำเครื่องหมาย{project.NameTh}ว่าสำเร็จ")"
+                                                        @onclick="@(() => AchieveProjectAsync(project))">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
+                                                </button>
                                             </article>
                                         }
                                     </div>
@@ -339,6 +345,12 @@
                                                         aria-label="@Text($"Archive {project.NameEn}", $"เก็บโปรเจกต์{project.NameTh}")"
                                                         @onclick="@(() => ArchiveProjectAsync(project))">
                                                     <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                                                </button>
+                                                <button type="button"
+                                                        title="@Text("Mark achieved", "ทำเครื่องหมายว่าสำเร็จ")"
+                                                        aria-label="@Text($"Mark {project.NameEn} achieved", $"ทำเครื่องหมาย{project.NameTh}ว่าสำเร็จ")"
+                                                        @onclick="@(() => AchieveProjectAsync(project))">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
                                                 </button>
                                             </article>
                                         }
@@ -2334,6 +2346,29 @@
         try
         {
             var response = await Api.ArchiveProjectAsync(project.ProjectId);
+            ApplyProjectManagement(response);
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task AchieveProjectAsync(ProjectNavItem project)
+    {
+        if (!IsSignedIn)
+        {
+            _draftMessage = Text("Sign in to mark projects achieved.", "เข้าสู่ระบบเพื่อทำเครื่องหมายโปรเจกต์ว่าสำเร็จ");
+            return;
+        }
+
+        try
+        {
+            var response = await Api.AchieveProjectAsync(project.ProjectId);
             ApplyProjectManagement(response);
         }
         catch (QuoteEngineApiException ex)

@@ -1872,6 +1872,30 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Project_achieve_marks_project_complete_and_rejects_other_customers()
+    {
+        using var owner = await CreateSignedInClientAsync("project-achieve-owner@example.com");
+        var activeProject = await CreateDraftProjectAsync(owner, "Active fixture");
+        var achievedProject = await CreateDraftProjectAsync(owner, "Released bracket");
+
+        var achieveResponse = await owner.PostAsync($"/quote/v1/projects/{achievedProject.ProjectId:D}/achieve", null);
+        achieveResponse.EnsureSuccessStatusCode();
+        var achieved = await achieveResponse.Content.ReadFromJsonAsync<ProjectManagementResponse>();
+        Assert.NotNull(achieved);
+        Assert.True(achieved.IsArchived);
+        Assert.Equal("Achieved", achieved.Status);
+
+        var navigation = await owner.GetFromJsonAsync<List<CustomerProjectNavItemDto>>("/quote/v1/projects/nav");
+        Assert.NotNull(navigation);
+        Assert.Contains(navigation, project => project.ProjectId == activeProject.ProjectId);
+        Assert.DoesNotContain(navigation, project => project.ProjectId == achievedProject.ProjectId);
+
+        using var other = await CreateSignedInClientAsync("project-achieve-other@example.com");
+        var crossCustomerAchieve = await other.PostAsync($"/quote/v1/projects/{activeProject.ProjectId:D}/achieve", null);
+        Assert.Equal(HttpStatusCode.NotFound, crossCustomerAchieve.StatusCode);
+    }
+
+    [Fact]
     public async Task Draft_project_create_and_duplicate_preserve_browser_local_dfm_payload()
     {
         using var client = await CreateSignedInClientAsync("local-dfm-owner@example.com");

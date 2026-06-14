@@ -572,6 +572,22 @@ public sealed class QuoteController(
         return archived is null ? NotFound() : Ok(archived);
     }
 
+    [HttpPost("projects/{projectId:guid}/achieve")]
+    public ActionResult<ProjectManagementResponse> AchieveProject(Guid projectId)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "Project completion is available only for signed-in customers."
+            });
+        }
+
+        var achieved = store.SetProjectAchieved(customerId, projectId);
+        return achieved is null ? NotFound() : Ok(achieved);
+    }
+
     [HttpPost("quotes/formal")]
     public async Task<ActionResult<GenerateFormalQuoteResponse>> GenerateFormalQuote(
         [FromBody] GenerateFormalQuoteRequest request, CancellationToken cancellationToken)
