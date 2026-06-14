@@ -921,6 +921,101 @@
     line-height: 1.35;
 }
 
+.qe-agent-plugin-panel {
+    display: grid;
+    gap: 8px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 6px 0 14px;
+    padding: 0 2px 8px 0;
+    overflow: hidden;
+}
+
+.qe-agent-plugin-panel,
+.qe-agent-plugin-panel * {
+    box-sizing: border-box;
+}
+
+.qe-agent-plugin-panel label {
+    display: block;
+    max-width: 100%;
+    padding: 0 8px;
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: uppercase;
+}
+
+.qe-agent-plugin-panel p {
+    margin: 4px 8px;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
+.qe-agent-plugin-list {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.qe-agent-plugin-list button {
+    display: grid;
+    gap: 3px;
+    width: 100%;
+    min-width: 0;
+    padding: 9px 8px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--qe-agent-ink);
+    cursor: pointer;
+    text-align: left;
+    overflow: hidden;
+}
+
+.qe-agent-plugin-list button:hover {
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-plugin-list strong,
+.qe-agent-plugin-list span,
+.qe-agent-plugin-list small,
+.qe-agent-plugin-list em {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.qe-agent-plugin-list strong {
+    font-size: 13px;
+    font-weight: 650;
+    white-space: nowrap;
+}
+
+.qe-agent-plugin-list span,
+.qe-agent-plugin-list em {
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    font-style: normal;
+    line-height: 1.25;
+    text-transform: uppercase;
+}
+
+.qe-agent-plugin-list small {
+    display: -webkit-box;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+}
+
 .qe-agent-rail-group {
     margin-top: 14px;
 }

@@ -21,6 +21,9 @@ public interface IQuoteAgentService
     /// <summary>Gets the current agent state.</summary>
     QuoteAgentStateResponse GetState(Guid sessionId);
 
+    /// <summary>Gets customer-safe connector definitions for the quote agent workspace.</summary>
+    QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId);
+
     /// <summary>Executes an allowlisted internal tool call.</summary>
     Task<object> ExecuteToolAsync(string toolName, QuoteAgentToolRequest request, QuoteAgentContext context, CancellationToken cancellationToken);
 
@@ -93,6 +96,11 @@ internal sealed class QuoteAgentService(
     public QuoteAgentStateResponse GetState(Guid sessionId)
     {
         return ToStateResponse(sessionStore.GetOrCreate(sessionId));
+    }
+
+    public QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId)
+    {
+        return BuildConnectorRegistry(sessionStore.GetOrCreate(sessionId));
     }
 
     public Task<object> ExecuteToolAsync(

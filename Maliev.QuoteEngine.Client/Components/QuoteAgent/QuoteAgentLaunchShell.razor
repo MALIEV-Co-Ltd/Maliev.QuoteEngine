@@ -31,7 +31,10 @@
                 <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
                 <span>@Text("Search", "ค้นหา")</span>
             </button>
-            <button type="button">
+            <button type="button"
+                    class="@(_pluginsOpen ? "active" : string.Empty)"
+                    aria-expanded="@AriaExpanded(_pluginsOpen)"
+                    @onclick="TogglePluginsAsync">
                 <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
                 <span>@Text("Plugins", "ปลั๊กอิน")</span>
             </button>
@@ -71,6 +74,34 @@
                             <p>@Text("No matching projects, orders, files, or artifacts yet.", "ยังไม่พบโปรเจกต์ ออเดอร์ ไฟล์ หรือไฟล์งานที่ตรงกัน")</p>
                         }
                     </div>
+                </section>
+            }
+
+            @if (_pluginsOpen)
+            {
+                <section class="qe-agent-plugin-panel" aria-label="@Text("Plugins and connectors", "ปลั๊กอินและตัวเชื่อมต่อ")">
+                    <label>@Text("External connectors", "ตัวเชื่อมต่อภายนอก")</label>
+                    @if (_connectors.Count == 0)
+                    {
+                        <p>@Text("Connectors will appear here when the registry is available.", "ตัวเชื่อมต่อจะแสดงที่นี่เมื่อทะเบียนพร้อมใช้งาน")</p>
+                    }
+                    else
+                    {
+                        <div class="qe-agent-plugin-list">
+                            @foreach (var connector in _connectors)
+                            {
+                                <button type="button" @onclick="@(() => ApplyConnector(connector))">
+                                    <strong>@connector.DisplayName</strong>
+                                    <span>@ConnectorStatus(connector)</span>
+                                    <small>@connector.Description</small>
+                                    @if (connector.SupportedFileTypes.Count > 0)
+                                    {
+                                        <em>@string.Join(", ", connector.SupportedFileTypes)</em>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
                 </section>
             }
 
@@ -649,6 +680,7 @@
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
+    private List<QuoteAgentConnectorDto> _connectors = [];
     private Guid _loadedSessionId;
     private string _draftMessage = string.Empty;
     private string? _error;
@@ -658,10 +690,12 @@
     private bool _sketchOpen;
     private bool _sketchInitPending;
     private bool _searchOpen;
+    private bool _pluginsOpen;
     private bool _focusSearchPending;
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
     private bool _projectNavigationLoaded;
+    private bool _connectorRegistryLoaded;
     private string _projectName = $"Manufacturing project {DateTimeOffset.Now:yyyy-MM-dd}";
     private string _searchQuery = string.Empty;
     private string _sketchTitle = "Untitled sketch";
@@ -913,6 +947,7 @@
         if (_railCollapsed)
         {
             _searchOpen = false;
+            _pluginsOpen = false;
         }
     }
 
@@ -1202,7 +1237,72 @@
     private void ToggleSearch()
     {
         _searchOpen = !_searchOpen;
+        if (_searchOpen)
+        {
+            _pluginsOpen = false;
+        }
+
         _focusSearchPending = _searchOpen;
+    }
+
+    private async Task TogglePluginsAsync()
+    {
+        _pluginsOpen = !_pluginsOpen;
+        if (_pluginsOpen)
+        {
+            _searchOpen = false;
+            if (!_connectorRegistryLoaded)
+            {
+                await LoadConnectorRegistryAsync();
+            }
+        }
+    }
+
+    private async Task LoadConnectorRegistryAsync()
+    {
+        try
+        {
+            var registry = await Api.GetConnectorRegistryAsync(SessionId);
+            _connectors = registry.Connectors;
+            _connectorRegistryLoaded = true;
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _connectors = [];
+            _connectorRegistryLoaded = false;
+            _error = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _connectors = [];
+            _connectorRegistryLoaded = false;
+            _error = ex.Message;
+        }
+    }
+
+    private string ConnectorStatus(QuoteAgentConnectorDto connector)
+    {
+        if (connector.IsConnected)
+        {
+            return Text("Connected", "เชื่อมต่อแล้ว");
+        }
+
+        return connector.Status.Equals("planned", StringComparison.OrdinalIgnoreCase)
+            ? Text("Planned", "วางแผนแล้ว")
+            : Text("Future", "อนาคต");
+    }
+
+    private void ApplyConnector(QuoteAgentConnectorDto connector)
+    {
+        if (connector.RequiresAuthenticationToConnect && !IsSignedIn)
+        {
+            _draftMessage = Text($"Sign in to connect {connector.DisplayName}.", $"เข้าสู่ระบบเพื่อเชื่อมต่อ {connector.DisplayName}");
+            return;
+        }
+
+        _draftMessage = connector.ActionHint.Equals("connect_google_drive", StringComparison.OrdinalIgnoreCase)
+            ? Text("Help me connect Google Drive when the connector is available.", "ช่วยเชื่อมต่อ Google Drive เมื่อปลั๊กอินพร้อมใช้งาน")
+            : Text($"Tell me how the {connector.DisplayName} connector will work.", $"อธิบายว่าตัวเชื่อมต่อ {connector.DisplayName} จะทำงานอย่างไร");
     }
 
     private IEnumerable<SearchNavItem> BuildSearchResults()

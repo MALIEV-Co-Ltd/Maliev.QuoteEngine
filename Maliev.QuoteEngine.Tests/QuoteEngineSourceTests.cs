@@ -736,6 +736,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("projects, orders, files, or artifacts", component, StringComparison.Ordinal);
         Assert.Contains("Pinned projects", component, StringComparison.Ordinal);
         Assert.Contains("Plugins", component, StringComparison.Ordinal);
+        Assert.Contains("TogglePluginsAsync", component, StringComparison.Ordinal);
+        Assert.Contains("GetConnectorRegistryAsync", component, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentConnectorDto", component, StringComparison.Ordinal);
+        Assert.Contains("ConnectorStatus", component, StringComparison.Ordinal);
+        Assert.Contains("ApplyConnector", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-plugin-panel\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-plugin-list\"", component, StringComparison.Ordinal);
         Assert.Contains("Projects", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Attach files", primaryNav, StringComparison.Ordinal);
         Assert.DoesNotContain("RequestUploadAsync", primaryNav, StringComparison.Ordinal);
@@ -752,6 +759,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-box", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-plugin-panel", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-plugin-list", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel,", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel *", agentStyles, StringComparison.Ordinal);
         Assert.Contains("max-height: min(42dvh, 360px);", agentStyles, StringComparison.Ordinal);

@@ -47,6 +47,16 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Gets customer-safe connector definitions for the QuoteEngine agent workspace.
+    /// </summary>
+    [HttpGet("sessions/{sessionId:guid}/connectors")]
+    [ProducesResponseType(typeof(QuoteAgentConnectorRegistryResponse), StatusCodes.Status200OK)]
+    public ActionResult<QuoteAgentConnectorRegistryResponse> GetConnectors(Guid sessionId)
+    {
+        return Ok(agentService.GetConnectorRegistry(sessionId));
+    }
+
+    /// <summary>
     /// Executes an internal allowlisted QuoteEngine agent tool call.
     /// </summary>
     [HttpPost("tools/{toolName}")]

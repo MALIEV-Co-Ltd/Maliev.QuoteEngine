@@ -1371,6 +1371,30 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_connector_registry_endpoint_lists_plugins_without_tool_context()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var response = await client.GetAsync($"/quote/v1/agent/sessions/{sessionId:D}/connectors");
+
+        response.EnsureSuccessStatusCode();
+        var registry = await response.Content.ReadFromJsonAsync<QuoteAgentConnectorRegistryResponse>();
+        Assert.NotNull(registry);
+        Assert.Equal(sessionId, registry.SessionId);
+        Assert.False(registry.RequiresAuthenticationToList);
+        Assert.Contains(registry.Connectors, connector =>
+            connector.ConnectorId == "google-drive" &&
+            connector.DisplayName == "Google Drive" &&
+            connector.Status == "planned" &&
+            connector.Category == "file_import" &&
+            connector.RequiresAuthenticationToConnect &&
+            connector.SupportedFileTypes.Contains("STEP"));
+        Assert.Contains(registry.Connectors, connector => connector.ConnectorId == "blender" && connector.Status == "future");
+        Assert.Contains(registry.Connectors, connector => connector.ConnectorId == "freecad" && connector.Status == "future");
+    }
+
+    [Fact]
     public async Task Agent_auth_handoff_lists_google_passkey_and_email_fallback_for_anonymous_customer()
     {
         using var client = factory.CreateClient();

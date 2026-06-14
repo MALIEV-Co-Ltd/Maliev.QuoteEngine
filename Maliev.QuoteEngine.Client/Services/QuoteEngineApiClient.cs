@@ -274,6 +274,16 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public async Task<QuoteAgentConnectorRegistryResponse> GetConnectorRegistryAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        return await GetFromJsonOrFallbackAsync(
+            $"quote/v1/agent/sessions/{sessionId:D}/connectors",
+            new QuoteAgentConnectorRegistryResponse { SessionId = sessionId },
+            cancellationToken);
+    }
+
     public Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync(
         Guid actionId,
         QuoteAgentConfirmActionRequest request,
