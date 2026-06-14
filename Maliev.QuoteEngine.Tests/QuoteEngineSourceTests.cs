@@ -629,11 +629,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private const string PageDropzoneId = \"quote-page-dropzone\";", source, StringComparison.Ordinal);
         Assert.Contains("Drop files anywhere to start", source, StringComparison.Ordinal);
         Assert.Contains("qe-pn-root is-launch-screen", source, StringComparison.Ordinal);
-        Assert.Contains("qe-pn-root is-workspace-ready", source, StringComparison.Ordinal);
-        Assert.Contains("@if (IsWorkspaceReady)", source, StringComparison.Ordinal);
+        Assert.Contains("is-agent-studio has-uploads", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-pn-root is-workspace-ready", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("<QePartsListPanel", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("<QeQuoteSummaryBar", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-pn-mobile-toolbar", source, StringComparison.Ordinal);
         Assert.Contains("RegisterActiveDropzoneAsync", source, StringComparison.Ordinal);
-        Assert.Contains("new[] { PageDropzoneId, CompactDropzoneId, MobileDropzoneId }", source, StringComparison.Ordinal);
-        Assert.Contains("[PageDropzoneId, HeroDropzoneId]", source, StringComparison.Ordinal);
+        Assert.Contains("string[] activeDropzoneIds = [PageDropzoneId];", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("new[] { PageDropzoneId, CompactDropzoneId, MobileDropzoneId }", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("[PageDropzoneId, HeroDropzoneId]", source, StringComparison.Ordinal);
         Assert.Contains("new { clickToOpen = false }", source, StringComparison.Ordinal);
         Assert.Contains("quoteEngineUploads.unregisterDropzone", source, StringComparison.Ordinal);
         Assert.DoesNotContain("loadSampleFile", script, StringComparison.Ordinal);
@@ -657,8 +661,6 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-page-drop-overlay {\n    position: fixed;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pn-root.is-dragover .qe-page-drop-overlay", styles, StringComparison.Ordinal);
         Assert.Contains("pointer-events: none;", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-pn-root.is-workspace-ready .qe-plp-root", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-pn-root.is-workspace-ready .qe-qsb-root", styles, StringComparison.Ordinal);
         Assert.Contains("@keyframes qe-panel-enter-left", styles, StringComparison.Ordinal);
         Assert.Contains("@keyframes qe-panel-enter-bottom", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-dropzone .mud-icon-root {", styles, StringComparison.Ordinal);
@@ -695,7 +697,7 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("<section class=\"@ShellClass\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-rail\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-composer\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"@($\"qe-agent-composer {(_sending ? \"is-sending\" : string.Empty)}\")\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-toggle\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-drawer\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-rail-group-toggle\"", component, StringComparison.Ordinal);
@@ -810,6 +812,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Click to dictate or hold", component, StringComparison.Ordinal);
         Assert.Contains("_dictating", component, StringComparison.Ordinal);
         Assert.Contains("_composerMenuOpen", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-send-spinner", component, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Processing\", \"กำลังประมวลผล\")", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"sr-only\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-add-menu\"", component, StringComparison.Ordinal);
         Assert.Contains("Add photos and files", component, StringComparison.Ordinal);
         Assert.Contains("Add hand sketch", component, StringComparison.Ordinal);
@@ -906,6 +911,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("textarea.removeEventListener(\"input\", handlers.input)", composerScript, StringComparison.Ordinal);
         Assert.Contains("function normalizeCaretAfterInput", composerScript, StringComparison.Ordinal);
         Assert.Contains("textarea.selectionStart === 0 && textarea.selectionEnd === 0", composerScript, StringComparison.Ordinal);
+        Assert.Contains("function updateComposerShape", composerScript, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-composer--multiline", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea.value.includes(\"\\n\")", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea.scrollHeight > lineHeight * 2.25", composerScript, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", composerScript, StringComparison.Ordinal);
         Assert.Contains("export async function typeComposerText", composerScript, StringComparison.Ordinal);
         Assert.Contains("export async function dictateComposerText", composerScript, StringComparison.Ordinal);
@@ -949,6 +958,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap", agentStyles, StringComparison.Ordinal);
         Assert.Contains("user-select: none;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer .qe-agent-round-btn", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer.qe-agent-composer--multiline", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 28px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-send-spinner", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes qe-agent-spin", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".sr-only", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-btn.active", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-menu", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-btn.active", agentStyles, StringComparison.Ordinal);
@@ -1626,7 +1640,7 @@ public sealed class QuoteEngineSourceTests
         var quoteDtos = ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
-        Assert.Contains("<QePartsListPanel", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("<QePartsListPanel", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("<QePartDetailCard", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("<QePartConfigSidebar", workspace, StringComparison.Ordinal);
         Assert.Contains("<QuoteAgentLaunchShell", workspace, StringComparison.Ordinal);
@@ -1635,11 +1649,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-artifact-section\"", agentShell, StringComparison.Ordinal);
         Assert.Contains("UploadedPartStatus", agentShell, StringComparison.Ordinal);
         Assert.Contains("UploadedPartIcon", agentShell, StringComparison.Ordinal);
-        Assert.Contains("<QeQuoteSummaryBar", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("<QeQuoteSummaryBar", workspace, StringComparison.Ordinal);
         Assert.Contains("QeDrawingAttachmentsTab", detailCard, StringComparison.Ordinal);
         Assert.Contains("3D Model", detailCard, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"DFM Analysis\"", detailCard, StringComparison.Ordinal);
-        Assert.Contains("qe-pn-mobile-toolbar", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-pn-mobile-toolbar", workspace, StringComparison.Ordinal);
         Assert.Contains("_isPartsDrawerOpen", workspace, StringComparison.Ordinal);
         Assert.Contains("_centerMode", workspace, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"@Text(\"Quantity\"", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor"), StringComparison.Ordinal);
@@ -2799,13 +2813,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OnApproveQuoteRequested", src, StringComparison.Ordinal);
         Assert.Contains("OnPaymentRequested", src, StringComparison.Ordinal);
 
-        Assert.Contains("BillingName=\"@BillingSummaryName\"", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("<QeQuoteSummaryBar", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("BillingName=\"@BillingSummaryName\"", workspace, StringComparison.Ordinal);
         Assert.Contains("BillingCompanyName = BillingCompanyName", workspace, StringComparison.Ordinal);
         Assert.Contains("BillingVatNumber = BillingVatNumber", workspace, StringComparison.Ordinal);
-        Assert.Contains("BillingHint=\"@BillingSummaryHint\"", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("BillingHint=\"@BillingSummaryHint\"", workspace, StringComparison.Ordinal);
         Assert.Contains("ApproveQuoteAsync", workspace, StringComparison.Ordinal);
         Assert.Contains("InitiatePaymentAsync", workspace, StringComparison.Ordinal);
-        Assert.Contains("PaymentBusy=\"@_paymentBusy\"", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("PaymentBusy=\"@_paymentBusy\"", workspace, StringComparison.Ordinal);
         Assert.Contains("_paymentBusy = true", workspace, StringComparison.Ordinal);
         Assert.Contains("_paymentBusy = false", workspace, StringComparison.Ordinal);
         Assert.Contains("disabled=\"@(!CanPay || !TermsAccepted || PaymentBusy)\"", src, StringComparison.Ordinal);
@@ -2972,7 +2987,8 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("[Parameter] public EventCallback OnDuplicateProject", partsList, StringComparison.Ordinal);
         Assert.Contains("@onclick=\"OnDuplicateProject\"", partsList, StringComparison.Ordinal);
-        Assert.Contains("OnDuplicateProject=\"DuplicateProjectAsync\"", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("OnDuplicateProject=\"DuplicateProjectAsync\"", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("<QePartsListPanel", workspace, StringComparison.Ordinal);
         Assert.Contains("private async Task DuplicateProjectAsync()", workspace, StringComparison.Ordinal);
         Assert.Contains("DuplicateProjectAsync(_draftProjectId.Value", workspace, StringComparison.Ordinal);
         Assert.Contains("CreateDraftProjectAsync", workspace, StringComparison.Ordinal);

@@ -2082,6 +2082,13 @@
     box-shadow: none;
     border: 1px solid var(--qe-agent-line);
     overflow: hidden;
+    transition: border-radius 160ms ease, padding 160ms ease, align-items 160ms ease;
+}
+
+.qe-agent-composer.qe-agent-composer--multiline {
+    align-items: end;
+    border-radius: 28px;
+    padding: 10px;
 }
 
 .qe-agent-composer textarea {
@@ -2097,6 +2104,12 @@
     overflow-y: auto;
     font-size: 16px !important;
     line-height: 1.5 !important;
+}
+
+.qe-agent-composer.qe-agent-composer--multiline textarea {
+    min-height: 72px;
+    padding-top: 10px;
+    padding-bottom: 10px;
 }
 
 .qe-agent-composer .qe-agent-round-btn {
@@ -2121,6 +2134,8 @@
 }
 
 .qe-agent-send-btn {
+    display: grid;
+    place-items: center;
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -2130,6 +2145,38 @@
 
 .qe-agent-send-btn:hover {
     background: color-mix(in srgb, var(--qe-agent-primary) 88%, #000000);
+}
+
+.qe-agent-send-btn:disabled {
+    cursor: progress;
+    opacity: .95;
+}
+
+.qe-agent-send-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, .45);
+    border-top-color: #ffffff;
+    border-radius: 999px;
+    animation: qe-agent-spin 700ms linear infinite;
+}
+
+.sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+@keyframes qe-agent-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .qe-agent-quick-actions {

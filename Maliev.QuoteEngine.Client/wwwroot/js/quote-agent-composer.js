@@ -23,7 +23,10 @@ export function initComposer(textarea, dotNetRef) {
   const pointerdown = () => clearTextSelection();
   const focus = () => clearTextSelection();
   const windowFocus = () => focusComposer(textarea);
-  const input = () => normalizeCaretAfterInput(textarea);
+  const input = () => {
+    normalizeCaretAfterInput(textarea);
+    updateComposerShape(textarea);
+  };
   const selectionchange = () => {
     if (document.activeElement === textarea) {
       clearTextSelection();
@@ -37,6 +40,7 @@ export function initComposer(textarea, dotNetRef) {
   window.addEventListener("focus", windowFocus);
   document.addEventListener("selectionchange", selectionchange);
   composerHandlers.set(textarea, { keydown, input, pointerdown, focus, windowFocus, selectionchange });
+  updateComposerShape(textarea);
   focusComposer(textarea);
 }
 
@@ -65,6 +69,7 @@ export function focusComposer(textarea) {
     clearTextSelection();
     textarea.focus({ preventScroll: true });
     moveCaretToEnd(textarea);
+    updateComposerShape(textarea);
   });
 }
 
@@ -81,6 +86,7 @@ export async function typeComposerText(textarea, text) {
   textarea.focus({ preventScroll: true });
   textarea.value = "";
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  updateComposerShape(textarea);
 
   for (let index = 0; index < value.length; index += step) {
     if (typingAnimations.get(textarea) !== token) {
@@ -89,11 +95,13 @@ export async function typeComposerText(textarea, text) {
 
     textarea.value = value.slice(0, Math.min(value.length, index + step));
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
+    updateComposerShape(textarea);
     await wait(12);
   }
 
   textarea.value = value;
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  updateComposerShape(textarea);
   typingAnimations.delete(textarea);
 }
 
@@ -141,6 +149,19 @@ function normalizeCaretAfterInput(textarea) {
     if (textarea.selectionStart === 0 && textarea.selectionEnd === 0) {
       moveCaretToEnd(textarea);
     }
+  });
+}
+
+function updateComposerShape(textarea) {
+  const composer = textarea.closest?.(".qe-agent-composer");
+  if (!composer) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    const lineHeight = Number.parseFloat(getComputedStyle(textarea).lineHeight) || 24;
+    const isMultiline = textarea.value.includes("\n") || textarea.scrollHeight > lineHeight * 2.25;
+    composer.classList.toggle("qe-agent-composer--multiline", isMultiline);
   });
 }
 

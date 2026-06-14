@@ -31,57 +31,7 @@
     </div>
 
     <div class="qe-pn-body">
-        @if (IsWorkspaceReady)
-        {
-            <QePartsListPanel @bind-Title="_title"
-                              Parts="@_parts"
-                              SelectedPartIndex="@_selectedPartIndex"
-                              ReferenceData="@_reference"
-                              Estimate="@_estimate"
-                              DropzoneId="@CompactDropzoneId"
-                              UploadLabel="@UploadCompactLabel"
-                              UploadHint="@UploadCompactHint"
-                              OnSelectPart="@SelectPart"
-                              OnDuplicateProject="DuplicateProjectAsync"
-                              OnRemovePart="@RemovePart" />
-            <div class="qe-pn-parts-drawer @(_isPartsDrawerOpen ? "qe-pn-parts-drawer--open" : "")">
-                <QePartsListPanel @bind-Title="_title"
-                                  Parts="@_parts"
-                                  SelectedPartIndex="@_selectedPartIndex"
-                                  ReferenceData="@_reference"
-                                  Estimate="@_estimate"
-                                  DropzoneId="@MobileDropzoneId"
-                                  UploadLabel="@UploadCompactLabel"
-                                  UploadHint="@UploadCompactHint"
-                                  IsDrawer="true"
-                                  OnSelectPart="@SelectPart"
-                                  OnDuplicateProject="DuplicateProjectAsync"
-                                  OnRemovePart="@RemovePart" />
-            </div>
-            @if (_isPartsDrawerOpen)
-            {
-                <button type="button" class="qe-pn-parts-drawer-backdrop" @onclick="ClosePartsDrawer" aria-label="Close parts drawer"></button>
-            }
-        }
-
         <main class="qe-pn-center">
-            @if (IsWorkspaceReady)
-            {
-                <div class="qe-pn-mobile-toolbar">
-                    <button type="button" class="qe-mobile-tool-btn" @onclick="TogglePartsDrawer">
-                        <MudIcon Icon="@Icons.Material.Outlined.List" Size="Size.Small" />
-                        @Text("Parts", "ชิ้นงาน")
-                    </button>
-                    <div class="qe-mobile-mode-switch" role="tablist" aria-label="@Text("Workspace mode", "โหมดพื้นที่ทำงาน")">
-                        <button type="button"
-                                class="@(_centerMode == "bulk" ? "" : "active")"
-                                @onclick="@(() => SetCenterMode("model"))">@Text("Config", "ตั้งค่า")</button>
-                        <button type="button"
-                                class="@(_centerMode == "bulk" ? "active" : "")"
-                                @onclick="@(() => SetCenterMode("bulk"))">@Text("Table", "ตาราง")</button>
-                    </div>
-                </div>
-            }
             @if (!string.IsNullOrWhiteSpace(_error))
             {
                 <MudAlert Severity="Severity.Error" Class="qe-error-alert">@_error</MudAlert>
@@ -107,33 +57,6 @@
                                    OnUploadRequested="OpenFilePickerAsync" />
         </main>
     </div>
-
-    @if (IsWorkspaceReady)
-    {
-        <QeQuoteSummaryBar Parts="@_parts"
-                           ReferenceData="@_reference"
-                           Estimate="@_estimate"
-                           FormalQuote="@_formalQuote"
-                           Order="@_order"
-                           Payment="@_payment"
-                           LeadTimeCode="@_leadTimeCode"
-                           CanRequestFormalQuote="@CanRequestFormalQuote"
-                           CanApproveQuote="@CanApproveQuote"
-                           CanCreateOrder="@CanCreateOrder"
-                           CanPay="@CanPay"
-                           TermsAccepted="@_acceptedCheckoutTerms"
-                           PaymentBusy="@_paymentBusy"
-                           QuoteButtonLabel="@QuoteButtonLabel"
-                           BillingName="@BillingSummaryName"
-                           BillingHint="@BillingSummaryHint"
-                           OnLeadTimeSelected="@SelectLeadTime"
-                           OnCalculateRequested="@CalculateAsync"
-                           OnQuoteRequested="@SubmitQuoteAsync"
-                           OnApproveQuoteRequested="@ApproveQuoteAsync"
-                           OnOrderRequested="@CreateOrderAsync"
-                           OnPaymentRequested="@InitiatePaymentAsync"
-                           TermsAcceptedChanged="@((accepted) => _acceptedCheckoutTerms = accepted)" />
-    }
 </div>
 
 @code {
@@ -200,7 +123,7 @@
     private bool IsDemoMode => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/demo", StringComparison.OrdinalIgnoreCase);
     private bool IsSignedIn => _authStatus.IsSignedIn;
     private bool IsWorkspaceReady => _parts.Count > 0;
-    private string WorkspaceRootClass => IsWorkspaceReady ? "qe-pn-root is-workspace-ready" : "qe-pn-root is-launch-screen";
+    private string WorkspaceRootClass => IsWorkspaceReady ? "qe-pn-root is-launch-screen is-agent-studio has-uploads" : "qe-pn-root is-launch-screen is-agent-studio";
     private bool CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged;
     private bool CanApproveQuote => _formalQuote is not null && IsSignedIn && !IsDemoMode && !_formalQuote.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase);
     private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged;
@@ -302,9 +225,7 @@
             return;
         }
 
-        var activeDropzoneIds = IsWorkspaceReady
-            ? new[] { PageDropzoneId, CompactDropzoneId, MobileDropzoneId }
-            : [PageDropzoneId, HeroDropzoneId];
+        string[] activeDropzoneIds = [PageDropzoneId];
 
         if (_registeredDropzoneIds.SetEquals(activeDropzoneIds))
         {

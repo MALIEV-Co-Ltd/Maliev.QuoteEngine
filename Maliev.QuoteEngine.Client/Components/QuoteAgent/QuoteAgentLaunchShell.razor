@@ -593,7 +593,7 @@
                     </button>
                 </section>
             }
-            <form class="qe-agent-composer" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
+            <form class="@($"qe-agent-composer {(_sending ? "is-sending" : string.Empty)}")" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
                 <button type="button"
                         class="@($"qe-agent-round-btn qe-agent-add-btn {(_composerMenuOpen ? "active" : string.Empty)}")"
                         title="@Text("Add files, sketches, or plugins", "เพิ่มไฟล์ สเก็ตช์ หรือปลั๊กอิน")"
@@ -620,7 +620,15 @@
                     <MudIcon Icon="@Icons.Material.Outlined.Mic" Size="Size.Small" />
                 </button>
                 <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@_sending">
-                    <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" />
+                    @if (_sending)
+                    {
+                        <span class="qe-agent-send-spinner" aria-hidden="true"></span>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" />
+                    }
+                    <span class="sr-only">@(_sending ? Text("Processing", "กำลังประมวลผล") : Text("Send", "ส่ง"))</span>
                 </button>
             </form>
             <div class="qe-agent-quick-actions" aria-label="@Text("Quick quote prompts", "คำสั่งลัดขอราคา")">
