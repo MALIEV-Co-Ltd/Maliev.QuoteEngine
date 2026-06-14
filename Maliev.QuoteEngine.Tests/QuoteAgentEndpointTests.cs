@@ -601,6 +601,64 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_project_summary_tool_guides_late_order_checkout_and_payment_steps()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-summary-late@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+
+        var approvalSummary = await GetProjectSummaryAsync(client, sessionId);
+        Assert.Contains(approvalSummary.NextActions, action =>
+            action.Contains("approve", StringComparison.OrdinalIgnoreCase) &&
+            action.Contains("quote", StringComparison.OrdinalIgnoreCase));
+
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+
+        var orderSummary = await GetProjectSummaryAsync(client, sessionId);
+        Assert.Contains(orderSummary.NextActions, action =>
+            action.Contains("order", StringComparison.OrdinalIgnoreCase));
+
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+
+        var checkoutSummary = await GetProjectSummaryAsync(client, sessionId);
+        Assert.Contains(checkoutSummary.NextActions, action =>
+            action.Contains("checkout", StringComparison.OrdinalIgnoreCase) ||
+            action.Contains("billing", StringComparison.OrdinalIgnoreCase));
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_checkout_details",
+            new Dictionary<string, JsonElement>
+            {
+                ["billing_address_id"] = JsonSerializer.SerializeToElement(CheckoutBillingAddressId.ToString("D"), JsonOptions),
+                ["shipping_address_id"] = JsonSerializer.SerializeToElement(CheckoutShippingAddressId.ToString("D"), JsonOptions),
+                ["phone"] = JsonSerializer.SerializeToElement("+66 2 555 0100", JsonOptions),
+                ["company"] = JsonSerializer.SerializeToElement("MALIEV Buyer Co.", JsonOptions),
+                ["vat_number"] = JsonSerializer.SerializeToElement("TH1234567890", JsonOptions),
+                ["accepted_terms"] = JsonSerializer.SerializeToElement(true, JsonOptions),
+                ["consent"] = JsonSerializer.SerializeToElement(true, JsonOptions)
+            });
+
+        var paymentSummary = await GetProjectSummaryAsync(client, sessionId);
+        Assert.Contains(paymentSummary.NextActions, action =>
+            action.Contains("payment", StringComparison.OrdinalIgnoreCase));
+
+        var paymentState = await ExecuteToolForStateAsync(client, sessionId, "quote_start_payment");
+        await ConfirmActionAsync(client, Assert.Single(paymentState.ProposedActions).ActionId);
+
+        var completeSummary = await GetProjectSummaryAsync(client, sessionId);
+        Assert.Contains(completeSummary.NextActions, action =>
+            action.Contains("payment", StringComparison.OrdinalIgnoreCase) &&
+            action.Contains("handoff", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Agent_register_uploads_tool_rejects_unsupported_attachment_extension()
     {
         using var client = factory.CreateClient();
@@ -2073,6 +2131,17 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var state = JsonSerializer.Deserialize<QuoteAgentStateResponse>(json, JsonOptions);
         Assert.NotNull(state);
         return state;
+    }
+
+    private static async Task<QuoteAgentProjectSummaryResponse> GetProjectSummaryAsync(
+        HttpClient client,
+        Guid sessionId)
+    {
+        var json = await ExecuteToolAsync(client, sessionId, "quote_get_project_summary");
+        var summary = JsonSerializer.Deserialize<QuoteAgentProjectSummaryResponse>(json, JsonOptions);
+
+        Assert.NotNull(summary);
+        return summary;
     }
 
     private static async Task<string> ExecuteToolAsync(

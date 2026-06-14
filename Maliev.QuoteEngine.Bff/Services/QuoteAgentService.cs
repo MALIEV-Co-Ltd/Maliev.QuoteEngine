@@ -501,14 +501,45 @@ internal sealed class QuoteAgentService(
             return ["Ask the customer to review and confirm the pending action card."];
         }
 
-        if (state.Gates.Any(gate =>
-                gate.Code.Equals("quote_artifact_ready", StringComparison.OrdinalIgnoreCase) &&
-                !gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase)))
+        if (!IsGatePassed(state, "quote_artifact_ready"))
         {
             return ["Prepare the formal quote artifact after DFM, configuration, and pricing are accepted."];
         }
 
+        if (!IsGatePassed(state, "quote_approved"))
+        {
+            return ["Ask the customer to review and approve the formal quote before order creation."];
+        }
+
+        if (!IsGatePassed(state, "order_created"))
+        {
+            return ["Create the manufacturing order after the approved quote is confirmed."];
+        }
+
+        if (!IsGatePassed(state, "checkout_ready"))
+        {
+            return ["Collect checkout details: billing, shipping, terms, consent, and ownership verification."];
+        }
+
+        if (!IsGatePassed(state, "payment_started_or_completed"))
+        {
+            return ["Start the PaymentService handoff after checkout details and amount are verified."];
+        }
+
+        if (state.Artifacts.Any(artifact =>
+                artifact.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ["Show the customer the payment handoff and track completion through payment events."];
+        }
+
         return ["Continue the quote workflow from the current project state."];
+    }
+
+    private static bool IsGatePassed(QuoteAgentStateResponse state, string code)
+    {
+        return state.Gates.Any(gate =>
+            gate.Code.Equals(code, StringComparison.OrdinalIgnoreCase) &&
+            gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase));
     }
 
     private Guid? ResolveCustomerId()
