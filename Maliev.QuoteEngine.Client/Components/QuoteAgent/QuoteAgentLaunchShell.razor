@@ -127,6 +127,14 @@
                 }
             </div>
             <button type="button"
+                    class="qe-agent-summary-toggle"
+                    aria-expanded="@AriaExpanded(_summaryPanelOpen)"
+                    title="@Text("Open project summary", "เปิดสรุปโปรเจกต์")"
+                    @onclick="ToggleSummaryPanel">
+                <MudIcon Icon="@Icons.Material.Outlined.Summarize" Size="Size.Small" />
+                <span>@Text("Summary", "สรุป")</span>
+            </button>
+            <button type="button"
                     class="qe-agent-artifact-toggle"
                     aria-expanded="@AriaExpanded(_artifactPanelOpen)"
                     @onclick="ToggleArtifactPanel">
@@ -885,6 +893,70 @@
 
     </main>
 
+    @if (_summaryPanelOpen)
+    {
+        <aside class="qe-agent-summary-drawer" aria-label="@Text("Project summary", "สรุปโปรเจกต์")">
+            <header>
+                <div>
+                    <span>@Text("Project", "โปรเจกต์")</span>
+                    <strong>@Text("Summary", "สรุป")</strong>
+                </div>
+                <button type="button" class="qe-agent-round-btn" @onclick="ToggleSummaryPanel" title="@Text("Close", "ปิด")">
+                    <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                </button>
+            </header>
+
+            <section class="qe-agent-summary-card">
+                <span>@Text("Current project", "โปรเจกต์ปัจจุบัน")</span>
+                <strong>@ProjectSummaryTitle</strong>
+                <p>@ProjectSummaryStatus</p>
+            </section>
+
+            <section class="qe-agent-summary-grid" aria-label="@Text("Project facts", "ข้อมูลโปรเจกต์")">
+                @foreach (var item in ProjectSummaryMetrics)
+                {
+                    <article>
+                        <span>@item.Label</span>
+                        <strong>@item.Value</strong>
+                    </article>
+                }
+            </section>
+
+            <section class="qe-agent-summary-section">
+                <header>@Text("Manufacturing state", "สถานะงานผลิต")</header>
+                <div class="qe-agent-summary-list">
+                    @foreach (var item in ProjectSummaryDetails)
+                    {
+                        <div>
+                            <span>@item.Label</span>
+                            <strong>@item.Value</strong>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <section class="qe-agent-summary-section">
+                <header>@Text("Next actions", "ขั้นตอนถัดไป")</header>
+                @if (_proposedActions.Count == 0)
+                {
+                    <p class="qe-agent-muted">@Text("No confirmation actions are waiting.", "ยังไม่มีรายการที่ต้องยืนยัน")</p>
+                }
+                else
+                {
+                    <div class="qe-agent-summary-actions">
+                        @foreach (var action in _proposedActions.Take(3))
+                        {
+                            <article>
+                                <strong>@action.Title</strong>
+                                <p>@action.Summary</p>
+                            </article>
+                        }
+                    </div>
+                }
+            </section>
+        </aside>
+    }
+
     @if (_artifactPanelOpen)
     {
         <aside class="qe-agent-artifact-drawer" aria-label="@Text("Quote artifacts", "ไฟล์งานใบเสนอราคา")">
@@ -973,12 +1045,12 @@
         </aside>
     }
 
-    @if (_artifactPanelOpen)
+    @if (_artifactPanelOpen || _summaryPanelOpen)
     {
         <button type="button"
                 class="qe-agent-artifact-backdrop"
-                aria-label="@Text("Close artifacts", "ปิดไฟล์งาน")"
-                @onclick="ToggleArtifactPanel"></button>
+                aria-label="@Text("Close side panel", "ปิดแผงด้านข้าง")"
+                @onclick="CloseSidePanels"></button>
     }
 </section>
 
@@ -996,6 +1068,7 @@
     private string? _error;
     private bool _sending;
     private bool _artifactPanelOpen;
+    private bool _summaryPanelOpen;
     private bool _railCollapsed;
     private bool _sketchOpen;
     private bool _sketchInitPending;
@@ -1133,9 +1206,41 @@
     private bool IsDarkMode { get; set; }
 
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.DarkMode : Icons.Material.Outlined.LightMode;
-    private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(_artifactPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
+    private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(RightPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
+    private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
     private int ArtifactCount => _artifacts.Count + UploadedParts.Count;
+    private AgentWorkbenchSnapshot? LatestWorkbench => _messages.LastOrDefault(message => message.Workbench is not null)?.Workbench;
+    private string ProjectSummaryTitle => string.IsNullOrWhiteSpace(_projectName)
+        ? Text("Untitled project", "โปรเจกต์ยังไม่มีชื่อ")
+        : _projectName;
+    private string ProjectSummaryStatus => _sending
+        ? Text("The agent is analyzing the latest request.", "เอเจนต์กำลังวิเคราะห์คำขอล่าสุด")
+        : _error is not null
+            ? Text("Agent connection needs attention.", "การเชื่อมต่อเอเจนต์ต้องตรวจสอบ")
+            : Text("Ready for the next manufacturing decision.", "พร้อมสำหรับการตัดสินใจผลิตขั้นถัดไป");
+    private IReadOnlyList<SummaryMetric> ProjectSummaryMetrics =>
+    [
+        new(Text("Files", "ไฟล์"), UploadedParts.Count.ToString(CultureInfo.InvariantCulture)),
+        new(Text("Artifacts", "ไฟล์งาน"), ArtifactCount.ToString(CultureInfo.InvariantCulture)),
+        new(Text("Estimate", "ราคา"), LatestWorkbench?.TotalPrice ?? Text("Not priced", "ยังไม่มีราคา")),
+        new(Text("Progress", "ความคืบหน้า"), SummaryProgressLabel)
+    ];
+    private IReadOnlyList<SummaryMetric> ProjectSummaryDetails =>
+    [
+        new(Text("Material", "วัสดุ"), LatestWorkbench?.Material ?? Text("Not selected", "ยังไม่ได้เลือก")),
+        new(Text("Quantity", "จำนวน"), LatestWorkbench?.Quantity ?? Text("Not selected", "ยังไม่ได้เลือก")),
+        new(Text("Lead time", "เวลานำส่ง"), SummaryLeadTime),
+        new(Text("DFM", "DFM"), SummaryDfmState)
+    ];
+    private string SummaryProgressLabel => _gates.Count == 0
+        ? Text("Not started", "ยังไม่เริ่ม")
+        : FormattableString.Invariant($"{_gates.Count(gate => gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase))}/{_gates.Count}");
+    private string SummaryLeadTime => LatestWorkbench?.OrderLines.FirstOrDefault(line => line.Label.Contains("Lead", StringComparison.OrdinalIgnoreCase))?.Value
+        ?? Text("Not selected", "ยังไม่ได้เลือก");
+    private string SummaryDfmState => LatestWorkbench?.DfmIssues.Count > 0
+        ? Text($"{LatestWorkbench.DfmIssues.Count} item(s) to review", $"ต้องตรวจสอบ {LatestWorkbench.DfmIssues.Count} รายการ")
+        : Text("No current DFM items", "ยังไม่มีรายการ DFM");
     private IReadOnlyList<UseCaseOption> VisibleUseCases => _visibleUseCases.Count == 0 ? SampleUseCases.Take(3).ToArray() : _visibleUseCases;
     private string ActiveWorkspaceTitle => _activeWorkspacePage switch
     {
@@ -1454,7 +1559,28 @@
 
     private void ToggleArtifactPanel()
     {
-        _artifactPanelOpen = !_artifactPanelOpen;
+        var next = !_artifactPanelOpen;
+        _artifactPanelOpen = next;
+        if (next)
+        {
+            _summaryPanelOpen = false;
+        }
+    }
+
+    private void ToggleSummaryPanel()
+    {
+        var next = !_summaryPanelOpen;
+        _summaryPanelOpen = next;
+        if (next)
+        {
+            _artifactPanelOpen = false;
+        }
+    }
+
+    private void CloseSidePanels()
+    {
+        _artifactPanelOpen = false;
+        _summaryPanelOpen = false;
     }
 
     private void ToggleRail()
@@ -2280,6 +2406,8 @@
     private sealed record AgentQuantityBreak(string Label, string Price, string Detail, bool Selected, string FollowUpPrompt);
 
     private sealed record AgentPriceLine(string Label, string Value);
+
+    private sealed record SummaryMetric(string Label, string Value);
 
     private sealed record AgentOrderLine(string Label, string Value);
 

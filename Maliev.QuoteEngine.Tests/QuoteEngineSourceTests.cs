@@ -705,6 +705,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"@($\"qe-agent-composer {(_sending ? \"is-sending\" : string.Empty)}\")\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-toggle\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-drawer\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-summary-toggle\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-summary-drawer\"", component, StringComparison.Ordinal);
+        Assert.Contains("ProjectSummaryMetrics", component, StringComparison.Ordinal);
+        Assert.Contains("ProjectSummaryDetails", component, StringComparison.Ordinal);
+        Assert.Contains("LatestWorkbench", component, StringComparison.Ordinal);
+        Assert.Contains("ToggleSummaryPanel", component, StringComparison.Ordinal);
+        Assert.Contains("CloseSidePanels", component, StringComparison.Ordinal);
+        Assert.Contains("RightPanelOpen", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.Summarize", component, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Summary\"", component, StringComparison.Ordinal);
         Assert.Contains("ShellClass", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-shell--rail-collapsed", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-shell--artifacts-open", component, StringComparison.Ordinal);
@@ -970,6 +980,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-shell", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-summary-drawer", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-summary-toggle", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-summary-card", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-summary-grid", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-summary-section", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 380px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("transition: grid-template-columns 260ms cubic-bezier(.2, .8, .2, 1);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("@keyframes qe-agent-artifact-drawer-enter", agentStyles, StringComparison.Ordinal);
