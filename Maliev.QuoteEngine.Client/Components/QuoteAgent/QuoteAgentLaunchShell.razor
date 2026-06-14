@@ -183,7 +183,10 @@
             }
             else
             {
-                <a class="qe-agent-signin-btn" href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                <div class="qe-agent-auth-actions">
+                    <a class="qe-agent-signin-btn" href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                    <a class="qe-agent-signup-btn" href="/auth/sign-up?returnUrl=/quotes">@Text("Sign up", "สมัครสมาชิก")</a>
+                </div>
             }
         </div>
     </aside>
