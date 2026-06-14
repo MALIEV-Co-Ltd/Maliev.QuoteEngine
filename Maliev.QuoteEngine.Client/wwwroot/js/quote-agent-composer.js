@@ -20,26 +20,14 @@ export function initComposer(textarea, dotNetRef) {
     });
   };
 
-  const pointerdown = () => clearTextSelection();
-  const focus = () => clearTextSelection();
-  const windowFocus = () => focusComposer(textarea);
   const input = () => {
     normalizeCaretAfterInput(textarea);
     updateComposerShape(textarea);
   };
-  const selectionchange = () => {
-    if (document.activeElement === textarea) {
-      clearTextSelection();
-    }
-  };
 
   textarea.addEventListener("keydown", keydown);
   textarea.addEventListener("input", input);
-  textarea.addEventListener("pointerdown", pointerdown);
-  textarea.addEventListener("focus", focus);
-  window.addEventListener("focus", windowFocus);
-  document.addEventListener("selectionchange", selectionchange);
-  composerHandlers.set(textarea, { keydown, input, pointerdown, focus, windowFocus, selectionchange });
+  composerHandlers.set(textarea, { keydown, input });
   updateComposerShape(textarea);
   focusComposer(textarea);
 }
@@ -52,10 +40,6 @@ export function disposeComposer(textarea) {
 
   textarea.removeEventListener("keydown", handlers.keydown);
   textarea.removeEventListener("input", handlers.input);
-  textarea.removeEventListener("pointerdown", handlers.pointerdown);
-  textarea.removeEventListener("focus", handlers.focus);
-  window.removeEventListener("focus", handlers.windowFocus);
-  document.removeEventListener("selectionchange", handlers.selectionchange);
   composerHandlers.delete(textarea);
 }
 
@@ -64,11 +48,12 @@ export function focusComposer(textarea) {
     return;
   }
 
-  clearTextSelection();
   window.requestAnimationFrame(() => {
-    clearTextSelection();
     textarea.focus({ preventScroll: true });
-    moveCaretToEnd(textarea);
+    if (document.activeElement === textarea) {
+      moveCaretToEnd(textarea);
+    }
+
     updateComposerShape(textarea);
   });
 }

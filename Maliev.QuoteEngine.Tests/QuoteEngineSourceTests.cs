@@ -921,10 +921,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("textarea.setSelectionRange(end, end)", composerScript, StringComparison.Ordinal);
         Assert.Contains("clearTextSelection", composerScript, StringComparison.Ordinal);
         Assert.Contains("selection.rangeCount > 0", composerScript, StringComparison.Ordinal);
-        Assert.Contains("window.addEventListener(\"focus\", windowFocus)", composerScript, StringComparison.Ordinal);
-        Assert.Contains("window.removeEventListener(\"focus\", handlers.windowFocus)", composerScript, StringComparison.Ordinal);
-        Assert.Contains("document.addEventListener(\"selectionchange\", selectionchange)", composerScript, StringComparison.Ordinal);
-        Assert.Contains("document.removeEventListener(\"selectionchange\", handlers.selectionchange)", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("window.addEventListener(\"focus\", windowFocus)", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("window.removeEventListener(\"focus\", handlers.windowFocus)", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("document.addEventListener(\"selectionchange\", selectionchange)", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("document.removeEventListener(\"selectionchange\", handlers.selectionchange)", composerScript, StringComparison.Ordinal);
         Assert.Contains("textarea.addEventListener(\"input\", input)", composerScript, StringComparison.Ordinal);
         Assert.Contains("textarea.removeEventListener(\"input\", handlers.input)", composerScript, StringComparison.Ordinal);
         Assert.Contains("function normalizeCaretAfterInput", composerScript, StringComparison.Ordinal);
