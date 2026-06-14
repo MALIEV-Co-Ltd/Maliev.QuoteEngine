@@ -2541,6 +2541,21 @@ internal sealed class QuoteAgentService(
             $"Current settings: language {state.Language}, units {state.Units}, currency {state.Currency}, interaction {state.InteractionMode}, artifact panel {(state.AllowArtifactPanel ? "enabled" : "disabled")}, multilingual {(state.Multilingual ? "enabled" : "disabled")}"
         };
 
+        if (state.Parts.Count > 0)
+        {
+            contextLines.Add($"Current parts: {BuildPartContext(state.Parts)}");
+        }
+
+        if (state.Artifacts.Count > 0)
+        {
+            contextLines.Add($"Current artifacts: {BuildArtifactContext(state.Artifacts)}");
+        }
+
+        if (state.Estimate is not null)
+        {
+            contextLines.Add($"Current estimate: {state.Estimate.Total.ToString("0.##", CultureInfo.InvariantCulture)} {state.Estimate.Currency}, {state.Estimate.Lines.Count} line(s)");
+        }
+
         if (!string.IsNullOrWhiteSpace(customerContext))
         {
             contextLines.Add($"Browser context: {customerContext.Trim()}");
@@ -2552,6 +2567,24 @@ internal sealed class QuoteAgentService(
 Customer message:
 {message.Trim()}
 """;
+    }
+
+    private static string BuildPartContext(IReadOnlyCollection<QuotePartDraftDto> parts)
+    {
+        return string.Join("; ", parts.Take(5).Select(part =>
+        {
+            var status = string.IsNullOrWhiteSpace(part.Status) ? "unknown" : part.Status;
+            var dfm = part.Findings.Count == 0
+                ? "no DFM issues"
+                : $"{part.Findings.Count} DFM issue(s), acknowledged {part.DfmAcknowledged.ToString().ToLowerInvariant()}";
+            return $"{part.FileName} ({part.ProcessId}/{part.MaterialId}, qty {part.Quantity.ToString(CultureInfo.InvariantCulture)}, {status}, {dfm})";
+        }));
+    }
+
+    private static string BuildArtifactContext(IReadOnlyCollection<QuoteAgentArtifactDto> artifacts)
+    {
+        return string.Join("; ", artifacts.Take(8).Select(artifact =>
+            $"{artifact.ArtifactType} {artifact.Status}: {artifact.Title}"));
     }
 
     private static List<ChatbotMessageAttachmentRequest>? BuildChatbotAttachments(

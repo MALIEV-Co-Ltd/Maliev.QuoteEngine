@@ -146,6 +146,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.NotNull(state);
         Assert.Single(state.Parts);
         Assert.NotNull(state.Estimate);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains("Current parts: fixture.stl", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Current artifacts:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Current estimate:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
     }
 
     [Fact]
