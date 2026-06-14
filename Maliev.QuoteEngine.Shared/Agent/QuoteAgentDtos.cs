@@ -464,6 +464,39 @@ public sealed class QuoteAgentConnectorDto
 }
 
 /// <summary>
+/// Customer-safe connector handoff response for planned file import and CAD sender integrations.
+/// </summary>
+public sealed class QuoteAgentConnectorHandoffResponse
+{
+    /// <summary>Gets or sets the QuoteEngine agent session ID that requested the connector handoff.</summary>
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets the requested connector ID.</summary>
+    public string ConnectorId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the customer-visible connector name.</summary>
+    public string DisplayName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the connector status such as planned, future, authentication_required, or ready_to_connect.</summary>
+    public string Status { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets whether the current request has a signed-in customer session.</summary>
+    public bool IsAuthenticated { get; set; }
+
+    /// <summary>Gets or sets whether this connector can be connected in the current product version.</summary>
+    public bool IsAvailableToConnect { get; set; }
+
+    /// <summary>Gets or sets the local trusted handoff URL for authentication or connector setup.</summary>
+    public string? HandoffUrl { get; set; }
+
+    /// <summary>Gets or sets a customer-safe connector setup message for the agent.</summary>
+    public string Message { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the next customer-safe action hint.</summary>
+    public string ActionHint { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Customer-safe authentication handoff response for agent-assisted sign-in and sign-up.
 /// </summary>
 public sealed class QuoteAgentAuthHandoffResponse
