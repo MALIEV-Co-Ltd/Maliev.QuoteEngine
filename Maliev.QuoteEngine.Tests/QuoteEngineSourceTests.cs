@@ -2065,7 +2065,11 @@ public sealed class QuoteEngineSourceTests
             loaderScript.ReplaceLineEndings("\n"),
             StringComparison.Ordinal);
         Assert.Contains("params.has(\"handoff\")", loaderScript, StringComparison.Ordinal);
-        Assert.Contains("params.get(\"source\") === \"web\"", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("params.get(\"source\") !== \"web\"", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("function consumeQueryWorkspaceHandoff(params)", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("url.searchParams.delete(\"handoff\")", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("url.searchParams.delete(\"source\")", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("window.history.replaceState(window.history.state, document.title, url.toString())", loaderScript, StringComparison.Ordinal);
         Assert.Contains("const firstWasmLoadKey = \"maliev.makestudio.first-wasm-loaded\";", loaderScript, StringComparison.Ordinal);
         Assert.Contains("function shouldPlayFirstWasmStory()", loaderScript, StringComparison.Ordinal);
         Assert.Contains("function rememberFirstWasmLoaded()", loaderScript, StringComparison.Ordinal);

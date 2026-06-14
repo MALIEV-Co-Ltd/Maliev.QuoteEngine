@@ -339,10 +339,28 @@
     document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${maxAgeSeconds}; SameSite=Lax${secure}`;
   }
 
+  function consumeQueryWorkspaceHandoff(params) {
+    if (!params.has("handoff") && params.get("source") !== "web") {
+      return false;
+    }
+
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("handoff");
+      url.searchParams.delete("source");
+      window.history.replaceState(window.history.state, document.title, url.toString());
+    } catch {
+      // History may be unavailable in constrained browser contexts. The handoff
+      // still counts for this page load; future loads will fall back to storage.
+    }
+
+    return true;
+  }
+
   function consumeWorkspaceHandoff() {
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.has("handoff") || params.get("source") === "web") {
+      if (consumeQueryWorkspaceHandoff(params)) {
         return true;
       }
     } catch {
