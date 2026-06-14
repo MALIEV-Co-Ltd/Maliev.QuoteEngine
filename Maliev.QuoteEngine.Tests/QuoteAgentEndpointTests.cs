@@ -1076,7 +1076,36 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     {
         await using var scopedFactory = CreateAgentFactory();
         using var client = await CreateSignedInClientAsync(scopedFactory, "agent-resume@example.com");
-        var sourceSessionId = await StartPricedCadSessionAsync(client);
+        var sourceSessionId = Guid.NewGuid();
+        await ExecuteToolForStateAsync(
+            client,
+            sourceSessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement("Quote this CNC housing with the attached drawing as 10 aluminum pieces.", JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "resume-housing.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "resume-upload-cad",
+                        storage_path = "quotes/temp/session/resume-upload-cad/resume-housing.step"
+                    },
+                    new
+                    {
+                        file_name = "resume-housing-drawing.pdf",
+                        content_type = "application/pdf",
+                        file_size_bytes = 88_000,
+                        kind = "drawing",
+                        upload_id = "resume-upload-drawing",
+                        storage_path = "quotes/temp/session/resume-upload-drawing/resume-housing-drawing.pdf"
+                    }
+                }, JsonOptions)
+            });
 
         var draftState = await ExecuteToolForStateAsync(client, sourceSessionId, "quote_prepare_draft_project");
         var draftAction = Assert.Single(draftState.ProposedActions);
@@ -1103,6 +1132,18 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(resumed.Artifacts, artifact =>
             artifact.ArtifactType == "resumed_project" &&
             artifact.Metadata["projectId"] == projectId.ToString("D"));
+        var resumedPart = Assert.Single(resumed.Parts);
+        var resumedDrawing = Assert.Single(resumedPart.DrawingFiles);
+        Assert.Equal("resume-housing-drawing.pdf", resumedDrawing.FileName);
+        var resumedAttachment = Assert.Single(resumed.Attachments);
+        Assert.Equal("resume-housing-drawing.pdf", resumedAttachment.FileName);
+        Assert.False(resumedAttachment.SatisfiesGeometryGate);
+        Assert.Contains(resumed.Artifacts, artifact =>
+            artifact.ArtifactType == "analysis" &&
+            artifact.Status == "ready" &&
+            artifact.Metadata["geometryGate"] == "satisfied_by_resumed_cad" &&
+            artifact.Metadata["needsCadGeometry"] == "false" &&
+            artifact.Metadata["usableForFinalPricing"] == "true");
         Assert.Contains(resumed.Artifacts, artifact => artifact.ArtifactType == "viewer" && artifact.Status == "ready");
         Assert.NotNull(resumed.Estimate);
     }

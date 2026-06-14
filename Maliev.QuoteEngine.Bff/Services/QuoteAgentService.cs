@@ -1140,6 +1140,7 @@ internal sealed class QuoteAgentService(
             }
 
             UpsertArtifact(state, "requirements_summary", "Project summary", "ready", null, null);
+            RestoreSupplementalAttachmentsFromParts(state, project.Notes);
             UpsertArtifact(state, "resumed_project", project.Title, project.Status, null, null);
             SetArtifactMetadata(state, "resumed_project", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -1160,6 +1161,60 @@ internal sealed class QuoteAgentService(
         }
 
         return ToStateResponse(state);
+    }
+
+    private static void RestoreSupplementalAttachmentsFromParts(QuoteAgentSessionState state, string projectNotes)
+    {
+        var supplemental = state.Parts
+            .SelectMany(part => part.DrawingFiles)
+            .Select(ToAgentAttachment)
+            .GroupBy(attachment => attachment.StoragePath ?? attachment.Url ?? attachment.FileName, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+        if (supplemental.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var attachment in supplemental)
+        {
+            state.Attachments.Add(attachment);
+        }
+
+        var artifact = state.Artifacts.FirstOrDefault(item =>
+            item.ArtifactType.Equals("analysis", StringComparison.OrdinalIgnoreCase));
+        if (artifact is null)
+        {
+            artifact = new QuoteAgentArtifactDto
+            {
+                ArtifactType = "analysis",
+                Title = "Supplemental requirement analysis",
+                Status = "ready"
+            };
+            state.Artifacts.Add(artifact);
+        }
+
+        artifact.Status = "ready";
+        artifact.Metadata["fileCount"] = supplemental.Count.ToString(CultureInfo.InvariantCulture);
+        artifact.Metadata["fileNames"] = string.Join(", ", supplemental.Select(item => item.FileName).Take(5));
+        artifact.Metadata["geometryGate"] = "satisfied_by_resumed_cad";
+        artifact.Metadata["summary"] = BuildSupplementalSummary(projectNotes, supplemental);
+        SetSupplementalRequirementMetadata(artifact, projectNotes, supplemental);
+        artifact.Metadata["needsCadGeometry"] = "false";
+        artifact.Metadata["usableForFinalPricing"] = "true";
+    }
+
+    private static QuoteAgentAttachmentDto ToAgentAttachment(QuotePartAttachmentDto attachment)
+    {
+        return new QuoteAgentAttachmentDto
+        {
+            FileName = attachment.FileName,
+            StoragePath = attachment.StoragePath,
+            ContentType = attachment.ContentType,
+            FileSizeBytes = attachment.FileSizeBytes,
+            Kind = attachment.Kind,
+            SatisfiesGeometryGate = false
+        };
     }
 
     private string ExecuteDraftProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
