@@ -1515,7 +1515,7 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
-            _error = ex.Message;
+            _error = Text("The agent workspace is temporarily unavailable. You can keep typing or attach files while it reconnects.", "พื้นที่ทำงานเอเจนต์ยังไม่พร้อมใช้งานชั่วคราว คุณยังพิมพ์หรือแนบไฟล์ต่อได้ระหว่างเชื่อมต่อใหม่");
         }
     }
 
@@ -1541,7 +1541,7 @@
         {
             _projects.Clear();
             _projectNavigationLoaded = false;
-            _error = ex.Message;
+            _error = Text("Project data is temporarily unavailable.", "ข้อมูลโปรเจกต์ยังไม่พร้อมใช้งานชั่วคราว");
         }
     }
 
@@ -1625,7 +1625,7 @@
             }
             else
             {
-                _error = ex.Message;
+                _messages.Add(new AgentMessageRow("assistant", BuildAgentConnectionFallbackMessage(message)));
             }
         }
         finally
@@ -2258,6 +2258,18 @@
         _proposedActions = [];
     }
 
+    private string BuildAgentConnectionFallbackMessage(string message)
+    {
+        var trimmed = message.Trim();
+        var promptReference = string.IsNullOrWhiteSpace(trimmed)
+            ? Text("your request", "คำขอของคุณ")
+            : trimmed;
+
+        return Text(
+            $"I can still help collect requirements for \"{promptReference}\" while the agent connection recovers. Please attach any CAD/3D files, drawings, photos, or sketches you have, and include material, finish, tolerance, quantity, and target lead time. I will analyze DFM, pricing, quote, order, and payment steps as soon as the service is reachable.",
+            $"ฉันยังช่วยรวบรวมความต้องการสำหรับ \"{promptReference}\" ได้ระหว่างรอการเชื่อมต่อเอเจนต์กลับมา กรุณาแนบไฟล์ CAD/3D แบบ รูปถ่าย หรือสเก็ตช์ที่มี พร้อมระบุวัสดุ ผิวงาน tolerance จำนวน และเวลาส่งมอบที่ต้องการ เมื่อบริการกลับมา ฉันจะตรวจ DFM คำนวณราคา ออกใบเสนอราคา สร้างออเดอร์ และดำเนินการชำระเงินต่อ");
+    }
+
     private static LocalDemoTurn BuildSketchDemoTurn()
     {
         var workbench = new AgentWorkbenchSnapshot(
@@ -2416,7 +2428,7 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
-            _error = ex.Message;
+            _error = Text("Project pin status could not be updated right now.", "ยังไม่สามารถอัปเดตสถานะปักหมุดโปรเจกต์ได้");
         }
     }
 
@@ -2439,7 +2451,7 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
-            _error = ex.Message;
+            _error = Text("Project duplication is temporarily unavailable.", "ยังไม่สามารถทำสำเนาโปรเจกต์ได้ชั่วคราว");
         }
     }
 
@@ -2462,7 +2474,7 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
-            _error = ex.Message;
+            _error = Text("Project archiving is temporarily unavailable.", "ยังไม่สามารถเก็บโปรเจกต์ได้ชั่วคราว");
         }
     }
 
@@ -2485,7 +2497,7 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
-            _error = ex.Message;
+            _error = Text("Project achievement status could not be updated right now.", "ยังไม่สามารถอัปเดตสถานะโปรเจกต์ว่าสำเร็จได้");
         }
     }
 
@@ -2580,7 +2592,7 @@
         {
             _customerSearchResults.Clear();
             _customerSearchUnavailable = true;
-            _error = ex.Message;
+            _error = Text("Search is temporarily unavailable.", "การค้นหายังไม่พร้อมใช้งานชั่วคราว");
         }
         finally
         {
@@ -2606,7 +2618,7 @@
         {
             _connectors = [];
             _connectorRegistryLoaded = false;
-            _error = ex.Message;
+            _error = Text("Connector registry is temporarily unavailable.", "ทะเบียนตัวเชื่อมต่อยังไม่พร้อมใช้งานชั่วคราว");
         }
     }
 
@@ -2650,7 +2662,7 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
-            _error = ex.Message;
+            _error = Text("Connector handoff is temporarily unavailable.", "การส่งต่อไปยังตัวเชื่อมต่อยังไม่พร้อมใช้งานชั่วคราว");
         }
     }
 

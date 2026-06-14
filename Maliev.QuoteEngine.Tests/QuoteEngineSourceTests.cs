@@ -865,6 +865,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SendAgentMessageStreamAsync", component, StringComparison.Ordinal);
         Assert.Contains("assistantMessage.Content += streamEvent.Delta", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentMarkdownRenderer.Render(message.Content)", component, StringComparison.Ordinal);
+        Assert.Contains("BuildAgentConnectionFallbackMessage(message)", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("_error = ex.Message;", component, StringComparison.Ordinal);
+        Assert.Contains("I can still help collect requirements", component, StringComparison.Ordinal);
         Assert.Contains("part.ThumbnailUrl", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-artifact-thumb", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-markdown\"", component, StringComparison.Ordinal);
