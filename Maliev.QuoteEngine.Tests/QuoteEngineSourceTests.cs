@@ -797,6 +797,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ToggleProjectPinAsync", component, StringComparison.Ordinal);
         Assert.Contains("PinProjectAsync", component, StringComparison.Ordinal);
         Assert.Contains("UnpinProjectAsync", component, StringComparison.Ordinal);
+        Assert.Contains("ArchiveProjectAsync", component, StringComparison.Ordinal);
+        Assert.Contains("Api.ArchiveProjectAsync(project.ProjectId)", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.Archive", component, StringComparison.Ordinal);
+        Assert.Contains("Archive project", component, StringComparison.Ordinal);
+        Assert.Contains("Task<ProjectManagementResponse> ArchiveProjectAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/projects/{projectId:D}/archive", apiClient, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.PushPin", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Icons.Material.Outlined.Search", primaryNav, StringComparison.Ordinal);

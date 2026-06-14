@@ -268,6 +268,12 @@
                                                         @onclick="@(() => ToggleProjectPinAsync(project))">
                                                     <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
                                                 </button>
+                                                <button type="button"
+                                                        title="@Text("Archive project", "เก็บโปรเจกต์")"
+                                                        aria-label="@Text($"Archive {project.NameEn}", $"เก็บโปรเจกต์{project.NameTh}")"
+                                                        @onclick="@(() => ArchiveProjectAsync(project))">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                                                </button>
                                             </article>
                                         }
                                     </div>
@@ -306,6 +312,12 @@
                                                         aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
                                                         @onclick="@(() => ToggleProjectPinAsync(project))">
                                                     <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
+                                                </button>
+                                                <button type="button"
+                                                        title="@Text("Archive project", "เก็บโปรเจกต์")"
+                                                        aria-label="@Text($"Archive {project.NameEn}", $"เก็บโปรเจกต์{project.NameTh}")"
+                                                        @onclick="@(() => ArchiveProjectAsync(project))">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
                                                 </button>
                                             </article>
                                         }
@@ -2246,6 +2258,29 @@
             var response = project.IsPinned
                 ? await Api.UnpinProjectAsync(project.ProjectId)
                 : await Api.PinProjectAsync(project.ProjectId);
+            ApplyProjectManagement(response);
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ArchiveProjectAsync(ProjectNavItem project)
+    {
+        if (!IsSignedIn)
+        {
+            _draftMessage = Text("Sign in to archive projects.", "เข้าสู่ระบบเพื่อเก็บโปรเจกต์");
+            return;
+        }
+
+        try
+        {
+            var response = await Api.ArchiveProjectAsync(project.ProjectId);
             ApplyProjectManagement(response);
         }
         catch (QuoteEngineApiException ex)

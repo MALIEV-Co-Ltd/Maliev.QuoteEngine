@@ -556,6 +556,22 @@ public sealed class QuoteController(
         return unpinned is null ? NotFound() : Ok(unpinned);
     }
 
+    [HttpPost("projects/{projectId:guid}/archive")]
+    public ActionResult<ProjectManagementResponse> ArchiveProject(Guid projectId)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "Project archiving is available only for signed-in customers."
+            });
+        }
+
+        var archived = store.SetProjectArchived(customerId, projectId, isArchived: true);
+        return archived is null ? NotFound() : Ok(archived);
+    }
+
     [HttpPost("quotes/formal")]
     public async Task<ActionResult<GenerateFormalQuoteResponse>> GenerateFormalQuote(
         [FromBody] GenerateFormalQuoteRequest request, CancellationToken cancellationToken)

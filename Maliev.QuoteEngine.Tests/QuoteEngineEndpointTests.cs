@@ -1848,6 +1848,30 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Project_archive_removes_project_from_navigation_and_rejects_other_customers()
+    {
+        using var owner = await CreateSignedInClientAsync("project-archive-owner@example.com");
+        var activeProject = await CreateDraftProjectAsync(owner, "Active fixture");
+        var archiveProject = await CreateDraftProjectAsync(owner, "Completed bracket");
+
+        var archiveResponse = await owner.PostAsync($"/quote/v1/projects/{archiveProject.ProjectId:D}/archive", null);
+        archiveResponse.EnsureSuccessStatusCode();
+        var archived = await archiveResponse.Content.ReadFromJsonAsync<ProjectManagementResponse>();
+        Assert.NotNull(archived);
+        Assert.True(archived.IsArchived);
+        Assert.Equal("Archived", archived.Status);
+
+        var navigation = await owner.GetFromJsonAsync<List<CustomerProjectNavItemDto>>("/quote/v1/projects/nav");
+        Assert.NotNull(navigation);
+        Assert.Contains(navigation, project => project.ProjectId == activeProject.ProjectId);
+        Assert.DoesNotContain(navigation, project => project.ProjectId == archiveProject.ProjectId);
+
+        using var other = await CreateSignedInClientAsync("project-archive-other@example.com");
+        var crossCustomerArchive = await other.PostAsync($"/quote/v1/projects/{activeProject.ProjectId:D}/archive", null);
+        Assert.Equal(HttpStatusCode.NotFound, crossCustomerArchive.StatusCode);
+    }
+
+    [Fact]
     public async Task Draft_project_create_and_duplicate_preserve_browser_local_dfm_payload()
     {
         using var client = await CreateSignedInClientAsync("local-dfm-owner@example.com");

@@ -162,6 +162,11 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             ?? throw new InvalidOperationException("QuoteEngine returned an empty project management response.");
     }
 
+    public Task<ProjectManagementResponse> ArchiveProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<object, ProjectManagementResponse>($"quote/v1/projects/{projectId:D}/archive", new { }, cancellationToken);
+    }
+
     public Task<GenerateFormalQuoteResponse> GenerateFormalQuoteAsync(GenerateFormalQuoteRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<GenerateFormalQuoteRequest, GenerateFormalQuoteResponse>("quote/v1/quotes/formal", request, cancellationToken);
