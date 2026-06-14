@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Maliev.QuoteEngine.Bff.Clients;
@@ -17,6 +18,11 @@ public interface IQuoteAgentService
 {
     /// <summary>Sends one customer turn through the QuoteEngine agent channel.</summary>
     Task<QuoteAgentTurnResponse> SendAsync(QuoteAgentMessageRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Streams one customer turn through the QuoteEngine agent channel.</summary>
+    IAsyncEnumerable<QuoteAgentStreamEvent> StreamAsync(
+        QuoteAgentMessageRequest request,
+        CancellationToken cancellationToken);
 
     /// <summary>Gets the current agent state.</summary>
     QuoteAgentStateResponse GetState(Guid sessionId);
@@ -96,6 +102,57 @@ internal sealed class QuoteAgentService(
             Gates = currentState.Gates,
             ProposedActions = currentState.ProposedActions,
             ThinkingSteps = chatbotResponse?.ThinkingSteps ?? []
+        };
+    }
+
+    public async IAsyncEnumerable<QuoteAgentStreamEvent> StreamAsync(
+        QuoteAgentMessageRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        yield return new QuoteAgentStreamEvent { Type = "started" };
+
+        QuoteAgentTurnResponse? response = null;
+        string? error = null;
+        try
+        {
+            response = await SendAsync(request, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+
+        if (response is null)
+        {
+            yield return new QuoteAgentStreamEvent
+            {
+                Type = "error",
+                Error = string.IsNullOrWhiteSpace(error)
+                    ? "The QuoteEngine agent could not complete this response."
+                    : error
+            };
+            yield break;
+        }
+
+        foreach (var delta in ChunkAssistantText(response.AssistantText))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return new QuoteAgentStreamEvent
+            {
+                Type = "delta",
+                Delta = delta
+            };
+            await Task.Delay(12, cancellationToken);
+        }
+
+        yield return new QuoteAgentStreamEvent
+        {
+            Type = "final",
+            Response = response
         };
     }
 
@@ -2105,6 +2162,35 @@ Customer message:
             .ToList();
 
         return supported.Count == 0 ? null : supported;
+    }
+
+    private static IEnumerable<string> ChunkAssistantText(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            yield break;
+        }
+
+        const int targetLength = 18;
+        for (var index = 0; index < text.Length;)
+        {
+            var remaining = text.Length - index;
+            if (remaining <= targetLength)
+            {
+                yield return text[index..];
+                yield break;
+            }
+
+            var length = targetLength;
+            var softBreak = text.LastIndexOfAny([' ', '\n', '\t'], index + targetLength, targetLength);
+            if (softBreak > index + 5)
+            {
+                length = softBreak - index + 1;
+            }
+
+            yield return text.Substring(index, length);
+            index += length;
+        }
     }
 
     private string? BuildThinkingCallbackUrl(Guid sessionId)

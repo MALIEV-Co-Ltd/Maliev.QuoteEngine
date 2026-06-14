@@ -55,6 +55,49 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_stream_returns_incremental_events_before_final_state()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "I need a 3D printed bracket.",
+                Language = "en"
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var body = await response.Content.ReadAsStringAsync();
+        var events = body
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonSerializer.Deserialize<QuoteAgentStreamEvent>(line, JsonOptions))
+            .Where(streamEvent => streamEvent is not null)
+            .Select(streamEvent => streamEvent!)
+            .ToList();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+        Assert.True(events.Count >= 3);
+        Assert.Equal("started", events[0].Type);
+        Assert.Contains(events, streamEvent => streamEvent.Type == "delta" && !string.IsNullOrWhiteSpace(streamEvent.Delta));
+        var final = Assert.Single(events, streamEvent => streamEvent.Type == "final");
+        Assert.NotNull(final.Response);
+        Assert.Contains("bracket", final.Response.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(final.Response.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
+        Assert.False(string.IsNullOrWhiteSpace(chatbot.LastSendRequest?.QuoteAgentContextToken));
+    }
+
+    [Fact]
     public async Task Agent_message_with_cad_attachment_materializes_prototype_analysis_and_price()
     {
         var chatbot = new RecordingChatbotServiceClient();

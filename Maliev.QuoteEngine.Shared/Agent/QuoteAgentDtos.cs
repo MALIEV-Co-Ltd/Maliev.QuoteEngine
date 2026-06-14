@@ -124,6 +124,26 @@ public sealed class QuoteAgentTurnResponse
 }
 
 /// <summary>
+/// Incremental event returned by the QuoteEngine agent streaming endpoint.
+/// </summary>
+public sealed class QuoteAgentStreamEvent
+{
+    /// <summary>Gets or sets the event type: started, delta, final, or error.</summary>
+    [Required]
+    [StringLength(40)]
+    public string Type { get; set; } = "delta";
+
+    /// <summary>Gets or sets the text delta for assistant content.</summary>
+    public string? Delta { get; set; }
+
+    /// <summary>Gets or sets the final complete turn response.</summary>
+    public QuoteAgentTurnResponse? Response { get; set; }
+
+    /// <summary>Gets or sets a customer-safe error message.</summary>
+    public string? Error { get; set; }
+}
+
+/// <summary>
 /// Current QuoteEngine agent state.
 /// </summary>
 public sealed class QuoteAgentStateResponse

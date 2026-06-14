@@ -886,27 +886,49 @@
         _error = null;
         _draftMessage = string.Empty;
         _messages.Add(new AgentMessageRow("user", message));
+        var assistantMessage = new AgentMessageRow("assistant", string.Empty);
+        _messages.Add(assistantMessage);
 
         try
         {
-            var response = await Api.SendAgentMessageAsync(new QuoteAgentMessageRequest
+            await foreach (var streamEvent in Api.SendAgentMessageStreamAsync(new QuoteAgentMessageRequest
             {
                 SessionId = SessionId,
                 Message = message,
                 Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en"
-            });
-
-            _messages.Add(new AgentMessageRow("assistant", response.AssistantText));
-            _gates = response.Gates;
-            _artifacts = response.Artifacts;
-            _proposedActions = response.ProposedActions;
+            }))
+            {
+                if (streamEvent.Type.Equals("delta", StringComparison.OrdinalIgnoreCase))
+                {
+                    assistantMessage.Content += streamEvent.Delta;
+                    await InvokeAsync(StateHasChanged);
+                }
+                else if (streamEvent.Type.Equals("final", StringComparison.OrdinalIgnoreCase) &&
+                         streamEvent.Response is not null)
+                {
+                    assistantMessage.Content = streamEvent.Response.AssistantText;
+                    _gates = streamEvent.Response.Gates;
+                    _artifacts = streamEvent.Response.Artifacts;
+                    _proposedActions = streamEvent.Response.ProposedActions;
+                    await InvokeAsync(StateHasChanged);
+                }
+                else if (streamEvent.Type.Equals("error", StringComparison.OrdinalIgnoreCase))
+                {
+                    _error = string.IsNullOrWhiteSpace(streamEvent.Error)
+                        ? Text("The agent could not complete this response.", "ผู้ช่วยไม่สามารถตอบกลับได้สำเร็จ")
+                        : streamEvent.Error;
+                    _messages.Remove(assistantMessage);
+                }
+            }
         }
         catch (QuoteEngineApiException ex)
         {
             _error = ex.UserMessage;
+            _messages.Remove(assistantMessage);
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
+            _messages.Remove(assistantMessage);
             if (TryBuildLocalDemoTurn(message, out var demoTurn))
             {
                 AddLocalDemoTurn(demoTurn);
@@ -1428,7 +1450,14 @@
         _draftMessage = Text(useCase.PromptEn, useCase.PromptTh);
     }
 
-    private sealed record AgentMessageRow(string Role, string Content, AgentWorkbenchSnapshot? Workbench = null);
+    private sealed class AgentMessageRow(string role, string content, AgentWorkbenchSnapshot? workbench = null)
+    {
+        public string Role { get; } = role;
+
+        public string Content { get; set; } = content;
+
+        public AgentWorkbenchSnapshot? Workbench { get; } = workbench;
+    }
 
     private sealed record LocalDemoTurn(
         string TextEn,

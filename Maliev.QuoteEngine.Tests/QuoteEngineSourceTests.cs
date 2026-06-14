@@ -771,7 +771,10 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("RequestUploadAsync", primaryNav, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.AttachFile", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.ArrowUpward", component, StringComparison.Ordinal);
-        Assert.Contains("SendAgentMessageAsync", component, StringComparison.Ordinal);
+        Assert.Contains("SendAgentMessageStreamAsync", component, StringComparison.Ordinal);
+        Assert.Contains("assistantMessage.Content += streamEvent.Delta", component, StringComparison.Ordinal);
+        Assert.Contains("streamEvent.Type.Equals(\"delta\"", component, StringComparison.Ordinal);
+        Assert.Contains("streamEvent.Type.Equals(\"final\"", component, StringComparison.Ordinal);
         Assert.Contains("ConfirmAgentActionAsync", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentGateDto", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentProposedActionDto", component, StringComparison.Ordinal);
@@ -825,6 +828,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("$470.00", component, StringComparison.Ordinal);
 
         Assert.Contains("Task<QuoteAgentTurnResponse> SendAgentMessageAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("IAsyncEnumerable<QuoteAgentStreamEvent> SendAgentMessageStreamAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("HttpCompletionOption.ResponseHeadersRead", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/agent/messages/stream", apiClient, StringComparison.Ordinal);
         Assert.Contains("Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("event.key !== \"Enter\"", composerScript, StringComparison.Ordinal);
         Assert.Contains("event.shiftKey", composerScript, StringComparison.Ordinal);

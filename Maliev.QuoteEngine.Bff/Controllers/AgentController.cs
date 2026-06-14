@@ -3,6 +3,7 @@ using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Agent;
 using Microsoft.AspNetCore.Mvc;
+using System.Text.Json;
 
 namespace Maliev.QuoteEngine.Bff.Controllers;
 
@@ -17,6 +18,7 @@ public sealed class AgentController(
     QuoteAgentContextToken contextToken) : ControllerBase
 {
     private const string AgentContextHeader = "X-Maliev-Agent-Context";
+    private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
     /// Sends a customer message through the QuoteEngine agent workflow.
@@ -34,6 +36,33 @@ public sealed class AgentController(
         }
 
         return Ok(await agentService.SendAsync(request, cancellationToken));
+    }
+
+    /// <summary>
+    /// Streams a customer message through the QuoteEngine agent workflow.
+    /// </summary>
+    [HttpPost("messages/stream")]
+    [Produces("application/x-ndjson")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> Stream(
+        [FromBody] QuoteAgentMessageRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        Response.ContentType = "application/x-ndjson; charset=utf-8";
+        await foreach (var streamEvent in agentService.StreamAsync(request, cancellationToken))
+        {
+            await Response.WriteAsync(JsonSerializer.Serialize(streamEvent, StreamJsonOptions), cancellationToken);
+            await Response.WriteAsync("\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+        }
+
+        return new EmptyResult();
     }
 
     /// <summary>

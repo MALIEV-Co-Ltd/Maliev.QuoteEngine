@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Agent;
@@ -274,6 +275,42 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
     public Task<QuoteAgentTurnResponse> SendAgentMessageAsync(QuoteAgentMessageRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<QuoteAgentMessageRequest, QuoteAgentTurnResponse>("quote/v1/agent/messages", request, cancellationToken);
+    }
+
+    public async IAsyncEnumerable<QuoteAgentStreamEvent> SendAgentMessageStreamAsync(
+        QuoteAgentMessageRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        const string uri = "quote/v1/agent/messages/stream";
+        using var message = new HttpRequestMessage(HttpMethod.Post, uri)
+        {
+            Content = JsonContent.Create(request)
+        };
+        using var response = await httpClient.SendAsync(
+            message,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(uri, response, cancellationToken);
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            var streamEvent = JsonSerializer.Deserialize<QuoteAgentStreamEvent>(line, JsonSerializerOptions.Web);
+            if (streamEvent is not null)
+            {
+                yield return streamEvent;
+            }
+        }
     }
 
     public async Task<QuoteAgentStateResponse> GetAgentStateAsync(Guid sessionId, CancellationToken cancellationToken = default)
