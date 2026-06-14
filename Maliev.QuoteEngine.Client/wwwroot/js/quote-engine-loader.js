@@ -3,6 +3,7 @@
   const seenResources = new Set();
   const bootVersion = Date.now().toString(36);
   const staleBootRetryKey = "maliev.quote.boot.retry";
+  const firstWasmLoadKey = "maliev.makestudio.first-wasm-loaded";
   let loadedResources = 0;
   let totalResources = 0;
   let displayedProgress = 0;
@@ -273,10 +274,9 @@
       : [];
     bootStartedAt = Date.now();
 
-    // Tell the full story for every Studio boot while the WASM runtime loads.
-    // Web → Studio handoff still affects the status copy, but direct Studio
-    // visits should also see the narrative instead of a static finale.
-    const wantsStory = true;
+    // Play the full narrative only for Maliev.Web handoffs or the first
+    // browser boot. Direct return visits should reach the Studio quickly.
+    const wantsStory = isWorkspaceHandoff;
     storyMode = wantsStory && !prefersReducedMotion() ? "full" : "quiet";
 
     if (storyMode === "full") {
@@ -353,6 +353,21 @@
     return false;
   }
 
+  function consumeFirstWasmLoad() {
+    try {
+      if (window.localStorage.getItem(firstWasmLoadKey) !== "1") {
+        window.localStorage.setItem(firstWasmLoadKey, "1");
+        return true;
+      }
+    } catch {
+      // If localStorage is blocked, treat this boot as first-load so the
+      // customer still sees the narrative while the runtime starts.
+      return true;
+    }
+
+    return false;
+  }
+
   function getQueryCulture() {
     try {
       return new URLSearchParams(window.location.search).get("culture");
@@ -411,7 +426,7 @@
   function startBlazor() {
     const isWorkspaceHandoff = consumeWorkspaceHandoff();
     setProgress(0, true);
-    beginBoot(isWorkspaceHandoff);
+    beginBoot(isWorkspaceHandoff || consumeFirstWasmLoad());
     setStatus(isWorkspaceHandoff ? currentStrings.status.starting : currentStrings.status.preparing);
 
     if (!window.Blazor || typeof window.Blazor.start !== "function") {
