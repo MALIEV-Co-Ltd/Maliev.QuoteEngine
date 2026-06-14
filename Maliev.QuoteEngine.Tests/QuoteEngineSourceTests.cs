@@ -1166,6 +1166,7 @@ public sealed class QuoteEngineSourceTests
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var threadBlock = ExtractSourceBlock(component, "<div class=\"qe-agent-thread\"", "<section class=\"qe-agent-composer-wrap\"");
         var artifactDrawerBlock = ExtractSourceBlock(component, "<aside class=\"qe-agent-artifact-drawer\"", "</aside>");
+        var confirmBlock = ExtractSourceBlock(component, "private async Task ConfirmActionAsync", "public Task ApplyAgentStateAsync");
 
         Assert.Contains("class=\"qe-agent-chat-actions\"", threadBlock, StringComparison.Ordinal);
         Assert.Contains("@if (_proposedActions.Count > 0)", threadBlock, StringComparison.Ordinal);
@@ -1174,6 +1175,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("action.RequiresAuthentication && !IsSignedIn", threadBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-chat-actions\"", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-chat-actions", styles, StringComparison.Ordinal);
+        Assert.Contains("var previousArtifactCount = _artifacts.Count;", confirmBlock, StringComparison.Ordinal);
+        Assert.Contains("if (result.State.Artifacts.Count > previousArtifactCount)", confirmBlock, StringComparison.Ordinal);
+        Assert.Contains("_artifactPanelOpen = true;", confirmBlock, StringComparison.Ordinal);
+        Assert.Contains("_summaryPanelOpen = false;", confirmBlock, StringComparison.Ordinal);
     }
 
     [Fact]

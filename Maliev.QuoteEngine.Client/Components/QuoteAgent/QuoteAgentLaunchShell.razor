@@ -1704,11 +1704,17 @@
     {
         try
         {
+            var previousArtifactCount = _artifacts.Count;
             var result = await Api.ConfirmAgentActionAsync(action.ActionId, new QuoteAgentConfirmActionRequest());
             _messages.Add(new AgentMessageRow("assistant", result.Message));
             if (result.State is not null)
             {
                 ApplyState(result.State);
+                if (result.State.Artifacts.Count > previousArtifactCount)
+                {
+                    _artifactPanelOpen = true;
+                    _summaryPanelOpen = false;
+                }
             }
         }
         catch (QuoteEngineApiException ex)
