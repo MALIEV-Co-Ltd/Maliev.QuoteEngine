@@ -237,62 +237,84 @@
                     {
                         @if (PinnedProjects.Any())
                         {
-                            <section class="qe-agent-management-section">
+                            <section class="@ProjectManagementSectionClass(_pinnedProjectsCollapsed)">
                                 <header>
-                                    <strong>@Text("Pinned", "ปักหมุด")</strong>
-                                    <small>@Text("Fast access projects", "โปรเจกต์ที่เข้าถึงบ่อย")</small>
+                                    <button type="button"
+                                            class="qe-agent-management-section-toggle"
+                                            aria-expanded="@AriaExpanded(!_pinnedProjectsCollapsed)"
+                                            @onclick="TogglePinnedProjects">
+                                        <span>
+                                            <strong>@Text("Pinned", "ปักหมุด")</strong>
+                                            <small>@Text("Fast access projects", "โปรเจกต์ที่เข้าถึงบ่อย")</small>
+                                        </span>
+                                        <MudIcon Icon="@(_pinnedProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                                    </button>
                                 </header>
-                                <div class="qe-agent-management-list">
-                                    @foreach (var project in PinnedProjects)
-                                    {
-                                        <article class="qe-agent-management-row">
-                                            <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
-                                            <div>
-                                                <strong>@ProjectName(project)</strong>
-                                                <p>@project.Status</p>
-                                            </div>
-                                            <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
-                                            <button type="button"
-                                                    title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
-                                                    aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
-                                                    @onclick="@(() => ToggleProjectPinAsync(project))">
-                                                <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
-                                            </button>
-                                        </article>
-                                    }
-                                </div>
+                                @if (!_pinnedProjectsCollapsed)
+                                {
+                                    <div class="qe-agent-management-list">
+                                        @foreach (var project in PinnedProjects)
+                                        {
+                                            <article class="qe-agent-management-row">
+                                                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
+                                                <div>
+                                                    <strong>@ProjectName(project)</strong>
+                                                    <p>@project.Status</p>
+                                                </div>
+                                                <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
+                                                <button type="button"
+                                                        title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
+                                                        aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
+                                                        @onclick="@(() => ToggleProjectPinAsync(project))">
+                                                    <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
+                                                </button>
+                                            </article>
+                                        }
+                                    </div>
+                                }
                             </section>
                         }
-                        <section class="qe-agent-management-section">
+                        <section class="@ProjectManagementSectionClass(_projectsCollapsed)">
                             <header>
-                                <strong>@Text("All projects", "โปรเจกต์ทั้งหมด")</strong>
-                                <small>@Text("Pinned projects are not duplicated here.", "โปรเจกต์ที่ปักหมุดจะไม่แสดงซ้ำที่นี่")</small>
+                                <button type="button"
+                                        class="qe-agent-management-section-toggle"
+                                        aria-expanded="@AriaExpanded(!_projectsCollapsed)"
+                                        @onclick="ToggleProjects">
+                                    <span>
+                                        <strong>@Text("All projects", "โปรเจกต์ทั้งหมด")</strong>
+                                        <small>@Text("Pinned projects are not duplicated here.", "โปรเจกต์ที่ปักหมุดจะไม่แสดงซ้ำที่นี่")</small>
+                                    </span>
+                                    <MudIcon Icon="@(_projectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                                </button>
                             </header>
-                            @if (RegularProjects.Any())
+                            @if (!_projectsCollapsed)
                             {
-                                <div class="qe-agent-management-list">
-                                    @foreach (var project in RegularProjects)
-                                    {
-                                        <article class="qe-agent-management-row">
-                                            <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
-                                            <div>
-                                                <strong>@ProjectName(project)</strong>
-                                                <p>@project.Status</p>
-                                            </div>
-                                            <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
-                                            <button type="button"
-                                                    title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
-                                                    aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
-                                                    @onclick="@(() => ToggleProjectPinAsync(project))">
-                                                <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
-                                            </button>
-                                        </article>
-                                    }
-                                </div>
-                            }
-                            else
-                            {
-                                <p class="qe-agent-management-empty">@Text("No unpinned projects.", "ไม่มีโปรเจกต์ที่ไม่ได้ปักหมุด")</p>
+                                @if (RegularProjects.Any())
+                                {
+                                    <div class="qe-agent-management-list">
+                                        @foreach (var project in RegularProjects)
+                                        {
+                                            <article class="qe-agent-management-row">
+                                                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
+                                                <div>
+                                                    <strong>@ProjectName(project)</strong>
+                                                    <p>@project.Status</p>
+                                                </div>
+                                                <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
+                                                <button type="button"
+                                                        title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
+                                                        aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
+                                                        @onclick="@(() => ToggleProjectPinAsync(project))">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
+                                                </button>
+                                            </article>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="qe-agent-management-empty">@Text("No unpinned projects.", "ไม่มีโปรเจกต์ที่ไม่ได้ปักหมุด")</p>
+                                }
                             }
                         </section>
                     }
@@ -1099,6 +1121,8 @@
     private bool _artifactPanelOpen;
     private bool _summaryPanelOpen;
     private bool _railCollapsed;
+    private bool _pinnedProjectsCollapsed;
+    private bool _projectsCollapsed;
     private bool _sketchOpen;
     private bool _sketchInitPending;
     private bool _searchOpen;
@@ -1305,6 +1329,13 @@
     private string PageNavClass(WorkspacePage page)
     {
         return IsWorkspacePage(page) ? "active" : string.Empty;
+    }
+
+    private static string ProjectManagementSectionClass(bool collapsed)
+    {
+        return collapsed
+            ? "qe-agent-management-section is-collapsed"
+            : "qe-agent-management-section";
     }
 
     protected override void OnInitialized()
@@ -2195,6 +2226,16 @@
         {
             _error = ex.Message;
         }
+    }
+
+    private void TogglePinnedProjects()
+    {
+        _pinnedProjectsCollapsed = !_pinnedProjectsCollapsed;
+    }
+
+    private void ToggleProjects()
+    {
+        _projectsCollapsed = !_projectsCollapsed;
     }
 
     private void ApplyProjectManagement(ProjectManagementResponse response)

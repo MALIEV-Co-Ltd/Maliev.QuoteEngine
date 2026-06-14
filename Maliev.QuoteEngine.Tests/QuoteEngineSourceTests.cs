@@ -720,11 +720,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-shell--artifacts-open", component, StringComparison.Ordinal);
         Assert.Contains("ToggleRail", component, StringComparison.Ordinal);
         Assert.Contains("AriaExpanded", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("TogglePinnedProjects", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("ToggleProjects", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("RailGroupClass", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("_pinnedProjectsCollapsed", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("_projectsCollapsed", component, StringComparison.Ordinal);
+        Assert.Contains("TogglePinnedProjects", component, StringComparison.Ordinal);
+        Assert.Contains("ToggleProjects", component, StringComparison.Ordinal);
+        Assert.Contains("ProjectManagementSectionClass", component, StringComparison.Ordinal);
+        Assert.Contains("_pinnedProjectsCollapsed", component, StringComparison.Ordinal);
+        Assert.Contains("_projectsCollapsed", component, StringComparison.Ordinal);
+        Assert.Contains("aria-expanded=\"@AriaExpanded(!_pinnedProjectsCollapsed)\"", component, StringComparison.Ordinal);
+        Assert.Contains("aria-expanded=\"@AriaExpanded(!_projectsCollapsed)\"", component, StringComparison.Ordinal);
+        Assert.Contains("@if (!_pinnedProjectsCollapsed)", component, StringComparison.Ordinal);
+        Assert.Contains("@if (!_projectsCollapsed)", component, StringComparison.Ordinal);
         Assert.Contains("MainClass => _messages.Count == 0 ? \"qe-agent-main qe-agent-main--empty\" : \"qe-agent-main qe-agent-main--chat\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
@@ -888,6 +892,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/search", apiClient, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-page", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-row", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-management-section-toggle", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-settings-grid", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel,", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel *", agentStyles, StringComparison.Ordinal);

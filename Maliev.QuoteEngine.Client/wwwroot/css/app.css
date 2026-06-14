@@ -2693,6 +2693,43 @@
     gap: 16px;
 }
 
+.qe-agent-management-section-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 34px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    font: inherit;
+    cursor: pointer;
+}
+
+.qe-agent-management-section-toggle span {
+    display: grid;
+    min-width: 0;
+}
+
+.qe-agent-management-section-toggle small {
+    margin-top: 2px;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+}
+
+.qe-agent-management-section-toggle .mud-icon-root {
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-management-section-toggle:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--qe-agent-primary) 40%, transparent);
+    outline-offset: 4px;
+    border-radius: 8px;
+}
+
 .qe-agent-management-section > header strong {
     font-size: 17px;
 }
