@@ -146,7 +146,9 @@ public sealed record QuoteUploadHandoffPartDto(
     string? ViewerGlbUrl = null,
     string? ViewerStoragePath = null,
     string? ViewerFileExtension = null,
-    string? ThumbnailUrl = null);
+    string? ThumbnailUrl = null,
+    string ContentType = "application/octet-stream",
+    long FileSizeBytes = 0);
 
 public sealed record QuoteUploadHandoffResponse(string QuoteSessionId, IReadOnlyList<QuoteUploadHandoffPartDto> Parts);
 

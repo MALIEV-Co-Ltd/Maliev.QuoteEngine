@@ -1332,6 +1332,34 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ViewerStoragePath = part.ViewerStoragePath", importMethod, StringComparison.Ordinal);
         Assert.Contains("ViewerFileExtension = NormalizeViewerFileExtension(part.ViewerFileExtension, part.ViewerStoragePath ?? part.StoragePath)", importMethod, StringComparison.Ordinal);
         Assert.Contains("ThumbnailUrl = part.ThumbnailUrl", importMethod, StringComparison.Ordinal);
+        Assert.Contains("FileSizeBytes = part.FileSizeBytes", importMethod, StringComparison.Ordinal);
+        Assert.Contains("ContentType = string.IsNullOrWhiteSpace(part.ContentType)", importMethod, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteWorkspace_registers_web_handoff_uploads_with_agent_shell()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var importStart = workspace.IndexOf("private async Task ImportHandoffAsync", StringComparison.Ordinal);
+        var selectStart = workspace.IndexOf("private void SelectPart", StringComparison.Ordinal);
+        Assert.True(importStart >= 0, "QuoteWorkspace must retain an explicit handoff import method.");
+        Assert.True(selectStart > importStart, "QuoteWorkspace handoff import method must precede part selection.");
+        var importMethod = workspace[importStart..selectStart];
+
+        Assert.Contains("await RegisterImportedHandoffPartWithAgentAsync(importedPart);", importMethod, StringComparison.Ordinal);
+        Assert.Contains("await _agentShell.NotifyUploadCompletedAsync(importedPart);", importMethod, StringComparison.Ordinal);
+        Assert.Contains("private async Task RegisterImportedHandoffPartWithAgentAsync(QuotePartViewModel part)", workspace, StringComparison.Ordinal);
+        Assert.Contains("Message = $\"Customer imported {part.FileName} from Maliev.Web.\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("Kind = InferAgentAttachmentKind(part.FileName, contentType)", workspace, StringComparison.Ordinal);
+        Assert.Contains("SatisfiesGeometryGate = QuoteUploadConstraints.IsSupportedCadFileName(part.FileName)", workspace, StringComparison.Ordinal);
+        Assert.Contains("Url = part.GlbUrl ?? part.ThumbnailUrl", workspace, StringComparison.Ordinal);
+        Assert.Contains("ContentType = contentType", workspace, StringComparison.Ordinal);
+        Assert.Contains("FileSizeBytes = Math.Max(1, part.FileSizeBytes)", workspace, StringComparison.Ordinal);
+        Assert.Contains("await _agentShell.ApplyAgentStateAsync(state);", workspace, StringComparison.Ordinal);
+        Assert.Contains("private static string InferImportedContentType(string fileName)", workspace, StringComparison.Ordinal);
+        Assert.Contains("application/step", workspace, StringComparison.Ordinal);
+        Assert.Contains("application/pdf", workspace, StringComparison.Ordinal);
+        Assert.Contains("image/png", workspace, StringComparison.Ordinal);
     }
 
     [Fact]

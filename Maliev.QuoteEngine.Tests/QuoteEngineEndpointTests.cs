@@ -1341,6 +1341,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(".step", viewerFileExtension.GetString());
         Assert.True(partJson.TryGetProperty("thumbnailUrl", out var thumbnailUrl), "Handoff parts must include a thumbnail for the imported part list.");
         Assert.Equal("/images/generated/sample-part.svg", thumbnailUrl.GetString());
+        Assert.True(partJson.TryGetProperty("contentType", out var contentType), "Handoff parts must include the MIME type for agent attachment registration.");
+        Assert.Equal("application/step", contentType.GetString());
+        Assert.True(partJson.TryGetProperty("fileSizeBytes", out var fileSizeBytes), "Handoff parts must include the original file size for agent attachment registration.");
+        Assert.Equal(420_000, fileSizeBytes.GetInt64());
     }
 
     [Fact]

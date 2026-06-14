@@ -420,6 +420,8 @@
             var part = new QuotePartViewModel
             {
                 FileName = candidate.FileName,
+                ContentType = candidate.ContentType,
+                FileSizeBytes = candidate.FileSizeBytes,
                 Status = "Uploading",
                 ClientFileId = candidate.ClientFileId
             };
@@ -623,7 +625,7 @@
             _parts.Clear();
             foreach (var part in response.Parts)
             {
-                _parts.Add(new QuotePartViewModel
+                var importedPart = new QuotePartViewModel
                 {
                     PartId = part.PartId,
                     FileId = part.FileId,
@@ -637,8 +639,19 @@
                     ThumbnailUrl = part.ThumbnailUrl,
                     VolumeCc = part.VolumeCc,
                     SurfaceAreaCm2 = part.SurfaceAreaCm2,
-                    Findings = part.Findings
-                });
+                    Findings = part.Findings,
+                    FileSizeBytes = part.FileSizeBytes,
+                    ContentType = string.IsNullOrWhiteSpace(part.ContentType)
+                        ? InferImportedContentType(part.FileName)
+                        : part.ContentType
+                };
+                ApplyDefaultRouting(importedPart, part.FileName);
+                _parts.Add(importedPart);
+                await RegisterImportedHandoffPartWithAgentAsync(importedPart);
+                if (_agentShell is not null)
+                {
+                    await _agentShell.NotifyUploadCompletedAsync(importedPart);
+                }
             }
 
             if (_parts.Count > 0)
@@ -651,6 +664,70 @@
         {
             _error = Text("We could not import the files from the website upload. Please drop them here again.", "เราไม่สามารถนำเข้าไฟล์จากการอัปโหลดบนเว็บไซต์ได้ กรุณาลากไฟล์มาวางอีกครั้ง");
         }
+    }
+
+    private async Task RegisterImportedHandoffPartWithAgentAsync(QuotePartViewModel part)
+    {
+        if (AgentSessionId == Guid.Empty || string.IsNullOrWhiteSpace(part.StoragePath))
+        {
+            return;
+        }
+
+        var contentType = string.IsNullOrWhiteSpace(part.ContentType)
+            ? InferImportedContentType(part.FileName)
+            : part.ContentType;
+        try
+        {
+            var state = await Api.RegisterAgentAttachmentsAsync(
+                AgentSessionId,
+                new QuoteAgentAttachmentRegisterRequest
+                {
+                    Message = $"Customer imported {part.FileName} from Maliev.Web.",
+                    Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en",
+                    Attachments =
+                    [
+                        new QuoteAgentAttachmentDto
+                        {
+                            FileName = part.FileName,
+                            ContentType = contentType,
+                            FileSizeBytes = Math.Max(1, part.FileSizeBytes),
+                            Kind = InferAgentAttachmentKind(part.FileName, contentType),
+                            UploadId = part.UploadId,
+                            StoragePath = part.StoragePath,
+                            Url = part.GlbUrl ?? part.ThumbnailUrl,
+                            SatisfiesGeometryGate = QuoteUploadConstraints.IsSupportedCadFileName(part.FileName)
+                        }
+                    ]
+                });
+
+            if (_agentShell is not null)
+            {
+                await _agentShell.ApplyAgentStateAsync(state);
+            }
+        }
+        catch (Exception ex) when (ex is QuoteEngineApiException or HttpRequestException or InvalidOperationException)
+        {
+            _error = Text("Files were imported, but agent context could not refresh yet.", "นำเข้าไฟล์แล้ว แต่ยังรีเฟรชบริบทเอเจนต์ไม่ได้");
+        }
+    }
+
+    private static string InferImportedContentType(string fileName)
+    {
+        return Path.GetExtension(fileName).ToLowerInvariant() switch
+        {
+            ".step" or ".stp" => "application/step",
+            ".stl" => "model/stl",
+            ".3mf" => "model/3mf",
+            ".obj" => "model/obj",
+            ".glb" => "model/gltf-binary",
+            ".gltf" => "model/gltf+json",
+            ".pdf" => "application/pdf",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            ".dxf" => "image/vnd.dxf",
+            _ => "application/octet-stream"
+        };
     }
 
     private void SelectPart(int index)

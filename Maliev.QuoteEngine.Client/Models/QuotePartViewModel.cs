@@ -14,6 +14,8 @@ public sealed class QuotePartViewModel
     public string UploadId { get; set; } = string.Empty;
     public string? ClientFileId { get; set; }
     public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = "application/octet-stream";
+    public long FileSizeBytes { get; set; }
     public string ProcessId { get; set; } = "fdm";
     public string MaterialId { get; set; } = "pla-black";
     public string? FinishId { get; set; }

@@ -561,7 +561,9 @@ public sealed class QuoteEnginePrototypeStore
                 analyzed.ViewerGlbUrl,
                 analyzed.StoragePath,
                 NormalizeViewerFileExtension(analyzed.StoragePath),
-                analyzed.ThumbnailUrl));
+                analyzed.ThumbnailUrl,
+                analyzed.ContentType,
+                analyzed.ExpectedSizeBytes));
         }
 
         return new QuoteUploadHandoffResponse(request.QuoteSessionId, parts);
