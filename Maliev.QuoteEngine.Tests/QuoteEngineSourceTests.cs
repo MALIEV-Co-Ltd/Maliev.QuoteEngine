@@ -872,6 +872,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-rail-group-toggle", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message--user .qe-agent-bubble p", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-radius: 999px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.DarkMode : Icons.Material.Outlined.LightMode;", component, StringComparison.Ordinal);
         Assert.Contains("Quote ideas", component, StringComparison.Ordinal);
         Assert.DoesNotContain(">Sample use cases<", component, StringComparison.Ordinal);
         Assert.Contains("SampleUseCases", component, StringComparison.Ordinal);

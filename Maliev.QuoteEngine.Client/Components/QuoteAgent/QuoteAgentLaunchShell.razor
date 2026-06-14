@@ -1050,7 +1050,7 @@
     [CascadingParameter(Name = "IsDarkMode")]
     private bool IsDarkMode { get; set; }
 
-    private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
+    private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.DarkMode : Icons.Material.Outlined.LightMode;
     private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(_artifactPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
     private int ArtifactCount => _artifacts.Count + UploadedParts.Count;
