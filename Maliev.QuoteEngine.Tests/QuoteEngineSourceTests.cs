@@ -838,6 +838,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ToggleComposerPluginsMenu", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-google-drive-icon", component, StringComparison.Ordinal);
         Assert.Contains("GetConnectorRegistryAsync", component, StringComparison.Ordinal);
+        Assert.Contains("GetConnectorHandoffAsync", component, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentConnectorHandoffResponse", component, StringComparison.Ordinal);
+        Assert.Contains("connector.ConnectorId", component, StringComparison.Ordinal);
+        Assert.Contains("handoff.HandoffUrl", component, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(handoff.HandoffUrl)", component, StringComparison.Ordinal);
+        Assert.Contains("handoff.Message", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentConnectorDto", component, StringComparison.Ordinal);
         Assert.Contains("ConnectorStatus", component, StringComparison.Ordinal);
         Assert.Contains("ApplyConnector", component, StringComparison.Ordinal);
@@ -908,6 +914,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-global-search input", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
         Assert.Contains("SearchCustomerDataAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("GetConnectorHandoffAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/agent/tools/quote_get_connector_handoff", apiClient, StringComparison.Ordinal);
+        Assert.Contains("connector_id", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/search", apiClient, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-page", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-row", agentStyles, StringComparison.Ordinal);
@@ -1907,6 +1916,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("params.has(\"handoff\")", loaderScript, StringComparison.Ordinal);
         Assert.Contains("params.get(\"source\") === \"web\"", loaderScript, StringComparison.Ordinal);
         Assert.Contains("const wantsStory = true;", loaderScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("const firstWasmLoadKey", loaderScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("function consumeFirstWasmLoad()", loaderScript, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "minVisibleMs = 0;\n    document.body.classList.add(\"quote-ready\");",
             loaderScript.ReplaceLineEndings("\n"),

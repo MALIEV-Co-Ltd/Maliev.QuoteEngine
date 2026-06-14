@@ -7,6 +7,7 @@
 @inject QuoteEngineApiClient Api
 @inject PreferenceService Preferences
 @inject IJSRuntime Js
+@inject NavigationManager Navigation
 
 <section class="@ShellClass" aria-label="@Text("Quote agent workspace", "พื้นที่ผู้ช่วยขอราคา")">
     <aside class="qe-agent-rail" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
@@ -205,7 +206,7 @@
                                                 <small>@string.Join(", ", connector.SupportedFileTypes)</small>
                                             }
                                         </div>
-                                        <button type="button" @onclick="@(() => ApplyConnector(connector))">@ConnectorStatus(connector)</button>
+                                        <button type="button" @onclick="@(() => ApplyConnectorAsync(connector))">@ConnectorStatus(connector)</button>
                                     </article>
                                 }
                             </div>
@@ -2476,17 +2477,30 @@
                || connector.DisplayName.Contains("Google Drive", StringComparison.OrdinalIgnoreCase);
     }
 
-    private void ApplyConnector(QuoteAgentConnectorDto connector)
+    private async Task ApplyConnectorAsync(QuoteAgentConnectorDto connector)
     {
-        if (connector.RequiresAuthenticationToConnect && !IsSignedIn)
+        try
         {
-            _draftMessage = Text($"Sign in to connect {connector.DisplayName}.", $"เข้าสู่ระบบเพื่อเชื่อมต่อ {connector.DisplayName}");
-            return;
-        }
+            QuoteAgentConnectorHandoffResponse handoff = await Api.GetConnectorHandoffAsync(SessionId, connector.ConnectorId);
+            if (!string.IsNullOrWhiteSpace(handoff.HandoffUrl) &&
+                handoff.Status.Equals("authentication_required", StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo(handoff.HandoffUrl);
+                return;
+            }
 
-        _draftMessage = connector.ActionHint.Equals("connect_google_drive", StringComparison.OrdinalIgnoreCase)
-            ? Text("Help me connect Google Drive when the connector is available.", "ช่วยเชื่อมต่อ Google Drive เมื่อปลั๊กอินพร้อมใช้งาน")
-            : Text($"Tell me how the {connector.DisplayName} connector will work.", $"อธิบายว่าตัวเชื่อมต่อ {connector.DisplayName} จะทำงานอย่างไร");
+            _draftMessage = string.IsNullOrWhiteSpace(handoff.Message)
+                ? Text($"Tell me how the {connector.DisplayName} connector will work.", $"อธิบายว่าตัวเชื่อมต่อ {connector.DisplayName} จะทำงานอย่างไร")
+                : handoff.Message;
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = ex.Message;
+        }
     }
 
     private IEnumerable<SearchNavItem> BuildSearchResults()

@@ -336,6 +336,24 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public Task<QuoteAgentConnectorHandoffResponse> GetConnectorHandoffAsync(
+        Guid sessionId,
+        string connectorId,
+        CancellationToken cancellationToken = default)
+    {
+        return PostAsync<QuoteAgentToolRequest, QuoteAgentConnectorHandoffResponse>(
+            "quote/v1/agent/tools/quote_get_connector_handoff",
+            new QuoteAgentToolRequest
+            {
+                Arguments = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["session_id"] = JsonSerializer.SerializeToElement(sessionId),
+                    ["connector_id"] = JsonSerializer.SerializeToElement(connectorId)
+                }
+            },
+            cancellationToken);
+    }
+
     public Task<QuoteAgentStateResponse> RegisterAgentAttachmentsAsync(
         Guid sessionId,
         QuoteAgentAttachmentRegisterRequest request,
