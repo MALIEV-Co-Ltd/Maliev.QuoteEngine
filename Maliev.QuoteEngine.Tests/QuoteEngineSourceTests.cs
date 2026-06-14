@@ -1075,6 +1075,24 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_RendersTrustedAuthHandoffMethodsFromAgentTurns()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("_authHandoff", component, StringComparison.Ordinal);
+        Assert.Contains("streamEvent.Response.AuthHandoff", component, StringComparison.Ordinal);
+        Assert.Contains("ApplyAuthHandoff", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-auth-handoff\"", component, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var method in _authHandoff!.Methods)", component, StringComparison.Ordinal);
+        Assert.Contains("method.DisplayName", component, StringComparison.Ordinal);
+        Assert.Contains("AuthMethodIcon(method)", component, StringComparison.Ordinal);
+        Assert.Contains("AuthMethodDescription(method)", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-auth-handoff", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-auth-methods", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Web_and_quote_engine_boundaries_are_documented()
     {
         var readme = ReadRepoFile("README.md");

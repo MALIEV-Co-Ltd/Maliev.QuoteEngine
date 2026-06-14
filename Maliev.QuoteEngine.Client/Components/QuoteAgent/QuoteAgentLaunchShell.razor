@@ -599,6 +599,29 @@
             </section>
         }
 
+        @if (ShouldShowAuthHandoff)
+        {
+            <section class="qe-agent-auth-handoff" aria-label="@Text("Trusted sign in options", "ตัวเลือกเข้าสู่ระบบที่เชื่อถือได้")">
+                <header>
+                    <div>
+                        <span>@Text("Sign in required", "ต้องเข้าสู่ระบบ")</span>
+                        <strong>@Text("Continue with MALIEV before quote, order, or payment actions", "เข้าสู่ MALIEV ก่อนทำใบเสนอราคา คำสั่งซื้อ หรือชำระเงิน")</strong>
+                    </div>
+                </header>
+                <div class="qe-agent-auth-methods">
+                    @foreach (var method in _authHandoff!.Methods)
+                    {
+                        <a href="@method.Url">
+                            <MudIcon Icon="@AuthMethodIcon(method)" Size="Size.Small" />
+                            <span>
+                                <strong>@method.DisplayName</strong>
+                                <small>@AuthMethodDescription(method)</small>
+                            </span>
+                        </a>
+                    }
+                </div>
+            </section>
+        }
         <section class="qe-agent-composer-wrap" aria-label="@Text("Message composer", "กล่องข้อความ")">
             @if (_composerMenuOpen)
             {
@@ -879,6 +902,7 @@
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
+    private QuoteAgentAuthHandoffResponse? _authHandoff;
     private List<QuoteAgentConnectorDto> _connectors = [];
     private Guid _loadedSessionId;
     private string _draftMessage = string.Empty;
@@ -1193,6 +1217,7 @@
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
                     _proposedActions = streamEvent.Response.ProposedActions;
+                    ApplyAuthHandoff(streamEvent.Response.AuthHandoff);
                     await InvokeAsync(StateHasChanged);
                 }
                 else if (streamEvent.Type.Equals("error", StringComparison.OrdinalIgnoreCase))
@@ -1309,6 +1334,16 @@
         _proposedActions = state.ProposedActions;
     }
 
+    private bool ShouldShowAuthHandoff =>
+        _authHandoff is not null &&
+        !_authHandoff.IsAuthenticated &&
+        _authHandoff.Methods.Count > 0 &&
+        !IsSignedIn;
+
+    private void ApplyAuthHandoff(QuoteAgentAuthHandoffResponse? authHandoff)
+    {
+        _authHandoff = authHandoff;
+    }
     private void ToggleArtifactPanel()
     {
         _artifactPanelOpen = !_artifactPanelOpen;
@@ -1627,6 +1662,21 @@
         };
     }
 
+    private static string AuthMethodIcon(QuoteAgentAuthMethodDto method)
+    {
+        return method.MethodId.Equals("passkey", StringComparison.OrdinalIgnoreCase)
+            ? Icons.Material.Outlined.Key
+            : method.MethodId.Equals("email-password", StringComparison.OrdinalIgnoreCase)
+                ? Icons.Material.Outlined.Mail
+                : Icons.Material.Outlined.Login;
+    }
+
+    private string AuthMethodDescription(QuoteAgentAuthMethodDto method)
+    {
+        return method.RequiresBrowserSupport
+            ? Text($"{method.Description} Browser support required.", $"{method.Description} ต้องใช้เบราว์เซอร์ที่รองรับ")
+            : method.Description;
+    }
     private static string StepIcon(string status)
     {
         return status.Equals("pending", StringComparison.OrdinalIgnoreCase)

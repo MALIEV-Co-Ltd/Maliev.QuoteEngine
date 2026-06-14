@@ -101,6 +101,7 @@ internal sealed class QuoteAgentService(
             Artifacts = currentState.Artifacts,
             Gates = currentState.Gates,
             ProposedActions = currentState.ProposedActions,
+            AuthHandoff = BuildTurnAuthHandoff(state, currentState),
             ThinkingSteps = chatbotResponse?.ThinkingSteps ?? []
         };
     }
@@ -174,6 +175,7 @@ internal sealed class QuoteAgentService(
             Artifacts = currentState.Artifacts,
             Gates = currentState.Gates,
             ProposedActions = currentState.ProposedActions,
+            AuthHandoff = BuildTurnAuthHandoff(state, currentState),
             ThinkingSteps = finalMessage?.ThinkingSteps ?? []
         };
 
@@ -1009,6 +1011,17 @@ internal sealed class QuoteAgentService(
                 }
             ]
         };
+    }
+
+    private QuoteAgentAuthHandoffResponse? BuildTurnAuthHandoff(
+        QuoteAgentSessionState state,
+        QuoteAgentStateResponse currentState)
+    {
+        return currentState.Gates.Any(gate =>
+            gate.Code.Equals("customer_authenticated", StringComparison.OrdinalIgnoreCase) &&
+            gate.Status.Equals("blocked", StringComparison.OrdinalIgnoreCase))
+                ? BuildAuthHandoff(state, [])
+                : null;
     }
 
     private object RegisterUploadsOrGateError(

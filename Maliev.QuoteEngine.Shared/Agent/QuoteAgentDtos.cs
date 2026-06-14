@@ -119,6 +119,9 @@ public sealed class QuoteAgentTurnResponse
     /// <summary>Gets or sets proposed confirmation actions.</summary>
     public List<QuoteAgentProposedActionDto> ProposedActions { get; set; } = [];
 
+    /// <summary>Gets or sets a trusted authentication handoff when customer authentication blocks the next step.</summary>
+    public QuoteAgentAuthHandoffResponse? AuthHandoff { get; set; }
+
     /// <summary>Gets or sets thinking steps returned by the agent harness.</summary>
     public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
 }

@@ -1726,6 +1726,41 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_turn_includes_auth_handoff_when_authenticated_gate_blocks_next_steps()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Quote this STEP as 25 black nylon SLS enclosures, then help me place the order.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "enclosure.step",
+                    ContentType = "model/step",
+                    FileSizeBytes = 240_000,
+                    Kind = "cad",
+                    StoragePath = "quotes/temp/enclosure.step",
+                    SatisfiesGeometryGate = true
+                }
+            ]
+        });
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+        Assert.NotNull(body);
+        Assert.Contains(body.Gates, gate => gate.Code == "customer_authenticated" && gate.Status == "blocked");
+        Assert.NotNull(body.AuthHandoff);
+        Assert.False(body.AuthHandoff.IsAuthenticated);
+        Assert.Equal("customer_authenticated", body.AuthHandoff.RequiredGateCode);
+        Assert.Contains(body.AuthHandoff.Methods, method => method.MethodId == "google" && method.Status == "preferred");
+        Assert.Contains(body.AuthHandoff.Methods, method => method.MethodId == "passkey" && method.RequiresBrowserSupport);
+        Assert.Contains(body.AuthHandoff.Methods, method => method.MethodId == "email-password" && method.Status == "fallback");
+    }
+
+    [Fact]
     public async Task Agent_auth_handoff_reports_existing_authenticated_customer()
     {
         await using var scopedFactory = CreateAgentFactory();
