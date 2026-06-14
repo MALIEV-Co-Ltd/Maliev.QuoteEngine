@@ -132,6 +132,12 @@ internal sealed class QuoteAgentService(
                 "pin_project",
                 "Pin project",
                 "Pin this Make Studio project for quick access."),
+            "quote_unpin_project" => PrepareProjectManagementActionOrGateError(
+                state,
+                request.Arguments,
+                "unpin_project",
+                "Unpin project",
+                "Remove this Make Studio project from pinned quick access."),
             "quote_archive_project" => PrepareProjectManagementActionOrGateError(
                 state,
                 request.Arguments,
@@ -201,6 +207,7 @@ internal sealed class QuoteAgentService(
             "draft_project" => ExecuteDraftProject(state, customerId!.Value, action),
             "duplicate_project" => ExecuteDuplicateProject(state, customerId!.Value, action),
             "pin_project" => ExecutePinProject(state, customerId!.Value, action),
+            "unpin_project" => ExecuteUnpinProject(state, customerId!.Value, action),
             "archive_project" => ExecuteArchiveProject(state, customerId!.Value, action),
             "formal_quote" => ExecuteFormalQuote(state, customerId!.Value, action),
             "quote_approval" => ExecuteQuoteApproval(state),
@@ -1392,6 +1399,25 @@ internal sealed class QuoteAgentService(
             ["isPinned"] = response.IsPinned.ToString().ToLowerInvariant()
         });
         return $"Project {response.ProjectNumber} was pinned.";
+    }
+
+    private string ExecuteUnpinProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    {
+        if (!TryResolveProjectId(state, action.Arguments, out var projectId))
+        {
+            throw new InvalidOperationException("A project is required before unpinning it.");
+        }
+
+        var response = prototypeStore.SetProjectPinned(customerId, projectId, isPinned: false)
+            ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
+        UpsertArtifact(state, "project_unpin", response.Title, "unpinned", null, null);
+        SetArtifactMetadata(state, "project_unpin", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["projectId"] = response.ProjectId.ToString("D"),
+            ["projectNumber"] = response.ProjectNumber,
+            ["isPinned"] = response.IsPinned.ToString().ToLowerInvariant()
+        });
+        return $"Project {response.ProjectNumber} was unpinned.";
     }
 
     private string ExecuteArchiveProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)

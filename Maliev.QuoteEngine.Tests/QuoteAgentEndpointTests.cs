@@ -948,6 +948,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
     [Theory]
     [InlineData("quote_pin_project", "pin_project", "project_pin", "pinned", "isPinned", "true")]
+    [InlineData("quote_unpin_project", "unpin_project", "project_unpin", "unpinned", "isPinned", "false")]
     [InlineData("quote_archive_project", "archive_project", "project_archive", "archived", "isArchived", "true")]
     public async Task Agent_project_management_tool_requires_confirmation_and_updates_customer_project(
         string toolName,
