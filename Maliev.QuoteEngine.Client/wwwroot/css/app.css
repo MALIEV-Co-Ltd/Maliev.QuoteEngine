@@ -788,8 +788,7 @@
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 4px;
-    scrollbar-gutter: stable;
+    padding: 4px 2px 4px 4px;
 }
 
 .qe-agent-search-panel {
@@ -799,12 +798,11 @@
     max-width: 100%;
     min-width: 0;
     margin: 6px 0 14px;
-    padding: 0 2px 8px;
+    padding: 0 2px 8px 0;
     border: 0;
     border-radius: 0;
     background: transparent;
     overflow: hidden;
-    contain: inline-size;
 }
 
 .qe-agent-search-panel,
@@ -815,7 +813,7 @@
 .qe-agent-search-panel label {
     display: block;
     max-width: 100%;
-    padding: 0 6px;
+    padding: 0 8px;
     color: var(--qe-agent-muted);
     font-size: 11px;
     font-weight: 700;
@@ -825,13 +823,13 @@
 
 .qe-agent-search-box {
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
+    grid-template-columns: 16px minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     width: 100%;
     max-width: 100%;
     min-height: 38px;
-    padding: 0 9px;
+    padding: 0 8px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 11px;
     background: var(--qe-agent-soft);
@@ -863,9 +861,8 @@
     max-height: min(42dvh, 360px);
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 0 2px 0 0;
+    padding: 0;
     min-width: 0;
-    scrollbar-gutter: stable;
 }
 
 .qe-agent-search-results button {
@@ -882,6 +879,7 @@
     cursor: pointer;
     text-align: left;
     min-width: 0;
+    overflow: hidden;
 }
 
 .qe-agent-search-results button:hover {
@@ -891,6 +889,7 @@
 .qe-agent-search-results span,
 .qe-agent-search-results small,
 .qe-agent-search-results p {
+    display: block;
     min-width: 0;
     max-width: 100%;
     color: var(--qe-agent-muted);
@@ -902,6 +901,7 @@
 .qe-agent-search-results strong {
     display: block;
     min-width: 0;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
