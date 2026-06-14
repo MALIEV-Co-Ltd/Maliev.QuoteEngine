@@ -66,6 +66,10 @@ internal sealed class QuoteAgentService(
         "orderId",
         "orderNumber",
         "quoteNumber",
+        "transactionId",
+        "paymentUrl",
+        "paymentStatus",
+        "amount",
         "total",
         "currency",
         "quantity",
@@ -1797,7 +1801,22 @@ internal sealed class QuoteAgentService(
 
         state.Payment = prototypeStore.StartPayment(customerId, state.Order.OrderId);
         UpsertArtifact(state, "payment", "Payment handoff", state.Payment.Status, null, state.Payment.PaymentUrl);
+        SetArtifactMetadata(state, "payment", BuildPaymentSummaryMetadata(state));
         return $"Payment handoff is ready for {state.Order.OrderNumber}.";
+    }
+
+    private static Dictionary<string, string> BuildPaymentSummaryMetadata(QuoteAgentSessionState state)
+    {
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["transactionId"] = state.Payment?.TransactionId.ToString("D") ?? string.Empty,
+            ["paymentUrl"] = state.Payment?.PaymentUrl ?? string.Empty,
+            ["paymentStatus"] = state.Payment?.Status ?? string.Empty,
+            ["orderId"] = state.Order?.OrderId.ToString("D") ?? string.Empty,
+            ["orderNumber"] = state.Order?.OrderNumber ?? string.Empty,
+            ["amount"] = state.Estimate?.Total.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
+            ["currency"] = state.Estimate?.Currency ?? string.Empty
+        };
     }
 
     private static QuotePartDraftDto? ResolvePart(
@@ -2662,7 +2681,7 @@ Customer message:
 
     private static string BuildArtifactContext(IReadOnlyCollection<QuoteAgentArtifactDto> artifacts)
     {
-        return string.Join("; ", artifacts.Take(8).Select(artifact =>
+        return string.Join("; ", artifacts.TakeLast(8).Select(artifact =>
         {
             var metadata = BuildArtifactMetadataContext(artifact.Metadata);
             return string.IsNullOrWhiteSpace(metadata)
