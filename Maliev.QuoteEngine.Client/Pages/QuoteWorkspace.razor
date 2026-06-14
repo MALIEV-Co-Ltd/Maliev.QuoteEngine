@@ -63,9 +63,6 @@
     private const string UploadContainerId = "quote-upload-container";
     private const string UploadInputId = "quote-cad-files";
     private const string PageDropzoneId = "quote-page-dropzone";
-    private const string CompactDropzoneId = "quote-compact-dropzone";
-    private const string MobileDropzoneId = "quote-mobile-dropzone";
-    private const string HeroDropzoneId = "quote-hero-dropzone";
     private const string QuoteDefaultProcessKey = "maliev.quote.default.process";
     private const string QuoteDefaultToleranceKey = "maliev.quote.default.tolerance";
     private const string QuoteDefaultInspectionKey = "maliev.quote.default.inspection";
@@ -137,7 +134,6 @@
         BillingAddressId.HasValue &&
         ShippingAddressId.HasValue;
     private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;
-    private string EmptyStateGridClass => "qe-empty-state-grid qe-empty-state-grid--solo";
     private Guid AgentSessionId => Guid.TryParse(_quoteSessionId, out var parsed) ? parsed : Guid.Empty;
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
@@ -145,17 +141,6 @@
     [SupplyParameterFromQuery(Name = "projectId")]
     public Guid? ProjectId { get; set; }
 
-    private string UploadCompactLabel => IsDemoMode ? Text("Demo sample only", "ไฟล์ตัวอย่างเท่านั้น") : Text("Drop quote files here", "วางไฟล์สำหรับขอราคาที่นี่");
-    private string UploadCompactHint => IsDemoMode ? Text("MALIEV-owned sample file", "ไฟล์ตัวอย่างของ MALIEV") : IsSignedIn ? Text("Customer-owned upload storage", "พื้นที่อัปโหลดของลูกค้า") : Text("Saved temporarily", "บันทึกชั่วคราว");
-    private string UploadHeroLabel => IsDemoMode ? Text("Demo sample is ready", "ไฟล์ตัวอย่างพร้อมใช้งาน") : Text("Drop files here or click to upload", "ลากไฟล์มาวางหรือคลิกเพื่ออัปโหลด");
-    private string UploadHeroHint => IsDemoMode
-        ? Text("Demo mode cannot create projects, formal quotes, orders, uploads, or history", "โหมดตัวอย่างไม่สามารถสร้างโปรเจกต์ ใบเสนอราคาทางการ คำสั่งซื้อ การอัปโหลด หรือประวัติได้")
-        : $"{QuoteUploadConstraints.SupportedAttachmentExtensionLabel} / {Text("max", "สูงสุด")} {QuoteUploadConstraints.MaxFileSizeMegabytes} MB {Text("per file", "ต่อไฟล์")}";
-    private string QuoteButtonLabel => IsDemoMode ? Text("Demo only", "ตัวอย่างเท่านั้น") : IsSignedIn ? Text("Quote", "ขอราคา") : Text("Sign in to quote", "เข้าสู่ระบบเพื่อขอราคา");
-    private string BillingSummaryName => IsSignedIn
-        ? BillingCompanyName ?? _authStatus.DisplayName ?? Text("Customer account", "บัญชีลูกค้า")
-        : Text("Guest checkout", "ขอราคาแบบผู้เยี่ยมชม");
-    private string BillingSummaryHint => IsSignedIn ? Text("Private order", "คำสั่งซื้อส่วนตัว") : Text("Sign in to save projects", "เข้าสู่ระบบเพื่อบันทึกโปรเจกต์");
     private string? BillingCompanyName => string.IsNullOrWhiteSpace(_profile?.CompanyName) ? null : _profile.CompanyName;
     private string? BillingVatNumber => string.IsNullOrWhiteSpace(_profile?.VatNumber) ? null : _profile.VatNumber;
     private string CheckoutReturnUrl => _order is null
@@ -1446,9 +1431,6 @@
         {
             await ClearRetainedBrowserUploadFilesAsync("dispose");
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", PageDropzoneId);
-            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", CompactDropzoneId);
-            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", MobileDropzoneId);
-            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", HeroDropzoneId);
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterPasteTarget", PageDropzoneId);
         }
         catch (JSDisconnectedException)

@@ -634,6 +634,11 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("<QePartsListPanel", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<QeQuoteSummaryBar", source, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-pn-mobile-toolbar", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Drop quote files here", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Untitled quote</", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("CompactDropzoneId", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("MobileDropzoneId", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("HeroDropzoneId", source, StringComparison.Ordinal);
         Assert.Contains("RegisterActiveDropzoneAsync", source, StringComparison.Ordinal);
         Assert.Contains("string[] activeDropzoneIds = [PageDropzoneId];", source, StringComparison.Ordinal);
         Assert.DoesNotContain("new[] { PageDropzoneId, CompactDropzoneId, MobileDropzoneId }", source, StringComparison.Ordinal);
@@ -668,8 +673,8 @@ public sealed class QuoteEngineSourceTests
         Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "models", "sample.glb")));
         Assert.True(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "images", "generated", "metal-components-cutout.png")));
         Assert.False(File.Exists(RepoPath("Maliev.QuoteEngine.Client", "wwwroot", "sample-file.step")));
-        Assert.Contains("\"Sign in to quote\"", source, StringComparison.Ordinal);
-        Assert.Contains("Saved temporarily", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"Sign in to quote\"", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("Saved temporarily", source, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-qsb-customer", source, StringComparison.Ordinal);
         Assert.DoesNotContain("CustomerBoundaryTitle", source, StringComparison.Ordinal);
         Assert.DoesNotContain("CustomerBoundaryHint", source, StringComparison.Ordinal);
