@@ -1,4 +1,5 @@
 @namespace Maliev.QuoteEngine.Client.Components.QuoteAgent
+@using System.Globalization
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject PreferenceService Preferences
@@ -53,12 +54,16 @@
                         <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
                         <input id="qe-agent-search-input"
                                @ref="_searchInput"
-                               @bind="_searchQuery"
-                               @bind:event="oninput"
+                               value="@_searchQuery"
+                               @oninput="OnSearchInputAsync"
                                placeholder="@Text("Projects, orders, files, quotes...", "โปรเจกต์ ออเดอร์ ไฟล์ ใบเสนอราคา...")" />
                     </div>
                     <div class="qe-agent-search-results" aria-live="polite">
-                        @if (SearchResults.Any())
+                        @if (_searchLoading)
+                        {
+                            <p>@Text("Searching customer data...", "กำลังค้นหาข้อมูลลูกค้า...")</p>
+                        }
+                        else if (SearchResults.Any())
                         {
                             @foreach (var result in SearchResults)
                             {
@@ -677,6 +682,7 @@
 @code {
     private readonly List<AgentMessageRow> _messages = [];
     private readonly List<ProjectNavItem> _projects = [];
+    private readonly List<QuoteAgentSearchResultDto> _customerSearchResults = [];
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -696,6 +702,8 @@
     private bool _projectsCollapsed;
     private bool _projectNavigationLoaded;
     private bool _connectorRegistryLoaded;
+    private bool _searchLoading;
+    private bool _customerSearchUnavailable;
     private string _projectName = $"Manufacturing project {DateTimeOffset.Now:yyyy-MM-dd}";
     private string _searchQuery = string.Empty;
     private string _sketchTitle = "Untitled sketch";
@@ -775,6 +783,8 @@
         else
         {
             _projects.Clear();
+            _customerSearchResults.Clear();
+            _customerSearchUnavailable = true;
             _projectNavigationLoaded = false;
         }
 
@@ -1234,15 +1244,63 @@
         existing.IsArchived = response.IsArchived;
     }
 
-    private void ToggleSearch()
+    private async Task ToggleSearch()
     {
         _searchOpen = !_searchOpen;
         if (_searchOpen)
         {
             _pluginsOpen = false;
+            await RefreshSearchResultsAsync();
         }
 
         _focusSearchPending = _searchOpen;
+    }
+
+    private async Task OnSearchInputAsync(ChangeEventArgs args)
+    {
+        _searchQuery = args.Value?.ToString() ?? string.Empty;
+        if (_searchOpen)
+        {
+            await RefreshSearchResultsAsync();
+        }
+    }
+
+    private async Task RefreshSearchResultsAsync()
+    {
+        if (!IsSignedIn || SessionId == Guid.Empty)
+        {
+            _customerSearchResults.Clear();
+            _customerSearchUnavailable = !IsSignedIn;
+            return;
+        }
+
+        _searchLoading = true;
+        _customerSearchUnavailable = false;
+        try
+        {
+            var response = await Api.SearchCustomerDataAsync(SessionId, _searchQuery, 20);
+            _customerSearchResults.Clear();
+            _customerSearchResults.AddRange(response.Results);
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _customerSearchResults.Clear();
+            _customerSearchUnavailable = true;
+            if (ex.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+            {
+                _error = ex.UserMessage;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _customerSearchResults.Clear();
+            _customerSearchUnavailable = true;
+            _error = ex.Message;
+        }
+        finally
+        {
+            _searchLoading = false;
+        }
     }
 
     private async Task TogglePluginsAsync()
@@ -1309,14 +1367,23 @@
     {
         var items = new List<SearchNavItem>();
 
-        items.AddRange(_projects.Select(project => new SearchNavItem(
-            "Project",
-            "โปรเจกต์",
-            project.NameEn,
-            project.NameTh,
-            project.IsPinned ? "Pinned project" : "Recent project",
-            project.IsPinned ? "โปรเจกต์ที่ปักหมุด" : "โปรเจกต์ล่าสุด",
-            project.NameEn)));
+        if (!_customerSearchUnavailable || _customerSearchResults.Count > 0)
+        {
+            items.AddRange(_customerSearchResults.Select(SearchNavItem.FromDto));
+        }
+        else
+        {
+            items.AddRange(_projects.Select(project => new SearchNavItem(
+                "Project",
+                "โปรเจกต์",
+                project.NameEn,
+                project.NameTh,
+                project.IsPinned ? "Pinned project" : "Recent project",
+                project.IsPinned ? "โปรเจกต์ที่ปักหมุด" : "โปรเจกต์ล่าสุด",
+                project.NameEn,
+                "resume_project",
+                $"/quotes?projectId={project.ProjectId:D}")));
+        }
 
         items.AddRange(_artifacts.Select(artifact => new SearchNavItem(
             "Artifact",
@@ -1325,10 +1392,12 @@
             artifact.Title,
             $"{artifact.ArtifactType} · {artifact.Status}",
             $"{artifact.ArtifactType} · {artifact.Status}",
-            $"{artifact.Title} {artifact.ArtifactType} {artifact.Status}")));
+            $"{artifact.Title} {artifact.ArtifactType} {artifact.Status}",
+            "open_artifact",
+            artifact.Url)));
 
         var query = _searchQuery.Trim();
-        if (query.Length == 0)
+        if (query.Length == 0 || (!_customerSearchUnavailable && _customerSearchResults.Count > 0))
         {
             return items.Take(6);
         }
@@ -1344,7 +1413,9 @@
 
     private void ApplySearchResult(SearchNavItem item)
     {
-        _draftMessage = Text($"Open or continue {item.TitleEn}.", $"เปิดหรือทำต่อ {item.TitleTh}");
+        _draftMessage = item.ActionHint.Equals("resume_project", StringComparison.OrdinalIgnoreCase)
+            ? Text($"Resume {item.TitleEn}.", $"ทำต่อ {item.TitleTh}")
+            : Text($"Open or continue {item.TitleEn}.", $"เปิดหรือทำต่อ {item.TitleTh}");
     }
 
     private void ApplyUseCase(UseCaseOption useCase)
@@ -1399,7 +1470,47 @@
 
     private sealed record UseCaseOption(string TitleEn, string TitleTh, string PromptEn, string PromptTh);
 
-    private sealed record SearchNavItem(string TypeEn, string TypeTh, string TitleEn, string TitleTh, string DetailEn, string DetailTh, string SearchText);
+    private sealed record SearchNavItem(
+        string TypeEn,
+        string TypeTh,
+        string TitleEn,
+        string TitleTh,
+        string DetailEn,
+        string DetailTh,
+        string SearchText,
+        string ActionHint,
+        string? Url)
+    {
+        public static SearchNavItem FromDto(QuoteAgentSearchResultDto result)
+        {
+            var typeEn = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(result.ResourceType.Replace("_", " ", StringComparison.Ordinal));
+            return new(
+                typeEn,
+                ResourceTypeThai(result.ResourceType),
+                result.Title,
+                result.Title,
+                result.Detail,
+                result.Detail,
+                $"{result.ResourceType} {result.Title} {result.Detail} {string.Join(" ", result.Metadata.Values)}",
+                result.ActionHint,
+                result.Url);
+        }
+
+        private static string ResourceTypeThai(string resourceType)
+        {
+            return resourceType.ToLowerInvariant() switch
+            {
+                "project" => "โปรเจกต์",
+                "quote" => "ใบเสนอราคา",
+                "order" => "ออเดอร์",
+                "document" => "เอกสาร",
+                "file" => "ไฟล์",
+                "part" => "ชิ้นงาน",
+                "artifact" => "ไฟล์งาน",
+                _ => "ข้อมูล"
+            };
+        }
+    }
 
     private sealed class ProjectNavItem(
         Guid projectId,

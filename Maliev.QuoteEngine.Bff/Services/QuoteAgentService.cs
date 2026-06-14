@@ -24,6 +24,9 @@ public interface IQuoteAgentService
     /// <summary>Gets customer-safe connector definitions for the quote agent workspace.</summary>
     QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId);
 
+    /// <summary>Searches customer-scoped quote data for the quote agent workspace.</summary>
+    QuoteAgentSearchResponse SearchCustomerData(Guid sessionId, string? query, int limit);
+
     /// <summary>Executes an allowlisted internal tool call.</summary>
     Task<object> ExecuteToolAsync(string toolName, QuoteAgentToolRequest request, QuoteAgentContext context, CancellationToken cancellationToken);
 
@@ -101,6 +104,19 @@ internal sealed class QuoteAgentService(
     public QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId)
     {
         return BuildConnectorRegistry(sessionStore.GetOrCreate(sessionId));
+    }
+
+    public QuoteAgentSearchResponse SearchCustomerData(Guid sessionId, string? query, int limit)
+    {
+        var state = sessionStore.GetOrCreate(sessionId);
+        var customerId = ResolveCustomerId() ?? state.CustomerId;
+        if (!customerId.HasValue)
+        {
+            throw new UnauthorizedAccessException("Sign in before searching customer projects, orders, quotes, files, or documents.");
+        }
+
+        state.CustomerId = customerId;
+        return BuildCustomerSearchResponse(state, customerId.Value, query, limit);
     }
 
     public Task<object> ExecuteToolAsync(
@@ -987,19 +1003,30 @@ internal sealed class QuoteAgentService(
 
         var query = ReadString(arguments, "query") ?? string.Empty;
         var limit = ReadInt(arguments, "limit", 20);
+        return BuildCustomerSearchResponse(state, customerId.Value, query, limit);
+    }
+
+    private QuoteAgentSearchResponse BuildCustomerSearchResponse(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        string? query,
+        int limit)
+    {
+        var normalizedQuery = query?.Trim() ?? string.Empty;
+        var normalizedLimit = Math.Clamp(limit, 1, 50);
         var results = prototypeStore
-            .SearchCustomerData(customerId.Value, query, limit)
+            .SearchCustomerData(customerId, normalizedQuery, normalizedLimit)
             .ToList();
-        AddSessionSearchResults(state, query, limit, results);
-        AddArtifactSearchResults(state, query, limit, results);
+        AddSessionSearchResults(state, normalizedQuery, normalizedLimit, results);
+        AddArtifactSearchResults(state, normalizedQuery, normalizedLimit, results);
 
         return new QuoteAgentSearchResponse
         {
             SessionId = state.SessionId,
-            Query = query.Trim(),
+            Query = normalizedQuery,
             IsAuthenticated = true,
             Results = results
-                .Take(Math.Clamp(limit, 1, 50))
+                .Take(normalizedLimit)
                 .ToList()
         };
     }

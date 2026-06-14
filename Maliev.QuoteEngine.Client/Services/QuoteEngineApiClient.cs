@@ -284,6 +284,28 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public async Task<QuoteAgentSearchResponse> SearchCustomerDataAsync(
+        Guid sessionId,
+        string? query,
+        int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var uri = $"quote/v1/agent/sessions/{sessionId:D}/search?limit={Math.Clamp(limit, 1, 50)}";
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            uri += $"&query={Uri.EscapeDataString(query.Trim())}";
+        }
+
+        using var response = await httpClient.GetAsync(uri, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(uri, response, cancellationToken);
+        }
+
+        return await response.Content.ReadFromJsonAsync<QuoteAgentSearchResponse>(cancellationToken: cancellationToken)
+            ?? new QuoteAgentSearchResponse { SessionId = sessionId, Query = query?.Trim() ?? string.Empty };
+    }
+
     public Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync(
         Guid actionId,
         QuoteAgentConfirmActionRequest request,

@@ -57,6 +57,31 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Searches signed-in customer quote data for the QuoteEngine agent workspace.
+    /// </summary>
+    [HttpGet("sessions/{sessionId:guid}/search")]
+    [ProducesResponseType(typeof(QuoteAgentSearchResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public ActionResult<QuoteAgentSearchResponse> SearchCustomerData(
+        Guid sessionId,
+        [FromQuery] string? query,
+        [FromQuery] int limit = 20)
+    {
+        try
+        {
+            return Ok(agentService.SearchCustomerData(sessionId, query, limit));
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = ex.Message
+            });
+        }
+    }
+
+    /// <summary>
     /// Executes an internal allowlisted QuoteEngine agent tool call.
     /// </summary>
     [HttpPost("tools/{toolName}")]

@@ -1182,6 +1182,66 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_search_endpoint_requires_customer_session()
+    {
+        using var client = factory.CreateClient();
+        var response = await client.GetAsync($"/quote/v1/agent/sessions/{Guid.NewGuid():D}/search?query=fixture");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        var json = await response.Content.ReadAsStringAsync();
+        Assert.Contains("Sign in", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_search_endpoint_returns_customer_scoped_results()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var ownerClient = await CreateSignedInClientAsync(scopedFactory, "agent-search-endpoint-owner@example.com");
+        var ownerSessionId = await StartPricedCadSessionAsync(ownerClient);
+
+        var draftState = await ExecuteToolForStateAsync(
+            ownerClient,
+            ownerSessionId,
+            "quote_prepare_draft_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["title"] = JsonSerializer.SerializeToElement("Endpoint fixture search project", JsonOptions)
+            });
+        await ConfirmActionAsync(ownerClient, Assert.Single(draftState.ProposedActions).ActionId);
+
+        using var otherClient = await CreateSignedInClientAsync(scopedFactory, "agent-search-endpoint-other@example.com");
+        var otherSessionId = await StartPricedCadSessionAsync(otherClient);
+        var otherDraftState = await ExecuteToolForStateAsync(
+            otherClient,
+            otherSessionId,
+            "quote_prepare_draft_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["title"] = JsonSerializer.SerializeToElement("Other endpoint fixture project", JsonOptions)
+            });
+        await ConfirmActionAsync(otherClient, Assert.Single(otherDraftState.ProposedActions).ActionId);
+
+        var response = await ownerClient.GetAsync($"/quote/v1/agent/sessions/{ownerSessionId:D}/search?query=fixture&limit=20");
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentSearchResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal(ownerSessionId, body.SessionId);
+        Assert.True(body.IsAuthenticated);
+        Assert.Equal("fixture", body.Query);
+        Assert.Contains(body.Results, result =>
+            result.ResourceType == "project" &&
+            result.Title == "Endpoint fixture search project" &&
+            result.ActionHint == "resume_project");
+        Assert.Contains(body.Results, result =>
+            result.ResourceType == "file" &&
+            result.Title == "fixture.step" &&
+            result.Metadata["source"] == "session");
+        Assert.DoesNotContain(body.Results, result =>
+            result.Title == "Other endpoint fixture project");
+    }
+
+    [Fact]
     public async Task Agent_search_customer_data_returns_customer_scoped_resources()
     {
         await using var scopedFactory = CreateAgentFactory();

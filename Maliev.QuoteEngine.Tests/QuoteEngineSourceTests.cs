@@ -731,6 +731,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Search everything", component, StringComparison.Ordinal);
         Assert.Contains("SearchResults", component, StringComparison.Ordinal);
         Assert.Contains("BuildSearchResults", component, StringComparison.Ordinal);
+        Assert.Contains("OnSearchInputAsync", component, StringComparison.Ordinal);
+        Assert.Contains("RefreshSearchResultsAsync", component, StringComparison.Ordinal);
+        Assert.Contains("SearchCustomerDataAsync", component, StringComparison.Ordinal);
+        Assert.Contains("private readonly List<QuoteAgentSearchResultDto> _customerSearchResults = [];", component, StringComparison.Ordinal);
+        Assert.Contains("SearchNavItem.FromDto", component, StringComparison.Ordinal);
         Assert.Contains("ApplySearchResult", component, StringComparison.Ordinal);
         Assert.Contains("SearchNavItem", component, StringComparison.Ordinal);
         Assert.Contains("projects, orders, files, or artifacts", component, StringComparison.Ordinal);
@@ -759,6 +764,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-box", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("SearchCustomerDataAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/search", apiClient, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-plugin-panel", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-plugin-list", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel,", agentStyles, StringComparison.Ordinal);
