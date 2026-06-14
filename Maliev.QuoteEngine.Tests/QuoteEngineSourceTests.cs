@@ -1107,6 +1107,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("window.addEventListener(\"paste\", paste)", sketchScript, StringComparison.Ordinal);
         Assert.Contains("window.removeEventListener(\"paste\", entry.paste)", sketchScript, StringComparison.Ordinal);
         Assert.Contains("export function setSketchBrushColor", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("SketchPreviewDataUrl", component, StringComparison.Ordinal);
+        Assert.Contains("_lastSketchDataUrl", component, StringComparison.Ordinal);
+        Assert.Contains("message.SketchPreviewDataUrl", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-message-sketch-preview\"", component, StringComparison.Ordinal);
+        Assert.Contains("Attached hand sketch:", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-message-sketch-preview", agentStyles, StringComparison.Ordinal);
     }
 
     [Fact]

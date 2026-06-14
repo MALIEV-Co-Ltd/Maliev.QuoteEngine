@@ -421,6 +421,12 @@
                             <span>@RoleLabel(message.Role)</span>
                             @if (message.Role.Equals("user", StringComparison.OrdinalIgnoreCase))
                             {
+                                @if (!string.IsNullOrWhiteSpace(message.SketchPreviewDataUrl))
+                                {
+                                    <img class="qe-agent-message-sketch-preview"
+                                         src="@message.SketchPreviewDataUrl"
+                                         alt="@Text("Attached hand sketch preview", "ตัวอย่างสเก็ตช์มือที่แนบ")" />
+                                }
                                 <p>@message.Content</p>
                             }
                             else
@@ -1969,7 +1975,10 @@
             _lastSketchDataUrl = await _sketchModule.InvokeAsync<string>("exportSketchCanvas", SketchCanvasId);
         }
 
-        _messages.Add(new AgentMessageRow("user", Text($"Attached hand sketch: {_sketchTitle}", $"แนบสเก็ตช์มือ: {_sketchTitle}")));
+        _messages.Add(new AgentMessageRow(
+            "user",
+            Text($"Attached hand sketch: {_sketchTitle}", $"แนบสเก็ตช์มือ: {_sketchTitle}"),
+            sketchPreviewDataUrl: _lastSketchDataUrl));
         AddLocalDemoTurn(BuildSketchDemoTurn());
         if (_sketchModule is not null)
         {
@@ -2560,7 +2569,11 @@
         Settings
     }
 
-    private sealed class AgentMessageRow(string role, string content, AgentWorkbenchSnapshot? workbench = null)
+    private sealed class AgentMessageRow(
+        string role,
+        string content,
+        AgentWorkbenchSnapshot? workbench = null,
+        string? sketchPreviewDataUrl = null)
     {
         public string Role { get; } = role;
 
@@ -2569,6 +2582,8 @@
         public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
 
         public AgentWorkbenchSnapshot? Workbench { get; } = workbench;
+
+        public string? SketchPreviewDataUrl { get; } = sketchPreviewDataUrl;
     }
 
     private sealed record LocalDemoTurn(

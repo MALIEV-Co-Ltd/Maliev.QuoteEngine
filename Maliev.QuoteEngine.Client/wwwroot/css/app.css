@@ -1572,6 +1572,16 @@
     color: #ffffff !important;
 }
 
+.qe-agent-message-sketch-preview {
+    display: block;
+    width: min(260px, 100%);
+    max-height: 180px;
+    margin: 2px 0 10px;
+    border-radius: 14px;
+    background: #ffffff;
+    object-fit: contain;
+}
+
 .qe-agent-message--assistant .qe-agent-bubble {
     color: var(--qe-agent-ink);
 }
