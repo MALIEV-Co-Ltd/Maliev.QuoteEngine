@@ -1935,6 +1935,7 @@
 
         QueueComposerAttachment(part);
         await InvokeAsync(StateHasChanged);
+        await AutoSubmitPendingAttachmentsAsync();
     }
 
     private void QueueComposerAttachment(QuotePartViewModel part)
@@ -2216,6 +2217,7 @@
         }
 
         _sketchOpen = false;
+        await AutoSubmitPendingAttachmentsAsync();
         await FocusComposerAsync();
     }
 
@@ -2236,6 +2238,16 @@
             "Ready");
 
         _pendingComposerAttachments.Add(attachment);
+    }
+
+    private async Task AutoSubmitPendingAttachmentsAsync()
+    {
+        if (_pendingComposerAttachments.Count == 0 || _sending)
+        {
+            return;
+        }
+
+        await HandleSubmitAsync();
     }
 
     private static string BuildSketchFileName(string title)
