@@ -99,6 +99,51 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_stream_returns_fallback_final_state_when_chatbot_stream_fails()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ThrowStreamException = true
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Can you quote this CNC housing?",
+                Language = "en"
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var body = await response.Content.ReadAsStringAsync();
+        var events = body
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonSerializer.Deserialize<QuoteAgentStreamEvent>(line, JsonOptions))
+            .Where(streamEvent => streamEvent is not null)
+            .Select(streamEvent => streamEvent!)
+            .ToList();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/x-ndjson", response.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("started", events[0].Type);
+        Assert.Contains(events, streamEvent => streamEvent.Type == "delta" && !string.IsNullOrWhiteSpace(streamEvent.Delta));
+        var final = Assert.Single(events, streamEvent => streamEvent.Type == "final");
+        Assert.NotNull(final.Response);
+        Assert.Contains(final.Response.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
+        Assert.False(string.IsNullOrWhiteSpace(chatbot.LastStreamRequest?.QuoteAgentContextToken));
+        Assert.DoesNotContain(events, streamEvent => streamEvent.Type == "error");
+    }
+
+    [Fact]
     public async Task Agent_message_with_cad_attachment_materializes_analysis_without_premature_price()
     {
         var chatbot = new RecordingChatbotServiceClient();
@@ -2349,6 +2394,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         public ChatbotSendMessageRequest? LastStreamRequest { get; private set; }
 
+        public bool ThrowStreamException { get; init; }
+
         public Task<ChatbotSessionResponse?> InitiateSessionAsync(
             ChatbotInitiateSessionRequest request,
             CancellationToken cancellationToken)
@@ -2384,6 +2431,11 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         {
             LastStreamRequest = request;
             await Task.CompletedTask;
+            if (ThrowStreamException)
+            {
+                throw new HttpRequestException("Simulated ChatbotService stream failure.");
+            }
+
             yield return new ChatbotMessageStreamEvent { Type = "started" };
             yield return new ChatbotMessageStreamEvent
             {

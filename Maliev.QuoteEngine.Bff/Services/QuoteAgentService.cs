@@ -58,7 +58,8 @@ internal sealed class QuoteAgentService(
     CustomerSessionResolver sessionResolver,
     IHttpContextAccessor httpContextAccessor,
     IHubContext<QuoteNotificationsHub> hubContext,
-    IConfiguration configuration) : IQuoteAgentService
+    IConfiguration configuration,
+    ILogger<QuoteAgentService> logger) : IQuoteAgentService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] ArtifactContextMetadataKeys =
@@ -143,9 +144,10 @@ internal sealed class QuoteAgentService(
 
         ChatbotMessageResponse? finalMessage = null;
         var receivedDelta = false;
+        var receivedError = false;
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
-        await foreach (var streamEvent in chatbotClient.SendMessageStreamAsync(new ChatbotSendMessageRequest
+        var chatbotStream = chatbotClient.SendMessageStreamAsync(new ChatbotSendMessageRequest
         {
             SessionId = chatbotSessionId,
             Content = ComposeAgentMessage(request.Message, request.CustomerContext, state),
@@ -153,8 +155,32 @@ internal sealed class QuoteAgentService(
             Attachments = BuildChatbotAttachments(request.Attachments),
             CallbackUrl = BuildThinkingCallbackUrl(state.SessionId),
             QuoteAgentContextToken = token
-        }, cancellationToken))
+        }, cancellationToken).GetAsyncEnumerator(cancellationToken);
+        while (true)
         {
+            ChatbotMessageStreamEvent streamEvent;
+            try
+            {
+                if (!await chatbotStream.MoveNextAsync())
+                {
+                    break;
+                }
+
+                streamEvent = chatbotStream.Current;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "ChatbotService stream failed for QuoteEngine agent session {SessionId}; using fallback turn response.",
+                    state.SessionId);
+                break;
+            }
+
             if (streamEvent.Type.Equals("delta", StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrEmpty(streamEvent.Delta))
             {
@@ -171,13 +197,20 @@ internal sealed class QuoteAgentService(
             }
             else if (streamEvent.Type.Equals("error", StringComparison.OrdinalIgnoreCase))
             {
+                receivedError = true;
                 yield return new QuoteAgentStreamEvent
                 {
                     Type = "error",
                     Error = streamEvent.Error
                 };
-                yield break;
+                break;
             }
+        }
+
+        await chatbotStream.DisposeAsync();
+        if (receivedError)
+        {
+            yield break;
         }
 
         var currentState = ToStateResponse(state);
