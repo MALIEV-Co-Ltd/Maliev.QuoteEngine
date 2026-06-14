@@ -473,6 +473,79 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_dfm_issue_blocks_pricing_until_exact_issue_is_acknowledged()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var uploadedState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement(
+                    "Quote this STEP as 10 aluminum pieces. Local DFM found a thin wall risk.",
+                    JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "thin-wall-bracket.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "dfm-risk-upload-cad",
+                        storage_path = "quotes/temp/session/dfm-risk-upload-cad/thin-wall-bracket.step"
+                    }
+                }, JsonOptions)
+            });
+
+        Assert.Contains(uploadedState.Parts, part =>
+            part.Findings.Any(finding => finding.Code == "THIN_WALL"));
+        Assert.Contains(uploadedState.Gates, gate => gate.Code == "dfm_reviewed" && gate.Status == "blocked");
+
+        var blockedEstimateJson = await ExecuteToolAsync(client, sessionId, "quote_calculate_estimate");
+        using (var blockedEstimate = JsonDocument.Parse(blockedEstimateJson))
+        {
+            Assert.Equal("dfm_reviewed", blockedEstimate.RootElement.GetProperty("requiredGateCode").GetString());
+            Assert.Equal("calculate_estimate", blockedEstimate.RootElement.GetProperty("actionType").GetString());
+        }
+
+        var vagueAcknowledgementJson = await ExecuteToolAsync(client, sessionId, "quote_acknowledge_dfm");
+        using (var vagueAcknowledgement = JsonDocument.Parse(vagueAcknowledgementJson))
+        {
+            Assert.Equal("dfm_reviewed", vagueAcknowledgement.RootElement.GetProperty("requiredGateCode").GetString());
+            Assert.Equal("dfm_acknowledgement", vagueAcknowledgement.RootElement.GetProperty("actionType").GetString());
+            Assert.Contains(
+                vagueAcknowledgement.RootElement.GetProperty("requiredIssueIds").EnumerateArray(),
+                issue => issue.GetString() == "THIN_WALL");
+        }
+
+        var acknowledgementState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_acknowledge_dfm",
+            new Dictionary<string, JsonElement>
+            {
+                ["issue_ids"] = JsonSerializer.SerializeToElement(new[] { "THIN_WALL" }, JsonOptions),
+                ["note"] = JsonSerializer.SerializeToElement("I reviewed and accept the thin-wall DFM risk.", JsonOptions)
+            });
+        var acknowledgementAction = Assert.Single(acknowledgementState.ProposedActions);
+        Assert.Equal("dfm_acknowledgement", acknowledgementAction.ActionType);
+
+        var acknowledgementResult = await ConfirmActionAsync(client, acknowledgementAction.ActionId);
+        Assert.NotNull(acknowledgementResult.State);
+        Assert.Contains(acknowledgementResult.State.Gates, gate =>
+            gate.Code == "dfm_reviewed" && gate.Status == "passed");
+
+        var pricedState = await ExecuteToolForStateAsync(client, sessionId, "quote_calculate_estimate");
+
+        Assert.NotNull(pricedState.Estimate);
+        Assert.Contains(pricedState.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+    }
+
+    [Fact]
     public async Task Agent_tool_endpoint_rejects_missing_signed_context()
     {
         using var client = factory.CreateClient();

@@ -159,13 +159,7 @@ internal sealed class QuoteAgentService(
                 ReadString(request.Arguments, "note") ?? "Approve the formal quote and allow order creation.",
                 requiresAuthentication: true,
                 request.Arguments),
-            "quote_acknowledge_dfm" => PrepareActionOrGateError(
-                state,
-                "dfm_acknowledgement",
-                "Acknowledge DFM review",
-                ReadString(request.Arguments, "note") ?? "Record customer acknowledgement of DFM risks.",
-                requiresAuthentication: false,
-                request.Arguments),
+            "quote_acknowledge_dfm" => PrepareDfmAcknowledgementOrGateError(state, request.Arguments),
             "quote_create_order" => PrepareActionOrGateError(
                 state,
                 "create_order",
@@ -432,6 +426,112 @@ internal sealed class QuoteAgentService(
             "start_payment" => FirstBlockingGate(gates, "order_created", "checkout_ready"),
             _ => null
         };
+    }
+
+    private object PrepareDfmAcknowledgementOrGateError(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments)
+    {
+        var blocker = GetActionBlocker(state, "dfm_acknowledgement", requiresAuthentication: false);
+        if (blocker is not null)
+        {
+            return new
+            {
+                error = blocker.Detail,
+                requiredGateCode = blocker.Code,
+                actionType = "dfm_acknowledgement",
+                state = ToStateResponse(state)
+            };
+        }
+
+        var issueCodes = CollectDfmIssueCodes(state)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (issueCodes.Length > 0)
+        {
+            var acknowledgedIssueIds = ReadStringArray(arguments, "issue_ids", "issueIds")
+                .Select(item => item.Trim())
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            if (acknowledgedIssueIds.Count == 0)
+            {
+                return new
+                {
+                    error = "DFM issue identifiers are required before recording acknowledgement.",
+                    requiredGateCode = "dfm_reviewed",
+                    actionType = "dfm_acknowledgement",
+                    requiredIssueIds = issueCodes,
+                    state = ToStateResponse(state)
+                };
+            }
+
+            var missingIssueIds = issueCodes
+                .Where(issueCode => !acknowledgedIssueIds.Contains(issueCode))
+                .ToArray();
+            if (missingIssueIds.Length > 0)
+            {
+                return new
+                {
+                    error = "Acknowledge every current DFM issue before pricing, formal quote, order, or payment.",
+                    requiredGateCode = "dfm_reviewed",
+                    actionType = "dfm_acknowledgement",
+                    missingIssueIds,
+                    state = ToStateResponse(state)
+                };
+            }
+        }
+
+        return PrepareAction(
+            state,
+            "dfm_acknowledgement",
+            "Acknowledge DFM review",
+            ReadString(arguments, "note") ?? "Record customer acknowledgement of DFM risks.",
+            requiresAuthentication: false,
+            arguments);
+    }
+
+    private static IEnumerable<string> CollectDfmIssueCodes(QuoteAgentSessionState state)
+    {
+        foreach (var part in state.Parts.Where(QuoteAgentSessionStore.HasDfmIssues))
+        {
+            foreach (var finding in part.Findings)
+            {
+                if (!string.IsNullOrWhiteSpace(finding.Code))
+                {
+                    yield return finding.Code;
+                }
+            }
+
+            foreach (var issue in part.FdmReport?.Issues ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(issue.Code))
+                {
+                    yield return issue.Code;
+                }
+            }
+
+            foreach (var issue in part.SlaReport?.Issues ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(issue.Code))
+                {
+                    yield return issue.Code;
+                }
+            }
+
+            foreach (var issue in part.CncReport?.Issues ?? [])
+            {
+                if (!string.IsNullOrWhiteSpace(issue.Code))
+                {
+                    yield return issue.Code;
+                }
+            }
+
+            if (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason))
+            {
+                yield return "NON_MANIFOLD";
+            }
+        }
     }
 
     private static QuoteAgentGateDto? FirstBlockingGate(
@@ -1387,7 +1487,7 @@ internal sealed class QuoteAgentService(
             ViewerStoragePath = attachment.StoragePath,
             ViewerFileExtension = Path.GetExtension(attachment.FileName).TrimStart('.').ToLowerInvariant(),
             ThumbnailUrl = "/images/generated/sample-part.svg",
-            Findings = [],
+            Findings = InferPrototypeFindings(message),
             IsManifold = true,
             DfmAcknowledged = false,
             PartNotes = "Prototype analysis generated from uploaded CAD/3D attachment metadata until GeometryService returns authoritative analysis.",
@@ -1424,6 +1524,23 @@ internal sealed class QuoteAgentService(
                 !string.IsNullOrWhiteSpace(part.MaterialId) &&
                 part.Quantity > 0) &&
             !string.IsNullOrWhiteSpace(state.LeadTimeCode);
+    }
+
+    private static IReadOnlyList<DfmFindingDto> InferPrototypeFindings(string message)
+    {
+        if (message.Contains("thin wall", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("wall too thin", StringComparison.OrdinalIgnoreCase))
+        {
+            return
+            [
+                new DfmFindingDto(
+                    "warning",
+                    "THIN_WALL",
+                    "Customer notes or local analysis indicate a thin-wall DFM risk that must be reviewed before pricing or formal quote actions.")
+            ];
+        }
+
+        return [];
     }
 
     private static string ResolveUploadId(QuoteAgentAttachmentDto attachment)
@@ -1660,6 +1777,33 @@ Customer message:
             JsonValueKind.False => "false",
             _ => null
         };
+    }
+
+    private static IReadOnlyList<string> ReadStringArray(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!arguments.TryGetValue(key, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.Array)
+            {
+                return value.EnumerateArray()
+                    .Select(item => item.ValueKind == JsonValueKind.String ? item.GetString() : item.GetRawText())
+                    .Where(item => !string.IsNullOrWhiteSpace(item))
+                    .Select(item => item!)
+                    .ToArray();
+            }
+
+            var singleValue = ReadString(arguments, key);
+            return string.IsNullOrWhiteSpace(singleValue) ? [] : [singleValue];
+        }
+
+        return [];
     }
 
     private static IReadOnlyList<QuoteAgentAttachmentDto> ReadUploadAttachments(
