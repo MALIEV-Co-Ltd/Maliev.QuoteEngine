@@ -773,6 +773,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Icons.Material.Filled.ArrowUpward", component, StringComparison.Ordinal);
         Assert.Contains("SendAgentMessageStreamAsync", component, StringComparison.Ordinal);
         Assert.Contains("assistantMessage.Content += streamEvent.Delta", component, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentMarkdownRenderer.Render(message.Content)", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-markdown\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-thinking\"", component, StringComparison.Ordinal);
+        Assert.Contains("assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps", component, StringComparison.Ordinal);
+        Assert.Contains("<details class=\"qe-agent-thinking\">", component, StringComparison.Ordinal);
         Assert.Contains("streamEvent.Type.Equals(\"delta\"", component, StringComparison.Ordinal);
         Assert.Contains("streamEvent.Type.Equals(\"final\"", component, StringComparison.Ordinal);
         Assert.Contains("ConfirmAgentActionAsync", component, StringComparison.Ordinal);
@@ -846,6 +851,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-workflow", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-markdown", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-markdown-table", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-thinking", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-thinking summary", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-flow-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-analysis-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-requirements-card table", agentStyles, StringComparison.Ordinal);

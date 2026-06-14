@@ -225,7 +225,42 @@
                     <article class="@($"qe-agent-message qe-agent-message--{message.Role} {(message.Workbench is not null ? "qe-agent-message--workbench" : string.Empty)}")">
                         <div class="qe-agent-bubble">
                             <span>@RoleLabel(message.Role)</span>
-                            <p>@message.Content</p>
+                            @if (message.Role.Equals("user", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <p>@message.Content</p>
+                            }
+                            else
+                            {
+                                <div class="qe-agent-markdown">
+                                    @QuoteAgentMarkdownRenderer.Render(message.Content)
+                                </div>
+                                @if (message.ThinkingSteps.Count > 0)
+                                {
+                                    <details class="qe-agent-thinking">
+                                        <summary>
+                                            <MudIcon Icon="@Icons.Material.Outlined.Psychology" Size="Size.Small" />
+                                            <span>@Text("Thinking", "การวิเคราะห์")</span>
+                                            <small>@ThinkingSummary(message.ThinkingSteps)</small>
+                                        </summary>
+                                        <ol>
+                                            @foreach (var step in message.ThinkingSteps.OrderBy(step => step.StepNumber))
+                                            {
+                                                <li>
+                                                    <strong>@step.Title</strong>
+                                                    @if (!string.IsNullOrWhiteSpace(step.Detail))
+                                                    {
+                                                        <p>@step.Detail</p>
+                                                    }
+                                                    @if (step.DurationMs is > 0)
+                                                    {
+                                                        <small>@FormatDuration(step.DurationMs.Value)</small>
+                                                    }
+                                                </li>
+                                            }
+                                        </ol>
+                                    </details>
+                                }
+                            }
                             @if (message.Workbench is not null)
                             {
                                 <section class="qe-agent-workflow" aria-label="@Text("Quote analysis artifacts", "ไฟล์วิเคราะห์ใบเสนอราคา")">
@@ -907,6 +942,7 @@
                          streamEvent.Response is not null)
                 {
                     assistantMessage.Content = streamEvent.Response.AssistantText;
+                    assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps;
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
                     _proposedActions = streamEvent.Response.ProposedActions;
@@ -1062,6 +1098,24 @@
         return role.Equals("user", StringComparison.OrdinalIgnoreCase)
             ? Text("You", "คุณ")
             : "Mali";
+    }
+
+    private string ThinkingSummary(IReadOnlyCollection<QuoteAgentThinkingStepDto> steps)
+    {
+        var totalDuration = steps.Sum(step => step.DurationMs.GetValueOrDefault());
+        if (totalDuration > 0)
+        {
+            return Text($"{steps.Count} steps · {FormatDuration(totalDuration)}", $"{steps.Count} ขั้นตอน · {FormatDuration(totalDuration)}");
+        }
+
+        return Text($"{steps.Count} steps", $"{steps.Count} ขั้นตอน");
+    }
+
+    private static string FormatDuration(long durationMs)
+    {
+        return durationMs < 1000
+            ? FormattableString.Invariant($"{durationMs} ms")
+            : FormattableString.Invariant($"{durationMs / 1000.0:0.#} s");
     }
 
     private static string ArtifactIcon(string artifactType)
@@ -1455,6 +1509,8 @@
         public string Role { get; } = role;
 
         public string Content { get; set; } = content;
+
+        public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
 
         public AgentWorkbenchSnapshot? Workbench { get; } = workbench;
     }
