@@ -2436,11 +2436,12 @@
 
 .qe-agent-use-cases button {
     display: grid;
-    gap: 6px;
-    align-content: center;
+    grid-template-rows: auto auto;
+    align-content: start;
+    gap: 8px;
     width: 100%;
-    min-height: 76px;
-    padding: 15px 18px;
+    min-height: 92px;
+    padding: 16px 18px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 14px;
     background: transparent;
@@ -2466,14 +2467,14 @@
     display: block;
     font-size: 15px;
     font-weight: 600;
-    line-height: 1.25;
+    line-height: 1.3;
 }
 
 .qe-agent-use-cases small {
     display: block;
     color: var(--qe-agent-muted);
     font-size: 13px;
-    line-height: 1.4;
+    line-height: 1.45;
 }
 
 .qe-agent-artifact-drawer {
