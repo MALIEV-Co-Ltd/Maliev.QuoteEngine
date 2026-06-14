@@ -2086,6 +2086,8 @@ internal sealed class QuoteAgentService(
 
         lock (state.SyncRoot)
         {
+            UpsertSupplementalFileArtifacts(state, supplemental);
+
             var artifact = state.Artifacts.FirstOrDefault(item =>
                 item.ArtifactType.Equals("analysis", StringComparison.OrdinalIgnoreCase));
             if (artifact is null)
@@ -2110,6 +2112,94 @@ internal sealed class QuoteAgentService(
                 AttachSupplementalFiles(part, supplemental);
             }
         }
+    }
+
+    private static void UpsertSupplementalFileArtifacts(
+        QuoteAgentSessionState state,
+        IReadOnlyCollection<QuoteAgentAttachmentDto> supplemental)
+    {
+        foreach (var attachment in supplemental)
+        {
+            var artifactType = InferSupplementalArtifactType(attachment);
+            var artifactKey = ResolveSupplementalArtifactKey(attachment);
+            var artifact = state.Artifacts.FirstOrDefault(item =>
+                item.Metadata.TryGetValue("attachmentKey", out var existingKey) &&
+                existingKey.Equals(artifactKey, StringComparison.OrdinalIgnoreCase));
+
+            if (artifact is null)
+            {
+                artifact = new QuoteAgentArtifactDto
+                {
+                    ArtifactType = artifactType,
+                    Title = string.IsNullOrWhiteSpace(attachment.FileName)
+                        ? "Supplemental manufacturing file"
+                        : attachment.FileName,
+                    Status = "ready",
+                    Url = string.IsNullOrWhiteSpace(attachment.Url) ? attachment.StoragePath : attachment.Url
+                };
+                state.Artifacts.Add(artifact);
+            }
+
+            artifact.ArtifactType = artifactType;
+            artifact.Title = string.IsNullOrWhiteSpace(attachment.FileName)
+                ? artifact.Title
+                : attachment.FileName;
+            artifact.Status = "ready";
+            artifact.Url = string.IsNullOrWhiteSpace(attachment.Url) ? attachment.StoragePath : attachment.Url;
+            artifact.Metadata["attachmentKey"] = artifactKey;
+            artifact.Metadata["fileName"] = attachment.FileName;
+            artifact.Metadata["kind"] = attachment.Kind;
+            artifact.Metadata["contentType"] = attachment.ContentType;
+            artifact.Metadata["fileSizeBytes"] = attachment.FileSizeBytes.ToString(CultureInfo.InvariantCulture);
+            artifact.Metadata["satisfiesGeometryGate"] = "false";
+            AddOptionalMetadata(artifact.Metadata, "uploadId", attachment.UploadId);
+            AddOptionalMetadata(artifact.Metadata, "storagePath", attachment.StoragePath);
+        }
+    }
+
+    private static string ResolveSupplementalArtifactKey(QuoteAgentAttachmentDto attachment)
+    {
+        if (!string.IsNullOrWhiteSpace(attachment.StoragePath))
+        {
+            return attachment.StoragePath.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(attachment.Url))
+        {
+            return attachment.Url.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(attachment.UploadId))
+        {
+            return attachment.UploadId.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(attachment.FileName)
+            ? attachment.AttachmentId.ToString("N")
+            : attachment.FileName.Trim();
+    }
+
+    private static string InferSupplementalArtifactType(QuoteAgentAttachmentDto attachment)
+    {
+        if (attachment.Kind.Equals("drawing", StringComparison.OrdinalIgnoreCase) ||
+            attachment.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return "drawing";
+        }
+
+        if (attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase) ||
+            attachment.FileName.Contains("sketch", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sketch";
+        }
+
+        if (attachment.Kind.Equals("photo", StringComparison.OrdinalIgnoreCase) ||
+            attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return "photo";
+        }
+
+        return "supplemental_file";
     }
 
     private static void MarkSupplementalAnalysisGeometrySatisfied(QuoteAgentSessionState state)

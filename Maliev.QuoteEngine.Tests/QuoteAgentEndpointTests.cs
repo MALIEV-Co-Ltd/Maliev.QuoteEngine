@@ -285,6 +285,12 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(body.Artifacts, artifact =>
             artifact.ArtifactType == "analysis" &&
             artifact.Status == "needs_geometry");
+        var sketchArtifact = Assert.Single(body.Artifacts, artifact => artifact.Title == "bracket-sketch.png");
+        Assert.Equal("sketch", sketchArtifact.ArtifactType);
+        Assert.Equal("ready", sketchArtifact.Status);
+        Assert.Equal("photo", sketchArtifact.Metadata["kind"]);
+        Assert.Equal("false", sketchArtifact.Metadata["satisfiesGeometryGate"]);
+        Assert.Equal("image/png", sketchArtifact.Metadata["contentType"]);
         Assert.Contains(body.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
     }
 
@@ -327,6 +333,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             artifact.ArtifactType == "analysis" &&
             artifact.Status == "needs_geometry" &&
             artifact.Metadata["geometryGate"] == "not_satisfied_by_supplemental_files");
+        var sketchArtifact = Assert.Single(body.Artifacts, artifact => artifact.Title == "bracket-sketch.jpg");
+        Assert.Equal("sketch", sketchArtifact.ArtifactType);
+        Assert.Equal("https://files.example.test/bracket-sketch.jpg", sketchArtifact.Url);
+        Assert.Equal("false", sketchArtifact.Metadata["satisfiesGeometryGate"]);
 
         var state = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
             $"/quote/v1/agent/sessions/{body.SessionId:D}");
@@ -381,6 +391,14 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.DoesNotContain(body.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
 
         var analysis = Assert.Single(body.Artifacts, artifact => artifact.ArtifactType == "analysis");
+        Assert.Contains(body.Artifacts, artifact =>
+            artifact.ArtifactType == "sketch" &&
+            artifact.Title == "bracket-sketch.jpg" &&
+            artifact.Metadata["contentType"] == "image/jpeg");
+        Assert.Contains(body.Artifacts, artifact =>
+            artifact.ArtifactType == "drawing" &&
+            artifact.Title == "bracket-drawing.pdf" &&
+            artifact.Metadata["contentType"] == "application/pdf");
         Assert.Equal("needs_geometry", analysis.Status);
         Assert.Equal("not_satisfied_by_supplemental_files", analysis.Metadata["geometryGate"]);
         Assert.Equal("sketch, technical_drawing", analysis.Metadata["sourceTypes"]);
@@ -559,6 +577,14 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(state.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
         Assert.Contains(state.Gates, gate => gate.Code == "analysis_complete" && gate.Status == "blocked");
         var analysisArtifact = Assert.Single(state.Artifacts, artifact => artifact.ArtifactType == "analysis");
+        Assert.Contains(state.Artifacts, artifact =>
+            artifact.ArtifactType == "sketch" &&
+            artifact.Title == "bracket-sketch.jpg" &&
+            artifact.Url == "https://files.example.test/bracket-sketch.jpg");
+        Assert.Contains(state.Artifacts, artifact =>
+            artifact.ArtifactType == "drawing" &&
+            artifact.Title == "bracket-notes.pdf" &&
+            artifact.Url == "quotes/temp/session/agent-upload-drawing/bracket-notes.pdf");
         Assert.Equal("needs_geometry", analysisArtifact.Status);
         Assert.Equal("not_satisfied_by_supplemental_files", analysisArtifact.Metadata["geometryGate"]);
         Assert.Contains("sketch", analysisArtifact.Metadata["summary"], StringComparison.OrdinalIgnoreCase);
