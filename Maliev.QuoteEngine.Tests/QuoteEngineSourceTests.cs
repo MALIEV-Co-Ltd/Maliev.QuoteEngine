@@ -755,6 +755,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SearchNavItem.FromDto", component, StringComparison.Ordinal);
         Assert.Contains("ApplySearchResult", component, StringComparison.Ordinal);
         Assert.Contains("SearchNavItem", component, StringComparison.Ordinal);
+        Assert.Contains("Search projects, orders, files...", component, StringComparison.Ordinal);
         Assert.Contains("projects, orders, files, or artifacts", component, StringComparison.Ordinal);
         Assert.Contains("Pinned projects", component, StringComparison.Ordinal);
         Assert.Contains("Plugins", component, StringComparison.Ordinal);
@@ -787,10 +788,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-plugin-list", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel,", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel *", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("max-height: min(42dvh, 360px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-height: min(34dvh, 280px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-y: auto;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-x: hidden;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("padding: 4px 2px 4px 4px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("padding: 4px 8px 4px 10px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("contain: inline-size;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("scrollbar-gutter: stable;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-wrap: anywhere;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 16px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("display: -webkit-box;", agentStyles, StringComparison.Ordinal);
