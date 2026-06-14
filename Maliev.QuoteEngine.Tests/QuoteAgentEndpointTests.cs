@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Shared.Agent;
+using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
@@ -1149,6 +1150,43 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             "not found",
             document.RootElement.GetProperty("error").GetString(),
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Project_detail_endpoint_resumes_only_signed_in_customer_project()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var ownerClient = await CreateSignedInClientAsync(scopedFactory, "project-detail-owner@example.com");
+        var ownerSessionId = await StartPricedCadSessionAsync(ownerClient);
+        var draftState = await ExecuteToolForStateAsync(
+            ownerClient,
+            ownerSessionId,
+            "quote_prepare_draft_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["title"] = JsonSerializer.SerializeToElement("Resume endpoint project", JsonOptions)
+            });
+        var draftResult = await ConfirmActionAsync(ownerClient, Assert.Single(draftState.ProposedActions).ActionId);
+        Assert.NotNull(draftResult.State);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var projectId));
+
+        var response = await ownerClient.GetAsync($"/quote/v1/projects/{projectId:D}");
+        var body = await response.Content.ReadFromJsonAsync<CustomerProjectDetailResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal(projectId, body.ProjectId);
+        Assert.Equal("Resume endpoint project", body.Title);
+        Assert.NotEmpty(body.Parts);
+
+        using var anonymousClient = scopedFactory.CreateClient();
+        var anonymousResponse = await anonymousClient.GetAsync($"/quote/v1/projects/{projectId:D}");
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymousResponse.StatusCode);
+
+        using var otherClient = await CreateSignedInClientAsync(scopedFactory, "project-detail-other@example.com");
+        var otherResponse = await otherClient.GetAsync($"/quote/v1/projects/{projectId:D}");
+        Assert.Equal(HttpStatusCode.NotFound, otherResponse.StatusCode);
     }
 
     [Fact]

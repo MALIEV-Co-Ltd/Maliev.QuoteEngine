@@ -381,6 +381,16 @@ public sealed record CreateDraftProjectResponse(
     string Title = "Untitled quote",
     IReadOnlyList<QuotePartDraftDto>? Parts = null);
 
+public sealed record CustomerProjectDetailResponse(
+    Guid ProjectId,
+    string ProjectNumber,
+    string Status,
+    string Title,
+    bool IsPinned,
+    bool IsArchived,
+    DateTimeOffset UpdatedAt,
+    IReadOnlyList<QuotePartDraftDto> Parts);
+
 public sealed record DuplicateDraftProjectRequest(string? Title);
 
 public sealed record DuplicateDraftProjectResponse(

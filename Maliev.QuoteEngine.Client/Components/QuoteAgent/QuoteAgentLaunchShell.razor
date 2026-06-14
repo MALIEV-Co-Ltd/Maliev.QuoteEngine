@@ -125,7 +125,7 @@
                         @foreach (var project in PinnedProjects)
                         {
                             <div class="qe-agent-project-row">
-                                <a href="/quote/new">
+                                <a href="@ProjectHref(project)">
                                     <span>@ProjectName(project)</span>
                                 </a>
                                 <button type="button"
@@ -155,7 +155,7 @@
                     @foreach (var project in RegularProjects)
                     {
                         <div class="qe-agent-project-row">
-                            <a href="/quote/new">
+                            <a href="@ProjectHref(project)">
                                 <span>@ProjectName(project)</span>
                             </a>
                             <button type="button"
@@ -1200,6 +1200,11 @@
     private string ProjectName(ProjectNavItem project)
     {
         return Text(project.NameEn, project.NameTh);
+    }
+
+    private static string ProjectHref(ProjectNavItem project)
+    {
+        return $"/quotes?projectId={project.ProjectId:D}";
     }
 
     private async Task ToggleProjectPinAsync(ProjectNavItem project)

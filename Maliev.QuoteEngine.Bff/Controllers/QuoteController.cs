@@ -490,6 +490,22 @@ public sealed class QuoteController(
         return Ok(store.GetProjectNavigation(customerId));
     }
 
+    [HttpGet("projects/{projectId:guid}")]
+    public ActionResult<CustomerProjectDetailResponse> GetProjectDetail(Guid projectId)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "Project details are available only for signed-in customers."
+            });
+        }
+
+        var project = store.GetProjectDetail(customerId, projectId);
+        return project is null ? NotFound() : Ok(project);
+    }
+
     [HttpPost("projects/{projectId:guid}/duplicate")]
     public ActionResult<DuplicateDraftProjectResponse> DuplicateDraftProject(
         Guid projectId,

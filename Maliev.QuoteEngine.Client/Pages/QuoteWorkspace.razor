@@ -240,6 +240,9 @@
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
+    [SupplyParameterFromQuery(Name = "projectId")]
+    public Guid? ProjectId { get; set; }
+
     private string UploadCompactLabel => IsDemoMode ? Text("Demo sample only", "ไฟล์ตัวอย่างเท่านั้น") : Text("Drop quote files here", "วางไฟล์สำหรับขอราคาที่นี่");
     private string UploadCompactHint => IsDemoMode ? Text("MALIEV-owned sample file", "ไฟล์ตัวอย่างของ MALIEV") : IsSignedIn ? Text("Customer-owned upload storage", "พื้นที่อัปโหลดของลูกค้า") : Text("Saved temporarily", "บันทึกชั่วคราว");
     private string UploadHeroLabel => IsDemoMode ? Text("Demo sample is ready", "ไฟล์ตัวอย่างพร้อมใช้งาน") : Text("Drop files here or click to upload", "ลากไฟล์มาวางหรือคลิกเพื่ออัปโหลด");
@@ -351,8 +354,9 @@
         var path = CurrentWorkspacePath();
         var pathChanged = !string.Equals(_lastWorkspacePath, path, StringComparison.OrdinalIgnoreCase);
         var handoffChanged = !string.Equals(_lastHandoff, Handoff, StringComparison.Ordinal);
+        var projectChanged = ProjectId != _draftProjectId;
 
-        if (!force && !pathChanged && !handoffChanged)
+        if (!force && !pathChanged && !handoffChanged && !projectChanged)
         {
             return;
         }
@@ -369,12 +373,16 @@
         }
         else
         {
-            if (force || wasDemoPath || HasDemoWorkspace)
+            if (force || wasDemoPath || HasDemoWorkspace || projectChanged)
             {
                 await ResetWorkspaceStateAsync();
             }
 
-            if (!string.IsNullOrWhiteSpace(Handoff) && (force || pathChanged || handoffChanged))
+            if (ProjectId.HasValue && (force || pathChanged || projectChanged))
+            {
+                await ResumeProjectAsync(ProjectId.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(Handoff) && (force || pathChanged || handoffChanged))
             {
                 await ImportHandoffAsync(Handoff);
             }
@@ -382,6 +390,40 @@
 
         _lastWorkspacePath = path;
         _lastHandoff = Handoff;
+    }
+
+    private async Task ResumeProjectAsync(Guid projectId)
+    {
+        try
+        {
+            var project = await Api.GetProjectDetailAsync(projectId);
+            _draftProjectId = project.ProjectId;
+            _title = project.Title;
+            _parts.Clear();
+            foreach (var part in project.Parts)
+            {
+                _parts.Add(CreatePartViewModel(part));
+            }
+
+            _selectedPartIndex = _parts.Count > 0 ? 0 : 0;
+            _estimate = null;
+            _formalQuote = null;
+            _order = null;
+            _payment = null;
+            _liveNotifications.Insert(0, Text($"Resumed {project.ProjectNumber}.", $"เปิดโปรเจกต์ {project.ProjectNumber} ต่อแล้ว"));
+            if (_parts.Count > 0)
+            {
+                await CalculateAsync();
+            }
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = Text("We could not resume this project. Please try again.", "ไม่สามารถเปิดโปรเจกต์นี้ต่อได้ กรุณาลองใหม่");
+        }
     }
 
     private string CurrentWorkspacePath() => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');

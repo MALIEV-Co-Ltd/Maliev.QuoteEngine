@@ -122,6 +122,16 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken) ?? [];
     }
 
+    public async Task<CustomerProjectDetailResponse> GetProjectDetailAsync(
+        Guid projectId,
+        CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<CustomerProjectDetailResponse>(
+            $"quote/v1/projects/{projectId:D}",
+            cancellationToken)
+            ?? throw new InvalidOperationException("QuoteEngine returned an empty project detail response.");
+    }
+
     public Task<DuplicateDraftProjectResponse> DuplicateProjectAsync(
         Guid projectId,
         DuplicateDraftProjectRequest request,

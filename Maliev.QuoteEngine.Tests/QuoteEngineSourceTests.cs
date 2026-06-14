@@ -607,6 +607,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("await LoadDemoProjectAsync();", source, StringComparison.Ordinal);
         Assert.Contains("private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;", source, StringComparison.Ordinal);
         Assert.Contains("private Guid AgentSessionId", source, StringComparison.Ordinal);
+        Assert.Contains("[SupplyParameterFromQuery(Name = \"projectId\")]", source, StringComparison.Ordinal);
+        Assert.Contains("public Guid? ProjectId { get; set; }", source, StringComparison.Ordinal);
+        Assert.Contains("ResumeProjectAsync(ProjectId.Value)", source, StringComparison.Ordinal);
+        Assert.Contains("GetProjectDetailAsync(projectId)", source, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
         Assert.Contains("private bool IsWorkspaceReady => _parts.Count > 0;", source, StringComparison.Ordinal);
         Assert.Contains("RegisterCompletedUploadWithAgentAsync(part, candidate)", source, StringComparison.Ordinal);
@@ -616,6 +620,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("QuoteUploadConstraints.IsSupportedCadFileName(candidate.FileName)", source, StringComparison.Ordinal);
         Assert.Contains("Task<QuoteAgentStateResponse> RegisterAgentAttachmentsAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/attachments", apiClient, StringComparison.Ordinal);
+        Assert.Contains("Task<CustomerProjectDetailResponse> GetProjectDetailAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/projects/{projectId:D}", apiClient, StringComparison.Ordinal);
         Assert.Contains("id=\"@PageDropzoneId\"", source, StringComparison.Ordinal);
         Assert.Contains("private const string PageDropzoneId = \"quote-page-dropzone\";", source, StringComparison.Ordinal);
         Assert.Contains("Drop files anywhere to start", source, StringComparison.Ordinal);
@@ -728,6 +734,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);", component, StringComparison.Ordinal);
         Assert.Contains("@foreach (var project in RegularProjects)", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-row\"", component, StringComparison.Ordinal);
+        Assert.Contains("href=\"@ProjectHref(project)\"", component, StringComparison.Ordinal);
+        Assert.Contains("private static string ProjectHref(ProjectNavItem project)", component, StringComparison.Ordinal);
+        Assert.Contains("/quotes?projectId={project.ProjectId:D}", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-pin-btn active\"", component, StringComparison.Ordinal);
         Assert.Contains("ToggleProjectPinAsync", component, StringComparison.Ordinal);
         Assert.Contains("PinProjectAsync", component, StringComparison.Ordinal);

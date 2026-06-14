@@ -204,6 +204,25 @@ public sealed class QuoteEnginePrototypeStore
             .ToArray();
     }
 
+    public CustomerProjectDetailResponse? GetProjectDetail(Guid customerId, Guid projectId)
+    {
+        var project = GetProject(customerId, projectId);
+        if (project is null)
+        {
+            return null;
+        }
+
+        return new CustomerProjectDetailResponse(
+            project.ProjectId,
+            project.ProjectNumber,
+            project.Status,
+            project.Title,
+            project.IsPinned,
+            project.IsArchived,
+            project.UpdatedAt,
+            ClonePartsForResponse(project.Parts));
+    }
+
     public IReadOnlyList<QuoteAgentSearchResultDto> SearchCustomerData(
         Guid customerId,
         string? query,
