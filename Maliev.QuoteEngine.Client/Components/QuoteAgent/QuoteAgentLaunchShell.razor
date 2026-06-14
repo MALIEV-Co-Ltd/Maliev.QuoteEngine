@@ -97,7 +97,7 @@
                                         title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
                                         aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
                                         aria-pressed="true"
-                                        @onclick="@(() => ToggleProjectPin(project))">
+                                        @onclick="@(() => ToggleProjectPinAsync(project))">
                                     <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
                                 </button>
                             </div>
@@ -127,7 +127,7 @@
                                     title="@(project.IsPinned ? Text("Unpin project", "เลิกปักหมุดโปรเจกต์") : Text("Pin project", "ปักหมุดโปรเจกต์"))"
                                     aria-label="@(project.IsPinned ? Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}") : Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}"))"
                                     aria-pressed="@project.IsPinned"
-                                    @onclick="@(() => ToggleProjectPin(project))">
+                                    @onclick="@(() => ToggleProjectPinAsync(project))">
                                 <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
                             </button>
                         </div>
@@ -645,14 +645,7 @@
 
 @code {
     private readonly List<AgentMessageRow> _messages = [];
-    private readonly List<ProjectNavItem> _projects =
-    [
-        new("milling-fixture-quote", "Milling fixture quote", "ใบเสนอราคาจิ๊กกัด", true),
-        new("nylon-sensor-housing", "Nylon sensor housing", "กล่องเซนเซอร์ไนลอน", true),
-        new("aluminum-mounting-bracket", "Aluminum mounting bracket", "ขายึดอะลูมิเนียม", false),
-        new("injection-mold-insert", "Injection mold insert", "อินเสิร์ตแม่พิมพ์", false),
-        new("cnc-housing-revision", "CNC housing revision", "ปรับแบบกล่อง CNC", false)
-    ];
+    private readonly List<ProjectNavItem> _projects = [];
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -668,6 +661,7 @@
     private bool _focusSearchPending;
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
+    private bool _projectNavigationLoaded;
     private string _projectName = $"Manufacturing project {DateTimeOffset.Now:yyyy-MM-dd}";
     private string _searchQuery = string.Empty;
     private string _sketchTitle = "Untitled sketch";
@@ -731,12 +725,25 @@
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
     private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(_artifactPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
-    private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned);
-    private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned);
+    private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned && !project.IsArchived);
+    private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
 
     protected override async Task OnParametersSetAsync()
     {
+        if (IsSignedIn)
+        {
+            if (!_projectNavigationLoaded)
+            {
+                await LoadProjectNavigationAsync();
+            }
+        }
+        else
+        {
+            _projects.Clear();
+            _projectNavigationLoaded = false;
+        }
+
         if (SessionId == Guid.Empty || SessionId == _loadedSessionId)
         {
             return;
@@ -787,6 +794,32 @@
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task LoadProjectNavigationAsync()
+    {
+        try
+        {
+            var projects = await Api.GetProjectNavigationAsync();
+            _projects.Clear();
+            _projects.AddRange(projects.Select(ProjectNavItem.FromDto));
+            _projectNavigationLoaded = true;
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _projects.Clear();
+            _projectNavigationLoaded = false;
+            if (ex.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+            {
+                _error = ex.UserMessage;
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _projects.Clear();
+            _projectNavigationLoaded = false;
             _error = ex.Message;
         }
     }
@@ -1124,9 +1157,46 @@
         return Text(project.NameEn, project.NameTh);
     }
 
-    private static void ToggleProjectPin(ProjectNavItem project)
+    private async Task ToggleProjectPinAsync(ProjectNavItem project)
     {
-        project.IsPinned = !project.IsPinned;
+        if (!IsSignedIn)
+        {
+            _draftMessage = Text("Sign in to pin or unpin projects.", "เข้าสู่ระบบเพื่อปักหมุดหรือเลิกปักหมุดโปรเจกต์");
+            return;
+        }
+
+        try
+        {
+            var response = project.IsPinned
+                ? await Api.UnpinProjectAsync(project.ProjectId)
+                : await Api.PinProjectAsync(project.ProjectId);
+            ApplyProjectManagement(response);
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void ApplyProjectManagement(ProjectManagementResponse response)
+    {
+        var existing = _projects.FirstOrDefault(project => project.ProjectId == response.ProjectId);
+        if (existing is null)
+        {
+            _projects.Add(ProjectNavItem.FromManagementResponse(response));
+            return;
+        }
+
+        existing.ProjectNumber = response.ProjectNumber;
+        existing.NameEn = response.Title;
+        existing.NameTh = response.Title;
+        existing.Status = response.Status;
+        existing.IsPinned = response.IsPinned;
+        existing.IsArchived = response.IsArchived;
     }
 
     private void ToggleSearch()
@@ -1157,10 +1227,6 @@
             $"{artifact.ArtifactType} · {artifact.Status}",
             $"{artifact.Title} {artifact.ArtifactType} {artifact.Status}")));
 
-        items.Add(new("Order", "ออเดอร์", "SO-5573 aluminum bracket", "SO-5573 ขายึดอะลูมิเนียม", "$470.00 · Net-30 · Standard lead time", "$470.00 · Net-30 · เวลานำส่งมาตรฐาน", "SO-5573 aluminum bracket order payment lead time"));
-        items.Add(new("File", "ไฟล์", "bracket_sketch.jpg", "bracket_sketch.jpg", "Supplemental sketch context", "สเก็ตช์ประกอบข้อกำหนด", "bracket sketch jpg drawing photo"));
-        items.Add(new("Connector", "ตัวเชื่อมต่อ", "Google Drive", "Google Drive", "Planned plugin for customer file import", "ปลั๊กอินที่วางแผนไว้สำหรับนำเข้าไฟล์ลูกค้า", "google drive plugin connector files"));
-
         var query = _searchQuery.Trim();
         if (query.Length == 0)
         {
@@ -1178,9 +1244,7 @@
 
     private void ApplySearchResult(SearchNavItem item)
     {
-        _draftMessage = item.TypeEn.Equals("Connector", StringComparison.OrdinalIgnoreCase)
-            ? Text("Help me connect Google Drive when the connector is available.", "ช่วยเชื่อมต่อ Google Drive เมื่อปลั๊กอินพร้อมใช้งาน")
-            : Text($"Open or continue {item.TitleEn}.", $"เปิดหรือทำต่อ {item.TitleTh}");
+        _draftMessage = Text($"Open or continue {item.TitleEn}.", $"เปิดหรือทำต่อ {item.TitleTh}");
     }
 
     private void ApplyUseCase(UseCaseOption useCase)
@@ -1237,15 +1301,52 @@
 
     private sealed record SearchNavItem(string TypeEn, string TypeTh, string TitleEn, string TitleTh, string DetailEn, string DetailTh, string SearchText);
 
-    private sealed class ProjectNavItem(string id, string nameEn, string nameTh, bool isPinned)
+    private sealed class ProjectNavItem(
+        Guid projectId,
+        string projectNumber,
+        string nameEn,
+        string nameTh,
+        string status,
+        bool isPinned,
+        bool isArchived)
     {
-        public string Id { get; } = id;
+        public Guid ProjectId { get; } = projectId;
 
-        public string NameEn { get; } = nameEn;
+        public string ProjectNumber { get; set; } = projectNumber;
 
-        public string NameTh { get; } = nameTh;
+        public string NameEn { get; set; } = nameEn;
+
+        public string NameTh { get; set; } = nameTh;
+
+        public string Status { get; set; } = status;
 
         public bool IsPinned { get; set; } = isPinned;
+
+        public bool IsArchived { get; set; } = isArchived;
+
+        public static ProjectNavItem FromDto(CustomerProjectNavItemDto project)
+        {
+            return new(
+                project.ProjectId,
+                project.ProjectNumber,
+                project.Title,
+                project.Title,
+                project.Status,
+                project.IsPinned,
+                project.IsArchived);
+        }
+
+        public static ProjectNavItem FromManagementResponse(ProjectManagementResponse project)
+        {
+            return new(
+                project.ProjectId,
+                project.ProjectNumber,
+                project.Title,
+                project.Title,
+                project.Status,
+                project.IsPinned,
+                project.IsArchived);
+        }
     }
 
     public async ValueTask DisposeAsync()

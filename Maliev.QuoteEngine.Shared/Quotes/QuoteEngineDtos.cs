@@ -398,6 +398,15 @@ public sealed record ProjectManagementResponse(
     bool IsPinned,
     bool IsArchived);
 
+public sealed record CustomerProjectNavItemDto(
+    Guid ProjectId,
+    string ProjectNumber,
+    string Title,
+    string Status,
+    bool IsPinned,
+    bool IsArchived,
+    DateTimeOffset UpdatedAt);
+
 public sealed record GenerateFormalQuoteRequest(Guid ProjectId, string QuoteSessionId, IReadOnlyList<QuotePartDraftDto> Parts, string Notes);
 
 public sealed record GenerateFormalQuoteResponse(Guid QuoteId, string QuoteNumber, string PdfUrl, string Status);

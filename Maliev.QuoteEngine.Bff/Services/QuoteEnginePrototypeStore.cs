@@ -187,6 +187,23 @@ public sealed class QuoteEnginePrototypeStore
             .ToArray();
     }
 
+    public IReadOnlyList<CustomerProjectNavItemDto> GetProjectNavigation(Guid customerId)
+    {
+        return _projects.Values
+            .Where(record => record.CustomerId == customerId && !record.IsArchived)
+            .OrderByDescending(record => record.IsPinned)
+            .ThenByDescending(record => record.UpdatedAt)
+            .Select(record => new CustomerProjectNavItemDto(
+                record.ProjectId,
+                record.ProjectNumber,
+                record.Title,
+                record.Status,
+                record.IsPinned,
+                record.IsArchived,
+                record.UpdatedAt))
+            .ToArray();
+    }
+
     public IReadOnlyList<QuoteAgentSearchResultDto> SearchCustomerData(
         Guid customerId,
         string? query,

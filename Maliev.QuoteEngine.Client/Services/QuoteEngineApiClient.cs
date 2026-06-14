@@ -115,6 +115,13 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return PostAsync<CreateDraftProjectRequest, CreateDraftProjectResponse>("quote/v1/projects/draft", request, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigationAsync(CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerProjectNavItemDto>>(
+            "quote/v1/projects/nav",
+            cancellationToken) ?? [];
+    }
+
     public Task<DuplicateDraftProjectResponse> DuplicateProjectAsync(
         Guid projectId,
         DuplicateDraftProjectRequest request,
@@ -124,6 +131,24 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             $"quote/v1/projects/{projectId:D}/duplicate",
             request,
             cancellationToken);
+    }
+
+    public Task<ProjectManagementResponse> PinProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<object, ProjectManagementResponse>($"quote/v1/projects/{projectId:D}/pin", new { }, cancellationToken);
+    }
+
+    public async Task<ProjectManagementResponse> UnpinProjectAsync(Guid projectId, CancellationToken cancellationToken = default)
+    {
+        var uri = $"quote/v1/projects/{projectId:D}/pin";
+        using var response = await httpClient.DeleteAsync(uri, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(uri, response, cancellationToken);
+        }
+
+        return await response.Content.ReadFromJsonAsync<ProjectManagementResponse>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException("QuoteEngine returned an empty project management response.");
     }
 
     public Task<GenerateFormalQuoteResponse> GenerateFormalQuoteAsync(GenerateFormalQuoteRequest request, CancellationToken cancellationToken = default)

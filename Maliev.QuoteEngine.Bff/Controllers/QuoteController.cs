@@ -475,6 +475,21 @@ public sealed class QuoteController(
         return Ok(store.CreateDraftProject(customerId, request));
     }
 
+    [HttpGet("projects/nav")]
+    public ActionResult<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigation()
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "Project navigation is available only for signed-in customers."
+            });
+        }
+
+        return Ok(store.GetProjectNavigation(customerId));
+    }
+
     [HttpPost("projects/{projectId:guid}/duplicate")]
     public ActionResult<DuplicateDraftProjectResponse> DuplicateDraftProject(
         Guid projectId,
@@ -491,6 +506,38 @@ public sealed class QuoteController(
 
         var duplicated = store.DuplicateDraftProject(customerId, projectId, request);
         return duplicated is null ? NotFound() : Ok(duplicated);
+    }
+
+    [HttpPost("projects/{projectId:guid}/pin")]
+    public ActionResult<ProjectManagementResponse> PinProject(Guid projectId)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "Project pinning is available only for signed-in customers."
+            });
+        }
+
+        var pinned = store.SetProjectPinned(customerId, projectId, isPinned: true);
+        return pinned is null ? NotFound() : Ok(pinned);
+    }
+
+    [HttpDelete("projects/{projectId:guid}/pin")]
+    public ActionResult<ProjectManagementResponse> UnpinProject(Guid projectId)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "Project unpinning is available only for signed-in customers."
+            });
+        }
+
+        var unpinned = store.SetProjectPinned(customerId, projectId, isPinned: false);
+        return unpinned is null ? NotFound() : Ok(unpinned);
     }
 
     [HttpPost("quotes/formal")]

@@ -1787,6 +1787,66 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Project_navigation_requires_signed_in_customer()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = false });
+
+        var response = await client.GetAsync("/quote/v1/projects/nav");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Project_navigation_lists_customer_projects_and_updates_pin_state()
+    {
+        using var client = await CreateSignedInClientAsync("project-nav-owner@example.com");
+
+        var first = await CreateDraftProjectAsync(client, "Regular project");
+        var second = await CreateDraftProjectAsync(client, "Pinned project");
+
+        var pinResponse = await client.PostAsync($"/quote/v1/projects/{second.ProjectId:D}/pin", null);
+        pinResponse.EnsureSuccessStatusCode();
+        var pinned = await pinResponse.Content.ReadFromJsonAsync<ProjectManagementResponse>();
+        Assert.NotNull(pinned);
+        Assert.True(pinned.IsPinned);
+
+        var navResponse = await client.GetAsync("/quote/v1/projects/nav");
+        navResponse.EnsureSuccessStatusCode();
+        var projects = await navResponse.Content.ReadFromJsonAsync<List<CustomerProjectNavItemDto>>();
+
+        Assert.NotNull(projects);
+        Assert.Equal(2, projects.Count);
+        Assert.Equal(second.ProjectId, projects[0].ProjectId);
+        Assert.True(projects[0].IsPinned);
+        Assert.Equal("Pinned project", projects[0].Title);
+        Assert.Contains(projects, project => project.ProjectId == first.ProjectId && !project.IsPinned);
+
+        var unpinResponse = await client.DeleteAsync($"/quote/v1/projects/{second.ProjectId:D}/pin");
+        unpinResponse.EnsureSuccessStatusCode();
+        var unpinned = await unpinResponse.Content.ReadFromJsonAsync<ProjectManagementResponse>();
+        Assert.NotNull(unpinned);
+        Assert.False(unpinned.IsPinned);
+
+        var updatedNav = await client.GetFromJsonAsync<List<CustomerProjectNavItemDto>>("/quote/v1/projects/nav");
+        Assert.NotNull(updatedNav);
+        Assert.Contains(updatedNav, project => project.ProjectId == second.ProjectId && !project.IsPinned);
+    }
+
+    [Fact]
+    public async Task Project_pin_rejects_project_owned_by_another_customer()
+    {
+        using var owner = await CreateSignedInClientAsync("project-nav-owner-a@example.com");
+        var project = await CreateDraftProjectAsync(owner, "Private fixture");
+
+        using var other = await CreateSignedInClientAsync("project-nav-owner-b@example.com");
+        var pinResponse = await other.PostAsync($"/quote/v1/projects/{project.ProjectId:D}/pin", null);
+        var unpinResponse = await other.DeleteAsync($"/quote/v1/projects/{project.ProjectId:D}/pin");
+
+        Assert.Equal(HttpStatusCode.NotFound, pinResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, unpinResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Draft_project_create_and_duplicate_preserve_browser_local_dfm_payload()
     {
         using var client = await CreateSignedInClientAsync("local-dfm-owner@example.com");
@@ -2965,6 +3025,20 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(knownSessionId, body.SessionId);
         Assert.False(body.Hydrated);
         Assert.NotNull(body.ContinuationMessage);
+    }
+
+    private static async Task<CreateDraftProjectResponse> CreateDraftProjectAsync(HttpClient client, string title)
+    {
+        var response = await client.PostAsJsonAsync(
+            "/quote/v1/projects/draft",
+            new CreateDraftProjectRequest(
+                QuoteSessionId: Guid.NewGuid().ToString("N"),
+                Parts: [],
+                Notes: "Project navigation test draft.",
+                Title: title));
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<CreateDraftProjectResponse>()
+            ?? throw new InvalidOperationException("QuoteEngine returned an empty draft project response.");
     }
 
     private async Task<HttpClient> CreateSignedInClientAsync(string email = "customer@example.com")
