@@ -263,6 +263,12 @@
                                                 </div>
                                                 <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
                                                 <button type="button"
+                                                        title="@Text("Duplicate project", "ทำสำเนาโปรเจกต์")"
+                                                        aria-label="@Text($"Duplicate {project.NameEn}", $"ทำสำเนา{project.NameTh}")"
+                                                        @onclick="@(() => DuplicateProjectAsync(project))">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                                                </button>
+                                                <button type="button"
                                                         title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
                                                         aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
                                                         @onclick="@(() => ToggleProjectPinAsync(project))">
@@ -307,6 +313,12 @@
                                                     <p>@project.Status</p>
                                                 </div>
                                                 <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
+                                                <button type="button"
+                                                        title="@Text("Duplicate project", "ทำสำเนาโปรเจกต์")"
+                                                        aria-label="@Text($"Duplicate {project.NameEn}", $"ทำสำเนา{project.NameTh}")"
+                                                        @onclick="@(() => DuplicateProjectAsync(project))">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                                                </button>
                                                 <button type="button"
                                                         title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
                                                         aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
@@ -2270,6 +2282,29 @@
         }
     }
 
+    private async Task DuplicateProjectAsync(ProjectNavItem project)
+    {
+        if (!IsSignedIn)
+        {
+            _draftMessage = Text("Sign in to duplicate projects.", "เข้าสู่ระบบเพื่อทำสำเนาโปรเจกต์");
+            return;
+        }
+
+        try
+        {
+            var response = await Api.DuplicateProjectAsync(project.ProjectId, new DuplicateDraftProjectRequest(Text($"{project.NameEn} copy", $"สำเนา {project.NameTh}")));
+            ApplyDuplicatedProject(response);
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = ex.Message;
+        }
+    }
+
     private async Task ArchiveProjectAsync(ProjectNavItem project)
     {
         if (!IsSignedIn)
@@ -2318,6 +2353,13 @@
         existing.Status = response.Status;
         existing.IsPinned = response.IsPinned;
         existing.IsArchived = response.IsArchived;
+    }
+
+    private void ApplyDuplicatedProject(DuplicateDraftProjectResponse response)
+    {
+        _projects.RemoveAll(project => project.ProjectId == response.ProjectId);
+        _projects.Insert(0, ProjectNavItem.FromDuplicateResponse(response));
+        _activeWorkspacePage = WorkspacePage.Projects;
     }
 
     private async Task ToggleSearch()
@@ -2663,6 +2705,18 @@
                 project.Status,
                 project.IsPinned,
                 project.IsArchived);
+        }
+
+        public static ProjectNavItem FromDuplicateResponse(DuplicateDraftProjectResponse project)
+        {
+            return new(
+                project.ProjectId,
+                project.ProjectNumber,
+                project.Title,
+                project.Title,
+                project.Status,
+                false,
+                false);
         }
     }
 

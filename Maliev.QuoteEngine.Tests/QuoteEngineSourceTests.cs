@@ -578,7 +578,7 @@ public sealed class QuoteEngineSourceTests
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         Assert.Contains(
-            "_parts.Add(part);\n            _selectedPartIndex = _parts.Count - 1;\n            await InvokeAsync(StateHasChanged);\n            try",
+            "_parts.Add(part);\n            _selectedPartIndex = _parts.Count - 1;\n            if (_agentShell is not null)\n            {\n                await _agentShell.NotifyUploadStartedAsync(part);\n            }\n\n            await InvokeAsync(StateHasChanged);\n            try",
             workspace,
             StringComparison.Ordinal);
         Assert.Contains(
@@ -794,6 +794,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("href=\"@ProjectHref(project)\"", component, StringComparison.Ordinal);
         Assert.Contains("private static string ProjectHref(ProjectNavItem project)", component, StringComparison.Ordinal);
         Assert.Contains("/quotes?projectId={project.ProjectId:D}", component, StringComparison.Ordinal);
+        Assert.Contains("DuplicateProjectAsync", component, StringComparison.Ordinal);
+        Assert.Contains("Api.DuplicateProjectAsync(project.ProjectId", component, StringComparison.Ordinal);
+        Assert.Contains("DuplicateDraftProjectRequest", component, StringComparison.Ordinal);
+        Assert.Contains("ApplyDuplicatedProject", component, StringComparison.Ordinal);
+        Assert.Contains("ProjectNavItem.FromDuplicateResponse", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.ContentCopy", component, StringComparison.Ordinal);
+        Assert.Contains("Duplicate project", component, StringComparison.Ordinal);
         Assert.Contains("ToggleProjectPinAsync", component, StringComparison.Ordinal);
         Assert.Contains("PinProjectAsync", component, StringComparison.Ordinal);
         Assert.Contains("UnpinProjectAsync", component, StringComparison.Ordinal);
