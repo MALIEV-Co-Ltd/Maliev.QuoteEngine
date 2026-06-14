@@ -319,6 +319,12 @@ internal sealed class QuoteAgentService(
                 "archive_project",
                 "Archive project",
                 "Archive this Make Studio project from the active project list."),
+            "quote_achieve_project" => PrepareProjectManagementActionOrGateError(
+                state,
+                request.Arguments,
+                "achieve_project",
+                "Mark project achieved",
+                "Mark this Make Studio project as achieved and remove it from active work."),
             "quote_duplicate_project" => PrepareActionOrGateError(
                 state,
                 "duplicate_project",
@@ -384,6 +390,7 @@ internal sealed class QuoteAgentService(
             "pin_project" => ExecutePinProject(state, customerId!.Value, action),
             "unpin_project" => ExecuteUnpinProject(state, customerId!.Value, action),
             "archive_project" => ExecuteArchiveProject(state, customerId!.Value, action),
+            "achieve_project" => ExecuteAchieveProject(state, customerId!.Value, action),
             "formal_quote" => ExecuteFormalQuote(state, customerId!.Value, action),
             "quote_approval" => ExecuteQuoteApproval(state),
             "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
@@ -1831,6 +1838,25 @@ internal sealed class QuoteAgentService(
             ["isArchived"] = response.IsArchived.ToString().ToLowerInvariant()
         });
         return $"Project {response.ProjectNumber} was archived.";
+    }
+
+    private string ExecuteAchieveProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    {
+        if (!TryResolveProjectId(state, action.Arguments, out var projectId))
+        {
+            throw new InvalidOperationException("A project is required before marking it achieved.");
+        }
+
+        var response = prototypeStore.SetProjectAchieved(customerId, projectId)
+            ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
+        UpsertArtifact(state, "project_achieve", response.Title, "achieved", null, null);
+        SetArtifactMetadata(state, "project_achieve", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["projectId"] = response.ProjectId.ToString("D"),
+            ["projectNumber"] = response.ProjectNumber,
+            ["isArchived"] = response.IsArchived.ToString().ToLowerInvariant()
+        });
+        return $"Project {response.ProjectNumber} was marked achieved.";
     }
 
     private string ExecuteFormalQuote(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
