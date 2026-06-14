@@ -1189,6 +1189,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_RendersSupplementalUploadsAsContextArtifacts()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var drawer = ExtractSourceBlock(shell, "<aside class=\"qe-agent-artifact-drawer\"", "</aside>");
+
+        Assert.Contains("@if (CanRenderUploadedPartViewer(SelectedUploadedPart))", drawer, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-artifact-context", drawer, StringComparison.Ordinal);
+        Assert.Contains("SupplementalArtifactLabel(SelectedUploadedPart)", drawer, StringComparison.Ordinal);
+        Assert.Contains("SupplementalArtifactHint(SelectedUploadedPart)", drawer, StringComparison.Ordinal);
+        Assert.Contains("CanRenderUploadedPartViewer", shell, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.IsSupportedCadFileName(part.FileName)", shell, StringComparison.Ordinal);
+        Assert.Contains("SelectedUploadedPart.ThumbnailUrl", drawer, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifact-context", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_RendersTrustedAuthHandoffMethodsFromAgentTurns()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");

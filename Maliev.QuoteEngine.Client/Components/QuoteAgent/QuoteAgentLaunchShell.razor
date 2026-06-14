@@ -1079,29 +1079,55 @@
             {
                 @if (UploadedParts.Count > 0)
                 {
-                    <section class="qe-agent-artifact-viewer" aria-label="@Text("Selected 3D file viewer", "ตัวแสดงไฟล์ 3D ที่เลือก")">
-                        <header>
-                            <div>
-                                <span>@Text("3D viewer", "ตัวแสดง 3D")</span>
-                                <strong>@SelectedUploadedPart.FileName</strong>
+                    @if (CanRenderUploadedPartViewer(SelectedUploadedPart))
+                    {
+                        <section class="qe-agent-artifact-viewer" aria-label="@Text("Selected 3D file viewer", "ตัวแสดงไฟล์ 3D ที่เลือก")">
+                            <header>
+                                <div>
+                                    <span>@Text("3D viewer", "ตัวแสดง 3D")</span>
+                                    <strong>@SelectedUploadedPart.FileName</strong>
+                                </div>
+                                <small>@UploadedPartStatus(SelectedUploadedPart)</small>
+                            </header>
+                            <div class="qe-agent-artifact-viewer-canvas">
+                                <QePartViewer GlbUrl="@SelectedUploadedPart.GlbUrl"
+                                              FileExtension="@ResolveUploadedPartViewerExtension(SelectedUploadedPart)"
+                                              IsDarkMode="@IsDarkMode"
+                                              PartColor="@SelectedUploadedPart.Color"
+                                              ProcessId="@SelectedUploadedPart.ProcessId"
+                                              MaterialId="@SelectedUploadedPart.MaterialId"
+                                              BrowserFileClientId="@SelectedUploadedPart.ClientFileId"
+                                              BrowserFileName="@SelectedUploadedPart.FileName"
+                                              StoragePath="@SelectedUploadedPart.StoragePath"
+                                              FinishCode="@SelectedUploadedPart.FinishCode"
+                                              RoughnessCode="@SelectedUploadedPart.RoughnessCode"
+                                              ViewerSettings="@SelectedUploadedPart.ViewerSettings" />
                             </div>
-                            <small>@UploadedPartStatus(SelectedUploadedPart)</small>
-                        </header>
-                        <div class="qe-agent-artifact-viewer-canvas">
-                            <QePartViewer GlbUrl="@SelectedUploadedPart.GlbUrl"
-                                          FileExtension="@ResolveUploadedPartViewerExtension(SelectedUploadedPart)"
-                                          IsDarkMode="@IsDarkMode"
-                                          PartColor="@SelectedUploadedPart.Color"
-                                          ProcessId="@SelectedUploadedPart.ProcessId"
-                                          MaterialId="@SelectedUploadedPart.MaterialId"
-                                          BrowserFileClientId="@SelectedUploadedPart.ClientFileId"
-                                          BrowserFileName="@SelectedUploadedPart.FileName"
-                                          StoragePath="@SelectedUploadedPart.StoragePath"
-                                          FinishCode="@SelectedUploadedPart.FinishCode"
-                                          RoughnessCode="@SelectedUploadedPart.RoughnessCode"
-                                          ViewerSettings="@SelectedUploadedPart.ViewerSettings" />
-                        </div>
-                    </section>
+                        </section>
+                    }
+                    else
+                    {
+                        <section class="qe-agent-artifact-context" aria-label="@Text("Supplemental uploaded file", "ไฟล์ประกอบที่อัปโหลด")">
+                            <header>
+                                <div>
+                                    <span>@SupplementalArtifactLabel(SelectedUploadedPart)</span>
+                                    <strong>@SelectedUploadedPart.FileName</strong>
+                                </div>
+                                <small>@UploadedPartStatus(SelectedUploadedPart)</small>
+                            </header>
+                            <div class="qe-agent-artifact-context-body">
+                                @if (!string.IsNullOrWhiteSpace(SelectedUploadedPart.ThumbnailUrl))
+                                {
+                                    <img src="@SelectedUploadedPart.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@UploadedPartIcon(SelectedUploadedPart)" Size="Size.Large" />
+                                }
+                                <p>@SupplementalArtifactHint(SelectedUploadedPart)</p>
+                            </div>
+                        </section>
+                    }
                     <section class="qe-agent-artifact-section" aria-label="@Text("Uploaded files", "ไฟล์ที่อัปโหลด")">
                         <header>@Text("Uploaded files", "ไฟล์ที่อัปโหลด")</header>
                         <div class="qe-agent-artifacts">
@@ -1875,6 +1901,53 @@
     private static bool IsUploadBusy(QuotePartViewModel part)
     {
         return part.Status is "Uploading" or "Processing" or "WaitingForUpload";
+    }
+
+    private static bool CanRenderUploadedPartViewer(QuotePartViewModel part)
+    {
+        return QuoteUploadConstraints.IsSupportedCadFileName(part.FileName);
+    }
+
+    private string SupplementalArtifactLabel(QuotePartViewModel part)
+    {
+        var extension = Path.GetExtension(part.FileName).TrimStart('.');
+        if (QuoteUploadConstraints.SupplementalImageExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return Text("Photo or sketch context", "ภาพถ่ายหรือสเก็ตช์ประกอบ");
+        }
+
+        if (QuoteUploadConstraints.SupplementalDocumentExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return Text("Drawing or document context", "แบบหรือเอกสารประกอบ");
+        }
+
+        return Text("Supplemental quote context", "ข้อมูลประกอบใบเสนอราคา");
+    }
+
+    private string SupplementalArtifactHint(QuotePartViewModel part)
+    {
+        var extension = Path.GetExtension(part.FileName).TrimStart('.');
+        if (QuoteUploadConstraints.SupplementalImageExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return Text(
+                "I can read this for dimensions, notes, material clues, and manufacturing intent. A CAD/3D file is still required before DFM, 3D viewer, pricing, or order completion.",
+                "ฉันอ่านภาพนี้เพื่อดูขนาด หมายเหตุ วัสดุ และความต้องการผลิตได้ แต่ยังต้องมีไฟล์ CAD/3D ก่อนตรวจ DFM แสดง 3D คำนวณราคา หรือสั่งผลิต");
+        }
+
+        if (QuoteUploadConstraints.SupplementalDocumentExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return Text(
+                "I can use this as drawing context for requirements and tolerances. Geometry-driven DFM, viewer, pricing, and order gates still need a CAD/3D file.",
+                "ฉันใช้ไฟล์นี้เป็นข้อมูลแบบสำหรับข้อกำหนดและ tolerance ได้ แต่ DFM แบบใช้เรขาคณิต ตัวแสดง 3D ราคา และขั้นตอนสั่งผลิตยังต้องมีไฟล์ CAD/3D");
+        }
+
+        return Text(
+            "I will keep this with the project as supporting manufacturing context until usable CAD/3D geometry is available.",
+            "ฉันจะเก็บไฟล์นี้ไว้เป็นข้อมูลประกอบการผลิตจนกว่าจะมีไฟล์ CAD/3D ที่ใช้ได้");
     }
 
     private static string UploadedPartIcon(QuotePartViewModel part)
