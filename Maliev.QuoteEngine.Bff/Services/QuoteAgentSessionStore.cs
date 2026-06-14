@@ -361,6 +361,16 @@ internal sealed class QuoteAgentSessionState
 
     public string Language { get; set; } = "en";
 
+    public string Units { get; set; } = "mm";
+
+    public string Currency { get; set; } = "THB";
+
+    public string InteractionMode { get; set; } = "chat";
+
+    public bool AllowArtifactPanel { get; set; } = true;
+
+    public bool Multilingual { get; set; } = true;
+
     public string LeadTimeCode { get; set; } = "STANDARD";
 
     public List<QuoteAgentAttachmentDto> Attachments { get; } = [];

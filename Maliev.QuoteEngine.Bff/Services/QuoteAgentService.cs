@@ -265,6 +265,8 @@ internal sealed class QuoteAgentService(
             "quote_get_reference_data" => prototypeStore.ReferenceData,
             "quote_get_account_context" => BuildAccountContext(state),
             "quote_get_auth_handoff" => BuildAuthHandoff(state, request.Arguments),
+            "quote_get_settings" => BuildSettings(state),
+            "quote_update_settings" => UpdateSettings(state, request.Arguments),
             "quote_get_connectors" => BuildConnectorRegistry(state),
             "quote_search_customer_data" => SearchCustomerDataOrGateError(state, request.Arguments),
             "quote_register_uploads" => RegisterUploadsOrGateError(state, request.Arguments),
@@ -1124,6 +1126,57 @@ internal sealed class QuoteAgentService(
                 }
             ]
         };
+    }
+
+    private static QuoteAgentSettingsResponse BuildSettings(QuoteAgentSessionState state)
+    {
+        return new QuoteAgentSettingsResponse
+        {
+            SessionId = state.SessionId,
+            Language = state.Language,
+            Units = state.Units,
+            Currency = state.Currency,
+            InteractionMode = state.InteractionMode,
+            AllowArtifactPanel = state.AllowArtifactPanel,
+            Multilingual = state.Multilingual,
+            NextActions =
+            [
+                "settings",
+                "continue_quote"
+            ]
+        };
+    }
+
+    private static QuoteAgentSettingsResponse UpdateSettings(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments)
+    {
+        lock (state.SyncRoot)
+        {
+            state.Language = NormalizeLanguage(ReadString(arguments, "language"), state.Language);
+            state.Units = NormalizeUnits(ReadString(arguments, "units") ?? ReadString(arguments, "unit_system"), state.Units);
+            state.Currency = NormalizeCurrency(ReadString(arguments, "currency"), state.Currency);
+            state.InteractionMode = NormalizeInteractionMode(
+                ReadString(arguments, "interaction_mode") ?? ReadString(arguments, "interactionMode"),
+                state.InteractionMode);
+
+            if (arguments.ContainsKey("allow_artifact_panel"))
+            {
+                state.AllowArtifactPanel = ReadBool(arguments, "allow_artifact_panel");
+            }
+            else if (arguments.ContainsKey("allowArtifactPanel"))
+            {
+                state.AllowArtifactPanel = ReadBool(arguments, "allowArtifactPanel");
+            }
+
+            if (arguments.ContainsKey("multilingual"))
+            {
+                state.Multilingual = ReadBool(arguments, "multilingual");
+            }
+
+            state.UpdatedAt = DateTimeOffset.UtcNow;
+            return BuildSettings(state);
+        }
     }
 
     private object SearchCustomerDataOrGateError(
@@ -2760,6 +2813,45 @@ Customer message:
         }
 
         return message.Any(ch => ch >= '\u0E00' && ch <= '\u0E7F') ? "th" : "en";
+    }
+
+    private static string NormalizeUnits(string? units, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(units))
+        {
+            return fallback;
+        }
+
+        var normalized = units.Trim().ToLowerInvariant();
+        return normalized is "inch" or "in" or "imperial"
+            ? "inch"
+            : "mm";
+    }
+
+    private static string NormalizeCurrency(string? currency, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(currency))
+        {
+            return fallback;
+        }
+
+        var normalized = currency.Trim().ToUpperInvariant();
+        return normalized is "THB" or "USD" or "EUR" or "JPY" or "SGD"
+            ? normalized
+            : fallback;
+    }
+
+    private static string NormalizeInteractionMode(string? interactionMode, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(interactionMode))
+        {
+            return fallback;
+        }
+
+        var normalized = interactionMode.Trim().ToLowerInvariant();
+        return normalized is "chat" or "chat-and-ui" or "ui"
+            ? normalized
+            : fallback;
     }
 
     private static string FallbackAgentAnswer(QuoteAgentStateResponse state)

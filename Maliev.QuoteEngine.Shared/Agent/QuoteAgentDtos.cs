@@ -370,6 +370,36 @@ public sealed class QuoteAgentProjectSummaryResponse
 }
 
 /// <summary>
+/// Customer-safe Make Studio settings for the current quote agent session.
+/// </summary>
+public sealed class QuoteAgentSettingsResponse
+{
+    /// <summary>Gets or sets the QuoteEngine agent session ID.</summary>
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets the current response/input language.</summary>
+    public string Language { get; set; } = "en";
+
+    /// <summary>Gets or sets the preferred dimensional unit system.</summary>
+    public string Units { get; set; } = "mm";
+
+    /// <summary>Gets or sets the preferred quote currency.</summary>
+    public string Currency { get; set; } = "THB";
+
+    /// <summary>Gets or sets the preferred Make Studio interaction mode.</summary>
+    public string InteractionMode { get; set; } = "chat";
+
+    /// <summary>Gets or sets whether the customer wants the artifact panel available.</summary>
+    public bool AllowArtifactPanel { get; set; } = true;
+
+    /// <summary>Gets or sets whether bilingual/multilingual responses are enabled for the session.</summary>
+    public bool Multilingual { get; set; } = true;
+
+    /// <summary>Gets or sets customer-safe next actions after reading or changing settings.</summary>
+    public List<string> NextActions { get; set; } = [];
+}
+
+/// <summary>
 /// Customer-safe connector registry response for QuoteEngine plugins and integrations.
 /// </summary>
 public sealed class QuoteAgentConnectorRegistryResponse

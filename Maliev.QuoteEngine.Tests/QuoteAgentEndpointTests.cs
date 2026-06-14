@@ -1688,6 +1688,46 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_settings_tool_returns_and_updates_customer_safe_session_settings()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var defaultsJson = await ExecuteToolAsync(client, sessionId, "quote_get_settings");
+        using (var defaults = JsonDocument.Parse(defaultsJson))
+        {
+            Assert.Equal(sessionId, defaults.RootElement.GetProperty("sessionId").GetGuid());
+            Assert.Equal("mm", defaults.RootElement.GetProperty("units").GetString());
+            Assert.Equal("THB", defaults.RootElement.GetProperty("currency").GetString());
+            Assert.Equal("chat", defaults.RootElement.GetProperty("interactionMode").GetString());
+            Assert.True(defaults.RootElement.GetProperty("allowArtifactPanel").GetBoolean());
+            Assert.True(defaults.RootElement.GetProperty("multilingual").GetBoolean());
+        }
+
+        var updateJson = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_update_settings",
+            new Dictionary<string, JsonElement>
+            {
+                ["units"] = JsonSerializer.SerializeToElement("inch", JsonOptions),
+                ["currency"] = JsonSerializer.SerializeToElement("USD", JsonOptions),
+                ["interaction_mode"] = JsonSerializer.SerializeToElement("chat-and-ui", JsonOptions),
+                ["allow_artifact_panel"] = JsonSerializer.SerializeToElement(false, JsonOptions),
+                ["language"] = JsonSerializer.SerializeToElement("th", JsonOptions)
+            });
+        using var updated = JsonDocument.Parse(updateJson);
+
+        Assert.Equal(sessionId, updated.RootElement.GetProperty("sessionId").GetGuid());
+        Assert.Equal("inch", updated.RootElement.GetProperty("units").GetString());
+        Assert.Equal("USD", updated.RootElement.GetProperty("currency").GetString());
+        Assert.Equal("chat-and-ui", updated.RootElement.GetProperty("interactionMode").GetString());
+        Assert.False(updated.RootElement.GetProperty("allowArtifactPanel").GetBoolean());
+        Assert.Equal("th", updated.RootElement.GetProperty("language").GetString());
+        Assert.Contains("settings", updated.RootElement.GetProperty("nextActions").EnumerateArray().Select(item => item.GetString()));
+    }
+
+    [Fact]
     public async Task Agent_auth_handoff_lists_google_passkey_and_email_fallback_for_anonymous_customer()
     {
         using var client = factory.CreateClient();
