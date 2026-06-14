@@ -1,6 +1,8 @@
 (function () {
   const root = document.documentElement;
   const seenResources = new Set();
+  const bootVersion = Date.now().toString(36);
+  const staleBootRetryKey = "maliev.quote.boot.retry";
   let loadedResources = 0;
   let totalResources = 0;
   let displayedProgress = 0;
@@ -43,8 +45,8 @@
   let currentStrings = STRINGS["en-US"];
 
   // ── Make Studio story / dismissal state ───────────────────────────────
-  const STORY_BEAT_MS = [1500, 1900, 1200, 2400];
-  const FINALE_HOLD_MS = 600;
+  const STORY_BEAT_MS = [3200, 4200, 2600, 5200];
+  const FINALE_HOLD_MS = 1200;
   let storyBeats = [];
   let storyMode = "full"; // "full" plays the narrative; "quiet" shows the finale only
   let bootTick = null;
@@ -95,9 +97,18 @@
     return map[defaultUri] || defaultUri;
   }
 
+  function withBootCacheBust(uri) {
+    if (!uri || !uri.startsWith("_framework/")) {
+      return uri;
+    }
+
+    const separator = uri.includes("?") ? "&" : "?";
+    return `${uri}${separator}v=${bootVersion}`;
+  }
+
   function loadBootResource(type, name, defaultUri, integrity) {
     if (type === "dotnetjs") {
-      return resolveStaticAsset(defaultUri);
+      return withBootCacheBust(resolveStaticAsset(defaultUri));
     }
 
     const key = `${type}:${name}:${defaultUri}`;
@@ -108,8 +119,12 @@
       updateResourceProgress();
     }
 
-    const requestInit = integrity ? { integrity } : undefined;
-    return fetch(defaultUri, requestInit).then(
+    const requestInit = {
+      cache: "no-store",
+      ...(integrity ? { integrity } : {})
+    };
+
+    return fetch(withBootCacheBust(defaultUri), requestInit).then(
       function (response) {
         loadedResources += 1;
         updateResourceProgress();
@@ -139,6 +154,34 @@
     setStatus(currentStrings.status.failed);
     document.body.classList.add("quote-loading-failed");
     stopBootTick();
+  }
+
+  function isStaleBootError(error) {
+    const message = String(error && (error.message || error) || "");
+    return message.includes("Failed to fetch dynamically imported module")
+      || message.includes("/_framework/dotnet.")
+      || message.includes("_framework/dotnet.");
+  }
+
+  function recoverFromStaleBoot(error) {
+    if (!isStaleBootError(error)) {
+      return false;
+    }
+
+    try {
+      if (window.sessionStorage.getItem(staleBootRetryKey) === "1") {
+        return false;
+      }
+
+      window.sessionStorage.setItem(staleBootRetryKey, "1");
+    } catch {
+      // If sessionStorage is unavailable, do one reload anyway.
+    }
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("msboot", Date.now().toString());
+    window.location.replace(url.toString());
+    return true;
   }
 
   // ── story timeline ────────────────────────────────────────────────────
@@ -230,9 +273,10 @@
       : [];
     bootStartedAt = Date.now();
 
-    // Tell the full story on every Web → Studio handoff. Organic visits stay
-    // quiet so the chat workspace remains the first real experience.
-    const wantsStory = isWorkspaceHandoff;
+    // Tell the full story for every Studio boot while the WASM runtime loads.
+    // Web → Studio handoff still affects the status copy, but direct Studio
+    // visits should also see the narrative instead of a static finale.
+    const wantsStory = true;
     storyMode = wantsStory && !prefersReducedMotion() ? "full" : "quiet";
 
     if (storyMode === "full") {
@@ -378,8 +422,17 @@
     return window.Blazor.start({
       loadBootResource: window.quoteEngineLoader.loadBootResource
     }).then(function () {
+      try {
+        window.sessionStorage.removeItem(staleBootRetryKey);
+      } catch {
+        // sessionStorage can be unavailable in strict privacy modes.
+      }
       window.quoteEngineLoader.markRuntimeReady();
     }).catch(function (error) {
+      if (recoverFromStaleBoot(error)) {
+        return;
+      }
+
       window.quoteEngineLoader.markFailed(error);
     });
   }

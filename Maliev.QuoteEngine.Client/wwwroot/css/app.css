@@ -2548,23 +2548,8 @@ body.quote-ready .startup-screen {
 }
 
 .ms-kill {
-    /* a center line painted per line-box (clone), so wrapped lines all strike through */
-    background-image: linear-gradient(currentColor, currentColor);
-    background-repeat: no-repeat;
-    background-position: 0 56%;
-    background-size: 0% 2px;
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
-}
-
-.ms-beat--on .ms-kill {
-    animation: ms-strike 0.6s cubic-bezier(0.6, 0, 0.4, 1) 0.85s forwards;
-}
-
-@keyframes ms-strike {
-    to {
-        background-size: 100% 2px;
-    }
 }
 
 .ms-beat--finale {
@@ -2716,10 +2701,6 @@ body.quote-loading-failed .ms-stage {
     .ms-beat {
         transition: opacity 0.2s ease;
         transform: none;
-    }
-    .ms-beat--on .ms-kill {
-        animation: none;
-        background-size: 100% 2px;
     }
     .ms-wordmark::after {
         animation: none;

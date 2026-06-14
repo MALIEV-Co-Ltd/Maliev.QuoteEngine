@@ -980,6 +980,25 @@
         finally
         {
             _sending = false;
+            await InvokeAsync(StateHasChanged);
+            await FocusComposerAsync();
+        }
+    }
+
+    private async Task FocusComposerAsync()
+    {
+        if (_composerModule is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _composerModule.InvokeVoidAsync("focusComposer", _composerTextarea);
+        }
+        catch (InvalidOperationException)
+        {
+            // The component can be disposed while a streamed response is ending.
         }
     }
 

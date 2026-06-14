@@ -4,6 +4,7 @@
 @page "/quote/new"
 @page "/projects/new"
 @page "/demo"
+@using System.Net
 @using System.Net.Http
 @using System.Text.Json
 @using Maliev.QuoteEngine.Shared.Account
@@ -272,8 +273,7 @@
         _authStatus = await Api.GetAuthStatusAsync();
         if (IsSignedIn)
         {
-            _profile = await Api.GetProfileAsync();
-            _addresses = await Api.GetAddressesAsync();
+            await LoadAuthenticatedAccountAsync();
         }
 
         await PreferenceState.InitializeAsync();
@@ -281,6 +281,21 @@
 
         await SynchronizeRouteStateAsync(force: true);
         _routeStateInitialized = true;
+    }
+
+    private async Task LoadAuthenticatedAccountAsync()
+    {
+        try
+        {
+            _profile = await Api.GetProfileAsync();
+            _addresses = await Api.GetAddressesAsync();
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            _authStatus = new QuoteAuthStatusResponse(false, null, null);
+            _profile = null;
+            _addresses = [];
+        }
     }
 
     protected override async Task OnParametersSetAsync()

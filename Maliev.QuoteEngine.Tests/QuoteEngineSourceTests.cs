@@ -790,6 +790,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("autofocus", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-composer.js", component, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", component, StringComparison.Ordinal);
+        Assert.Contains("FocusComposerAsync", component, StringComparison.Ordinal);
+        Assert.Contains("await FocusComposerAsync();", component, StringComparison.Ordinal);
         Assert.Contains("focusComposer", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-use-cases\"", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
@@ -847,11 +849,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("event.preventDefault();", composerScript, StringComparison.Ordinal);
         Assert.Contains("textarea.dispatchEvent(new Event(\"input\", { bubbles: true }))", composerScript, StringComparison.Ordinal);
         Assert.Contains("window.requestAnimationFrame", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea.form.requestSubmit();", composerScript, StringComparison.Ordinal);
         Assert.Contains("export function focusComposer", composerScript, StringComparison.Ordinal);
         Assert.Contains("clearTextSelection", composerScript, StringComparison.Ordinal);
+        Assert.Contains("selection.rangeCount > 0", composerScript, StringComparison.Ordinal);
+        Assert.Contains("window.addEventListener(\"focus\", windowFocus)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("window.removeEventListener(\"focus\", handlers.windowFocus)", composerScript, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", composerScript, StringComparison.Ordinal);
         Assert.Contains("registerPasteTarget", workspace, StringComparison.Ordinal);
         Assert.Contains("unregisterPasteTarget", workspace, StringComparison.Ordinal);
+        Assert.Contains("LoadAuthenticatedAccountAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("HttpStatusCode.Unauthorized", workspace, StringComparison.Ordinal);
+        Assert.Contains("_authStatus = new QuoteAuthStatusResponse(false, null, null);", workspace, StringComparison.Ordinal);
         Assert.Contains("function registerPasteTarget", uploadScript, StringComparison.Ordinal);
         Assert.Contains("filesFromClipboard", uploadScript, StringComparison.Ordinal);
         Assert.Contains("HandleDroppedFilesAsync", uploadScript, StringComparison.Ordinal);
@@ -1603,6 +1612,7 @@ public sealed class QuoteEngineSourceTests
 
         // The startup screen is the Make Studio narrative — no MALIEV logo in it.
         Assert.Contains("id=\"quote-startup\"", index, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"ms-tag\"", index, StringComparison.Ordinal);
         Assert.Contains("class=\"ms-beat\"", index, StringComparison.Ordinal);
         Assert.Contains("data-ms-beat=\"4\"", index, StringComparison.Ordinal);
         Assert.Contains("class=\"ms-wordmark\"", index, StringComparison.Ordinal);
@@ -1633,7 +1643,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("loadBootResource", loaderScript, StringComparison.Ordinal);
         Assert.Contains("if (type === \"dotnetjs\")", loaderScript, StringComparison.Ordinal);
         Assert.Contains("resolveStaticAsset(defaultUri)", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("withBootCacheBust(resolveStaticAsset(defaultUri))", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("cache: \"no-store\"", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("Failed to fetch dynamically imported module", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("staleBootRetryKey", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("window.location.replace(url.toString())", loaderScript, StringComparison.Ordinal);
         Assert.Contains("let displayedProgress = 0", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("const STORY_BEAT_MS = [3200, 4200, 2600, 5200];", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("const FINALE_HOLD_MS = 1200;", loaderScript, StringComparison.Ordinal);
         Assert.Contains("Math.max(displayedProgress, progress)", loaderScript, StringComparison.Ordinal);
         Assert.Contains("markRuntimeReady", loaderScript, StringComparison.Ordinal);
         Assert.Contains("enableSkipStory();", loaderScript, StringComparison.Ordinal);
@@ -1642,7 +1659,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("beginBoot(isWorkspaceHandoff);", loaderScript.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("params.has(\"handoff\")", loaderScript, StringComparison.Ordinal);
         Assert.Contains("params.get(\"source\") === \"web\"", loaderScript, StringComparison.Ordinal);
-        Assert.Contains("const wantsStory = isWorkspaceHandoff;", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("const wantsStory = true;", loaderScript, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "minVisibleMs = 0;\n    document.body.classList.add(\"quote-ready\");",
             loaderScript.ReplaceLineEndings("\n"),
@@ -1652,6 +1669,8 @@ public sealed class QuoteEngineSourceTests
             loaderScript.ReplaceLineEndings("\n"),
             StringComparison.Ordinal);
         Assert.Contains("ms-beat--on", loaderScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("ms-strike", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("ms-beat--on .ms-kill", styles, StringComparison.Ordinal);
         Assert.DoesNotContain("maliev.makestudio.story.seen", loaderScript, StringComparison.Ordinal);
         Assert.Contains("Preparing Make Studio", loaderScript, StringComparison.Ordinal);
 
