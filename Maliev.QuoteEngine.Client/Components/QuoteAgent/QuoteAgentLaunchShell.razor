@@ -448,6 +448,25 @@
                                          src="@message.SketchPreviewDataUrl"
                                          alt="@Text("Attached hand sketch preview", "ตัวอย่างสเก็ตช์มือที่แนบ")" />
                                 }
+                                @if (message.Attachments.Count > 0)
+                                {
+                                    <div class="qe-agent-message-attachments" aria-label="@Text("Attached files", "ไฟล์ที่แนบ")">
+                                        @foreach (var attachment in message.Attachments)
+                                        {
+                                            <span>
+                                                @if (!string.IsNullOrWhiteSpace(attachment.PreviewUrl))
+                                                {
+                                                    <img src="@attachment.PreviewUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@UploadedPartIcon(attachment)" Size="Size.Small" />
+                                                }
+                                                <small>@attachment.FileName</small>
+                                            </span>
+                                        }
+                                    </div>
+                                }
                                 <p>@message.Content</p>
                             }
                             else
@@ -831,20 +850,20 @@
                 }
             }
             <form class="@($"qe-agent-composer {(_sending ? "is-sending" : string.Empty)}")" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
-                @if (UploadedParts.Count > 0)
+                @if (_pendingComposerAttachments.Count > 0)
                 {
                     <div class="qe-agent-composer-attachments" aria-label="@Text("Attached artifacts", "อาร์ติแฟกต์ที่แนบ")">
-                        @for (var i = 0; i < Math.Min(UploadedParts.Count, 5); i++)
+                        @for (var i = 0; i < Math.Min(_pendingComposerAttachments.Count, 5); i++)
                         {
                             var index = i;
-                            var part = UploadedParts[i];
+                            var part = _pendingComposerAttachments[i];
                             <button type="button"
-                                    class="@($"qe-agent-composer-attachment {(i == SelectedPartIndex ? "active" : string.Empty)}")"
-                                    @onclick="@(() => SelectUploadedPartAsync(index))">
+                                    class="@($"qe-agent-composer-attachment {(i == _pendingComposerAttachments.Count - 1 ? "active" : string.Empty)}")"
+                                    @onclick="@(() => SelectPendingComposerAttachmentAsync(index))">
                                 <span class="qe-agent-composer-attachment-preview">
-                                    @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
+                                    @if (!string.IsNullOrWhiteSpace(part.PreviewUrl))
                                     {
-                                        <img src="@part.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                        <img src="@part.PreviewUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
                                     }
                                     else
                                     {
@@ -1219,6 +1238,7 @@
     private readonly List<AgentMessageRow> _messages = [];
     private readonly List<ProjectNavItem> _projects = [];
     private readonly List<QuoteAgentSearchResultDto> _customerSearchResults = [];
+    private readonly List<ComposerAttachmentPreview> _pendingComposerAttachments = [];
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1564,9 +1584,15 @@
     private async Task HandleSubmitAsync()
     {
         var message = _draftMessage.Trim();
-        if (string.IsNullOrWhiteSpace(message) || _sending)
+        var pendingAttachments = BuildPendingMessageAttachments();
+        if ((string.IsNullOrWhiteSpace(message) && pendingAttachments.Count == 0) || _sending)
         {
             return;
+        }
+
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            message = BuildAttachmentOnlyMessage(pendingAttachments);
         }
 
         if (message.Length > QuoteAgentTextLimits.MaxMessageCharacters)
@@ -1582,8 +1608,9 @@
         _error = null;
         _composerMenuOpen = false;
         _draftMessage = string.Empty;
+        _pendingComposerAttachments.Clear();
         EnsureLocalProjectFromMessage(message);
-        _messages.Add(new AgentMessageRow("user", message));
+        _messages.Add(new AgentMessageRow("user", message, attachments: pendingAttachments));
         var assistantMessage = new AgentMessageRow("assistant", string.Empty);
         _messages.Add(assistantMessage);
 
@@ -1593,7 +1620,8 @@
             {
                 SessionId = SessionId,
                 Message = message,
-                Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en"
+                Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en",
+                Attachments = pendingAttachments.Select(attachment => attachment.ToAgentAttachment()).ToList()
             }))
             {
                 if (streamEvent.Type.Equals("delta", StringComparison.OrdinalIgnoreCase))
@@ -1644,6 +1672,21 @@
             await InvokeAsync(StateHasChanged);
             await FocusComposerAsync();
         }
+    }
+
+    private IReadOnlyList<ComposerAttachmentPreview> BuildPendingMessageAttachments()
+    {
+        return _pendingComposerAttachments
+            .Select(attachment => attachment with { })
+            .ToList();
+    }
+
+    private string BuildAttachmentOnlyMessage(IReadOnlyList<ComposerAttachmentPreview> attachments)
+    {
+        var hasSketch = attachments.Any(attachment => attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase));
+        return hasSketch
+            ? Text("Please analyze the attached hand sketch.", "ช่วยวิเคราะห์สเก็ตช์มือที่แนบ")
+            : Text("Please analyze the attached files.", "ช่วยวิเคราะห์ไฟล์ที่แนบ");
     }
 
     private async Task FocusComposerAsync()
@@ -1879,9 +1922,7 @@
             return;
         }
 
-        _messages.Add(new AgentMessageRow(
-            "user",
-            Text($"Attached file: {part.FileName}", $"แนบไฟล์: {part.FileName}")));
+        QueueComposerAttachment(part);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -1892,14 +1933,40 @@
             return;
         }
 
-        var uploadKind = QuoteUploadConstraints.IsSupportedCadFileName(part.FileName)
-            ? Text("I can use this as the geometry source for DFM, viewer, and pricing.", "ฉันใช้ไฟล์นี้เป็นข้อมูลรูปทรงสำหรับ DFM, viewer และราคาได้")
-            : Text("I will use it as supplemental manufacturing context until CAD/3D geometry is available.", "ฉันจะใช้เป็นข้อมูลประกอบการผลิตจนกว่าจะมีไฟล์ CAD/3D");
-
-        _messages.Add(new AgentMessageRow(
-            "assistant",
-            Text($"Upload ready: {part.FileName}. {uploadKind}", $"ไฟล์พร้อมใช้: {part.FileName}. {uploadKind}")));
+        QueueComposerAttachment(part);
         await InvokeAsync(StateHasChanged);
+    }
+
+    private void QueueComposerAttachment(QuotePartViewModel part)
+    {
+        var attachment = ComposerAttachmentPreview.FromPart(part);
+        var existingIndex = _pendingComposerAttachments.FindIndex(item => item.Matches(attachment));
+        if (existingIndex >= 0)
+        {
+            _pendingComposerAttachments[existingIndex] = attachment;
+            return;
+        }
+
+        _pendingComposerAttachments.Add(attachment);
+    }
+
+    private async Task SelectPendingComposerAttachmentAsync(int index)
+    {
+        if (index < 0 || index >= _pendingComposerAttachments.Count)
+        {
+            return;
+        }
+
+        var attachment = _pendingComposerAttachments[index];
+        var uploadedPartIndex = UploadedParts.ToList().FindIndex(part =>
+            string.Equals(part.ClientFileId, attachment.ClientFileId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(part.UploadId, attachment.UploadId, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(part.FileName, attachment.FileName, StringComparison.OrdinalIgnoreCase));
+
+        if (uploadedPartIndex >= 0)
+        {
+            await SelectUploadedPartAsync(uploadedPartIndex);
+        }
     }
 
     private string UploadedPartStatus(QuotePartViewModel part)
@@ -1915,6 +1982,11 @@
     }
 
     private static bool IsUploadBusy(QuotePartViewModel part)
+    {
+        return part.Status is "Uploading" or "Processing" or "WaitingForUpload";
+    }
+
+    private static bool IsUploadBusy(ComposerAttachmentPreview part)
     {
         return part.Status is "Uploading" or "Processing" or "WaitingForUpload";
     }
@@ -1979,6 +2051,23 @@
                || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
                || extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
                || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            ? Icons.Material.Outlined.Image
+            : Icons.Material.Outlined.InsertDriveFile;
+    }
+
+    private static string UploadedPartIcon(ComposerAttachmentPreview part)
+    {
+        if (QuoteUploadConstraints.IsSupportedCadFileName(part.FileName))
+        {
+            return Icons.Material.Outlined.ViewInAr;
+        }
+
+        if (part.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase))
+        {
+            return Icons.Material.Outlined.Draw;
+        }
+
+        return part.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
             ? Icons.Material.Outlined.Image
             : Icons.Material.Outlined.InsertDriveFile;
     }
@@ -2120,17 +2209,44 @@
             _lastSketchDataUrl = await _sketchModule.InvokeAsync<string>("exportSketchCanvas", SketchCanvasId);
         }
 
-        _messages.Add(new AgentMessageRow(
-            "user",
-            Text($"Attached hand sketch: {_sketchTitle}", $"แนบสเก็ตช์มือ: {_sketchTitle}"),
-            sketchPreviewDataUrl: _lastSketchDataUrl));
-        AddLocalDemoTurn(BuildSketchDemoTurn());
+        QueueSketchComposerAttachment(_sketchTitle, _lastSketchDataUrl);
         if (_sketchModule is not null)
         {
             await _sketchModule.InvokeVoidAsync("disposeSketchCanvas", SketchCanvasId);
         }
 
         _sketchOpen = false;
+        await FocusComposerAsync();
+    }
+
+    private void QueueSketchComposerAttachment(string title, string? previewDataUrl)
+    {
+        var fileName = BuildSketchFileName(title);
+        var attachment = new ComposerAttachmentPreview(
+            Guid.NewGuid(),
+            fileName,
+            "image/png",
+            previewDataUrl?.Length ?? 0,
+            previewDataUrl,
+            "sketch",
+            null,
+            null,
+            previewDataUrl,
+            false,
+            "Ready");
+
+        _pendingComposerAttachments.Add(attachment);
+    }
+
+    private static string BuildSketchFileName(string title)
+    {
+        var cleaned = Regex.Replace(title, "[^\\p{L}\\p{N}\\s_-]+", " ").Trim();
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            cleaned = "manufacturing-sketch";
+        }
+
+        return $"{cleaned.Replace(' ', '-')}.png";
     }
 
     private string RoleLabel(string role)
@@ -2774,15 +2890,109 @@
         Settings
     }
 
+    private sealed record ComposerAttachmentPreview(
+        Guid AttachmentId,
+        string FileName,
+        string ContentType,
+        long FileSizeBytes,
+        string? PreviewUrl,
+        string Kind,
+        string? UploadId,
+        string? StoragePath,
+        string? Url,
+        bool SatisfiesGeometryGate,
+        string Status,
+        string? ClientFileId = null)
+    {
+        public static ComposerAttachmentPreview FromPart(QuotePartViewModel part)
+        {
+            var previewUrl = part.ThumbnailUrl;
+            var url = part.GlbUrl ?? part.ThumbnailUrl;
+            var kind = InferKind(part.FileName, part.ContentType);
+
+            return new ComposerAttachmentPreview(
+                part.PartId,
+                part.FileName,
+                part.ContentType,
+                part.FileSizeBytes,
+                previewUrl,
+                kind,
+                part.UploadId,
+                part.StoragePath,
+                url,
+                QuoteUploadConstraints.IsSupportedCadFileName(part.FileName),
+                part.Status,
+                part.ClientFileId);
+        }
+
+        public QuoteAgentAttachmentDto ToAgentAttachment()
+        {
+            return new QuoteAgentAttachmentDto
+            {
+                AttachmentId = AttachmentId,
+                FileName = FileName,
+                ContentType = ContentType,
+                FileSizeBytes = FileSizeBytes,
+                Url = Url,
+                Kind = Kind,
+                UploadId = UploadId,
+                StoragePath = StoragePath,
+                SatisfiesGeometryGate = SatisfiesGeometryGate
+            };
+        }
+
+        public bool Matches(ComposerAttachmentPreview other)
+        {
+            return MatchesValue(ClientFileId, other.ClientFileId)
+                || MatchesValue(UploadId, other.UploadId)
+                || MatchesValue(StoragePath, other.StoragePath)
+                || MatchesValue(FileName, other.FileName);
+        }
+
+        private static string InferKind(string fileName, string contentType)
+        {
+            if (QuoteUploadConstraints.IsSupportedCadFileName(fileName))
+            {
+                return "cad";
+            }
+
+            var extension = Path.GetExtension(fileName).TrimStart('.');
+            if (QuoteUploadConstraints.SupplementalDocumentExtensions.Any(item =>
+                    item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+            {
+                return "drawing";
+            }
+
+            if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+                QuoteUploadConstraints.SupplementalImageExtensions.Any(item =>
+                    item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+            {
+                return fileName.Contains("sketch", StringComparison.OrdinalIgnoreCase) ? "sketch" : "photo";
+            }
+
+            return "supplemental";
+        }
+
+        private static bool MatchesValue(string? left, string? right)
+        {
+            return !string.IsNullOrWhiteSpace(left) &&
+                   !string.IsNullOrWhiteSpace(right) &&
+                   string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     private sealed class AgentMessageRow(
         string role,
         string content,
         AgentWorkbenchSnapshot? workbench = null,
+        IReadOnlyList<ComposerAttachmentPreview>? attachments = null,
         string? sketchPreviewDataUrl = null)
     {
         public string Role { get; } = role;
 
         public string Content { get; set; } = content;
+
+        public IReadOnlyList<ComposerAttachmentPreview> Attachments { get; } = attachments ?? [];
 
         public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
 

@@ -1589,6 +1589,43 @@
     object-fit: contain;
 }
 
+.qe-agent-message-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 8px;
+}
+
+.qe-agent-message-attachments > span {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    max-width: min(260px, 100%);
+    padding: 5px 8px 5px 5px;
+    border-radius: 12px;
+    background: color-mix(in srgb, #ffffff 18%, transparent);
+    color: #ffffff;
+}
+
+.qe-agent-message-attachments img,
+.qe-agent-message-attachments svg {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    object-fit: cover;
+}
+
+.qe-agent-message-attachments small {
+    min-width: 0;
+    overflow: hidden;
+    color: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .qe-agent-message--assistant .qe-agent-bubble {
     color: var(--qe-agent-ink);
 }

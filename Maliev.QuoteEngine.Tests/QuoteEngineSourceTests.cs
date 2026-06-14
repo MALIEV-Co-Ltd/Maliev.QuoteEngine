@@ -904,10 +904,17 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-add-backdrop\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-composer-attachments\"", component, StringComparison.Ordinal);
         Assert.Contains("IsUploadBusy(part)", component, StringComparison.Ordinal);
+        Assert.Contains("_pendingComposerAttachments", component, StringComparison.Ordinal);
+        Assert.Contains("BuildPendingMessageAttachments()", component, StringComparison.Ordinal);
+        Assert.Contains("pendingAttachments.Count == 0", component, StringComparison.Ordinal);
+        Assert.Contains("new AgentMessageRow(\"user\", message, attachments: pendingAttachments)", component, StringComparison.Ordinal);
+        Assert.Contains("Attachments = pendingAttachments.Select(attachment => attachment.ToAgentAttachment()).ToList()", component, StringComparison.Ordinal);
+        Assert.Contains("message.Attachments.Count > 0", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-message-attachments\"", component, StringComparison.Ordinal);
         Assert.Contains("NotifyUploadStartedAsync", component, StringComparison.Ordinal);
         Assert.Contains("NotifyUploadCompletedAsync", component, StringComparison.Ordinal);
-        Assert.Contains("Attached file:", component, StringComparison.Ordinal);
-        Assert.Contains("Upload ready:", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Attached file:", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Upload ready:", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-send-spinner", component, StringComparison.Ordinal);
         Assert.Contains("Text(\"Processing\", \"กำลังประมวลผล\")", component, StringComparison.Ordinal);
         Assert.Contains("class=\"sr-only\"", component, StringComparison.Ordinal);
@@ -1143,8 +1150,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SketchPreviewDataUrl", component, StringComparison.Ordinal);
         Assert.Contains("_lastSketchDataUrl", component, StringComparison.Ordinal);
         Assert.Contains("message.SketchPreviewDataUrl", component, StringComparison.Ordinal);
+        Assert.Contains("QueueSketchComposerAttachment", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-message-sketch-preview\"", component, StringComparison.Ordinal);
-        Assert.Contains("Attached hand sketch:", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Attached hand sketch:", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-message-attachments", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message-sketch-preview", agentStyles, StringComparison.Ordinal);
     }
 
@@ -1179,6 +1188,36 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("if (result.State.Artifacts.Count > previousArtifactCount)", confirmBlock, StringComparison.Ordinal);
         Assert.Contains("_artifactPanelOpen = true;", confirmBlock, StringComparison.Ordinal);
         Assert.Contains("_summaryPanelOpen = false;", confirmBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_queues_attachments_in_composer_until_next_message()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var submitBlock = ExtractSourceBlock(component, "private async Task HandleSubmitAsync()", "private async Task FocusComposerAsync()");
+        var uploadStartedBlock = ExtractSourceBlock(component, "public async Task NotifyUploadStartedAsync", "public async Task NotifyUploadCompletedAsync");
+        var uploadCompletedBlock = ExtractSourceBlock(component, "public async Task NotifyUploadCompletedAsync", "private string UploadedPartStatus");
+        var sketchBlock = ExtractSourceBlock(component, "private async Task AttachSketchAsync()", "private string RoleLabel");
+
+        Assert.Contains("var pendingAttachments = BuildPendingMessageAttachments();", submitBlock, StringComparison.Ordinal);
+        Assert.Contains("string.IsNullOrWhiteSpace(message) && pendingAttachments.Count == 0", submitBlock, StringComparison.Ordinal);
+        Assert.Contains("new AgentMessageRow(\"user\", message, attachments: pendingAttachments)", submitBlock, StringComparison.Ordinal);
+        Assert.Contains("Attachments = pendingAttachments.Select(attachment => attachment.ToAgentAttachment()).ToList()", submitBlock, StringComparison.Ordinal);
+        Assert.Contains("_pendingComposerAttachments.Clear();", submitBlock, StringComparison.Ordinal);
+
+        Assert.Contains("QueueComposerAttachment(part);", uploadStartedBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("_messages.Add", uploadStartedBlock, StringComparison.Ordinal);
+        Assert.Contains("QueueComposerAttachment(part);", uploadCompletedBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("_messages.Add", uploadCompletedBlock, StringComparison.Ordinal);
+
+        Assert.Contains("QueueSketchComposerAttachment", sketchBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("_messages.Add", sketchBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("AddLocalDemoTurn", sketchBlock, StringComparison.Ordinal);
+
+        Assert.Contains("message.Attachments.Count > 0", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-message-attachments\"", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-message-attachments", styles, StringComparison.Ordinal);
     }
 
     [Fact]
