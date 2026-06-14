@@ -713,9 +713,10 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-signin-btn\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-signup-btn\"", component, StringComparison.Ordinal);
+        Assert.Contains("Sign in / Sign up", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-signup-btn\"", component, StringComparison.Ordinal);
         Assert.Contains("href=\"/auth/sign-in?returnUrl=/quotes\"", component, StringComparison.Ordinal);
-        Assert.Contains("href=\"/auth/sign-up?returnUrl=/quotes\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"/auth/sign-up?returnUrl=/quotes\"", component, StringComparison.Ordinal);
         Assert.Contains("@bind=\"_projectName\"", component, StringComparison.Ordinal);
         Assert.Contains("private string _projectName = string.Empty;", component, StringComparison.Ordinal);
         Assert.Contains("OpenSketchAsync", component, StringComparison.Ordinal);
@@ -922,9 +923,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("opacity: 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-empty-projects", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-signup-btn", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-auth-actions", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("grid-template-columns: minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".qe-agent-signup-btn", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".qe-agent-auth-actions", agentStyles, StringComparison.Ordinal);
         Assert.Contains("white-space: nowrap;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-status.is-warning span", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-status.is-failed span", agentStyles, StringComparison.Ordinal);

@@ -688,8 +688,7 @@
 .qe-agent-shell--rail-collapsed .qe-agent-global-search input,
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav span,
 .qe-agent-shell--rail-collapsed .qe-agent-rail-scroll,
-.qe-agent-shell--rail-collapsed .qe-agent-rail-foot span:not(.qe-agent-account-dot),
-.qe-agent-shell--rail-collapsed .qe-agent-auth-actions {
+.qe-agent-shell--rail-collapsed .qe-agent-rail-foot span:not(.qe-agent-account-dot) {
     display: none;
 }
 
@@ -1123,15 +1122,7 @@
     text-decoration: none;
 }
 
-.qe-agent-auth-actions {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
-    width: 100%;
-}
-
-.qe-agent-signin-btn,
-.qe-agent-signup-btn {
+.qe-agent-signin-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1141,9 +1132,6 @@
     border-radius: 10px;
     white-space: nowrap;
     line-height: 1.2;
-}
-
-.qe-agent-signin-btn {
     background: var(--qe-agent-ink);
     color: var(--qe-agent-bg) !important;
     font-weight: 600;
@@ -1151,17 +1139,6 @@
 
 .qe-agent-signin-btn:hover {
     background: color-mix(in srgb, var(--qe-agent-ink) 86%, var(--qe-agent-muted));
-}
-
-.qe-agent-signup-btn {
-    border: 1px solid var(--qe-agent-line);
-    background: transparent;
-    color: var(--qe-agent-ink) !important;
-    font-weight: 600;
-}
-
-.qe-agent-signup-btn:hover {
-    background: var(--qe-agent-hover);
 }
 
 .qe-agent-account-dot {
