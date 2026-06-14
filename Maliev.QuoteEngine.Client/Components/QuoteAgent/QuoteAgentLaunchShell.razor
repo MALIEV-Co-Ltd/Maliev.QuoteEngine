@@ -858,7 +858,7 @@
                             var index = i;
                             var part = _pendingComposerAttachments[i];
                             <button type="button"
-                                    class="@($"qe-agent-composer-attachment {(i == _pendingComposerAttachments.Count - 1 ? "active" : string.Empty)}")"
+                                    class="@($"qe-agent-composer-attachment-card {(i == _pendingComposerAttachments.Count - 1 ? "active" : string.Empty)}")"
                                     @onclick="@(() => SelectPendingComposerAttachmentAsync(index))">
                                 <span class="qe-agent-composer-attachment-preview">
                                     @if (!string.IsNullOrWhiteSpace(part.PreviewUrl))
@@ -874,7 +874,10 @@
                                         <span class="qe-agent-upload-progress" aria-hidden="true"></span>
                                     }
                                 </span>
-                                <span class="sr-only">@part.FileName</span>
+                                <span class="qe-agent-composer-attachment-copy">
+                                    <strong>@part.FileName</strong>
+                                    <small>@AttachmentStatusLabel(part)</small>
+                                </span>
                             </button>
                         }
                     </div>
@@ -1935,7 +1938,7 @@
 
         QueueComposerAttachment(part);
         await InvokeAsync(StateHasChanged);
-        await AutoSubmitPendingAttachmentsAsync();
+        await PreviewThenAutoSubmitPendingAttachmentsAsync();
     }
 
     private void QueueComposerAttachment(QuotePartViewModel part)
@@ -1968,6 +1971,28 @@
         {
             await SelectUploadedPartAsync(uploadedPartIndex);
         }
+    }
+
+    private string AttachmentStatusLabel(ComposerAttachmentPreview part)
+    {
+        if (IsUploadBusy(part))
+        {
+            return Text("Uploading", "กำลังอัปโหลด");
+        }
+
+        if (part.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase))
+        {
+            return Text("Sketch attached", "แนบสเก็ตช์แล้ว");
+        }
+
+        if (QuoteUploadConstraints.IsSupportedCadFileName(part.FileName))
+        {
+            return Text("3D/CAD file attached", "แนบไฟล์ 3D/CAD แล้ว");
+        }
+
+        return part.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
+            ? Text("Image attached", "แนบรูปภาพแล้ว")
+            : Text("File attached", "แนบไฟล์แล้ว");
     }
 
     private string UploadedPartStatus(QuotePartViewModel part)
@@ -2217,7 +2242,7 @@
         }
 
         _sketchOpen = false;
-        await AutoSubmitPendingAttachmentsAsync();
+        await PreviewThenAutoSubmitPendingAttachmentsAsync();
         await FocusComposerAsync();
     }
 
@@ -2240,13 +2265,15 @@
         _pendingComposerAttachments.Add(attachment);
     }
 
-    private async Task AutoSubmitPendingAttachmentsAsync()
+    private async Task PreviewThenAutoSubmitPendingAttachmentsAsync()
     {
         if (_pendingComposerAttachments.Count == 0 || _sending)
         {
             return;
         }
 
+        await InvokeAsync(StateHasChanged);
+        await Task.Yield();
         await HandleSubmitAsync();
     }
 

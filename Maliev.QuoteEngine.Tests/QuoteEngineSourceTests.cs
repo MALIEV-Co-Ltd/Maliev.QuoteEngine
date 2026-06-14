@@ -906,6 +906,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("CloseComposerMenuAsync", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-add-backdrop\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-composer-attachments\"", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-composer-attachment-card", component, StringComparison.Ordinal);
+        Assert.Contains("@part.FileName", component, StringComparison.Ordinal);
+        Assert.Contains("AttachmentStatusLabel(part)", component, StringComparison.Ordinal);
         Assert.Contains("IsUploadBusy(part)", component, StringComparison.Ordinal);
         Assert.Contains("_pendingComposerAttachments", component, StringComparison.Ordinal);
         Assert.Contains("BuildPendingMessageAttachments()", component, StringComparison.Ordinal);
@@ -1098,6 +1101,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-add-menu", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-backdrop", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-attachments", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-attachment-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-progress", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-btn.active", agentStyles, StringComparison.Ordinal);
         Assert.Contains("scrollbar-gutter: stable;", agentStyles, StringComparison.Ordinal);
@@ -1229,11 +1233,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("QueueComposerAttachment(part);", uploadStartedBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("_messages.Add", uploadStartedBlock, StringComparison.Ordinal);
         Assert.Contains("QueueComposerAttachment(part);", uploadCompletedBlock, StringComparison.Ordinal);
-        Assert.Contains("await AutoSubmitPendingAttachmentsAsync();", uploadCompletedBlock, StringComparison.Ordinal);
+        Assert.Contains("await PreviewThenAutoSubmitPendingAttachmentsAsync();", uploadCompletedBlock, StringComparison.Ordinal);
 
         Assert.Contains("QueueSketchComposerAttachment", sketchBlock, StringComparison.Ordinal);
-        Assert.Contains("await AutoSubmitPendingAttachmentsAsync();", sketchBlock, StringComparison.Ordinal);
-        Assert.Contains("private async Task AutoSubmitPendingAttachmentsAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("await PreviewThenAutoSubmitPendingAttachmentsAsync();", sketchBlock, StringComparison.Ordinal);
+        Assert.Contains("private async Task PreviewThenAutoSubmitPendingAttachmentsAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("await InvokeAsync(StateHasChanged);", component, StringComparison.Ordinal);
+        Assert.Contains("await Task.Yield();", component, StringComparison.Ordinal);
         Assert.Contains("_pendingComposerAttachments.Count == 0", component, StringComparison.Ordinal);
         Assert.Contains("await HandleSubmitAsync();", component, StringComparison.Ordinal);
 
