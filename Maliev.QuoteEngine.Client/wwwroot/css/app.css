@@ -3133,6 +3133,26 @@
     border-color: var(--qe-agent-primary);
 }
 
+.qe-agent-artifact-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: fit-content;
+    margin-top: 8px;
+    padding: 6px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--qe-agent-line);
+    color: var(--qe-agent-ink);
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.qe-agent-artifact-link:hover {
+    border-color: var(--qe-agent-primary);
+    color: var(--qe-agent-primary);
+}
+
 .qe-agent-artifact-thumb {
     width: 28px;
     height: 28px;

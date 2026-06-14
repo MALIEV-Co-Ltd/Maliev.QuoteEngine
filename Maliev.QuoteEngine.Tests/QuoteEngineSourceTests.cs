@@ -1223,6 +1223,22 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_RendersArtifactUrlActionsInArtifactDrawer()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var drawer = ExtractSourceBlock(shell, "<aside class=\"qe-agent-artifact-drawer\"", "</aside>");
+
+        Assert.Contains("!string.IsNullOrWhiteSpace(artifact.Url)", drawer, StringComparison.Ordinal);
+        Assert.Contains("href=\"@artifact.Url\"", drawer, StringComparison.Ordinal);
+        Assert.Contains("target=\"_blank\"", drawer, StringComparison.Ordinal);
+        Assert.Contains("rel=\"noopener noreferrer\"", drawer, StringComparison.Ordinal);
+        Assert.Contains("ArtifactActionLabel(artifact)", drawer, StringComparison.Ordinal);
+        Assert.Contains("private string ArtifactActionLabel(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifact-link", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_RendersTrustedAuthHandoffMethodsFromAgentTurns()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");

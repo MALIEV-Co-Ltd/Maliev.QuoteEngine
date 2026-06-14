@@ -1164,6 +1164,16 @@
                                 <strong>@artifact.Title</strong>
                                 <small>@artifact.Status</small>
                             </div>
+                            @if (!string.IsNullOrWhiteSpace(artifact.Url))
+                            {
+                                <a class="qe-agent-artifact-link"
+                                   href="@artifact.Url"
+                                   target="_blank"
+                                   rel="noopener noreferrer">
+                                    <span>@ArtifactActionLabel(artifact)</span>
+                                    <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                                </a>
+                            }
                         </div>
                     }
                 </div>
@@ -2188,6 +2198,18 @@
             "order" => Icons.Material.Outlined.PrecisionManufacturing,
             "viewer" => Icons.Material.Outlined.ViewInAr,
             _ => Icons.Material.Outlined.Inventory2
+        };
+    }
+
+    private string ArtifactActionLabel(QuoteAgentArtifactDto artifact)
+    {
+        return artifact.ArtifactType.ToLowerInvariant() switch
+        {
+            "formal_quote" => Text("Open quote", "เปิดใบเสนอราคา"),
+            "quote_approval" => Text("Review quote", "ตรวจใบเสนอราคา"),
+            "payment" => Text("Open payment", "เปิดการชำระเงิน"),
+            "viewer" => Text("Open viewer", "เปิดตัวแสดงผล"),
+            _ => Text("Open", "เปิด")
         };
     }
 
