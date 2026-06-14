@@ -23,7 +23,6 @@
 
         <nav class="qe-agent-primary-nav" aria-label="@Text("Quote workspace", "พื้นที่ขอราคา")">
             <div class="@($"qe-agent-global-search {(_searchOpen ? "active" : string.Empty)}")">
-                <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
                 <input id="qe-agent-search-input"
                        @ref="_searchInput"
                        value="@_searchQuery"

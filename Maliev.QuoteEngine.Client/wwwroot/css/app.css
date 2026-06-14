@@ -752,26 +752,29 @@
 }
 
 .qe-agent-global-search {
-    display: grid;
-    grid-template-columns: 22px minmax(0, 1fr);
-    align-items: center;
-    gap: 9px;
+    display: block;
     min-height: 36px;
-    padding: 7px 10px;
+    padding: 0;
+    border: 1px solid var(--qe-agent-line);
     border-radius: 9px;
+    background: transparent;
     color: var(--qe-agent-muted);
+    overflow: hidden;
 }
 
 .qe-agent-global-search:hover,
 .qe-agent-global-search.active,
 .qe-agent-global-search:focus-within {
-    background: var(--qe-agent-soft);
+    border-color: color-mix(in srgb, var(--qe-agent-ink) 34%, var(--qe-agent-line));
+    background: transparent;
     color: var(--qe-agent-ink);
 }
 
 .qe-agent-global-search input {
     width: 100%;
     min-width: 0;
+    min-height: 36px;
+    padding: 0 12px;
     border: 0;
     outline: 0;
     background: transparent;

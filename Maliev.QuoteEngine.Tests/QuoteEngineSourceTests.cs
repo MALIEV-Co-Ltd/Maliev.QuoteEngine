@@ -754,7 +754,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("UnpinProjectAsync", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.PushPin", component, StringComparison.Ordinal);
-        Assert.Contains("Icons.Material.Outlined.Search", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Icons.Material.Outlined.Search", primaryNav, StringComparison.Ordinal);
         Assert.Contains("qe-agent-global-search", component, StringComparison.Ordinal);
         Assert.Contains("@onfocus=\"OpenSearchAsync\"", component, StringComparison.Ordinal);
         Assert.Contains("placeholder=\"@Text(\"Search\"", component, StringComparison.Ordinal);
@@ -823,7 +823,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("contain: inline-size;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("scrollbar-gutter: stable;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-wrap: anywhere;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("grid-template-columns: 22px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("display: block;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border: 1px solid var(--qe-agent-line);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("display: -webkit-box;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-shell--rail-collapsed", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-shell--artifacts-open", agentStyles, StringComparison.Ordinal);
