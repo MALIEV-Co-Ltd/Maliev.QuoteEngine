@@ -61,6 +61,20 @@ internal sealed class QuoteAgentService(
     IConfiguration configuration) : IQuoteAgentService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly string[] ArtifactContextMetadataKeys =
+    [
+        "orderId",
+        "orderNumber",
+        "quoteNumber",
+        "total",
+        "currency",
+        "quantity",
+        "leadTimeCode",
+        "parts",
+        "projectId",
+        "projectNumber",
+        "status"
+    ];
 
     public async Task<QuoteAgentTurnResponse> SendAsync(
         QuoteAgentMessageRequest request,
@@ -2649,7 +2663,21 @@ Customer message:
     private static string BuildArtifactContext(IReadOnlyCollection<QuoteAgentArtifactDto> artifacts)
     {
         return string.Join("; ", artifacts.Take(8).Select(artifact =>
-            $"{artifact.ArtifactType} {artifact.Status}: {artifact.Title}"));
+        {
+            var metadata = BuildArtifactMetadataContext(artifact.Metadata);
+            return string.IsNullOrWhiteSpace(metadata)
+                ? $"{artifact.ArtifactType} {artifact.Status}: {artifact.Title}"
+                : $"{artifact.ArtifactType} {artifact.Status}: {artifact.Title} ({metadata})";
+        }));
+    }
+
+    private static string BuildArtifactMetadataContext(IReadOnlyDictionary<string, string> metadata)
+    {
+        return string.Join(", ", ArtifactContextMetadataKeys
+            .Where(metadata.ContainsKey)
+            .Select(key => $"{key}={metadata[key]}")
+            .Where(item => !item.EndsWith("=", StringComparison.Ordinal))
+            .Take(8));
     }
 
     private static List<ChatbotMessageAttachmentRequest>? BuildChatbotAttachments(

@@ -1823,6 +1823,44 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_forwards_artifact_metadata_to_chatbot_service_after_order_creation()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-order-context@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Show me the order summary.",
+            Language = "en"
+        }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains("Current artifacts:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("order", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("quantity=25", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("quoteNumber=", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("orderId=", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Agent_auth_handoff_lists_google_passkey_and_email_fallback_for_anonymous_customer()
     {
         using var client = factory.CreateClient();
