@@ -2496,7 +2496,7 @@
 .qe-agent-use-cases button {
     display: grid;
     grid-template-rows: auto auto;
-    align-content: start;
+    align-content: center;
     gap: 8px;
     width: 100%;
     box-sizing: border-box;
