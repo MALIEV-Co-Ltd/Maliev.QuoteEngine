@@ -1989,7 +1989,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("enableSkipStory();", loaderScript, StringComparison.Ordinal);
         Assert.Contains("function skipStory()", loaderScript, StringComparison.Ordinal);
         Assert.Contains("if (!canSkipStory)", loaderScript, StringComparison.Ordinal);
-        Assert.Contains("beginBoot(isWorkspaceHandoff || consumeFirstWasmLoad());", loaderScript.ReplaceLineEndings("\n"), StringComparison.Ordinal);
+        Assert.Contains("const isFirstWasmLoad = shouldPlayFirstWasmStory();", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("firstWasmStoryPending = isFirstWasmLoad;", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("beginBoot(isWorkspaceHandoff || isFirstWasmLoad);", loaderScript.ReplaceLineEndings("\n"), StringComparison.Ordinal);
         Assert.Contains("function beginBoot(wantsStory)", loaderScript, StringComparison.Ordinal);
         Assert.Contains(
             "if (!wantsStory) {\n      finishStartupStory();\n      return;\n    }",
@@ -1998,9 +2000,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("params.has(\"handoff\")", loaderScript, StringComparison.Ordinal);
         Assert.Contains("params.get(\"source\") === \"web\"", loaderScript, StringComparison.Ordinal);
         Assert.Contains("const firstWasmLoadKey = \"maliev.makestudio.first-wasm-loaded\";", loaderScript, StringComparison.Ordinal);
-        Assert.Contains("function consumeFirstWasmLoad()", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("function shouldPlayFirstWasmStory()", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("function rememberFirstWasmLoaded()", loaderScript, StringComparison.Ordinal);
         Assert.Contains("window.localStorage.getItem(firstWasmLoadKey) !== \"1\"", loaderScript, StringComparison.Ordinal);
-        Assert.Contains("window.localStorage.setItem(firstWasmLoadKey, \"1\")", loaderScript, StringComparison.Ordinal);
+        var firstLoadCheckBlock = ExtractSourceBlock(loaderScript, "function shouldPlayFirstWasmStory()", "function rememberFirstWasmLoaded()");
+        var rememberBlock = ExtractSourceBlock(loaderScript, "function rememberFirstWasmLoaded()", "function getQueryCulture()");
+        Assert.DoesNotContain("window.localStorage.setItem(firstWasmLoadKey, \"1\")", firstLoadCheckBlock, StringComparison.Ordinal);
+        Assert.Contains("window.localStorage.setItem(firstWasmLoadKey, \"1\")", rememberBlock, StringComparison.Ordinal);
+        Assert.Contains("if (firstWasmStoryPending)", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("rememberFirstWasmLoaded();", loaderScript, StringComparison.Ordinal);
         Assert.DoesNotContain("const wantsStory = isWorkspaceHandoff;", loaderScript, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "minVisibleMs = 0;\n    document.body.classList.add(\"quote-ready\");",

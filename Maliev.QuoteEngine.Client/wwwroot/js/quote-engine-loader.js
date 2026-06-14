@@ -55,6 +55,7 @@
   let minVisibleMs = FINALE_HOLD_MS;
   let runtimeReady = false;
   let canSkipStory = false;
+  let firstWasmStoryPending = false;
 
   function clamp(value) {
     return Math.max(0, Math.min(100, value));
@@ -144,6 +145,10 @@
 
   function markReady() {
     runtimeReady = true;
+    if (firstWasmStoryPending) {
+      rememberFirstWasmLoaded();
+      firstWasmStoryPending = false;
+    }
     setProgress(100, true);
     setStatus(currentStrings.status.ready);
     enableSkipStory();
@@ -357,19 +362,22 @@
     return false;
   }
 
-  function consumeFirstWasmLoad() {
+  function shouldPlayFirstWasmStory() {
     try {
-      if (window.localStorage.getItem(firstWasmLoadKey) !== "1") {
-        window.localStorage.setItem(firstWasmLoadKey, "1");
-        return true;
-      }
+      return window.localStorage.getItem(firstWasmLoadKey) !== "1";
     } catch {
       // If localStorage is blocked, treat this boot as first-load so the
       // customer still sees the narrative while the runtime starts.
       return true;
     }
+  }
 
-    return false;
+  function rememberFirstWasmLoaded() {
+    try {
+      window.localStorage.setItem(firstWasmLoadKey, "1");
+    } catch {
+      // localStorage can be unavailable in strict privacy modes.
+    }
   }
 
   function getQueryCulture() {
@@ -429,8 +437,10 @@
 
   function startBlazor() {
     const isWorkspaceHandoff = consumeWorkspaceHandoff();
+    const isFirstWasmLoad = shouldPlayFirstWasmStory();
+    firstWasmStoryPending = isFirstWasmLoad;
     setProgress(0, true);
-    beginBoot(isWorkspaceHandoff || consumeFirstWasmLoad());
+    beginBoot(isWorkspaceHandoff || isFirstWasmLoad);
     setStatus(isWorkspaceHandoff ? currentStrings.status.starting : currentStrings.status.preparing);
 
     if (!window.Blazor || typeof window.Blazor.start !== "function") {
