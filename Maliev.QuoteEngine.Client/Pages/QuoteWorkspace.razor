@@ -477,14 +477,25 @@
 
                 await InvokeAsync(StateHasChanged);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 part.Status = "Upload failed";
-                _error = ex.Message;
+                _error = BuildUploadFailureMessage(candidate.FileName);
                 await ScheduleBrowserUploadFileCleanupAsync(candidate.ClientFileId);
                 await InvokeAsync(StateHasChanged);
             }
         }
+    }
+
+    private string BuildUploadFailureMessage(string fileName)
+    {
+        var safeFileName = string.IsNullOrWhiteSpace(fileName)
+            ? Text("This file", "ไฟล์นี้")
+            : fileName;
+
+        return Text(
+            $"{safeFileName} could not be uploaded. Please check your connection and try dropping the file again.",
+            $"ไม่สามารถอัปโหลด {safeFileName} ได้ กรุณาตรวจสอบการเชื่อมต่อแล้วลองลากไฟล์มาวางอีกครั้ง");
     }
 
     private bool ValidateUploadCandidate(UploadCandidate candidate)

@@ -581,10 +581,15 @@ public sealed class QuoteEngineSourceTests
             "_parts.Add(part);\n            _selectedPartIndex = _parts.Count - 1;\n            if (_agentShell is not null)\n            {\n                await _agentShell.NotifyUploadStartedAsync(part);\n            }\n\n            await InvokeAsync(StateHasChanged);\n            try",
             workspace,
             StringComparison.Ordinal);
-        Assert.Contains(
-            "part.Status = \"Upload failed\";\n                _error = ex.Message;\n                await ScheduleBrowserUploadFileCleanupAsync(candidate.ClientFileId);\n                await InvokeAsync(StateHasChanged);",
+        var uploadFailureBlock = ExtractSourceBlock(
             workspace,
+            "part.Status = \"Upload failed\";",
+            "private bool ValidateUploadCandidate");
+        Assert.Contains(
+            "BuildUploadFailureMessage(candidate.FileName)",
+            uploadFailureBlock,
             StringComparison.Ordinal);
+        Assert.DoesNotContain("_error = ex.Message", uploadFailureBlock, StringComparison.Ordinal);
     }
 
     [Fact]
