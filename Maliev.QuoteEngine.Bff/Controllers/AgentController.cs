@@ -57,6 +57,24 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Registers browser-uploaded files with a QuoteEngine agent session.
+    /// </summary>
+    [HttpPost("sessions/{sessionId:guid}/attachments")]
+    [ProducesResponseType(typeof(QuoteAgentStateResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public ActionResult<QuoteAgentStateResponse> RegisterAttachments(
+        Guid sessionId,
+        [FromBody] QuoteAgentAttachmentRegisterRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(agentService.RegisterAttachments(sessionId, request));
+    }
+
+    /// <summary>
     /// Searches signed-in customer quote data for the QuoteEngine agent workspace.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}/search")]

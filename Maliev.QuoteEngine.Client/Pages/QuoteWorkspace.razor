@@ -520,6 +520,7 @@
 
                 if (!ShouldRetainBrowserUploadFile(part))
                     await ScheduleBrowserUploadFileCleanupAsync(candidate.ClientFileId);
+                await RegisterCompletedUploadWithAgentAsync(part, candidate);
                 await InvokeAsync(StateHasChanged);
             }
             catch (Exception ex)
@@ -553,6 +554,72 @@
         }
 
         return true;
+    }
+
+    private async Task RegisterCompletedUploadWithAgentAsync(QuotePartViewModel part, UploadCandidate candidate)
+    {
+        if (AgentSessionId == Guid.Empty)
+        {
+            return;
+        }
+
+        try
+        {
+            var state = await Api.RegisterAgentAttachmentsAsync(
+                AgentSessionId,
+                new QuoteAgentAttachmentRegisterRequest
+                {
+                    Message = $"Customer uploaded {candidate.FileName}.",
+                    Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en",
+                    Attachments =
+                    [
+                        new QuoteAgentAttachmentDto
+                        {
+                            FileName = candidate.FileName,
+                            ContentType = candidate.ContentType,
+                            FileSizeBytes = candidate.FileSizeBytes,
+                            Kind = InferAgentAttachmentKind(candidate.FileName, candidate.ContentType),
+                            UploadId = part.UploadId,
+                            StoragePath = part.StoragePath,
+                            Url = part.GlbUrl ?? part.ThumbnailUrl,
+                            SatisfiesGeometryGate = QuoteUploadConstraints.IsSupportedCadFileName(candidate.FileName)
+                        }
+                    ]
+                });
+
+            if (state.Artifacts.Count > 0)
+            {
+                _liveNotifications.Insert(0, Text("Make Studio agent registered the uploaded file.", "เอเจนต์ Make Studio รับไฟล์ที่อัปโหลดแล้ว"));
+            }
+        }
+        catch (Exception ex) when (ex is QuoteEngineApiException or HttpRequestException or InvalidOperationException)
+        {
+            _liveNotifications.Insert(0, Text("Upload succeeded. Agent context will refresh when you continue chatting.", "อัปโหลดสำเร็จ บริบทเอเจนต์จะอัปเดตเมื่อคุณสนทนาต่อ"));
+        }
+    }
+
+    private static string InferAgentAttachmentKind(string fileName, string contentType)
+    {
+        var extension = Path.GetExtension(fileName).TrimStart('.');
+        if (QuoteUploadConstraints.IsSupportedCadFileName(fileName))
+        {
+            return "cad";
+        }
+
+        if (QuoteUploadConstraints.SupplementalDocumentExtensions.Any(item =>
+            item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "drawing";
+        }
+
+        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+            QuoteUploadConstraints.SupplementalImageExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "photo";
+        }
+
+        return "supplemental";
     }
 
     private async Task ImportHandoffAsync(string encodedHandoff)

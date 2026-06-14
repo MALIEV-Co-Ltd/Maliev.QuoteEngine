@@ -284,6 +284,17 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public Task<QuoteAgentStateResponse> RegisterAgentAttachmentsAsync(
+        Guid sessionId,
+        QuoteAgentAttachmentRegisterRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return PostAsync<QuoteAgentAttachmentRegisterRequest, QuoteAgentStateResponse>(
+            $"quote/v1/agent/sessions/{sessionId:D}/attachments",
+            request,
+            cancellationToken);
+    }
+
     public async Task<QuoteAgentSearchResponse> SearchCustomerDataAsync(
         Guid sessionId,
         string? query,

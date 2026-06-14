@@ -593,6 +593,7 @@ public sealed class QuoteEngineSourceTests
         var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var legacyQuotes = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Quotes.razor");
         var script = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
 
         Assert.Contains("@page \"/quotes\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("@page \"/quotes\"", legacyQuotes, StringComparison.Ordinal);
@@ -608,6 +609,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private Guid AgentSessionId", source, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
         Assert.Contains("private bool IsWorkspaceReady => _parts.Count > 0;", source, StringComparison.Ordinal);
+        Assert.Contains("RegisterCompletedUploadWithAgentAsync(part, candidate)", source, StringComparison.Ordinal);
+        Assert.Contains("RegisterAgentAttachmentsAsync", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentAttachmentRegisterRequest", source, StringComparison.Ordinal);
+        Assert.Contains("InferAgentAttachmentKind", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.IsSupportedCadFileName(candidate.FileName)", source, StringComparison.Ordinal);
+        Assert.Contains("Task<QuoteAgentStateResponse> RegisterAgentAttachmentsAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/attachments", apiClient, StringComparison.Ordinal);
         Assert.Contains("id=\"@PageDropzoneId\"", source, StringComparison.Ordinal);
         Assert.Contains("private const string PageDropzoneId = \"quote-page-dropzone\";", source, StringComparison.Ordinal);
         Assert.Contains("Drop files anywhere to start", source, StringComparison.Ordinal);

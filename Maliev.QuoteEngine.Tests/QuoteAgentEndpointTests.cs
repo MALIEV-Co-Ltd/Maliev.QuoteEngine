@@ -147,6 +147,85 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_attachment_registration_materializes_uploaded_cad_state()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var response = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
+            new QuoteAgentAttachmentRegisterRequest
+            {
+                Message = "Customer uploaded a STEP file for 25 aluminum brackets.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "uploaded-bracket.step",
+                        ContentType = "model/step",
+                        FileSizeBytes = 380_000,
+                        Kind = "cad",
+                        UploadId = "upload-agent-sync",
+                        StoragePath = "quotes/temp/session/uploaded-bracket.step"
+                    }
+                ]
+            });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal(sessionId, body.SessionId);
+        Assert.Contains(body.Attachments, attachment =>
+            attachment.FileName == "uploaded-bracket.step" &&
+            attachment.SatisfiesGeometryGate);
+        Assert.Contains(body.Parts, part =>
+            part.FileName == "uploaded-bracket.step" &&
+            part.UploadId == "upload-agent-sync");
+        Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "viewer");
+        Assert.Contains(body.Gates, gate => gate.Code == "geometry_required" && gate.Status == "passed");
+    }
+
+    [Fact]
+    public async Task Agent_attachment_registration_keeps_supplemental_files_out_of_geometry_gate()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var response = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
+            new QuoteAgentAttachmentRegisterRequest
+            {
+                Message = "Customer uploaded a sketch for an aluminum bracket.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "bracket-sketch.png",
+                        ContentType = "image/png",
+                        FileSizeBytes = 120_000,
+                        Kind = "photo",
+                        UploadId = "upload-agent-supplemental",
+                        StoragePath = "quotes/temp/session/bracket-sketch.png"
+                    }
+                ]
+            });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(body.Attachments, attachment =>
+            attachment.FileName == "bracket-sketch.png" &&
+            !attachment.SatisfiesGeometryGate);
+        Assert.Empty(body.Parts);
+        Assert.Contains(body.Artifacts, artifact =>
+            artifact.ArtifactType == "analysis" &&
+            artifact.Status == "needs_geometry");
+        Assert.Contains(body.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
+    }
+
+    [Fact]
     public async Task Agent_message_with_supplemental_drawing_keeps_geometry_gate_blocked()
     {
         var chatbot = new RecordingChatbotServiceClient();

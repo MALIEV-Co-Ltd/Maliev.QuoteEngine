@@ -24,6 +24,9 @@ public interface IQuoteAgentService
     /// <summary>Gets customer-safe connector definitions for the quote agent workspace.</summary>
     QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId);
 
+    /// <summary>Registers uploaded browser files with the current agent session.</summary>
+    QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request);
+
     /// <summary>Searches customer-scoped quote data for the quote agent workspace.</summary>
     QuoteAgentSearchResponse SearchCustomerData(Guid sessionId, string? query, int limit);
 
@@ -104,6 +107,31 @@ internal sealed class QuoteAgentService(
     public QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId)
     {
         return BuildConnectorRegistry(sessionStore.GetOrCreate(sessionId));
+    }
+
+    public QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request)
+    {
+        var message = string.IsNullOrWhiteSpace(request.Message)
+            ? "Attached files to this quote session."
+            : request.Message;
+        var language = NormalizeLanguage(request.Language, message);
+        var state = sessionStore.GetOrCreate(sessionId, language);
+        state.Language = language;
+        var customerId = ResolveCustomerId();
+        state.CustomerId = customerId ?? state.CustomerId;
+
+        var messageRequest = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = message,
+            Language = language,
+            Attachments = request.Attachments
+        };
+
+        sessionStore.AddAttachments(state, messageRequest.Attachments);
+        MaterializeSupplementalAnalysis(state, messageRequest);
+        MaterializePrototypeParts(state, messageRequest);
+        return ToStateResponse(state);
     }
 
     public QuoteAgentSearchResponse SearchCustomerData(Guid sessionId, string? query, int limit)

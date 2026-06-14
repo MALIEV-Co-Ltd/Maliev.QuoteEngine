@@ -30,6 +30,23 @@ public sealed class QuoteAgentMessageRequest
 }
 
 /// <summary>
+/// Request to register uploaded browser files with an existing QuoteEngine agent session.
+/// </summary>
+public sealed class QuoteAgentAttachmentRegisterRequest
+{
+    /// <summary>Gets or sets optional customer-visible context used to infer requirements.</summary>
+    [StringLength(1600)]
+    public string? Message { get; set; }
+
+    /// <summary>Gets or sets the language for generated session state.</summary>
+    [RegularExpression("^(en|th)?$", ErrorMessage = "Language must be 'en' or 'th'.")]
+    public string? Language { get; set; }
+
+    /// <summary>Gets or sets the uploaded attachments to register.</summary>
+    public List<QuoteAgentAttachmentDto> Attachments { get; set; } = [];
+}
+
+/// <summary>
 /// Attachment metadata for an agent turn.
 /// </summary>
 public sealed class QuoteAgentAttachmentDto
