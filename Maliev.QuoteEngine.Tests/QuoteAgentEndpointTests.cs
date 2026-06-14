@@ -1728,6 +1728,49 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_forwards_current_session_settings_to_chatbot_service()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_update_settings",
+            new Dictionary<string, JsonElement>
+            {
+                ["units"] = JsonSerializer.SerializeToElement("inch", JsonOptions),
+                ["currency"] = JsonSerializer.SerializeToElement("USD", JsonOptions),
+                ["interaction_mode"] = JsonSerializer.SerializeToElement("chat-and-ui", JsonOptions),
+                ["allow_artifact_panel"] = JsonSerializer.SerializeToElement(false, JsonOptions),
+                ["language"] = JsonSerializer.SerializeToElement("th", JsonOptions)
+            });
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "ช่วยเสนอราคาชิ้นงานนี้ตามค่าที่ตั้งไว้",
+            Language = "th"
+        }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains(
+            "Current settings: language th, units inch, currency USD, interaction chat-and-ui, artifact panel disabled, multilingual enabled",
+            chatbot.LastSendRequest.Content,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Agent_auth_handoff_lists_google_passkey_and_email_fallback_for_anonymous_customer()
     {
         using var client = factory.CreateClient();
