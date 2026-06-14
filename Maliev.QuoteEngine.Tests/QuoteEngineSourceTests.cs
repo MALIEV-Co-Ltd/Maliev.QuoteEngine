@@ -1174,6 +1174,21 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_RendersUploadedPartViewerInsideArtifactDrawer()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+
+        Assert.Contains("qe-agent-artifact-viewer", shell, StringComparison.Ordinal);
+        Assert.Contains("<QePartViewer", shell, StringComparison.Ordinal);
+        Assert.Contains("GlbUrl=\"@SelectedUploadedPart.GlbUrl\"", shell, StringComparison.Ordinal);
+        Assert.Contains("BrowserFileClientId=\"@SelectedUploadedPart.ClientFileId\"", shell, StringComparison.Ordinal);
+        Assert.Contains("ViewerSettings=\"@SelectedUploadedPart.ViewerSettings\"", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("<QePartDetailCard", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("<QePartsListPanel", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("<QePartConfigSidebar", shell, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_RendersTrustedAuthHandoffMethodsFromAgentTurns()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");

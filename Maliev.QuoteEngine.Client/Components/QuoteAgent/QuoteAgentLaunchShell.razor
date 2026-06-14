@@ -1079,6 +1079,29 @@
             {
                 @if (UploadedParts.Count > 0)
                 {
+                    <section class="qe-agent-artifact-viewer" aria-label="@Text("Selected 3D file viewer", "ตัวแสดงไฟล์ 3D ที่เลือก")">
+                        <header>
+                            <div>
+                                <span>@Text("3D viewer", "ตัวแสดง 3D")</span>
+                                <strong>@SelectedUploadedPart.FileName</strong>
+                            </div>
+                            <small>@UploadedPartStatus(SelectedUploadedPart)</small>
+                        </header>
+                        <div class="qe-agent-artifact-viewer-canvas">
+                            <QePartViewer GlbUrl="@SelectedUploadedPart.GlbUrl"
+                                          FileExtension="@ResolveUploadedPartViewerExtension(SelectedUploadedPart)"
+                                          IsDarkMode="@IsDarkMode"
+                                          PartColor="@SelectedUploadedPart.Color"
+                                          ProcessId="@SelectedUploadedPart.ProcessId"
+                                          MaterialId="@SelectedUploadedPart.MaterialId"
+                                          BrowserFileClientId="@SelectedUploadedPart.ClientFileId"
+                                          BrowserFileName="@SelectedUploadedPart.FileName"
+                                          StoragePath="@SelectedUploadedPart.StoragePath"
+                                          FinishCode="@SelectedUploadedPart.FinishCode"
+                                          RoughnessCode="@SelectedUploadedPart.RoughnessCode"
+                                          ViewerSettings="@SelectedUploadedPart.ViewerSettings" />
+                        </div>
+                    </section>
                     <section class="qe-agent-artifact-section" aria-label="@Text("Uploaded files", "ไฟล์ที่อัปโหลด")">
                         <header>@Text("Uploaded files", "ไฟล์ที่อัปโหลด")</header>
                         <div class="qe-agent-artifacts">
@@ -1314,6 +1337,7 @@
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
     private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
     private int ArtifactCount => _artifacts.Count + UploadedParts.Count;
+    private QuotePartViewModel SelectedUploadedPart => UploadedParts[Math.Clamp(SelectedPartIndex, 0, Math.Max(UploadedParts.Count - 1, 0))];
     private AgentWorkbenchSnapshot? LatestWorkbench => _messages.LastOrDefault(message => message.Workbench is not null)?.Workbench;
     private string ProjectSummaryTitle => string.IsNullOrWhiteSpace(_projectName)
         ? Text("Untitled project", "โปรเจกต์ยังไม่มีชื่อ")
@@ -1868,6 +1892,17 @@
                || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
             ? Icons.Material.Outlined.Image
             : Icons.Material.Outlined.InsertDriveFile;
+    }
+
+    private static string ResolveUploadedPartViewerExtension(QuotePartViewModel part)
+    {
+        if (!string.IsNullOrWhiteSpace(part.ViewerFileExtension))
+        {
+            return part.ViewerFileExtension;
+        }
+
+        var extension = Path.GetExtension(part.FileName);
+        return string.IsNullOrWhiteSpace(extension) ? ".glb" : extension;
     }
 
     private Task OpenSketchAsync()

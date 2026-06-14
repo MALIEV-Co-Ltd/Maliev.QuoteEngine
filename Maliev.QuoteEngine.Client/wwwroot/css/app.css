@@ -2988,6 +2988,56 @@
     text-transform: uppercase;
 }
 
+.qe-agent-artifact-viewer {
+    display: grid;
+    gap: 10px;
+    min-width: 0;
+    padding: 12px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 16px;
+    background: var(--qe-agent-raised);
+}
+
+.qe-agent-artifact-viewer > header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
+}
+
+.qe-agent-artifact-viewer > header div {
+    min-width: 0;
+}
+
+.qe-agent-artifact-viewer > header span,
+.qe-agent-artifact-viewer > header small {
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+}
+
+.qe-agent-artifact-viewer > header strong {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--qe-agent-ink);
+    font-size: 14px;
+}
+
+.qe-agent-artifact-viewer-canvas {
+    min-height: 260px;
+    height: min(42dvh, 360px);
+    overflow: hidden;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 14px;
+    background: var(--qe-agent-bg);
+}
+
+.qe-agent-artifact-viewer-canvas .qe-viewer-wrap {
+    min-height: 260px;
+}
+
 .qe-agent-artifact,
 .qe-agent-action {
     background: var(--qe-agent-raised);
