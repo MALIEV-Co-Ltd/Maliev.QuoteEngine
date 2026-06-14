@@ -587,8 +587,14 @@
                           autofocus
                           placeholder="@Text("Describe your part, paste dimensions, attach files, or drag and drop files...", "อธิบายชิ้นงาน วางขนาด แนบไฟล์ หรือลากไฟล์มาวาง...")"
                           aria-label="@Text("Message MALIEV Quote Agent", "ข้อความถึงผู้ช่วยขอราคา MALIEV")"></textarea>
-                <button type="button" class="qe-agent-round-btn" title="@Text("Attach CAD or drawing", "แนบ CAD หรือแบบ")" @onclick="RequestUploadAsync">
-                    <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
+                <button type="button"
+                        class="@($"qe-agent-round-btn qe-agent-dictation-btn {(_dictating ? "active" : string.Empty)}")"
+                        title="@Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง")"
+                        aria-label="@Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง")"
+                        aria-pressed="@_dictating"
+                        disabled="@_dictating"
+                        @onclick="StartDictationAsync">
+                    <MudIcon Icon="@Icons.Material.Outlined.Mic" Size="Size.Small" />
                 </button>
                 <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@_sending">
                     <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" />
@@ -792,6 +798,7 @@
     private bool _connectorRegistryLoaded;
     private bool _searchLoading;
     private bool _customerSearchUnavailable;
+    private bool _dictating;
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
     private string _sketchTitle = "Untitled sketch";
@@ -1132,6 +1139,38 @@
         catch (InvalidOperationException)
         {
             // The component can be disposed while a streamed response is ending.
+        }
+    }
+
+    private async Task StartDictationAsync()
+    {
+        if (_composerModule is null || _dictating)
+        {
+            await FocusComposerAsync();
+            return;
+        }
+
+        _dictating = true;
+        _error = null;
+        try
+        {
+            var dictatedText = await _composerModule.InvokeAsync<string>("dictateComposerText", _composerTextarea);
+            if (!string.IsNullOrWhiteSpace(dictatedText))
+            {
+                _draftMessage = dictatedText;
+            }
+        }
+        catch (JSException ex)
+        {
+            _error = Text(
+                $"Dictation is not available yet: {ex.Message}",
+                $"ยังไม่สามารถใช้การพูดตามคำบอกได้: {ex.Message}");
+        }
+        finally
+        {
+            _dictating = false;
+            await InvokeAsync(StateHasChanged);
+            await FocusComposerAsync();
         }
     }
 

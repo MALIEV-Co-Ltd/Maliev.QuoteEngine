@@ -783,7 +783,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Projects", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Attach files", primaryNav, StringComparison.Ordinal);
         Assert.DoesNotContain("RequestUploadAsync", primaryNav, StringComparison.Ordinal);
-        Assert.Contains("Icons.Material.Outlined.AttachFile", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.Add", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.Mic", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.ArrowUpward", component, StringComparison.Ordinal);
         Assert.Contains("SendAgentMessageStreamAsync", component, StringComparison.Ordinal);
         Assert.Contains("assistantMessage.Content += streamEvent.Delta", component, StringComparison.Ordinal);
@@ -803,6 +804,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("quote-agent-composer.js", component, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", component, StringComparison.Ordinal);
         Assert.Contains("FocusComposerAsync", component, StringComparison.Ordinal);
+        Assert.Contains("StartDictationAsync", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.Mic", component, StringComparison.Ordinal);
+        Assert.Contains("Click to dictate or hold", component, StringComparison.Ordinal);
+        Assert.Contains("_dictating", component, StringComparison.Ordinal);
         Assert.Contains("await FocusComposerAsync();", component, StringComparison.Ordinal);
         Assert.Contains("focusComposer", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-use-cases\"", component, StringComparison.Ordinal);
@@ -916,6 +921,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("-webkit-line-clamp: 2;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap", agentStyles, StringComparison.Ordinal);
         Assert.Contains("user-select: none;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer .qe-agent-round-btn", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-dictation-btn.active", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-use-cases button:focus-visible", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("box-shadow: 0 0 0 2px color-mix(in srgb, var(--qe-agent-primary) 28%, transparent);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("top: 50%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--chat .qe-agent-thread", agentStyles, StringComparison.Ordinal);
         Assert.Contains("justify-content: flex-end;", agentStyles, StringComparison.Ordinal);

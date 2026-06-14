@@ -2049,6 +2049,23 @@
     line-height: 1.5 !important;
 }
 
+.qe-agent-composer .qe-agent-round-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+}
+
+.qe-agent-composer .qe-agent-round-btn:hover,
+.qe-agent-composer .qe-agent-round-btn:focus-visible,
+.qe-agent-composer .qe-agent-round-btn.active {
+    border-radius: 999px;
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-dictation-btn.active {
+    color: var(--qe-agent-primary);
+}
+
 .qe-agent-send-btn {
     width: 36px;
     height: 36px;
@@ -2096,27 +2113,40 @@
 .qe-agent-use-cases button {
     display: grid;
     gap: 6px;
+    align-content: center;
     width: 100%;
+    min-height: 76px;
     padding: 15px 18px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 14px;
     background: transparent;
     color: var(--qe-agent-ink);
     cursor: pointer;
+    outline: 0;
+    overflow: hidden;
     text-align: left;
+    user-select: none;
 }
 
-.qe-agent-use-cases button:hover {
+.qe-agent-use-cases button:hover,
+.qe-agent-use-cases button:focus-visible {
     background: var(--qe-agent-hover);
 }
 
+.qe-agent-use-cases button:focus-visible {
+    border-color: var(--qe-agent-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--qe-agent-primary) 28%, transparent);
+}
+
 .qe-agent-use-cases span {
+    display: block;
     font-size: 15px;
     font-weight: 600;
     line-height: 1.25;
 }
 
 .qe-agent-use-cases small {
+    display: block;
     color: var(--qe-agent-muted);
     font-size: 13px;
     line-height: 1.4;

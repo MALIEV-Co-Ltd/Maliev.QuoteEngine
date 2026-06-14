@@ -91,6 +91,21 @@ export async function typeComposerText(textarea, text) {
   typingAnimations.delete(textarea);
 }
 
+export async function dictateComposerText(textarea) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    throw new Error("Speech recognition is not supported in this browser.");
+  }
+
+  const transcript = await captureSpeech(SpeechRecognition);
+  const summarizedText = summarizeDictation(transcript);
+  if (summarizedText) {
+    await typeComposerText(textarea, summarizedText);
+  }
+
+  return summarizedText;
+}
+
 function clearTextSelection() {
   const selection = window.getSelection?.();
   if (selection && selection.rangeCount > 0) {
@@ -100,4 +115,55 @@ function clearTextSelection() {
 
 function wait(milliseconds) {
   return new Promise(resolve => window.setTimeout(resolve, milliseconds));
+}
+
+function captureSpeech(SpeechRecognition) {
+  return new Promise((resolve, reject) => {
+    const recognition = new SpeechRecognition();
+    let transcript = "";
+    let settled = false;
+
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.lang = document.documentElement.lang || navigator.language || "en-US";
+
+    recognition.onresult = event => {
+      transcript = Array.from(event.results)
+        .map(result => result[0]?.transcript || "")
+        .join(" ")
+        .trim();
+    };
+
+    recognition.onerror = event => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      reject(new Error(event.error || "Dictation failed."));
+    };
+
+    recognition.onend = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      resolve(transcript);
+    };
+
+    try {
+      recognition.start();
+    } catch (error) {
+      settled = true;
+      reject(error);
+    }
+  });
+}
+
+function summarizeDictation(text) {
+  return String(text ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 }
