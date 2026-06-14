@@ -111,42 +111,84 @@ internal sealed class QuoteAgentService(
     {
         yield return new QuoteAgentStreamEvent { Type = "started" };
 
-        QuoteAgentTurnResponse? response = null;
-        string? error = null;
-        try
+        var language = NormalizeLanguage(request.Language, request.Message);
+        var sessionId = request.SessionId.GetValueOrDefault(Guid.NewGuid());
+        var state = sessionStore.GetOrCreate(sessionId, language);
+        state.Language = language;
+        var customerId = ResolveCustomerId();
+        state.CustomerId = customerId ?? state.CustomerId;
+        sessionStore.AddAttachments(state, request.Attachments);
+        MaterializeSupplementalAnalysis(state, request);
+        MaterializePrototypeParts(state, request);
+
+        ChatbotMessageResponse? finalMessage = null;
+        var receivedDelta = false;
+        var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
+        var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
+        await foreach (var streamEvent in chatbotClient.SendMessageStreamAsync(new ChatbotSendMessageRequest
         {
-            response = await SendAsync(request, cancellationToken);
-        }
-        catch (OperationCanceledException)
+            SessionId = chatbotSessionId,
+            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state),
+            Language = language,
+            Attachments = BuildChatbotAttachments(request.Attachments),
+            CallbackUrl = BuildThinkingCallbackUrl(state.SessionId),
+            QuoteAgentContextToken = token
+        }, cancellationToken))
         {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
+            if (streamEvent.Type.Equals("delta", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrEmpty(streamEvent.Delta))
+            {
+                receivedDelta = true;
+                yield return new QuoteAgentStreamEvent
+                {
+                    Type = "delta",
+                    Delta = streamEvent.Delta
+                };
+            }
+            else if (streamEvent.Type.Equals("final", StringComparison.OrdinalIgnoreCase))
+            {
+                finalMessage = streamEvent.Message;
+            }
+            else if (streamEvent.Type.Equals("error", StringComparison.OrdinalIgnoreCase))
+            {
+                yield return new QuoteAgentStreamEvent
+                {
+                    Type = "error",
+                    Error = streamEvent.Error
+                };
+                yield break;
+            }
         }
 
-        if (response is null)
+        var currentState = ToStateResponse(state);
+        var response = new QuoteAgentTurnResponse
         {
-            yield return new QuoteAgentStreamEvent
-            {
-                Type = "error",
-                Error = string.IsNullOrWhiteSpace(error)
-                    ? "The QuoteEngine agent could not complete this response."
-                    : error
-            };
-            yield break;
-        }
+            SessionId = state.SessionId,
+            MessageId = finalMessage?.MessageId,
+            AssistantText = string.IsNullOrWhiteSpace(finalMessage?.Content)
+                ? FallbackAgentAnswer(currentState)
+                : finalMessage.Content,
+            Role = string.IsNullOrWhiteSpace(finalMessage?.Role) ? "assistant" : finalMessage.Role,
+            Language = NormalizeLanguage(finalMessage?.Language, request.Message),
+            CreatedAt = finalMessage?.CreatedAt == default ? DateTimeOffset.UtcNow : finalMessage!.CreatedAt,
+            Artifacts = currentState.Artifacts,
+            Gates = currentState.Gates,
+            ProposedActions = currentState.ProposedActions,
+            ThinkingSteps = finalMessage?.ThinkingSteps ?? []
+        };
 
-        foreach (var delta in ChunkAssistantText(response.AssistantText))
+        if (!receivedDelta)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            yield return new QuoteAgentStreamEvent
+            foreach (var delta in ChunkAssistantText(response.AssistantText))
             {
-                Type = "delta",
-                Delta = delta
-            };
-            await Task.Delay(12, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return new QuoteAgentStreamEvent
+                {
+                    Type = "delta",
+                    Delta = delta
+                };
+                await Task.Delay(12, cancellationToken);
+            }
         }
 
         yield return new QuoteAgentStreamEvent

@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
@@ -3121,6 +3122,36 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
                 Language = "en",
                 CreatedAt = DateTimeOffset.UtcNow
             });
+        }
+
+        public async IAsyncEnumerable<ChatbotMessageStreamEvent> SendMessageStreamAsync(
+            ChatbotSendMessageRequest request,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.CompletedTask;
+            yield return new ChatbotMessageStreamEvent { Type = "started" };
+            yield return new ChatbotMessageStreamEvent
+            {
+                Type = "delta",
+                Delta = "Mali can help with CNC aluminum "
+            };
+            yield return new ChatbotMessageStreamEvent
+            {
+                Type = "delta",
+                Delta = "fixture quotes in Quote Engine."
+            };
+            yield return new ChatbotMessageStreamEvent
+            {
+                Type = "final",
+                Message = new ChatbotMessageResponse
+                {
+                    MessageId = Guid.Parse("20c5a8da-7a10-46da-bcf3-83f757987846"),
+                    Content = "Mali can help with CNC aluminum fixture quotes in Quote Engine.",
+                    Role = "assistant",
+                    Language = "en",
+                    CreatedAt = DateTimeOffset.UtcNow
+                }
+            };
         }
 
         public Task<ChatbotConversationMessagesResponse?> GetConversationMessagesAsync(Guid sessionId, CancellationToken cancellationToken)

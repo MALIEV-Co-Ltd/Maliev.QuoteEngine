@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -94,7 +95,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.NotNull(final.Response);
         Assert.Contains("bracket", final.Response.AssistantText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(final.Response.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
-        Assert.False(string.IsNullOrWhiteSpace(chatbot.LastSendRequest?.QuoteAgentContextToken));
+        Assert.False(string.IsNullOrWhiteSpace(chatbot.LastStreamRequest?.QuoteAgentContextToken));
     }
 
     [Fact]
@@ -1794,6 +1795,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         public ChatbotSendMessageRequest? LastSendRequest { get; private set; }
 
+        public ChatbotSendMessageRequest? LastStreamRequest { get; private set; }
+
         public Task<ChatbotSessionResponse?> InitiateSessionAsync(
             ChatbotInitiateSessionRequest request,
             CancellationToken cancellationToken)
@@ -1821,6 +1824,37 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
                 Language = "en",
                 CreatedAt = DateTimeOffset.UtcNow
             });
+        }
+
+        public async IAsyncEnumerable<ChatbotMessageStreamEvent> SendMessageStreamAsync(
+            ChatbotSendMessageRequest request,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            LastStreamRequest = request;
+            await Task.CompletedTask;
+            yield return new ChatbotMessageStreamEvent { Type = "started" };
+            yield return new ChatbotMessageStreamEvent
+            {
+                Type = "delta",
+                Delta = "Upload the bracket CAD file "
+            };
+            yield return new ChatbotMessageStreamEvent
+            {
+                Type = "delta",
+                Delta = "and I will check geometry, DFM, material, and price gates."
+            };
+            yield return new ChatbotMessageStreamEvent
+            {
+                Type = "final",
+                Message = new ChatbotMessageResponse
+                {
+                    MessageId = Guid.Parse("d127db4e-1106-4106-8f6b-32c6b467e8ad"),
+                    Content = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.",
+                    Role = "assistant",
+                    Language = "en",
+                    CreatedAt = DateTimeOffset.UtcNow
+                }
+            };
         }
 
         public Task<ChatbotConversationMessagesResponse?> GetConversationMessagesAsync(

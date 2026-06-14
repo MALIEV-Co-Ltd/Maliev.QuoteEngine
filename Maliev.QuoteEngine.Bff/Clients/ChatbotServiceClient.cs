@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Chatbot;
@@ -15,6 +16,11 @@ public interface IChatbotServiceClient
 
     /// <summary>Sends a message to a chatbot session.</summary>
     Task<ChatbotMessageResponse?> SendMessageAsync(ChatbotSendMessageRequest request, CancellationToken cancellationToken);
+
+    /// <summary>Streams a message response from a chatbot session.</summary>
+    IAsyncEnumerable<ChatbotMessageStreamEvent> SendMessageStreamAsync(
+        ChatbotSendMessageRequest request,
+        CancellationToken cancellationToken);
 
     /// <summary>Gets internal session messages for BFF-owned handoff hydration.</summary>
     Task<ChatbotConversationMessagesResponse?> GetConversationMessagesAsync(Guid sessionId, CancellationToken cancellationToken);
@@ -45,6 +51,60 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
             request,
             "sending chatbot message",
             cancellationToken);
+    }
+
+    public async IAsyncEnumerable<ChatbotMessageStreamEvent> SendMessageStreamAsync(
+        ChatbotSendMessageRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Post, "/chatbot/v1/messages/stream")
+        {
+            Content = JsonContent.Create(request, options: SnakeCaseJson)
+        };
+        using var response = await httpClient.SendAsync(
+            message,
+            HttpCompletionOption.ResponseHeadersRead,
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogWarning(
+                "ChatbotService returned {StatusCode} while streaming chatbot message.",
+                response.StatusCode);
+            yield return new ChatbotMessageStreamEvent
+            {
+                Type = "error",
+                Error = $"ChatbotService stream failed with status {(int)response.StatusCode}."
+            };
+            yield break;
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            ChatbotMessageStreamEvent? streamEvent;
+            try
+            {
+                streamEvent = JsonSerializer.Deserialize<ChatbotMessageStreamEvent>(line, SnakeCaseJson);
+            }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex, "ChatbotService returned an invalid stream event.");
+                continue;
+            }
+
+            if (streamEvent is not null)
+            {
+                yield return streamEvent;
+            }
+        }
     }
 
     public async Task<ChatbotConversationMessagesResponse?> GetConversationMessagesAsync(Guid sessionId, CancellationToken cancellationToken)
@@ -206,6 +266,22 @@ public sealed class ChatbotMessageResponse
 
     /// <summary>Gets or sets agent thinking steps returned by ChatbotService.</summary>
     public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
+}
+
+/// <summary>ChatbotService streamed message event.</summary>
+public sealed class ChatbotMessageStreamEvent
+{
+    /// <summary>Gets or sets the event type: started, delta, final, or error.</summary>
+    public string Type { get; set; } = "delta";
+
+    /// <summary>Gets or sets the assistant text delta for delta events.</summary>
+    public string? Delta { get; set; }
+
+    /// <summary>Gets or sets the final assistant message for final events.</summary>
+    public ChatbotMessageResponse? Message { get; set; }
+
+    /// <summary>Gets or sets the customer-safe error message for error events.</summary>
+    public string? Error { get; set; }
 }
 
 /// <summary>ChatbotService conversation message history response.</summary>
