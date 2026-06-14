@@ -1695,6 +1695,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("data-ms-beat=\"4\"", index, StringComparison.Ordinal);
         Assert.Contains("class=\"ms-wordmark\"", index, StringComparison.Ordinal);
         Assert.Contains("Make Studio", index, StringComparison.Ordinal);
+        Assert.Contains("Describe what you want to make. <strong>Make&nbsp;Studio</strong> quotes&nbsp;it, reviews&nbsp;it, and orders&nbsp;it in minutes.", index, StringComparison.Ordinal);
+        Assert.DoesNotContain("Describe what you want to make&nbsp;— Make&nbsp;Studio", index, StringComparison.Ordinal);
         Assert.Contains("role=\"progressbar\"", index, StringComparison.Ordinal);
         Assert.Contains("id=\"startup-status\"", index, StringComparison.Ordinal);
         Assert.Contains("id=\"startup-percent\"", index, StringComparison.Ordinal);
