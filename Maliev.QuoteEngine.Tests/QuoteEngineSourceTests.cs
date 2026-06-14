@@ -1161,6 +1161,20 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteUploadJs_does_not_steal_sketchboard_clipboard_images()
+    {
+        var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
+        var sketchScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-agent-sketch.js");
+
+        Assert.Contains("if (shouldIgnorePasteEvent(event))", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("function shouldIgnorePasteEvent(event)", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("event.defaultPrevented", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("event.target?.closest?.(\".qe-agent-sketch-dialog\")", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("window.addEventListener(\"paste\", paste)", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("await insertClipboardFile(entry, image);", sketchScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_disposes_sketch_canvas_when_component_is_disposed()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");

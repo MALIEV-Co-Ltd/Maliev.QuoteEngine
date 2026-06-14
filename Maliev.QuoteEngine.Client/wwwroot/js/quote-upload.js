@@ -168,6 +168,10 @@ window.quoteEngineUploads = (() => {
     unregisterPasteTarget(targetId);
 
     const paste = async event => {
+      if (shouldIgnorePasteEvent(event)) {
+        return;
+      }
+
       const files = filesFromClipboard(event.clipboardData);
       if (files.length === 0) {
         return;
@@ -180,6 +184,11 @@ window.quoteEngineUploads = (() => {
 
     target.addEventListener("paste", paste);
     pasteTargetMap.set(targetId, { target, paste });
+  }
+
+  function shouldIgnorePasteEvent(event) {
+    return event.defaultPrevented ||
+      !!event.target?.closest?.(".qe-agent-sketch-dialog");
   }
 
   function unregisterPasteTarget(targetId) {
