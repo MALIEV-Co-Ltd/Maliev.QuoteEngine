@@ -93,13 +93,29 @@
                             @foreach (var connector in _connectors)
                             {
                                 <button type="button" @onclick="@(() => ApplyConnector(connector))">
-                                    <strong>@connector.DisplayName</strong>
-                                    <span>@ConnectorStatus(connector)</span>
-                                    <small>@connector.Description</small>
-                                    @if (connector.SupportedFileTypes.Count > 0)
-                                    {
-                                        <em>@string.Join(", ", connector.SupportedFileTypes)</em>
-                                    }
+                                    <span class="qe-agent-plugin-icon" aria-hidden="true">
+                                        @if (IsGoogleDriveConnector(connector))
+                                        {
+                                            <svg viewBox="0 0 24 24" focusable="false">
+                                                <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                                <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                                <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                                            </svg>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
+                                        }
+                                    </span>
+                                    <span>
+                                        <strong>@connector.DisplayName</strong>
+                                        <em>@ConnectorStatus(connector)</em>
+                                        <small>@connector.Description</small>
+                                        @if (connector.SupportedFileTypes.Count > 0)
+                                        {
+                                            <i>@string.Join(", ", connector.SupportedFileTypes)</i>
+                                        }
+                                    </span>
                                 </button>
                             }
                         </div>
@@ -241,7 +257,14 @@
                                 <button type="button"
                                         class="@($"qe-agent-upload-card {(i == SelectedPartIndex ? "active" : string.Empty)}")"
                                         @onclick="@(() => SelectUploadedPartAsync(index))">
-                                    <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
+                                    @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
+                                    {
+                                        <img src="@part.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
+                                    }
                                     <span>@part.FileName</span>
                                     <small>@UploadedPartStatus(part)</small>
                                 </button>
@@ -588,10 +611,29 @@
                         <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
                         <span>@Text("Add hand sketch", "เพิ่มสเก็ตช์มือ")</span>
                     </button>
-                    <button type="button" role="menuitem" @onclick="ApplyGoogleDriveConnectorAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.CloudQueue" Size="Size.Small" />
-                        <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
+                    <button type="button"
+                            role="menuitem"
+                            aria-expanded="@AriaExpanded(_composerPluginsOpen)"
+                            @onclick="ToggleComposerPluginsMenu">
+                        <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
+                        <span>@Text("Plugins", "ปลั๊กอิน")</span>
+                        <MudIcon Icon="@(_composerPluginsOpen ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ChevronRight)" Size="Size.Small" />
                     </button>
+                    @if (_composerPluginsOpen)
+                    {
+                        <div class="qe-agent-add-submenu" role="group" aria-label="@Text("Plugin connectors", "ตัวเชื่อมต่อปลั๊กอิน")">
+                            <button type="button" role="menuitem" @onclick="ApplyGoogleDriveConnectorAsync">
+                                <span class="qe-agent-google-drive-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false">
+                                        <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                        <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                        <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                                    </svg>
+                                </span>
+                                <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
+                            </button>
+                        </div>
+                    }
                 </section>
             }
             <form class="@($"qe-agent-composer {(_sending ? "is-sending" : string.Empty)}")" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
@@ -616,7 +658,6 @@
                         title="@Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง")"
                         aria-label="@Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง")"
                         aria-pressed="@_dictating"
-                        disabled="@_dictating"
                         @onclick="StartDictationAsync">
                     <MudIcon Icon="@Icons.Material.Outlined.Mic" Size="Size.Small" />
                 </button>
@@ -764,7 +805,14 @@
                                 <button type="button"
                                         class="@($"qe-agent-artifact qe-agent-artifact--button {(i == SelectedPartIndex ? "active" : string.Empty)}")"
                                         @onclick="@(() => SelectUploadedPartAsync(index))">
-                                    <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
+                                    @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
+                                    {
+                                        <img class="qe-agent-artifact-thumb" src="@part.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
+                                    }
                                     <div>
                                         <strong>@part.FileName</strong>
                                         <small>@UploadedPartStatus(part)</small>
@@ -851,6 +899,7 @@
     private bool _customerSearchUnavailable;
     private bool _dictating;
     private bool _composerMenuOpen;
+    private bool _composerPluginsOpen;
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
     private string _sketchTitle = "Manufacturing sketch";
@@ -1246,6 +1295,13 @@
         }
     }
 
+    public Task ApplyAgentStateAsync(QuoteAgentStateResponse state)
+    {
+        ApplyState(state);
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
     private void ApplyState(QuoteAgentStateResponse state)
     {
         _gates = state.Gates;
@@ -1281,7 +1337,17 @@
     private async Task ToggleComposerMenuAsync()
     {
         _composerMenuOpen = !_composerMenuOpen;
+        if (!_composerMenuOpen)
+        {
+            _composerPluginsOpen = false;
+        }
+
         await FocusComposerAsync();
+    }
+
+    private void ToggleComposerPluginsMenu()
+    {
+        _composerPluginsOpen = !_composerPluginsOpen;
     }
 
     private static string RailGroupClass(bool collapsed)
@@ -1310,6 +1376,7 @@
     private async Task RequestUploadFromComposerMenuAsync()
     {
         _composerMenuOpen = false;
+        _composerPluginsOpen = false;
         await RequestUploadAsync();
     }
 
@@ -1360,12 +1427,14 @@
     private async Task OpenSketchFromComposerMenuAsync()
     {
         _composerMenuOpen = false;
+        _composerPluginsOpen = false;
         await OpenSketchAsync();
     }
 
     private async Task ApplyGoogleDriveConnectorAsync()
     {
         _composerMenuOpen = false;
+        _composerPluginsOpen = false;
         _draftMessage = Text(
             "Connect Google Drive so I can choose manufacturing files from my Drive.",
             "เชื่อมต่อ Google Drive เพื่อเลือกไฟล์งานผลิตจาก Drive ของฉัน");
@@ -1901,6 +1970,12 @@
         return connector.Status.Equals("planned", StringComparison.OrdinalIgnoreCase)
             ? Text("Planned", "วางแผนแล้ว")
             : Text("Future", "อนาคต");
+    }
+
+    private static bool IsGoogleDriveConnector(QuoteAgentConnectorDto connector)
+    {
+        return connector.ActionHint.Equals("connect_google_drive", StringComparison.OrdinalIgnoreCase)
+               || connector.DisplayName.Contains("Google Drive", StringComparison.OrdinalIgnoreCase);
     }
 
     private void ApplyConnector(QuoteAgentConnectorDto connector)

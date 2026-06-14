@@ -46,7 +46,8 @@
                 </div>
             }
 
-            <QuoteAgentLaunchShell SessionId="@AgentSessionId"
+            <QuoteAgentLaunchShell @ref="_agentShell"
+                                   SessionId="@AgentSessionId"
                                    IsSignedIn="@IsSignedIn"
                                    IsDemoMode="@IsDemoMode"
                                    ShowLaunchAccountCard="@ShowLaunchAccountCard"
@@ -82,6 +83,7 @@
     private Guid? _draftProjectId;
     private HubConnection? _notificationConnection;
     private DotNetObjectReference<QuoteWorkspace>? _dotNetRef;
+    private QuoteAgentLaunchShell? _agentShell;
     private readonly List<string> _liveNotifications = [];
     private readonly HashSet<string> _registeredDropzoneIds = [];
     private static readonly HashSet<string> DefaultBrowserViewerExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -532,6 +534,11 @@
             if (state.Artifacts.Count > 0)
             {
                 _liveNotifications.Insert(0, Text("Make Studio agent registered the uploaded file.", "เอเจนต์ Make Studio รับไฟล์ที่อัปโหลดแล้ว"));
+            }
+
+            if (_agentShell is not null)
+            {
+                await _agentShell.ApplyAgentStateAsync(state);
             }
         }
         catch (Exception ex) when (ex is QuoteEngineApiException or HttpRequestException or InvalidOperationException)

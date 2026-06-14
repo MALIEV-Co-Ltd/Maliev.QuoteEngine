@@ -972,7 +972,9 @@
 
 .qe-agent-plugin-list button {
     display: grid;
-    gap: 3px;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px;
     width: 100%;
     min-width: 0;
     padding: 9px 8px;
@@ -989,10 +991,30 @@
     background: var(--qe-agent-hover);
 }
 
+.qe-agent-plugin-icon {
+    display: grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    margin-top: 1px;
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-plugin-icon svg {
+    width: 20px;
+    height: 20px;
+}
+
+.qe-agent-plugin-list button > span:last-child {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
 .qe-agent-plugin-list strong,
-.qe-agent-plugin-list span,
 .qe-agent-plugin-list small,
-.qe-agent-plugin-list em {
+.qe-agent-plugin-list em,
+.qe-agent-plugin-list i {
     display: block;
     min-width: 0;
     max-width: 100%;
@@ -1006,8 +1028,8 @@
     white-space: nowrap;
 }
 
-.qe-agent-plugin-list span,
-.qe-agent-plugin-list em {
+.qe-agent-plugin-list em,
+.qe-agent-plugin-list i {
     color: var(--qe-agent-muted);
     font-size: 11px;
     font-style: normal;
@@ -1499,7 +1521,7 @@
 
 .qe-agent-upload-card {
     display: inline-grid;
-    grid-template-columns: 20px minmax(0, 1fr);
+    grid-template-columns: 42px minmax(0, 1fr);
     grid-template-areas:
         "icon name"
         "icon status";
@@ -1522,6 +1544,15 @@
 .qe-agent-upload-card .mud-icon-root {
     grid-area: icon;
     color: var(--qe-agent-muted);
+}
+
+.qe-agent-upload-card img {
+    grid-area: icon;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    object-fit: cover;
+    background: var(--qe-agent-soft);
 }
 
 .qe-agent-upload-card span {
@@ -2024,35 +2055,54 @@
     bottom: calc(100% + 10px);
     z-index: 35;
     display: grid;
-    gap: 4px;
-    width: min(280px, calc(100vw - 48px));
-    padding: 8px;
+    gap: 2px;
+    width: min(218px, calc(100vw - 48px));
+    padding: 7px;
     border: 1px solid var(--qe-agent-line);
-    border-radius: 16px;
+    border-radius: 14px;
     background: var(--qe-agent-raised);
     box-shadow: 0 16px 44px rgba(0, 0, 0, .14);
 }
 
 .qe-agent-add-menu button {
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-columns: 22px minmax(0, 1fr) 18px;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    min-height: 42px;
-    padding: 9px 10px;
+    min-height: 34px;
+    padding: 7px 8px;
     border: 0;
-    border-radius: 12px;
+    border-radius: 9px;
     background: transparent;
     color: var(--qe-agent-ink);
     cursor: pointer;
     text-align: left;
-    font-size: 14px;
+    font-size: 13px;
+    line-height: 1.2;
+}
+
+.qe-agent-add-menu button > span:nth-child(2):last-child,
+.qe-agent-add-submenu button > span:nth-child(2):last-child {
+    grid-column: 2 / 4;
 }
 
 .qe-agent-add-menu button:hover,
 .qe-agent-add-menu button:focus-visible {
     background: var(--qe-agent-hover);
+}
+
+.qe-agent-add-submenu {
+    display: grid;
+    gap: 2px;
+    padding: 2px 0 4px 14px;
+}
+
+.qe-agent-google-drive-icon,
+.qe-agent-google-drive-icon svg {
+    display: block;
+    width: 18px;
+    height: 18px;
 }
 
 .qe-agent-main--empty .qe-agent-composer-wrap {
@@ -2070,17 +2120,20 @@
 
 .qe-agent-composer {
     display: grid;
-    grid-template-columns: 36px minmax(0, 1fr) 36px 42px;
-    align-items: center;
-    gap: 8px;
+    grid-template-columns: 36px minmax(0, 1fr) 42px 42px;
+    grid-template-areas:
+        "text text text text"
+        "add spacer dictate send";
+    align-items: end;
+    gap: 8px 12px;
     width: 100%;
-    min-height: 56px;
-    padding: 8px;
-    border-radius: 999px;
+    min-height: 90px;
+    padding: 12px;
+    border-radius: 28px;
     background: var(--qe-agent-raised);
     box-shadow: none;
     border: 1px solid var(--qe-agent-line);
-    overflow: hidden;
+    overflow: visible;
     transition: border-radius 160ms ease, padding 160ms ease, align-items 160ms ease;
 }
 
@@ -2091,9 +2144,10 @@
 }
 
 .qe-agent-composer textarea {
+    grid-area: text;
     min-height: 40px;
     max-height: 170px;
-    padding: 8px 4px 7px;
+    padding: 4px 4px 7px;
     border: 0 !important;
     outline: 0 !important;
     background: transparent !important;
@@ -2117,8 +2171,23 @@
     border-radius: 999px;
 }
 
+.qe-agent-add-btn {
+    grid-area: add;
+}
+
 .qe-agent-add-btn.active {
-    transform: rotate(45deg);
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-dictation-btn {
+    grid-area: dictate;
+    justify-self: end;
+    margin-right: 6px;
+}
+
+.qe-agent-send-btn {
+    grid-area: send;
+    justify-self: end;
 }
 
 .qe-agent-composer .qe-agent-round-btn:hover,
@@ -2333,7 +2402,7 @@
 
 .qe-agent-artifact--button {
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-columns: 32px minmax(0, 1fr);
     align-items: center;
     gap: 10px;
     width: 100%;
@@ -2345,6 +2414,14 @@
 
 .qe-agent-artifact--button.active {
     border-color: var(--qe-agent-primary);
+}
+
+.qe-agent-artifact-thumb {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: var(--qe-agent-soft);
 }
 
 .qe-agent-primary-btn,
@@ -2580,11 +2657,7 @@
     }
 
     .qe-agent-composer {
-        grid-template-columns: 36px minmax(0, 1fr) 42px;
-    }
-
-    .qe-agent-composer > .qe-agent-round-btn:nth-of-type(2) {
-        display: none;
+        grid-template-columns: 36px minmax(0, 1fr) 42px 42px;
     }
 
     .qe-agent-composer textarea {

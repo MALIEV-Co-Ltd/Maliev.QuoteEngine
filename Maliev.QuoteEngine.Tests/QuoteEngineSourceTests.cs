@@ -790,6 +790,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Pinned projects", component, StringComparison.Ordinal);
         Assert.Contains("Plugins", component, StringComparison.Ordinal);
         Assert.Contains("TogglePluginsAsync", component, StringComparison.Ordinal);
+        Assert.Contains("_composerPluginsOpen", component, StringComparison.Ordinal);
+        Assert.Contains("ToggleComposerPluginsMenu", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-google-drive-icon", component, StringComparison.Ordinal);
         Assert.Contains("GetConnectorRegistryAsync", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentConnectorDto", component, StringComparison.Ordinal);
         Assert.Contains("ConnectorStatus", component, StringComparison.Ordinal);
@@ -805,6 +808,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SendAgentMessageStreamAsync", component, StringComparison.Ordinal);
         Assert.Contains("assistantMessage.Content += streamEvent.Delta", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentMarkdownRenderer.Render(message.Content)", component, StringComparison.Ordinal);
+        Assert.Contains("part.ThumbnailUrl", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-artifact-thumb", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-markdown\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-thinking\"", component, StringComparison.Ordinal);
         Assert.Contains("assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps", component, StringComparison.Ordinal);
@@ -1054,6 +1059,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("action.RequiresAuthentication && !IsSignedIn", threadBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-chat-actions\"", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-chat-actions", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteWorkspace_PushesRegisteredUploadAgentStateIntoMakeStudioShell()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+
+        Assert.Contains("@ref=\"_agentShell\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("private QuoteAgentLaunchShell? _agentShell;", workspace, StringComparison.Ordinal);
+        Assert.Contains("await _agentShell.ApplyAgentStateAsync(state);", workspace, StringComparison.Ordinal);
+        Assert.Contains("public Task ApplyAgentStateAsync(QuoteAgentStateResponse state)", shell, StringComparison.Ordinal);
+        Assert.Contains("ApplyState(state);", shell, StringComparison.Ordinal);
     }
 
     [Fact]
