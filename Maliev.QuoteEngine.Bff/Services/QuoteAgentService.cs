@@ -975,6 +975,7 @@ internal sealed class QuoteAgentService(
         var results = prototypeStore
             .SearchCustomerData(customerId.Value, query, limit)
             .ToList();
+        AddSessionSearchResults(state, query, limit, results);
         AddArtifactSearchResults(state, query, limit, results);
 
         return new QuoteAgentSearchResponse
@@ -1037,6 +1038,80 @@ internal sealed class QuoteAgentService(
         return PrepareAction(state, actionType, title, summary, requiresAuthentication: true, actionArguments);
     }
 
+    private static void AddSessionSearchResults(
+        QuoteAgentSessionState state,
+        string query,
+        int limit,
+        List<QuoteAgentSearchResultDto> results)
+    {
+        var normalizedLimit = Math.Clamp(limit, 1, 50);
+        lock (state.SyncRoot)
+        {
+            foreach (var attachment in state.Attachments)
+            {
+                if (results.Count >= normalizedLimit)
+                {
+                    return;
+                }
+
+                var result = new QuoteAgentSearchResultDto
+                {
+                    ResourceType = "file",
+                    ResourceId = ResolveUploadId(attachment),
+                    Title = attachment.FileName,
+                    Detail = $"{NormalizeFileKind(attachment.Kind)} · {attachment.ContentType} · {FormatFileSize(attachment.FileSizeBytes)}",
+                    ActionHint = attachment.SatisfiesGeometryGate ? "open_geometry_file" : "open_supplemental_file",
+                    Url = attachment.Url ?? attachment.StoragePath,
+                    Metadata = new(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["fileName"] = attachment.FileName,
+                        ["kind"] = attachment.Kind,
+                        ["contentType"] = attachment.ContentType,
+                        ["fileSizeBytes"] = attachment.FileSizeBytes.ToString(CultureInfo.InvariantCulture),
+                        ["satisfiesGeometryGate"] = attachment.SatisfiesGeometryGate.ToString().ToLowerInvariant(),
+                        ["source"] = "session"
+                    }
+                };
+                AddOptionalMetadata(result.Metadata, "uploadId", attachment.UploadId);
+                AddOptionalMetadata(result.Metadata, "storagePath", attachment.StoragePath);
+
+                AddIfMatchesSearch(results, query, result);
+            }
+
+            foreach (var part in state.Parts)
+            {
+                if (results.Count >= normalizedLimit)
+                {
+                    return;
+                }
+
+                var result = new QuoteAgentSearchResultDto
+                {
+                    ResourceType = "part",
+                    ResourceId = part.PartId.ToString("D"),
+                    Title = part.FileName,
+                    Detail = $"{part.ProcessId} · {part.MaterialId} · qty {part.Quantity}",
+                    ActionHint = "open_part",
+                    Url = part.ViewerGlbUrl,
+                    Metadata = new(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["partId"] = part.PartId.ToString("D"),
+                        ["uploadId"] = part.UploadId,
+                        ["process"] = part.ProcessId,
+                        ["material"] = part.MaterialId,
+                        ["quantity"] = part.Quantity.ToString(CultureInfo.InvariantCulture),
+                        ["status"] = part.Status,
+                        ["source"] = "session"
+                    }
+                };
+                AddOptionalMetadata(result.Metadata, "viewerFileExtension", part.ViewerFileExtension);
+                AddOptionalMetadata(result.Metadata, "storagePath", part.StoragePath);
+
+                AddIfMatchesSearch(results, query, result);
+            }
+        }
+    }
+
     private static void AddArtifactSearchResults(
         QuoteAgentSessionState state,
         string query,
@@ -1068,16 +1143,57 @@ internal sealed class QuoteAgentService(
                     return;
                 }
 
-                if (string.IsNullOrWhiteSpace(query) ||
-                    result.ResourceType.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    result.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    result.Detail.Contains(query, StringComparison.OrdinalIgnoreCase) ||
-                    result.Metadata.Values.Any(value => value.Contains(query, StringComparison.OrdinalIgnoreCase)))
-                {
-                    results.Add(result);
-                }
+                AddIfMatchesSearch(results, query, result);
             }
         }
+    }
+
+    private static void AddIfMatchesSearch(
+        List<QuoteAgentSearchResultDto> results,
+        string query,
+        QuoteAgentSearchResultDto result)
+    {
+        if (string.IsNullOrWhiteSpace(query) ||
+            result.ResourceType.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            result.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            result.Detail.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+            result.Metadata.Values.Any(value => value.Contains(query, StringComparison.OrdinalIgnoreCase)))
+        {
+            results.Add(result);
+        }
+    }
+
+    private static void AddOptionalMetadata(
+        Dictionary<string, string> metadata,
+        string key,
+        string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            metadata[key] = value;
+        }
+    }
+
+    private static string NormalizeFileKind(string? kind)
+    {
+        return string.IsNullOrWhiteSpace(kind)
+            ? "file"
+            : kind.Trim().Replace('_', ' ');
+    }
+
+    private static string FormatFileSize(long fileSizeBytes)
+    {
+        if (fileSizeBytes >= 1_048_576)
+        {
+            return $"{fileSizeBytes / 1_048_576m:0.#} MB";
+        }
+
+        if (fileSizeBytes >= 1024)
+        {
+            return $"{fileSizeBytes / 1024m:0.#} KB";
+        }
+
+        return $"{fileSizeBytes} bytes";
     }
 
     private object ResumeProjectOrGateError(

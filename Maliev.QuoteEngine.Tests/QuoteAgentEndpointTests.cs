@@ -1244,6 +1244,78 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_search_customer_data_includes_current_session_files_and_parts()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-search-session@example.com");
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement(
+                    "Quote this CNC housing as 12 aluminum parts with the matching drawing.",
+                    JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "session-housing.step",
+                        content_type = "model/step",
+                        file_size_bytes = 420_000,
+                        kind = "cad",
+                        upload_id = "session-housing-cad",
+                        storage_path = "quotes/temp/session/session-housing.step"
+                    },
+                    new
+                    {
+                        file_name = "session-housing-drawing.pdf",
+                        content_type = "application/pdf",
+                        file_size_bytes = 92_000,
+                        kind = "drawing",
+                        upload_id = "session-housing-drawing",
+                        storage_path = "quotes/temp/session/session-housing-drawing.pdf"
+                    }
+                }, JsonOptions)
+            });
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_search_customer_data",
+            new Dictionary<string, JsonElement>
+            {
+                ["query"] = JsonSerializer.SerializeToElement("session-housing", JsonOptions),
+                ["limit"] = JsonSerializer.SerializeToElement(20, JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+        var results = document.RootElement.GetProperty("results").EnumerateArray().ToArray();
+
+        Assert.Equal(sessionId, document.RootElement.GetProperty("sessionId").GetGuid());
+        var cadFile = Assert.Single(results, result =>
+            result.GetProperty("resourceType").GetString() == "file" &&
+            result.GetProperty("title").GetString() == "session-housing.step");
+        Assert.Equal("session", cadFile.GetProperty("metadata").GetProperty("source").GetString());
+        Assert.Equal("true", cadFile.GetProperty("metadata").GetProperty("satisfiesGeometryGate").GetString());
+
+        var drawingFile = Assert.Single(results, result =>
+            result.GetProperty("resourceType").GetString() == "file" &&
+            result.GetProperty("title").GetString() == "session-housing-drawing.pdf");
+        Assert.Equal("drawing", drawingFile.GetProperty("metadata").GetProperty("kind").GetString());
+        Assert.Equal("false", drawingFile.GetProperty("metadata").GetProperty("satisfiesGeometryGate").GetString());
+
+        var part = Assert.Single(results, result =>
+            result.GetProperty("resourceType").GetString() == "part" &&
+            result.GetProperty("title").GetString() == "session-housing.step");
+        Assert.Equal("open_part", part.GetProperty("actionHint").GetString());
+        Assert.Equal("session", part.GetProperty("metadata").GetProperty("source").GetString());
+        Assert.Equal("12", part.GetProperty("metadata").GetProperty("quantity").GetString());
+    }
+
+    [Fact]
     public async Task Agent_search_customer_data_requires_customer_session()
     {
         using var client = factory.CreateClient();
