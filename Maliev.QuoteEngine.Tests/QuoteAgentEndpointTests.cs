@@ -348,6 +348,13 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Equal("needs_geometry", analysisArtifact.Status);
         Assert.Equal("not_satisfied_by_supplemental_files", analysisArtifact.Metadata["geometryGate"]);
         Assert.Contains("sketch", analysisArtifact.Metadata["summary"], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("sketch, drawing", analysisArtifact.Metadata["fileKinds"]);
+        Assert.Equal("50", analysisArtifact.Metadata["inferredQuantity"]);
+        Assert.Equal("cnc", analysisArtifact.Metadata["inferredProcess"]);
+        Assert.Equal("al6061", analysisArtifact.Metadata["inferredMaterial"]);
+        Assert.Equal("STANDARD", analysisArtifact.Metadata["inferredLeadTime"]);
+        Assert.Equal("true", analysisArtifact.Metadata["needsCadGeometry"]);
+        Assert.Equal("false", analysisArtifact.Metadata["usableForFinalPricing"]);
     }
 
     [Fact]

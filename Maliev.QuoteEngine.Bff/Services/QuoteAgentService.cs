@@ -1457,6 +1457,7 @@ internal sealed class QuoteAgentService(
             artifact.Metadata["fileNames"] = string.Join(", ", supplemental.Select(item => item.FileName).Take(5));
             artifact.Metadata["geometryGate"] = "not_satisfied_by_supplemental_files";
             artifact.Metadata["summary"] = BuildSupplementalSummary(request.Message, supplemental);
+            SetSupplementalRequirementMetadata(artifact, request.Message, supplemental);
 
             foreach (var part in state.Parts)
             {
@@ -1503,6 +1504,36 @@ internal sealed class QuoteAgentService(
         var quantity = InferQuantity(message);
         var process = InferProcessFromMessage(message) ?? "unknown";
         return $"Captured {supplemental.Count} supplemental file(s): {string.Join(", ", kinds)}. Inferred quantity {quantity} and process {process}; CAD/3D geometry is still required for final DFM, pricing, order, and payment.";
+    }
+
+    private static void SetSupplementalRequirementMetadata(
+        QuoteAgentArtifactDto artifact,
+        string message,
+        IReadOnlyCollection<QuoteAgentAttachmentDto> supplemental)
+    {
+        var process = InferProcessFromMessage(message) ?? "unknown";
+        var material = process.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+            ? "unknown"
+            : InferMaterial(process, message);
+
+        artifact.Metadata["fileKinds"] = string.Join(
+            ", ",
+            supplemental
+                .Select(item => string.IsNullOrWhiteSpace(item.Kind) ? item.ContentType : item.Kind)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(8));
+        artifact.Metadata["inferredQuantity"] = InferQuantity(message).ToString(CultureInfo.InvariantCulture);
+        artifact.Metadata["inferredProcess"] = process;
+        artifact.Metadata["inferredMaterial"] = material;
+        artifact.Metadata["inferredFinish"] = process.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+            ? "unknown"
+            : InferFinish(process, message);
+        artifact.Metadata["inferredTolerance"] = process.Equals("unknown", StringComparison.OrdinalIgnoreCase)
+            ? "unknown"
+            : InferTolerance(process, message);
+        artifact.Metadata["inferredLeadTime"] = InferLeadTime(message) ?? "STANDARD";
+        artifact.Metadata["needsCadGeometry"] = "true";
+        artifact.Metadata["usableForFinalPricing"] = "false";
     }
 
     private static void AttachSupplementalFiles(
