@@ -324,10 +324,7 @@ public sealed class QuoteEnginePrototypeStore
 
     public IReadOnlyList<CustomerAddressDto> GetAddresses(Guid customerId)
     {
-        if (!_addressesByCustomer.TryGetValue(customerId, out var addresses))
-        {
-            return [];
-        }
+        var addresses = _addressesByCustomer.GetOrAdd(customerId, _ => CreateDefaultAddresses());
 
         lock (addresses)
         {
@@ -1066,6 +1063,44 @@ public sealed class QuoteEnginePrototypeStore
             Longitude = source.Longitude,
             Version = source.Version
         };
+    }
+
+    private static List<CustomerAddressDto> CreateDefaultAddresses()
+    {
+        var countryId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+        return
+        [
+            new CustomerAddressDto
+            {
+                Id = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
+                Type = "Billing",
+                IsDefault = true,
+                AddressLine1 = "12 Billing Road",
+                City = "Bangkok",
+                StateProvince = "Bangkok",
+                PostalCode = "10110",
+                CountryId = countryId,
+                RecipientName = "MALIEV Buyer",
+                RecipientPhone = "+66 2 555 0100",
+                AddressSource = "Prototype",
+                FormattedAddress = "12 Billing Road, Bangkok 10110"
+            },
+            new CustomerAddressDto
+            {
+                Id = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
+                Type = "Shipping",
+                IsDefault = true,
+                AddressLine1 = "34 Shipping Road",
+                City = "Bangkok",
+                StateProvince = "Bangkok",
+                PostalCode = "10110",
+                CountryId = countryId,
+                RecipientName = "MALIEV Receiving",
+                RecipientPhone = "+66 2 555 0100",
+                AddressSource = "Prototype",
+                FormattedAddress = "34 Shipping Road, Bangkok 10110"
+            }
+        ];
     }
 
     private static void ResetSameRoleDefault(List<CustomerAddressDto> addresses, CustomerAddressDto current)

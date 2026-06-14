@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Security;
+using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.SignalR;
@@ -932,15 +933,59 @@ internal sealed class QuoteAgentService(
     {
         var customerId = ResolveCustomerId();
         var authHandoff = BuildAuthHandoff(state, []);
+        if (!customerId.HasValue)
+        {
+            return new
+            {
+                isAuthenticated = false,
+                customerId = (Guid?)null,
+                signInUrl = "/auth/sign-in?returnUrl=/quote/new",
+                signUpUrl = "/auth/sign-up?returnUrl=/quote/new",
+                authHandoff,
+                gates = QuoteAgentSessionStore.BuildGates(state, isAuthenticated: false),
+                nextActions = new[]
+                {
+                    "sign_in_or_sign_up",
+                    "continue_public_quote"
+                }
+            };
+        }
+
+        state.CustomerId = customerId;
+        var profile = prototypeStore.GetProfile(customerId.Value);
+        var addresses = prototypeStore.GetAddresses(customerId.Value);
+        var defaultBillingAddress = SelectDefaultAddress(addresses, "Billing");
+        var defaultShippingAddress = SelectDefaultAddress(addresses, "Shipping");
+
         return new
         {
-            isAuthenticated = customerId.HasValue,
+            isAuthenticated = true,
             customerId,
             signInUrl = "/auth/sign-in?returnUrl=/quote/new",
             signUpUrl = "/auth/sign-up?returnUrl=/quote/new",
             authHandoff,
-            gates = QuoteAgentSessionStore.BuildGates(state, customerId.HasValue)
+            profile,
+            defaultBillingAddress,
+            defaultShippingAddress,
+            gates = QuoteAgentSessionStore.BuildGates(state, isAuthenticated: true),
+            nextActions = new[]
+            {
+                "use_default_checkout_addresses",
+                "collect_missing_checkout_details",
+                "continue_quote"
+            }
         };
+    }
+
+    private static CustomerAddressDto? SelectDefaultAddress(
+        IReadOnlyCollection<CustomerAddressDto> addresses,
+        string type)
+    {
+        return addresses.FirstOrDefault(address =>
+                address.IsDefault &&
+                address.Type.Equals(type, StringComparison.OrdinalIgnoreCase)) ??
+            addresses.FirstOrDefault(address =>
+                address.Type.Equals(type, StringComparison.OrdinalIgnoreCase));
     }
 
     private QuoteAgentAuthHandoffResponse BuildAuthHandoff(

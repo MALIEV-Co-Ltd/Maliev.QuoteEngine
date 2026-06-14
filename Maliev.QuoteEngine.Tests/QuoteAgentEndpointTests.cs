@@ -1732,6 +1732,45 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_account_context_returns_auth_handoff_without_customer_defaults_when_anonymous()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_get_account_context");
+        using var document = JsonDocument.Parse(json);
+
+        Assert.False(document.RootElement.GetProperty("isAuthenticated").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("customerId").ValueKind);
+        Assert.Equal("authentication_required", document.RootElement.GetProperty("authHandoff").GetProperty("status").GetString());
+        Assert.False(document.RootElement.TryGetProperty("profile", out _));
+        Assert.False(document.RootElement.TryGetProperty("defaultBillingAddress", out _));
+        Assert.False(document.RootElement.TryGetProperty("defaultShippingAddress", out _));
+    }
+
+    [Fact]
+    public async Task Agent_account_context_returns_signed_in_profile_and_default_checkout_addresses()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-account-context@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_get_account_context");
+        using var document = JsonDocument.Parse(json);
+
+        Assert.True(document.RootElement.GetProperty("isAuthenticated").GetBoolean());
+        Assert.NotEqual(Guid.Empty, document.RootElement.GetProperty("customerId").GetGuid());
+        Assert.Equal("already_authenticated", document.RootElement.GetProperty("authHandoff").GetProperty("status").GetString());
+        Assert.Equal("agent-account-context@example.com", document.RootElement.GetProperty("profile").GetProperty("email").GetString());
+        Assert.Equal("Billing", document.RootElement.GetProperty("defaultBillingAddress").GetProperty("type").GetString());
+        Assert.True(document.RootElement.GetProperty("defaultBillingAddress").GetProperty("isDefault").GetBoolean());
+        Assert.Equal("Shipping", document.RootElement.GetProperty("defaultShippingAddress").GetProperty("type").GetString());
+        Assert.True(document.RootElement.GetProperty("defaultShippingAddress").GetProperty("isDefault").GetBoolean());
+        Assert.Equal("use_default_checkout_addresses", document.RootElement.GetProperty("nextActions")[0].GetString());
+    }
+
+    [Fact]
     public async Task Agent_message_forwards_current_session_settings_to_chatbot_service()
     {
         var chatbot = new RecordingChatbotServiceClient();
