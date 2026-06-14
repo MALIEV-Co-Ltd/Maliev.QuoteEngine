@@ -17,21 +17,37 @@
         </div>
 
         <nav class="qe-agent-primary-nav" aria-label="@Text("Quote workspace", "พื้นที่ขอราคา")">
-            <a class="active" href="/">
+            <button type="button"
+                    class="@PageNavClass(WorkspacePage.Chat)"
+                    aria-current="@(IsWorkspacePage(WorkspacePage.Chat) ? "page" : null)"
+                    @onclick="OpenChatWorkspaceAsync">
                 <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
                 <span>@Text("New project", "โปรเจกต์ใหม่")</span>
-            </a>
+            </button>
             <button type="button"
-                    class="@(_pluginsOpen ? "active" : string.Empty)"
-                    aria-expanded="@AriaExpanded(_pluginsOpen)"
-                    @onclick="TogglePluginsAsync">
+                    class="@PageNavClass(WorkspacePage.Plugins)"
+                    aria-current="@(IsWorkspacePage(WorkspacePage.Plugins) ? "page" : null)"
+                    @onclick="OpenPluginsPageAsync">
                 <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
                 <span>@Text("Plugins", "ปลั๊กอิน")</span>
             </button>
-            <a href="/quotes">
+            <button type="button"
+                    class="@PageNavClass(WorkspacePage.Projects)"
+                    aria-current="@(IsWorkspacePage(WorkspacePage.Projects) ? "page" : null)"
+                    @onclick="OpenProjectsPage">
                 <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
                 <span>@Text("Projects", "โปรเจกต์")</span>
-            </a>
+            </button>
+            @if (IsSignedIn)
+            {
+                <button type="button"
+                        class="@PageNavClass(WorkspacePage.Settings)"
+                        aria-current="@(IsWorkspacePage(WorkspacePage.Settings) ? "page" : null)"
+                        @onclick="OpenSettingsPage">
+                    <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
+                    <span>@Text("Settings", "ตั้งค่า")</span>
+                </button>
+            }
         </nav>
 
         <div class="qe-agent-rail-scroll">
@@ -71,118 +87,6 @@
                     </div>
                 </section>
             }
-
-            @if (_pluginsOpen)
-            {
-                <section class="qe-agent-plugin-panel" aria-label="@Text("Plugins and connectors", "ปลั๊กอินและตัวเชื่อมต่อ")">
-                    <label>@Text("External connectors", "ตัวเชื่อมต่อภายนอก")</label>
-                    @if (_connectors.Count == 0)
-                    {
-                        <p>@Text("Connectors will appear here when the registry is available.", "ตัวเชื่อมต่อจะแสดงที่นี่เมื่อทะเบียนพร้อมใช้งาน")</p>
-                    }
-                    else
-                    {
-                        <div class="qe-agent-plugin-list">
-                            @foreach (var connector in _connectors)
-                            {
-                                <button type="button" @onclick="@(() => ApplyConnector(connector))">
-                                    <span class="qe-agent-plugin-icon" aria-hidden="true">
-                                        @if (IsGoogleDriveConnector(connector))
-                                        {
-                                            <svg viewBox="0 0 24 24" focusable="false">
-                                                <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
-                                                <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
-                                                <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
-                                            </svg>
-                                        }
-                                        else
-                                        {
-                                            <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
-                                        }
-                                    </span>
-                                    <span>
-                                        <strong>@connector.DisplayName</strong>
-                                        <em>@ConnectorStatus(connector)</em>
-                                        <small>@connector.Description</small>
-                                        @if (connector.SupportedFileTypes.Count > 0)
-                                        {
-                                            <i>@string.Join(", ", connector.SupportedFileTypes)</i>
-                                        }
-                                    </span>
-                                </button>
-                            }
-                        </div>
-                    }
-                </section>
-            }
-
-            @if (PinnedProjects.Any())
-            {
-                <section class="@RailGroupClass(_pinnedProjectsCollapsed)" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
-                    <button type="button"
-                            class="qe-agent-rail-group-toggle"
-                            aria-expanded="@AriaExpanded(!_pinnedProjectsCollapsed)"
-                            @onclick="TogglePinnedProjects">
-                        <span>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</span>
-                        <MudIcon Icon="@(_pinnedProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
-                    </button>
-                    @if (!_pinnedProjectsCollapsed)
-                    {
-                        @foreach (var project in PinnedProjects)
-                        {
-                            <div class="qe-agent-project-row">
-                                <a href="@ProjectHref(project)">
-                                    <span>@ProjectName(project)</span>
-                                </a>
-                                <button type="button"
-                                        class="qe-agent-pin-btn active"
-                                        title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
-                                        aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
-                                        aria-pressed="true"
-                                        @onclick="@(() => ToggleProjectPinAsync(project))">
-                                    <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
-                                </button>
-                            </div>
-                        }
-                    }
-                </section>
-            }
-
-            <section class="@RailGroupClass(_projectsCollapsed)" aria-label="@Text("Projects", "โปรเจกต์")">
-                <button type="button"
-                        class="qe-agent-rail-group-toggle"
-                        aria-expanded="@AriaExpanded(!_projectsCollapsed)"
-                        @onclick="ToggleProjects">
-                    <span>@Text("Projects", "โปรเจกต์")</span>
-                    <MudIcon Icon="@(_projectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
-                </button>
-                @if (!_projectsCollapsed)
-                {
-                    @if (RegularProjects.Any())
-                    {
-                        @foreach (var project in RegularProjects)
-                        {
-                            <div class="qe-agent-project-row">
-                                <a href="@ProjectHref(project)">
-                                    <span>@ProjectName(project)</span>
-                                </a>
-                                <button type="button"
-                                        class="@($"qe-agent-pin-btn {(project.IsPinned ? "active" : string.Empty)}")"
-                                        title="@(project.IsPinned ? Text("Unpin project", "เลิกปักหมุดโปรเจกต์") : Text("Pin project", "ปักหมุดโปรเจกต์"))"
-                                        aria-label="@(project.IsPinned ? Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}") : Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}"))"
-                                        aria-pressed="@project.IsPinned"
-                                        @onclick="@(() => ToggleProjectPinAsync(project))">
-                                    <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
-                                </button>
-                            </div>
-                        }
-                    }
-                    else
-                    {
-                        <p class="qe-agent-empty-projects">@Text("No projects", "ยังไม่มีโปรเจกต์")</p>
-                    }
-                }
-            </section>
         </div>
 
         <div class="qe-agent-rail-foot">
@@ -239,6 +143,184 @@
             </button>
         </div>
 
+        @if (!IsWorkspacePage(WorkspacePage.Chat))
+        {
+            <section class="qe-agent-management-page" aria-label="@ActiveWorkspaceTitle">
+                @if (IsWorkspacePage(WorkspacePage.Plugins))
+                {
+                    <header class="qe-agent-management-head">
+                        <div>
+                            <span>@Text("Connectors", "ตัวเชื่อมต่อ")</span>
+                            <h1>@Text("Plugins", "ปลั๊กอิน")</h1>
+                            <p>@Text("Connect external tools for files, drawings, and manufacturing context.", "เชื่อมต่อเครื่องมือภายนอกสำหรับไฟล์ drawing และบริบทการผลิต")</p>
+                        </div>
+                    </header>
+                    <div class="qe-agent-management-search">
+                        <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+                        <input placeholder="@Text("Search plugins and connectors", "ค้นหาปลั๊กอินและตัวเชื่อมต่อ")"
+                               aria-label="@Text("Search plugins and connectors", "ค้นหาปลั๊กอินและตัวเชื่อมต่อ")" />
+                    </div>
+                    <section class="qe-agent-management-section">
+                        <header>
+                            <strong>@Text("Available connectors", "ตัวเชื่อมต่อที่มี")</strong>
+                            <small>@Text("Google Drive is planned first; CAD tools follow after MVP.", "Google Drive อยู่ในแผนแรก จากนั้นเป็นเครื่องมือ CAD หลัง MVP")</small>
+                        </header>
+                        @if (_connectors.Count == 0)
+                        {
+                            <p class="qe-agent-management-empty">@Text("Connectors will appear here when the registry is available.", "ตัวเชื่อมต่อจะแสดงที่นี่เมื่อทะเบียนพร้อมใช้งาน")</p>
+                        }
+                        else
+                        {
+                            <div class="qe-agent-management-list">
+                                @foreach (var connector in _connectors)
+                                {
+                                    <article class="qe-agent-management-row">
+                                        <span class="qe-agent-plugin-icon" aria-hidden="true">
+                                            @if (IsGoogleDriveConnector(connector))
+                                            {
+                                                <svg viewBox="0 0 24 24" focusable="false">
+                                                    <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                                    <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                                    <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                                                </svg>
+                                            }
+                                            else
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
+                                            }
+                                        </span>
+                                        <div>
+                                            <strong>@connector.DisplayName</strong>
+                                            <p>@connector.Description</p>
+                                            @if (connector.SupportedFileTypes.Count > 0)
+                                            {
+                                                <small>@string.Join(", ", connector.SupportedFileTypes)</small>
+                                            }
+                                        </div>
+                                        <button type="button" @onclick="@(() => ApplyConnector(connector))">@ConnectorStatus(connector)</button>
+                                    </article>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+                else if (IsWorkspacePage(WorkspacePage.Projects))
+                {
+                    <header class="qe-agent-management-head">
+                        <div>
+                            <span>@Text("Make Studio", "Make Studio")</span>
+                            <h1>@Text("Projects", "โปรเจกต์")</h1>
+                            <p>@Text("Resume, pin, and manage manufacturing work without leaving the quote studio.", "ทำต่อ ปักหมุด และจัดการงานผลิตได้จากในสตูดิโอขอราคา")</p>
+                        </div>
+                    </header>
+                    @if (!IsSignedIn)
+                    {
+                        <section class="qe-agent-management-empty">
+                            <strong>@Text("Sign in to view projects", "เข้าสู่ระบบเพื่อดูโปรเจกต์")</strong>
+                            <p>@Text("Your projects, files, quotes, and orders are kept in your MALIEV account.", "โปรเจกต์ ไฟล์ ใบเสนอราคา และคำสั่งซื้อจะอยู่ในบัญชี MALIEV ของคุณ")</p>
+                            <a href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                        </section>
+                    }
+                    else if (!_projects.Any(project => !project.IsArchived))
+                    {
+                        <p class="qe-agent-management-empty">@Text("No projects yet. Start a new project from chat.", "ยังไม่มีโปรเจกต์ เริ่มโปรเจกต์ใหม่จากแชท")</p>
+                    }
+                    else
+                    {
+                        @if (PinnedProjects.Any())
+                        {
+                            <section class="qe-agent-management-section">
+                                <header>
+                                    <strong>@Text("Pinned", "ปักหมุด")</strong>
+                                    <small>@Text("Fast access projects", "โปรเจกต์ที่เข้าถึงบ่อย")</small>
+                                </header>
+                                <div class="qe-agent-management-list">
+                                    @foreach (var project in PinnedProjects)
+                                    {
+                                        <article class="qe-agent-management-row">
+                                            <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
+                                            <div>
+                                                <strong>@ProjectName(project)</strong>
+                                                <p>@project.Status</p>
+                                            </div>
+                                            <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
+                                            <button type="button"
+                                                    title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
+                                                    aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
+                                                    @onclick="@(() => ToggleProjectPinAsync(project))">
+                                                <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
+                                            </button>
+                                        </article>
+                                    }
+                                </div>
+                            </section>
+                        }
+                        <section class="qe-agent-management-section">
+                            <header>
+                                <strong>@Text("All projects", "โปรเจกต์ทั้งหมด")</strong>
+                                <small>@Text("Pinned projects are not duplicated here.", "โปรเจกต์ที่ปักหมุดจะไม่แสดงซ้ำที่นี่")</small>
+                            </header>
+                            @if (RegularProjects.Any())
+                            {
+                                <div class="qe-agent-management-list">
+                                    @foreach (var project in RegularProjects)
+                                    {
+                                        <article class="qe-agent-management-row">
+                                            <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
+                                            <div>
+                                                <strong>@ProjectName(project)</strong>
+                                                <p>@project.Status</p>
+                                            </div>
+                                            <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
+                                            <button type="button"
+                                                    title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
+                                                    aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
+                                                    @onclick="@(() => ToggleProjectPinAsync(project))">
+                                                <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
+                                            </button>
+                                        </article>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <p class="qe-agent-management-empty">@Text("No unpinned projects.", "ไม่มีโปรเจกต์ที่ไม่ได้ปักหมุด")</p>
+                            }
+                        </section>
+                    }
+                }
+                else if (IsWorkspacePage(WorkspacePage.Settings))
+                {
+                    <header class="qe-agent-management-head">
+                        <div>
+                            <span>@Text("Account", "บัญชี")</span>
+                            <h1>@Text("Settings", "ตั้งค่า")</h1>
+                            <p>@Text("Manage Studio preferences and account actions.", "จัดการการตั้งค่า Studio และการทำงานของบัญชี")</p>
+                        </div>
+                    </header>
+                    <section class="qe-agent-management-section">
+                        <header>
+                            <strong>@Text("Studio preferences", "การตั้งค่า Studio")</strong>
+                            <small>@Text("More controls will appear as account services are connected.", "ตัวเลือกเพิ่มเติมจะแสดงเมื่อเชื่อมต่อบริการบัญชีแล้ว")</small>
+                        </header>
+                        <div class="qe-agent-settings-grid">
+                            <button type="button" @onclick="ToggleThemeAsync">
+                                <MudIcon Icon="@ThemeIcon" Size="Size.Small" />
+                                <span>@Text("Theme", "ธีม")</span>
+                                <strong>@(IsDarkMode ? Text("Dark", "มืด") : Text("Light", "สว่าง"))</strong>
+                            </button>
+                            <a href="/auth/sign-in?returnUrl=/quotes">
+                                <MudIcon Icon="@Icons.Material.Outlined.ManageAccounts" Size="Size.Small" />
+                                <span>@Text("Account", "บัญชี")</span>
+                                <strong>@Text("Manage sign in", "จัดการการเข้าสู่ระบบ")</strong>
+                            </a>
+                        </div>
+                    </section>
+                }
+            </section>
+        }
+        else
+        {
         <div class="qe-agent-thread" aria-live="polite">
             @if (_messages.Count == 0)
             {
@@ -625,6 +707,7 @@
                 </div>
             </section>
         }
+
         <section class="qe-agent-composer-wrap" aria-label="@Text("Message composer", "กล่องข้อความ")">
             @if (_composerMenuOpen)
             {
@@ -726,6 +809,7 @@
                 </section>
             }
         </section>
+        }
 
         @if (_sketchOpen)
         {
@@ -916,10 +1000,7 @@
     private bool _sketchOpen;
     private bool _sketchInitPending;
     private bool _searchOpen;
-    private bool _pluginsOpen;
     private bool _focusSearchPending;
-    private bool _pinnedProjectsCollapsed;
-    private bool _projectsCollapsed;
     private bool _projectNavigationLoaded;
     private bool _connectorRegistryLoaded;
     private bool _searchLoading;
@@ -927,6 +1008,7 @@
     private bool _dictating;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
+    private WorkspacePage _activeWorkspacePage = WorkspacePage.Chat;
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
     private string _sketchTitle = "Manufacturing sketch";
@@ -1055,6 +1137,13 @@
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
     private int ArtifactCount => _artifacts.Count + UploadedParts.Count;
     private IReadOnlyList<UseCaseOption> VisibleUseCases => _visibleUseCases.Count == 0 ? SampleUseCases.Take(3).ToArray() : _visibleUseCases;
+    private string ActiveWorkspaceTitle => _activeWorkspacePage switch
+    {
+        WorkspacePage.Plugins => Text("Plugins", "ปลั๊กอิน"),
+        WorkspacePage.Projects => Text("Projects", "โปรเจกต์"),
+        WorkspacePage.Settings => Text("Settings", "ตั้งค่า"),
+        _ => Text("New project", "โปรเจกต์ใหม่")
+    };
     private string AgentStatusClass => _error is not null
         ? "qe-agent-status is-failed"
         : _sending || _searchLoading
@@ -1073,6 +1162,16 @@
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned && !project.IsArchived);
     private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
+
+    private bool IsWorkspacePage(WorkspacePage page)
+    {
+        return _activeWorkspacePage == page;
+    }
+
+    private string PageNavClass(WorkspacePage page)
+    {
+        return IsWorkspacePage(page) ? "active" : string.Empty;
+    }
 
     protected override void OnInitialized()
     {
@@ -1352,6 +1451,7 @@
     {
         _authHandoff = authHandoff;
     }
+
     private void ToggleArtifactPanel()
     {
         _artifactPanelOpen = !_artifactPanelOpen;
@@ -1363,18 +1463,40 @@
         if (_railCollapsed)
         {
             _searchOpen = false;
-            _pluginsOpen = false;
         }
     }
 
-    private void TogglePinnedProjects()
+    private async Task OpenChatWorkspaceAsync()
     {
-        _pinnedProjectsCollapsed = !_pinnedProjectsCollapsed;
+        _activeWorkspacePage = WorkspacePage.Chat;
+        _searchOpen = false;
+        await FocusComposerAsync();
     }
 
-    private void ToggleProjects()
+    private async Task OpenPluginsPageAsync()
     {
-        _projectsCollapsed = !_projectsCollapsed;
+        _activeWorkspacePage = WorkspacePage.Plugins;
+        _searchOpen = false;
+        if (!_connectorRegistryLoaded)
+        {
+            await LoadConnectorRegistryAsync();
+        }
+    }
+
+    private async Task OpenProjectsPage()
+    {
+        _activeWorkspacePage = WorkspacePage.Projects;
+        _searchOpen = false;
+        if (IsSignedIn && !_projectNavigationLoaded)
+        {
+            await LoadProjectNavigationAsync();
+        }
+    }
+
+    private void OpenSettingsPage()
+    {
+        _activeWorkspacePage = WorkspacePage.Settings;
+        _searchOpen = false;
     }
 
     private async Task ToggleComposerMenuAsync()
@@ -1391,11 +1513,6 @@
     private void ToggleComposerPluginsMenu()
     {
         _composerPluginsOpen = !_composerPluginsOpen;
-    }
-
-    private static string RailGroupClass(bool collapsed)
-    {
-        return collapsed ? "qe-agent-rail-group is-collapsed" : "qe-agent-rail-group";
     }
 
     private static string AriaExpanded(bool value)
@@ -1685,6 +1802,7 @@
             ? Text($"{method.Description} Browser support required.", $"{method.Description} ต้องใช้เบราว์เซอร์ที่รองรับ")
             : method.Description;
     }
+
     private static string StepIcon(string status)
     {
         return status.Equals("pending", StringComparison.OrdinalIgnoreCase)
@@ -1849,7 +1967,6 @@
         }
 
         _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, _projectName, _projectName, "draft", false, false));
-        _projectsCollapsed = false;
     }
 
     private static string BuildLocalProjectTitle(string message)
@@ -1921,7 +2038,6 @@
         _searchOpen = !_searchOpen;
         if (_searchOpen)
         {
-            _pluginsOpen = false;
             await RefreshSearchResultsAsync();
         }
 
@@ -1931,7 +2047,6 @@
     private async Task OpenSearchAsync()
     {
         _searchOpen = true;
-        _pluginsOpen = false;
         _focusSearchPending = false;
         await RefreshSearchResultsAsync();
     }
@@ -1980,19 +2095,6 @@
         finally
         {
             _searchLoading = false;
-        }
-    }
-
-    private async Task TogglePluginsAsync()
-    {
-        _pluginsOpen = !_pluginsOpen;
-        if (_pluginsOpen)
-        {
-            _searchOpen = false;
-            if (!_connectorRegistryLoaded)
-            {
-                await LoadConnectorRegistryAsync();
-            }
         }
     }
 
@@ -2119,6 +2221,14 @@
 
         _draftMessage = prompt;
         await FocusComposerAsync();
+    }
+
+    private enum WorkspacePage
+    {
+        Chat,
+        Plugins,
+        Projects,
+        Settings
     }
 
     private sealed class AgentMessageRow(string role, string content, AgentWorkbenchSnapshot? workbench = null)
