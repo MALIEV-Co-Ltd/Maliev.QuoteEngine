@@ -99,7 +99,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task Agent_message_with_cad_attachment_materializes_prototype_analysis_and_price()
+    public async Task Agent_message_with_cad_attachment_materializes_analysis_without_premature_price()
     {
         var chatbot = new RecordingChatbotServiceClient();
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
@@ -135,21 +135,35 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(body.Gates, gate => gate.Code == "geometry_required" && gate.Status == "passed");
         Assert.Contains(body.Gates, gate => gate.Code == "analysis_complete" && gate.Status == "passed");
         Assert.Contains(body.Gates, gate => gate.Code == "dfm_reviewed" && gate.Status == "passed");
-        Assert.Contains(body.Gates, gate => gate.Code == "configuration_complete" && gate.Status == "passed");
-        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(body.Gates, gate => gate.Code == "configuration_complete" && gate.Status != "passed");
+        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status != "passed");
         Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "viewer" && artifact.Status == "ready");
         Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "dfm" && artifact.Status == "ready");
-        Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "pricing" && artifact.Status == "ready");
+        Assert.DoesNotContain(body.Artifacts, artifact => artifact.ArtifactType == "pricing");
 
         var state = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
             $"/quote/v1/agent/sessions/{body.SessionId:D}");
         Assert.NotNull(state);
         Assert.Single(state.Parts);
-        Assert.NotNull(state.Estimate);
+        Assert.Null(state.Estimate);
         Assert.NotNull(chatbot.LastSendRequest);
         Assert.Contains("Current parts: fixture.stl", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("Current artifacts:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("Current estimate:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Current estimate:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Agent_message_rejects_book_length_customer_prompt()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = new string('x', QuoteAgentTextLimits.MaxMessageCharacters + 1),
+            Language = "en"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -446,7 +460,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             artifact.ArtifactType == "analysis" &&
             artifact.Status == "ready" &&
             artifact.Metadata["geometryGate"] == "satisfied_by_cad_attachment");
-        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status != "passed");
     }
 
     [Fact]
@@ -493,10 +507,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Single(part.DrawingFiles);
         Assert.Contains(state.Gates, gate => gate.Code == "geometry_required" && gate.Status == "passed");
         Assert.Contains(state.Gates, gate => gate.Code == "analysis_complete" && gate.Status == "passed");
-        Assert.Contains(state.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(state.Gates, gate => gate.Code == "priced" && gate.Status != "passed");
         Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "viewer" && artifact.Status == "ready");
         Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "dfm" && artifact.Status == "ready");
-        Assert.NotNull(state.Estimate);
+        Assert.Null(state.Estimate);
     }
 
     [Fact]
@@ -592,12 +606,11 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Equal(1, summary.AttachmentCount);
         Assert.Equal(1, summary.PartCount);
         Assert.True(summary.ArtifactCount >= 3);
-        Assert.NotNull(summary.EstimateTotal);
-        Assert.Equal("THB", summary.EstimateCurrency);
+        Assert.Null(summary.EstimateTotal);
+        Assert.Null(summary.EstimateCurrency);
         Assert.Contains("geometry_required", summary.PassedGateCodes);
-        Assert.Contains("priced", summary.PassedGateCodes);
-        Assert.Contains("customer_authenticated", summary.BlockingGateCodes);
-        Assert.Contains(summary.NextActions, action => action.Contains("sign-in", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("priced", summary.PassedGateCodes);
+        Assert.Contains(summary.NextActions, action => action.Contains("Confirm process", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -728,6 +741,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
                 }, JsonOptions)
             });
 
+        await ConfigureFirstPartForEstimateAsync(client, sessionId);
+
         var state = await ExecuteToolForStateAsync(client, sessionId, "quote_calculate_estimate");
 
         Assert.NotNull(state.Estimate);
@@ -803,6 +818,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.NotNull(acknowledgementResult.State);
         Assert.Contains(acknowledgementResult.State.Gates, gate =>
             gate.Code == "dfm_reviewed" && gate.Status == "passed");
+
+        await ConfigureFirstPartForEstimateAsync(client, sessionId);
 
         var pricedState = await ExecuteToolForStateAsync(client, sessionId, "quote_calculate_estimate");
 
@@ -1759,6 +1776,82 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_connector_handoff_for_google_drive_requires_trusted_auth_when_anonymous()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_get_connector_handoff",
+            new Dictionary<string, JsonElement>
+            {
+                ["connector_id"] = JsonSerializer.SerializeToElement("google-drive", JsonOptions),
+                ["return_url"] = JsonSerializer.SerializeToElement("/quote/new?connector=google-drive", JsonOptions)
+            });
+        var handoff = JsonSerializer.Deserialize<QuoteAgentConnectorHandoffResponse>(json, JsonOptions);
+
+        Assert.NotNull(handoff);
+        Assert.Equal(sessionId, handoff.SessionId);
+        Assert.Equal("google-drive", handoff.ConnectorId);
+        Assert.Equal("Google Drive", handoff.DisplayName);
+        Assert.False(handoff.IsAuthenticated);
+        Assert.False(handoff.IsAvailableToConnect);
+        Assert.Equal("authentication_required", handoff.Status);
+        Assert.Equal("/auth/sign-in?returnUrl=%2Fquote%2Fnew%3Fconnector%3Dgoogle-drive", handoff.HandoffUrl);
+        Assert.Equal("sign_in_to_connect", handoff.ActionHint);
+        Assert.Contains("Google Drive", handoff.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Agent_connector_handoff_for_google_drive_reports_planned_connector_after_sign_in()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-connector@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_get_connector_handoff",
+            new Dictionary<string, JsonElement>
+            {
+                ["connector_id"] = JsonSerializer.SerializeToElement("google-drive", JsonOptions)
+            });
+        var handoff = JsonSerializer.Deserialize<QuoteAgentConnectorHandoffResponse>(json, JsonOptions);
+
+        Assert.NotNull(handoff);
+        Assert.True(handoff.IsAuthenticated);
+        Assert.False(handoff.IsAvailableToConnect);
+        Assert.Equal("planned", handoff.Status);
+        Assert.Equal("/quote/new?connect=google-drive", handoff.HandoffUrl);
+        Assert.Equal("connector_planned", handoff.ActionHint);
+        Assert.Contains("planned", handoff.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_connector_handoff_rejects_unknown_connector()
+    {
+        using var client = factory.CreateClient();
+
+        var json = await ExecuteToolAsync(
+            client,
+            Guid.NewGuid(),
+            "quote_get_connector_handoff",
+            new Dictionary<string, JsonElement>
+            {
+                ["connector_id"] = JsonSerializer.SerializeToElement("dropbox", JsonOptions)
+            });
+        var handoff = JsonSerializer.Deserialize<QuoteAgentConnectorHandoffResponse>(json, JsonOptions);
+
+        Assert.NotNull(handoff);
+        Assert.Equal("dropbox", handoff.ConnectorId);
+        Assert.Equal("connector_not_found", handoff.Status);
+        Assert.Equal("choose_available_connector", handoff.ActionHint);
+    }
+
+    [Fact]
     public async Task Agent_settings_tool_returns_and_updates_customer_safe_session_settings()
     {
         using var client = factory.CreateClient();
@@ -2117,8 +2210,32 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(body);
-        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status != "passed");
+
+        var configuredState = await ConfigureFirstPartForEstimateAsync(client, body.SessionId);
+        Assert.Contains(configuredState.Gates, gate => gate.Code == "configuration_complete" && gate.Status == "passed");
+
+        var pricedState = await ExecuteToolForStateAsync(client, body.SessionId, "quote_calculate_estimate");
+        Assert.Contains(pricedState.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.NotNull(pricedState.Estimate);
         return body.SessionId;
+    }
+
+    private static Task<QuoteAgentStateResponse> ConfigureFirstPartForEstimateAsync(HttpClient client, Guid sessionId)
+    {
+        return ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_part_configuration",
+            new Dictionary<string, JsonElement>
+            {
+                ["process"] = JsonSerializer.SerializeToElement("fdm_3d_printing", JsonOptions),
+                ["material"] = JsonSerializer.SerializeToElement("pla_black", JsonOptions),
+                ["finish"] = JsonSerializer.SerializeToElement("as_printed", JsonOptions),
+                ["tolerance"] = JsonSerializer.SerializeToElement("standard", JsonOptions),
+                ["quantity"] = JsonSerializer.SerializeToElement("25", JsonOptions),
+                ["lead_time"] = JsonSerializer.SerializeToElement("STANDARD", JsonOptions)
+            });
     }
 
     private static async Task<QuoteAgentStateResponse> ExecuteToolForStateAsync(

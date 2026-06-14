@@ -847,14 +847,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@ref=\"_composerTextarea\"", component, StringComparison.Ordinal);
         Assert.Contains("@bind:event=\"oninput\"", component, StringComparison.Ordinal);
         Assert.Contains("autofocus", component, StringComparison.Ordinal);
+        Assert.Contains("maxlength=\"@QuoteAgentTextLimits.MaxMessageCharacters\"", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-composer.js", component, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", component, StringComparison.Ordinal);
         Assert.Contains("FocusComposerAsync", component, StringComparison.Ordinal);
         Assert.Contains("StartDictationAsync", component, StringComparison.Ordinal);
-        Assert.Contains("Icons.Material.Outlined.Mic", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.MicNone", component, StringComparison.Ordinal);
         Assert.Contains("Click to dictate or hold", component, StringComparison.Ordinal);
         Assert.Contains("_dictating", component, StringComparison.Ordinal);
         Assert.Contains("_composerMenuOpen", component, StringComparison.Ordinal);
+        Assert.Contains("CloseComposerMenuAsync", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-add-backdrop\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-composer-attachments\"", component, StringComparison.Ordinal);
+        Assert.Contains("IsUploadBusy(part)", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-send-spinner", component, StringComparison.Ordinal);
         Assert.Contains("Text(\"Processing\", \"กำลังประมวลผล\")", component, StringComparison.Ordinal);
         Assert.Contains("class=\"sr-only\"", component, StringComparison.Ordinal);
@@ -862,6 +867,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Add photos and files", component, StringComparison.Ordinal);
         Assert.Contains("Add hand sketch", component, StringComparison.Ordinal);
         Assert.Contains("Google Drive connector", component, StringComparison.Ordinal);
+        Assert.Contains("Paste an image from the clipboard", component, StringComparison.Ordinal);
+        Assert.DoesNotContain(">Paste image<", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.DeleteOutline", component, StringComparison.Ordinal);
         Assert.Contains("ApplyGoogleDriveConnectorAsync", component, StringComparison.Ordinal);
         Assert.Contains("RequestUploadFromComposerMenuAsync", component, StringComparison.Ordinal);
         Assert.Contains("OpenSketchFromComposerMenuAsync", component, StringComparison.Ordinal);
@@ -1018,6 +1026,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-dictation-btn.active", agentStyles, StringComparison.Ordinal);
         Assert.Contains("@keyframes qe-agent-dictation-pulse", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-menu", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-add-backdrop", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-attachments", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-progress", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-btn.active", agentStyles, StringComparison.Ordinal);
         Assert.Contains("scrollbar-gutter: stable;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases button:focus-visible", agentStyles, StringComparison.Ordinal);
@@ -1034,6 +1045,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain(".qe-agent-auth-actions", agentStyles, StringComparison.Ordinal);
         Assert.Contains("white-space: nowrap;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-status.is-warning span", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-status > span:first-child", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-status.is-failed span", agentStyles, StringComparison.Ordinal);
         Assert.Contains("field-sizing: content;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-y: auto;", agentStyles, StringComparison.Ordinal);
@@ -1048,6 +1060,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-hidden-file", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-color", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-paper", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-sketch-canvas.is-eraser", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-sketch-trash-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border: 0 !important;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("background: var(--qe-agent-bg);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-right: 0;", agentStyles, StringComparison.Ordinal);
@@ -1059,6 +1073,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("event.pressure", sketchScript, StringComparison.Ordinal);
         Assert.Contains("quadraticCurveTo", sketchScript, StringComparison.Ordinal);
         Assert.Contains("drawSoftSegment", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("state.images", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("hitTestImage", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("imageResizeHandle", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("renderEraserIndicator", sketchScript, StringComparison.Ordinal);
         Assert.Contains("export async function insertSketchImage", sketchScript, StringComparison.Ordinal);
         Assert.Contains("export async function pasteSketchImage", sketchScript, StringComparison.Ordinal);
         Assert.Contains("export function setSketchEraser", sketchScript, StringComparison.Ordinal);
@@ -1104,6 +1122,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@ref=\"_agentShell\"", workspace, StringComparison.Ordinal);
         Assert.Contains("private QuoteAgentLaunchShell? _agentShell;", workspace, StringComparison.Ordinal);
         Assert.Contains("await _agentShell.ApplyAgentStateAsync(state);", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("agent registered the uploaded file", workspace, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("public Task ApplyAgentStateAsync(QuoteAgentStateResponse state)", shell, StringComparison.Ordinal);
         Assert.Contains("ApplyState(state);", shell, StringComparison.Ordinal);
     }

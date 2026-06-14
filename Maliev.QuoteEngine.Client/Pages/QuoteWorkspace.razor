@@ -531,11 +531,6 @@
                     ]
                 });
 
-            if (state.Artifacts.Count > 0)
-            {
-                _liveNotifications.Insert(0, Text("Make Studio agent registered the uploaded file.", "เอเจนต์ Make Studio รับไฟล์ที่อัปโหลดแล้ว"));
-            }
-
             if (_agentShell is not null)
             {
                 await _agentShell.ApplyAgentStateAsync(state);
@@ -543,7 +538,7 @@
         }
         catch (Exception ex) when (ex is QuoteEngineApiException or HttpRequestException or InvalidOperationException)
         {
-            _liveNotifications.Insert(0, Text("Upload succeeded. Agent context will refresh when you continue chatting.", "อัปโหลดสำเร็จ บริบทเอเจนต์จะอัปเดตเมื่อคุณสนทนาต่อ"));
+            _error = Text("Upload succeeded, but agent context could not refresh yet.", "อัปโหลดสำเร็จ แต่ยังรีเฟรชบริบทเอเจนต์ไม่ได้");
         }
     }
 

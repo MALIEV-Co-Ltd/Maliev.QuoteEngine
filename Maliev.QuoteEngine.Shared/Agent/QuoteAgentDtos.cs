@@ -5,6 +5,22 @@ using Maliev.QuoteEngine.Shared.Quotes;
 namespace Maliev.QuoteEngine.Shared.Agent;
 
 /// <summary>
+/// Text limits for customer-facing QuoteEngine agent requests.
+/// </summary>
+public static class QuoteAgentTextLimits
+{
+    /// <summary>
+    /// Maximum customer text characters accepted in one conversational turn.
+    /// </summary>
+    public const int MaxMessageCharacters = 1200;
+
+    /// <summary>
+    /// Maximum customer-visible context characters accepted with an agent request.
+    /// </summary>
+    public const int MaxCustomerContextCharacters = 1600;
+}
+
+/// <summary>
 /// Customer message request for the chat-based QuoteEngine agent.
 /// </summary>
 public sealed class QuoteAgentMessageRequest
@@ -14,7 +30,7 @@ public sealed class QuoteAgentMessageRequest
 
     /// <summary>Gets or sets the customer message.</summary>
     [Required]
-    [StringLength(4000, MinimumLength = 1)]
+    [StringLength(QuoteAgentTextLimits.MaxMessageCharacters, MinimumLength = 1)]
     public string Message { get; set; } = string.Empty;
 
     /// <summary>Gets or sets the preferred response language.</summary>
@@ -22,7 +38,7 @@ public sealed class QuoteAgentMessageRequest
     public string? Language { get; set; }
 
     /// <summary>Gets or sets optional browser-visible customer context.</summary>
-    [StringLength(1600)]
+    [StringLength(QuoteAgentTextLimits.MaxCustomerContextCharacters)]
     public string? CustomerContext { get; set; }
 
     /// <summary>Gets or sets supplemental attachments already available to the browser.</summary>

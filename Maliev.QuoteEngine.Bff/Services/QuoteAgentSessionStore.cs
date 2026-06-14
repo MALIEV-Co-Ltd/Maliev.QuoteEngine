@@ -160,7 +160,8 @@ internal sealed class QuoteAgentSessionStore
             state.Parts.All(part => IsTerminalAnalysisStatus(part.Status));
         var hasDfmIssues = state.Parts.Any(HasDfmIssues);
         var dfmReviewed = state.Parts.Count > 0 && state.Parts.All(part => part.DfmAcknowledged || !HasDfmIssues(part));
-        var configurationComplete = state.Parts.Count > 0 &&
+        var configurationComplete = state.ConfigurationConfirmed &&
+            state.Parts.Count > 0 &&
             state.Parts.All(part =>
                 !string.IsNullOrWhiteSpace(part.ProcessId) &&
                 !string.IsNullOrWhiteSpace(part.MaterialId) &&
@@ -372,6 +373,8 @@ internal sealed class QuoteAgentSessionState
     public bool Multilingual { get; set; } = true;
 
     public string LeadTimeCode { get; set; } = "STANDARD";
+
+    public bool ConfigurationConfirmed { get; set; }
 
     public List<QuoteAgentAttachmentDto> Attachments { get; } = [];
 

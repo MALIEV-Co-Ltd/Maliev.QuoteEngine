@@ -287,6 +287,7 @@ internal sealed class QuoteAgentService(
             "quote_get_settings" => BuildSettings(state),
             "quote_update_settings" => UpdateSettings(state, request.Arguments),
             "quote_get_connectors" => BuildConnectorRegistry(state),
+            "quote_get_connector_handoff" => BuildConnectorHandoff(state, request.Arguments),
             "quote_search_customer_data" => SearchCustomerDataOrGateError(state, request.Arguments),
             "quote_register_uploads" => RegisterUploadsOrGateError(state, request.Arguments),
             "quote_resume_project" => ResumeProjectOrGateError(state, request.Arguments),
@@ -780,6 +781,7 @@ internal sealed class QuoteAgentService(
                     }
                 });
                 SetIfPresent(arguments, "lead_time", value => state.LeadTimeCode = value);
+                state.ConfigurationConfirmed = true;
             }
         }
 
@@ -1222,6 +1224,74 @@ internal sealed class QuoteAgentService(
         };
     }
 
+    private QuoteAgentConnectorHandoffResponse BuildConnectorHandoff(
+        QuoteAgentSessionState state,
+        IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var connectorId = NormalizeConnectorId(ReadString(arguments, "connector_id") ?? ReadString(arguments, "connectorId"));
+        var connector = BuildConnectorRegistry(state).Connectors
+            .FirstOrDefault(item => item.ConnectorId.Equals(connectorId, StringComparison.OrdinalIgnoreCase));
+        if (connector is null)
+        {
+            return new QuoteAgentConnectorHandoffResponse
+            {
+                SessionId = state.SessionId,
+                ConnectorId = connectorId,
+                Status = "connector_not_found",
+                IsAuthenticated = ResolveCustomerId().HasValue,
+                IsAvailableToConnect = false,
+                Message = "That connector is not available in Make Studio.",
+                ActionHint = "choose_available_connector"
+            };
+        }
+
+        var customerId = ResolveCustomerId();
+        var returnUrl = NormalizeAuthReturnUrl(
+            ReadString(arguments, "return_url") ??
+            ReadString(arguments, "returnUrl") ??
+            $"/quote/new?connect={connector.ConnectorId}");
+        if (connector.RequiresAuthenticationToConnect && !customerId.HasValue)
+        {
+            return new QuoteAgentConnectorHandoffResponse
+            {
+                SessionId = state.SessionId,
+                ConnectorId = connector.ConnectorId,
+                DisplayName = connector.DisplayName,
+                Status = "authentication_required",
+                IsAuthenticated = false,
+                IsAvailableToConnect = false,
+                HandoffUrl = $"/auth/sign-in?returnUrl={Uri.EscapeDataString(returnUrl)}",
+                Message = $"Sign in through MALIEV before connecting {connector.DisplayName}. The agent will not collect credentials in chat.",
+                ActionHint = "sign_in_to_connect"
+            };
+        }
+
+        state.CustomerId = customerId ?? state.CustomerId;
+        var isAvailable = connector.Status.Equals("available", StringComparison.OrdinalIgnoreCase) ||
+            connector.Status.Equals("connected", StringComparison.OrdinalIgnoreCase);
+        return new QuoteAgentConnectorHandoffResponse
+        {
+            SessionId = state.SessionId,
+            ConnectorId = connector.ConnectorId,
+            DisplayName = connector.DisplayName,
+            Status = connector.Status,
+            IsAuthenticated = customerId.HasValue,
+            IsAvailableToConnect = isAvailable,
+            HandoffUrl = $"/quote/new?connect={connector.ConnectorId}",
+            Message = isAvailable
+                ? $"{connector.DisplayName} can be connected from the trusted Make Studio connector panel."
+                : $"{connector.DisplayName} is planned for Make Studio. For now, upload files directly or drag them into the chat.",
+            ActionHint = isAvailable ? connector.ActionHint : "connector_planned"
+        };
+    }
+
+    private static string NormalizeConnectorId(string? connectorId)
+    {
+        return string.IsNullOrWhiteSpace(connectorId)
+            ? "google-drive"
+            : connectorId.Trim().ToLowerInvariant();
+    }
+
     private static QuoteAgentSettingsResponse BuildSettings(QuoteAgentSessionState state)
     {
         return new QuoteAgentSettingsResponse
@@ -1588,6 +1658,7 @@ internal sealed class QuoteAgentService(
             UpsertArtifact(state, "requirements_summary", "Project summary", "ready", null, null);
             RestoreSupplementalAttachmentsFromParts(state, project.Notes);
             UpsertArtifact(state, "resumed_project", project.Title, project.Status, null, null);
+            state.ConfigurationConfirmed = true;
             SetArtifactMetadata(state, "resumed_project", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["projectId"] = project.ProjectId.ToString("D"),
@@ -1968,16 +2039,10 @@ internal sealed class QuoteAgentService(
             }
 
             ApplyMessageConfiguration(state, request.Message);
-            if (HasPriceableConfiguration(state))
-            {
-                state.Estimate = prototypeStore.Estimate(new QuoteEstimateRequest
-                {
-                    QuoteSessionId = state.SessionId.ToString("N"),
-                    LeadTimeCode = state.LeadTimeCode,
-                    Parts = state.Parts
-                });
-                UpsertArtifact(state, "pricing", "Pricing estimate", "ready", null, null);
-            }
+            state.ConfigurationConfirmed = false;
+            state.Estimate = null;
+            state.Artifacts.RemoveAll(artifact =>
+                artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase));
         }
     }
 
@@ -2464,7 +2529,8 @@ internal sealed class QuoteAgentService(
 
     private static bool HasPriceableConfiguration(QuoteAgentSessionState state)
     {
-        return state.Parts.Count > 0 &&
+        return state.ConfigurationConfirmed &&
+            state.Parts.Count > 0 &&
             state.Parts.All(part =>
                 !string.IsNullOrWhiteSpace(part.ProcessId) &&
                 !string.IsNullOrWhiteSpace(part.MaterialId) &&

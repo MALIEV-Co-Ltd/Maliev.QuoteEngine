@@ -719,6 +719,10 @@
         <section class="qe-agent-composer-wrap" aria-label="@Text("Message composer", "กล่องข้อความ")">
             @if (_composerMenuOpen)
             {
+                <button type="button"
+                        class="qe-agent-add-backdrop"
+                        aria-label="@Text("Close add menu", "ปิดเมนูเพิ่มไฟล์")"
+                        @onclick="CloseComposerMenuAsync"></button>
                 <section class="qe-agent-add-menu" role="menu" aria-label="@Text("Add to message", "เพิ่มในข้อความ")">
                     <button type="button" role="menuitem" @onclick="RequestUploadFromComposerMenuAsync">
                         <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
@@ -754,6 +758,35 @@
                 }
             }
             <form class="@($"qe-agent-composer {(_sending ? "is-sending" : string.Empty)}")" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
+                @if (UploadedParts.Count > 0)
+                {
+                    <div class="qe-agent-composer-attachments" aria-label="@Text("Attached artifacts", "อาร์ติแฟกต์ที่แนบ")">
+                        @for (var i = 0; i < Math.Min(UploadedParts.Count, 5); i++)
+                        {
+                            var index = i;
+                            var part = UploadedParts[i];
+                            <button type="button"
+                                    class="@($"qe-agent-composer-attachment {(i == SelectedPartIndex ? "active" : string.Empty)}")"
+                                    @onclick="@(() => SelectUploadedPartAsync(index))">
+                                <span class="qe-agent-composer-attachment-preview">
+                                    @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
+                                    {
+                                        <img src="@part.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
+                                    }
+                                    @if (IsUploadBusy(part))
+                                    {
+                                        <span class="qe-agent-upload-progress" aria-hidden="true"></span>
+                                    }
+                                </span>
+                                <span class="sr-only">@part.FileName</span>
+                            </button>
+                        }
+                    </div>
+                }
                 <button type="button"
                         class="@($"qe-agent-round-btn qe-agent-add-btn {(_composerMenuOpen ? "active" : string.Empty)}")"
                         title="@Text("Add files, sketches, or plugins", "เพิ่มไฟล์ สเก็ตช์ หรือปลั๊กอิน")"
@@ -766,7 +799,7 @@
                           @bind="_draftMessage"
                           @bind:event="oninput"
                           rows="1"
-                          maxlength="4000"
+                          maxlength="@QuoteAgentTextLimits.MaxMessageCharacters"
                           autofocus
                           placeholder="@Text("Describe your part, paste dimensions, attach files, or drag and drop files...", "อธิบายชิ้นงาน วางขนาด แนบไฟล์ หรือลากไฟล์มาวาง...")"
                           aria-label="@Text("Message MALIEV Quote Agent", "ข้อความถึงผู้ช่วยขอราคา MALIEV")"></textarea>
@@ -776,7 +809,7 @@
                         aria-label="@Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง")"
                         aria-pressed="@_dictating"
                         @onclick="StartDictationAsync">
-                    <MudIcon Icon="@Icons.Material.Outlined.Mic" Size="Size.Small" />
+                    <MudIcon Icon="@Icons.Material.Outlined.MicNone" Size="Size.Small" />
                 </button>
                 <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@_sending">
                     @if (_sending)
@@ -833,7 +866,7 @@
                                @bind="_sketchTitle"
                                maxlength="80"
                                aria-label="@Text("Sketch name", "ชื่อสเก็ตช์")" />
-                        <small>@Text("Paste an image, insert a file, or draw with a mouse or pen.", "วางรูปภาพ เพิ่มไฟล์ หรือวาดด้วยเมาส์หรือปากกา")</small>
+                        <small>@Text("Paste an image from the clipboard, insert a file, or draw with a mouse or pen.", "วางรูปภาพจากคลิปบอร์ด เพิ่มไฟล์ หรือวาดด้วยเมาส์หรือปากกา")</small>
                     </div>
                     <button type="button" class="qe-agent-round-btn" @onclick="CloseSketchAsync" title="@Text("Close", "ปิด")">
                         <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
@@ -870,19 +903,15 @@
                             <MudIcon Icon="@Icons.Material.Outlined.AddPhotoAlternate" Size="Size.Small" />
                             <span>@Text("Insert image", "เพิ่มรูปภาพ")</span>
                         </label>
-                        <button type="button" class="qe-agent-secondary-btn" @onclick="PasteSketchImageAsync">
-                            <MudIcon Icon="@Icons.Material.Outlined.ContentPaste" Size="Size.Small" />
-                            <span>@Text("Paste image", "วางรูปภาพ")</span>
-                        </button>
-                        <button type="button" class="qe-agent-secondary-btn" @onclick="ClearSketchAsync">
-                            <MudIcon Icon="@Icons.Material.Outlined.Backspace" Size="Size.Small" />
-                            <span>@Text("Clear", "ล้าง")</span>
-                        </button>
                     </div>
                     <InputFile id="@SketchImageInputId"
                                class="qe-agent-hidden-file"
                                OnChange="InsertSketchImageAsync"
                                accept="image/png,image/jpeg,image/webp,image/gif" />
+                    <button type="button" class="qe-agent-secondary-btn qe-agent-sketch-trash-btn" @onclick="ClearSketchAsync" title="@Text("Clear sketch", "ล้างสเก็ตช์")">
+                        <MudIcon Icon="@Icons.Material.Outlined.DeleteOutline" Size="Size.Small" />
+                        <span class="sr-only">@Text("Clear sketch", "ล้างสเก็ตช์")</span>
+                    </button>
                     <button type="button" class="qe-agent-primary-btn" @onclick="AttachSketchAsync">
                         <MudIcon Icon="@Icons.Material.Outlined.Check" Size="Size.Small" />
                         <span>@Text("Attach sketch", "แนบสเก็ตช์")</span>
@@ -1398,6 +1427,15 @@
             return;
         }
 
+        if (message.Length > QuoteAgentTextLimits.MaxMessageCharacters)
+        {
+            _error = Text(
+                $"Please keep each message under {QuoteAgentTextLimits.MaxMessageCharacters:N0} characters and attach long files instead.",
+                $"กรุณาให้แต่ละข้อความไม่เกิน {QuoteAgentTextLimits.MaxMessageCharacters:N0} ตัวอักษร และแนบไฟล์ยาวแทน");
+            await FocusComposerAsync();
+            return;
+        }
+
         _sending = true;
         _error = null;
         _composerMenuOpen = false;
@@ -1503,9 +1541,14 @@
         }
         catch (JSException ex)
         {
+            var friendly = ex.Message.Contains("no-speech", StringComparison.OrdinalIgnoreCase)
+                ? Text("I did not hear speech. Try again, or type the request.", "ไม่ได้ยินเสียงพูด ลองอีกครั้งหรือพิมพ์คำขอ")
+                : Text(
+                    $"Dictation is not available yet: {ex.Message}",
+                    $"ยังไม่สามารถใช้การพูดตามคำบอกได้: {ex.Message}");
             _error = Text(
-                $"Dictation is not available yet: {ex.Message}",
-                $"ยังไม่สามารถใช้การพูดตามคำบอกได้: {ex.Message}");
+                friendly,
+                friendly);
         }
         finally
         {
@@ -1636,6 +1679,13 @@
         await FocusComposerAsync();
     }
 
+    private async Task CloseComposerMenuAsync()
+    {
+        _composerMenuOpen = false;
+        _composerPluginsOpen = false;
+        await FocusComposerAsync();
+    }
+
     private void ToggleComposerPluginsMenu()
     {
         _composerPluginsOpen = !_composerPluginsOpen;
@@ -1684,6 +1734,11 @@
                 : null;
 
         return string.IsNullOrWhiteSpace(metrics) ? status : $"{status} · {metrics}";
+    }
+
+    private static bool IsUploadBusy(QuotePartViewModel part)
+    {
+        return part.Status is "Uploading" or "Processing" or "WaitingForUpload";
     }
 
     private static string UploadedPartIcon(QuotePartViewModel part)
