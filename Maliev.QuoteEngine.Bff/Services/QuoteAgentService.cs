@@ -167,13 +167,7 @@ internal sealed class QuoteAgentService(
                 ReadString(request.Arguments, "requirements") ?? "Create a manufacturing order from the approved quote.",
                 requiresAuthentication: true,
                 request.Arguments),
-            "quote_start_payment" => PrepareActionOrGateError(
-                state,
-                "start_payment",
-                "Start payment",
-                "Start a PaymentService handoff after checkout ownership, amount, and terms are verified.",
-                requiresAuthentication: true,
-                request.Arguments),
+            "quote_start_payment" => PreparePaymentActionOrGateError(state, request.Arguments),
             _ => new { error = $"Unknown QuoteEngine tool: {toolName}" }
         };
         return Task.FromResult<object>(result);
@@ -689,6 +683,84 @@ internal sealed class QuoteAgentService(
             error,
             requiredGateCode = "checkout_ready",
             actionType = "update_checkout_details",
+            state = ToStateResponse(state)
+        };
+    }
+
+    private object PreparePaymentActionOrGateError(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments)
+    {
+        var blocker = GetActionBlocker(state, "start_payment", requiresAuthentication: true);
+        if (blocker is not null)
+        {
+            if (blocker.Code.Equals("customer_authenticated", StringComparison.OrdinalIgnoreCase))
+            {
+                return new
+                {
+                    error = blocker.Detail,
+                    requiredGateCode = blocker.Code,
+                    actionType = "start_payment",
+                    authHandoff = BuildAuthHandoff(state, arguments),
+                    state = ToStateResponse(state)
+                };
+            }
+
+            return new
+            {
+                error = blocker.Detail,
+                requiredGateCode = blocker.Code,
+                actionType = "start_payment",
+                state = ToStateResponse(state)
+            };
+        }
+
+        var requestedOrderNumber = ReadString(arguments, "order_number") ?? ReadString(arguments, "orderNumber");
+        if (!string.IsNullOrWhiteSpace(requestedOrderNumber) &&
+            !requestedOrderNumber.Trim().Equals(state.Order?.OrderNumber, StringComparison.OrdinalIgnoreCase))
+        {
+            return PaymentVerificationGateError(
+                state,
+                "Payment order number does not match the server-side order for this quote session.");
+        }
+
+        var requestedCurrency = ReadString(arguments, "currency");
+        if (!string.IsNullOrWhiteSpace(requestedCurrency) &&
+            !requestedCurrency.Trim().Equals(state.Estimate?.Currency, StringComparison.OrdinalIgnoreCase))
+        {
+            return PaymentVerificationGateError(
+                state,
+                "Payment currency does not match the current server-side estimate.");
+        }
+
+        if (TryReadDecimal(arguments, "amount", out var requestedAmount) &&
+            state.Estimate is not null &&
+            Math.Abs(requestedAmount - state.Estimate.Total) > 0.01m)
+        {
+            return PaymentVerificationGateError(
+                state,
+                "Payment amount does not match the current server-side estimate.");
+        }
+
+        return PrepareAction(
+            state,
+            "start_payment",
+            "Start payment",
+            "Start a PaymentService handoff after checkout ownership, amount, and terms are verified.",
+            requiresAuthentication: true,
+            arguments);
+    }
+
+    private object PaymentVerificationGateError(QuoteAgentSessionState state, string error)
+    {
+        return new
+        {
+            error,
+            requiredGateCode = "payment_amount_verified",
+            actionType = "start_payment",
+            expectedAmount = state.Estimate?.Total,
+            expectedCurrency = state.Estimate?.Currency,
+            expectedOrderNumber = state.Order?.OrderNumber,
             state = ToStateResponse(state)
         };
     }
@@ -1910,6 +1982,21 @@ Customer message:
         return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : fallback;
+    }
+
+    private static bool TryReadDecimal(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        string key,
+        out decimal value)
+    {
+        value = 0m;
+        return arguments.TryGetValue(key, out var element) &&
+            element.ValueKind is JsonValueKind.Number or JsonValueKind.String &&
+            decimal.TryParse(
+                element.ValueKind == JsonValueKind.String ? element.GetString() : element.GetRawText(),
+                NumberStyles.Number,
+                CultureInfo.InvariantCulture,
+                out value);
     }
 
     private static bool ReadBool(

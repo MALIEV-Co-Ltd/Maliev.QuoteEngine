@@ -787,6 +787,69 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_start_payment_rejects_mismatched_amount_before_confirmation()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-payment-amount@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var currentState = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.NotNull(currentState.Estimate);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        var orderResult = await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+        Assert.NotNull(orderResult.State);
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_checkout_details",
+            new Dictionary<string, JsonElement>
+            {
+                ["billing_address_id"] = JsonSerializer.SerializeToElement(CheckoutBillingAddressId.ToString("D"), JsonOptions),
+                ["shipping_address_id"] = JsonSerializer.SerializeToElement(CheckoutShippingAddressId.ToString("D"), JsonOptions),
+                ["accepted_terms"] = JsonSerializer.SerializeToElement(true, JsonOptions),
+                ["consent"] = JsonSerializer.SerializeToElement(true, JsonOptions)
+            });
+
+        var mismatchedPaymentJson = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_start_payment",
+            new Dictionary<string, JsonElement>
+            {
+                ["order_number"] = JsonSerializer.SerializeToElement(orderResult.State.Artifacts.Single(artifact => artifact.ArtifactType == "order").Title, JsonOptions),
+                ["amount"] = JsonSerializer.SerializeToElement(currentState.Estimate.Total + 100m, JsonOptions),
+                ["currency"] = JsonSerializer.SerializeToElement(currentState.Estimate.Currency, JsonOptions)
+            });
+        using (var mismatchedPayment = JsonDocument.Parse(mismatchedPaymentJson))
+        {
+            Assert.Equal("payment_amount_verified", mismatchedPayment.RootElement.GetProperty("requiredGateCode").GetString());
+            Assert.Equal("start_payment", mismatchedPayment.RootElement.GetProperty("actionType").GetString());
+            Assert.Equal(currentState.Estimate.Total, mismatchedPayment.RootElement.GetProperty("expectedAmount").GetDecimal());
+            Assert.Equal(currentState.Estimate.Currency, mismatchedPayment.RootElement.GetProperty("expectedCurrency").GetString());
+            Assert.Equal(0, mismatchedPayment.RootElement.GetProperty("state").GetProperty("proposedActions").GetArrayLength());
+        }
+
+        var paymentState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_start_payment",
+            new Dictionary<string, JsonElement>
+            {
+                ["amount"] = JsonSerializer.SerializeToElement(currentState.Estimate.Total, JsonOptions),
+                ["currency"] = JsonSerializer.SerializeToElement(currentState.Estimate.Currency, JsonOptions)
+            });
+
+        Assert.Single(paymentState.ProposedActions);
+        Assert.Equal("start_payment", paymentState.ProposedActions[0].ActionType);
+    }
+
+    [Fact]
     public async Task Agent_update_checkout_details_records_required_payment_context()
     {
         await using var scopedFactory = CreateAgentFactory();
