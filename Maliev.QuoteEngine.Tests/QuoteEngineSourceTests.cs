@@ -843,6 +843,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private readonly List<QuoteAgentSearchResultDto> _customerSearchResults = [];", component, StringComparison.Ordinal);
         Assert.Contains("SearchNavItem.FromDto", component, StringComparison.Ordinal);
         Assert.Contains("ApplySearchResult", component, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(item.Url)", component, StringComparison.Ordinal);
+        Assert.Contains("item.ActionHint.Equals(\"open_artifact\"", component, StringComparison.Ordinal);
+        Assert.Contains("_artifactPanelOpen = true;", component, StringComparison.Ordinal);
         Assert.Contains("SearchNavItem", component, StringComparison.Ordinal);
         Assert.Contains("Search all projects, orders, files, and artifacts", component, StringComparison.Ordinal);
         Assert.Contains("projects, orders, files, or artifacts", component, StringComparison.Ordinal);

@@ -2877,6 +2877,22 @@
 
     private void ApplySearchResult(SearchNavItem item)
     {
+        _searchOpen = false;
+        _focusSearchPending = false;
+
+        if (item.ActionHint.Equals("open_artifact", StringComparison.OrdinalIgnoreCase))
+        {
+            _artifactPanelOpen = true;
+            _summaryPanelOpen = false;
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(item.Url))
+        {
+            Navigation.NavigateTo(item.Url);
+            return;
+        }
+
         _draftMessage = item.ActionHint.Equals("resume_project", StringComparison.OrdinalIgnoreCase)
             ? Text($"Resume {item.TitleEn}.", $"ทำต่อ {item.TitleTh}")
             : Text($"Open or continue {item.TitleEn}.", $"เปิดหรือทำต่อ {item.TitleTh}");
