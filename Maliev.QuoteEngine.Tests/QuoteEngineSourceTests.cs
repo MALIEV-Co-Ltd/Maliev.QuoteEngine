@@ -1848,7 +1848,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("window.location.replace(url.toString())", loaderScript, StringComparison.Ordinal);
         Assert.Contains("let displayedProgress = 0", loaderScript, StringComparison.Ordinal);
         Assert.Contains("const STORY_BEAT_MS = [3200, 4200, 2600, 5200];", loaderScript, StringComparison.Ordinal);
-        Assert.Contains("const FINALE_HOLD_MS = 1200;", loaderScript, StringComparison.Ordinal);
+        Assert.Contains("const FINALE_HOLD_MS = 3000;", loaderScript, StringComparison.Ordinal);
         Assert.Contains("Math.max(displayedProgress, progress)", loaderScript, StringComparison.Ordinal);
         Assert.Contains("markRuntimeReady", loaderScript, StringComparison.Ordinal);
         Assert.Contains("enableSkipStory();", loaderScript, StringComparison.Ordinal);

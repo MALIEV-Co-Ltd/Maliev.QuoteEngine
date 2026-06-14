@@ -14,7 +14,7 @@
         "For years, getting a custom part made meant one thing.",
         "Upload files. Send emails. Wait days for a quote.",
         "That ends here.",
-        "Describe what you want to make — Make Studio quotes it, reviews it, and orders it in minutes."
+        "Describe what you want to make. Make Studio quotes it, reviews it, and orders it in minutes."
       ],
       tagline: "Agentic manufacturing",
       status: {
@@ -46,7 +46,7 @@
 
   // ── Make Studio story / dismissal state ───────────────────────────────
   const STORY_BEAT_MS = [3200, 4200, 2600, 5200];
-  const FINALE_HOLD_MS = 1200;
+  const FINALE_HOLD_MS = 3000;
   let storyBeats = [];
   let storyMode = "full"; // "full" plays the narrative; "quiet" shows the finale only
   let bootTick = null;
