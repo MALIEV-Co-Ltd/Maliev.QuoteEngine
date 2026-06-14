@@ -318,6 +318,78 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_supplemental_drawing_extracts_structured_requirements_without_satisfying_geometry()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Need 50 of these brackets in 3mm aluminum. Overall 50 mm x 30 mm, 2x Ø6 thru holes, 8 x 16 mm slot, ±0.1 mm, clear anodize. Can you do them by end of month?",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "bracket-sketch.jpg",
+                    ContentType = "image/jpeg",
+                    FileSizeBytes = 1_800_000,
+                    Kind = "sketch",
+                    Url = "https://files.example.test/bracket-sketch.jpg"
+                },
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "bracket-drawing.pdf",
+                    ContentType = "application/pdf",
+                    FileSizeBytes = 520_000,
+                    Kind = "drawing",
+                    Url = "https://files.example.test/bracket-drawing.pdf"
+                }
+            ]
+        });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(body.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
+        Assert.DoesNotContain(body.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+
+        var analysis = Assert.Single(body.Artifacts, artifact => artifact.ArtifactType == "analysis");
+        Assert.Equal("needs_geometry", analysis.Status);
+        Assert.Equal("not_satisfied_by_supplemental_files", analysis.Metadata["geometryGate"]);
+        Assert.Equal("sketch, technical_drawing", analysis.Metadata["sourceTypes"]);
+        Assert.Equal("50", analysis.Metadata["quantity"]);
+        Assert.Equal("cnc", analysis.Metadata["process"]);
+        Assert.Equal("al6061", analysis.Metadata["material"]);
+        Assert.Equal("clear", analysis.Metadata["color"]);
+        Assert.Equal("±0.1 mm", analysis.Metadata["tolerance"]);
+        Assert.Equal("3 mm", analysis.Metadata["thicknessHint"]);
+        Assert.Contains("50 mm", analysis.Metadata["dimensionHints"], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("8 x 16 mm", analysis.Metadata["dimensionHints"], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("mounting holes", analysis.Metadata["featureHints"], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("slot", analysis.Metadata["featureHints"], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("deadline-sensitive", analysis.Metadata["manufacturingNotes"], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("true", analysis.Metadata["geometryRequired"]);
+        Assert.Equal("false", analysis.Metadata["usableForFinalPricing"]);
+
+        var summaryJson = await ExecuteToolAsync(client, body.SessionId, "quote_get_project_summary");
+        var summary = JsonSerializer.Deserialize<QuoteAgentProjectSummaryResponse>(summaryJson, JsonOptions);
+        Assert.NotNull(summary);
+        Assert.Equal("50", summary.RequirementFacts["quantity"]);
+        Assert.Equal("3 mm", summary.RequirementFacts["thicknessHint"]);
+        Assert.Contains("slot", summary.RequirementFacts["featureHints"], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("geometry_required", summary.BlockingGateCodes);
+    }
+
+    [Fact]
     public async Task Agent_message_with_cad_and_drawing_attaches_supplemental_file_to_part()
     {
         var chatbot = new RecordingChatbotServiceClient();

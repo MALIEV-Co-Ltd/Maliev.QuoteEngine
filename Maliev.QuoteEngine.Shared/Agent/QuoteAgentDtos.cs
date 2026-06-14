@@ -359,6 +359,9 @@ public sealed class QuoteAgentProjectSummaryResponse
     /// <summary>Gets or sets currently pending confirmation action types.</summary>
     public List<string> PendingActionTypes { get; set; } = [];
 
+    /// <summary>Gets or sets extracted customer-safe requirement facts from drawings, sketches, photos, or chat text.</summary>
+    public Dictionary<string, string> RequirementFacts { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>Gets or sets concise next actions the assistant can explain to the customer.</summary>
     public List<string> NextActions { get; set; } = [];
 }

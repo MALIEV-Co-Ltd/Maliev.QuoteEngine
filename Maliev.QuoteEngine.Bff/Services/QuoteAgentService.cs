@@ -442,6 +442,7 @@ internal sealed class QuoteAgentService(
                 .Select(action => action.ActionType)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList(),
+            RequirementFacts = ExtractRequirementFacts(currentState),
             NextActions = BuildNextActions(currentState, blockingGates)
         };
     }
@@ -1893,6 +1894,294 @@ internal sealed class QuoteAgentService(
         artifact.Metadata["inferredLeadTime"] = InferLeadTime(message) ?? "STANDARD";
         artifact.Metadata["needsCadGeometry"] = "true";
         artifact.Metadata["usableForFinalPricing"] = "false";
+
+        foreach (var (key, value) in ExtractSupplementalRequirementFacts(message, supplemental, process, material))
+        {
+            artifact.Metadata[key] = value;
+        }
+    }
+
+    private static Dictionary<string, string> ExtractRequirementFacts(QuoteAgentStateResponse state)
+    {
+        var facts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var artifact in state.Artifacts.Where(artifact =>
+            artifact.ArtifactType.Equals("analysis", StringComparison.OrdinalIgnoreCase) ||
+            artifact.ArtifactType.Equals("requirements_summary", StringComparison.OrdinalIgnoreCase)))
+        {
+            foreach (var (key, value) in artifact.Metadata)
+            {
+                if (IsRequirementFactKey(key) && !string.IsNullOrWhiteSpace(value))
+                {
+                    facts[key] = value;
+                }
+            }
+        }
+
+        if (state.Parts.Count > 0)
+        {
+            var part = state.Parts[0];
+            facts.TryAdd("partFile", part.FileName);
+            facts.TryAdd("process", part.ProcessId);
+            facts.TryAdd("material", part.MaterialId);
+            if (!string.IsNullOrWhiteSpace(part.FinishId))
+            {
+                facts.TryAdd("finish", part.FinishId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(part.ToleranceId))
+            {
+                facts.TryAdd("tolerance", part.ToleranceId);
+            }
+
+            facts.TryAdd("quantity", part.Quantity.ToString(CultureInfo.InvariantCulture));
+            if (part.DrawingFiles.Count > 0)
+            {
+                facts.TryAdd("supplementalFiles", string.Join(", ", part.DrawingFiles.Select(file => file.FileName).Take(5)));
+            }
+        }
+
+        return facts;
+    }
+
+    private static bool IsRequirementFactKey(string key)
+    {
+        return key is
+            "sourceTypes" or
+            "quantity" or
+            "process" or
+            "material" or
+            "finish" or
+            "color" or
+            "tolerance" or
+            "leadTime" or
+            "dimensionHints" or
+            "thicknessHint" or
+            "featureHints" or
+            "manufacturingNotes" or
+            "geometryRequired" or
+            "usableForFinalPricing" or
+            "needsCadGeometry";
+    }
+
+    private static Dictionary<string, string> ExtractSupplementalRequirementFacts(
+        string message,
+        IReadOnlyCollection<QuoteAgentAttachmentDto> supplemental,
+        string process,
+        string material)
+    {
+        var facts = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["sourceTypes"] = string.Join(", ", InferSourceTypes(supplemental)),
+            ["quantity"] = InferQuantity(message).ToString(CultureInfo.InvariantCulture),
+            ["process"] = process,
+            ["material"] = material,
+            ["finish"] = process.Equals("unknown", StringComparison.OrdinalIgnoreCase) ? "unknown" : InferFinish(process, message),
+            ["color"] = InferColor(message),
+            ["tolerance"] = process.Equals("unknown", StringComparison.OrdinalIgnoreCase) ? InferExplicitTolerance(message) ?? "unknown" : InferExplicitTolerance(message) ?? InferTolerance(process, message),
+            ["leadTime"] = InferLeadTime(message) ?? "STANDARD",
+            ["geometryRequired"] = "true",
+            ["usableForFinalPricing"] = "false"
+        };
+
+        var dimensions = InferDimensionHints(message);
+        if (dimensions.Count > 0)
+        {
+            facts["dimensionHints"] = string.Join(", ", dimensions);
+        }
+
+        var thickness = InferThicknessHint(message);
+        if (!string.IsNullOrWhiteSpace(thickness))
+        {
+            facts["thicknessHint"] = thickness;
+        }
+
+        var features = InferFeatureHints(message);
+        if (features.Count > 0)
+        {
+            facts["featureHints"] = string.Join(", ", features);
+        }
+
+        var notes = BuildManufacturingNotes(message, supplemental);
+        if (!string.IsNullOrWhiteSpace(notes))
+        {
+            facts["manufacturingNotes"] = notes;
+        }
+
+        return facts;
+    }
+
+    private static IReadOnlyList<string> InferSourceTypes(IReadOnlyCollection<QuoteAgentAttachmentDto> supplemental)
+    {
+        return supplemental
+            .Select(attachment =>
+            {
+                if (attachment.Kind.Equals("drawing", StringComparison.OrdinalIgnoreCase) ||
+                    attachment.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ||
+                    attachment.FileName.Contains("drawing", StringComparison.OrdinalIgnoreCase) ||
+                    attachment.FileName.Contains("print", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "technical_drawing";
+                }
+
+                if (attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase) ||
+                    attachment.FileName.Contains("sketch", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "sketch";
+                }
+
+                if (attachment.Kind.Equals("photo", StringComparison.OrdinalIgnoreCase) ||
+                    attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                {
+                    return "photo";
+                }
+
+                return "supplemental";
+            })
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<string> InferDimensionHints(string message)
+    {
+        var normalized = message.Replace('×', 'x');
+        var dimensions = new List<string>();
+        foreach (Match match in Regex.Matches(
+            normalized,
+            @"(?<value>\d+(?:\.\d+)?)\s*(?<unit>mm|cm|in|inch|inches)\b",
+            RegexOptions.IgnoreCase))
+        {
+            var value = match.Groups["value"].Value;
+            var unit = NormalizeUnit(match.Groups["unit"].Value);
+            dimensions.Add($"{value} {unit}");
+        }
+
+        foreach (Match match in Regex.Matches(
+            normalized,
+            @"(?<a>\d+(?:\.\d+)?)\s*x\s*(?<b>\d+(?:\.\d+)?)\s*(?<unit>mm|cm|in|inch|inches)\b",
+            RegexOptions.IgnoreCase))
+        {
+            dimensions.Add($"{match.Groups["a"].Value} x {match.Groups["b"].Value} {NormalizeUnit(match.Groups["unit"].Value)}");
+        }
+
+        return dimensions
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .ToArray();
+    }
+
+    private static string? InferThicknessHint(string message)
+    {
+        var patterns = new[]
+        {
+            @"(?<value>\d+(?:\.\d+)?)\s*mm\s*(?:thick|thickness|sheet|plate|al|aluminum|aluminium)\b",
+            @"\b(?:t|thk|thickness)\s*[:=]?\s*(?<value>\d+(?:\.\d+)?)\s*mm\b"
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = Regex.Match(message, pattern, RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                return $"{match.Groups["value"].Value} mm";
+            }
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<string> InferFeatureHints(string message)
+    {
+        var features = new List<string>();
+        AddIfMentioned(features, message, "bracket", "bracket profile");
+        AddIfMentioned(features, message, "hole", "mounting holes");
+        AddIfMentioned(features, message, "slot", "slot");
+        AddIfMentioned(features, message, "bend", "bend");
+        AddIfMentioned(features, message, "thread", "threaded feature");
+        AddIfMentioned(features, message, "countersink", "countersink");
+        AddIfMentioned(features, message, "chamfer", "chamfer");
+        AddIfMentioned(features, message, "fillet", "fillet");
+
+        foreach (Match match in Regex.Matches(
+            message.Replace('×', 'x'),
+            @"(?<count>\d+)\s*x\s*(?:Ø|dia|diameter)?\s*(?<size>\d+(?:\.\d+)?)\s*(?<unit>mm)?\s*(?<name>holes?|thru|through)?",
+            RegexOptions.IgnoreCase))
+        {
+            if (!match.Value.Contains("x", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var unit = string.IsNullOrWhiteSpace(match.Groups["unit"].Value) ? "mm" : NormalizeUnit(match.Groups["unit"].Value);
+            features.Add($"{match.Groups["count"].Value}x diameter {match.Groups["size"].Value} {unit}");
+        }
+
+        return features
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(8)
+            .ToArray();
+    }
+
+    private static void AddIfMentioned(List<string> values, string message, string term, string label)
+    {
+        if (message.Contains(term, StringComparison.OrdinalIgnoreCase))
+        {
+            values.Add(label);
+        }
+    }
+
+    private static string InferColor(string message)
+    {
+        var colors = new[] { "black", "white", "clear", "natural", "red", "blue", "green", "gray", "grey", "silver" };
+        return colors.FirstOrDefault(color => message.Contains(color, StringComparison.OrdinalIgnoreCase)) ?? "unknown";
+    }
+
+    private static string? InferExplicitTolerance(string message)
+    {
+        var match = Regex.Match(message, @"(?:±|\+/-|\+-)\s*(?<value>\d+(?:\.\d+)?)\s*(?<unit>mm|cm|in|inch|inches)?", RegexOptions.IgnoreCase);
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var unit = string.IsNullOrWhiteSpace(match.Groups["unit"].Value)
+            ? "mm"
+            : NormalizeUnit(match.Groups["unit"].Value);
+        return $"±{match.Groups["value"].Value} {unit}";
+    }
+
+    private static string BuildManufacturingNotes(
+        string message,
+        IReadOnlyCollection<QuoteAgentAttachmentDto> supplemental)
+    {
+        var notes = new List<string>();
+        if (message.Contains("end of month", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("rush", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("urgent", StringComparison.OrdinalIgnoreCase))
+        {
+            notes.Add("deadline-sensitive");
+        }
+
+        if (supplemental.Any(attachment =>
+                attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase) ||
+                attachment.FileName.Contains("sketch", StringComparison.OrdinalIgnoreCase)))
+        {
+            notes.Add("dimensions require confirmation from sketch");
+        }
+
+        if (supplemental.Any(attachment => attachment.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase)))
+        {
+            notes.Add("technical drawing supplied");
+        }
+
+        return string.Join("; ", notes);
+    }
+
+    private static string NormalizeUnit(string unit)
+    {
+        return unit.Equals("inch", StringComparison.OrdinalIgnoreCase) ||
+            unit.Equals("inches", StringComparison.OrdinalIgnoreCase)
+                ? "in"
+                : unit.ToLowerInvariant();
     }
 
     private static void AttachSupplementalFiles(
@@ -2014,11 +2303,24 @@ internal sealed class QuoteAgentService(
 
     private static int InferQuantity(string message)
     {
-        var match = Regex.Match(message, @"\b(?<quantity>\d{1,5})\s*(pcs?|pieces?|parts?|units?)?\b", RegexOptions.IgnoreCase);
-        return match.Success &&
-            int.TryParse(match.Groups["quantity"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var quantity)
-            ? Math.Clamp(quantity, 1, 100_000)
-            : 1;
+        var patterns = new[]
+        {
+            @"\b(?<quantity>\d{1,5})\s*(?:pcs?|pieces?|parts?|units?)\b",
+            @"\b(?:need|needs|quote|make|order|produce|require|required|want|about|around|as|for)\s+(?:about\s+|around\s+)?(?<quantity>\d{1,5})\b(?!\s*(?:mm|cm|in|inch|inches|°|deg|degree))",
+            @"\b(?<quantity>\d{1,5})\s+(?:brackets?|housings?|enclosures?|fixtures?|inserts?|parts?)\b"
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = Regex.Match(message, pattern, RegexOptions.IgnoreCase);
+            if (match.Success &&
+                int.TryParse(match.Groups["quantity"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var quantity))
+            {
+                return Math.Clamp(quantity, 1, 100_000);
+            }
+        }
+
+        return 1;
     }
 
     private static string InferProcess(QuoteAgentAttachmentDto attachment, string message)
