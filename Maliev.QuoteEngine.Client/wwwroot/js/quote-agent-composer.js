@@ -16,11 +16,6 @@ export function initComposer(textarea, dotNetRef) {
     event.preventDefault();
     textarea.dispatchEvent(new Event("input", { bubbles: true }));
     window.requestAnimationFrame(() => {
-      if (textarea.form?.requestSubmit) {
-        textarea.form.requestSubmit();
-        return;
-      }
-
       dotNetRef.invokeMethodAsync("SubmitComposerFromKeyboardAsync");
     });
   };
@@ -28,12 +23,20 @@ export function initComposer(textarea, dotNetRef) {
   const pointerdown = () => clearTextSelection();
   const focus = () => clearTextSelection();
   const windowFocus = () => focusComposer(textarea);
+  const input = () => normalizeCaretAfterInput(textarea);
+  const selectionchange = () => {
+    if (document.activeElement === textarea) {
+      clearTextSelection();
+    }
+  };
 
   textarea.addEventListener("keydown", keydown);
+  textarea.addEventListener("input", input);
   textarea.addEventListener("pointerdown", pointerdown);
   textarea.addEventListener("focus", focus);
   window.addEventListener("focus", windowFocus);
-  composerHandlers.set(textarea, { keydown, pointerdown, focus, windowFocus });
+  document.addEventListener("selectionchange", selectionchange);
+  composerHandlers.set(textarea, { keydown, input, pointerdown, focus, windowFocus, selectionchange });
   focusComposer(textarea);
 }
 
@@ -44,9 +47,11 @@ export function disposeComposer(textarea) {
   }
 
   textarea.removeEventListener("keydown", handlers.keydown);
+  textarea.removeEventListener("input", handlers.input);
   textarea.removeEventListener("pointerdown", handlers.pointerdown);
   textarea.removeEventListener("focus", handlers.focus);
   window.removeEventListener("focus", handlers.windowFocus);
+  document.removeEventListener("selectionchange", handlers.selectionchange);
   composerHandlers.delete(textarea);
 }
 
@@ -59,6 +64,7 @@ export function focusComposer(textarea) {
   window.requestAnimationFrame(() => {
     clearTextSelection();
     textarea.focus({ preventScroll: true });
+    moveCaretToEnd(textarea);
   });
 }
 
@@ -111,6 +117,31 @@ function clearTextSelection() {
   if (selection && selection.rangeCount > 0) {
     selection.removeAllRanges();
   }
+}
+
+function moveCaretToEnd(textarea) {
+  if (typeof textarea.setSelectionRange !== "function") {
+    return;
+  }
+
+  const end = textarea.value?.length ?? 0;
+  try {
+    textarea.setSelectionRange(end, end);
+  } catch {
+    // Some input modes may temporarily reject selection changes.
+  }
+}
+
+function normalizeCaretAfterInput(textarea) {
+  window.requestAnimationFrame(() => {
+    if (document.activeElement !== textarea || !textarea.value) {
+      return;
+    }
+
+    if (textarea.selectionStart === 0 && textarea.selectionEnd === 0) {
+      moveCaretToEnd(textarea);
+    }
+  });
 }
 
 function wait(milliseconds) {

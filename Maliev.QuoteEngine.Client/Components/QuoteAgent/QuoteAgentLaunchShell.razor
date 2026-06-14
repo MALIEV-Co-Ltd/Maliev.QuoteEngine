@@ -1,6 +1,7 @@
 @namespace Maliev.QuoteEngine.Client.Components.QuoteAgent
 @using System.Globalization
 @using System.IO
+@using System.Text.RegularExpressions
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject PreferenceService Preferences
@@ -182,7 +183,7 @@
             }
             else
             {
-                <a class="qe-agent-signin-btn" href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in / Sign up", "เข้าสู่ระบบ / สมัครสมาชิก")</a>
+                <a class="qe-agent-signin-btn" href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
             }
         </div>
     </aside>
@@ -276,10 +277,10 @@
                                             @foreach (var step in message.ThinkingSteps.OrderBy(step => step.StepNumber))
                                             {
                                                 <li>
-                                                    <strong>@step.Title</strong>
+                                                    <strong>@ThinkingStepTitle(step)</strong>
                                                     @if (!string.IsNullOrWhiteSpace(step.Detail))
                                                     {
-                                                        <p>@step.Detail</p>
+                                                        <p>@ThinkingStepDetail(step)</p>
                                                     }
                                                     @if (step.DurationMs is > 0)
                                                     {
@@ -575,8 +576,30 @@
         }
 
         <section class="qe-agent-composer-wrap" aria-label="@Text("Message composer", "กล่องข้อความ")">
+            @if (_composerMenuOpen)
+            {
+                <section class="qe-agent-add-menu" role="menu" aria-label="@Text("Add to message", "เพิ่มในข้อความ")">
+                    <button type="button" role="menuitem" @onclick="RequestUploadFromComposerMenuAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
+                        <span>@Text("Add photos and files", "เพิ่มรูปและไฟล์")</span>
+                    </button>
+                    <button type="button" role="menuitem" @onclick="OpenSketchFromComposerMenuAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
+                        <span>@Text("Add hand sketch", "เพิ่มสเก็ตช์มือ")</span>
+                    </button>
+                    <button type="button" role="menuitem" @onclick="ApplyGoogleDriveConnectorAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.CloudQueue" Size="Size.Small" />
+                        <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
+                    </button>
+                </section>
+            }
             <form class="qe-agent-composer" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
-                <button type="button" class="qe-agent-round-btn" title="@Text("Attach files", "แนบไฟล์")" @onclick="RequestUploadAsync">
+                <button type="button"
+                        class="@($"qe-agent-round-btn qe-agent-add-btn {(_composerMenuOpen ? "active" : string.Empty)}")"
+                        title="@Text("Add files, sketches, or plugins", "เพิ่มไฟล์ สเก็ตช์ หรือปลั๊กอิน")"
+                        aria-label="@Text("Add files, sketches, or plugins", "เพิ่มไฟล์ สเก็ตช์ หรือปลั๊กอิน")"
+                        aria-expanded="@AriaExpanded(_composerMenuOpen)"
+                        @onclick="ToggleComposerMenuAsync">
                     <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
                 </button>
                 <textarea @ref="_composerTextarea"
@@ -799,6 +822,7 @@
     private bool _searchLoading;
     private bool _customerSearchUnavailable;
     private bool _dictating;
+    private bool _composerMenuOpen;
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
     private string _sketchTitle = "Untitled sketch";
@@ -1062,7 +1086,9 @@
 
         _sending = true;
         _error = null;
+        _composerMenuOpen = false;
         _draftMessage = string.Empty;
+        EnsureLocalProjectFromMessage(message);
         _messages.Add(new AgentMessageRow("user", message));
         var assistantMessage = new AgentMessageRow("assistant", string.Empty);
         _messages.Add(assistantMessage);
@@ -1223,6 +1249,12 @@
         _projectsCollapsed = !_projectsCollapsed;
     }
 
+    private async Task ToggleComposerMenuAsync()
+    {
+        _composerMenuOpen = !_composerMenuOpen;
+        await FocusComposerAsync();
+    }
+
     private static string RailGroupClass(bool collapsed)
     {
         return collapsed ? "qe-agent-rail-group is-collapsed" : "qe-agent-rail-group";
@@ -1244,6 +1276,12 @@
         {
             await OnUploadRequested.InvokeAsync();
         }
+    }
+
+    private async Task RequestUploadFromComposerMenuAsync()
+    {
+        _composerMenuOpen = false;
+        await RequestUploadAsync();
     }
 
     private async Task SelectUploadedPartAsync(int index)
@@ -1288,6 +1326,21 @@
         _sketchOpen = true;
         _sketchInitPending = true;
         return Task.CompletedTask;
+    }
+
+    private async Task OpenSketchFromComposerMenuAsync()
+    {
+        _composerMenuOpen = false;
+        await OpenSketchAsync();
+    }
+
+    private async Task ApplyGoogleDriveConnectorAsync()
+    {
+        _composerMenuOpen = false;
+        _draftMessage = Text(
+            "Connect Google Drive so I can choose manufacturing files from my Drive.",
+            "เชื่อมต่อ Google Drive เพื่อเลือกไฟล์งานผลิตจาก Drive ของฉัน");
+        await FocusComposerAsync();
     }
 
     private void CloseSketch()
@@ -1340,6 +1393,41 @@
         }
 
         return Text($"{steps.Count} steps", $"{steps.Count} ขั้นตอน");
+    }
+
+    private string ThinkingStepTitle(QuoteAgentThinkingStepDto step)
+    {
+        var title = string.IsNullOrWhiteSpace(step.Title) ? step.Type : step.Title;
+        return HumanizeAgentActivity(title);
+    }
+
+    private string ThinkingStepDetail(QuoteAgentThinkingStepDto step)
+    {
+        return HumanizeAgentActivity(step.Detail ?? string.Empty);
+    }
+
+    private static string HumanizeAgentActivity(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var normalized = value
+            .Replace("quote_", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("_", " ", StringComparison.Ordinal)
+            .Replace("-", " ", StringComparison.Ordinal);
+
+        if (!value.Contains('_', StringComparison.Ordinal) &&
+            !value.StartsWith("quote-", StringComparison.OrdinalIgnoreCase) &&
+            !value.StartsWith("quote ", StringComparison.OrdinalIgnoreCase) &&
+            !value.StartsWith("quote_", StringComparison.OrdinalIgnoreCase))
+        {
+            return value;
+        }
+
+        var textInfo = CultureInfo.CurrentCulture.TextInfo;
+        return textInfo.ToTitleCase(normalized.Trim().ToLower(CultureInfo.CurrentCulture));
     }
 
     private static string FormatDuration(long durationMs)
@@ -1507,6 +1595,44 @@
     private string ProjectName(ProjectNavItem project)
     {
         return Text(project.NameEn, project.NameTh);
+    }
+
+    private void EnsureLocalProjectFromMessage(string message)
+    {
+        var title = BuildLocalProjectTitle(message);
+        if (string.IsNullOrWhiteSpace(_projectName))
+        {
+            _projectName = title;
+        }
+
+        var existingProject = _projects.FirstOrDefault(project => project.ProjectId == SessionId);
+        if (existingProject is not null)
+        {
+            existingProject.NameEn = _projectName;
+            existingProject.NameTh = _projectName;
+            existingProject.Status = "draft";
+            return;
+        }
+
+        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, _projectName, _projectName, "draft", false, false));
+        _projectsCollapsed = false;
+    }
+
+    private static string BuildLocalProjectTitle(string message)
+    {
+        var words = Regex.Matches(message, "[\\p{L}\\p{N}]+")
+            .Select(match => match.Value)
+            .Where(word => word.Length > 1)
+            .Take(6)
+            .ToArray();
+
+        if (words.Length == 0)
+        {
+            return "New manufacturing project";
+        }
+
+        var title = string.Join(' ', words);
+        return title.Length <= 70 ? title : $"{title[..67]}...";
     }
 
     private static string ProjectHref(ProjectNavItem project)

@@ -713,7 +713,8 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-signin-btn\"", component, StringComparison.Ordinal);
-        Assert.Contains("Sign in / Sign up", component, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Sign in\", \"เข้าสู่ระบบ\")", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Sign in / Sign up", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-signup-btn\"", component, StringComparison.Ordinal);
         Assert.Contains("href=\"/auth/sign-in?returnUrl=/quotes\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("href=\"/auth/sign-up?returnUrl=/quotes\"", component, StringComparison.Ordinal);
@@ -808,6 +809,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Icons.Material.Outlined.Mic", component, StringComparison.Ordinal);
         Assert.Contains("Click to dictate or hold", component, StringComparison.Ordinal);
         Assert.Contains("_dictating", component, StringComparison.Ordinal);
+        Assert.Contains("_composerMenuOpen", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-add-menu\"", component, StringComparison.Ordinal);
+        Assert.Contains("Add photos and files", component, StringComparison.Ordinal);
+        Assert.Contains("Add hand sketch", component, StringComparison.Ordinal);
+        Assert.Contains("Google Drive connector", component, StringComparison.Ordinal);
+        Assert.Contains("ApplyGoogleDriveConnectorAsync", component, StringComparison.Ordinal);
+        Assert.Contains("RequestUploadFromComposerMenuAsync", component, StringComparison.Ordinal);
+        Assert.Contains("OpenSketchFromComposerMenuAsync", component, StringComparison.Ordinal);
+        Assert.Contains("EnsureLocalProjectFromMessage(message);", component, StringComparison.Ordinal);
+        Assert.Contains("BuildLocalProjectTitle", component, StringComparison.Ordinal);
+        Assert.Contains("ThinkingStepTitle(step)", component, StringComparison.Ordinal);
+        Assert.Contains("HumanizeAgentActivity", component, StringComparison.Ordinal);
         Assert.Contains("await FocusComposerAsync();", component, StringComparison.Ordinal);
         Assert.Contains("focusComposer", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-use-cases\"", component, StringComparison.Ordinal);
@@ -878,14 +891,26 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("event.preventDefault();", composerScript, StringComparison.Ordinal);
         Assert.Contains("textarea.dispatchEvent(new Event(\"input\", { bubbles: true }))", composerScript, StringComparison.Ordinal);
         Assert.Contains("window.requestAnimationFrame", composerScript, StringComparison.Ordinal);
-        Assert.Contains("textarea.form.requestSubmit();", composerScript, StringComparison.Ordinal);
+        Assert.Contains("dotNetRef.invokeMethodAsync(\"SubmitComposerFromKeyboardAsync\")", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("textarea.form.requestSubmit();", composerScript, StringComparison.Ordinal);
         Assert.Contains("export function focusComposer", composerScript, StringComparison.Ordinal);
+        Assert.Contains("moveCaretToEnd(textarea)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea.setSelectionRange(end, end)", composerScript, StringComparison.Ordinal);
         Assert.Contains("clearTextSelection", composerScript, StringComparison.Ordinal);
         Assert.Contains("selection.rangeCount > 0", composerScript, StringComparison.Ordinal);
         Assert.Contains("window.addEventListener(\"focus\", windowFocus)", composerScript, StringComparison.Ordinal);
         Assert.Contains("window.removeEventListener(\"focus\", handlers.windowFocus)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("document.addEventListener(\"selectionchange\", selectionchange)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("document.removeEventListener(\"selectionchange\", handlers.selectionchange)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea.addEventListener(\"input\", input)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea.removeEventListener(\"input\", handlers.input)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("function normalizeCaretAfterInput", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea.selectionStart === 0 && textarea.selectionEnd === 0", composerScript, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", composerScript, StringComparison.Ordinal);
         Assert.Contains("export async function typeComposerText", composerScript, StringComparison.Ordinal);
+        Assert.Contains("export async function dictateComposerText", composerScript, StringComparison.Ordinal);
+        Assert.Contains("SpeechRecognition", composerScript, StringComparison.Ordinal);
+        Assert.Contains("summarizeDictation", composerScript, StringComparison.Ordinal);
         Assert.Contains("typingAnimations", composerScript, StringComparison.Ordinal);
         Assert.Contains("registerPasteTarget", workspace, StringComparison.Ordinal);
         Assert.Contains("unregisterPasteTarget", workspace, StringComparison.Ordinal);
@@ -896,6 +921,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("filesFromClipboard", uploadScript, StringComparison.Ordinal);
         Assert.Contains("HandleDroppedFilesAsync", uploadScript, StringComparison.Ordinal);
         Assert.Contains("storeBrowserFile", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("event.clipboardData", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("event.preventDefault();", uploadScript, StringComparison.Ordinal);
 
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-shell", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
@@ -923,6 +950,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("user-select: none;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer .qe-agent-round-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-btn.active", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-add-menu", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-add-btn.active", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("scrollbar-gutter: stable;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases button:focus-visible", agentStyles, StringComparison.Ordinal);
         Assert.Contains("box-shadow: 0 0 0 2px color-mix(in srgb, var(--qe-agent-primary) 28%, transparent);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("top: 50%;", agentStyles, StringComparison.Ordinal);
@@ -3436,7 +3466,7 @@ public sealed class QuoteEngineSourceTests
 
     private static string ReadRepoFile(params string[] pathParts)
     {
-        return File.ReadAllText(RepoPath(pathParts));
+        return File.ReadAllText(RepoPath(pathParts)).ReplaceLineEndings("\n");
     }
 
     private static string RepoPath(params string[] pathParts)
