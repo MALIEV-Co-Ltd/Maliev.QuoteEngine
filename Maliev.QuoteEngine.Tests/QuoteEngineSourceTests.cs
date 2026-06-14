@@ -922,6 +922,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Add photos and files", component, StringComparison.Ordinal);
         Assert.Contains("Add hand sketch", component, StringComparison.Ordinal);
         Assert.Contains("Google Drive connector", component, StringComparison.Ordinal);
+        Assert.Contains("Google Drive is available first; CAD tools follow after MVP.", component, StringComparison.Ordinal);
+        Assert.Contains("connector.Status.Equals(\"available\"", component, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Connect\", \"เชื่อมต่อ\")", component, StringComparison.Ordinal);
         Assert.Contains("Paste an image from the clipboard", component, StringComparison.Ordinal);
         Assert.DoesNotContain(">Paste image<", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.DeleteOutline", component, StringComparison.Ordinal);

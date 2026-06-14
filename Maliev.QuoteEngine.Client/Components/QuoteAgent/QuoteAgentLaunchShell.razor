@@ -180,7 +180,7 @@
                     <section class="qe-agent-management-section">
                         <header>
                             <strong>@Text("Available connectors", "ตัวเชื่อมต่อที่มี")</strong>
-                            <small>@Text("Google Drive is planned first; CAD tools follow after MVP.", "Google Drive อยู่ในแผนแรก จากนั้นเป็นเครื่องมือ CAD หลัง MVP")</small>
+                            <small>@Text("Google Drive is available first; CAD tools follow after MVP.", "Google Drive พร้อมใช้งานก่อน จากนั้นเป็นเครื่องมือ CAD หลัง MVP")</small>
                         </header>
                         @if (_connectors.Count == 0)
                         {
@@ -2771,6 +2771,11 @@
         if (connector.IsConnected)
         {
             return Text("Connected", "เชื่อมต่อแล้ว");
+        }
+
+        if (connector.Status.Equals("available", StringComparison.OrdinalIgnoreCase))
+        {
+            return Text("Connect", "เชื่อมต่อ");
         }
 
         return connector.Status.Equals("planned", StringComparison.OrdinalIgnoreCase)

@@ -1747,7 +1747,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task Agent_connector_registry_lists_safe_planned_customer_connectors()
+    public async Task Agent_connector_registry_lists_safe_customer_connectors()
     {
         using var client = factory.CreateClient();
         var sessionId = Guid.NewGuid();
@@ -1762,7 +1762,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var googleDrive = Assert.Single(connectors, connector =>
             connector.GetProperty("connectorId").GetString() == "google-drive");
         Assert.Equal("Google Drive", googleDrive.GetProperty("displayName").GetString());
-        Assert.Equal("planned", googleDrive.GetProperty("status").GetString());
+        Assert.Equal("available", googleDrive.GetProperty("status").GetString());
         Assert.Equal("file_import", googleDrive.GetProperty("category").GetString());
         Assert.True(googleDrive.GetProperty("requiresAuthenticationToConnect").GetBoolean());
         Assert.False(googleDrive.GetProperty("isConnected").GetBoolean());
@@ -1794,7 +1794,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(registry.Connectors, connector =>
             connector.ConnectorId == "google-drive" &&
             connector.DisplayName == "Google Drive" &&
-            connector.Status == "planned" &&
+            connector.Status == "available" &&
             connector.Category == "file_import" &&
             connector.RequiresAuthenticationToConnect &&
             connector.SupportedFileTypes.Contains("STEP"));
@@ -1832,7 +1832,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task Agent_connector_handoff_for_google_drive_reports_planned_connector_after_sign_in()
+    public async Task Agent_connector_handoff_for_google_drive_is_connectable_after_sign_in()
     {
         await using var scopedFactory = CreateAgentFactory();
         using var client = await CreateSignedInClientAsync(scopedFactory, "agent-connector@example.com");
@@ -1850,11 +1850,11 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         Assert.NotNull(handoff);
         Assert.True(handoff.IsAuthenticated);
-        Assert.False(handoff.IsAvailableToConnect);
-        Assert.Equal("planned", handoff.Status);
+        Assert.True(handoff.IsAvailableToConnect);
+        Assert.Equal("ready_to_connect", handoff.Status);
         Assert.Equal("/quote/new?connect=google-drive", handoff.HandoffUrl);
-        Assert.Equal("connector_planned", handoff.ActionHint);
-        Assert.Contains("planned", handoff.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("connect_google_drive", handoff.ActionHint);
+        Assert.Contains("trusted Make Studio connector panel", handoff.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
