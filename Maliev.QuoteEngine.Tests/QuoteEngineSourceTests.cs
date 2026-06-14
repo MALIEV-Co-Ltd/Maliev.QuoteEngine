@@ -812,11 +812,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("quote/v1/projects/{projectId:D}/archive", apiClient, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.PushPin", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("Icons.Material.Outlined.Search", primaryNav, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.Search", primaryNav, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"ToggleSearch\"", primaryNav, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-agent-global-search", primaryNav, StringComparison.Ordinal);
         Assert.Contains("qe-agent-global-search", component, StringComparison.Ordinal);
         Assert.Contains("@onfocus=\"OpenSearchAsync\"", component, StringComparison.Ordinal);
-        Assert.Contains("placeholder=\"@Text(\"Search\"", component, StringComparison.Ordinal);
+        Assert.Contains("placeholder=\"@Text(\"Projects, orders, files, quotes...\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-search-panel\"", component, StringComparison.Ordinal);
         Assert.Contains("Search everything", component, StringComparison.Ordinal);
         Assert.Contains("SearchResults", component, StringComparison.Ordinal);

@@ -26,6 +26,14 @@
                 <span>@Text("New project", "โปรเจกต์ใหม่")</span>
             </button>
             <button type="button"
+                    class="@(_searchOpen ? "active" : string.Empty)"
+                    aria-expanded="@AriaExpanded(_searchOpen)"
+                    aria-controls="qe-agent-search-panel"
+                    @onclick="ToggleSearch">
+                <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+                <span>@Text("Search", "ค้นหา")</span>
+            </button>
+            <button type="button"
                     class="@PageNavClass(WorkspacePage.Plugins)"
                     aria-current="@(IsWorkspacePage(WorkspacePage.Plugins) ? "page" : null)"
                     @onclick="OpenPluginsPageAsync">
@@ -52,19 +60,19 @@
         </nav>
 
         <div class="qe-agent-rail-scroll">
-            <div class="@($"qe-agent-global-search {(_searchOpen ? "active" : string.Empty)}")">
-                <input id="qe-agent-search-input"
-                       @ref="_searchInput"
-                       value="@_searchQuery"
-                       @onfocus="OpenSearchAsync"
-                       @oninput="OnSearchInputAsync"
-                       placeholder="@Text("Search", "ค้นหา")"
-                       aria-label="@Text("Search all projects, orders, files, and artifacts", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์ และไฟล์งานทั้งหมด")" />
-            </div>
             @if (_searchOpen)
             {
-                <section class="qe-agent-search-panel" aria-label="@Text("Search customer data", "ค้นหาข้อมูลลูกค้า")">
+                <section id="qe-agent-search-panel" class="qe-agent-search-panel" aria-label="@Text("Search customer data", "ค้นหาข้อมูลลูกค้า")">
                     <label for="qe-agent-search-input">@Text("Search everything", "ค้นหาทั้งหมด")</label>
+                    <div class="@($"qe-agent-global-search {(_searchOpen ? "active" : string.Empty)}")">
+                        <input id="qe-agent-search-input"
+                               @ref="_searchInput"
+                               value="@_searchQuery"
+                               @onfocus="OpenSearchAsync"
+                               @oninput="OnSearchInputAsync"
+                               placeholder="@Text("Projects, orders, files, quotes...", "โปรเจกต์ ออเดอร์ ไฟล์ ใบเสนอราคา...")"
+                               aria-label="@Text("Search all projects, orders, files, and artifacts", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์ และไฟล์งานทั้งหมด")" />
+                    </div>
                     <div class="qe-agent-search-results" aria-live="polite">
                         @if (_searchLoading)
                         {
