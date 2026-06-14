@@ -620,6 +620,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ResumeProjectAsync(ProjectId.Value)", source, StringComparison.Ordinal);
         Assert.Contains("GetProjectDetailAsync(projectId)", source, StringComparison.Ordinal);
         Assert.Contains("ApplyDefaultRouting(part, candidate.FileName)", source, StringComparison.Ordinal);
+        Assert.Contains("await TryApplyLocalSupplementalPreviewUrlAsync(part, candidate);", source, StringComparison.Ordinal);
         Assert.Contains("private bool IsWorkspaceReady => _parts.Count > 0;", source, StringComparison.Ordinal);
         Assert.Contains("RegisterCompletedUploadWithAgentAsync(part, candidate)", source, StringComparison.Ordinal);
         Assert.Contains("await _agentShell.NotifyUploadStartedAsync(part);", source, StringComparison.Ordinal);
@@ -652,6 +653,9 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("[PageDropzoneId, HeroDropzoneId]", source, StringComparison.Ordinal);
         Assert.Contains("new { clickToOpen = false }", source, StringComparison.Ordinal);
         Assert.Contains("quoteEngineUploads.unregisterDropzone", source, StringComparison.Ordinal);
+        Assert.Contains("private async Task TryApplyLocalSupplementalPreviewUrlAsync(QuotePartViewModel part, UploadCandidate candidate)", source, StringComparison.Ordinal);
+        Assert.Contains("part.ThumbnailUrl = objectUrl;", source, StringComparison.Ordinal);
+        Assert.Contains("candidate.ContentType.StartsWith(\"image/\", StringComparison.OrdinalIgnoreCase)", source, StringComparison.Ordinal);
         Assert.DoesNotContain("loadSampleFile", script, StringComparison.Ordinal);
         Assert.DoesNotContain("fetch(sampleUrl", script, StringComparison.Ordinal);
         Assert.Contains("registrationOptions.clickToOpen !== false", script, StringComparison.Ordinal);

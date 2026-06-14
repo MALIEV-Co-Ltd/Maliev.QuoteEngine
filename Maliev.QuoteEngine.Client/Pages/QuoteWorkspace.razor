@@ -424,6 +424,7 @@
                 ClientFileId = candidate.ClientFileId
             };
             ApplyDefaultRouting(part, candidate.FileName);
+            await TryApplyLocalSupplementalPreviewUrlAsync(part, candidate);
             _parts.Add(part);
             _selectedPartIndex = _parts.Count - 1;
             if (_agentShell is not null)
@@ -484,6 +485,30 @@
                 await ScheduleBrowserUploadFileCleanupAsync(candidate.ClientFileId);
                 await InvokeAsync(StateHasChanged);
             }
+        }
+    }
+
+    private async Task TryApplyLocalSupplementalPreviewUrlAsync(QuotePartViewModel part, UploadCandidate candidate)
+    {
+        if (string.IsNullOrWhiteSpace(candidate.ClientFileId) ||
+            !candidate.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        try
+        {
+            var objectUrl = await Js.InvokeAsync<string?>(
+                "quoteEngineUploads.getObjectUrl",
+                candidate.ClientFileId);
+            if (!string.IsNullOrWhiteSpace(objectUrl))
+            {
+                part.ThumbnailUrl = objectUrl;
+            }
+        }
+        catch (JSException)
+        {
+            // Preview is optional; the upload path remains authoritative.
         }
     }
 
