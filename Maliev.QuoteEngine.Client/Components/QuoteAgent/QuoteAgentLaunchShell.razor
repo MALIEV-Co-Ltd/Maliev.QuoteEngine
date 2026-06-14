@@ -2,6 +2,7 @@
 @using System.Globalization
 @using System.IO
 @using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Components.Forms
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject PreferenceService Preferences
@@ -23,15 +24,6 @@
         </div>
 
         <nav class="qe-agent-primary-nav" aria-label="@Text("Quote workspace", "พื้นที่ขอราคา")">
-            <div class="@($"qe-agent-global-search {(_searchOpen ? "active" : string.Empty)}")">
-                <input id="qe-agent-search-input"
-                       @ref="_searchInput"
-                       value="@_searchQuery"
-                       @onfocus="OpenSearchAsync"
-                       @oninput="OnSearchInputAsync"
-                       placeholder="@Text("Search", "ค้นหา")"
-                       aria-label="@Text("Search all projects, orders, files, and artifacts", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์ และไฟล์งานทั้งหมด")" />
-            </div>
             <a class="active" href="/">
                 <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
                 <span>@Text("New project", "โปรเจกต์ใหม่")</span>
@@ -50,6 +42,15 @@
         </nav>
 
         <div class="qe-agent-rail-scroll">
+            <div class="@($"qe-agent-global-search {(_searchOpen ? "active" : string.Empty)}")">
+                <input id="qe-agent-search-input"
+                       @ref="_searchInput"
+                       value="@_searchQuery"
+                       @onfocus="OpenSearchAsync"
+                       @oninput="OnSearchInputAsync"
+                       placeholder="@Text("Search", "ค้นหา")"
+                       aria-label="@Text("Search all projects, orders, files, and artifacts", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์ และไฟล์งานทั้งหมด")" />
+            </div>
             @if (_searchOpen)
             {
                 <section class="qe-agent-search-panel" aria-label="@Text("Search customer data", "ค้นหาข้อมูลลูกค้า")">
@@ -664,7 +665,7 @@
             <button type="button"
                     class="qe-agent-sketch-backdrop"
                     aria-label="@Text("Close hand sketch", "ปิดสเก็ตช์มือ")"
-                    @onclick="CloseSketch"></button>
+                    @onclick="CloseSketchAsync"></button>
             <section class="qe-agent-sketch-dialog" role="dialog" aria-modal="true" aria-label="@Text("Hand sketch", "สเก็ตช์มือ")">
                 <header>
                     <div>
@@ -673,16 +674,17 @@
                                @bind="_sketchTitle"
                                maxlength="80"
                                aria-label="@Text("Sketch name", "ชื่อสเก็ตช์")" />
+                        <small>@Text("Paste an image, insert a file, or draw with a mouse or pen.", "วางรูปภาพ เพิ่มไฟล์ หรือวาดด้วยเมาส์หรือปากกา")</small>
                     </div>
-                    <button type="button" class="qe-agent-round-btn" @onclick="CloseSketch" title="@Text("Close", "ปิด")">
+                    <button type="button" class="qe-agent-round-btn" @onclick="CloseSketchAsync" title="@Text("Close", "ปิด")">
                         <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
                     </button>
                 </header>
                 <div class="qe-agent-sketch-paper">
                     <canvas id="@SketchCanvasId"
                             class="qe-agent-sketch-canvas"
-                            width="1100"
-                            height="720"
+                            width="1600"
+                            height="1000"
                             aria-label="@Text("Draw your part sketch with a mouse or pen", "วาดสเก็ตช์ชิ้นงานด้วยเมาส์หรือปากกา")"></canvas>
                 </div>
                 <footer>
@@ -700,10 +702,28 @@
                             </button>
                         }
                     </div>
-                    <button type="button" class="qe-agent-secondary-btn" @onclick="ClearSketchAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.Backspace" Size="Size.Small" />
-                        <span>@Text("Clear", "ล้าง")</span>
-                    </button>
+                    <div class="qe-agent-sketch-actions">
+                        <button type="button" class="qe-agent-secondary-btn" @onclick="UseSketchEraserAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.AutoFixOff" Size="Size.Small" />
+                            <span>@Text("Eraser", "ยางลบ")</span>
+                        </button>
+                        <label class="qe-agent-secondary-btn" for="@SketchImageInputId">
+                            <MudIcon Icon="@Icons.Material.Outlined.AddPhotoAlternate" Size="Size.Small" />
+                            <span>@Text("Insert image", "เพิ่มรูปภาพ")</span>
+                        </label>
+                        <button type="button" class="qe-agent-secondary-btn" @onclick="PasteSketchImageAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.ContentPaste" Size="Size.Small" />
+                            <span>@Text("Paste image", "วางรูปภาพ")</span>
+                        </button>
+                        <button type="button" class="qe-agent-secondary-btn" @onclick="ClearSketchAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.Backspace" Size="Size.Small" />
+                            <span>@Text("Clear", "ล้าง")</span>
+                        </button>
+                    </div>
+                    <InputFile id="@SketchImageInputId"
+                               class="qe-agent-hidden-file"
+                               OnChange="InsertSketchImageAsync"
+                               accept="image/png,image/jpeg,image/webp,image/gif" />
                     <button type="button" class="qe-agent-primary-btn" @onclick="AttachSketchAsync">
                         <MudIcon Icon="@Icons.Material.Outlined.Check" Size="Size.Small" />
                         <span>@Text("Attach sketch", "แนบสเก็ตช์")</span>
@@ -833,7 +853,7 @@
     private bool _composerMenuOpen;
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
-    private string _sketchTitle = "Untitled sketch";
+    private string _sketchTitle = "Manufacturing sketch";
     private string _sketchColor = "#161616";
     private string? _lastSketchDataUrl;
     private ElementReference _composerTextarea;
@@ -843,6 +863,7 @@
     private IJSObjectReference? _sketchModule;
     private IReadOnlyList<UseCaseOption> _visibleUseCases = [];
     private string SketchCanvasId { get; } = $"qe-agent-sketch-{Guid.NewGuid():N}";
+    private string SketchImageInputId { get; } = $"qe-agent-sketch-image-{Guid.NewGuid():N}";
     private static readonly SketchColorOption[] SketchColors =
     [
         new("Black", "ดำ", "#161616"),
@@ -1029,7 +1050,7 @@
 
         _sketchInitPending = false;
         _sketchModule ??= await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-sketch.js");
-        await _sketchModule.InvokeVoidAsync("initSketchCanvas", SketchCanvasId);
+        await _sketchModule.InvokeVoidAsync("initSketchCanvas", SketchCanvasId, _composerDotNetRef);
         await _sketchModule.InvokeVoidAsync("setSketchBrushColor", SketchCanvasId, _sketchColor);
 
         if (_focusSearchPending && _searchOpen)
@@ -1351,9 +1372,15 @@
         await FocusComposerAsync();
     }
 
-    private void CloseSketch()
+    private async Task CloseSketchAsync()
     {
+        if (_sketchModule is not null)
+        {
+            await _sketchModule.InvokeVoidAsync("disposeSketchCanvas", SketchCanvasId);
+        }
+
         _sketchOpen = false;
+        _sketchInitPending = false;
     }
 
     private async Task ClearSketchAsync()
@@ -1362,6 +1389,44 @@
         {
             await _sketchModule.InvokeVoidAsync("clearSketchCanvas", SketchCanvasId);
         }
+    }
+
+    private async Task UseSketchEraserAsync()
+    {
+        if (_sketchModule is not null)
+        {
+            await _sketchModule.InvokeVoidAsync("setSketchEraser", SketchCanvasId);
+        }
+    }
+
+    private async Task PasteSketchImageAsync()
+    {
+        if (_sketchModule is not null)
+        {
+            var pasted = await _sketchModule.InvokeAsync<bool>("pasteSketchImage", SketchCanvasId);
+            if (pasted)
+            {
+                ApplySketchImageTitle(Text("Clipboard image", "รูปจากคลิปบอร์ด"));
+            }
+        }
+    }
+
+    private async Task InsertSketchImageAsync(InputFileChangeEventArgs args)
+    {
+        var image = args.File;
+        if (!image.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            _error = Text("Only image files can be inserted into the sketch.", "เพิ่มได้เฉพาะไฟล์รูปภาพในสเก็ตช์");
+            return;
+        }
+
+        await using var stream = image.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+        var dataUrl = $"data:{image.ContentType};base64,{Convert.ToBase64String(memory.ToArray())}";
+        _sketchModule ??= await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-sketch.js");
+        await _sketchModule.InvokeVoidAsync("insertSketchImage", SketchCanvasId, dataUrl);
+        ApplySketchImageTitle(Path.GetFileNameWithoutExtension(image.Name));
     }
 
     private async Task SelectSketchColorAsync(string color)
@@ -1373,8 +1438,37 @@
         }
     }
 
+    [JSInvokable]
+    public Task SetSketchImageNameAsync(string? name)
+    {
+        ApplySketchImageTitle(name);
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void ApplySketchImageTitle(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return;
+        }
+
+        var cleaned = Regex.Replace(name, "[^\\p{L}\\p{N}\\s_-]+", " ").Trim();
+        if (string.IsNullOrWhiteSpace(cleaned))
+        {
+            return;
+        }
+
+        _sketchTitle = Text($"{cleaned} annotation", $"โน้ตรูป {cleaned}");
+    }
+
     private async Task AttachSketchAsync()
     {
+        if (string.IsNullOrWhiteSpace(_sketchTitle) ||
+            _sketchTitle.Equals("Untitled sketch", StringComparison.OrdinalIgnoreCase))
+        {
+            _sketchTitle = Text("Manufacturing sketch", "สเก็ตช์งานผลิต");
+        }
+
         if (_sketchModule is not null)
         {
             _lastSketchDataUrl = await _sketchModule.InvokeAsync<string>("exportSketchCanvas", SketchCanvasId);
@@ -1382,6 +1476,11 @@
 
         _messages.Add(new AgentMessageRow("user", Text($"Attached hand sketch: {_sketchTitle}", $"แนบสเก็ตช์มือ: {_sketchTitle}")));
         AddLocalDemoTurn(BuildSketchDemoTurn());
+        if (_sketchModule is not null)
+        {
+            await _sketchModule.InvokeVoidAsync("disposeSketchCanvas", SketchCanvasId);
+        }
+
         _sketchOpen = false;
     }
 
@@ -2047,6 +2146,11 @@
 
         if (_sketchModule is not null)
         {
+            if (_sketchOpen)
+            {
+                await _sketchModule.InvokeVoidAsync("disposeSketchCanvas", SketchCanvasId);
+            }
+
             await _sketchModule.DisposeAsync();
         }
     }

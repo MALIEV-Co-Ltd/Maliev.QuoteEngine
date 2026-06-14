@@ -729,6 +729,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("exportSketchCanvas", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-sketch-canvas\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-sketch-tools\"", component, StringComparison.Ordinal);
+        Assert.Contains("InsertSketchImageAsync", component, StringComparison.Ordinal);
+        Assert.Contains("PasteSketchImageAsync", component, StringComparison.Ordinal);
+        Assert.Contains("UseSketchEraserAsync", component, StringComparison.Ordinal);
+        Assert.Contains("SetSketchImageNameAsync", component, StringComparison.Ordinal);
+        Assert.Contains("ApplySketchImageTitle(Text(\"Clipboard image\", \"รูปจากคลิปบอร์ด\"))", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("ApplySketchImageTitle(Text(\"Clipboard image annotation\"", component, StringComparison.Ordinal);
+        Assert.Contains("InputFile id=\"@SketchImageInputId\"", component, StringComparison.Ordinal);
         Assert.Contains("SketchColorOption", component, StringComparison.Ordinal);
         Assert.Contains("SelectSketchColorAsync", component, StringComparison.Ordinal);
         Assert.Contains("new(\"Red\", \"แดง\", \"#dc2626\")", component, StringComparison.Ordinal);
@@ -758,6 +765,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.PushPin", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Icons.Material.Outlined.Search", primaryNav, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-agent-global-search", primaryNav, StringComparison.Ordinal);
         Assert.Contains("qe-agent-global-search", component, StringComparison.Ordinal);
         Assert.Contains("@onfocus=\"OpenSearchAsync\"", component, StringComparison.Ordinal);
         Assert.Contains("placeholder=\"@Text(\"Search\"", component, StringComparison.Ordinal);
@@ -964,6 +972,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@keyframes qe-agent-spin", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".sr-only", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-btn.active", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes qe-agent-dictation-pulse", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-menu", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-btn.active", agentStyles, StringComparison.Ordinal);
         Assert.Contains("scrollbar-gutter: stable;", agentStyles, StringComparison.Ordinal);
@@ -991,6 +1000,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("background: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-dialog", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-tools", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-sketch-actions", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-hidden-file", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-color", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-paper", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border: 0 !important;", agentStyles, StringComparison.Ordinal);
@@ -1004,7 +1015,23 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("event.pressure", sketchScript, StringComparison.Ordinal);
         Assert.Contains("quadraticCurveTo", sketchScript, StringComparison.Ordinal);
         Assert.Contains("drawSoftSegment", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("export async function insertSketchImage", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("export async function pasteSketchImage", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("export function setSketchEraser", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("window.addEventListener(\"paste\", paste)", sketchScript, StringComparison.Ordinal);
+        Assert.Contains("window.removeEventListener(\"paste\", entry.paste)", sketchScript, StringComparison.Ordinal);
         Assert.Contains("export function setSketchBrushColor", sketchScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_disposes_sketch_canvas_when_component_is_disposed()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var disposeBlock = ExtractSourceBlock(component, "public async ValueTask DisposeAsync()", "\n    }\n}");
+
+        Assert.Contains("if (_sketchOpen)", disposeBlock, StringComparison.Ordinal);
+        Assert.Contains("disposeSketchCanvas", disposeBlock, StringComparison.Ordinal);
+        Assert.Contains("await _sketchModule.DisposeAsync();", disposeBlock, StringComparison.Ordinal);
     }
 
     [Fact]
