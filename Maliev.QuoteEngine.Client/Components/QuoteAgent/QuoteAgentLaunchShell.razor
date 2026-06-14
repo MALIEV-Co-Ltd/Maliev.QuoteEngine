@@ -1,5 +1,6 @@
 @namespace Maliev.QuoteEngine.Client.Components.QuoteAgent
 @using System.Globalization
+@using System.IO
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject PreferenceService Preferences
@@ -21,17 +22,20 @@
         </div>
 
         <nav class="qe-agent-primary-nav" aria-label="@Text("Quote workspace", "พื้นที่ขอราคา")">
+            <div class="@($"qe-agent-global-search {(_searchOpen ? "active" : string.Empty)}")">
+                <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+                <input id="qe-agent-search-input"
+                       @ref="_searchInput"
+                       value="@_searchQuery"
+                       @onfocus="OpenSearchAsync"
+                       @oninput="OnSearchInputAsync"
+                       placeholder="@Text("Search", "ค้นหา")"
+                       aria-label="@Text("Search all projects, orders, files, and artifacts", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์ และไฟล์งานทั้งหมด")" />
+            </div>
             <a class="active" href="/">
                 <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
                 <span>@Text("New project", "โปรเจกต์ใหม่")</span>
             </a>
-            <button type="button"
-                    class="@(_searchOpen ? "active" : string.Empty)"
-                    aria-expanded="@AriaExpanded(_searchOpen)"
-                    @onclick="ToggleSearch">
-                <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
-                <span>@Text("Search", "ค้นหา")</span>
-            </button>
             <button type="button"
                     class="@(_pluginsOpen ? "active" : string.Empty)"
                     aria-expanded="@AriaExpanded(_pluginsOpen)"
@@ -50,14 +54,6 @@
             {
                 <section class="qe-agent-search-panel" aria-label="@Text("Search customer data", "ค้นหาข้อมูลลูกค้า")">
                     <label for="qe-agent-search-input">@Text("Search everything", "ค้นหาทั้งหมด")</label>
-                    <div class="qe-agent-search-box">
-                        <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
-                        <input id="qe-agent-search-input"
-                               @ref="_searchInput"
-                               value="@_searchQuery"
-                               @oninput="OnSearchInputAsync"
-                               placeholder="@Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...")" />
-                    </div>
                     <div class="qe-agent-search-results" aria-live="polite">
                         @if (_searchLoading)
                         {
@@ -152,21 +148,28 @@
                 </button>
                 @if (!_projectsCollapsed)
                 {
-                    @foreach (var project in RegularProjects)
+                    @if (RegularProjects.Any())
                     {
-                        <div class="qe-agent-project-row">
-                            <a href="@ProjectHref(project)">
-                                <span>@ProjectName(project)</span>
-                            </a>
-                            <button type="button"
-                                    class="@($"qe-agent-pin-btn {(project.IsPinned ? "active" : string.Empty)}")"
-                                    title="@(project.IsPinned ? Text("Unpin project", "เลิกปักหมุดโปรเจกต์") : Text("Pin project", "ปักหมุดโปรเจกต์"))"
-                                    aria-label="@(project.IsPinned ? Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}") : Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}"))"
-                                    aria-pressed="@project.IsPinned"
-                                    @onclick="@(() => ToggleProjectPinAsync(project))">
-                                <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
-                            </button>
-                        </div>
+                        @foreach (var project in RegularProjects)
+                        {
+                            <div class="qe-agent-project-row">
+                                <a href="@ProjectHref(project)">
+                                    <span>@ProjectName(project)</span>
+                                </a>
+                                <button type="button"
+                                        class="@($"qe-agent-pin-btn {(project.IsPinned ? "active" : string.Empty)}")"
+                                        title="@(project.IsPinned ? Text("Unpin project", "เลิกปักหมุดโปรเจกต์") : Text("Pin project", "ปักหมุดโปรเจกต์"))"
+                                        aria-label="@(project.IsPinned ? Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}") : Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}"))"
+                                        aria-pressed="@project.IsPinned"
+                                        @onclick="@(() => ToggleProjectPinAsync(project))">
+                                    <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
+                                </button>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <p class="qe-agent-empty-projects">@Text("No projects", "ยังไม่มีโปรเจกต์")</p>
                     }
                 }
             </section>
@@ -187,12 +190,17 @@
 
     <main class="@MainClass">
         <div class="qe-agent-topline">
-            <div class="qe-agent-status">
+            <div class="@AgentStatusClass"
+                 title="@AgentStatusTooltip"
+                 aria-label="@AgentStatusTooltip">
                 <span aria-hidden="true"></span>
-                <input class="qe-agent-project-name"
-                       @bind="_projectName"
-                       maxlength="120"
-                       aria-label="@Text("Project name", "ชื่อโปรเจกต์")" />
+                @if (!string.IsNullOrWhiteSpace(_projectName))
+                {
+                    <input class="qe-agent-project-name"
+                           @bind="_projectName"
+                           maxlength="120"
+                           aria-label="@Text("Project name", "ชื่อโปรเจกต์")" />
+                }
             </div>
             <button type="button"
                     class="qe-agent-artifact-toggle"
@@ -200,7 +208,7 @@
                     @onclick="ToggleArtifactPanel">
                 <MudIcon Icon="@Icons.Material.Outlined.Inventory2" Size="Size.Small" />
                 <span>@Text("Artifacts", "ไฟล์งาน")</span>
-                <b>@_artifacts.Count</b>
+                <b>@ArtifactCount</b>
             </button>
             <button type="button"
                     class="qe-agent-round-btn"
@@ -217,6 +225,29 @@
                 <div class="qe-agent-prompt">
                     <h1>@Text("What do you want to make today?", "วันนี้ต้องการผลิตอะไร?")</h1>
                 </div>
+                @if (UploadedParts.Count > 0)
+                {
+                    <section class="qe-agent-upload-strip" aria-label="@Text("Attached quote files", "ไฟล์ที่แนบ")">
+                        <header>
+                            <span>@Text("Attached files", "ไฟล์ที่แนบ")</span>
+                            <strong>@Text("I am reading these into the quote workspace.", "กำลังอ่านไฟล์เหล่านี้เข้าสู่พื้นที่ขอราคา")</strong>
+                        </header>
+                        <div>
+                            @for (var i = 0; i < UploadedParts.Count; i++)
+                            {
+                                var index = i;
+                                var part = UploadedParts[i];
+                                <button type="button"
+                                        class="@($"qe-agent-upload-card {(i == SelectedPartIndex ? "active" : string.Empty)}")"
+                                        @onclick="@(() => SelectUploadedPartAsync(index))">
+                                    <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
+                                    <span>@part.FileName</span>
+                                    <small>@UploadedPartStatus(part)</small>
+                                </button>
+                            }
+                        </div>
+                    </section>
+                }
             }
             else
             {
@@ -555,7 +586,7 @@
                           rows="1"
                           maxlength="4000"
                           autofocus
-                          placeholder="@Text("Describe your part, paste dimensions, or attach files...", "อธิบายชิ้นงาน วางขนาด หรือแนบไฟล์...")"
+                          placeholder="@Text("Describe your part, paste dimensions, attach files, or drag and drop files...", "อธิบายชิ้นงาน วางขนาด แนบไฟล์ หรือลากไฟล์มาวาง...")"
                           aria-label="@Text("Message MALIEV Quote Agent", "ข้อความถึงผู้ช่วยขอราคา MALIEV")"></textarea>
                 <button type="button" class="qe-agent-round-btn" title="@Text("Attach CAD or drawing", "แนบ CAD หรือแบบ")" @onclick="RequestUploadAsync">
                     <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
@@ -580,11 +611,10 @@
             </div>
             @if (_messages.Count == 0)
             {
-                <section class="qe-agent-use-cases" aria-label="@Text("Sample use cases", "ตัวอย่างการใช้งาน")">
-                    <header>@Text("Sample use cases", "ตัวอย่างการใช้งาน")</header>
-                    @foreach (var useCase in SampleUseCases)
+                <section class="qe-agent-use-cases" aria-label="@Text("Quote ideas", "ไอเดียขอราคา")">
+                    @foreach (var useCase in VisibleUseCases)
                     {
-                        <button type="button" @onclick="@(() => ApplyUseCase(useCase))">
+                        <button type="button" @onclick="@(() => ApplyUseCaseAsync(useCase))">
                             <span>@Text(useCase.TitleEn, useCase.TitleTh)</span>
                             <small>@Text(useCase.PromptEn, useCase.PromptTh)</small>
                         </button>
@@ -660,12 +690,34 @@
                     <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
                 </button>
             </header>
-            @if (_artifacts.Count == 0)
+            @if (ArtifactCount == 0)
             {
                 <p class="qe-agent-muted">@Text("Viewer, DFM reports, estimates, quote PDFs, order records, and payment handoffs will appear here.", "โมเดล รายงาน DFM ราคา ใบเสนอราคา คำสั่งซื้อ และการชำระเงินจะแสดงที่นี่")</p>
             }
             else
             {
+                @if (UploadedParts.Count > 0)
+                {
+                    <section class="qe-agent-artifact-section" aria-label="@Text("Uploaded files", "ไฟล์ที่อัปโหลด")">
+                        <header>@Text("Uploaded files", "ไฟล์ที่อัปโหลด")</header>
+                        <div class="qe-agent-artifacts">
+                            @for (var i = 0; i < UploadedParts.Count; i++)
+                            {
+                                var index = i;
+                                var part = UploadedParts[i];
+                                <button type="button"
+                                        class="@($"qe-agent-artifact qe-agent-artifact--button {(i == SelectedPartIndex ? "active" : string.Empty)}")"
+                                        @onclick="@(() => SelectUploadedPartAsync(index))">
+                                    <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
+                                    <div>
+                                        <strong>@part.FileName</strong>
+                                        <small>@UploadedPartStatus(part)</small>
+                                    </div>
+                                </button>
+                            }
+                        </div>
+                    </section>
+                }
                 <div class="qe-agent-artifacts">
                     @foreach (var artifact in _artifacts)
                     {
@@ -741,7 +793,7 @@
     private bool _connectorRegistryLoaded;
     private bool _searchLoading;
     private bool _customerSearchUnavailable;
-    private string _projectName = $"Manufacturing project {DateTimeOffset.Now:yyyy-MM-dd}";
+    private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
     private string _sketchTitle = "Untitled sketch";
     private string _sketchColor = "#161616";
@@ -751,6 +803,7 @@
     private DotNetObjectReference<QuoteAgentLaunchShell>? _composerDotNetRef;
     private IJSObjectReference? _composerModule;
     private IJSObjectReference? _sketchModule;
+    private IReadOnlyList<UseCaseOption> _visibleUseCases = [];
     private string SketchCanvasId { get; } = $"qe-agent-sketch-{Guid.NewGuid():N}";
     private static readonly SketchColorOption[] SketchColors =
     [
@@ -777,7 +830,59 @@
             "Compare material and finish options",
             "เปรียบเทียบวัสดุและผิวสำเร็จ",
             "For this CNC part, compare 6061 aluminum clear anodized vs black anodized for 10, 50, and 100 pieces, including lead time and cost drivers.",
-            "สำหรับชิ้นงาน CNC นี้ ช่วยเปรียบเทียบอะลูมิเนียม 6061 อโนไดซ์ใสกับอโนไดซ์ดำ สำหรับ 10, 50 และ 100 ชิ้น พร้อมเวลานำส่งและปัจจัยต้นทุน")
+            "สำหรับชิ้นงาน CNC นี้ ช่วยเปรียบเทียบอะลูมิเนียม 6061 อโนไดซ์ใสกับอโนไดซ์ดำ สำหรับ 10, 50 และ 100 ชิ้น พร้อมเวลานำส่งและปัจจัยต้นทุน"),
+        new("Quote a CNC aluminum housing", "ขอราคาตัวเรือนอะลูมิเนียม CNC", "I need a CNC machined 6061 aluminum electronics housing from STEP files, 25 and 100 piece price breaks, black anodize, and a 10 business day lead time.", "ต้องการตัวเรือนอิเล็กทรอนิกส์อะลูมิเนียม 6061 CNC จากไฟล์ STEP ขอราคา 25 และ 100 ชิ้น อโนไดซ์ดำ และเวลานำส่ง 10 วันทำการ"),
+        new("Check SLS nylon snap fits", "ตรวจ snap fit ไนลอน SLS", "Review this SLS nylon part for snap-fit risk, wall thickness, print orientation, tolerance, and quote 50 pieces in black PA12.", "ช่วยตรวจชิ้นงานไนลอน SLS สำหรับความเสี่ยง snap-fit ความหนาผนัง ทิศทางพิมพ์ ความเผื่อ และเสนอราคา PA12 สีดำ 50 ชิ้น"),
+        new("Review sheet metal bend risks", "ตรวจความเสี่ยงงานพับโลหะแผ่น", "I have a DXF and PDF drawing for a 1.5 mm stainless bracket. Check bend relief, hole distance from bends, finish, and price 200 pieces.", "มีไฟล์ DXF และ PDF สำหรับขายึดสแตนเลส 1.5 มม. ช่วยตรวจ bend relief ระยะรูจากแนวพับ ผิวสำเร็จ และราคา 200 ชิ้น"),
+        new("Quote injection mold prototype", "ขอราคาต้นแบบแม่พิมพ์ฉีด", "Estimate a prototype injection mold for an ABS enclosure, including DFM risks, tool material options, sample quantity, and production lead time.", "ประเมินแม่พิมพ์ฉีดต้นแบบสำหรับกล่อง ABS พร้อมความเสี่ยง DFM ตัวเลือกวัสดุแม่พิมพ์ จำนวนตัวอย่าง และเวลานำส่งการผลิต"),
+        new("Turn photos into RFQ details", "เปลี่ยนรูปถ่ายเป็นรายละเอียด RFQ", "I only have photos of an existing mounting plate. Help extract requirements, identify missing dimensions, and tell me what files you need for final pricing.", "มีแค่รูปถ่ายแผ่นยึดเดิม ช่วยดึงข้อกำหนด หาขนาดที่ยังขาด และบอกว่าไฟล์ใดจำเป็นสำหรับราคาสุดท้าย"),
+        new("Compare CNC vs 3D printing", "เปรียบเทียบ CNC กับ 3D printing", "For this small enclosure, compare CNC machining versus MJF nylon for cost, lead time, tolerance, surface finish, and DFM risks at 10, 50, and 200 units.", "สำหรับกล่องขนาดเล็กนี้ ช่วยเปรียบเทียบ CNC กับ MJF nylon ด้านต้นทุน เวลานำส่ง ความเผื่อ ผิว และความเสี่ยง DFM ที่ 10, 50 และ 200 ชิ้น"),
+        new("Validate threads and inserts", "ตรวจเกลียวและ insert", "Check this STEP model for threaded holes, heat-set inserts, minimum boss wall thickness, and quote 30 FDM prototypes.", "ช่วยตรวจโมเดล STEP สำหรับรูเกลียว insert แบบฝังร้อน ความหนาผนัง boss ขั้นต่ำ และเสนอราคา FDM ต้นแบบ 30 ชิ้น"),
+        new("Quote laser cut acrylic panels", "ขอราคาแผ่นอะคริลิกตัดเลเซอร์", "I need clear acrylic laser-cut panels from DXF files, polished edges, countersunk holes, and price breaks for 20, 100, and 500 pieces.", "ต้องการแผ่นอะคริลิกใสตัดเลเซอร์จาก DXF ขอบขัดเงา รู countersink และราคา 20, 100, 500 ชิ้น"),
+        new("DFM review for thin walls", "ตรวจ DFM ผนังบาง", "Analyze this STL for thin walls, fragile ribs, trapped powder, minimum clearance, and whether it is better for SLA, SLS, or MJF.", "วิเคราะห์ STL นี้เรื่องผนังบาง rib เปราะ ผงค้าง clearance ขั้นต่ำ และเหมาะกับ SLA, SLS หรือ MJF มากกว่า"),
+        new("Quote anodized machined bracket", "ขอราคาขายึด CNC อโนไดซ์", "Quote this machined bracket in 6061-T6 with clear anodize, ±0.05 mm critical holes, inspection report, and quantities 5, 25, and 100.", "ขอราคาขายึด CNC วัสดุ 6061-T6 อโนไดซ์ใส รูสำคัญ ±0.05 มม. พร้อมรายงานตรวจ และจำนวน 5, 25, 100"),
+        new("Ask for missing drawing dimensions", "ถามหาขนาด drawing ที่ขาด", "Read this PDF drawing and list every missing dimension, tolerance, material, finish, and note that blocks a manufacturable quote.", "อ่าน drawing PDF นี้ แล้วสรุปขนาด ความเผื่อ วัสดุ ผิวสำเร็จ และ note ที่ยังขาดสำหรับการเสนอราคาที่ผลิตได้จริง"),
+        new("Quote replacement machine part", "ขอราคาชิ้นส่วนเครื่องจักรทดแทน", "I need to replace a worn machine part from photos and rough caliper measurements. Help plan reverse engineering and quote the first 3 pieces.", "ต้องการทำชิ้นส่วนเครื่องจักรทดแทนจากรูปถ่ายและขนาดวัดคร่าว ๆ ช่วยวางแผน reverse engineering และเสนอราคา 3 ชิ้นแรก"),
+        new("Review powder coat color options", "ตรวจตัวเลือกสี powder coat", "For this sheet-metal enclosure, compare black powder coat, white powder coat, and clear anodize options including MOQ, lead time, and durability.", "สำหรับกล่องโลหะแผ่นนี้ ช่วยเปรียบเทียบ powder coat ดำ ขาว และอโนไดซ์ใส รวม MOQ เวลานำส่ง และความทนทาน"),
+        new("Quote gasketed enclosure", "ขอราคากล่องมี gasket", "Review this enclosure for gasket groove dimensions, sealing surface flatness, screw spacing, material choice, and quote CNC prototypes.", "ตรวจกล่องนี้เรื่องร่อง gasket ความเรียบผิวซีล ระยะสกรู วัสดุ และเสนอราคาต้นแบบ CNC"),
+        new("Check tolerances before pricing", "ตรวจ tolerance ก่อนเสนอราคา", "Before pricing this part, identify which tolerances are expensive, which can be relaxed, and what inspection method is needed.", "ก่อนเสนอราคา ช่วยระบุ tolerance ใดแพงเกินไป อันไหนผ่อนได้ และควรตรวจด้วยวิธีใด"),
+        new("Quote silicone casting master", "ขอราคาต้นแบบหล่อซิลิโคน", "I have a 3D model for a urethane casting master. Check draft, undercuts, surface finish, silicone mold life, and quote 20 parts.", "มีโมเดล 3D สำหรับ master หล่อยูรีเทน ช่วยตรวจ draft undercut ผิว อายุแม่พิมพ์ซิลิโคน และเสนอราคา 20 ชิ้น"),
+        new("Review assembly fit", "ตรวจการประกอบ", "Check these uploaded parts as an assembly for clearance, fastener access, tolerance stack-up, and whether CNC or printed prototypes make sense.", "ตรวจชิ้นงานที่อัปโหลดเป็น assembly เรื่อง clearance การเข้าถึง fastener tolerance stack-up และควรทำต้นแบบ CNC หรือพิมพ์ 3D"),
+        new("Quote high-temperature material", "ขอราคาวัสดุทนอุณหภูมิสูง", "Suggest materials and quote options for a part exposed to 120°C, light chemical contact, and moderate mechanical load.", "ช่วยแนะนำวัสดุและตัวเลือกราคา สำหรับชิ้นงานโดน 120°C สัมผัสสารเคมีเล็กน้อย และรับแรงปานกลาง"),
+        new("Review cosmetic surface requirements", "ตรวจข้อกำหนดผิว cosmetic", "This is a customer-facing part. Help define cosmetic surface requirements, acceptable layer lines, color, finish, and inspection notes.", "ชิ้นงานนี้เป็นส่วนที่ลูกค้าเห็น ช่วยกำหนดข้อกำหนดผิว cosmetic รอย layer ที่ยอมรับได้ สี ผิวสำเร็จ และ note การตรวจ"),
+        new("Quote tapped aluminum plate", "ขอราคาแผ่นอะลูมิเนียมต๊าปเกลียว", "Quote a 10 mm thick 6061 aluminum plate with tapped M4 holes, chamfers, deburring, and quantities 10, 50, and 250.", "ขอราคาแผ่นอะลูมิเนียม 6061 หนา 10 มม. มีรูต๊าป M4 chamfer ลบคม และจำนวน 10, 50, 250"),
+        new("Find manufacturability blockers", "หาจุดติด DFM", "Analyze this CAD file and tell me only the manufacturability blockers first, then ask questions needed to price it.", "วิเคราะห์ไฟล์ CAD นี้ และบอกเฉพาะจุดติด DFM ก่อน จากนั้นถามคำถามที่จำเป็นต่อการเสนอราคา"),
+        new("Quote transparent resin prototype", "ขอราคาเรซินใสต้นแบบ", "Quote a transparent SLA resin prototype, check minimum wall thickness, polish requirements, UV stability, and delivery options.", "ขอราคา SLA resin ใสต้นแบบ ตรวจความหนาผนังขั้นต่ำ งานขัด ความทน UV และตัวเลือกการส่งมอบ"),
+        new("Convert sketch to CAD plan", "เปลี่ยนสเก็ตช์เป็นแผน CAD", "I have a hand sketch. Help define the CAD model we need, dimensions to confirm, likely process, and a quote path.", "มีสเก็ตช์มือ ช่วยกำหนดโมเดล CAD ที่ต้องทำ ขนาดที่ต้องยืนยัน กระบวนการที่น่าจะเหมาะ และแนวทางเสนอราคา"),
+        new("Quote urgent production run", "ขอราคางานผลิตด่วน", "I need this part urgently. Compare standard and expedited lead times, cost impact, and what DFM risks must be accepted.", "ต้องการชิ้นงานด่วน ช่วยเปรียบเทียบเวลานำส่งปกติและด่วน ผลต่อราคา และความเสี่ยง DFM ที่ต้องยอมรับ"),
+        new("Review hole and slot tolerances", "ตรวจ tolerance รูและ slot", "Check hole and slot tolerances on this drawing, suggest standard manufacturable tolerances, and quote 75 pieces.", "ตรวจ tolerance รูและ slot บน drawing นี้ แนะนำ tolerance มาตรฐานที่ผลิตง่าย และเสนอราคา 75 ชิ้น"),
+        new("Quote stainless laser cut parts", "ขอราคาสแตนเลสตัดเลเซอร์", "Quote 304 stainless laser cut parts from DXF, brushed finish, no burrs, and packaging requirements for cosmetic faces.", "ขอราคาชิ้นงานสแตนเลส 304 ตัดเลเซอร์จาก DXF ผิว brushed ไม่มีครีบ และข้อกำหนดการแพ็กผิวสวย"),
+        new("Analyze uploaded STEP for volume", "วิเคราะห์ STEP เพื่อประเมินปริมาตร", "Analyze the uploaded STEP file for bounding box, volume, surface area, process fit, and the fastest path to quote.", "วิเคราะห์ STEP ที่อัปโหลดเพื่อหา bounding box ปริมาตร พื้นที่ผิว ความเหมาะสมกระบวนการ และทางลัดสู่ราคา"),
+        new("Quote small batch bridge production", "ขอราคา bridge production", "I need bridge production before tooling is ready. Compare CNC, urethane casting, and additive options for 150 parts.", "ต้องการ bridge production ก่อนแม่พิมพ์พร้อม ช่วยเปรียบเทียบ CNC หล่อยูรีเทน และ additive สำหรับ 150 ชิ้น"),
+        new("Review press-fit feature risk", "ตรวจความเสี่ยง press-fit", "Review this model for press-fit pins, boss cracking risk, material choice, tolerance stack, and inspection plan.", "ตรวจโมเดลนี้เรื่อง pin press-fit ความเสี่ยง boss แตก วัสดุ tolerance stack และแผนตรวจ"),
+        new("Quote engraved aluminum tags", "ขอราคา tag อะลูมิเนียมแกะสลัก", "Quote anodized aluminum tags with laser engraving, rounded corners, adhesive backing, and quantities 100, 500, and 1000.", "ขอราคา tag อะลูมิเนียมอโนไดซ์แกะเลเซอร์ มุมโค้ง กาวหลัง และจำนวน 100, 500, 1000"),
+        new("Check draft for molding", "ตรวจ draft สำหรับ molding", "Review this plastic part for injection molding draft, ribs, sink marks, gate options, and tool complexity.", "ตรวจชิ้นงานพลาสติกนี้สำหรับ injection molding เรื่อง draft rib sink mark gate และความซับซ้อนแม่พิมพ์"),
+        new("Quote fixture plate machining", "ขอราคา machining fixture plate", "Quote a fixture plate with precision dowel holes, threaded holes, black anodize, CMM inspection, and 2-week delivery.", "ขอราคา fixture plate มีรู dowel แม่นยำ รูต๊าป อโนไดซ์ดำ ตรวจ CMM และส่งภายใน 2 สัปดาห์"),
+        new("Review model for support scars", "ตรวจรอย support", "Check this part for support scar risk, best print orientation, surface finish tradeoffs, and post-processing cost.", "ตรวจชิ้นงานนี้เรื่องรอย support ทิศทางพิมพ์ที่เหมาะ tradeoff ผิว และต้นทุน post-processing"),
+        new("Quote rubber-like prototype", "ขอราคาต้นแบบยาง", "Suggest options for a rubber-like flexible prototype, compare TPU printing and urethane casting, and quote 15 pieces.", "แนะนำตัวเลือกต้นแบบยืดหยุ่นคล้ายยาง เปรียบเทียบพิมพ์ TPU กับหล่อยูรีเทน และเสนอราคา 15 ชิ้น"),
+        new("Turn drawing notes into quote", "เปลี่ยน note drawing เป็นราคา", "Read the drawing notes, extract material, finish, revision, tolerances, inspection requirements, and quote the latest revision.", "อ่าน note ใน drawing ดึงวัสดุ ผิว revision tolerance ข้อกำหนดการตรวจ และเสนอราคา revision ล่าสุด"),
+        new("Quote machined heat sink", "ขอราคา heat sink CNC", "Quote a machined aluminum heat sink, check fin aspect ratio, tool access, deburring, anodize, and quantities 10 and 100.", "ขอราคา heat sink อะลูมิเนียม CNC ตรวจ aspect ratio ของ fin การเข้าถึง tool ลบคม อโนไดซ์ และจำนวน 10 กับ 100"),
+        new("Review welding fixture concept", "ตรวจ concept fixture งานเชื่อม", "I have a rough fixture concept. Help identify manufacturable components, material choices, tolerances, and quote the fixture build.", "มี concept fixture งานเชื่อมคร่าว ๆ ช่วยระบุชิ้นส่วนที่ผลิตได้ วัสดุ tolerance และเสนอราคาสร้าง fixture"),
+        new("Quote packaging tray prototype", "ขอราคาต้นแบบถาดแพ็กกิ้ง", "Quote a packaging tray prototype from photos and dimensions, suggest thermoforming or 3D printing, and list missing details.", "ขอราคาต้นแบบถาดแพ็กกิ้งจากรูปและขนาด แนะนำ thermoforming หรือ 3D printing และสรุปรายละเอียดที่ขาด"),
+        new("Analyze color and finish options", "วิเคราะห์สีและผิวสำเร็จ", "Compare color and finish options for this customer-facing CNC part, including anodize, powder coat, bead blast, and raw machining.", "เปรียบเทียบสีและผิวสำหรับชิ้นงาน CNC ที่ลูกค้าเห็น รวมอโนไดซ์ powder coat bead blast และผิว machining ดิบ"),
+        new("Quote medical device prototype", "ขอราคาต้นแบบอุปกรณ์แพทย์", "Quote a non-implant medical device prototype, identify biocompatible material options, traceability needs, and inspection requirements.", "ขอราคาต้นแบบอุปกรณ์แพทย์ที่ไม่ฝังในร่างกาย ระบุตัวเลือกวัสดุ biocompatible ความต้องการ traceability และการตรวจ"),
+        new("Review edge break callouts", "ตรวจ edge break", "Check this drawing for edge break, deburr, chamfer, and sharp-edge risks before quoting.", "ตรวจ drawing นี้เรื่อง edge break ลบคม chamfer และความเสี่ยงขอบคมก่อนเสนอราคา"),
+        new("Quote assembly with hardware", "ขอราคา assembly พร้อม hardware", "Quote this small assembly including machined parts, purchased fasteners, inserts, assembly labor, and packaging.", "ขอราคา assembly ขนาดเล็ก รวมชิ้นงาน CNC fastener ซื้อ insert ค่าแรงประกอบ และแพ็กกิ้ง"),
+        new("Check file quality before RFQ", "ตรวจคุณภาพไฟล์ก่อน RFQ", "Check whether these uploaded files are enough for a quote and list any broken geometry, missing drawings, or ambiguous requirements.", "ตรวจว่าไฟล์ที่อัปโหลดเพียงพอสำหรับเสนอราคาหรือไม่ และสรุป geometry เสีย drawing ที่ขาด หรือข้อกำหนดกำกวม"),
+        new("Quote carbon fiber plate", "ขอราคาแผ่นคาร์บอนไฟเบอร์", "Quote CNC-routed carbon fiber plates, check dust handling, edge finish, hole tolerance, and quantities 20 and 100.", "ขอราคาแผ่นคาร์บอนไฟเบอร์ CNC router ตรวจการจัดการฝุ่น ผิวขอบ tolerance รู และจำนวน 20 กับ 100"),
+        new("Review plating requirements", "ตรวจข้อกำหนด plating", "Review this part for zinc plating, masking needs, hydrogen embrittlement risk, material compatibility, and quote 300 pieces.", "ตรวจชิ้นงานนี้สำหรับชุบ zinc ความต้องการ masking ความเสี่ยง hydrogen embrittlement ความเข้ากันวัสดุ และราคา 300 ชิ้น"),
+        new("Quote robot end-effector parts", "ขอราคาชิ้นส่วน end-effector หุ่นยนต์", "Quote robot end-effector parts from STEP files, check lightweighting, stiffness, precision interfaces, and anodized finish.", "ขอราคาชิ้นส่วน end-effector หุ่นยนต์จาก STEP ตรวจการลดน้ำหนัก ความแข็ง stiffness interface แม่นยำ และผิวอโนไดซ์"),
+        new("Analyze manufacturable material swaps", "วิเคราะห์การเปลี่ยนวัสดุที่ผลิตง่ายขึ้น", "Suggest material swaps that reduce cost or lead time without changing critical function for this uploaded part.", "แนะนำการเปลี่ยนวัสดุที่ลดต้นทุนหรือเวลานำส่งโดยไม่กระทบ function สำคัญของชิ้นงานที่อัปโหลด"),
+        new("Quote display stand prototype", "ขอราคาต้นแบบขาตั้ง display", "Quote a display stand prototype from sketches, recommend process, finish, stability risks, and a path to 500 units.", "ขอราคาต้นแบบขาตั้ง display จากสเก็ตช์ แนะนำกระบวนการ ผิว ความเสี่ยงเสถียรภาพ และแนวทางไปสู่ 500 ชิ้น"),
+        new("Review sealing and IP rating", "ตรวจซีลและ IP rating", "Review this enclosure for IP54 sealing risk, gasket compression, fastener spacing, and material/finish recommendations.", "ตรวจกล่องนี้สำหรับความเสี่ยงซีล IP54 การกด gasket ระยะ fastener และคำแนะนำวัสดุ/ผิว"),
+        new("Quote spare parts from old drawings", "ขอราคาชิ้นส่วนอะไหล่จาก drawing เก่า", "I have old scanned drawings. Extract the quote requirements, flag unreadable notes, and tell me what needs confirmation.", "มี drawing scan เก่า ช่วยดึงข้อกำหนดสำหรับเสนอราคา ชี้ note ที่อ่านไม่ได้ และบอกสิ่งที่ต้องยืนยัน"),
+        new("Check minimum order quantity", "ตรวจ MOQ", "For this part, explain the price drivers, MOQ, setup costs, and best quantity break for a pilot run.", "สำหรับชิ้นงานนี้ ช่วยอธิบายปัจจัยราคา MOQ ค่า setup และ quantity break ที่เหมาะสำหรับ pilot run"),
+        new("Quote production-ready revision", "ขอราคา revision พร้อมผลิต", "Quote the latest revision, compare it to the previous uploaded version, and call out any manufacturing-impacting changes.", "ขอราคา revision ล่าสุด เปรียบเทียบกับเวอร์ชันก่อนที่อัปโหลด และชี้การเปลี่ยนแปลงที่กระทบการผลิต")
     ];
 
     [Parameter]
@@ -793,10 +898,19 @@
     public bool ShowLaunchAccountCard { get; set; }
 
     [Parameter]
+    public IReadOnlyList<QuotePartViewModel> UploadedParts { get; set; } = [];
+
+    [Parameter]
+    public int SelectedPartIndex { get; set; }
+
+    [Parameter]
     public string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     [Parameter]
     public EventCallback OnUploadRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnUploadedPartSelected { get; set; }
 
     [CascadingParameter(Name = "IsDarkMode")]
     private bool IsDarkMode { get; set; }
@@ -804,9 +918,29 @@
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
     private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(_artifactPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
+    private int ArtifactCount => _artifacts.Count + UploadedParts.Count;
+    private IReadOnlyList<UseCaseOption> VisibleUseCases => _visibleUseCases.Count == 0 ? SampleUseCases.Take(3).ToArray() : _visibleUseCases;
+    private string AgentStatusClass => _error is not null
+        ? "qe-agent-status is-failed"
+        : _sending || _searchLoading
+            ? "qe-agent-status is-warning"
+            : "qe-agent-status is-connected";
+    private string AgentStatusTooltip => _error is not null
+        ? Text("Agent connection failed. Try again or refresh Make Studio.", "เชื่อมต่อเอเจนต์ไม่สำเร็จ กรุณาลองใหม่หรือรีเฟรช Make Studio")
+        : _sending || _searchLoading
+            ? Text("Agent is working or reconnecting.", "เอเจนต์กำลังทำงานหรือเชื่อมต่อใหม่")
+            : Text("Agent connected and ready.", "เอเจนต์เชื่อมต่อและพร้อมใช้งาน");
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned && !project.IsArchived);
     private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
+
+    protected override void OnInitialized()
+    {
+        _visibleUseCases = SampleUseCases
+            .OrderBy(_ => Random.Shared.Next())
+            .Take(3)
+            .ToArray();
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -1072,6 +1206,43 @@
         {
             await OnUploadRequested.InvokeAsync();
         }
+    }
+
+    private async Task SelectUploadedPartAsync(int index)
+    {
+        if (OnUploadedPartSelected.HasDelegate)
+        {
+            await OnUploadedPartSelected.InvokeAsync(index);
+        }
+    }
+
+    private string UploadedPartStatus(QuotePartViewModel part)
+    {
+        var status = string.IsNullOrWhiteSpace(part.Status) ? Text("Attached", "แนบแล้ว") : part.Status;
+        var metrics = part.VolumeCc > 0
+            ? FormattableString.Invariant($"{part.VolumeCc:0.##} cc")
+            : part.SurfaceAreaCm2 > 0
+                ? FormattableString.Invariant($"{part.SurfaceAreaCm2:0.##} cm²")
+                : null;
+
+        return string.IsNullOrWhiteSpace(metrics) ? status : $"{status} · {metrics}";
+    }
+
+    private static string UploadedPartIcon(QuotePartViewModel part)
+    {
+        var fileName = part.FileName;
+        if (QuoteUploadConstraints.IsSupportedCadFileName(fileName))
+        {
+            return Icons.Material.Outlined.ViewInAr;
+        }
+
+        var extension = Path.GetExtension(fileName);
+        return extension.Equals(".jpg", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".png", StringComparison.OrdinalIgnoreCase)
+               || extension.Equals(".webp", StringComparison.OrdinalIgnoreCase)
+            ? Icons.Material.Outlined.Image
+            : Icons.Material.Outlined.InsertDriveFile;
     }
 
     private Task OpenSketchAsync()
@@ -1359,6 +1530,14 @@
         _focusSearchPending = _searchOpen;
     }
 
+    private async Task OpenSearchAsync()
+    {
+        _searchOpen = true;
+        _pluginsOpen = false;
+        _focusSearchPending = false;
+        await RefreshSearchResultsAsync();
+    }
+
     private async Task OnSearchInputAsync(ChangeEventArgs args)
     {
         _searchQuery = args.Value?.ToString() ?? string.Empty;
@@ -1521,10 +1700,21 @@
             : Text($"Open or continue {item.TitleEn}.", $"เปิดหรือทำต่อ {item.TitleTh}");
     }
 
-    private void ApplyUseCase(UseCaseOption useCase)
+    private async Task ApplyUseCaseAsync(UseCaseOption useCase)
     {
-        _draftMessage = Text(useCase.PromptEn, useCase.PromptTh);
-        _ = _composerModule?.InvokeVoidAsync("focusComposer", _composerTextarea);
+        var prompt = Text(useCase.PromptEn, useCase.PromptTh);
+        _draftMessage = string.Empty;
+        await InvokeAsync(StateHasChanged);
+
+        if (_composerModule is not null)
+        {
+            await _composerModule.InvokeVoidAsync("typeComposerText", _composerTextarea, prompt);
+            _draftMessage = prompt;
+            return;
+        }
+
+        _draftMessage = prompt;
+        await FocusComposerAsync();
     }
 
     private sealed class AgentMessageRow(string role, string content, AgentWorkbenchSnapshot? workbench = null)

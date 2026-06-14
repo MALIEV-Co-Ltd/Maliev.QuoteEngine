@@ -96,37 +96,15 @@
                 </div>
             }
 
-            @if (SelectedPart is null)
-            {
-                <QuoteAgentLaunchShell SessionId="@AgentSessionId"
-                                       IsSignedIn="@IsSignedIn"
-                                       IsDemoMode="@IsDemoMode"
-                                       ShowLaunchAccountCard="@ShowLaunchAccountCard"
-                                       Culture="@Culture"
-                                       OnUploadRequested="OpenFilePickerAsync" />
-            }
-            else
-            {
-                var _sp = SelectedPart!;
-                <div class="qe-pn-detail-row">
-                    <QePartDetailCard Part="@_sp"
-                                      Parts="@_parts"
-                                      ReferenceData="@_reference"
-                                      Estimate="@_estimate"
-                                      CenterMode="@_centerMode"
-                                      CenterModeChanged="@SetCenterMode"
-                                      OnPartChanged="@OnPartConfigurationChanged"
-                                      OnSelectPart="@SelectPartFromTable"
-                                      OnAddFilesRequested="@OpenFilePickerAsync"
-                                      OnRequestFreshViewerUrl="@RequestFreshViewerUrlAsync"
-                                      CanAttachDocuments="@(!IsDemoMode)"
-                                      IsDarkMode="@IsDarkMode" />
-
-                    <QePartConfigSidebar Part="@_sp"
-                                         ReferenceData="@_reference"
-                                         OnPartChanged="@OnPartConfigurationChanged" />
-                </div>
-            }
+            <QuoteAgentLaunchShell SessionId="@AgentSessionId"
+                                   IsSignedIn="@IsSignedIn"
+                                   IsDemoMode="@IsDemoMode"
+                                   ShowLaunchAccountCard="@ShowLaunchAccountCard"
+                                   Culture="@Culture"
+                                   UploadedParts="@_parts"
+                                   SelectedPartIndex="@_selectedPartIndex"
+                                   OnUploadedPartSelected="SelectPart"
+                                   OnUploadRequested="OpenFilePickerAsync" />
         </main>
     </div>
 
