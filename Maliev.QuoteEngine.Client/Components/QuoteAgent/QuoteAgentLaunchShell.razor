@@ -672,21 +672,21 @@
                     }
                     <span class="sr-only">@(_sending ? Text("Processing", "กำลังประมวลผล") : Text("Send", "ส่ง"))</span>
                 </button>
+                <div class="qe-agent-quick-actions" aria-label="@Text("Quick quote prompts", "คำสั่งลัดขอราคา")">
+                    <button type="button" @onclick="RequestUploadAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+                        <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
+                    </button>
+                    <button type="button" @onclick="RequestUploadAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" Size="Size.Small" />
+                        <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
+                    </button>
+                    <button type="button" @onclick="OpenSketchAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
+                        <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
+                    </button>
+                </div>
             </form>
-            <div class="qe-agent-quick-actions" aria-label="@Text("Quick quote prompts", "คำสั่งลัดขอราคา")">
-                <button type="button" @onclick="RequestUploadAsync">
-                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
-                    <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
-                </button>
-                <button type="button" @onclick="RequestUploadAsync">
-                    <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" Size="Size.Small" />
-                    <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
-                </button>
-                <button type="button" @onclick="OpenSketchAsync">
-                    <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
-                    <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
-                </button>
-            </div>
             @if (_messages.Count == 0)
             {
                 <section class="qe-agent-use-cases" aria-label="@Text("Quote ideas", "ไอเดียขอราคา")">

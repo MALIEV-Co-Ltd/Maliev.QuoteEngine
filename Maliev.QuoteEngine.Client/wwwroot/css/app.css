@@ -2123,18 +2123,25 @@
     grid-template-columns: 36px minmax(0, 1fr) 42px 42px;
     grid-template-areas:
         "text text text text"
-        "add spacer dictate send";
+        "add spacer dictate send"
+        "quick quick quick quick";
     align-items: end;
     gap: 8px 12px;
     width: 100%;
-    min-height: 90px;
+    min-height: 126px;
     padding: 12px;
     border-radius: 28px;
-    background: var(--qe-agent-raised);
-    box-shadow: none;
-    border: 1px solid var(--qe-agent-line);
+    background: #ffffff;
+    box-shadow: 0 18px 44px rgba(16, 24, 40, .10), 0 2px 8px rgba(16, 24, 40, .06);
+    border: 1px solid color-mix(in srgb, var(--qe-agent-line) 80%, #ffffff);
     overflow: visible;
     transition: border-radius 160ms ease, padding 160ms ease, align-items 160ms ease;
+}
+
+:root[data-maliev-theme="dark"] .qe-agent-composer {
+    background: var(--qe-agent-raised);
+    box-shadow: 0 22px 54px rgba(0, 0, 0, .36);
+    border-color: var(--qe-agent-line);
 }
 
 .qe-agent-composer.qe-agent-composer--multiline {
@@ -2264,23 +2271,29 @@
 }
 
 .qe-agent-quick-actions {
+    grid-area: quick;
     display: flex;
-    justify-content: center;
+    justify-content: flex-start;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 8px;
+    min-width: 0;
+    padding-top: 8px;
+    border-top: 1px solid color-mix(in srgb, var(--qe-agent-line) 64%, transparent);
 }
 
 .qe-agent-quick-actions button {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: 34px;
-    padding: 7px 12px;
+    min-height: 32px;
+    padding: 6px 10px;
     border: 1px solid var(--qe-agent-line);
-    border-radius: 10px;
+    border-radius: 999px;
     background: transparent;
     color: var(--qe-agent-muted);
     cursor: pointer;
+    font-size: 13px;
+    line-height: 1.2;
 }
 
 .qe-agent-quick-actions button:hover {
