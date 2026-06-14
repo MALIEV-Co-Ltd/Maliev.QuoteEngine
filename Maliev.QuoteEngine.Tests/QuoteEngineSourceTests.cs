@@ -751,7 +751,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-search-panel,", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel *", agentStyles, StringComparison.Ordinal);
         Assert.Contains("max-height: none;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("overflow: visible;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("overflow-x: hidden;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("contain: inline-size;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("overflow-wrap: anywhere;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 18px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("display: -webkit-box;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-shell--rail-collapsed", agentStyles, StringComparison.Ordinal);
