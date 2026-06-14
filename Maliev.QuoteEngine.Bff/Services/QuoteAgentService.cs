@@ -1751,7 +1751,27 @@ internal sealed class QuoteAgentService(
 
         state.Order = prototypeStore.CreateOrder(customerId, state.FormalQuote.QuoteId);
         UpsertArtifact(state, "order", state.Order.OrderNumber, state.Order.Status, null, null);
+        SetArtifactMetadata(state, "order", BuildOrderSummaryMetadata(state));
         return $"Manufacturing order {state.Order.OrderNumber} is created.";
+    }
+
+    private static Dictionary<string, string> BuildOrderSummaryMetadata(QuoteAgentSessionState state)
+    {
+        var quantity = state.Parts.Sum(part => Math.Max(1, part.Quantity));
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["orderId"] = state.Order?.OrderId.ToString("D") ?? string.Empty,
+            ["orderNumber"] = state.Order?.OrderNumber ?? string.Empty,
+            ["quoteId"] = state.FormalQuote?.QuoteId.ToString("D") ?? string.Empty,
+            ["quoteNumber"] = state.FormalQuote?.QuoteNumber ?? string.Empty,
+            ["total"] = state.Estimate?.Total.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
+            ["currency"] = state.Estimate?.Currency ?? string.Empty,
+            ["quantity"] = quantity.ToString(CultureInfo.InvariantCulture),
+            ["leadTimeCode"] = state.LeadTimeCode,
+            ["parts"] = string.Join(", ", state.Parts.Select(part => part.FileName).Take(8)),
+            ["processes"] = string.Join(", ", state.Parts.Select(part => part.ProcessId).Distinct(StringComparer.OrdinalIgnoreCase).Take(8)),
+            ["materials"] = string.Join(", ", state.Parts.Select(part => part.MaterialId).Distinct(StringComparer.OrdinalIgnoreCase).Take(8))
+        };
     }
 
     private string ExecuteStartPayment(QuoteAgentSessionState state, Guid customerId)

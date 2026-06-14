@@ -936,6 +936,15 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var orderResult = await ConfirmActionAsync(client, orderAction.ActionId);
         Assert.NotNull(orderResult.State);
         Assert.Contains(orderResult.State.Gates, gate => gate.Code == "order_created" && gate.Status == "passed");
+        var orderArtifact = Assert.Single(orderResult.State.Artifacts, artifact => artifact.ArtifactType == "order");
+        Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Status));
+        Assert.Equal("25", orderArtifact.Metadata["quantity"]);
+        Assert.Equal("STANDARD", orderArtifact.Metadata["leadTimeCode"]);
+        Assert.Equal("THB", orderArtifact.Metadata["currency"]);
+        Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Metadata["total"]));
+        Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Metadata["quoteNumber"]));
+        Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Metadata["orderId"]));
+        Assert.Contains("fixture.step", orderArtifact.Metadata["parts"], StringComparison.Ordinal);
 
         var checkoutState = await ExecuteToolForStateAsync(
             client,
