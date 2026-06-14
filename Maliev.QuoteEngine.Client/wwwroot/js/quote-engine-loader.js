@@ -267,7 +267,7 @@
       window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
 
-  function beginBoot(isWorkspaceHandoff) {
+  function beginBoot(wantsStory) {
     const stage = document.getElementById("quote-startup");
     storyBeats = stage
       ? Array.prototype.slice.call(stage.querySelectorAll(".ms-beat"))
@@ -276,8 +276,12 @@
 
     // Play the full narrative only for Maliev.Web handoffs or the first
     // browser boot. Direct return visits should reach the Studio quickly.
-    const wantsStory = isWorkspaceHandoff;
-    storyMode = wantsStory && !prefersReducedMotion() ? "full" : "quiet";
+    if (!wantsStory) {
+      finishStartupStory();
+      return;
+    }
+
+    storyMode = !prefersReducedMotion() ? "full" : "quiet";
 
     if (storyMode === "full") {
       minVisibleMs = STORY_BEAT_MS.reduce(function (sum, ms) { return sum + ms; }, 0) + FINALE_HOLD_MS;
