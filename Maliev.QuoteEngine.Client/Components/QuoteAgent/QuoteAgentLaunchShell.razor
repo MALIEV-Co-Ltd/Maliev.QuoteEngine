@@ -14,13 +14,6 @@
             <a class="qe-agent-brand" href="/" aria-label="MALIEV">
                 <img src="/images/logo.svg" alt="MALIEV" />
             </a>
-            <button type="button"
-                    class="qe-agent-collapse"
-                    aria-expanded="@AriaExpanded(!_railCollapsed)"
-                    title="@(_railCollapsed ? Text("Expand sidebar", "ขยายแถบด้านข้าง") : Text("Collapse sidebar", "ยุบแถบด้านข้าง"))"
-                    @onclick="ToggleRail">
-                <MudIcon Icon="@(_railCollapsed ? Icons.Material.Outlined.Menu : Icons.Material.Outlined.MenuOpen)" Size="Size.Small" />
-            </button>
         </div>
 
         <nav class="qe-agent-primary-nav" aria-label="@Text("Quote workspace", "พื้นที่ขอราคา")">
@@ -193,15 +186,24 @@
         </div>
 
         <div class="qe-agent-rail-foot">
-            @if (IsSignedIn)
-            {
-                <span class="qe-agent-account-dot" aria-hidden="true">@Text("M", "ม")</span>
-                <span>@Text("Signed in", "เข้าสู่ระบบแล้ว")</span>
-            }
-            else
-            {
-                <a class="qe-agent-signin-btn" href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
-            }
+            <div class="qe-agent-account-action">
+                @if (IsSignedIn)
+                {
+                    <span class="qe-agent-account-dot" aria-hidden="true">@Text("M", "ม")</span>
+                    <span>@Text("Signed in", "เข้าสู่ระบบแล้ว")</span>
+                }
+                else
+                {
+                    <a class="qe-agent-signin-btn" href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                }
+            </div>
+            <button type="button"
+                    class="qe-agent-collapse"
+                    aria-expanded="@AriaExpanded(!_railCollapsed)"
+                    title="@(_railCollapsed ? Text("Expand sidebar", "ขยายแถบด้านข้าง") : Text("Collapse sidebar", "ยุบแถบด้านข้าง"))"
+                    @onclick="ToggleRail">
+                <MudIcon Icon="@(_railCollapsed ? Icons.Material.Outlined.Menu : Icons.Material.Outlined.MenuOpen)" Size="Size.Small" />
+            </button>
         </div>
     </aside>
 
@@ -211,6 +213,7 @@
                  title="@AgentStatusTooltip"
                  aria-label="@AgentStatusTooltip">
                 <span aria-hidden="true"></span>
+                <strong>@AgentStatusLabel</strong>
                 @if (!string.IsNullOrWhiteSpace(_projectName))
                 {
                     <input class="qe-agent-project-name"
@@ -1062,6 +1065,11 @@
         : _sending || _searchLoading
             ? Text("Agent is working or reconnecting.", "เอเจนต์กำลังทำงานหรือเชื่อมต่อใหม่")
             : Text("Agent connected and ready.", "เอเจนต์เชื่อมต่อและพร้อมใช้งาน");
+    private string AgentStatusLabel => _error is not null
+        ? Text("failed", "ล้มเหลว")
+        : _sending || _searchLoading
+            ? Text("connecting", "กำลังเชื่อมต่อ")
+            : Text("connected", "เชื่อมต่อแล้ว");
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned && !project.IsArchived);
     private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
