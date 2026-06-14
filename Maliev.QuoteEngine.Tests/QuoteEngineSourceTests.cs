@@ -952,9 +952,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("event.preventDefault();", uploadScript, StringComparison.Ordinal);
 
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-shell", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("grid-template-columns: 260px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 380px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("transition: grid-template-columns 260ms cubic-bezier(.2, .8, .2, 1);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes qe-agent-artifact-drawer-enter", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("animation: qe-agent-artifact-drawer-enter 260ms cubic-bezier(.2, .8, .2, 1) both;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("height: 100dvh;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("max-height: min(36dvh, 320px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);

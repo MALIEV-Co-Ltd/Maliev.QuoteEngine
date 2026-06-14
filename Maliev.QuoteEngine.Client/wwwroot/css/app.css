@@ -620,16 +620,16 @@
     --qe-agent-inverse-text: #ffffff;
     --qe-agent-primary: #0a72ef;
     display: grid;
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 260px minmax(0, 1fr) 0;
     min-height: 100dvh;
     height: 100dvh;
     border-top: 0;
     background: var(--qe-agent-bg);
-    transition: grid-template-columns 180ms ease;
+    transition: grid-template-columns 260ms cubic-bezier(.2, .8, .2, 1);
 }
 
 .qe-agent-shell--rail-collapsed {
-    grid-template-columns: 64px minmax(0, 1fr);
+    grid-template-columns: 64px minmax(0, 1fr) 0;
 }
 
 .qe-agent-shell--artifacts-open {
@@ -662,6 +662,8 @@
     background: var(--qe-agent-bg);
     border-right: 0;
     min-width: 0;
+    overflow: hidden;
+    transition: padding 260ms cubic-bezier(.2, .8, .2, 1);
 }
 
 .qe-agent-rail-head {
@@ -689,10 +691,16 @@
 
 .qe-agent-shell--rail-collapsed .qe-agent-brand,
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav span,
-.qe-agent-shell--rail-collapsed .qe-agent-rail-scroll,
 .qe-agent-shell--rail-collapsed .qe-agent-account-action span:not(.qe-agent-account-dot),
 .qe-agent-shell--rail-collapsed .qe-agent-signin-btn {
     display: none;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-rail-scroll {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-8px);
+    visibility: hidden;
 }
 
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav {
@@ -832,6 +840,12 @@
     overflow-y: auto;
     padding: 4px 8px 4px 10px;
     scrollbar-gutter: stable;
+    opacity: 1;
+    transform: translateX(0);
+    transition:
+        opacity 180ms ease,
+        transform 260ms cubic-bezier(.2, .8, .2, 1),
+        visibility 260ms step-end;
 }
 
 .qe-agent-search-panel {
@@ -2490,6 +2504,9 @@
     color: var(--qe-agent-ink);
     border-left: 1px solid var(--qe-agent-line);
     box-shadow: none;
+    opacity: 1;
+    transform: translateX(0);
+    animation: qe-agent-artifact-drawer-enter 260ms cubic-bezier(.2, .8, .2, 1) both;
 }
 
 .qe-agent-artifact-backdrop {
@@ -2868,6 +2885,28 @@
 
     .qe-agent-sketch-canvas {
         min-height: 420px;
+    }
+}
+
+@keyframes qe-agent-artifact-drawer-enter {
+    from {
+        opacity: 0;
+        transform: translateX(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .qe-agent-shell,
+    .qe-agent-rail,
+    .qe-agent-rail-scroll,
+    .qe-agent-artifact-drawer {
+        animation: none !important;
+        transition: none !important;
     }
 }
 /* End quote agent chat-first shell */
