@@ -551,8 +551,10 @@
                 </button>
                 <textarea @ref="_composerTextarea"
                           @bind="_draftMessage"
+                          @bind:event="oninput"
                           rows="1"
                           maxlength="4000"
+                          autofocus
                           placeholder="@Text("Describe your part, paste dimensions, or attach files...", "อธิบายชิ้นงาน วางขนาด หรือแนบไฟล์...")"
                           aria-label="@Text("Message MALIEV Quote Agent", "ข้อความถึงผู้ช่วยขอราคา MALIEV")"></textarea>
                 <button type="button" class="qe-agent-round-btn" title="@Text("Attach CAD or drawing", "แนบ CAD หรือแบบ")" @onclick="RequestUploadAsync">
@@ -839,6 +841,7 @@
             _composerDotNetRef = DotNetObjectReference.Create(this);
             _composerModule = await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-composer.js");
             await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef);
+            await _composerModule.InvokeVoidAsync("focusComposer", _composerTextarea);
         }
 
         if (!_sketchInitPending)
@@ -1502,6 +1505,7 @@
     private void ApplyUseCase(UseCaseOption useCase)
     {
         _draftMessage = Text(useCase.PromptEn, useCase.PromptTh);
+        _ = _composerModule?.InvokeVoidAsync("focusComposer", _composerTextarea);
     }
 
     private sealed class AgentMessageRow(string role, string content, AgentWorkbenchSnapshot? workbench = null)

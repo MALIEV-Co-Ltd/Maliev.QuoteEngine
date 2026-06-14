@@ -2,6 +2,7 @@ window.quoteEngineUploads = (() => {
   const fileMap = new Map();
   const objectUrlMap = new Map();
   const dropzoneMap = new Map();
+  const pasteTargetMap = new Map();
   const clearTimerMap = new Map();
   const pendingUploadIds = new Set();
   const activeUploadIds = new Set();
@@ -158,6 +159,39 @@ window.quoteEngineUploads = (() => {
     });
   }
 
+  function registerPasteTarget(targetId, dotNetRef) {
+    const target = document.getElementById(targetId) || document;
+    if (!target || !dotNetRef) {
+      return;
+    }
+
+    unregisterPasteTarget(targetId);
+
+    const paste = async event => {
+      const files = filesFromClipboard(event.clipboardData);
+      if (files.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      const droppedFiles = files.map(file => storeBrowserFile(file));
+      await dotNetRef.invokeMethodAsync("HandleDroppedFilesAsync", droppedFiles);
+    };
+
+    target.addEventListener("paste", paste);
+    pasteTargetMap.set(targetId, { target, paste });
+  }
+
+  function unregisterPasteTarget(targetId) {
+    const registration = pasteTargetMap.get(targetId);
+    if (!registration) {
+      return;
+    }
+
+    registration.target.removeEventListener("paste", registration.paste);
+    pasteTargetMap.delete(targetId);
+  }
+
   function unregisterDropzone(dropzoneId) {
     const registration = dropzoneMap.get(dropzoneId);
     if (!registration) {
@@ -176,6 +210,61 @@ window.quoteEngineUploads = (() => {
 
   function createClientFileId() {
     return crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : `${Date.now()}${Math.random()}`;
+  }
+
+  function storeBrowserFile(file) {
+    const clientFileId = createClientFileId();
+    const storedFile = normalizeFile(file);
+    fileMap.set(clientFileId, storedFile);
+    pendingUploadIds.add(clientFileId);
+    return {
+      clientFileId,
+      fileName: storedFile.name || createPastedFileName(storedFile.type),
+      contentType: storedFile.type || "application/octet-stream",
+      fileSizeBytes: storedFile.size
+    };
+  }
+
+  function filesFromClipboard(clipboardData) {
+    if (!clipboardData) {
+      return [];
+    }
+
+    const files = Array.from(clipboardData.files || []);
+    if (files.length > 0) {
+      return files.map(ensurePastedFileName);
+    }
+
+    return Array.from(clipboardData.items || [])
+      .filter(item => item.kind === "file")
+      .map(item => item.getAsFile())
+      .filter(Boolean)
+      .map(ensurePastedFileName);
+  }
+
+  function ensurePastedFileName(file) {
+    if (file.name) {
+      return file;
+    }
+
+    const name = createPastedFileName(file.type);
+    try {
+      return new File([file], name, { type: file.type || "application/octet-stream", lastModified: Date.now() });
+    } catch {
+      file.name = name;
+      return file;
+    }
+  }
+
+  function createPastedFileName(contentType) {
+    const normalizedType = (contentType || "").toLowerCase();
+    const extension = normalizedType.includes("png") ? "png"
+      : normalizedType.includes("jpeg") || normalizedType.includes("jpg") ? "jpg"
+      : normalizedType.includes("webp") ? "webp"
+      : normalizedType.includes("pdf") ? "pdf"
+      : "bin";
+    const stamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\..+/, "").replace("T", "-");
+    return `pasted-quote-file-${stamp}.${extension}`;
   }
 
   function uploadBlob(uploadUrl, contentType, file, uploadBody) {
@@ -302,6 +391,8 @@ window.quoteEngineUploads = (() => {
     openFilePicker,
     registerDropzone,
     unregisterDropzone,
+    registerPasteTarget,
+    unregisterPasteTarget,
     uploadFile,
     clearFile,
     scheduleClearFile,

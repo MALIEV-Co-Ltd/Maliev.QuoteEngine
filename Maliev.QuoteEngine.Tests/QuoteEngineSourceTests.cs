@@ -680,8 +680,10 @@ public sealed class QuoteEngineSourceTests
     public void QuoteAgentLaunchShell_has_monochrome_chatgpt_like_contract()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
         var composerScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-agent-composer.js");
+        var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var agentStyles = ExtractSourceBlock(styles, "/* Quote agent chat-first shell */", "/* End quote agent chat-first shell */");
         var primaryNav = ExtractSourceBlock(component, "<nav class=\"qe-agent-primary-nav\"", "</nav>");
@@ -784,8 +786,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("QuoteAgentGateDto", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentProposedActionDto", component, StringComparison.Ordinal);
         Assert.Contains("@ref=\"_composerTextarea\"", component, StringComparison.Ordinal);
+        Assert.Contains("@bind:event=\"oninput\"", component, StringComparison.Ordinal);
+        Assert.Contains("autofocus", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-composer.js", component, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", component, StringComparison.Ordinal);
+        Assert.Contains("focusComposer", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-use-cases\"", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-box", agentStyles, StringComparison.Ordinal);
@@ -840,7 +845,17 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("event.key !== \"Enter\"", composerScript, StringComparison.Ordinal);
         Assert.Contains("event.shiftKey", composerScript, StringComparison.Ordinal);
         Assert.Contains("event.preventDefault();", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea.dispatchEvent(new Event(\"input\", { bubbles: true }))", composerScript, StringComparison.Ordinal);
+        Assert.Contains("window.requestAnimationFrame", composerScript, StringComparison.Ordinal);
+        Assert.Contains("export function focusComposer", composerScript, StringComparison.Ordinal);
+        Assert.Contains("clearTextSelection", composerScript, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", composerScript, StringComparison.Ordinal);
+        Assert.Contains("registerPasteTarget", workspace, StringComparison.Ordinal);
+        Assert.Contains("unregisterPasteTarget", workspace, StringComparison.Ordinal);
+        Assert.Contains("function registerPasteTarget", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("filesFromClipboard", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("HandleDroppedFilesAsync", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("storeBrowserFile", uploadScript, StringComparison.Ordinal);
 
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-shell", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
@@ -865,6 +880,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-order-card footer button:first-child", agentStyles, StringComparison.Ordinal);
         Assert.Contains("-webkit-line-clamp: 2;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("user-select: none;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("top: 50%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--chat .qe-agent-thread", agentStyles, StringComparison.Ordinal);
         Assert.Contains("justify-content: flex-end;", agentStyles, StringComparison.Ordinal);

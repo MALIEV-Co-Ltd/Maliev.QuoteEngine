@@ -296,6 +296,7 @@
         if (firstRender)
         {
             _dotNetRef = DotNetObjectReference.Create(this);
+            await Js.InvokeVoidAsync("quoteEngineUploads.registerPasteTarget", PageDropzoneId, _dotNetRef);
         }
 
         await RegisterActiveDropzoneAsync();
@@ -1534,6 +1535,7 @@
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", CompactDropzoneId);
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", MobileDropzoneId);
             await Js.InvokeVoidAsync("quoteEngineUploads.unregisterDropzone", HeroDropzoneId);
+            await Js.InvokeVoidAsync("quoteEngineUploads.unregisterPasteTarget", PageDropzoneId);
         }
         catch (JSDisconnectedException)
         {

@@ -1319,6 +1319,7 @@
 
 .qe-agent-prompt {
     max-width: 820px;
+    user-select: none;
 }
 
 .qe-agent-prompt h1 {
