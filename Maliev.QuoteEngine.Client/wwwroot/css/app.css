@@ -764,6 +764,9 @@
 
 .qe-agent-global-search {
     display: block;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    min-width: 0;
     min-height: 36px;
     padding: 0;
     margin: 0 0 10px;
@@ -771,7 +774,7 @@
     border-radius: 9px;
     background: transparent;
     color: var(--qe-agent-muted);
-    overflow: hidden;
+    overflow: clip;
 }
 
 .qe-agent-global-search:hover,
@@ -853,13 +856,16 @@
     gap: 8px;
     width: 100%;
     max-width: 100%;
+    inline-size: 100%;
+    max-inline-size: 100%;
     min-width: 0;
     margin: 0 0 18px;
-    padding: 0 0 8px;
+    padding: 0 0 10px;
+    padding-inline: 4px;
     border: 0;
     border-radius: 0;
     background: transparent;
-    overflow: hidden;
+    overflow: clip;
     contain: inline-size;
 }
 
@@ -892,6 +898,7 @@
 
 .qe-agent-search-results button {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2px;
     width: 100%;
     max-width: 100%;

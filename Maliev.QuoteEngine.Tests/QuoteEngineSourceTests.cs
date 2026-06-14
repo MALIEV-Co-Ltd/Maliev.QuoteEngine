@@ -937,6 +937,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("padding: 4px 8px 4px 10px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("contain: inline-size;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("scrollbar-gutter: stable;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("inline-size: 100%;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-inline-size: 100%;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("overflow: clip;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("padding-inline: 4px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-wrap: anywhere;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("display: block;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border: 1px solid var(--qe-agent-line);", agentStyles, StringComparison.Ordinal);
