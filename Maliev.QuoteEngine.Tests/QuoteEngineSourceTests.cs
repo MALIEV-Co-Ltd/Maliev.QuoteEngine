@@ -1753,6 +1753,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("body.quote-skip-ready:not(.quote-ready) .ms-skip", styles, StringComparison.Ordinal);
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .startup-screen", styles, StringComparison.Ordinal);
         Assert.Contains(".ms-beat {", styles, StringComparison.Ordinal);
+        Assert.Contains(".ms-beat--dim {\n    color: currentColor;\n    font-weight: 550;", styles, StringComparison.Ordinal);
+        Assert.Contains(".ms-tagline {\n    font-family: var(--maliev-font-mono);\n    font-size: 11px;\n    letter-spacing: 0.42em;\n    text-transform: uppercase;\n    opacity: 1;\n    color: currentColor;", styles, StringComparison.Ordinal);
         Assert.Contains(".ms-progress-fill {", styles, StringComparison.Ordinal);
         Assert.Contains("width: var(--ms-progress, 0%)", styles, StringComparison.Ordinal);
         Assert.Contains("prefers-reduced-motion", styles, StringComparison.Ordinal);

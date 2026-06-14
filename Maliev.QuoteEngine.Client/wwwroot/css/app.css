@@ -2837,8 +2837,8 @@ body.quote-ready .startup-screen {
 }
 
 .ms-beat--dim {
-    color: var(--ms-soft);
-    font-weight: 500;
+    color: currentColor;
+    font-weight: 550;
 }
 
 .ms-kill {
@@ -2898,7 +2898,8 @@ body.quote-ready .startup-screen {
     font-size: 11px;
     letter-spacing: 0.42em;
     text-transform: uppercase;
-    opacity: 0.5;
+    opacity: 1;
+    color: currentColor;
     padding-left: 0.42em;
 }
 
