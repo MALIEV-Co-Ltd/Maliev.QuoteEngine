@@ -893,6 +893,8 @@
                           rows="1"
                           maxlength="@QuoteAgentTextLimits.MaxMessageCharacters"
                           autofocus
+                          lang="@SpeechRecognitionLanguage"
+                          data-speech-languages="@SpeechRecognitionLanguages"
                           placeholder="@Text("Describe your part, paste dimensions, attach files, or drag and drop files...", "อธิบายชิ้นงาน วางขนาด แนบไฟล์ หรือลากไฟล์มาวาง...")"
                           aria-label="@Text("Message MALIEV Quote Agent", "ข้อความถึงผู้ช่วยขอราคา MALIEV")"></textarea>
                 <div class="qe-agent-dictation-meter" aria-hidden="@(!_dictating)">
@@ -1333,7 +1335,7 @@
     private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
     private const int SearchMinimumCharacters = 3;
     private const int SearchPromptVisibleCharacters = 22;
-    private const int DictationMeterBarCount = 56;
+    private const int DictationMeterBarCount = 48;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1540,6 +1542,14 @@
         : _dictating
             ? Text("Stop dictation", "หยุดพูดตามคำบอก")
             : Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง");
+
+    private string SpeechRecognitionLanguage => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture
+        ? "th-TH"
+        : "en-US";
+
+    private string SpeechRecognitionLanguages => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture
+        ? "th-TH,en-US"
+        : "en-US,th-TH";
 
     private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
     private int ArtifactCount => _artifacts.Count + UploadedParts.Count;

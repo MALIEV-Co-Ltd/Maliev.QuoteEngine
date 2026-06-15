@@ -2867,6 +2867,12 @@
 .qe-agent-composer textarea.qe-agent-dictation-source {
     color: transparent !important;
     caret-color: transparent;
+    -webkit-text-fill-color: transparent;
+}
+
+.qe-agent-composer textarea.qe-agent-dictation-source::selection {
+    color: transparent;
+    background: transparent;
 }
 
 .qe-agent-dictation-preview {
@@ -2899,12 +2905,14 @@
 }
 
 .qe-agent-dictation-preview-live {
+    display: inline;
+    padding-inline: 3px;
+    margin-inline: 2px;
     color: var(--qe-agent-primary);
     background: color-mix(in srgb, var(--qe-agent-primary) 13%, transparent);
     border-radius: 6px;
     box-decoration-break: clone;
     -webkit-box-decoration-break: clone;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--qe-agent-primary) 13%, transparent);
     font-style: italic;
 }
 
@@ -3005,8 +3013,8 @@
 .qe-agent-dictation-meter-bars i {
     --qe-bar-level: 0;
     display: block;
-    flex: 0 0 2px;
-    width: 2px;
+    flex: 0 0 3px;
+    width: 3px;
     height: calc(var(--qe-bar-level) * 28px);
     min-height: 0;
     border-radius: 999px;

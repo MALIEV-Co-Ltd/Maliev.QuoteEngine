@@ -934,7 +934,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_dictationProcessing", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-spinner", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-meter", component, StringComparison.Ordinal);
-        Assert.Contains("DictationMeterBarCount = 56", component, StringComparison.Ordinal);
+        Assert.Contains("DictationMeterBarCount = 48", component, StringComparison.Ordinal);
+        Assert.Contains("lang=\"@SpeechRecognitionLanguage\"", component, StringComparison.Ordinal);
+        Assert.Contains("data-speech-languages=\"@SpeechRecognitionLanguages\"", component, StringComparison.Ordinal);
         Assert.Contains("@ref=\"_dictationButton\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("I did not hear speech", component, StringComparison.Ordinal);
         Assert.Contains("_composerMenuOpen", component, StringComparison.Ordinal);
@@ -1136,6 +1138,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("setTextareaSelection(textarea, session.before.length", composerScript, StringComparison.Ordinal);
         Assert.Contains("resolveSpeechRecognitionLanguage", composerScript, StringComparison.Ordinal);
         Assert.Contains("resolveSpeechRecognitionLanguages", composerScript, StringComparison.Ordinal);
+        Assert.Contains("languages: resolveSpeechRecognitionLanguages(textarea)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea?.dataset?.speechLanguages", composerScript, StringComparison.Ordinal);
         Assert.Contains("startRecognitionSession(session);", composerScript, StringComparison.Ordinal);
         Assert.Contains("void startDictationMeter(session);", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("await startDictationMeter(session)", composerScript, StringComparison.Ordinal);
@@ -1269,6 +1273,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-dictation-preview-caret", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer textarea.qe-agent-dictation-source", agentStyles, StringComparison.Ordinal);
         Assert.Contains("caret-color: transparent;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("-webkit-text-fill-color: transparent;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer textarea.qe-agent-dictation-source::selection", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-meter", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-meter-bars", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-spinner", agentStyles, StringComparison.Ordinal);
@@ -1278,6 +1284,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("inset-inline: 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("justify-content: space-between;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("width: 100%;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 3px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("height 160ms linear", agentStyles, StringComparison.Ordinal);
         Assert.Contains("height: calc(var(--qe-bar-level) * 28px);", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("--qe-bar-amp", agentStyles, StringComparison.Ordinal);

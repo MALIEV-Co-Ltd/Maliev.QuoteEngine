@@ -178,7 +178,9 @@ export function focusComposer(textarea) {
     return;
   }
 
+  clearTextSelection();
   window.requestAnimationFrame(() => {
+    clearTextSelection();
     textarea.focus({ preventScroll: true });
     if (document.activeElement === textarea) {
       moveCaretToEnd(textarea);
@@ -252,7 +254,7 @@ export async function beginDictation(textarea, dictationButton) {
     finalTranscript: "",
     interimTranscript: "",
     languageIndex: 0,
-    languages: resolveSpeechRecognitionLanguages(),
+    languages: resolveSpeechRecognitionLanguages(textarea),
     noSpeechError: false,
     recognition: new SpeechRecognition(),
     restartTimer: 0,
@@ -492,17 +494,23 @@ function setTextareaSelection(textarea, start, end) {
   }
 }
 
-function resolveSpeechRecognitionLanguage() {
-  return resolveSpeechRecognitionLanguages()[0] || "en-US";
+function resolveSpeechRecognitionLanguage(textarea) {
+  return resolveSpeechRecognitionLanguages(textarea)[0] || "en-US";
 }
 
-function resolveSpeechRecognitionLanguages() {
+function resolveSpeechRecognitionLanguages(textarea) {
+  const configuredLanguages = String(textarea?.dataset?.speechLanguages || "")
+    .split(",")
+    .map(language => language.trim())
+    .filter(Boolean);
   const candidates = [
+    ...configuredLanguages,
+    textarea?.lang,
     document.documentElement.lang,
     ...(Array.isArray(navigator.languages) ? navigator.languages : []),
     navigator.language,
-    "en-US",
-    "th-TH"
+    "th-TH",
+    "en-US"
   ];
   const languages = [];
   for (const candidate of candidates) {
