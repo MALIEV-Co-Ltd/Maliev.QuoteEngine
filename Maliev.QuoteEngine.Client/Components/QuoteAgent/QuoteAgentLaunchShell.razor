@@ -3,6 +3,7 @@
 @using System.IO
 @using System.Text.RegularExpressions
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Web
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject PreferenceService Preferences
@@ -921,10 +922,16 @@
             </form>
             @if (_messages.Count == 0)
             {
-                <section class="qe-agent-use-cases" aria-label="@Text("Quote ideas", "ไอเดียขอราคา")">
-                    @foreach (var useCase in VisibleUseCases)
+                <section class="@UseCaseListClass"
+                         aria-label="@Text("Quote ideas", "ไอเดียขอราคา")"
+                         @onwheel="HandleUseCaseWheelAsync"
+                         @onwheel:preventDefault="true">
+                    @for (var i = 0; i < VisibleUseCases.Count; i++)
                     {
-                        <button type="button" @onclick="@(() => ApplyUseCaseAsync(useCase))">
+                        var useCase = VisibleUseCases[i];
+                        <button type="button"
+                                class="@UseCaseCardClass(i)"
+                                @onclick="@(() => ApplyUseCaseAsync(useCase))">
                             <span>@Text(useCase.TitleEn, useCase.TitleTh)</span>
                             <small>@Text(useCase.PromptEn, useCase.PromptTh)</small>
                         </button>
@@ -1230,6 +1237,8 @@
     private readonly List<QuoteAgentSearchResultDto> _customerSearchResults = [];
     private readonly List<ComposerAttachmentPreview> _pendingComposerAttachments = [];
     private const int SearchMinimumCharacters = 3;
+    private const int MaxVisibleUseCases = 5;
+    private const int UseCaseRotationDelayMs = 150;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1266,7 +1275,11 @@
     private DotNetObjectReference<QuoteAgentLaunchShell>? _composerDotNetRef;
     private IJSObjectReference? _composerModule;
     private IJSObjectReference? _sketchModule;
-    private IReadOnlyList<UseCaseOption> _visibleUseCases = [];
+    private IReadOnlyList<UseCaseOption> _useCaseDeck = [];
+    private CancellationTokenSource? _useCaseRotationCts;
+    private int _useCaseStartIndex;
+    private int _useCaseRotationDirection = 1;
+    private bool _useCaseRotating;
     private string SketchCanvasId { get; } = $"qe-agent-sketch-{Guid.NewGuid():N}";
     private string SketchImageInputId { get; } = $"qe-agent-sketch-image-{Guid.NewGuid():N}";
     private static readonly SketchColorOption[] SketchColors =
@@ -1435,7 +1448,8 @@
     private string SummaryDfmState => LatestWorkbench?.DfmIssues.Count > 0
         ? Text($"{LatestWorkbench.DfmIssues.Count} item(s) to review", $"ต้องตรวจสอบ {LatestWorkbench.DfmIssues.Count} รายการ")
         : Text("No current DFM items", "ยังไม่มีรายการ DFM");
-    private IReadOnlyList<UseCaseOption> VisibleUseCases => _visibleUseCases.Count == 0 ? SampleUseCases.Take(3).ToArray() : _visibleUseCases;
+    private IReadOnlyList<UseCaseOption> VisibleUseCases => BuildVisibleUseCases();
+    private string UseCaseListClass => $"qe-agent-use-cases {(_useCaseRotating ? "is-rotating" : string.Empty)} {(_useCaseRotationDirection >= 0 ? "is-forward" : "is-backward")}";
     private string ActiveWorkspaceTitle => _activeWorkspacePage switch
     {
         WorkspacePage.Plugins => Text("Plugins", "ปลั๊กอิน"),
@@ -1480,11 +1494,73 @@
             : "qe-agent-management-section";
     }
 
+    private IReadOnlyList<UseCaseOption> BuildVisibleUseCases()
+    {
+        var deck = _useCaseDeck.Count == 0 ? SampleUseCases : _useCaseDeck;
+        var count = Math.Min(MaxVisibleUseCases, deck.Count);
+        var visible = new UseCaseOption[count];
+
+        for (var i = 0; i < count; i++)
+        {
+            visible[i] = deck[PositiveModulo(_useCaseStartIndex + i, deck.Count)];
+        }
+
+        return visible;
+    }
+
+    private static string UseCaseCardClass(int index)
+    {
+        return FormattableString.Invariant($"qe-agent-use-case-card qe-agent-use-case-card--slot-{index + 1}");
+    }
+
+    private async Task HandleUseCaseWheelAsync(WheelEventArgs args)
+    {
+        var delta = Math.Abs(args.DeltaY) >= Math.Abs(args.DeltaX) ? args.DeltaY : args.DeltaX;
+        var direction = delta < 0 ? -1 : 1;
+
+        await RotateUseCasesAsync(direction);
+    }
+
+    private async Task RotateUseCasesAsync(int direction)
+    {
+        var deck = _useCaseDeck.Count == 0 ? SampleUseCases : _useCaseDeck;
+
+        if (deck.Count <= MaxVisibleUseCases || _useCaseRotating)
+        {
+            return;
+        }
+
+        _useCaseRotationCts?.Cancel();
+        _useCaseRotationCts?.Dispose();
+        _useCaseRotationCts = new CancellationTokenSource();
+        var cancellationToken = _useCaseRotationCts.Token;
+
+        _useCaseRotationDirection = direction < 0 ? -1 : 1;
+        _useCaseRotating = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await Task.Delay(UseCaseRotationDelayMs, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        _useCaseStartIndex = PositiveModulo(_useCaseStartIndex + _useCaseRotationDirection, deck.Count);
+        _useCaseRotating = false;
+    }
+
+    private static int PositiveModulo(int value, int modulus)
+    {
+        return ((value % modulus) + modulus) % modulus;
+    }
+
     protected override void OnInitialized()
     {
-        _visibleUseCases = SampleUseCases
+        _useCaseDeck = SampleUseCases
             .OrderBy(_ => Random.Shared.Next())
-            .Take(3)
             .ToArray();
     }
 
@@ -3281,6 +3357,9 @@
 
     public async ValueTask DisposeAsync()
     {
+        _useCaseRotationCts?.Cancel();
+        _useCaseRotationCts?.Dispose();
+
         if (_composerModule is not null)
         {
             await _composerModule.InvokeVoidAsync("disposeComposer", _composerTextarea);
