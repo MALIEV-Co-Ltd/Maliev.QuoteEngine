@@ -54,6 +54,44 @@ dotnet test Maliev.QuoteEngine.slnx --configuration Release --filter "FullyQuali
 - Add source or endpoint tests for route metadata, session/customer scoping, upload contract changes, and cross-boundary DTO changes.
 - For UI/session changes, run targeted tests and browser verification when the affected flow is runnable locally.
 
+## Goal Execution Workflow
+
+Use the lightest validation lane that still protects the affected behavior. Do not run every gate for every checkpoint.
+
+### Lane 1: UI Polish And Interaction
+
+Use this lane for layout, visual styling, copy, focus handling, panel sizing, composer behavior, and other browser-visible refinements that do not change server contracts.
+
+- Prefer browser-first verification: inspect the target component/CSS, make the scoped edit, run the app when needed, and verify the real interaction with a screenshot or concise browser evidence.
+- Do not add brittle source-string tests for simple visual details such as spacing, border radius, colors, or copy unless the behavior is a durable product contract.
+- Use focused component/source checks only when the UI behavior has non-trivial state, keyboard, upload, or accessibility logic.
+- Batch related visual tweaks into one coherent local commit instead of committing every tiny CSS adjustment.
+
+### Lane 2: Product Behavior And Agent Contracts
+
+Use this lane for chat turns, streaming, attachment payloads, artifact state, project actions, auth handoffs, pricing/lead-time configuration, and agent tool contracts.
+
+- Use TDD or an equivalent failing regression first when changing behavior.
+- Verify the relevant DTO and JSON wire shape across client, BFF, shared contracts, and downstream service clients before editing.
+- Run focused endpoint/source tests for the touched behavior before broader validation.
+- Keep gates visible in code and tests, but do not expose internal completion gates in the customer UI unless explicitly required.
+
+### Lane 3: Security, Money, Orders, And Durable Account Data
+
+Use this lane for authentication, account mutation, ownership checks, formal quotes, order creation, payment initiation, document generation, upload authorization, and connector handoffs.
+
+- Require strict contract tests, ownership/authorization tests, and focused service/client validation.
+- Confirm write actions are confirmation-backed and customer-session scoped.
+- Run build, relevant tests, format verification, and pre-commit review before committing.
+
+### Checkpoint Discipline
+
+- A checkpoint should usually finish in 10-30 minutes. If it cannot, split it into a smaller slice.
+- Each checkpoint should have one explicit outcome, one validation plan, and one local commit when it changes repo files.
+- Avoid re-reading large generated files or broad `rg` output when a targeted search or line-range read will answer the question.
+- Preserve unrelated dirty files from parallel agents. Stage and commit only files that belong to the validated slice.
+- The full `dotnet build`, broad `dotnet test`, and full `dotnet format --verify-no-changes` gates remain required for release-sized or high-risk slices, but they are not mandatory after every small UI polish edit.
+
 ## Banned Libraries And Practices
 
 - AutoMapper is banned; use explicit mapping.
