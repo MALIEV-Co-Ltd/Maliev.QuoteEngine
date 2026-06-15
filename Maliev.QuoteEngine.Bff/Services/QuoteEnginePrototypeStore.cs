@@ -457,7 +457,8 @@ public sealed class QuoteEnginePrototypeStore
         string segment = "Self-service manufacturing",
         string tier = "Customer",
         string ndaStatus = "Active",
-        DateTimeOffset? ndaExpiresAt = null)
+        DateTimeOffset? ndaExpiresAt = null,
+        string vatNumber = "")
     {
         var normalizedEmail = NormalizeEmail(email);
         var profile = new CustomerProfileResponse(
@@ -475,7 +476,8 @@ public sealed class QuoteEnginePrototypeStore
                 : segment,
             Tier: string.IsNullOrWhiteSpace(tier) ? "Customer" : tier,
             NdaStatus: string.IsNullOrWhiteSpace(ndaStatus) ? "Active" : ndaStatus,
-            NdaExpiresAt: ndaExpiresAt ?? DateTimeOffset.UtcNow.AddDays(90));
+            NdaExpiresAt: ndaExpiresAt ?? DateTimeOffset.UtcNow.AddDays(90),
+            VatNumber: string.IsNullOrWhiteSpace(vatNumber) ? string.Empty : vatNumber.Trim());
 
         _customerIdsByEmail[normalizedEmail] = customerId;
         _customers[customerId] = profile;

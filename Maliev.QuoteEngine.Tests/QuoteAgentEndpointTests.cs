@@ -2003,6 +2003,45 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_update_account_profile_requires_confirmation_and_updates_customer_context()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-profile-update@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var pendingState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_account_profile",
+            new Dictionary<string, JsonElement>
+            {
+                ["display_name"] = JsonSerializer.SerializeToElement("Dana Manufacturing", JsonOptions),
+                ["phone"] = JsonSerializer.SerializeToElement("+66 2 555 0200", JsonOptions),
+                ["company_name"] = JsonSerializer.SerializeToElement("Northbridge Robotics", JsonOptions),
+                ["vat_number"] = JsonSerializer.SerializeToElement("TH9876543210", JsonOptions),
+                ["preferred_currency"] = JsonSerializer.SerializeToElement("USD", JsonOptions)
+            });
+
+        var action = Assert.Single(pendingState.ProposedActions);
+        Assert.Equal("account_profile_update", action.ActionType);
+        Assert.True(action.RequiresAuthentication);
+
+        var result = await ConfirmActionAsync(client, action.ActionId);
+        Assert.Contains("profile updated", result.Message, StringComparison.OrdinalIgnoreCase);
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_get_account_context");
+        using var document = JsonDocument.Parse(json);
+        var profile = document.RootElement.GetProperty("profile");
+
+        Assert.Equal("Dana Manufacturing", profile.GetProperty("displayName").GetString());
+        Assert.Equal("agent-profile-update@example.com", profile.GetProperty("email").GetString());
+        Assert.Equal("+66 2 555 0200", profile.GetProperty("phone").GetString());
+        Assert.Equal("Northbridge Robotics", profile.GetProperty("companyName").GetString());
+        Assert.Equal("USD", profile.GetProperty("preferredCurrency").GetString());
+        Assert.Equal("TH9876543210", profile.GetProperty("vatNumber").GetString());
+    }
+
+    [Fact]
     public async Task Agent_message_forwards_current_session_settings_to_chatbot_service()
     {
         var chatbot = new RecordingChatbotServiceClient();

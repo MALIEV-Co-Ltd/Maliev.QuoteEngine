@@ -319,6 +319,13 @@ internal sealed class QuoteAgentService(
             "quote_get_auth_handoff" => BuildAuthHandoff(state, request.Arguments),
             "quote_get_settings" => BuildSettings(state),
             "quote_update_settings" => UpdateSettings(state, request.Arguments),
+            "quote_update_account_profile" => PrepareActionOrGateError(
+                state,
+                "account_profile_update",
+                "Update account profile",
+                BuildAccountProfileUpdateSummary(request.Arguments),
+                requiresAuthentication: true,
+                request.Arguments),
             "quote_get_connectors" => BuildConnectorRegistry(state),
             "quote_get_connector_handoff" => BuildConnectorHandoff(state, request.Arguments),
             "quote_search_customer_data" => SearchCustomerDataOrGateError(state, request.Arguments),
@@ -424,6 +431,7 @@ internal sealed class QuoteAgentService(
             "unpin_project" => ExecuteUnpinProject(state, customerId!.Value, action),
             "archive_project" => ExecuteArchiveProject(state, customerId!.Value, action),
             "achieve_project" => ExecuteAchieveProject(state, customerId!.Value, action),
+            "account_profile_update" => ExecuteAccountProfileUpdate(state, customerId!.Value, action),
             "formal_quote" => ExecuteFormalQuote(state, customerId!.Value, action),
             "quote_approval" => ExecuteQuoteApproval(state),
             "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
@@ -1383,6 +1391,42 @@ internal sealed class QuoteAgentService(
         }
     }
 
+    private static string BuildAccountProfileUpdateSummary(Dictionary<string, JsonElement> arguments)
+    {
+        var fields = new List<string>();
+        AddIfPresent(fields, arguments, "display_name", "display name");
+        AddIfPresent(fields, arguments, "displayName", "display name");
+        AddIfPresent(fields, arguments, "phone", "phone");
+        AddIfPresent(fields, arguments, "company_name", "company");
+        AddIfPresent(fields, arguments, "companyName", "company");
+        AddIfPresent(fields, arguments, "vat_number", "VAT number");
+        AddIfPresent(fields, arguments, "vatNumber", "VAT number");
+        AddIfPresent(fields, arguments, "preferred_language", "language");
+        AddIfPresent(fields, arguments, "preferredLanguage", "language");
+        AddIfPresent(fields, arguments, "preferred_currency", "currency");
+        AddIfPresent(fields, arguments, "preferredCurrency", "currency");
+        AddIfPresent(fields, arguments, "timezone", "timezone");
+
+        return fields.Count == 0
+            ? "Review and confirm the requested account profile update."
+            : $"Review and confirm updates to {string.Join(", ", fields.Distinct(StringComparer.OrdinalIgnoreCase))}.";
+    }
+
+    private static void AddIfPresent(
+        List<string> fields,
+        Dictionary<string, JsonElement> arguments,
+        string key,
+        string label)
+    {
+        if (arguments.TryGetValue(key, out var value) &&
+            value.ValueKind != JsonValueKind.Null &&
+            value.ValueKind != JsonValueKind.Undefined &&
+            !string.IsNullOrWhiteSpace(value.ToString()))
+        {
+            fields.Add(label);
+        }
+    }
+
     private object SearchCustomerDataOrGateError(
         QuoteAgentSessionState state,
         Dictionary<string, JsonElement> arguments)
@@ -1890,6 +1934,52 @@ internal sealed class QuoteAgentService(
             ["isArchived"] = response.IsArchived.ToString().ToLowerInvariant()
         });
         return $"Project {response.ProjectNumber} was marked achieved.";
+    }
+
+    private string ExecuteAccountProfileUpdate(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action)
+    {
+        var current = prototypeStore.GetProfile(customerId);
+        var displayName = ReadString(action.Arguments, "display_name") ??
+            ReadString(action.Arguments, "displayName") ??
+            current.DisplayName;
+        var phone = ReadString(action.Arguments, "phone") ?? current.Phone;
+        var companyName = ReadString(action.Arguments, "company_name") ??
+            ReadString(action.Arguments, "companyName") ??
+            current.CompanyName;
+        var preferredLanguage = NormalizeLanguage(
+            ReadString(action.Arguments, "preferred_language") ??
+            ReadString(action.Arguments, "preferredLanguage"),
+            current.PreferredLanguage);
+        var preferredCurrency = NormalizeCurrency(
+            ReadString(action.Arguments, "preferred_currency") ??
+            ReadString(action.Arguments, "preferredCurrency"),
+            current.PreferredCurrency);
+        var timezone = ReadString(action.Arguments, "timezone") ?? current.Timezone;
+        var vatNumber = ReadString(action.Arguments, "vat_number") ??
+            ReadString(action.Arguments, "vatNumber") ??
+            current.VatNumber;
+
+        var updated = prototypeStore.UpsertCustomer(
+            customerId,
+            current.Email,
+            displayName,
+            phone,
+            companyName,
+            preferredLanguage,
+            current.ProfileImageUrl,
+            preferredCurrency,
+            timezone,
+            string.IsNullOrWhiteSpace(companyName) ? "Self-service manufacturing" : "Company manufacturing",
+            current.Tier,
+            current.NdaStatus,
+            current.NdaExpiresAt,
+            vatNumber);
+        state.CustomerId = customerId;
+
+        return $"Account profile updated for {updated.DisplayName}.";
     }
 
     private string ExecuteFormalQuote(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
