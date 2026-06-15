@@ -2458,42 +2458,18 @@
 .qe-agent-composer-attachments {
     grid-area: attachments;
     display: flex;
-    align-items: center;
-    gap: 8px;
+    align-items: flex-start;
+    gap: 7px;
     min-width: 0;
     width: 100%;
-    padding: 2px 4px 6px;
+    padding: 4px 44px 2px 44px;
     overflow-x: auto;
     overflow-y: hidden;
-    scrollbar-width: thin;
+    scrollbar-width: none;
 }
 
-.qe-agent-composer-attachment-heading {
-    display: grid;
-    gap: 2px;
-    flex: 0 0 auto;
-    min-width: 132px;
-    padding: 0 4px;
-    color: var(--qe-agent-muted);
-    font-size: 11px;
-    line-height: 1.2;
-}
-
-.qe-agent-composer-attachment-heading span {
-    color: var(--qe-agent-ink);
-    font-size: 12px;
-    font-weight: 700;
-}
-
-.qe-agent-composer-attachment-heading small {
-    font-size: 11px;
-    font-weight: 500;
-}
-
-.qe-agent-composer-attachment-notice {
-    max-width: 180px;
-    color: var(--qe-agent-muted);
-    white-space: normal;
+.qe-agent-composer-attachments::-webkit-scrollbar {
+    display: none;
 }
 
 .qe-agent-composer-attachment-card {
@@ -2501,13 +2477,13 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) 24px;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     flex: 0 0 auto;
-    width: min(260px, 72vw);
-    min-height: 58px;
-    padding: 6px 10px 6px 6px;
+    width: min(214px, 66vw);
+    min-height: 52px;
+    padding: 5px 8px 5px 5px;
     border: 1px solid var(--qe-agent-line);
-    border-radius: 16px;
+    border-radius: 12px;
     background: var(--qe-agent-raised);
     color: var(--qe-agent-ink);
     cursor: pointer;
@@ -2517,15 +2493,15 @@
 
 .qe-agent-composer-attachment-card--image {
     grid-template-columns: 1fr;
-    width: 74px;
-    height: 74px;
-    min-height: 74px;
+    width: 72px;
+    height: 72px;
+    min-height: 72px;
     padding: 4px;
-    border-radius: 16px;
+    border-radius: 12px;
 }
 
 .qe-agent-composer-attachment-card--file {
-    width: min(220px, 68vw);
+    width: min(214px, 66vw);
 }
 
 .qe-agent-composer-attachment-main {
@@ -2546,11 +2522,6 @@
     display: block;
     width: 100%;
     height: 100%;
-}
-
-.qe-agent-composer-attachment-card.active {
-    border-color: var(--qe-agent-primary);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--qe-agent-primary) 22%, transparent);
 }
 
 .qe-agent-composer-attachment-preview {
@@ -2617,23 +2588,23 @@
 .qe-agent-composer-attachment-remove {
     display: inline-grid;
     place-items: center;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     padding: 0;
     border: 0;
     border-radius: 999px;
     background: transparent;
-    color: var(--qe-agent-muted);
+    color: var(--qe-agent-ink);
     cursor: pointer;
 }
 
 .qe-agent-composer-attachment-card--image .qe-agent-composer-attachment-remove {
     position: absolute;
-    top: 4px;
-    right: 4px;
+    top: 5px;
+    right: 5px;
     width: 20px;
     height: 20px;
-    background: color-mix(in srgb, var(--qe-agent-bg) 88%, transparent);
+    background: color-mix(in srgb, var(--qe-agent-bg) 92%, transparent);
     color: var(--qe-agent-ink);
     box-shadow: 0 2px 8px rgba(0, 0, 0, .16);
 }

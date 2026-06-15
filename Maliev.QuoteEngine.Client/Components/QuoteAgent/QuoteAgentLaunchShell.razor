@@ -397,36 +397,6 @@
                 <div class="qe-agent-prompt">
                     <h1>@Text("What do you want to make today?", "วันนี้ต้องการผลิตอะไร?")</h1>
                 </div>
-                @if (UploadedParts.Count > 0)
-                {
-                    <section class="qe-agent-upload-strip" aria-label="@Text("Attached quote files", "ไฟล์ที่แนบ")">
-                        <header>
-                            <span>@Text("Attached files", "ไฟล์ที่แนบ")</span>
-                            <strong>@Text("I am reading these into the quote workspace.", "กำลังอ่านไฟล์เหล่านี้เข้าสู่พื้นที่ขอราคา")</strong>
-                        </header>
-                        <div>
-                            @for (var i = 0; i < UploadedParts.Count; i++)
-                            {
-                                var index = i;
-                                var part = UploadedParts[i];
-                                <button type="button"
-                                        class="@($"qe-agent-upload-card {(i == SelectedPartIndex ? "active" : string.Empty)}")"
-                                        @onclick="@(() => SelectUploadedPartAsync(index))">
-                                    @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
-                                    {
-                                        <img src="@part.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
-                                    }
-                                    else
-                                    {
-                                        <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
-                                    }
-                                    <span>@part.FileName</span>
-                                    <small>@UploadedPartStatus(part)</small>
-                                </button>
-                            }
-                        </div>
-                    </section>
-                }
             }
             else
             {
@@ -854,11 +824,6 @@
                          role="status"
                          aria-live="polite"
                          aria-label="@Text("Attached artifacts", "อาร์ติแฟกต์ที่แนบ")">
-                        <div class="qe-agent-composer-attachment-heading">
-                            <span>@Text("Attachments", "ไฟล์แนบ")</span>
-                            <small>@ComposerAttachmentQueueHint()</small>
-                            <small class="qe-agent-composer-attachment-notice">@ComposerAttachmentNotice()</small>
-                        </div>
                         @for (var i = 0; i < Math.Min(_pendingComposerAttachments.Count, 5); i++)
                         {
                             var index = i;
@@ -1290,7 +1255,6 @@
     private bool _dictating;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
-    private string? _composerAttachmentNotice;
     private WorkspacePage _activeWorkspacePage = WorkspacePage.Chat;
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
@@ -1970,7 +1934,6 @@
         }
 
         QueueComposerAttachment(part);
-        SetComposerAttachmentNotice(part);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -1982,7 +1945,6 @@
         }
 
         QueueComposerAttachment(part);
-        SetComposerAttachmentNotice(part);
         await InvokeAsync(StateHasChanged);
         await RefreshPendingAttachmentPreviewAsync();
     }
@@ -2053,52 +2015,12 @@
             : Text("File attached", "แนบไฟล์แล้ว");
     }
 
-    private string ComposerAttachmentQueueHint()
-    {
-        return Text("Will attach to your next message", "จะแนบไปกับข้อความถัดไป");
-    }
-
-    private string ComposerAttachmentNotice()
-    {
-        if (!string.IsNullOrWhiteSpace(_composerAttachmentNotice))
-        {
-            return _composerAttachmentNotice;
-        }
-
-        return Text(
-            "Attached to the message preview. Add a note, or press send when ready.",
-            "แนบในตัวอย่างข้อความแล้ว เพิ่มข้อความหรือกดส่งเมื่อพร้อม");
-    }
-
-    private void SetComposerAttachmentNotice(QuotePartViewModel part)
-    {
-        _composerAttachmentNotice = IsUploadBusy(part)
-            ? Text(
-                $"Uploading {part.FileName}. It will stay in this message preview.",
-                $"กำลังอัปโหลด {part.FileName} และจะแสดงในตัวอย่างข้อความนี้")
-            : Text(
-                $"{part.FileName} is attached to the message preview.",
-                $"{part.FileName} แนบในตัวอย่างข้อความแล้ว");
-    }
-
-    private void SetComposerAttachmentNotice(ComposerAttachmentPreview attachment)
-    {
-        _composerAttachmentNotice = attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase)
-            ? Text(
-                $"{attachment.FileName} is attached to the message preview.",
-                $"{attachment.FileName} แนบในตัวอย่างข้อความแล้ว")
-            : Text(
-                $"{attachment.FileName} is attached to the message preview.",
-                $"{attachment.FileName} แนบในตัวอย่างข้อความแล้ว");
-    }
-
     private string ComposerAttachmentCardClass(ComposerAttachmentPreview part, int index)
     {
         var kindClass = IsImageComposerAttachment(part)
             ? "qe-agent-composer-attachment-card--image"
             : "qe-agent-composer-attachment-card--file";
-        var activeClass = index == _pendingComposerAttachments.Count - 1 ? " active" : string.Empty;
-        return $"qe-agent-composer-attachment-card {kindClass}{activeClass}";
+        return $"qe-agent-composer-attachment-card {kindClass}";
     }
 
     private static bool IsImageComposerAttachment(ComposerAttachmentPreview part)
@@ -2384,7 +2306,6 @@
             "Ready");
 
         _pendingComposerAttachments.Add(attachment);
-        SetComposerAttachmentNotice(attachment);
     }
 
     private async Task RefreshPendingAttachmentPreviewAsync()
