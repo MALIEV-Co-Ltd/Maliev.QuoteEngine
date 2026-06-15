@@ -406,7 +406,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
         {
-            Message = "Need 50 of these brackets in 3mm aluminum. Overall 50 mm x 30 mm, 2x Ø6 thru holes, 8 x 16 mm slot, ±0.1 mm, clear anodize. Can you do them by end of month?",
+            Message = "Need 50 of these brackets in 3mm aluminum. Overall 50 mm x 30 mm, 2x Ø6 thru holes, 8 x 16 mm slot, ±0.1 mm, clear anodize. Can you quote a 7 day lead time?",
             Language = "en",
             Attachments =
             [
@@ -458,6 +458,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains("mounting holes", analysis.Metadata["featureHints"], StringComparison.OrdinalIgnoreCase);
         Assert.Contains("slot", analysis.Metadata["featureHints"], StringComparison.OrdinalIgnoreCase);
         Assert.Contains("deadline-sensitive", analysis.Metadata["manufacturingNotes"], StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("STANDARD", analysis.Metadata["leadTime"]);
+        Assert.Equal("7", analysis.Metadata["leadTimeDays"]);
         Assert.Equal("true", analysis.Metadata["geometryRequired"]);
         Assert.Equal("false", analysis.Metadata["usableForFinalPricing"]);
 
@@ -468,6 +470,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Equal("sketch, technical_drawing", summary.RequirementFacts["sourceTypes"]);
         Assert.Equal("50", summary.RequirementFacts["quantity"]);
         Assert.Equal("3 mm", summary.RequirementFacts["thicknessHint"]);
+        Assert.Equal("STANDARD", summary.RequirementFacts["leadTime"]);
+        Assert.Equal("7", summary.RequirementFacts["leadTimeDays"]);
         Assert.Contains("slot", summary.RequirementFacts["featureHints"], StringComparison.OrdinalIgnoreCase);
         Assert.Contains("geometry_required", summary.BlockingGateCodes);
     }

@@ -2391,6 +2391,11 @@ internal sealed class QuoteAgentService(
             ? "unknown"
             : InferTolerance(process, message);
         artifact.Metadata["inferredLeadTime"] = InferLeadTime(message) ?? "STANDARD";
+        var leadTimeDays = InferLeadTimeDays(message);
+        if (leadTimeDays.HasValue)
+        {
+            artifact.Metadata["leadTimeDays"] = leadTimeDays.Value.ToString(CultureInfo.InvariantCulture);
+        }
         artifact.Metadata["needsCadGeometry"] = "true";
         artifact.Metadata["usableForFinalPricing"] = "false";
 
@@ -2465,6 +2470,7 @@ internal sealed class QuoteAgentService(
             "color" or
             "tolerance" or
             "leadTime" or
+            "leadTimeDays" or
             "dimensionHints" or
             "thicknessHint" or
             "featureHints" or
@@ -2493,6 +2499,12 @@ internal sealed class QuoteAgentService(
             ["geometryRequired"] = "true",
             ["usableForFinalPricing"] = "false"
         };
+
+        var leadTimeDays = InferLeadTimeDays(message);
+        if (leadTimeDays.HasValue)
+        {
+            facts["leadTimeDays"] = leadTimeDays.Value.ToString(CultureInfo.InvariantCulture);
+        }
 
         var dimensions = InferDimensionHints(message);
         if (dimensions.Count > 0)
@@ -2665,7 +2677,8 @@ internal sealed class QuoteAgentService(
         IReadOnlyCollection<QuoteAgentAttachmentDto> supplemental)
     {
         var notes = new List<string>();
-        if (message.Contains("end of month", StringComparison.OrdinalIgnoreCase) ||
+        if (InferLeadTimeDays(message).HasValue ||
+            message.Contains("end of month", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("rush", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("urgent", StringComparison.OrdinalIgnoreCase))
         {
@@ -2970,6 +2983,21 @@ internal sealed class QuoteAgentService(
         }
 
         return "STANDARD";
+    }
+
+    private static int? InferLeadTimeDays(string message)
+    {
+        var match = Regex.Match(
+            message,
+            @"\b(?<days>\d{1,3})\s*(?:business\s*)?(?:day|days)\s*(?:lead\s*time|turnaround|delivery)?\b",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!match.Success ||
+            !int.TryParse(match.Groups["days"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var days))
+        {
+            return null;
+        }
+
+        return Math.Clamp(days, 1, 365);
     }
 
     private static string NormalizeAuthIntent(string? intent)
