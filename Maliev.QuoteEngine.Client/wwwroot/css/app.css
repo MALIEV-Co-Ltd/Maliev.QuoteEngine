@@ -2515,6 +2515,8 @@
        and zero-sized, so the resting shadow is unchanged. */
     --qe-dictation-level: 0;
     --qe-dictation-color: var(--qe-agent-primary);
+    --qe-composer-collapsed-height: 58px;
+    --qe-composer-expansion-offset: 0px;
     display: grid;
     position: relative;
     grid-template-columns: 42px minmax(0, 1fr) 0 48px 42px;
@@ -2522,6 +2524,7 @@
     align-items: center;
     gap: 8px;
     width: 100%;
+    margin-top: calc(-1 * var(--qe-composer-expansion-offset));
     min-height: 58px;
     padding: 8px;
     border-radius: 999px;
@@ -2535,6 +2538,7 @@
     transition:
         border-radius 220ms cubic-bezier(.2, .8, .2, 1),
         min-height 220ms cubic-bezier(.2, .8, .2, 1),
+        margin-top 220ms cubic-bezier(.2, .8, .2, 1),
         padding 220ms cubic-bezier(.2, .8, .2, 1),
         box-shadow 220ms ease,
         align-items 220ms ease;
@@ -2546,6 +2550,7 @@
     transition:
         border-radius 220ms cubic-bezier(.2, .8, .2, 1),
         min-height 220ms cubic-bezier(.2, .8, .2, 1),
+        margin-top 220ms cubic-bezier(.2, .8, .2, 1),
         padding 220ms cubic-bezier(.2, .8, .2, 1),
         box-shadow 90ms linear,
         align-items 220ms ease;
@@ -2954,6 +2959,7 @@
     grid-area: meter;
     display: none;
     align-items: center;
+    align-self: center;
     justify-self: stretch;
     min-width: 0;
     height: 30px;
@@ -2965,8 +2971,12 @@
 
 .qe-agent-composer--dictating .qe-agent-dictation-meter,
 .qe-agent-composer--dictation-processing .qe-agent-dictation-meter {
-    display: flex;
     opacity: 1;
+}
+
+.qe-agent-composer--dictating .qe-agent-dictation-meter,
+.qe-agent-composer--dictation-processing .qe-agent-dictation-meter {
+    display: flex;
 }
 
 .qe-agent-dictation-meter-line {
@@ -2986,29 +2996,17 @@
 }
 
 .qe-agent-dictation-meter-bars i {
-    --qe-bar-amp: .42;
+    --qe-bar-level: 0;
     display: block;
     width: 2px;
-    height: calc(5px + (var(--qe-dictation-level) * var(--qe-bar-amp) * 24px));
-    min-height: 5px;
+    height: calc(var(--qe-bar-level) * 28px);
+    min-height: 0;
     border-radius: 999px;
     background: color-mix(in srgb, var(--qe-agent-ink) 78%, var(--qe-dictation-color));
     transform-origin: center;
     transition:
         background-color 90ms linear,
         height 90ms linear;
-}
-
-.qe-agent-dictation-meter-bars i:nth-child(2n) {
-    --qe-bar-amp: .72;
-}
-
-.qe-agent-dictation-meter-bars i:nth-child(3n) {
-    --qe-bar-amp: 1;
-}
-
-.qe-agent-dictation-meter-bars i:nth-child(5n) {
-    --qe-bar-amp: .86;
 }
 
 .qe-agent-composer--dictation-processing .qe-agent-dictation-meter {

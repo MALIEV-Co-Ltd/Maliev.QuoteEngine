@@ -46,14 +46,15 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     }
 
     suppressClick = true;
+    dictationButton?.setPointerCapture?.(event.pointerId);
     await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
     holdTimer = window.setTimeout(async () => {
       holdStarted = true;
-      dictationButton?.setPointerCapture?.(event.pointerId);
     }, 220);
   };
   const pointerUp = async event => {
     window.clearTimeout(holdTimer);
+    dictationButton?.releasePointerCapture?.(event.pointerId);
     if (pressStartedActive) {
       return;
     }
@@ -62,11 +63,11 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
       return;
     }
 
-    dictationButton?.releasePointerCapture?.(event.pointerId);
     await finishDictationFromUserAction(textarea, dotNetRef);
   };
   const pointerCancel = async event => {
     window.clearTimeout(holdTimer);
+    dictationButton?.releasePointerCapture?.(event.pointerId);
     if (pressStartedActive) {
       return;
     }
@@ -75,7 +76,6 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
       return;
     }
 
-    dictationButton?.releasePointerCapture?.(event.pointerId);
     await finishDictationFromUserAction(textarea, dotNetRef);
   };
   const click = async event => {
@@ -104,7 +104,18 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     dictationButtonHandlers.set(textarea, { dictationButton, pointerDown, pointerUp, pointerCancel, click });
   }
 
-  composerHandlers.set(textarea, { keydown, input });
+  const composer = textarea.closest?.(".qe-agent-composer");
+  const resizeObserver = composer && window.ResizeObserver
+    ? new ResizeObserver(() => updateComposerExpansionOffset(textarea))
+    : null;
+  resizeObserver?.observe(composer);
+
+  const mutationObserver = composer
+    ? new MutationObserver(() => updateComposerExpansionOffset(textarea))
+    : null;
+  mutationObserver?.observe(composer, { attributes: true, attributeFilter: ["class"] });
+
+  composerHandlers.set(textarea, { keydown, input, resizeObserver, mutationObserver });
   updateComposerShape(textarea);
   focusComposer(textarea);
 }
@@ -117,6 +128,8 @@ export function disposeComposer(textarea) {
 
   textarea.removeEventListener("keydown", handlers.keydown);
   textarea.removeEventListener("input", handlers.input);
+  handlers.resizeObserver?.disconnect?.();
+  handlers.mutationObserver?.disconnect?.();
   const dictationHandlers = dictationButtonHandlers.get(textarea);
   if (dictationHandlers?.dictationButton) {
     dictationHandlers.dictationButton.removeEventListener("pointerdown", dictationHandlers.pointerDown);
@@ -254,7 +267,7 @@ export async function beginDictation(textarea, dictationButton) {
   session.recognition.interimResults = true;
   session.recognition.maxAlternatives = 1;
   session.recognition.onaudiostart = () => {
-    boostDictationLevel(session, 0.16, "quiet", 450);
+    boostDictationLevel(session, 0, "quiet", 0);
   };
   session.recognition.onsoundstart = () => {
     boostDictationLevel(session, 0.34, "good", 900);
@@ -263,7 +276,7 @@ export async function beginDictation(textarea, dictationButton) {
     boostDictationLevel(session, 0.5, "good", 1200);
   };
   session.recognition.onspeechend = () => {
-    boostDictationLevel(session, 0.18, "quiet", 300);
+    boostDictationLevel(session, 0, "quiet", 0);
   };
   session.recognition.onaudioend = () => {
     boostDictationLevel(session, 0, "quiet", 0);
@@ -596,6 +609,7 @@ async function startDictationMeter(session) {
     session.audioStream = stream;
     session.audioAnalyser = analyser;
     session.audioSource = source;
+    initializeDictationMeterHistory(session);
 
     if (!session.active) {
       stopDictationMeter(session);
@@ -615,18 +629,20 @@ async function startDictationMeter(session) {
       }
 
       const rms = Math.sqrt(sum / samples.length);
-      const noiseFloor = session.noiseFloor ?? 0.012;
-      if (rms < noiseFloor * 1.8) {
+      const noiseFloor = session.noiseFloor ?? 0.018;
+      if (rms < noiseFloor * 1.45) {
         session.noiseFloor = noiseFloor * 0.94 + rms * 0.06;
       }
 
       const activeSignal = Math.max(0, rms - (session.noiseFloor ?? noiseFloor));
-      let level = Math.min(1, activeSignal * 32 + rms * 4);
+      const gate = Math.max(0.008, (session.noiseFloor ?? noiseFloor) * 0.55);
+      let level = activeSignal <= gate ? 0 : Math.min(1, (activeSignal - gate) * 44);
       if (session.speechBoostUntil && Date.now() < session.speechBoostUntil) {
         level = Math.max(level, session.speechBoostLevel || 0);
       }
 
-      const state = level > 0.82 ? "loud" : level < 0.16 ? "quiet" : "good";
+      const state = level > 0.82 ? "loud" : level < 0.08 ? "quiet" : "good";
+      appendDictationMeterLevel(session, level);
       setDictationLevel(button, level, state);
       session.audioFrame = window.requestAnimationFrame(tick);
     };
@@ -634,7 +650,48 @@ async function startDictationMeter(session) {
     tick();
   } catch (error) {
     setDictationLevel(button, 0, "quiet");
+    renderDictationMeterHistory(session?.button, []);
     session.meterUnavailable = error?.name || error?.message || "audio-capture";
+  }
+}
+
+function initializeDictationMeterHistory(session) {
+  const bars = getDictationMeterBars(session?.button);
+  const count = Math.max(1, bars.length || 16);
+  session.volumeHistory = Array(count).fill(0);
+  renderDictationMeterHistory(session.button, session.volumeHistory);
+}
+
+function appendDictationMeterLevel(session, level) {
+  if (!session?.active) {
+    return;
+  }
+
+  const bars = getDictationMeterBars(session.button);
+  const count = Math.max(1, bars.length || session.volumeHistory?.length || 16);
+  if (!Array.isArray(session.volumeHistory) || session.volumeHistory.length !== count) {
+    session.volumeHistory = Array(count).fill(0);
+  }
+
+  session.volumeHistory.push(Math.max(0, Math.min(1, level)));
+  while (session.volumeHistory.length > count) {
+    session.volumeHistory.shift();
+  }
+
+  renderDictationMeterHistory(session.button, session.volumeHistory);
+}
+
+function getDictationMeterBars(button) {
+  const composer = button?.closest?.(".qe-agent-composer");
+  return Array.from(composer?.querySelectorAll?.(".qe-agent-dictation-meter-bars i") || []);
+}
+
+function renderDictationMeterHistory(button, history) {
+  const bars = getDictationMeterBars(button);
+  for (let index = 0; index < bars.length; index += 1) {
+    const value = Math.max(0, Math.min(1, history?.[index] || 0));
+    bars[index].style.setProperty("--qe-bar-level", value.toFixed(2));
+    bars[index].style.opacity = value <= 0.01 ? "0" : (0.35 + value * 0.65).toFixed(2);
   }
 }
 
@@ -679,6 +736,7 @@ function clearDictationLevel(button) {
 
   composer.style.removeProperty("--qe-dictation-level");
   delete composer.dataset.dictationLevel;
+  renderDictationMeterHistory(button, []);
 }
 
 function stopDictationMeter(session) {
@@ -806,6 +864,19 @@ function updateComposerShape(textarea) {
   const value = textarea.value || "";
   const isMultiline = value.includes("\n") || isComposerTextWrapped(textarea, value);
   composer.classList.toggle("qe-agent-composer--multiline", isMultiline);
+  updateComposerExpansionOffset(textarea);
+}
+
+function updateComposerExpansionOffset(textarea) {
+  const composer = textarea.closest?.(".qe-agent-composer");
+  if (!composer) {
+    return;
+  }
+
+  const styles = getComputedStyle(composer);
+  const collapsedHeight = Number.parseFloat(styles.getPropertyValue("--qe-composer-collapsed-height")) || 58;
+  const growth = Math.max(0, composer.getBoundingClientRect().height - collapsedHeight);
+  composer.style.setProperty("--qe-composer-expansion-offset", `${Math.round(growth)}px`);
 }
 
 function wait(milliseconds) {
