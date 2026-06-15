@@ -2860,6 +2860,12 @@ internal sealed class QuoteAgentService(
             return "sla";
         }
 
+        if (message.Contains("sls", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("selective laser sintering", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sls";
+        }
+
         if (message.Contains("3d print", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("fdm", StringComparison.OrdinalIgnoreCase) ||
             message.Contains("nylon", StringComparison.OrdinalIgnoreCase) ||
@@ -2881,6 +2887,13 @@ internal sealed class QuoteAgentService(
         if (process.Equals("sla", StringComparison.OrdinalIgnoreCase))
         {
             return "resin-gray";
+        }
+
+        if (process.Equals("sls", StringComparison.OrdinalIgnoreCase))
+        {
+            return message.Contains("black", StringComparison.OrdinalIgnoreCase)
+                ? "nylon-black"
+                : "nylon-pa12";
         }
 
         if (message.Contains("clear", StringComparison.OrdinalIgnoreCase))
@@ -2905,6 +2918,14 @@ internal sealed class QuoteAgentService(
             return "sla-standard-cure";
         }
 
+        if (process.Equals("sls", StringComparison.OrdinalIgnoreCase))
+        {
+            return message.Contains("dyed", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("black", StringComparison.OrdinalIgnoreCase)
+                    ? "sls-dyed-black"
+                    : "sls-raw";
+        }
+
         return message.Contains("smooth", StringComparison.OrdinalIgnoreCase)
             ? "fdm-vapor-smooth"
             : "fdm-matte";
@@ -2920,7 +2941,17 @@ internal sealed class QuoteAgentService(
                     : "iso-2768-m";
         }
 
-        return process.Equals("sla", StringComparison.OrdinalIgnoreCase) ? "sla-standard" : "fdm-standard";
+        if (process.Equals("sla", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sla-standard";
+        }
+
+        if (process.Equals("sls", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sls-standard";
+        }
+
+        return "fdm-standard";
     }
 
     private static string? InferLeadTime(string message)

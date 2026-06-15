@@ -2257,6 +2257,9 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
         Assert.NotNull(body);
+        var summary = await GetProjectSummaryAsync(client, body.SessionId);
+        Assert.Equal("sls", summary.RequirementFacts["process"]);
+        Assert.Equal("nylon-black", summary.RequirementFacts["material"]);
         Assert.Contains(body.Gates, gate => gate.Code == "customer_authenticated" && gate.Status == "blocked");
         Assert.NotNull(body.AuthHandoff);
         Assert.False(body.AuthHandoff.IsAuthenticated);
