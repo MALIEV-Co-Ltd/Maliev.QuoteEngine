@@ -59,6 +59,31 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_forwards_optional_model_override_to_chatbot_service()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Clean up this dictated sentence.",
+            Language = "en",
+            ModelName = "gemini-2.5-flash-lite"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("gemini-2.5-flash-lite", chatbot.LastSendRequest?.ModelName);
+    }
+
+    [Fact]
     public async Task Agent_message_stream_returns_incremental_events_before_final_state()
     {
         var chatbot = new RecordingChatbotServiceClient();

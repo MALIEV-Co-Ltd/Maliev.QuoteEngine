@@ -744,10 +744,14 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-signin-btn\"", component, StringComparison.Ordinal);
-        Assert.Contains("@Text(\"Sign in\", \"เข้าสู่ระบบ\")", component, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Start pricing\", \"เริ่มดูราคา\")", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Sign in / Sign up", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-signup-btn\"", component, StringComparison.Ordinal);
-        Assert.Contains("href=\"/auth/sign-in?returnUrl=/quotes\"", component, StringComparison.Ordinal);
+        Assert.Contains("OpenAuthDialog(\"sign-in\")", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-auth-modal\"", component, StringComparison.Ordinal);
+        Assert.Contains("ContinueWithGoogle", component, StringComparison.Ordinal);
+        Assert.Contains("forceLoad: true", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"/auth/sign-in?returnUrl=/quotes\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("href=\"/auth/sign-up?returnUrl=/quotes\"", component, StringComparison.Ordinal);
         Assert.Contains("@bind=\"_projectName\"", component, StringComparison.Ordinal);
         Assert.Contains("private string _projectName = string.Empty;", component, StringComparison.Ordinal);
@@ -934,7 +938,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_dictationProcessing", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-spinner", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-meter", component, StringComparison.Ordinal);
-        Assert.Contains("DictationMeterBarCount = 48", component, StringComparison.Ordinal);
+        Assert.Contains("DictationMeterBarCount = 160", component, StringComparison.Ordinal);
+        Assert.Contains("ComposerWrapClass", component, StringComparison.Ordinal);
         Assert.Contains("lang=\"@SpeechRecognitionLanguage\"", component, StringComparison.Ordinal);
         Assert.Contains("data-speech-languages=\"@SpeechRecognitionLanguages\"", component, StringComparison.Ordinal);
         Assert.Contains("@ref=\"_dictationButton\"", component, StringComparison.Ordinal);
@@ -1155,16 +1160,22 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("session.recognition.onspeechstart", composerScript, StringComparison.Ordinal);
         Assert.Contains("boostDictationLevel(session, 0.45, \"good\", 1400)", composerScript, StringComparison.Ordinal);
         Assert.Contains("session.speechBoostUntil && Date.now() < session.speechBoostUntil", composerScript, StringComparison.Ordinal);
+        Assert.Contains("export function setComposerText", composerScript, StringComparison.Ordinal);
+        Assert.Contains("InvokeVoidAsync(\"setComposerText\", _composerTextarea, cleaned)", component, StringComparison.Ordinal);
+        Assert.Contains("ModelName = \"gemini-2.5-flash-lite\"", component, StringComparison.Ordinal);
+        Assert.Contains("if (rawSpeech)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("createDictationSpan(finalizing ? \"qe-agent-dictation-preview-final\" : \"qe-agent-dictation-preview-live\", rawSpeech)", composerScript, StringComparison.Ordinal);
         Assert.Contains("analyser.smoothingTimeConstant = 0.72", composerScript, StringComparison.Ordinal);
         Assert.Contains("session.noiseFloor", composerScript, StringComparison.Ordinal);
         Assert.Contains("const gate = Math.max(0.008, (session.noiseFloor ?? noiseFloor) * 0.55);", composerScript, StringComparison.Ordinal);
         Assert.Contains("let level = activeSignal <= gate ? 0 : Math.min(1, (activeSignal - gate) * 44);", composerScript, StringComparison.Ordinal);
         Assert.Contains("initializeDictationMeterHistory(session);", composerScript, StringComparison.Ordinal);
         Assert.Contains("session.smoothedMeterLevel = smoothedLevel;", composerScript, StringComparison.Ordinal);
-        Assert.Contains("now - session.lastVolumeHistoryAt >= 85", composerScript, StringComparison.Ordinal);
+        Assert.Contains("now - session.lastVolumeHistoryAt >= 86", composerScript, StringComparison.Ordinal);
         Assert.Contains("appendDictationMeterLevel(session, smoothedLevel);", composerScript, StringComparison.Ordinal);
         Assert.Contains("function renderDictationMeterHistory", composerScript, StringComparison.Ordinal);
         Assert.Contains("bars[index].style.setProperty(\"--qe-bar-level\"", composerScript, StringComparison.Ordinal);
+        Assert.Contains("bars[index].style.opacity = \"0\";", composerScript, StringComparison.Ordinal);
         Assert.Contains("renderDictationMeterHistory(button, []);", composerScript, StringComparison.Ordinal);
         Assert.Contains("setDictationLevel(button, level, state)", composerScript, StringComparison.Ordinal);
         Assert.Contains("button?.closest?.(\".qe-agent-composer\")", composerScript, StringComparison.Ordinal);
@@ -1284,9 +1295,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("inset-inline: 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("justify-content: space-between;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("width: 100%;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("flex: 0 0 3px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("height 160ms linear", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("height: calc(var(--qe-bar-level) * 28px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 1px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("width: 1px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("min-height: 0;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 0;", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("transition: height", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("height: calc(var(--qe-bar-level) * 24px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap--dictation-active", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("--qe-bar-amp", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer[data-dictation-level]", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer[data-dictation-level=\"quiet\"]", agentStyles, StringComparison.Ordinal);
@@ -1325,6 +1340,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-empty-projects", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-rail-foot .qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-auth-modal", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-auth-dialog", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-color: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("background: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("color: #ffffff !important;", agentStyles, StringComparison.Ordinal);
@@ -1381,6 +1398,21 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Legacy_auth_pages_redirect_into_make_studio_auth_dialog()
+    {
+        var signIn = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignIn.razor");
+        var signUp = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignUp.razor");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+
+        Assert.Contains("Navigation.NavigateTo(\"/quotes?auth=sign-in\", replace: true);", signIn, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/quotes?auth=sign-up\", replace: true);", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("auth-shell", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("auth-shell", signUp, StringComparison.Ordinal);
+        Assert.Contains("[SupplyParameterFromQuery(Name = \"auth\")]", workspace, StringComparison.Ordinal);
+        Assert.Contains("InitialAuthMode=\"@AuthMode\"", workspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteUploadJs_does_not_steal_sketchboard_clipboard_images()
     {
         var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
@@ -1410,7 +1442,7 @@ public sealed class QuoteEngineSourceTests
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
-        var threadBlock = ExtractSourceBlock(component, "<div class=\"qe-agent-thread\"", "<section class=\"qe-agent-composer-wrap\"");
+        var threadBlock = ExtractSourceBlock(component, "<div class=\"qe-agent-thread\"", "<section class=\"@ComposerWrapClass\"");
         var artifactDrawerBlock = ExtractSourceBlock(component, "qe-agent-artifact-drawer", "</aside>");
         var confirmBlock = ExtractSourceBlock(component, "private async Task ConfirmActionAsync", "public Task ApplyAgentStateAsync");
 

@@ -37,6 +37,10 @@ public sealed class QuoteAgentMessageRequest
     [RegularExpression("^(en|th)?$", ErrorMessage = "Language must be 'en' or 'th'.")]
     public string? Language { get; set; }
 
+    /// <summary>Gets or sets an optional model override for narrow utility turns.</summary>
+    [StringLength(80)]
+    public string? ModelName { get; set; }
+
     /// <summary>Gets or sets optional browser-visible customer context.</summary>
     [StringLength(QuoteAgentTextLimits.MaxCustomerContextCharacters)]
     public string? CustomerContext { get; set; }

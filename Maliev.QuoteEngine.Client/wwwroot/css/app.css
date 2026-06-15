@@ -2510,6 +2510,10 @@
     transform: none;
 }
 
+.qe-agent-main--empty .qe-agent-composer-wrap--dictation-active {
+    margin-top: 34px;
+}
+
 .qe-agent-main--chat .qe-agent-composer-wrap {
     align-self: end;
 }
@@ -2977,6 +2981,7 @@
     justify-self: stretch;
     min-width: 0;
     height: 30px;
+    gap: 8px;
     overflow: hidden;
     color: var(--qe-agent-muted);
     opacity: 0;
@@ -3018,17 +3023,30 @@
 .qe-agent-dictation-meter-bars i {
     --qe-bar-level: 0;
     display: block;
-    flex: 0 0 3px;
-    width: 3px;
-    height: calc(var(--qe-bar-level) * 28px);
+    flex: 0 0 1px;
+    width: 1px;
+    height: calc(var(--qe-bar-level) * 24px);
     min-height: 0;
-    border-radius: 999px;
+    border-radius: 0;
     background: color-mix(in srgb, var(--qe-agent-ink) 78%, var(--qe-dictation-color));
+    opacity: 0;
     transform-origin: center;
-    transition:
-        background-color 160ms linear,
-        height 160ms linear,
-        opacity 160ms linear;
+}
+
+.qe-agent-dictation-time {
+    flex: 0 0 auto;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--qe-agent-muted);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 160ms linear;
+}
+
+.qe-agent-composer--dictating .qe-agent-dictation-time,
+.qe-agent-composer--dictation-processing .qe-agent-dictation-time {
+    opacity: 1;
 }
 
 .qe-agent-composer--dictation-processing .qe-agent-dictation-meter {
@@ -3036,7 +3054,8 @@
 }
 
 .qe-agent-composer--dictation-processing .qe-agent-dictation-meter-bars i {
-    height: 8px;
+    height: 3px;
+    min-height: 3px;
     background: color-mix(in srgb, var(--qe-agent-muted) 58%, transparent);
 }
 

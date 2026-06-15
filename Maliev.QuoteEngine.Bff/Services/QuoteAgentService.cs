@@ -103,6 +103,7 @@ internal sealed class QuoteAgentService(
             SessionId = chatbotSessionId,
             Content = ComposeAgentMessage(request.Message, request.CustomerContext, state),
             Language = language,
+            ModelName = request.ModelName,
             Attachments = BuildChatbotAttachments(request.Attachments),
             CallbackUrl = BuildThinkingCallbackUrl(state.SessionId),
             QuoteAgentContextToken = token
@@ -154,6 +155,7 @@ internal sealed class QuoteAgentService(
             SessionId = chatbotSessionId,
             Content = ComposeAgentMessage(request.Message, request.CustomerContext, state),
             Language = language,
+            ModelName = request.ModelName,
             Attachments = BuildChatbotAttachments(request.Attachments),
             CallbackUrl = BuildThinkingCallbackUrl(state.SessionId),
             QuoteAgentContextToken = token

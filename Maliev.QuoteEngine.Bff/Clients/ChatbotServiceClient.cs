@@ -211,6 +211,9 @@ public sealed class ChatbotSendMessageRequest
     /// <summary>Gets or sets the requested response language.</summary>
     public string? Language { get; set; }
 
+    /// <summary>Gets or sets an optional model override for utility calls.</summary>
+    public string? ModelName { get; set; }
+
     /// <summary>Gets or sets message attachments.</summary>
     public List<ChatbotMessageAttachmentRequest>? Attachments { get; set; }
 

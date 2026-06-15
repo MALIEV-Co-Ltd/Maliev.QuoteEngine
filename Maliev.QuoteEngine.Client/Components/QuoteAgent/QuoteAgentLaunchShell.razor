@@ -786,7 +786,7 @@
             </section>
         }
 
-        <section class="qe-agent-composer-wrap" aria-label="@Text("Message composer", "กล่องข้อความ")">
+        <section class="@ComposerWrapClass" aria-label="@Text("Message composer", "กล่องข้อความ")">
             <form class="@ComposerClass" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
                 @if (_composerMenuOpen)
                 {
@@ -905,6 +905,7 @@
                             <i></i>
                         }
                     </span>
+                    <span class="qe-agent-dictation-time">@_dictationTimeLabel</span>
                 </div>
                 <button type="button"
                         @ref="_dictationButton"
@@ -1335,7 +1336,7 @@
     private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
     private const int SearchMinimumCharacters = 3;
     private const int SearchPromptVisibleCharacters = 22;
-    private const int DictationMeterBarCount = 48;
+    private const int DictationMeterBarCount = 160;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1363,6 +1364,8 @@
     private bool _customerSearchUnavailable;
     private bool _dictating;
     private bool _dictationProcessing;
+    private string _dictationTimeLabel = string.Empty;
+    private CancellationTokenSource? _dictationTimerCts;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
     private bool _searchPromptHovered;
@@ -1507,6 +1510,7 @@
 
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.DarkMode : Icons.Material.Outlined.LightMode;
     private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(RightPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
+    private string ComposerWrapClass => $"qe-agent-composer-wrap{(_dictating || _dictationProcessing ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
     private string ComposerClass
     {
@@ -1908,6 +1912,7 @@
     public async Task ReportDictationErrorAsync(string? code)
     {
         _dictating = false;
+        StopDictationTimer();
         _dictationProcessing = false;
         _error = DictationErrorMessage(code);
         await InvokeAsync(StateHasChanged);
@@ -1919,6 +1924,7 @@
     {
         _dictating = true;
         _dictationProcessing = false;
+        StartDictationTimer();
         _error = null;
         await InvokeAsync(StateHasChanged);
     }
@@ -1927,6 +1933,7 @@
     public async Task BeginDictationProcessingAsync()
     {
         _dictating = false;
+        StopDictationTimer();
         _dictationProcessing = true;
         await InvokeAsync(StateHasChanged);
     }
@@ -1936,9 +1943,52 @@
     {
         _draftMessage = dictatedText ?? string.Empty;
         _dictating = false;
-        _dictationProcessing = false;
+        StopDictationTimer();
         await InvokeAsync(StateHasChanged);
-        await FocusComposerAsync();
+        await SubmitDictatedMessageAsync();
+    }
+
+    private async Task SubmitDictatedMessageAsync()
+    {
+        var rawText = _draftMessage;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(rawText))
+            {
+                return;
+            }
+
+            var request = new QuoteAgentMessageRequest
+            {
+                SessionId = SessionId == Guid.Empty ? null : SessionId,
+                Message = $"Clean up this dictated speech. Remove filler words, fix punctuation, capitalize correctly, and return ONLY the cleaned text without any prefix, explanation, or commentary: {rawText}",
+                Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en",
+                ModelName = "gemini-2.5-flash-lite"
+            };
+
+            var response = await Api.SendAgentMessageAsync(request);
+            var cleaned = (response.AssistantText ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(cleaned))
+            {
+                return;
+            }
+
+            _draftMessage = cleaned;
+            if (_composerModule is not null)
+            {
+                await _composerModule.InvokeVoidAsync("setComposerText", _composerTextarea, cleaned);
+            }
+        }
+        catch
+        {
+            _draftMessage = rawText;
+        }
+        finally
+        {
+            _dictationProcessing = false;
+            await InvokeAsync(StateHasChanged);
+            await FocusComposerAsync();
+        }
     }
 
     private string DictationErrorMessage(string? code)
@@ -1958,6 +2008,43 @@
                 "Dictation stopped unexpectedly. Please try again.",
                 "การพูดตามคำบอกหยุดทำงานกะทันหัน โปรดลองอีกครั้ง"),
         };
+    }
+
+    private void StartDictationTimer()
+    {
+        StopDictationTimer();
+        _dictationTimeLabel = "0:00";
+        var startTime = DateTime.UtcNow;
+        _dictationTimerCts = new CancellationTokenSource();
+        var token = _dictationTimerCts.Token;
+        _ = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested)
+            {
+                var elapsed = DateTime.UtcNow - startTime;
+                var label = elapsed.TotalMinutes >= 1
+                    ? $"{(int)elapsed.TotalMinutes}:{elapsed.Seconds:D2}"
+                    : $"0:{elapsed.Seconds:D2}";
+                _dictationTimeLabel = label;
+                await InvokeAsync(StateHasChanged);
+                try
+                {
+                    await Task.Delay(1000, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        });
+    }
+
+    private void StopDictationTimer()
+    {
+        _dictationTimerCts?.Cancel();
+        _dictationTimerCts?.Dispose();
+        _dictationTimerCts = null;
+        _dictationTimeLabel = string.Empty;
     }
 
     private async Task BeginDictationAsync()

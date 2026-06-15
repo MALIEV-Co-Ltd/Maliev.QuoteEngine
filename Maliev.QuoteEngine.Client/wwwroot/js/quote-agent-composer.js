@@ -42,6 +42,7 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     holdStarted = false;
     window.clearTimeout(holdTimer);
     if (pressStartedActive) {
+      await finishDictationFromUserAction(textarea, dotNetRef);
       return;
     }
 
@@ -85,7 +86,13 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
       return;
     }
 
-    if (isDictationActive(textarea)) {
+    const session = dictationSessions.get(textarea);
+    if (!session || session.settled) {
+      event.preventDefault();
+      return;
+    }
+
+    if (isDictationActive(textarea) || dictationButton?.classList.contains("active")) {
       await finishDictationFromUserAction(textarea, dotNetRef);
       return;
     }
@@ -220,6 +227,21 @@ export async function typeComposerText(textarea, text) {
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
   updateComposerShape(textarea);
   typingAnimations.delete(textarea);
+}
+
+export function setComposerText(textarea, text) {
+  if (!textarea) {
+    return;
+  }
+
+  typingAnimations.delete(textarea);
+  clearTextSelection();
+  const value = String(text ?? "");
+  textarea.value = value;
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  setTextareaSelection(textarea, value.length, value.length);
+  textarea.focus({ preventScroll: true });
+  updateComposerShape(textarea);
 }
 
 export async function dictateComposerText(textarea) {
@@ -409,8 +431,9 @@ function updateDictationPreview(textarea, session, finalizing) {
   overlay.innerHTML = "";
   overlay.append(createDictationSpan("qe-agent-dictation-preview-before", session.before));
   overlay.append(createDictationSpan("qe-agent-dictation-preview-spacer", speechPrefix));
-  overlay.append(createDictationSpan(finalizing ? "qe-agent-dictation-preview-final" : "qe-agent-dictation-preview-live", rawSpeech));
-  if (!rawSpeech) {
+  if (rawSpeech) {
+    overlay.append(createDictationSpan(finalizing ? "qe-agent-dictation-preview-final" : "qe-agent-dictation-preview-live", rawSpeech));
+  } else {
     overlay.append(createDictationSpan("qe-agent-dictation-preview-caret", ""));
   }
   overlay.append(createDictationSpan("qe-agent-dictation-preview-spacer", speechSuffix));
@@ -631,9 +654,14 @@ async function startDictationMeter(session) {
 
       analyser.getByteTimeDomainData(samples);
       let sum = 0;
+      let peak = 0;
       for (let index = 0; index < samples.length; index += 1) {
         const centered = (samples[index] - 128) / 128;
         sum += centered * centered;
+        const abs = Math.abs(centered);
+        if (abs > peak) {
+          peak = abs;
+        }
       }
 
       const rms = Math.sqrt(sum / samples.length);
@@ -645,17 +673,19 @@ async function startDictationMeter(session) {
       const activeSignal = Math.max(0, rms - (session.noiseFloor ?? noiseFloor));
       const gate = Math.max(0.008, (session.noiseFloor ?? noiseFloor) * 0.55);
       let level = activeSignal <= gate ? 0 : Math.min(1, (activeSignal - gate) * 44);
+      const peakBoost = Math.min(1, peak * 1.6);
+      level = Math.max(level, peakBoost * 0.6);
       if (session.speechBoostUntil && Date.now() < session.speechBoostUntil) {
         level = Math.max(level, session.speechBoostLevel || 0);
       }
 
       const previousLevel = session.smoothedMeterLevel ?? level;
-      const smoothedLevel = previousLevel * 0.72 + level * 0.28;
+      const smoothedLevel = previousLevel * 0.55 + level * 0.45;
       session.smoothedMeterLevel = smoothedLevel;
 
       const state = smoothedLevel > 0.82 ? "loud" : smoothedLevel < 0.08 ? "quiet" : "good";
       const now = Date.now();
-      if (!session.lastVolumeHistoryAt || now - session.lastVolumeHistoryAt >= 85) {
+      if (!session.lastVolumeHistoryAt || now - session.lastVolumeHistoryAt >= 86) {
         appendDictationMeterLevel(session, smoothedLevel);
         session.lastVolumeHistoryAt = now;
       }
@@ -710,7 +740,11 @@ function renderDictationMeterHistory(button, history) {
   for (let index = 0; index < bars.length; index += 1) {
     const value = Math.max(0, Math.min(1, history?.[index] || 0));
     bars[index].style.setProperty("--qe-bar-level", value.toFixed(2));
-    bars[index].style.opacity = value <= 0.01 ? "0" : (0.35 + value * 0.65).toFixed(2);
+    if (value <= 0.01) {
+      bars[index].style.opacity = "0";
+    } else {
+      bars[index].style.opacity = (0.45 + value * 0.55).toFixed(2);
+    }
   }
 }
 
