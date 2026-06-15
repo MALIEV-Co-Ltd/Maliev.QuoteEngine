@@ -1238,6 +1238,7 @@
     private readonly List<ComposerAttachmentPreview> _pendingComposerAttachments = [];
     private const int SearchMinimumCharacters = 3;
     private const int MaxVisibleUseCases = 5;
+    private const int RenderedUseCaseSlots = MaxVisibleUseCases + 1;
     private const int UseCaseRotationDelayMs = 150;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
@@ -1497,7 +1498,7 @@
     private IReadOnlyList<UseCaseOption> BuildVisibleUseCases()
     {
         var deck = _useCaseDeck.Count == 0 ? SampleUseCases : _useCaseDeck;
-        var count = Math.Min(MaxVisibleUseCases, deck.Count);
+        var count = Math.Min(RenderedUseCaseSlots, deck.Count);
         var visible = new UseCaseOption[count];
 
         for (var i = 0; i < count; i++)

@@ -996,6 +996,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SampleUseCases", component, StringComparison.Ordinal);
         Assert.Contains("VisibleUseCases", component, StringComparison.Ordinal);
         Assert.Contains("MaxVisibleUseCases", component, StringComparison.Ordinal);
+        Assert.Contains("RenderedUseCaseSlots", component, StringComparison.Ordinal);
         Assert.Contains("HandleUseCaseWheelAsync", component, StringComparison.Ordinal);
         Assert.Contains("@onwheel=\"HandleUseCaseWheelAsync\"", component, StringComparison.Ordinal);
         Assert.Contains("@onwheel:preventDefault=\"true\"", component, StringComparison.Ordinal);
@@ -1093,15 +1094,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-use-case-visible-count: 3;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("--qe-use-case-breathing-room: 64px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("height: calc((var(--qe-use-case-card-height) * var(--qe-use-case-visible-count)) + (var(--qe-use-case-gap) * (var(--qe-use-case-visible-count) - 1)));", agentStyles, StringComparison.Ordinal);
         Assert.Contains("max-height: min(52dvh, 500px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-y: hidden;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("scrollbar-width: none;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-use-cases::-webkit-scrollbar", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases.is-rotating.is-forward", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("@keyframes qe-agent-use-case-exit-up", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("@keyframes qe-agent-use-case-enter-up", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-use-case-card--slot-5", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes qe-agent-use-case-enter-from-bottom", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-use-case-card--slot-6", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-workflow", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-markdown", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-markdown-table", agentStyles, StringComparison.Ordinal);

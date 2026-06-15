@@ -2842,11 +2842,12 @@
     --qe-use-case-card-height: 92px;
     --qe-use-case-step: 102px;
     --qe-use-case-visible-count: 3;
+    --qe-use-case-breathing-room: 64px;
     display: grid;
     gap: var(--qe-use-case-gap);
     width: min(760px, 100%);
     height: calc((var(--qe-use-case-card-height) * var(--qe-use-case-visible-count)) + (var(--qe-use-case-gap) * (var(--qe-use-case-visible-count) - 1)));
-    margin: 42px auto 0;
+    margin: var(--qe-use-case-breathing-room) auto 0;
     padding: 0;
     overflow: hidden;
     contain: layout paint;
@@ -2886,7 +2887,8 @@
     appearance: none;
     justify-content: start;
     will-change: opacity, transform;
-    animation: qe-agent-use-case-enter-up 190ms cubic-bezier(.2, .8, .2, 1) both;
+    transform: translateY(0);
+    transition: transform 190ms cubic-bezier(.2, .8, .2, 1), opacity 190ms ease;
 }
 
 .qe-agent-use-cases button:hover,
@@ -2918,54 +2920,45 @@
     -webkit-line-clamp: 2;
 }
 
-.qe-agent-use-case-card--slot-4,
-.qe-agent-use-case-card--slot-5 {
+.qe-agent-use-case-card--slot-5,
+.qe-agent-use-case-card--slot-6 {
     display: none !important;
 }
 
 .qe-agent-use-cases.is-rotating.is-forward .qe-agent-use-case-card--slot-1 {
-    animation: qe-agent-use-case-exit-up 150ms cubic-bezier(.32, .72, .2, 1) both;
+    opacity: 0;
+    transform: translateY(calc(var(--qe-use-case-step) * -1));
 }
 
 .qe-agent-use-cases.is-rotating.is-forward .qe-agent-use-case-card:not(.qe-agent-use-case-card--slot-1) {
     transform: translateY(calc(var(--qe-use-case-step) * -1));
-    transition: transform 150ms cubic-bezier(.32, .72, .2, 1), opacity 150ms ease;
 }
 
-.qe-agent-use-cases.is-rotating.is-backward .qe-agent-use-case-card--slot-5,
-.qe-agent-use-cases.is-rotating.is-backward .qe-agent-use-case-card--slot-4,
-.qe-agent-use-cases.is-rotating.is-backward .qe-agent-use-case-card--slot-3 {
-    animation: qe-agent-use-case-exit-down 150ms cubic-bezier(.32, .72, .2, 1) both;
+.qe-agent-use-cases.is-rotating.is-forward .qe-agent-use-case-card--slot-4,
+.qe-agent-use-cases.is-rotating.is-forward .qe-agent-use-case-card--slot-5,
+.qe-agent-use-cases.is-rotating.is-forward .qe-agent-use-case-card--slot-6 {
+    animation: qe-agent-use-case-enter-from-bottom 190ms cubic-bezier(.2, .8, .2, 1) both;
 }
 
-.qe-agent-use-cases.is-rotating.is-backward .qe-agent-use-case-card:not(.qe-agent-use-case-card--slot-5):not(.qe-agent-use-case-card--slot-4):not(.qe-agent-use-case-card--slot-3) {
+.qe-agent-use-cases.is-rotating.is-backward .qe-agent-use-case-card {
     transform: translateY(var(--qe-use-case-step));
-    transition: transform 150ms cubic-bezier(.32, .72, .2, 1), opacity 150ms ease;
 }
 
-@keyframes qe-agent-use-case-enter-up {
+.qe-agent-use-cases.is-rotating.is-backward .qe-agent-use-case-card--slot-3,
+.qe-agent-use-cases.is-rotating.is-backward .qe-agent-use-case-card--slot-4,
+.qe-agent-use-cases.is-rotating.is-backward .qe-agent-use-case-card--slot-5 {
+    opacity: 0;
+}
+
+@keyframes qe-agent-use-case-enter-from-bottom {
     from {
         opacity: 0;
-        transform: translateY(18px);
+        transform: translateY(0);
     }
 
     to {
         opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes qe-agent-use-case-exit-up {
-    to {
-        opacity: 0;
         transform: translateY(calc(var(--qe-use-case-step) * -1));
-    }
-}
-
-@keyframes qe-agent-use-case-exit-down {
-    to {
-        opacity: 0;
-        transform: translateY(var(--qe-use-case-step));
     }
 }
 
@@ -2974,10 +2967,10 @@
         --qe-use-case-visible-count: 2;
         --qe-use-case-card-height: 84px;
         --qe-use-case-step: 94px;
-        margin-top: 28px;
+        --qe-use-case-breathing-room: 40px;
     }
 
-    .qe-agent-use-case-card--slot-3 {
+    .qe-agent-use-case-card--slot-4 {
         display: none !important;
     }
 }
@@ -2990,6 +2983,10 @@
     .qe-agent-use-case-card--slot-4 {
         display: grid !important;
     }
+
+    .qe-agent-use-case-card--slot-5 {
+        display: grid !important;
+    }
 }
 
 @media (min-width: 1440px) and (min-height: 1350px) {
@@ -2998,6 +2995,10 @@
     }
 
     .qe-agent-use-case-card--slot-5 {
+        display: grid !important;
+    }
+
+    .qe-agent-use-case-card--slot-6 {
         display: grid !important;
     }
 }
