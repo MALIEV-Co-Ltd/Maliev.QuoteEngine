@@ -1107,7 +1107,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-use-case-visible-count: 3;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("--qe-use-case-breathing-room: 64px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("--qe-use-case-breathing-room: 72px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("height: calc((var(--qe-use-case-card-height) * var(--qe-use-case-visible-count)) + (var(--qe-use-case-gap) * (var(--qe-use-case-visible-count) - 1)));", agentStyles, StringComparison.Ordinal);
         Assert.Contains("max-height: min(52dvh, 500px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-y: hidden;", agentStyles, StringComparison.Ordinal);
