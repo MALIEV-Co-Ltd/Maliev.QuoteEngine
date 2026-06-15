@@ -768,6 +768,7 @@
     width: 100%;
     min-width: 0;
     padding: 2px 0 0;
+    outline: 0;
 }
 
 .qe-agent-global-search {
@@ -781,9 +782,10 @@
     min-height: 36px;
     padding: 0 10px;
     margin: 0;
-    border: 1px solid var(--qe-agent-line);
+    border: 0;
     border-radius: 9px;
-    background: transparent;
+    outline: 0;
+    background: var(--qe-agent-soft);
     color: var(--qe-agent-muted);
     overflow: clip;
 }
@@ -791,8 +793,7 @@
 .qe-agent-global-search:hover,
 .qe-agent-global-search.active,
 .qe-agent-global-search:focus-within {
-    border-color: color-mix(in srgb, var(--qe-agent-ink) 34%, var(--qe-agent-line));
-    background: transparent;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);
     color: var(--qe-agent-ink);
 }
 
@@ -2411,7 +2412,9 @@
     top: 45%;
     left: 50%;
     width: min(820px, calc(100% - 32px));
+    max-height: calc(55dvh - 24px);
     padding: 0;
+    grid-template-rows: auto minmax(0, 1fr);
     transform: translate(-50%, 0);
 }
 
@@ -2864,6 +2867,19 @@
     padding: 0;
 }
 
+.qe-agent-main--empty .qe-agent-use-cases {
+    max-height: max(180px, calc(55dvh - 150px));
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 2px;
+    scroll-snap-type: y mandatory;
+    scrollbar-width: none;
+}
+
+.qe-agent-main--empty .qe-agent-use-cases::-webkit-scrollbar {
+    display: none;
+}
+
 .qe-agent-use-cases button {
     display: grid;
     grid-template-rows: auto auto;
@@ -2884,7 +2900,8 @@
     text-align: left;
     user-select: none;
     appearance: none;
-	justify-content: start;
+    justify-content: start;
+    scroll-snap-align: start;
 }
 
 .qe-agent-use-cases button:hover,
@@ -2906,11 +2923,14 @@
 }
 
 .qe-agent-use-cases small {
-    display: block;
+    display: -webkit-box;
     margin: 0;
     color: var(--qe-agent-muted);
     font-size: 13px;
     line-height: 1.45;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
 }
 
 .qe-agent-management-page {

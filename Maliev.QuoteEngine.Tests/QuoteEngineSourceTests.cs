@@ -955,6 +955,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-global-search", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-global-search input", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-rail-search", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
         Assert.Contains("SearchCustomerDataAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("GetConnectorHandoffAsync", apiClient, StringComparison.Ordinal);
@@ -1082,6 +1084,13 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("max-height: min(36dvh, 320px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--empty .qe-agent-use-cases", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-height: max(180px, calc(55dvh - 150px));", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("overflow-y: auto;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("scrollbar-width: none;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--empty .qe-agent-use-cases::-webkit-scrollbar", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("scroll-snap-type: y mandatory;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("scroll-snap-align: start;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-workflow", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-markdown", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-markdown-table", agentStyles, StringComparison.Ordinal);
