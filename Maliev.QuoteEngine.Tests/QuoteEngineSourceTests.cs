@@ -938,7 +938,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_dictationProcessing", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-spinner", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-meter", component, StringComparison.Ordinal);
-        Assert.Contains("DictationMeterBarCount = 160", component, StringComparison.Ordinal);
+        Assert.Contains("DictationMeterBarCount = 56", component, StringComparison.Ordinal);
         Assert.Contains("ComposerWrapClass", component, StringComparison.Ordinal);
         Assert.Contains("lang=\"@SpeechRecognitionLanguage\"", component, StringComparison.Ordinal);
         Assert.Contains("data-speech-languages=\"@SpeechRecognitionLanguages\"", component, StringComparison.Ordinal);
@@ -1118,8 +1118,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ensureComposerShapeMirror", composerScript, StringComparison.Ordinal);
         Assert.Contains("mirror.scrollHeight > lineHeight * 1.5", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("value.length > 68", composerScript, StringComparison.Ordinal);
-        Assert.Contains("grid-template-rows: auto 38px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("grid-template-rows: auto auto 38px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-rows: auto 40px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-rows: auto auto 40px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", composerScript, StringComparison.Ordinal);
         Assert.Contains("export async function typeComposerText", composerScript, StringComparison.Ordinal);
         Assert.Contains("export async function dictateComposerText", composerScript, StringComparison.Ordinal);
@@ -1175,7 +1175,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("appendDictationMeterLevel(session, smoothedLevel);", composerScript, StringComparison.Ordinal);
         Assert.Contains("function renderDictationMeterHistory", composerScript, StringComparison.Ordinal);
         Assert.Contains("bars[index].style.setProperty(\"--qe-bar-level\"", composerScript, StringComparison.Ordinal);
-        Assert.Contains("bars[index].style.opacity = \"0\";", composerScript, StringComparison.Ordinal);
+        Assert.Contains("bars[index].style.opacity = (0.24 + value * 0.76).toFixed(2);", composerScript, StringComparison.Ordinal);
         Assert.Contains("renderDictationMeterHistory(button, []);", composerScript, StringComparison.Ordinal);
         Assert.Contains("setDictationLevel(button, level, state)", composerScript, StringComparison.Ordinal);
         Assert.Contains("button?.closest?.(\".qe-agent-composer\")", composerScript, StringComparison.Ordinal);
@@ -1261,18 +1261,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-composer--has-attachments", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-composer--dictating", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-composer--dictation-processing", component, StringComparison.Ordinal);
-        Assert.Contains("grid-template-areas: \"add text meter dictate send\";", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("\"add tools dictate send\";", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer.qe-agent-composer--has-attachments", agentStyles, StringComparison.Ordinal);
         Assert.Contains("align-items: start;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("padding: 10px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("--qe-composer-collapsed-height: 58px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("--qe-composer-collapsed-height: 104px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-composer-expansion-offset: 0px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("margin-top: calc(-1 * var(--qe-composer-expansion-offset));", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer .qe-agent-round-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer.qe-agent-composer--multiline", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("border-radius: 28px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("\"text text text text text\"", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("\"add meter meter dictate send\"", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 24px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("\"text text text text\"", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("\"add tools dictate send\"", agentStyles, StringComparison.Ordinal);
         Assert.Contains("max-height: 132px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("left: 8px;", ExtractSourceBlock(agentStyles, ".qe-agent-add-menu", ".qe-agent-add-menu button"), StringComparison.Ordinal);
         Assert.Contains(".qe-agent-send-spinner", agentStyles, StringComparison.Ordinal);
@@ -1295,12 +1295,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("inset-inline: 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("justify-content: space-between;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("width: 100%;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("flex: 0 0 1px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("width: 1px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("min-height: 0;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("border-radius: 0;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 2.5px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("width: 2.5px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("min-height: 4px;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("transition: height", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("height: calc(var(--qe-bar-level) * 24px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("height: calc(4px + var(--qe-bar-level) * 20px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap--dictation-active", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("--qe-bar-amp", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer[data-dictation-level]", agentStyles, StringComparison.Ordinal);
@@ -1709,52 +1708,34 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void Customer_auth_pages_follow_maliev_web_sign_in_pattern()
+    public void Customer_auth_pages_redirect_into_make_studio_account_modal()
     {
         var signIn = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignIn.razor");
         var signUp = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignUp.razor");
-        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
 
-        Assert.Contains("class=\"auth-shell\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-title\"", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("class=\"auth-title-logo\"", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("<img class=\"auth-title-logo\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-google\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("href=\"@GoogleHref\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("private string GoogleHref =>", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("ExchangeGoogleAsync", signIn, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-email-entry-form", signIn, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-credential-form", signIn, StringComparison.Ordinal);
-        Assert.Contains("@onsubmit=\"ContinueWithEmail\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("@onclick=\"BackToEmailStep\"", signIn, StringComparison.Ordinal);
-        Assert.Contains("PasswordRequirementClass", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("class=\"auth-email-panel\"", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("Use email instead", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("<span class=\"eyebrow\">Customer account</span>", signIn, StringComparison.Ordinal);
-        Assert.DoesNotContain("<div class=\"auth-divider\">or use email</div>", signIn, StringComparison.Ordinal);
+        // The dedicated auth routes no longer render their own sign-in surface; they
+        // bounce into the Make Studio workspace, which hosts the in-app account modal.
+        Assert.Contains("@page \"/auth/sign-in\"", signIn, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/quotes?auth=sign-in\"", signIn, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"auth-shell\"", signIn, StringComparison.Ordinal);
 
-        Assert.Contains("class=\"auth-shell\"", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("class=\"auth-title-logo\"", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("<img class=\"auth-title-logo\"", signUp, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-google\"", signUp, StringComparison.Ordinal);
-        Assert.Contains("href=\"@GoogleHref\"", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("ExchangeGoogleAsync", signUp, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-email-entry-form", signUp, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-credential-form", signUp, StringComparison.Ordinal);
-        Assert.Contains("@Text(\"Verify email address\", \"ยืนยันอีเมล\")", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("class=\"auth-email-panel\"", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("First name", signUp, StringComparison.Ordinal);
-        Assert.DoesNotContain("Company", signUp, StringComparison.Ordinal);
+        Assert.Contains("@page \"/auth/sign-up\"", signUp, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/quotes?auth=sign-up\"", signUp, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"auth-shell\"", signUp, StringComparison.Ordinal);
 
-        Assert.Contains(".auth-shell", styles, StringComparison.Ordinal);
-        Assert.Contains(".auth-title-logo", styles, StringComparison.Ordinal);
-        Assert.Contains(".auth-google", styles, StringComparison.Ordinal);
-        Assert.Contains(".auth-email-entry-form", styles, StringComparison.Ordinal);
-        Assert.Contains(".auth-credential-form", styles, StringComparison.Ordinal);
-        Assert.Contains(".auth-requirement-list", styles, StringComparison.Ordinal);
-        Assert.Contains(".auth-field-help", styles, StringComparison.Ordinal);
-        Assert.Contains("width: min(100%, 640px);", styles, StringComparison.Ordinal);
-        Assert.Contains("max-width: 640px;", styles, StringComparison.Ordinal);
+        // Identity stays centralized in the MALIEV account: the modal shows the real
+        // multicolor Google mark, hands every method off to the secure account page,
+        // and never collects a password inside Make Studio.
+        Assert.Contains("class=\"qe-agent-auth-modal\"", shell, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-auth-google\"", shell, StringComparison.Ordinal);
+        Assert.Contains("fill=\"#4285F4\"", shell, StringComparison.Ordinal);
+        Assert.Contains("ContinueWithGoogle", shell, StringComparison.Ordinal);
+        Assert.Contains("private void NavigateToMalievAccount()", shell, StringComparison.Ordinal);
+        Assert.Contains("\"/auth/sign-in\"", shell, StringComparison.Ordinal);
+        Assert.Contains("\"/auth/sign-up\"", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("type=\"password\"", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("SubmitEmailAuth", shell, StringComparison.Ordinal);
     }
 
     [Fact]

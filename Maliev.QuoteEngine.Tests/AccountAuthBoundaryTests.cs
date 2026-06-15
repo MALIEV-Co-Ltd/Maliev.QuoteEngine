@@ -1,5 +1,10 @@
 using System.Net;
+using System.Security.Claims;
+using Maliev.QuoteEngine.Bff.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Hosting;
+using NSubstitute;
 
 namespace Maliev.QuoteEngine.Tests;
 
@@ -20,5 +25,26 @@ public sealed class AccountAuthBoundaryTests(QuoteEngineWebApplicationFactory fa
         var response = await client.GetAsync(path);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public void Customer_session_resolver_rejects_unauthenticated_customer_claims()
+    {
+        var customerId = Guid.Parse("81b29779-d78c-4d5b-bef2-21f315dafa70");
+        var identity = new ClaimsIdentity([new Claim("customer_id", customerId.ToString("D"))]);
+        var accessor = new HttpContextAccessor
+        {
+            HttpContext = new DefaultHttpContext
+            {
+                User = new ClaimsPrincipal(identity)
+            }
+        };
+        var environment = Substitute.For<IHostEnvironment>();
+        var resolver = new CustomerSessionResolver(accessor, new QuoteEnginePrototypeStore(), environment);
+
+        var resolved = resolver.TryResolveCustomerId(out var resolvedCustomerId);
+
+        Assert.False(resolved);
+        Assert.Equal(Guid.Empty, resolvedCustomerId);
     }
 }

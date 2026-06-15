@@ -51,6 +51,7 @@
                                    IsSignedIn="@IsSignedIn"
                                    IsDemoMode="@IsDemoMode"
                                    ShowLaunchAccountCard="@ShowLaunchAccountCard"
+                                   InitialAuthMode="@AuthMode"
                                    Culture="@Culture"
                                    UploadedParts="@_parts"
                                    SelectedPartIndex="@_selectedPartIndex"
@@ -142,6 +143,9 @@
 
     [SupplyParameterFromQuery(Name = "projectId")]
     public Guid? ProjectId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "auth")]
+    public string? AuthMode { get; set; }
 
     private string? BillingCompanyName => string.IsNullOrWhiteSpace(_profile?.CompanyName) ? null : _profile.CompanyName;
     private string? BillingVatNumber => string.IsNullOrWhiteSpace(_profile?.VatNumber) ? null : _profile.VatNumber;

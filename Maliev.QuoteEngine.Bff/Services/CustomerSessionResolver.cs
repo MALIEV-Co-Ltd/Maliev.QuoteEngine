@@ -29,6 +29,12 @@ public sealed class CustomerSessionResolver(
     public bool TryResolveCustomerId(out Guid customerId)
     {
         var user = httpContextAccessor.HttpContext?.User;
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            customerId = Guid.Empty;
+            return false;
+        }
+
         var rawCustomerId = user?.FindFirstValue("customer_id")
             ?? user?.FindFirstValue("customerId")
             ?? user?.FindFirstValue(ClaimTypes.NameIdentifier);

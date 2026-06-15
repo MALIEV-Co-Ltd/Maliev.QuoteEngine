@@ -112,7 +112,10 @@
                 }
                 else
                 {
-                    <a class="qe-agent-signin-btn" href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                    <button type="button" class="qe-agent-signin-btn" @onclick='@(() => OpenAuthDialog("sign-in"))'>
+                        <span>@Text("Start pricing", "เริ่มดูราคา")</span>
+                        <small>@Text("Sign in or create account", "เข้าสู่ระบบหรือสมัคร")</small>
+                    </button>
                 }
             </div>
             <button type="button"
@@ -240,7 +243,7 @@
                         <section class="qe-agent-management-empty">
                             <strong>@Text("Sign in to view projects", "เข้าสู่ระบบเพื่อดูโปรเจกต์")</strong>
                             <p>@Text("Your projects, files, quotes, and orders are kept in your MALIEV account.", "โปรเจกต์ ไฟล์ ใบเสนอราคา และคำสั่งซื้อจะอยู่ในบัญชี MALIEV ของคุณ")</p>
-                            <a href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                            <button type="button" @onclick='@(() => OpenAuthDialog("sign-in"))'>@Text("Sign in", "เข้าสู่ระบบ")</button>
                         </section>
                     }
                     else if (!_projects.Any(project => !project.IsArchived))
@@ -389,11 +392,11 @@
                                 <span>@Text("Theme", "ธีม")</span>
                                 <strong>@(IsDarkMode ? Text("Dark", "มืด") : Text("Light", "สว่าง"))</strong>
                             </button>
-                            <a href="/auth/sign-in?returnUrl=/quotes">
+                            <button type="button" @onclick='@(() => OpenAuthDialog("sign-in"))'>
                                 <MudIcon Icon="@Icons.Material.Outlined.ManageAccounts" Size="Size.Small" />
                                 <span>@Text("Account", "บัญชี")</span>
                                 <strong>@Text("Manage sign in", "จัดการการเข้าสู่ระบบ")</strong>
-                            </a>
+                            </button>
                         </div>
                     </section>
                 }
@@ -745,7 +748,7 @@
                         </div>
                         @if (action.RequiresAuthentication && !IsSignedIn)
                         {
-                            <a href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in to continue", "เข้าสู่ระบบเพื่อทำต่อ")</a>
+                            <button type="button" @onclick='@(() => OpenAuthDialog("sign-in"))'>@Text("Sign in to continue", "เข้าสู่ระบบเพื่อทำต่อ")</button>
                         }
                         else
                         {
@@ -771,7 +774,7 @@
                 <div class="qe-agent-auth-methods">
                     @foreach (var method in _authHandoff!.Methods)
                     {
-                        <a href="@method.Url">
+                        <button type="button" @onclick="@(() => OpenAuthMethod(method))">
                             <MudIcon Icon="@AuthMethodIcon(method)" Size="Size.Small" />
                             <span>
                                 <strong>
@@ -780,7 +783,7 @@
                                 </strong>
                                 <small>@AuthMethodDescription(method)</small>
                             </span>
-                        </a>
+                        </button>
                     }
                 </div>
             </section>
@@ -1248,7 +1251,7 @@
                             <p>@action.Summary</p>
                             @if (action.RequiresAuthentication && !IsSignedIn)
                             {
-                                <a href="/auth/sign-in?returnUrl=/quotes">@Text("Sign in", "เข้าสู่ระบบ")</a>
+                                <button type="button" @onclick='@(() => OpenAuthDialog("sign-in"))'>@Text("Sign in", "เข้าสู่ระบบ")</button>
                             }
                             else
                             {
@@ -1326,6 +1329,58 @@
                 aria-label="@Text("Close side panel", "ปิดแผงด้านข้าง")"
                 @onclick="CloseSidePanels"></button>
     }
+
+    @if (_authDialogOpen && !IsSignedIn)
+    {
+        <div class="qe-agent-auth-modal" role="dialog" aria-modal="true" aria-labelledby="qe-agent-auth-title">
+            <button type="button"
+                    class="qe-agent-auth-modal-backdrop"
+                    aria-label="@Text("Close sign in", "ปิดเข้าสู่ระบบ")"
+                    @onclick="CloseAuthDialog"></button>
+            <section class="qe-agent-auth-dialog">
+                <header>
+                    <div>
+                        <span>@Text("MALIEV account", "บัญชี MALIEV")</span>
+                        <h2 id="qe-agent-auth-title">@AuthDialogTitle</h2>
+                    </div>
+                    <button type="button" class="qe-agent-round-btn" @onclick="CloseAuthDialog" title="@Text("Close", "ปิด")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
+                </header>
+                <p>@Text("Keep chatting while your project is private. Your MALIEV account keeps the same sign-in across Make Studio and maliev.com, so passwords are entered only on the secure MALIEV account page.", "แชทต่อได้ขณะโปรเจกต์ยังเป็นส่วนตัว บัญชี MALIEV ใช้การเข้าสู่ระบบเดียวกันทั้ง Make Studio และ maliev.com จึงกรอกรหัสผ่านเฉพาะบนหน้าบัญชี MALIEV ที่ปลอดภัยเท่านั้น")</p>
+
+                <button type="button" class="qe-agent-auth-google" @onclick="ContinueWithGoogle">
+                    <span class="qe-agent-auth-google-mark" aria-hidden="true">
+                        <svg viewBox="0 0 18 18" focusable="false" role="img" aria-hidden="true">
+                            <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.84 2.08-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.87 2.69-6.62z" />
+                            <path fill="#34A853" d="M9 18c2.43 0 4.47-.81 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.33-1.58-5.04-3.71H.96v2.33C2.44 15.98 5.48 18 9 18z" />
+                            <path fill="#FBBC05" d="M3.96 10.71A5.41 5.41 0 0 1 3.68 9c0-.59.1-1.17.28-1.71V4.96H.96A8.96 8.96 0 0 0 0 9c0 1.45.35 2.83.96 4.04l3-2.33z" />
+                            <path fill="#EA4335" d="M9 3.58c1.32 0 2.51.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.96l3 2.33C4.67 5.16 6.66 3.58 9 3.58z" />
+                        </svg>
+                    </span>
+                    <span>@Text("Continue with Google", "ดำเนินการต่อด้วย Google")</span>
+                </button>
+                <div class="qe-agent-auth-divider" role="separator">@Text("or", "หรือ")</div>
+                <form class="qe-agent-auth-form" @onsubmit="ContinueWithEmail" @onsubmit:preventDefault>
+                    <label>
+                        <span>@Text("Email address", "อีเมล")</span>
+                        <input type="email"
+                               autocomplete="email"
+                               inputmode="email"
+                               placeholder="name@company.com"
+                               @bind="_authEmail"
+                               @bind:event="oninput" />
+                    </label>
+                    <button type="submit" disabled="@(!AuthEmailLooksValid)">
+                        @Text("Continue with email", "ดำเนินการต่อด้วยอีเมล")
+                    </button>
+                </form>
+                <button type="button" class="qe-agent-auth-switch" @onclick="ToggleAuthDialogMode">
+                    @AuthDialogSwitchLabel
+                </button>
+            </section>
+        </div>
+    }
 </section>
 
 @code {
@@ -1336,7 +1391,7 @@
     private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
     private const int SearchMinimumCharacters = 3;
     private const int SearchPromptVisibleCharacters = 22;
-    private const int DictationMeterBarCount = 160;
+    private const int DictationMeterBarCount = 56;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1366,6 +1421,10 @@
     private bool _dictationProcessing;
     private string _dictationTimeLabel = string.Empty;
     private CancellationTokenSource? _dictationTimerCts;
+    private bool _authDialogOpen;
+    private string _authDialogMode = "sign-in";
+    private string _lastInitialAuthMode = string.Empty;
+    private string _authEmail = string.Empty;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
     private bool _searchPromptHovered;
@@ -1491,6 +1550,9 @@
     public bool ShowLaunchAccountCard { get; set; }
 
     [Parameter]
+    public string? InitialAuthMode { get; set; }
+
+    [Parameter]
     public IReadOnlyList<QuotePartViewModel> UploadedParts { get; set; } = [];
 
     [Parameter]
@@ -1510,8 +1572,8 @@
 
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.DarkMode : Icons.Material.Outlined.LightMode;
     private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(RightPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
-    private string ComposerWrapClass => $"qe-agent-composer-wrap{(_dictating || _dictationProcessing ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
+    private string ComposerWrapClass => $"qe-agent-composer-wrap{(_dictating || _dictationProcessing ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
     private string ComposerClass
     {
         get
@@ -1617,6 +1679,15 @@
         : _sending || _searchLoading
             ? Text("connecting", "กำลังเชื่อมต่อ")
             : Text("connected", "เชื่อมต่อแล้ว");
+    private string AuthReturnUrl => "/quotes";
+    private string AuthDialogTitle => _authDialogMode.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
+        ? Text("Create your MALIEV account", "สร้างบัญชี MALIEV")
+        : Text("Sign in to continue", "เข้าสู่ระบบเพื่อดำเนินการต่อ");
+    private string AuthDialogSwitchLabel => _authDialogMode.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
+        ? Text("Already have an account? Sign in", "มีบัญชีอยู่แล้ว? เข้าสู่ระบบ")
+        : Text("New to MALIEV? Create account", "ยังไม่มีบัญชี? สร้างบัญชี");
+    private bool AuthEmailLooksValid => !string.IsNullOrWhiteSpace(_authEmail) &&
+        Regex.IsMatch(_authEmail.Trim(), "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", RegexOptions.CultureInvariant);
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned && !project.IsArchived);
     private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
@@ -1660,8 +1731,18 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        var requestedAuthMode = NormalizeAuthMode(InitialAuthMode);
+        if (!IsSignedIn &&
+            !string.IsNullOrWhiteSpace(requestedAuthMode) &&
+            !requestedAuthMode.Equals(_lastInitialAuthMode, StringComparison.OrdinalIgnoreCase))
+        {
+            _lastInitialAuthMode = requestedAuthMode;
+            OpenAuthDialog(requestedAuthMode);
+        }
+
         if (IsSignedIn)
         {
+            CloseAuthDialog();
             if (!_projectNavigationLoaded)
             {
                 await LoadProjectNavigationAsync();
@@ -1682,6 +1763,77 @@
 
         _loadedSessionId = SessionId;
         await LoadStateAsync();
+    }
+
+    private static string NormalizeAuthMode(string? mode)
+    {
+        return mode?.Equals("sign-up", StringComparison.OrdinalIgnoreCase) == true ||
+            mode?.Equals("signup", StringComparison.OrdinalIgnoreCase) == true ||
+            mode?.Equals("register", StringComparison.OrdinalIgnoreCase) == true
+            ? "sign-up"
+            : mode?.Equals("sign-in", StringComparison.OrdinalIgnoreCase) == true ||
+                mode?.Equals("signin", StringComparison.OrdinalIgnoreCase) == true ||
+                mode?.Equals("login", StringComparison.OrdinalIgnoreCase) == true
+                    ? "sign-in"
+                    : string.Empty;
+    }
+
+    private void OpenAuthDialog(string mode)
+    {
+        _authDialogMode = NormalizeAuthMode(mode);
+        if (string.IsNullOrWhiteSpace(_authDialogMode))
+        {
+            _authDialogMode = "sign-in";
+        }
+
+        _authDialogOpen = true;
+    }
+
+    private void CloseAuthDialog()
+    {
+        _authDialogOpen = false;
+    }
+
+    private void ToggleAuthDialogMode()
+    {
+        _authDialogMode = _authDialogMode.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
+            ? "sign-in"
+            : "sign-up";
+    }
+
+    // Identity is centralized in the MALIEV account (shared sign-in cookie). Make
+    // Studio has no password surface of its own, so every method hands off to the
+    // secure MALIEV account page instead of collecting credentials here.
+    private void ContinueWithEmail()
+    {
+        if (AuthEmailLooksValid)
+        {
+            NavigateToMalievAccount();
+        }
+    }
+
+    private void ContinueWithGoogle()
+    {
+        NavigateToMalievAccount();
+    }
+
+    private void NavigateToMalievAccount()
+    {
+        var authPath = _authDialogMode.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
+            ? "/auth/sign-up"
+            : "/auth/sign-in";
+        Navigation.NavigateTo($"{authPath}?returnUrl={Uri.EscapeDataString(AuthReturnUrl)}", forceLoad: true);
+    }
+
+    private void OpenAuthMethod(QuoteAgentAuthMethodDto method)
+    {
+        if (string.IsNullOrWhiteSpace(method.Url))
+        {
+            OpenAuthDialog("sign-in");
+            return;
+        }
+
+        Navigation.NavigateTo(method.Url, forceLoad: true);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -1912,8 +2064,8 @@
     public async Task ReportDictationErrorAsync(string? code)
     {
         _dictating = false;
-        StopDictationTimer();
         _dictationProcessing = false;
+        StopDictationTimer();
         _error = DictationErrorMessage(code);
         await InvokeAsync(StateHasChanged);
         await FocusComposerAsync();
@@ -1924,8 +2076,8 @@
     {
         _dictating = true;
         _dictationProcessing = false;
-        StartDictationTimer();
         _error = null;
+        StartDictationTimer();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -1933,8 +2085,8 @@
     public async Task BeginDictationProcessingAsync()
     {
         _dictating = false;
-        StopDictationTimer();
         _dictationProcessing = true;
+        StopDictationTimer();
         await InvokeAsync(StateHasChanged);
     }
 
@@ -2102,6 +2254,7 @@
         {
             _dictating = false;
             _dictationProcessing = false;
+            StopDictationTimer();
             await InvokeAsync(StateHasChanged);
             await FocusComposerAsync();
         }
@@ -2136,20 +2289,23 @@
 
     public Task ApplyAgentStateAsync(QuoteAgentStateResponse state)
     {
-        ApplyState(state);
+        // This entry point is driven by file upload/attach registration. We refresh
+        // artifacts and highlights but do NOT auto-open the workbench panel — the
+        // customer asked to keep the workbench closed until they choose to open it.
+        ApplyState(state, suppressPanelAutoOpen: true);
         StateHasChanged();
         return Task.CompletedTask;
     }
 
-    private void ApplyState(QuoteAgentStateResponse state)
+    private void ApplyState(QuoteAgentStateResponse state, bool suppressPanelAutoOpen = false)
     {
         _gates = state.Gates;
         _artifacts = state.Artifacts;
         _proposedActions = state.ProposedActions;
-        _ = ApplyUiDirectivesAsync(state.UiDirectives);
+        _ = ApplyUiDirectivesAsync(state.UiDirectives, suppressPanelAutoOpen);
     }
 
-    private async Task ApplyUiDirectivesAsync(IReadOnlyCollection<QuoteAgentUiDirectiveDto> directives)
+    private async Task ApplyUiDirectivesAsync(IReadOnlyCollection<QuoteAgentUiDirectiveDto> directives, bool suppressPanelAutoOpen = false)
     {
         if (directives.Count == 0)
         {
@@ -2157,7 +2313,14 @@
         }
 
         _uiFocusDirectives = directives.ToList();
-        OpenDirectivePanel(_uiFocusDirectives);
+        // Mid-conversation agent directives may still focus a panel (agent-directed
+        // workbench focus); upload/attach refreshes pass suppressPanelAutoOpen so the
+        // panel never pops open just because files were added.
+        if (!suppressPanelAutoOpen)
+        {
+            OpenDirectivePanel(_uiFocusDirectives);
+        }
+
         SelectDirectiveUploadTarget(_uiFocusDirectives);
         ActivateUiHighlights(_uiFocusDirectives);
         await InvokeAsync(StateHasChanged);

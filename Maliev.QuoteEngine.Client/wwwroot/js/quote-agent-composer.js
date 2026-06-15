@@ -413,7 +413,10 @@ function prepareDictationPreview(textarea, session) {
   clearTextSelection();
   textarea.focus({ preventScroll: true });
   setTextareaSelection(textarea, session.before.length, session.before.length);
-  textarea.classList.add("qe-agent-dictation-source");
+  // The textarea itself is the single visible source of truth during dictation:
+  // the live transcript is written straight into textarea.value below. We do NOT
+  // hide the textarea text and paint a second copy in an overlay — that dual
+  // render is what caused the transcript to double up / mis-align after stopping.
   updateDictationPreview(textarea, session, false);
 }
 
@@ -740,11 +743,9 @@ function renderDictationMeterHistory(button, history) {
   for (let index = 0; index < bars.length; index += 1) {
     const value = Math.max(0, Math.min(1, history?.[index] || 0));
     bars[index].style.setProperty("--qe-bar-level", value.toFixed(2));
-    if (value <= 0.01) {
-      bars[index].style.opacity = "0";
-    } else {
-      bars[index].style.opacity = (0.45 + value * 0.55).toFixed(2);
-    }
+    // Keep a faint resting nub for every bar so the waveform reads as one
+    // continuous field; louder samples ramp the bar up toward full opacity.
+    bars[index].style.opacity = (0.24 + value * 0.76).toFixed(2);
   }
 }
 

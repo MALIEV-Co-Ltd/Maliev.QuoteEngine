@@ -1256,6 +1256,7 @@
 
 .qe-agent-signin-btn {
     display: inline-flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     width: 100%;
@@ -1268,7 +1269,16 @@
     background: var(--qe-agent-primary, #0a72ef);
     color: #ffffff !important;
     font-weight: 600;
+    text-decoration: none;
     box-shadow: 0 8px 20px color-mix(in srgb, var(--qe-agent-primary, #0a72ef) 24%, transparent);
+}
+
+.qe-agent-signin-btn small {
+    display: block;
+    margin-top: 2px;
+    color: color-mix(in srgb, #ffffff 72%, transparent);
+    font-size: 11px;
+    font-weight: 500;
 }
 
 .qe-agent-signin-btn:hover {
@@ -1578,21 +1588,28 @@
     gap: 10px;
 }
 
-.qe-agent-auth-methods a {
+.qe-agent-auth-methods a,
+.qe-agent-auth-methods button {
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr);
     gap: 10px;
     min-width: 0;
+    width: 100%;
     padding: 11px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 10px;
     background: var(--qe-agent-raised);
     color: var(--qe-agent-ink);
+    font: inherit;
+    text-align: left;
     text-decoration: none;
+    cursor: pointer;
 }
 
 .qe-agent-auth-methods a:hover,
-.qe-agent-auth-methods a:focus-visible {
+.qe-agent-auth-methods a:focus-visible,
+.qe-agent-auth-methods button:hover,
+.qe-agent-auth-methods button:focus-visible {
     border-color: color-mix(in srgb, var(--qe-agent-primary) 45%, var(--qe-agent-line));
     background: var(--qe-agent-hover);
 }
@@ -1647,6 +1664,177 @@
     color: var(--qe-agent-muted);
 }
 
+.qe-agent-auth-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+}
+
+.qe-agent-auth-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--qe-agent-bg) 72%, transparent);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    cursor: pointer;
+}
+
+.qe-agent-auth-dialog {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 18px;
+    width: min(460px, calc(100vw - 32px));
+    padding: 24px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 18px;
+    background: var(--qe-agent-bg);
+    color: var(--qe-agent-ink);
+    box-shadow: 0 24px 90px color-mix(in srgb, #000000 22%, transparent);
+}
+
+.qe-agent-auth-dialog header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.qe-agent-auth-dialog header span {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.qe-agent-auth-dialog h2,
+.qe-agent-auth-dialog p {
+    margin: 0;
+}
+
+.qe-agent-auth-dialog h2 {
+    font-size: 28px;
+    font-weight: 650;
+    line-height: 1.1;
+}
+
+.qe-agent-auth-dialog p {
+    color: var(--qe-agent-muted);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.qe-agent-auth-google,
+.qe-agent-auth-form button[type="submit"] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 46px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 12px;
+    background: var(--qe-agent-ink);
+    color: var(--qe-agent-bg);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+}
+
+.qe-agent-auth-google {
+    background: var(--qe-agent-raised);
+    color: var(--qe-agent-ink);
+}
+
+.qe-agent-auth-google:hover,
+.qe-agent-auth-form button[type="submit"]:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--qe-agent-primary) 42%, var(--qe-agent-line));
+}
+
+.qe-agent-auth-form button[type="submit"]:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.qe-agent-auth-google-mark {
+    display: grid;
+    place-items: center;
+    width: 20px;
+    height: 20px;
+}
+
+.qe-agent-auth-google-mark svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+}
+
+.qe-agent-auth-divider {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.qe-agent-auth-divider::before,
+.qe-agent-auth-divider::after {
+    content: "";
+    height: 1px;
+    background: var(--qe-agent-line);
+}
+
+.qe-agent-auth-form {
+    display: grid;
+    gap: 12px;
+}
+
+.qe-agent-auth-form label {
+    display: grid;
+    gap: 7px;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.qe-agent-auth-form input {
+    min-height: 46px;
+    padding: 0 13px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 12px;
+    background: var(--qe-agent-raised);
+    color: var(--qe-agent-ink);
+    font: inherit;
+    font-size: 15px;
+    outline: none;
+    text-transform: none;
+}
+
+.qe-agent-auth-form input:focus {
+    border-color: color-mix(in srgb, var(--qe-agent-primary) 58%, var(--qe-agent-line));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--qe-agent-primary) 16%, transparent);
+}
+
+.qe-agent-auth-switch {
+    justify-self: end;
+    border: 0;
+    background: transparent;
+    color: var(--qe-agent-primary);
+    font: inherit;
+    font-weight: 650;
+    cursor: pointer;
+}
+
 .qe-agent-prompt {
     max-width: 820px;
     user-select: none;
@@ -1688,7 +1876,8 @@
     padding: 0;
     box-shadow: none;
     background: transparent;
-    font-size: 16px;
+    /* Default chat UI text size. */
+    font-size: 14px;
     line-height: 1.55;
 }
 
@@ -1913,7 +2102,8 @@
     background: var(--qe-agent-soft);
     color: var(--qe-agent-ink);
     font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
-    font-size: .9em;
+    /* Default chat code text size. */
+    font-size: 12px;
 }
 
 .qe-agent-markdown pre {
@@ -2524,19 +2714,25 @@
        and zero-sized, so the resting shadow is unchanged. */
     --qe-dictation-level: 0;
     --qe-dictation-color: var(--qe-agent-primary);
-    --qe-composer-collapsed-height: 58px;
+    --qe-composer-collapsed-height: 104px;
     --qe-composer-expansion-offset: 0px;
     display: grid;
     position: relative;
-    grid-template-columns: 42px minmax(0, 1fr) 0 48px 42px;
-    grid-template-areas: "add text meter dictate send";
+    /* Persistent rectangle: the textarea sits on its own top row and a bottom
+       toolbar holds the + button, the quick-action chips (which share the
+       "tools" slot with the dictation waveform), and the mic / send buttons. */
+    grid-template-columns: 42px minmax(0, 1fr) 42px 42px;
+    grid-template-areas:
+        "text text text text"
+        "add tools dictate send";
+    grid-template-rows: auto 40px;
     align-items: center;
-    gap: 8px;
+    gap: 4px 8px;
     width: 100%;
     margin-top: calc(-1 * var(--qe-composer-expansion-offset));
-    min-height: 58px;
-    padding: 8px;
-    border-radius: 999px;
+    min-height: 104px;
+    padding: 10px 12px;
+    border-radius: 24px;
     background: #ffffff;
     box-shadow:
         0 18px 44px rgba(16, 24, 40, .10),
@@ -2579,11 +2775,10 @@
 
 .qe-agent-composer.qe-agent-composer--has-attachments {
     grid-template-areas:
-        "attachments attachments attachments attachments attachments"
-        "add text meter dictate send";
-    align-items: start;
-    padding: 10px;
-    border-radius: 28px;
+        "attachments attachments attachments attachments"
+        "text text text text"
+        "add tools dictate send";
+    grid-template-rows: auto auto 40px;
 }
 
 .qe-agent-add-backdrop {
@@ -2805,50 +3000,31 @@
 
 :root[data-maliev-theme="dark"] .qe-agent-composer {
     background: var(--qe-agent-raised);
-    box-shadow: 0 22px 54px rgba(0, 0, 0, .36);
+    /* Keep the reactive dictation glow layer here too — without it the live
+       audio-level shadow was invisible in dark mode. A higher mix weight makes
+       the glow read against the dark surface. */
+    box-shadow:
+        0 22px 54px rgba(0, 0, 0, .36),
+        0 0 calc(var(--qe-dictation-level) * 72px) calc(var(--qe-dictation-level) * 22px) color-mix(in srgb, var(--qe-dictation-color) calc(var(--qe-dictation-level) * 72%), transparent);
     border-color: var(--qe-agent-line);
 }
 
+/* The composer is a persistent rectangle, so the multiline / dictating states no
+   longer restructure the grid — they only adjust the text row. The quick-action
+   chips and the waveform meter both live in the bottom "tools" slot and swap by
+   visibility (see below), so dictation needs no column change. */
 .qe-agent-composer.qe-agent-composer--multiline {
-    align-items: end;
-    border-radius: 28px;
-    padding: 10px;
-    grid-template-areas:
-        "text text text text text"
-        "add meter meter dictate send";
-    /* Rows size to the text content so the rectangle hugs the message instead of
-       snapping to a fixed tall box at the wrap point. Keeps the pill -> rectangle
-       growth continuous as more lines are typed. */
-    grid-template-rows: auto 38px;
+    grid-template-rows: auto 40px;
 }
 
-.qe-agent-composer.qe-agent-composer--has-attachments.qe-agent-composer--multiline {
-    grid-template-areas:
-        "attachments attachments attachments attachments attachments"
-        "text text text text text"
-        "add meter meter dictate send";
-    grid-template-rows: auto auto 38px;
-}
-
-.qe-agent-composer.qe-agent-composer--dictating,
-.qe-agent-composer.qe-agent-composer--dictation-processing {
-    align-items: end;
-    border-radius: 28px;
-    padding: 10px;
-    grid-template-columns: 42px minmax(0, 1fr) minmax(160px, 260px) 42px 42px;
-    grid-template-areas:
-        "text text text text text"
-        "add meter meter dictate send";
-    grid-template-rows: auto 38px;
-}
-
+.qe-agent-composer.qe-agent-composer--has-attachments.qe-agent-composer--multiline,
 .qe-agent-composer.qe-agent-composer--has-attachments.qe-agent-composer--dictating,
 .qe-agent-composer.qe-agent-composer--has-attachments.qe-agent-composer--dictation-processing {
     grid-template-areas:
-        "attachments attachments attachments attachments attachments"
-        "text text text text text"
-        "add meter meter dictate send";
-    grid-template-rows: auto auto 38px;
+        "attachments attachments attachments attachments"
+        "text text text text"
+        "add tools dictate send";
+    grid-template-rows: auto auto 40px;
 }
 
 .qe-agent-composer textarea {
@@ -2885,6 +3061,10 @@
 }
 
 .qe-agent-dictation-preview {
+    /* The live transcript now renders directly in the textarea (single visible
+       source). This styled overlay is retained only as inert scaffolding and is
+       never shown, so the textarea and overlay can no longer double up. */
+    display: none;
     grid-area: text;
     align-self: stretch;
     position: relative;
@@ -2894,7 +3074,7 @@
     padding: 8px 4px;
     overflow: hidden;
     color: var(--qe-agent-ink);
-    font-size: 16px;
+    font-size: 14px;
     letter-spacing: 0;
     line-height: 1.5;
     pointer-events: none;
@@ -2973,7 +3153,7 @@
 }
 
 .qe-agent-dictation-meter {
-    grid-area: meter;
+    grid-area: tools;
     display: none;
     position: relative;
     align-items: center;
@@ -3018,26 +3198,38 @@
     width: 100%;
     min-width: 0;
     height: 28px;
+    /* Reserve room on the right so the bars never run underneath the time
+       readout that floats over the waveform's trailing edge. */
+    padding-right: 48px;
 }
 
 .qe-agent-dictation-meter-bars i {
     --qe-bar-level: 0;
     display: block;
-    flex: 0 0 1px;
-    width: 1px;
-    height: calc(var(--qe-bar-level) * 24px);
-    min-height: 0;
-    border-radius: 0;
+    flex: 0 0 2.5px;
+    width: 2.5px;
+    height: calc(4px + var(--qe-bar-level) * 20px);
+    min-height: 4px;
+    border-radius: 999px;
     background: color-mix(in srgb, var(--qe-agent-ink) 78%, var(--qe-dictation-color));
-    opacity: 0;
+    opacity: .24;
     transform-origin: center;
 }
 
 .qe-agent-dictation-time {
-    flex: 0 0 auto;
+    /* Floats over the trailing edge of the waveform with a soft backing chip so
+       it stays legible against the bars; the bars reserve space for it above. */
+    position: absolute;
+    right: 0;
+    top: 50%;
+    z-index: 2;
+    transform: translateY(-50%);
+    padding: 2px 7px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--qe-agent-bg) 78%, transparent);
     font-size: 12px;
-    font-weight: 500;
-    color: var(--qe-agent-muted);
+    font-weight: 600;
+    color: var(--qe-agent-ink);
     font-variant-numeric: tabular-nums;
     pointer-events: none;
     opacity: 0;
@@ -3149,31 +3341,46 @@
 }
 
 .qe-agent-quick-actions {
-    position: absolute;
-    top: calc(100% + 14px);
-    left: 50%;
-    z-index: 2;
+    /* Lives inside the composer's bottom toolbar, immediately right of the +
+       button. Shares the "tools" slot with the waveform meter (which is hidden
+       unless dictating), so the chips never overflow the page during a chat. */
+    grid-area: tools;
+    z-index: 1;
     display: flex;
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 8px;
-    width: max-content;
-    max-width: min(100%, 720px);
+    align-items: center;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    gap: 6px;
     min-width: 0;
-    transform: translateX(-50%);
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+}
+
+.qe-agent-quick-actions::-webkit-scrollbar {
+    display: none;
+}
+
+/* While dictating, the waveform takes over the tools slot. */
+.qe-agent-composer--dictating .qe-agent-quick-actions,
+.qe-agent-composer--dictation-processing .qe-agent-quick-actions {
+    display: none;
 }
 
 .qe-agent-quick-actions button {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    flex: 0 0 auto;
     min-height: 32px;
-    padding: 6px 10px;
+    padding: 5px 11px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 999px;
     background: transparent;
     color: var(--qe-agent-muted);
     cursor: pointer;
+    white-space: nowrap;
     font-size: 13px;
     line-height: 1.2;
 }
