@@ -956,7 +956,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-global-search", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-global-search input", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-rail-search", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("background: transparent !important;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("box-shadow: none;", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
         Assert.Contains("SearchCustomerDataAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("GetConnectorHandoffAsync", apiClient, StringComparison.Ordinal);
@@ -1114,6 +1116,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-composer--has-attachments", component, StringComparison.Ordinal);
         Assert.Contains("grid-template-areas: \"add text dictate send\";", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer.qe-agent-composer--has-attachments", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("align-items: start;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("padding: 10px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer .qe-agent-round-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer.qe-agent-composer--multiline", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-radius: 28px;", agentStyles, StringComparison.Ordinal);
@@ -1272,6 +1276,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("await InvokeAsync(StateHasChanged);", component, StringComparison.Ordinal);
         Assert.Contains("role=\"status\"", component, StringComparison.Ordinal);
         Assert.Contains("aria-live=\"polite\"", component, StringComparison.Ordinal);
+        Assert.Contains("SelectedPartIndex = uploadedPartIndex;", component, StringComparison.Ordinal);
+        Assert.Contains("_artifactPanelOpen = true;", component, StringComparison.Ordinal);
+        Assert.Contains("_summaryPanelOpen = false;", component, StringComparison.Ordinal);
         Assert.DoesNotContain("ComposerAttachmentQueueHint()", component, StringComparison.Ordinal);
         Assert.DoesNotContain("ComposerAttachmentNotice()", component, StringComparison.Ordinal);
         Assert.DoesNotContain("SetComposerAttachmentNotice", component, StringComparison.Ordinal);

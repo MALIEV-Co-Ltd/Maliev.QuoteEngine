@@ -1977,8 +1977,13 @@
 
         if (uploadedPartIndex >= 0)
         {
+            SelectedPartIndex = uploadedPartIndex;
             await SelectUploadedPartAsync(uploadedPartIndex);
         }
+
+        _artifactPanelOpen = true;
+        _summaryPanelOpen = false;
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task RemovePendingComposerAttachmentAsync(int index)

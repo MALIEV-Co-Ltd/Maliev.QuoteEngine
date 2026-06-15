@@ -785,15 +785,17 @@
     border: 0;
     border-radius: 9px;
     outline: 0;
-    background: var(--qe-agent-soft);
+    background: transparent;
     color: var(--qe-agent-muted);
     overflow: clip;
+    box-shadow: none;
 }
 
 .qe-agent-global-search:hover,
 .qe-agent-global-search.active,
 .qe-agent-global-search:focus-within {
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);
+    background: transparent;
+    box-shadow: none;
     color: var(--qe-agent-ink);
 }
 
@@ -804,10 +806,12 @@
     padding: 0;
     border: 0;
     outline: 0;
-    background: transparent;
+    background: transparent !important;
     color: var(--qe-agent-ink);
     font: inherit;
     font-size: 14px;
+    appearance: none;
+    box-shadow: none !important;
 }
 
 .qe-agent-global-search input::placeholder {
@@ -2444,6 +2448,9 @@
     grid-template-areas:
         "attachments attachments attachments attachments"
         "add text dictate send";
+    align-items: start;
+    padding: 10px;
+    border-radius: 28px;
 }
 
 .qe-agent-add-backdrop {
@@ -2462,7 +2469,7 @@
     gap: 7px;
     min-width: 0;
     width: 100%;
-    padding: 4px 44px 2px 44px;
+    padding: 2px 42px 6px 42px;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
