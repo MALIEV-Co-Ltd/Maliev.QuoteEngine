@@ -713,7 +713,7 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("<section class=\"@ShellClass\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-rail\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"@($\"qe-agent-composer {(_sending ? \"is-sending\" : string.Empty)}\")\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"@ComposerClass\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-toggle\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-drawer\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-summary-toggle\"", component, StringComparison.Ordinal);
@@ -1095,6 +1095,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-main--empty .qe-agent-thread {\n    position: absolute;\n    top: 40.5%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap {\n    position: absolute;\n    top: 45%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("user-select: none;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("ComposerClass", component, StringComparison.Ordinal);
+        Assert.Contains("_pendingComposerAttachments.Count > 0", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-composer--has-attachments", component, StringComparison.Ordinal);
+        Assert.Contains("grid-template-areas: \"add text dictate send\";", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer.qe-agent-composer--has-attachments", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer .qe-agent-round-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer.qe-agent-composer--multiline", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-radius: 28px;", agentStyles, StringComparison.Ordinal);

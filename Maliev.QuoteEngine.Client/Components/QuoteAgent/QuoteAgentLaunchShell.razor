@@ -852,7 +852,7 @@
                     </section>
                 }
             }
-            <form class="@($"qe-agent-composer {(_sending ? "is-sending" : string.Empty)}")" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
+            <form class="@ComposerClass" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
                 @if (_pendingComposerAttachments.Count > 0)
                 {
                     <div class="qe-agent-composer-attachments"
@@ -1422,6 +1422,25 @@
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.DarkMode : Icons.Material.Outlined.LightMode;
     private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(RightPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
+    private string ComposerClass
+    {
+        get
+        {
+            var classes = new List<string> { "qe-agent-composer" };
+            if (_sending)
+            {
+                classes.Add("is-sending");
+            }
+
+            if (_pendingComposerAttachments.Count > 0)
+            {
+                classes.Add("qe-agent-composer--has-attachments");
+            }
+
+            return string.Join(" ", classes);
+        }
+    }
+
     private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
     private int ArtifactCount => _artifacts.Count + UploadedParts.Count;
     private QuotePartViewModel SelectedUploadedPart => UploadedParts[Math.Clamp(SelectedPartIndex, 0, Math.Max(UploadedParts.Count - 1, 0))];

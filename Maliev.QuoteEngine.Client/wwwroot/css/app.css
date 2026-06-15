@@ -2412,9 +2412,7 @@
     display: grid;
     position: relative;
     grid-template-columns: 42px minmax(0, 1fr) 48px 42px;
-    grid-template-areas:
-        "attachments attachments attachments attachments"
-        "add text dictate send";
+    grid-template-areas: "add text dictate send";
     align-items: center;
     gap: 8px;
     width: 100%;
@@ -2426,6 +2424,12 @@
     border: 1px solid color-mix(in srgb, var(--qe-agent-line) 80%, #ffffff);
     overflow: visible;
     transition: border-radius 160ms ease, padding 160ms ease, align-items 160ms ease;
+}
+
+.qe-agent-composer.qe-agent-composer--has-attachments {
+    grid-template-areas:
+        "attachments attachments attachments attachments"
+        "add text dictate send";
 }
 
 .qe-agent-add-backdrop {
