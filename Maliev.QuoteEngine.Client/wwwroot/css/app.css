@@ -782,20 +782,21 @@
     min-height: 36px;
     padding: 0 10px;
     margin: 0;
-    border: 0;
-    border-radius: 9px;
+    border: 1px solid color-mix(in srgb, var(--qe-agent-line) 82%, transparent);
+    border-radius: 11px;
     outline: 0;
-    background: transparent;
+    background: var(--qe-agent-raised);
     color: var(--qe-agent-muted);
     overflow: clip;
-    box-shadow: none;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
 }
 
 .qe-agent-global-search:hover,
 .qe-agent-global-search.active,
 .qe-agent-global-search:focus-within {
-    background: transparent;
-    box-shadow: none;
+    background: var(--qe-agent-raised);
+    border-color: color-mix(in srgb, var(--qe-agent-primary) 58%, var(--qe-agent-line));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--qe-agent-primary) 12%, transparent);
     color: var(--qe-agent-ink);
 }
 
@@ -815,8 +816,8 @@
 }
 
 .qe-agent-global-search input::placeholder {
-    color: var(--qe-agent-ink);
-    opacity: .9;
+    color: var(--qe-agent-muted);
+    opacity: 1;
 }
 
 .qe-agent-primary-nav a,
@@ -2446,7 +2447,12 @@
     box-shadow: 0 18px 44px rgba(16, 24, 40, .10), 0 2px 8px rgba(16, 24, 40, .06);
     border: 1px solid color-mix(in srgb, var(--qe-agent-line) 80%, #ffffff);
     overflow: visible;
-    transition: border-radius 160ms ease, padding 160ms ease, align-items 160ms ease;
+    transition:
+        border-radius 220ms cubic-bezier(.2, .8, .2, 1),
+        min-height 220ms cubic-bezier(.2, .8, .2, 1),
+        padding 220ms cubic-bezier(.2, .8, .2, 1),
+        box-shadow 220ms ease,
+        align-items 220ms ease;
 }
 
 .qe-agent-composer.qe-agent-composer--has-attachments {
@@ -2685,6 +2691,7 @@
     align-items: end;
     border-radius: 28px;
     padding: 10px;
+    min-height: 136px;
     grid-template-areas:
         "text text text text"
         "add controls dictate send";
@@ -2697,6 +2704,7 @@
         "text text text text"
         "add controls dictate send";
     grid-template-rows: auto minmax(72px, auto) 38px;
+    min-height: 188px;
 }
 
 .qe-agent-composer textarea {
@@ -2715,6 +2723,10 @@
     overflow-y: auto;
     font-size: 16px !important;
     line-height: 1.5 !important;
+    transition:
+        min-height 220ms cubic-bezier(.2, .8, .2, 1),
+        max-height 220ms cubic-bezier(.2, .8, .2, 1),
+        padding 220ms cubic-bezier(.2, .8, .2, 1);
 }
 
 .qe-agent-composer textarea.qe-agent-dictation-source {

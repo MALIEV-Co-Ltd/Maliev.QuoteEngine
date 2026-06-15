@@ -842,7 +842,7 @@
                                         {
                                             <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
                                         }
-                                        @if (IsUploadBusy(part))
+                                        @if (IsComposerUploadPending(part))
                                         {
                                             <span class="qe-agent-upload-progress" aria-hidden="true"></span>
                                         }
@@ -2048,7 +2048,7 @@
 
     private string AttachmentStatusLabel(ComposerAttachmentPreview part)
     {
-        if (IsUploadBusy(part))
+        if (IsComposerUploadPending(part))
         {
             return Text("Uploading", "กำลังอัปโหลด");
         }
@@ -2110,7 +2110,16 @@
 
     private static bool IsUploadBusy(ComposerAttachmentPreview part)
     {
-        return part.Status is "Uploading" or "Processing" or "WaitingForUpload";
+        return IsComposerUploadPending(part);
+    }
+
+    private static bool IsComposerUploadPending(ComposerAttachmentPreview part)
+    {
+        return part.Status is "Uploading" or "WaitingForUpload" ||
+            string.IsNullOrWhiteSpace(part.UploadId) &&
+            string.IsNullOrWhiteSpace(part.StoragePath) &&
+            string.IsNullOrWhiteSpace(part.Url) &&
+            !part.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool CanRenderUploadedPartViewer(QuotePartViewModel part)

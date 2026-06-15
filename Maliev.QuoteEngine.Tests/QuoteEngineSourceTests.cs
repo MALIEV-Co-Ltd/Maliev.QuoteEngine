@@ -918,7 +918,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-composer-attachment-card", component, StringComparison.Ordinal);
         Assert.Contains("@part.FileName", component, StringComparison.Ordinal);
         Assert.Contains("AttachmentStatusLabel(part)", component, StringComparison.Ordinal);
-        Assert.Contains("IsUploadBusy(part)", component, StringComparison.Ordinal);
+        Assert.Contains("IsComposerUploadPending(part)", component, StringComparison.Ordinal);
+        Assert.Contains("private static bool IsComposerUploadPending(ComposerAttachmentPreview part)", component, StringComparison.Ordinal);
+        var composerUploadBusyBlock = ExtractSourceBlock(
+            component,
+            "private static bool IsUploadBusy(ComposerAttachmentPreview part)",
+            "private static bool IsComposerUploadPending(ComposerAttachmentPreview part)");
+        Assert.DoesNotContain("\"Processing\"", composerUploadBusyBlock, StringComparison.Ordinal);
         Assert.Contains("_pendingComposerAttachments", component, StringComparison.Ordinal);
         Assert.Contains("BuildPendingMessageAttachments()", component, StringComparison.Ordinal);
         Assert.Contains("pendingAttachments.Count == 0", component, StringComparison.Ordinal);
@@ -963,8 +969,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-global-search", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-global-search input", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-rail-search", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("background: transparent !important;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("box-shadow: none;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border: 1px solid color-mix(in srgb, var(--qe-agent-line) 82%, transparent);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 11px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("background: var(--qe-agent-raised);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("box-shadow: 0 0 0 3px color-mix(in srgb, var(--qe-agent-primary) 12%, transparent);", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
         Assert.Contains("SearchCustomerDataAsync", apiClient, StringComparison.Ordinal);
@@ -1062,8 +1070,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("textarea.selectionStart === 0 && textarea.selectionEnd === 0", composerScript, StringComparison.Ordinal);
         Assert.Contains("function updateComposerShape", composerScript, StringComparison.Ordinal);
         Assert.Contains("qe-agent-composer--multiline", composerScript, StringComparison.Ordinal);
-        Assert.Contains("textarea.value.includes(\"\\n\")", composerScript, StringComparison.Ordinal);
-        Assert.Contains("textarea.scrollHeight > lineHeight * 2.25", composerScript, StringComparison.Ordinal);
+        Assert.Contains("value.includes(\"\\n\")", composerScript, StringComparison.Ordinal);
+        Assert.Contains("value.length > 68", composerScript, StringComparison.Ordinal);
+        Assert.Contains("value.length > 0 && textarea.scrollHeight > lineHeight * 1.55", composerScript, StringComparison.Ordinal);
+        Assert.Contains("textarea.scrollHeight > lineHeight * 1.55", composerScript, StringComparison.Ordinal);
+        Assert.Contains("min-height: 136px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("min-height: 188px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", composerScript, StringComparison.Ordinal);
         Assert.Contains("export async function typeComposerText", composerScript, StringComparison.Ordinal);
         Assert.Contains("export async function dictateComposerText", composerScript, StringComparison.Ordinal);

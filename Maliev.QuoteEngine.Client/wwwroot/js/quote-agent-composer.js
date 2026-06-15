@@ -391,7 +391,8 @@ function updateComposerShape(textarea) {
 
   window.requestAnimationFrame(() => {
     const lineHeight = Number.parseFloat(getComputedStyle(textarea).lineHeight) || 24;
-    const isMultiline = textarea.value.includes("\n") || textarea.scrollHeight > lineHeight * 2.25;
+    const value = textarea.value || "";
+    const isMultiline = value.includes("\n") || value.length > 68 || value.length > 0 && textarea.scrollHeight > lineHeight * 1.55;
     composer.classList.toggle("qe-agent-composer--multiline", isMultiline);
   });
 }
