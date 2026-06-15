@@ -1,12 +1,16 @@
 const composerHandlers = new WeakMap();
 const typingAnimations = new WeakMap();
+const dictationSessions = new WeakMap();
+const dictationButtonHandlers = new WeakMap();
+const composerDotNetRefs = new WeakMap();
 
-export function initComposer(textarea, dotNetRef) {
+export function initComposer(textarea, dotNetRef, dictationButton) {
   if (!textarea || !dotNetRef) {
     return;
   }
 
   disposeComposer(textarea);
+  composerDotNetRefs.set(textarea, dotNetRef);
 
   const keydown = event => {
     if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) {
@@ -25,8 +29,62 @@ export function initComposer(textarea, dotNetRef) {
     updateComposerShape(textarea);
   };
 
+  let holdTimer = 0;
+  let holdStarted = false;
+  let suppressClick = false;
+  const pointerDown = event => {
+    if (event.button !== undefined && event.button !== 0) {
+      return;
+    }
+
+    holdStarted = false;
+    window.clearTimeout(holdTimer);
+    holdTimer = window.setTimeout(async () => {
+      holdStarted = true;
+      suppressClick = true;
+      dictationButton?.setPointerCapture?.(event.pointerId);
+      await dotNetRef.invokeMethodAsync("BeginDictationFromHoldAsync");
+    }, 220);
+  };
+  const pointerUp = async event => {
+    window.clearTimeout(holdTimer);
+    if (!holdStarted) {
+      return;
+    }
+
+    dictationButton?.releasePointerCapture?.(event.pointerId);
+    await dotNetRef.invokeMethodAsync("StopDictationAsync");
+  };
+  const pointerCancel = async event => {
+    window.clearTimeout(holdTimer);
+    if (!holdStarted) {
+      return;
+    }
+
+    dictationButton?.releasePointerCapture?.(event.pointerId);
+    await dotNetRef.invokeMethodAsync("StopDictationAsync");
+  };
+  const click = async event => {
+    if (suppressClick) {
+      suppressClick = false;
+      event.preventDefault();
+      return;
+    }
+
+    await dotNetRef.invokeMethodAsync("ToggleDictationAsync");
+  };
+
   textarea.addEventListener("keydown", keydown);
   textarea.addEventListener("input", input);
+  if (dictationButton) {
+    dictationButton.addEventListener("pointerdown", pointerDown);
+    dictationButton.addEventListener("pointerup", pointerUp);
+    dictationButton.addEventListener("pointerleave", pointerCancel);
+    dictationButton.addEventListener("pointercancel", pointerCancel);
+    dictationButton.addEventListener("click", click);
+    dictationButtonHandlers.set(textarea, { dictationButton, pointerDown, pointerUp, pointerCancel, click });
+  }
+
   composerHandlers.set(textarea, { keydown, input });
   updateComposerShape(textarea);
   focusComposer(textarea);
@@ -40,6 +98,18 @@ export function disposeComposer(textarea) {
 
   textarea.removeEventListener("keydown", handlers.keydown);
   textarea.removeEventListener("input", handlers.input);
+  const dictationHandlers = dictationButtonHandlers.get(textarea);
+  if (dictationHandlers?.dictationButton) {
+    dictationHandlers.dictationButton.removeEventListener("pointerdown", dictationHandlers.pointerDown);
+    dictationHandlers.dictationButton.removeEventListener("pointerup", dictationHandlers.pointerUp);
+    dictationHandlers.dictationButton.removeEventListener("pointerleave", dictationHandlers.pointerCancel);
+    dictationHandlers.dictationButton.removeEventListener("pointercancel", dictationHandlers.pointerCancel);
+    dictationHandlers.dictationButton.removeEventListener("click", dictationHandlers.click);
+    dictationButtonHandlers.delete(textarea);
+  }
+
+  cancelDictation(textarea);
+  composerDotNetRefs.delete(textarea);
   composerHandlers.delete(textarea);
 }
 
@@ -91,19 +161,195 @@ export async function typeComposerText(textarea, text) {
 }
 
 export async function dictateComposerText(textarea) {
+  await beginDictation(textarea);
+  return endDictation(textarea);
+}
+
+export async function beginDictation(textarea) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     throw new Error("Speech recognition is not supported in this browser.");
   }
 
-  const transcript = await captureSpeech(SpeechRecognition);
-  const summarizedText = summarizeDictation(transcript);
-  if (summarizedText) {
-    await typeComposerText(textarea, summarizedText);
+  if (!textarea) {
+    return;
   }
 
-  return summarizedText;
+  cancelDictation(textarea);
+
+  const selectionStart = typeof textarea.selectionStart === "number"
+    ? textarea.selectionStart
+    : textarea.value.length;
+  const selectionEnd = typeof textarea.selectionEnd === "number"
+    ? textarea.selectionEnd
+    : selectionStart;
+  const session = {
+    after: textarea.value.slice(selectionEnd),
+    before: textarea.value.slice(0, selectionStart),
+    dotNetStopRequested: false,
+    finalTranscript: "",
+    interimTranscript: "",
+    recognition: new SpeechRecognition(),
+    settled: false,
+    dotNetRef: composerDotNetRefs.get(textarea)
+  };
+  dictationSessions.set(textarea, session);
+  prepareDictationPreview(textarea, session);
+
+  session.recognition.continuous = true;
+  session.recognition.interimResults = true;
+  session.recognition.maxAlternatives = 1;
+  session.recognition.lang = document.documentElement.lang || navigator.language || "en-US";
+
+  session.recognition.onresult = event => {
+    let finalText = "";
+    let interimText = "";
+    for (let index = 0; index < event.results.length; index += 1) {
+      const result = event.results[index];
+      const text = result[0]?.transcript || "";
+      if (result.isFinal) {
+        finalText += ` ${text}`;
+      } else {
+        interimText += ` ${text}`;
+      }
+    }
+
+    session.finalTranscript = summarizeDictation(`${session.finalTranscript} ${finalText}`);
+    session.interimTranscript = summarizeDictation(interimText);
+    updateDictationPreview(textarea, session, false);
+  };
+
+  session.recognition.onerror = event => {
+    if (event.error === "no-speech") {
+      session.interimTranscript = "";
+      updateDictationPreview(textarea, session, false);
+      return;
+    }
+
+    session.error = event.error || "Dictation failed.";
+    try {
+      session.recognition.stop();
+    } catch {
+      // Browser recognition may already be stopped.
+    }
+  };
+
+  session.recognition.onend = () => {
+    if (session.settled || session.dotNetStopRequested) {
+      return;
+    }
+
+    session.settled = true;
+    finishDictation(textarea, session);
+    session.dotNetRef?.invokeMethodAsync("StopDictationAsync");
+  };
+
+  try {
+    session.recognition.start();
+  } catch (error) {
+    cancelDictation(textarea);
+    throw error;
+  }
 }
+
+export async function endDictation(textarea) {
+  const session = dictationSessions.get(textarea);
+  if (!textarea || !session) {
+    return textarea?.value || "";
+  }
+
+  session.dotNetStopRequested = true;
+  try {
+    session.recognition.stop();
+  } catch {
+    // Browser recognition may already be stopped.
+  }
+
+  return finishDictation(textarea, session);
+}
+
+function cancelDictation(textarea) {
+  const session = dictationSessions.get(textarea);
+  if (!session) {
+    return;
+  }
+
+  try {
+    session.recognition.abort();
+  } catch {
+    // Ignore aborted or unavailable sessions.
+  }
+
+  removeDictationPreview(textarea);
+  dictationSessions.delete(textarea);
+}
+
+function prepareDictationPreview(textarea, session) {
+  clearTextSelection();
+  textarea.focus({ preventScroll: true });
+  textarea.classList.add("qe-agent-dictation-source");
+  updateDictationPreview(textarea, session, false);
+}
+
+function updateDictationPreview(textarea, session, finalizing) {
+  const rawSpeech = summarizeDictation(`${session.finalTranscript} ${session.interimTranscript}`);
+  const previewValue = `${session.before}${rawSpeech}${session.after}`;
+  textarea.value = previewValue;
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  updateComposerShape(textarea);
+
+  const overlay = ensureDictationOverlay(textarea);
+  overlay.innerHTML = "";
+  overlay.append(createDictationSpan("qe-agent-dictation-preview-before", session.before));
+  overlay.append(createDictationSpan(finalizing ? "qe-agent-dictation-preview-final" : "qe-agent-dictation-preview-live", rawSpeech));
+  overlay.append(createDictationSpan("qe-agent-dictation-preview-after", session.after));
+}
+
+function finishDictation(textarea, session) {
+  if (session.error) {
+    removeDictationPreview(textarea);
+    dictationSessions.delete(textarea);
+    return textarea.value || "";
+  }
+
+  const speech = summarizeDictation(`${session.finalTranscript} ${session.interimTranscript}`);
+  const refinedSpeech = summarizeDictation(speech);
+  const nextValue = `${session.before}${refinedSpeech}${session.after}`;
+  session.settled = true;
+  textarea.value = nextValue;
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  updateComposerShape(textarea);
+  removeDictationPreview(textarea);
+  dictationSessions.delete(textarea);
+  return nextValue;
+}
+
+function ensureDictationOverlay(textarea) {
+  const composer = textarea.closest?.(".qe-agent-composer");
+  let overlay = composer?.querySelector(".qe-agent-dictation-preview");
+  if (!overlay && composer) {
+    overlay = document.createElement("div");
+    overlay.className = "qe-agent-dictation-preview";
+    overlay.setAttribute("aria-hidden", "true");
+    textarea.insertAdjacentElement("afterend", overlay);
+  }
+
+  return overlay;
+}
+
+function createDictationSpan(className, text) {
+  const span = document.createElement("span");
+  span.className = className;
+  span.textContent = text || "";
+  return span;
+}
+
+function removeDictationPreview(textarea) {
+  textarea?.classList.remove("qe-agent-dictation-source");
+  const composer = textarea?.closest?.(".qe-agent-composer");
+  composer?.querySelector(".qe-agent-dictation-preview")?.remove();
+}
+
 
 function clearTextSelection() {
   const selection = window.getSelection?.();

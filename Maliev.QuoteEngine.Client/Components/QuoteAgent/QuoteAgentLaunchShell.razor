@@ -887,11 +887,11 @@
                           placeholder="@Text("Describe your part, paste dimensions, attach files, or drag and drop files...", "อธิบายชิ้นงาน วางขนาด แนบไฟล์ หรือลากไฟล์มาวาง...")"
                           aria-label="@Text("Message MALIEV Quote Agent", "ข้อความถึงผู้ช่วยขอราคา MALIEV")"></textarea>
                 <button type="button"
+                        @ref="_dictationButton"
                         class="@($"qe-agent-round-btn qe-agent-dictation-btn {(_dictating ? "active" : string.Empty)}")"
                         title="@Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง")"
                         aria-label="@Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง")"
-                        aria-pressed="@_dictating"
-                        @onclick="StartDictationAsync">
+                        aria-pressed="@_dictating">
                     <MudIcon Icon="@Icons.Material.Outlined.MicNone" Size="Size.Small" />
                 </button>
                 <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@_sending">
@@ -1273,6 +1273,7 @@
     private string? _lastSketchDataUrl;
     private ElementReference _composerTextarea;
     private ElementReference _searchInput;
+    private ElementReference _dictationButton;
     private DotNetObjectReference<QuoteAgentLaunchShell>? _composerDotNetRef;
     private IJSObjectReference? _composerModule;
     private IJSObjectReference? _sketchModule;
@@ -1597,7 +1598,7 @@
         {
             _composerDotNetRef = DotNetObjectReference.Create(this);
             _composerModule = await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-composer.js");
-            await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef);
+            await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef, _dictationButton);
             await _composerModule.InvokeVoidAsync("focusComposer", _composerTextarea);
         }
 
@@ -1794,7 +1795,27 @@
         }
     }
 
-    private async Task StartDictationAsync()
+    [JSInvokable]
+    public Task ToggleDictationAsync()
+    {
+        return _dictating
+            ? StopDictationAsync()
+            : BeginDictationAsync();
+    }
+
+    [JSInvokable]
+    public Task BeginDictationFromHoldAsync()
+    {
+        return BeginDictationAsync();
+    }
+
+    [JSInvokable]
+    public Task StopDictationAsync()
+    {
+        return EndDictationAsync();
+    }
+
+    private async Task BeginDictationAsync()
     {
         if (_composerModule is null || _dictating)
         {
@@ -1806,22 +1827,40 @@
         _error = null;
         try
         {
-            var dictatedText = await _composerModule.InvokeAsync<string>("dictateComposerText", _composerTextarea);
-            if (!string.IsNullOrWhiteSpace(dictatedText))
-            {
-                _draftMessage = dictatedText;
-            }
+            await _composerModule.InvokeVoidAsync("beginDictation", _composerTextarea);
         }
         catch (JSException ex)
         {
-            var friendly = ex.Message.Contains("no-speech", StringComparison.OrdinalIgnoreCase)
-                ? Text("I did not hear speech. Try again, or type the request.", "ไม่ได้ยินเสียงพูด ลองอีกครั้งหรือพิมพ์คำขอ")
-                : Text(
-                    $"Dictation is not available yet: {ex.Message}",
-                    $"ยังไม่สามารถใช้การพูดตามคำบอกได้: {ex.Message}");
+            var friendly = Text(
+                $"Dictation is not available yet: {ex.Message}",
+                $"ยังไม่สามารถใช้การพูดตามคำบอกได้: {ex.Message}");
             _error = Text(
                 friendly,
                 friendly);
+            _dictating = false;
+            await InvokeAsync(StateHasChanged);
+            await FocusComposerAsync();
+        }
+    }
+
+    private async Task EndDictationAsync()
+    {
+        if (_composerModule is null || !_dictating)
+        {
+            await FocusComposerAsync();
+            return;
+        }
+
+        try
+        {
+            var dictatedText = await _composerModule.InvokeAsync<string>("endDictation", _composerTextarea);
+            _draftMessage = dictatedText;
+        }
+        catch (JSException ex)
+        {
+            _error = Text(
+                $"Dictation is not available yet: {ex.Message}",
+                $"ยังไม่สามารถใช้การพูดตามคำบอกได้: {ex.Message}");
         }
         finally
         {

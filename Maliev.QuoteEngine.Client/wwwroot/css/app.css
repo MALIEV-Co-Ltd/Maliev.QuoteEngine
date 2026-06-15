@@ -2684,6 +2684,8 @@
 
 .qe-agent-composer textarea {
     grid-area: text;
+    position: relative;
+    z-index: 1;
     min-height: 38px;
     max-height: 170px;
     padding: 8px 4px;
@@ -2696,6 +2698,53 @@
     overflow-y: auto;
     font-size: 16px !important;
     line-height: 1.5 !important;
+}
+
+.qe-agent-composer textarea.qe-agent-dictation-source {
+    color: transparent !important;
+    caret-color: var(--qe-agent-primary);
+}
+
+.qe-agent-dictation-preview {
+    grid-area: text;
+    align-self: stretch;
+    position: relative;
+    z-index: 2;
+    min-height: 38px;
+    max-height: 170px;
+    padding: 8px 4px;
+    overflow: hidden;
+    color: var(--qe-agent-ink);
+    font-size: 16px;
+    line-height: 1.5;
+    pointer-events: none;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.qe-agent-composer.qe-agent-composer--multiline .qe-agent-dictation-preview {
+    min-height: 72px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+}
+
+.qe-agent-dictation-preview-before,
+.qe-agent-dictation-preview-after {
+    color: var(--qe-agent-ink);
+}
+
+.qe-agent-dictation-preview-live {
+    color: var(--qe-agent-primary);
+    background: color-mix(in srgb, var(--qe-agent-primary) 13%, transparent);
+    border-radius: 6px;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--qe-agent-primary) 13%, transparent);
+    font-style: italic;
+}
+
+.qe-agent-dictation-preview-final {
+    color: var(--qe-agent-ink);
 }
 
 .qe-agent-composer.qe-agent-composer--multiline textarea {
