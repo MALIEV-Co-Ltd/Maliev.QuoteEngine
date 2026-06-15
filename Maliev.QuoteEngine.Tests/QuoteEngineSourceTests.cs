@@ -914,6 +914,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ToggleDictationAsync", component, StringComparison.Ordinal);
         Assert.Contains("BeginDictationFromHoldAsync", component, StringComparison.Ordinal);
         Assert.Contains("StopDictationAsync", component, StringComparison.Ordinal);
+        Assert.Contains("InvokeVoidAsync(\"beginDictation\", _composerTextarea, _dictationButton)", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.MicNone", component, StringComparison.Ordinal);
         Assert.Contains("Click to dictate or hold", component, StringComparison.Ordinal);
         Assert.Contains("_dictating", component, StringComparison.Ordinal);
@@ -1100,8 +1101,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("StopDictationAsync", composerScript, StringComparison.Ordinal);
         Assert.Contains("event.error === \"no-speech\"", composerScript, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-preview-live", composerScript, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-dictation-preview-caret", composerScript, StringComparison.Ordinal);
         Assert.Contains("SpeechRecognition", composerScript, StringComparison.Ordinal);
         Assert.Contains("summarizeDictation", composerScript, StringComparison.Ordinal);
+        Assert.Contains("resolveDictationInsertion", composerScript, StringComparison.Ordinal);
+        Assert.Contains("setTextareaSelection(textarea, session.before.length", composerScript, StringComparison.Ordinal);
+        Assert.Contains("resolveSpeechRecognitionLanguage", composerScript, StringComparison.Ordinal);
+        Assert.Contains("navigator.mediaDevices.getUserMedia", composerScript, StringComparison.Ordinal);
+        Assert.Contains("setDictationLevel(button, level, state)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("data-dictation-level", agentStyles, StringComparison.Ordinal);
         Assert.Contains("typingAnimations", composerScript, StringComparison.Ordinal);
         Assert.Contains("registerPasteTarget", workspace, StringComparison.Ordinal);
         Assert.Contains("unregisterPasteTarget", workspace, StringComparison.Ordinal);
@@ -1190,8 +1198,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-dictation-btn.active", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-preview", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-preview-live", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-dictation-preview-caret", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer textarea.qe-agent-dictation-source", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("@keyframes qe-agent-dictation-pulse", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("--qe-dictation-ring", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("--qe-dictation-scale", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-dictation-btn.active[data-dictation-level=\"quiet\"]", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-dictation-btn.active[data-dictation-level=\"good\"]", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-dictation-btn.active[data-dictation-level=\"loud\"]", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-menu", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-backdrop", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-attachments", agentStyles, StringComparison.Ordinal);

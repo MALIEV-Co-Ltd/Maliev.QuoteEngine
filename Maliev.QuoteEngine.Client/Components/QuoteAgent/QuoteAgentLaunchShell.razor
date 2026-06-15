@@ -1856,7 +1856,7 @@
         _error = null;
         try
         {
-            await _composerModule.InvokeVoidAsync("beginDictation", _composerTextarea);
+            await _composerModule.InvokeVoidAsync("beginDictation", _composerTextarea, _dictationButton);
         }
         catch (JSException ex)
         {

@@ -2793,6 +2793,7 @@
     overflow: hidden;
     color: var(--qe-agent-ink);
     font-size: 16px;
+    letter-spacing: 0;
     line-height: 1.5;
     pointer-events: none;
     white-space: pre-wrap;
@@ -2818,6 +2819,27 @@
     -webkit-box-decoration-break: clone;
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--qe-agent-primary) 13%, transparent);
     font-style: italic;
+}
+
+.qe-agent-dictation-preview-spacer {
+    white-space: pre-wrap;
+}
+
+.qe-agent-dictation-preview-caret {
+    display: inline-block;
+    width: 2px;
+    height: 1.08em;
+    margin-inline-start: 2px;
+    border-radius: 999px;
+    background: var(--qe-agent-primary);
+    vertical-align: -0.16em;
+    animation: qe-agent-dictation-caret 1s steps(1, end) infinite;
+}
+
+@keyframes qe-agent-dictation-caret {
+    50% {
+        opacity: 0;
+    }
 }
 
 .qe-agent-dictation-preview-final {
@@ -2865,23 +2887,34 @@
 }
 
 .qe-agent-dictation-btn.active {
-    color: var(--qe-agent-primary);
-    animation: qe-agent-dictation-pulse 1.15s ease-in-out infinite;
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--qe-agent-primary) 34%, transparent);
+    --qe-dictation-level: .2;
+    --qe-dictation-ring: 8px;
+    --qe-dictation-glow: 14px;
+    --qe-dictation-scale: 1.02;
+    --qe-dictation-color: var(--qe-agent-primary);
+    color: var(--qe-dictation-color);
+    background: color-mix(in srgb, var(--qe-dictation-color) 16%, var(--qe-agent-hover));
+    box-shadow:
+        0 0 0 var(--qe-dictation-ring) color-mix(in srgb, var(--qe-dictation-color) 28%, transparent),
+        0 0 var(--qe-dictation-glow) color-mix(in srgb, var(--qe-dictation-color) 32%, transparent);
+    transform: scale(var(--qe-dictation-scale));
+    transition:
+        background-color 80ms linear,
+        box-shadow 80ms linear,
+        color 80ms linear,
+        transform 80ms linear;
 }
 
-@keyframes qe-agent-dictation-pulse {
-    0% {
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--qe-agent-primary) 36%, transparent);
-    }
+.qe-agent-dictation-btn.active[data-dictation-level="quiet"] {
+    --qe-dictation-color: #8b949e;
+}
 
-    70% {
-        box-shadow: 0 0 0 12px color-mix(in srgb, var(--qe-agent-primary) 0%, transparent);
-    }
+.qe-agent-dictation-btn.active[data-dictation-level="good"] {
+    --qe-dictation-color: var(--qe-agent-primary);
+}
 
-    100% {
-        box-shadow: 0 0 0 0 color-mix(in srgb, var(--qe-agent-primary) 0%, transparent);
-    }
+.qe-agent-dictation-btn.active[data-dictation-level="loud"] {
+    --qe-dictation-color: #ef4444;
 }
 
 .qe-agent-send-btn {

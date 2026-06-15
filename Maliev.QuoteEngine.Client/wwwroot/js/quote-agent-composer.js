@@ -165,7 +165,7 @@ export async function dictateComposerText(textarea) {
   return endDictation(textarea);
 }
 
-export async function beginDictation(textarea) {
+export async function beginDictation(textarea, dictationButton) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     throw new Error("Speech recognition is not supported in this browser.");
@@ -177,34 +177,38 @@ export async function beginDictation(textarea) {
 
   cancelDictation(textarea);
 
-  const selectionStart = typeof textarea.selectionStart === "number"
+  const rawSelectionStart = typeof textarea.selectionStart === "number"
     ? textarea.selectionStart
     : textarea.value.length;
-  const selectionEnd = typeof textarea.selectionEnd === "number"
+  const rawSelectionEnd = typeof textarea.selectionEnd === "number"
     ? textarea.selectionEnd
-    : selectionStart;
+    : rawSelectionStart;
+  const insertion = resolveDictationInsertion(textarea.value, rawSelectionStart, rawSelectionEnd);
   const session = {
-    after: textarea.value.slice(selectionEnd),
-    before: textarea.value.slice(0, selectionStart),
+    after: textarea.value.slice(insertion.end),
+    before: textarea.value.slice(0, insertion.start),
+    button: dictationButton || dictationButtonHandlers.get(textarea)?.dictationButton || null,
     dotNetStopRequested: false,
     finalTranscript: "",
     interimTranscript: "",
     recognition: new SpeechRecognition(),
     settled: false,
+    active: true,
     dotNetRef: composerDotNetRefs.get(textarea)
   };
   dictationSessions.set(textarea, session);
   prepareDictationPreview(textarea, session);
+  startDictationMeter(session);
 
   session.recognition.continuous = true;
   session.recognition.interimResults = true;
   session.recognition.maxAlternatives = 1;
-  session.recognition.lang = document.documentElement.lang || navigator.language || "en-US";
+  session.recognition.lang = resolveSpeechRecognitionLanguage();
 
   session.recognition.onresult = event => {
     let finalText = "";
     let interimText = "";
-    for (let index = 0; index < event.results.length; index += 1) {
+    for (let index = event.resultIndex || 0; index < event.results.length; index += 1) {
       const result = event.results[index];
       const text = result[0]?.transcript || "";
       if (result.isFinal) {
@@ -280,6 +284,8 @@ function cancelDictation(textarea) {
     // Ignore aborted or unavailable sessions.
   }
 
+  stopDictationMeter(session);
+  session.active = false;
   removeDictationPreview(textarea);
   dictationSessions.delete(textarea);
 }
@@ -287,25 +293,36 @@ function cancelDictation(textarea) {
 function prepareDictationPreview(textarea, session) {
   clearTextSelection();
   textarea.focus({ preventScroll: true });
+  setTextareaSelection(textarea, session.before.length, session.before.length);
   textarea.classList.add("qe-agent-dictation-source");
   updateDictationPreview(textarea, session, false);
 }
 
 function updateDictationPreview(textarea, session, finalizing) {
   const rawSpeech = summarizeDictation(`${session.finalTranscript} ${session.interimTranscript}`);
-  const previewValue = `${session.before}${rawSpeech}${session.after}`;
+  const speechPrefix = rawSpeech && session.before && !/\s$/.test(session.before) ? " " : "";
+  const speechSuffix = rawSpeech && session.after && !/^\s/.test(session.after) ? " " : "";
+  const previewValue = `${session.before}${speechPrefix}${rawSpeech}${speechSuffix}${session.after}`;
   textarea.value = previewValue;
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  setTextareaSelection(textarea, session.before.length + speechPrefix.length + rawSpeech.length, session.before.length + speechPrefix.length + rawSpeech.length);
   updateComposerShape(textarea);
 
   const overlay = ensureDictationOverlay(textarea);
   overlay.innerHTML = "";
   overlay.append(createDictationSpan("qe-agent-dictation-preview-before", session.before));
+  overlay.append(createDictationSpan("qe-agent-dictation-preview-spacer", speechPrefix));
   overlay.append(createDictationSpan(finalizing ? "qe-agent-dictation-preview-final" : "qe-agent-dictation-preview-live", rawSpeech));
+  if (!rawSpeech) {
+    overlay.append(createDictationSpan("qe-agent-dictation-preview-caret", ""));
+  }
+  overlay.append(createDictationSpan("qe-agent-dictation-preview-spacer", speechSuffix));
   overlay.append(createDictationSpan("qe-agent-dictation-preview-after", session.after));
 }
 
 function finishDictation(textarea, session) {
+  stopDictationMeter(session);
+  session.active = false;
   if (session.error) {
     removeDictationPreview(textarea);
     dictationSessions.delete(textarea);
@@ -314,10 +331,13 @@ function finishDictation(textarea, session) {
 
   const speech = summarizeDictation(`${session.finalTranscript} ${session.interimTranscript}`);
   const refinedSpeech = summarizeDictation(speech);
-  const nextValue = `${session.before}${refinedSpeech}${session.after}`;
+  const speechPrefix = refinedSpeech && session.before && !/\s$/.test(session.before) ? " " : "";
+  const speechSuffix = refinedSpeech && session.after && !/^\s/.test(session.after) ? " " : "";
+  const nextValue = `${session.before}${speechPrefix}${refinedSpeech}${speechSuffix}${session.after}`;
   session.settled = true;
   textarea.value = nextValue;
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  setTextareaSelection(textarea, session.before.length + speechPrefix.length + refinedSpeech.length, session.before.length + speechPrefix.length + refinedSpeech.length);
   updateComposerShape(textarea);
   removeDictationPreview(textarea);
   dictationSessions.delete(textarea);
@@ -348,6 +368,126 @@ function removeDictationPreview(textarea) {
   textarea?.classList.remove("qe-agent-dictation-source");
   const composer = textarea?.closest?.(".qe-agent-composer");
   composer?.querySelector(".qe-agent-dictation-preview")?.remove();
+}
+
+function resolveDictationInsertion(value, selectionStart, selectionEnd) {
+  const text = String(value ?? "");
+  if (selectionStart !== selectionEnd) {
+    return { start: selectionStart, end: selectionEnd };
+  }
+
+  let index = Math.max(0, Math.min(selectionEnd, text.length));
+  while (index < text.length && !/\s/.test(text[index])) {
+    index += 1;
+  }
+
+  return { start: index, end: index };
+}
+
+function setTextareaSelection(textarea, start, end) {
+  if (typeof textarea?.setSelectionRange !== "function") {
+    return;
+  }
+
+  try {
+    textarea.setSelectionRange(start, end);
+  } catch {
+    // Some input modes may temporarily reject selection changes.
+  }
+}
+
+function resolveSpeechRecognitionLanguage() {
+  const language = document.documentElement.lang || navigator.language || "en-US";
+  if (language.toLowerCase() === "th") {
+    return "th-TH";
+  }
+
+  if (language.toLowerCase() === "en") {
+    return navigator.language?.startsWith("en-") ? navigator.language : "en-US";
+  }
+
+  return language;
+}
+
+async function startDictationMeter(session) {
+  const button = session.button;
+  if (!button || !navigator.mediaDevices?.getUserMedia || !window.AudioContext && !window.webkitAudioContext) {
+    setDictationLevel(button, 0, "quiet");
+    return;
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContext();
+    const analyser = audioContext.createAnalyser();
+    analyser.fftSize = 1024;
+    const source = audioContext.createMediaStreamSource(stream);
+    const samples = new Uint8Array(analyser.fftSize);
+
+    source.connect(analyser);
+    session.audioContext = audioContext;
+    session.audioStream = stream;
+    session.audioAnalyser = analyser;
+    session.audioSource = source;
+
+    if (!session.active) {
+      stopDictationMeter(session);
+      return;
+    }
+
+    const tick = () => {
+      if (!session.active) {
+        return;
+      }
+
+      analyser.getByteTimeDomainData(samples);
+      let sum = 0;
+      for (let index = 0; index < samples.length; index += 1) {
+        const centered = (samples[index] - 128) / 128;
+        sum += centered * centered;
+      }
+
+      const rms = Math.sqrt(sum / samples.length);
+      const level = Math.min(1, rms * 7);
+      const state = level > 0.82 ? "loud" : level < 0.12 ? "quiet" : "good";
+      setDictationLevel(button, level, state);
+      session.audioFrame = window.requestAnimationFrame(tick);
+    };
+
+    tick();
+  } catch {
+    setDictationLevel(button, 0, "quiet");
+  }
+}
+
+function setDictationLevel(button, level, state) {
+  if (!button) {
+    return;
+  }
+
+  const normalized = Math.max(0, Math.min(1, level));
+  button.style.setProperty("--qe-dictation-level", normalized.toFixed(2));
+  button.style.setProperty("--qe-dictation-ring", `${Math.round(4 + normalized * 16)}px`);
+  button.style.setProperty("--qe-dictation-glow", `${Math.round(10 + normalized * 22)}px`);
+  button.style.setProperty("--qe-dictation-scale", (1 + normalized * 0.12).toFixed(3));
+  button.dataset.dictationLevel = state;
+}
+
+function stopDictationMeter(session) {
+  if (session.audioFrame) {
+    window.cancelAnimationFrame(session.audioFrame);
+  }
+
+  session.audioStream?.getTracks?.().forEach(track => track.stop());
+  session.audioContext?.close?.();
+  if (session.button) {
+    session.button.style.removeProperty("--qe-dictation-level");
+    session.button.style.removeProperty("--qe-dictation-ring");
+    session.button.style.removeProperty("--qe-dictation-glow");
+    session.button.style.removeProperty("--qe-dictation-scale");
+    delete session.button.dataset.dictationLevel;
+  }
 }
 
 
