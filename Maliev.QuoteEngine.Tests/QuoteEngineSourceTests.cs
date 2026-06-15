@@ -937,6 +937,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Text(\"Processing\", \"กำลังประมวลผล\")", component, StringComparison.Ordinal);
         Assert.Contains("class=\"sr-only\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-add-menu\"", component, StringComparison.Ordinal);
+        Assert.True(
+            component.IndexOf("<form class=\"@ComposerClass\"", StringComparison.Ordinal) <
+            component.IndexOf("class=\"qe-agent-add-menu\"", StringComparison.Ordinal));
         Assert.Contains("Add photos and files", component, StringComparison.Ordinal);
         Assert.Contains("Add hand sketch", component, StringComparison.Ordinal);
         Assert.Contains("Google Drive connector", component, StringComparison.Ordinal);
@@ -1142,6 +1145,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-composer .qe-agent-round-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer.qe-agent-composer--multiline", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-radius: 28px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("\"text text text text\"", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("\"add controls dictate send\"", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-height: 132px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("left: 8px;", ExtractSourceBlock(agentStyles, ".qe-agent-add-menu", ".qe-agent-add-menu button"), StringComparison.Ordinal);
         Assert.Contains(".qe-agent-send-spinner", agentStyles, StringComparison.Ordinal);
         Assert.Contains("@keyframes qe-agent-spin", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".sr-only", agentStyles, StringComparison.Ordinal);

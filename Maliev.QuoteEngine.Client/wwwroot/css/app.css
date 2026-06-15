@@ -2320,8 +2320,8 @@
 
 .qe-agent-add-menu {
     position: absolute;
-    left: 0;
-    bottom: calc(100% + 10px);
+    left: 8px;
+    bottom: calc(100% + 8px);
     z-index: 35;
     display: grid;
     gap: 2px;
@@ -2363,8 +2363,8 @@
 
 .qe-agent-add-submenu {
     position: absolute;
-    left: min(232px, calc(100vw - 300px));
-    bottom: calc(100% + 10px);
+    left: min(238px, calc(100vw - 300px));
+    bottom: calc(100% + 8px);
     z-index: 36;
     display: grid;
     gap: 2px;
@@ -2680,6 +2680,18 @@
     align-items: end;
     border-radius: 28px;
     padding: 10px;
+    grid-template-areas:
+        "text text text text"
+        "add controls dictate send";
+    grid-template-rows: minmax(72px, auto) 38px;
+}
+
+.qe-agent-composer.qe-agent-composer--has-attachments.qe-agent-composer--multiline {
+    grid-template-areas:
+        "attachments attachments attachments attachments"
+        "text text text text"
+        "add controls dictate send";
+    grid-template-rows: auto minmax(72px, auto) 38px;
 }
 
 .qe-agent-composer textarea {
@@ -2751,6 +2763,8 @@
     min-height: 72px;
     padding-top: 10px;
     padding-bottom: 10px;
+    align-self: stretch;
+    max-height: 132px;
 }
 
 .qe-agent-composer .qe-agent-round-btn {
