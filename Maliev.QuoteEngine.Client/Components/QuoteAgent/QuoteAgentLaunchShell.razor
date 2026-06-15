@@ -898,8 +898,10 @@
                 <div class="qe-agent-dictation-meter" aria-hidden="@(!_dictating)">
                     <span class="qe-agent-dictation-meter-line"></span>
                     <span class="qe-agent-dictation-meter-bars">
-                        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-                        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                        @for (var index = 0; index < DictationMeterBarCount; index++)
+                        {
+                            <i></i>
+                        }
                     </span>
                 </div>
                 <button type="button"
@@ -1331,6 +1333,7 @@
     private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
     private const int SearchMinimumCharacters = 3;
     private const int SearchPromptVisibleCharacters = 22;
+    private const int DictationMeterBarCount = 56;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];

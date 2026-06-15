@@ -641,9 +641,18 @@ async function startDictationMeter(session) {
         level = Math.max(level, session.speechBoostLevel || 0);
       }
 
-      const state = level > 0.82 ? "loud" : level < 0.08 ? "quiet" : "good";
-      appendDictationMeterLevel(session, level);
-      setDictationLevel(button, level, state);
+      const previousLevel = session.smoothedMeterLevel ?? level;
+      const smoothedLevel = previousLevel * 0.72 + level * 0.28;
+      session.smoothedMeterLevel = smoothedLevel;
+
+      const state = smoothedLevel > 0.82 ? "loud" : smoothedLevel < 0.08 ? "quiet" : "good";
+      const now = Date.now();
+      if (!session.lastVolumeHistoryAt || now - session.lastVolumeHistoryAt >= 85) {
+        appendDictationMeterLevel(session, smoothedLevel);
+        session.lastVolumeHistoryAt = now;
+      }
+
+      setDictationLevel(button, smoothedLevel, state);
       session.audioFrame = window.requestAnimationFrame(tick);
     };
 
@@ -658,6 +667,8 @@ async function startDictationMeter(session) {
 function initializeDictationMeterHistory(session) {
   const bars = getDictationMeterBars(session?.button);
   const count = Math.max(1, bars.length || 16);
+  session.lastVolumeHistoryAt = 0;
+  session.smoothedMeterLevel = 0;
   session.volumeHistory = Array(count).fill(0);
   renderDictationMeterHistory(session.button, session.volumeHistory);
 }
