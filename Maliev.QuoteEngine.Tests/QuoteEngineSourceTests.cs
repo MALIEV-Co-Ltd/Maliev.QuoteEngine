@@ -1092,6 +1092,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-order-card footer button:first-child", agentStyles, StringComparison.Ordinal);
         Assert.Contains("-webkit-line-clamp: 2;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--empty .qe-agent-thread {\n    position: absolute;\n    top: 40.5%;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap {\n    position: absolute;\n    top: 45%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("user-select: none;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer .qe-agent-round-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer.qe-agent-composer--multiline", agentStyles, StringComparison.Ordinal);
@@ -1110,7 +1112,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("scrollbar-gutter: stable;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-use-cases button:focus-visible", agentStyles, StringComparison.Ordinal);
         Assert.Contains("box-shadow: 0 0 0 2px color-mix(in srgb, var(--qe-agent-primary) 28%, transparent);", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("top: 50%;", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("top: 50%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--chat .qe-agent-thread", agentStyles, StringComparison.Ordinal);
         Assert.Contains("justify-content: flex-end;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-project-row", agentStyles, StringComparison.Ordinal);

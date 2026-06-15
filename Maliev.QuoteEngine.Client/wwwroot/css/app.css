@@ -1393,9 +1393,10 @@
 
 .qe-agent-main--empty .qe-agent-thread {
     position: absolute;
-    top: 42%;
+    top: 40.5%;
     left: 50%;
     width: min(820px, calc(100% - 32px));
+    margin: 0;
     padding: 0;
     transform: translate(-50%, -100%);
 }
@@ -2396,11 +2397,11 @@
 
 .qe-agent-main--empty .qe-agent-composer-wrap {
     position: absolute;
-    top: 50%;
+    top: 45%;
     left: 50%;
     width: min(820px, calc(100% - 32px));
     padding: 0;
-    transform: translate(-50%, -4px);
+    transform: translate(-50%, 0);
 }
 
 .qe-agent-main--chat .qe-agent-composer-wrap {
@@ -2844,7 +2845,7 @@
     display: grid;
     gap: 10px;
     width: min(760px, 100%);
-    margin: 64px auto 0;
+    margin: 42px auto 0;
     padding: 0;
 }
 
