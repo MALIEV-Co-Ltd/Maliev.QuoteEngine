@@ -1196,19 +1196,37 @@
     width: 100%;
     min-height: 36px;
     padding: 8px 13px;
-    border: 1px solid var(--qe-agent-line);
+    border: 1px solid var(--qe-agent-primary, #0a72ef);
     border-radius: 12px;
     white-space: nowrap;
     line-height: 1.2;
-    background: var(--qe-agent-ink);
-    color: var(--qe-agent-inverse-text) !important;
+    background: var(--qe-agent-primary, #0a72ef);
+    color: #ffffff !important;
     font-weight: 600;
-    box-shadow: 0 8px 20px rgba(0, 0, 0, .10);
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--qe-agent-primary, #0a72ef) 24%, transparent);
 }
 
 .qe-agent-signin-btn:hover {
-    background: color-mix(in srgb, var(--qe-agent-ink) 86%, var(--qe-agent-muted));
-    color: var(--qe-agent-inverse-text) !important;
+    border-color: color-mix(in srgb, var(--qe-agent-primary, #0a72ef) 82%, #000000);
+    background: color-mix(in srgb, var(--qe-agent-primary, #0a72ef) 88%, #000000);
+    color: #ffffff !important;
+}
+
+.qe-agent-rail-foot .qe-agent-signin-btn {
+    display: inline-flex;
+    grid-template-columns: none;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--qe-agent-primary, #0a72ef);
+    background: var(--qe-agent-primary, #0a72ef);
+    color: #ffffff !important;
+    text-align: center;
+}
+
+.qe-agent-rail-foot .qe-agent-signin-btn:hover {
+    border-color: color-mix(in srgb, var(--qe-agent-primary, #0a72ef) 82%, #000000);
+    background: color-mix(in srgb, var(--qe-agent-primary, #0a72ef) 88%, #000000);
+    color: #ffffff !important;
 }
 
 .qe-agent-account-dot {
@@ -2424,8 +2442,10 @@
     align-items: center;
     gap: 8px;
     min-width: 0;
-    padding: 2px 4px 8px;
+    width: 100%;
+    padding: 2px 4px 6px;
     overflow-x: auto;
+    overflow-y: hidden;
     scrollbar-width: thin;
 }
 
@@ -2476,6 +2496,19 @@
     text-align: left;
 }
 
+.qe-agent-composer-attachment-card--image {
+    grid-template-columns: 1fr;
+    width: 74px;
+    height: 74px;
+    min-height: 74px;
+    padding: 4px;
+    border-radius: 16px;
+}
+
+.qe-agent-composer-attachment-card--file {
+    width: min(220px, 68vw);
+}
+
 .qe-agent-composer-attachment-main {
     display: grid;
     grid-template-columns: 46px minmax(0, 1fr);
@@ -2488,6 +2521,12 @@
     color: inherit;
     cursor: pointer;
     text-align: left;
+}
+
+.qe-agent-composer-attachment-card--image .qe-agent-composer-attachment-main {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 .qe-agent-composer-attachment-card.active {
@@ -2503,6 +2542,12 @@
     overflow: hidden;
     border-radius: 12px;
     background: var(--qe-agent-bg);
+}
+
+.qe-agent-composer-attachment-card--image .qe-agent-composer-attachment-preview {
+    width: 100%;
+    height: 100%;
+    border-radius: 12px;
 }
 
 .qe-agent-composer-attachment-preview img {
@@ -2525,6 +2570,10 @@
     display: grid;
     gap: 2px;
     min-width: 0;
+}
+
+.qe-agent-composer-attachment-card--image .qe-agent-composer-attachment-copy {
+    display: none;
 }
 
 .qe-agent-composer-attachment-copy strong,
@@ -2557,6 +2606,17 @@
     background: transparent;
     color: var(--qe-agent-muted);
     cursor: pointer;
+}
+
+.qe-agent-composer-attachment-card--image .qe-agent-composer-attachment-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    background: color-mix(in srgb, var(--qe-agent-bg) 88%, transparent);
+    color: var(--qe-agent-ink);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .16);
 }
 
 .qe-agent-composer-attachment-remove:hover,

@@ -868,7 +868,7 @@
                         {
                             var index = i;
                             var part = _pendingComposerAttachments[i];
-                            <div class="@($"qe-agent-composer-attachment-card {(i == _pendingComposerAttachments.Count - 1 ? "active" : string.Empty)}")">
+                            <div class="@ComposerAttachmentCardClass(part, i)">
                                 <button type="button"
                                         class="qe-agent-composer-attachment-main"
                                         @onclick="@(() => SelectPendingComposerAttachmentAsync(index))">
@@ -1968,7 +1968,7 @@
         QueueComposerAttachment(part);
         SetComposerAttachmentNotice(part);
         await InvokeAsync(StateHasChanged);
-        await SendPendingAttachmentsImmediatelyAsync();
+        await RefreshPendingAttachmentPreviewAsync();
     }
 
     private void QueueComposerAttachment(QuotePartViewModel part)
@@ -2039,7 +2039,7 @@
 
     private string ComposerAttachmentQueueHint()
     {
-        return Text("Sending with this message", "กำลังส่งไปพร้อมข้อความนี้");
+        return Text("Will attach to your next message", "จะแนบไปกับข้อความถัดไป");
     }
 
     private string ComposerAttachmentNotice()
@@ -2050,8 +2050,8 @@
         }
 
         return Text(
-            "Attached now. I am sending it for analysis.",
-            "แนบแล้ว กำลังส่งเพื่อวิเคราะห์");
+            "Attached to the message preview. Add a note, or press send when ready.",
+            "แนบในตัวอย่างข้อความแล้ว เพิ่มข้อความหรือกดส่งเมื่อพร้อม");
     }
 
     private void SetComposerAttachmentNotice(QuotePartViewModel part)
@@ -2061,19 +2061,34 @@
                 $"Uploading {part.FileName}. It will stay in this message preview.",
                 $"กำลังอัปโหลด {part.FileName} และจะแสดงในตัวอย่างข้อความนี้")
             : Text(
-                $"{part.FileName} is uploaded. Sending it for analysis now.",
-                $"{part.FileName} อัปโหลดแล้ว กำลังส่งเพื่อวิเคราะห์");
+                $"{part.FileName} is attached to the message preview.",
+                $"{part.FileName} แนบในตัวอย่างข้อความแล้ว");
     }
 
     private void SetComposerAttachmentNotice(ComposerAttachmentPreview attachment)
     {
         _composerAttachmentNotice = attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase)
             ? Text(
-                $"{attachment.FileName} is attached. Sending it for analysis now.",
-                $"{attachment.FileName} แนบแล้ว กำลังส่งเพื่อวิเคราะห์")
+                $"{attachment.FileName} is attached to the message preview.",
+                $"{attachment.FileName} แนบในตัวอย่างข้อความแล้ว")
             : Text(
-                $"{attachment.FileName} is uploaded. Sending it for analysis now.",
-                $"{attachment.FileName} อัปโหลดแล้ว กำลังส่งเพื่อวิเคราะห์");
+                $"{attachment.FileName} is attached to the message preview.",
+                $"{attachment.FileName} แนบในตัวอย่างข้อความแล้ว");
+    }
+
+    private string ComposerAttachmentCardClass(ComposerAttachmentPreview part, int index)
+    {
+        var kindClass = IsImageComposerAttachment(part)
+            ? "qe-agent-composer-attachment-card--image"
+            : "qe-agent-composer-attachment-card--file";
+        var activeClass = index == _pendingComposerAttachments.Count - 1 ? " active" : string.Empty;
+        return $"qe-agent-composer-attachment-card {kindClass}{activeClass}";
+    }
+
+    private static bool IsImageComposerAttachment(ComposerAttachmentPreview part)
+    {
+        return part.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase) ||
+            part.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
     }
 
     private int RemainingComposerAttachmentCount => Math.Max(0, _pendingComposerAttachments.Count - 5);
@@ -2332,7 +2347,7 @@
         }
 
         _sketchOpen = false;
-        await SendPendingAttachmentsImmediatelyAsync();
+        await RefreshPendingAttachmentPreviewAsync();
         await FocusComposerAsync();
     }
 
@@ -2365,18 +2380,6 @@
 
         await InvokeAsync(StateHasChanged);
         await FocusComposerAsync();
-    }
-
-    private async Task SendPendingAttachmentsImmediatelyAsync()
-    {
-        await RefreshPendingAttachmentPreviewAsync();
-
-        if (_pendingComposerAttachments.Count == 0 || _sending)
-        {
-            return;
-        }
-
-        await HandleSubmitAsync();
     }
 
     private static string BuildSketchFileName(string title)
