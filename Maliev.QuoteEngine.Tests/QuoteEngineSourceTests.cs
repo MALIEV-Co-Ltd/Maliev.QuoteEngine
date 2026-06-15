@@ -1002,14 +1002,13 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain(">Sample use cases<", component, StringComparison.Ordinal);
         Assert.Contains("SampleUseCases", component, StringComparison.Ordinal);
         Assert.Contains("VisibleUseCases", component, StringComparison.Ordinal);
-        Assert.Contains("MaxVisibleUseCases", component, StringComparison.Ordinal);
-        Assert.Contains("RenderedUseCaseSlots", component, StringComparison.Ordinal);
-        Assert.Contains("HandleUseCaseWheelAsync", component, StringComparison.Ordinal);
-        Assert.Contains("@onwheel=\"HandleUseCaseWheelAsync\"", component, StringComparison.Ordinal);
-        Assert.Contains("@onwheel:preventDefault=\"true\"", component, StringComparison.Ordinal);
-        Assert.Contains("PositiveModulo", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-use-case-card\"", component, StringComparison.Ordinal);
         Assert.Contains("Random.Shared.Next()", component, StringComparison.Ordinal);
         Assert.Contains("ApplyUseCaseAsync", component, StringComparison.Ordinal);
+        // Use case ideas scroll natively now; the transform-based fake rotation was removed.
+        Assert.DoesNotContain("HandleUseCaseWheelAsync", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("@onwheel", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("RenderedUseCaseSlots", component, StringComparison.Ordinal);
         Assert.Contains("typeComposerText", component, StringComparison.Ordinal);
         Assert.Contains("UseCaseOption", component, StringComparison.Ordinal);
         Assert.Contains("Quote a 3D printed enclosure", component, StringComparison.Ordinal);
@@ -1114,9 +1113,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("overflow-y: hidden;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("scrollbar-width: none;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-use-cases::-webkit-scrollbar", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-use-cases.is-rotating.is-forward", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("@keyframes qe-agent-use-case-enter-from-bottom", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-use-case-card--slot-6", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-use-cases::-webkit-scrollbar", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("scroll-snap-type: y proximity;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("scroll-snap-align: start;", agentStyles, StringComparison.Ordinal);
+        // Native scrolling replaced the transform-based rotation, keyframe, and slot machinery.
+        Assert.DoesNotContain("is-rotating", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-agent-use-case-enter-from-bottom", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-agent-use-case-card--slot", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-workflow", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-markdown", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-markdown-table", agentStyles, StringComparison.Ordinal);
@@ -1132,8 +1135,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-order-card footer button:first-child", agentStyles, StringComparison.Ordinal);
         Assert.Contains("-webkit-line-clamp: 2;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-main--empty .qe-agent-thread {\n    position: absolute;\n    top: 40.5%;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap {\n    position: absolute;\n    top: 45%;", agentStyles, StringComparison.Ordinal);
+        // Empty-state landing centers content in normal flow (flex + margin auto) so it holds at every breakpoint.
+        Assert.Contains(".qe-agent-main--empty {\n    display: flex;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--empty .qe-agent-thread {\n    position: static;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap {\n    position: static;", agentStyles, StringComparison.Ordinal);
+        // Mobile shell forces a single full-height row so main fills the viewport instead of collapsing.
+        Assert.Contains("grid-template-rows: minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("top: 40.5%;", agentStyles, StringComparison.Ordinal);
+        Assert.DoesNotContain("top: 45%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("user-select: none;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("ComposerClass", component, StringComparison.Ordinal);
         Assert.Contains("_pendingComposerAttachments.Count > 0", component, StringComparison.Ordinal);
