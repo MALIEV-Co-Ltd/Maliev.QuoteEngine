@@ -2451,6 +2451,12 @@
     font-weight: 500;
 }
 
+.qe-agent-composer-attachment-notice {
+    max-width: 180px;
+    color: var(--qe-agent-muted);
+    white-space: normal;
+}
+
 .qe-agent-composer-attachment-card {
     position: relative;
     display: grid;

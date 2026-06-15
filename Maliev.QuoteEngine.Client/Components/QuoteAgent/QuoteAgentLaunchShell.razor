@@ -855,10 +855,14 @@
             <form class="@($"qe-agent-composer {(_sending ? "is-sending" : string.Empty)}")" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
                 @if (_pendingComposerAttachments.Count > 0)
                 {
-                    <div class="qe-agent-composer-attachments" aria-label="@Text("Attached artifacts", "อาร์ติแฟกต์ที่แนบ")">
+                    <div class="qe-agent-composer-attachments"
+                         role="status"
+                         aria-live="polite"
+                         aria-label="@Text("Attached artifacts", "อาร์ติแฟกต์ที่แนบ")">
                         <div class="qe-agent-composer-attachment-heading">
                             <span>@Text("Attachments", "ไฟล์แนบ")</span>
                             <small>@ComposerAttachmentQueueHint()</small>
+                            <small class="qe-agent-composer-attachment-notice">@ComposerAttachmentNotice()</small>
                         </div>
                         @for (var i = 0; i < Math.Min(_pendingComposerAttachments.Count, 5); i++)
                         {
@@ -1290,6 +1294,7 @@
     private bool _dictating;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
+    private string? _composerAttachmentNotice;
     private WorkspacePage _activeWorkspacePage = WorkspacePage.Chat;
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
@@ -1949,6 +1954,7 @@
         }
 
         QueueComposerAttachment(part);
+        SetComposerAttachmentNotice(part);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -1960,6 +1966,7 @@
         }
 
         QueueComposerAttachment(part);
+        SetComposerAttachmentNotice(part);
         await InvokeAsync(StateHasChanged);
         await RefreshPendingAttachmentPreviewAsync();
     }
@@ -2033,6 +2040,40 @@
     private string ComposerAttachmentQueueHint()
     {
         return Text("Will send with your next message", "จะส่งไปพร้อมข้อความถัดไป");
+    }
+
+    private string ComposerAttachmentNotice()
+    {
+        if (!string.IsNullOrWhiteSpace(_composerAttachmentNotice))
+        {
+            return _composerAttachmentNotice;
+        }
+
+        return Text(
+            "Uploaded now. Add a note or press send to analyze.",
+            "อัปโหลดแล้ว เพิ่มข้อความหรือกดส่งเพื่อวิเคราะห์");
+    }
+
+    private void SetComposerAttachmentNotice(QuotePartViewModel part)
+    {
+        _composerAttachmentNotice = IsUploadBusy(part)
+            ? Text(
+                $"Uploading {part.FileName}. It will stay in this message preview.",
+                $"กำลังอัปโหลด {part.FileName} และจะแสดงในตัวอย่างข้อความนี้")
+            : Text(
+                $"{part.FileName} is uploaded. Add a note or press send to analyze.",
+                $"{part.FileName} อัปโหลดแล้ว เพิ่มข้อความหรือกดส่งเพื่อวิเคราะห์");
+    }
+
+    private void SetComposerAttachmentNotice(ComposerAttachmentPreview attachment)
+    {
+        _composerAttachmentNotice = attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase)
+            ? Text(
+                $"{attachment.FileName} is attached. Add a note or press send to analyze.",
+                $"{attachment.FileName} แนบแล้ว เพิ่มข้อความหรือกดส่งเพื่อวิเคราะห์")
+            : Text(
+                $"{attachment.FileName} is uploaded. Add a note or press send to analyze.",
+                $"{attachment.FileName} อัปโหลดแล้ว เพิ่มข้อความหรือกดส่งเพื่อวิเคราะห์");
     }
 
     private int RemainingComposerAttachmentCount => Math.Max(0, _pendingComposerAttachments.Count - 5);
@@ -2312,6 +2353,7 @@
             "Ready");
 
         _pendingComposerAttachments.Add(attachment);
+        SetComposerAttachmentNotice(attachment);
     }
 
     private async Task RefreshPendingAttachmentPreviewAsync()

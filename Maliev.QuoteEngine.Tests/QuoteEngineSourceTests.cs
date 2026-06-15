@@ -1223,6 +1223,7 @@ public sealed class QuoteEngineSourceTests
         var uploadStartedBlock = ExtractSourceBlock(component, "public async Task NotifyUploadStartedAsync", "public async Task NotifyUploadCompletedAsync");
         var uploadCompletedBlock = ExtractSourceBlock(component, "public async Task NotifyUploadCompletedAsync", "private string UploadedPartStatus");
         var sketchBlock = ExtractSourceBlock(component, "private async Task AttachSketchAsync()", "private string RoleLabel");
+        var queueSketchBlock = ExtractSourceBlock(component, "private void QueueSketchComposerAttachment", "private async Task RefreshPendingAttachmentPreviewAsync()");
 
         Assert.Contains("var pendingAttachments = BuildPendingMessageAttachments();", submitBlock, StringComparison.Ordinal);
         Assert.Contains("string.IsNullOrWhiteSpace(message) && pendingAttachments.Count == 0", submitBlock, StringComparison.Ordinal);
@@ -1243,6 +1244,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-composer-attachment-heading\"", component, StringComparison.Ordinal);
         Assert.Contains("ComposerAttachmentQueueHint()", component, StringComparison.Ordinal);
         Assert.Contains("Will send with your next message", component, StringComparison.Ordinal);
+        Assert.Contains("role=\"status\"", component, StringComparison.Ordinal);
+        Assert.Contains("aria-live=\"polite\"", component, StringComparison.Ordinal);
+        Assert.Contains("ComposerAttachmentNotice()", component, StringComparison.Ordinal);
+        Assert.Contains("Uploaded now. Add a note or press send to analyze.", component, StringComparison.Ordinal);
+        Assert.Contains("SetComposerAttachmentNotice(part);", uploadStartedBlock, StringComparison.Ordinal);
+        Assert.Contains("SetComposerAttachmentNotice(part);", uploadCompletedBlock, StringComparison.Ordinal);
+        Assert.Contains("SetComposerAttachmentNotice(attachment);", queueSketchBlock, StringComparison.Ordinal);
         Assert.Contains("RemainingComposerAttachmentCount", component, StringComparison.Ordinal);
         Assert.Contains("ComposerAttachmentOverflowLabel()", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-composer-attachment-overflow\"", component, StringComparison.Ordinal);
@@ -1252,6 +1260,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_pendingComposerAttachments.RemoveAt(index);", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-attachment-remove", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-attachment-heading", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-attachment-notice", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-attachment-overflow", styles, StringComparison.Ordinal);
 
         Assert.Contains("message.Attachments.Count > 0", component, StringComparison.Ordinal);
