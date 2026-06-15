@@ -56,6 +56,7 @@ internal sealed class QuoteAgentService(
     QuoteAgentSessionStore sessionStore,
     QuoteAgentContextToken contextToken,
     CustomerSessionResolver sessionResolver,
+    IGoogleDriveConnectorStore googleDriveConnectorStore,
     IHttpContextAccessor httpContextAccessor,
     IHubContext<QuoteNotificationsHub> hubContext,
     IConfiguration configuration,
@@ -1394,8 +1395,10 @@ internal sealed class QuoteAgentService(
         return ToStateResponse(state);
     }
 
-    private static QuoteAgentConnectorRegistryResponse BuildConnectorRegistry(QuoteAgentSessionState state)
+    private QuoteAgentConnectorRegistryResponse BuildConnectorRegistry(QuoteAgentSessionState state)
     {
+        var customerId = ResolveCustomerId();
+        var isGoogleDriveConnected = customerId.HasValue && googleDriveConnectorStore.IsConnected(customerId.Value);
         return new QuoteAgentConnectorRegistryResponse
         {
             SessionId = state.SessionId,
@@ -1407,12 +1410,12 @@ internal sealed class QuoteAgentService(
                     ConnectorId = "google-drive",
                     DisplayName = "Google Drive",
                     Category = "file_import",
-                    Status = "available",
+                    Status = isGoogleDriveConnected ? "connected" : "available",
                     Description = "Connect Google Drive to choose customer CAD, drawings, photos, and sketches from a trusted Make Studio handoff.",
                     RequiresAuthenticationToConnect = true,
-                    IsConnected = false,
+                    IsConnected = isGoogleDriveConnected,
                     SupportedFileTypes = ["STEP", "STL", "3MF", "OBJ", "GLB", "PDF", "JPG", "PNG"],
-                    ActionHint = "connect_google_drive"
+                    ActionHint = isGoogleDriveConnected ? "browse_google_drive" : "connect_google_drive"
                 },
                 new QuoteAgentConnectorDto
                 {
@@ -1492,14 +1495,14 @@ internal sealed class QuoteAgentService(
             SessionId = state.SessionId,
             ConnectorId = connector.ConnectorId,
             DisplayName = connector.DisplayName,
-            Status = isAvailable ? "ready_to_connect" : connector.Status,
+            Status = connector.IsConnected ? "connected" : isAvailable ? "ready_to_connect" : connector.Status,
             IsAuthenticated = customerId.HasValue,
             IsAvailableToConnect = isAvailable,
             HandoffUrl = $"/quote/new?connect={connector.ConnectorId}",
             Message = isAvailable
                 ? $"{connector.DisplayName} can be connected from the trusted Make Studio connector panel."
                 : $"{connector.DisplayName} is planned for Make Studio. For now, upload files directly or drag them into the chat.",
-            ActionHint = isAvailable ? connector.ActionHint : "connector_planned"
+            ActionHint = connector.IsConnected ? "browse_google_drive" : isAvailable ? connector.ActionHint : "connector_planned"
         };
     }
 

@@ -5,11 +5,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Maliev.QuoteEngine.Bff.Clients;
+using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -1977,6 +1979,59 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Google_drive_connector_start_requires_customer_session()
+    {
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig();
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_start_redirects_signed_in_customer_to_google_with_drive_scope()
+    {
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig();
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            HandleCookies = true,
+            AllowAutoRedirect = false
+        });
+        var signIn = await client.GetAsync("/test/sign-in?email=drive-connect@example.com");
+        signIn.EnsureSuccessStatusCode();
+
+        var response = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.NotNull(response.Headers.Location);
+        var redirect = response.Headers.Location.OriginalString;
+        Assert.StartsWith("https://accounts.google.com/o/oauth2/v2/auth", redirect, StringComparison.Ordinal);
+        Assert.Contains("client_id=quote-engine-google-client", redirect, StringComparison.Ordinal);
+        Assert.Contains("scope=https%3A%2F%2Fwww.googleapis.com%2Fauth%2Fdrive.file", redirect, StringComparison.Ordinal);
+        Assert.Contains("access_type=offline", redirect, StringComparison.Ordinal);
+        Assert.Contains("include_granted_scopes=true", redirect, StringComparison.Ordinal);
+        Assert.Contains("state=", redirect, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_registry_marks_drive_connected_for_signed_in_customer()
+    {
+        await using var scopedFactory = CreateAgentFactoryWithConnectedGoogleDrive();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-connected@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var registry = await client.GetFromJsonAsync<QuoteAgentConnectorRegistryResponse>(
+            $"/quote/v1/agent/sessions/{sessionId:D}/connectors");
+
+        Assert.NotNull(registry);
+        var drive = Assert.Single(registry.Connectors, connector => connector.ConnectorId == "google-drive");
+        Assert.True(drive.IsConnected);
+        Assert.Equal("connected", drive.Status);
+        Assert.Equal("browse_google_drive", drive.ActionHint);
+    }
+
+    [Fact]
     public async Task Agent_settings_tool_returns_and_updates_customer_safe_session_settings()
     {
         using var client = factory.CreateClient();
@@ -2479,6 +2534,74 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
                 services.AddSingleton<IChatbotServiceClient, RecordingChatbotServiceClient>();
             });
         });
+    }
+
+    private WebApplicationFactory<Program> CreateAgentFactoryWithGoogleDriveConfig()
+    {
+        return factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Authentication:Google:ClientId"] = "quote-engine-google-client",
+                    ["Authentication:Google:ClientSecret"] = "quote-engine-google-secret",
+                    ["GoogleDrive:RedirectUri"] = "https://make.maliev.com/auth/google/drive/callback"
+                });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient, RecordingChatbotServiceClient>();
+            });
+        });
+    }
+
+    private WebApplicationFactory<Program> CreateAgentFactoryWithConnectedGoogleDrive()
+    {
+        return factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Authentication:Google:ClientId"] = "quote-engine-google-client",
+                    ["Authentication:Google:ClientSecret"] = "quote-engine-google-secret",
+                    ["GoogleDrive:RedirectUri"] = "https://make.maliev.com/auth/google/drive/callback"
+                });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient, RecordingChatbotServiceClient>();
+                services.RemoveAll<IGoogleDriveConnectorStore>();
+                services.AddSingleton<IGoogleDriveConnectorStore, AlwaysConnectedGoogleDriveConnectorStore>();
+            });
+        });
+    }
+
+    private sealed class AlwaysConnectedGoogleDriveConnectorStore : IGoogleDriveConnectorStore
+    {
+        public bool IsConnected(Guid customerId) => true;
+
+        public GoogleDriveConnection? Get(Guid customerId)
+        {
+            return new GoogleDriveConnection(
+                customerId,
+                "access-token",
+                "refresh-token",
+                DateTimeOffset.UtcNow.AddHours(1),
+                "drive-connected@example.com",
+                DateTimeOffset.UtcNow);
+        }
+
+        public void Save(GoogleDriveConnection connection)
+        {
+        }
+
+        public void Remove(Guid customerId)
+        {
+        }
     }
 
     private sealed class RecordingChatbotServiceClient : IChatbotServiceClient

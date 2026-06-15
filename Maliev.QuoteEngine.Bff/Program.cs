@@ -68,6 +68,7 @@ builder.Services.AddScoped<QuoteUploadHandoffToken>();
 builder.Services.AddScoped<QuoteAgentContextToken>();
 builder.Services.AddScoped<ICustomerChatbotService, CustomerChatbotService>();
 builder.Services.AddSingleton<QuoteAgentSessionStore>();
+builder.Services.AddSingleton<IGoogleDriveConnectorStore, InMemoryGoogleDriveConnectorStore>();
 builder.Services.AddScoped<IQuoteAgentService, QuoteAgentService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(45));
