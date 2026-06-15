@@ -3438,6 +3438,16 @@
     text-transform: uppercase;
 }
 
+.qe-agent-artifact-preview-shell {
+    display: grid;
+    min-height: min(46dvh, 440px);
+}
+
+.qe-agent-artifact-preview-shell > * {
+    min-width: 0;
+    min-height: 100%;
+}
+
 .qe-agent-artifact-viewer {
     display: grid;
     gap: 10px;
@@ -3476,7 +3486,7 @@
 }
 
 .qe-agent-artifact-viewer-canvas {
-    min-height: 260px;
+    min-height: 300px;
     height: min(42dvh, 360px);
     overflow: hidden;
     border: 1px solid var(--qe-agent-line);
@@ -3530,7 +3540,24 @@
     gap: 10px;
 }
 
-.qe-agent-artifact-context-body img {
+.qe-agent-artifact-context-preview {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    min-height: 260px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: zoom-in;
+}
+
+.qe-agent-artifact-context-preview:hover img,
+.qe-agent-artifact-context-preview:focus-visible img {
+    border-color: var(--qe-agent-primary);
+}
+
+.qe-agent-artifact-context-body img,
+.qe-agent-artifact-context-preview img {
     width: 100%;
     max-height: 260px;
     object-fit: contain;
@@ -3589,6 +3616,9 @@
     color: var(--qe-agent-ink);
     text-decoration: none;
     font-size: 12px;
+    font-family: inherit;
+    background: transparent;
+    cursor: pointer;
 }
 
 .qe-agent-artifact-link:hover {
@@ -3602,6 +3632,142 @@
     border-radius: 8px;
     object-fit: cover;
     background: var(--qe-agent-soft);
+}
+
+.qe-agent-preview-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    display: grid;
+    place-items: center;
+    padding: clamp(16px, 3vw, 42px);
+}
+
+.qe-agent-preview-backdrop {
+    position: fixed;
+    inset: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--qe-agent-bg) 18%, rgba(0, 0, 0, .72));
+    cursor: zoom-out;
+}
+
+:root[data-maliev-theme="light"] .qe-agent-preview-backdrop {
+    background: color-mix(in srgb, var(--qe-agent-bg) 34%, rgba(0, 0, 0, .44));
+}
+
+.qe-agent-preview-dialog {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(1120px, 92vw);
+    height: min(820px, 88dvh);
+    min-height: 420px;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--qe-agent-line) 82%, transparent);
+    border-radius: 18px;
+    background: var(--qe-agent-raised);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, .32);
+}
+
+.qe-agent-preview-dialog > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    min-width: 0;
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--qe-agent-line);
+}
+
+.qe-agent-preview-dialog > header div {
+    min-width: 0;
+}
+
+.qe-agent-preview-dialog > header span,
+.qe-agent-preview-dialog > header small {
+    display: block;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+}
+
+.qe-agent-preview-dialog > header strong {
+    display: block;
+    overflow: hidden;
+    color: var(--qe-agent-ink);
+    font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-preview-stage {
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    min-height: 0;
+    padding: 18px;
+    background: var(--qe-agent-bg);
+}
+
+.qe-agent-preview-stage img,
+.qe-agent-preview-stage iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border: 0;
+    border-radius: 12px;
+    object-fit: contain;
+    background: var(--qe-agent-raised);
+}
+
+.qe-agent-preview-fallback {
+    display: grid;
+    place-items: center;
+    gap: 10px;
+    max-width: 460px;
+    padding: 28px;
+    color: var(--qe-agent-muted);
+    text-align: center;
+}
+
+.qe-agent-preview-fallback strong {
+    color: var(--qe-agent-ink);
+}
+
+.qe-agent-preview-fallback p {
+    margin: 0;
+    line-height: 1.45;
+}
+
+.qe-agent-preview-nav {
+    position: absolute;
+    top: 50%;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--qe-agent-raised) 90%, transparent);
+    color: var(--qe-agent-ink);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, .18);
+    cursor: pointer;
+    transform: translateY(-50%);
+}
+
+.qe-agent-preview-nav--prev {
+    left: 16px;
+}
+
+.qe-agent-preview-nav--next {
+    right: 16px;
+}
+
+.qe-agent-preview-nav:disabled {
+    opacity: .35;
+    cursor: default;
 }
 
 .qe-agent-primary-btn,

@@ -1092,55 +1092,62 @@
             {
                 @if (UploadedParts.Count > 0)
                 {
-                    @if (CanRenderUploadedPartViewer(SelectedUploadedPart))
-                    {
-                        <section class="qe-agent-artifact-viewer" aria-label="@Text("Selected 3D file viewer", "ตัวแสดงไฟล์ 3D ที่เลือก")">
-                            <header>
-                                <div>
-                                    <span>@Text("3D viewer", "ตัวแสดง 3D")</span>
-                                    <strong>@SelectedUploadedPart.FileName</strong>
+                    <div class="qe-agent-artifact-preview-shell">
+                        @if (CanRenderUploadedPartViewer(SelectedUploadedPart))
+                        {
+                            <section class="qe-agent-artifact-viewer" aria-label="@Text("Selected 3D file viewer", "ตัวแสดงไฟล์ 3D ที่เลือก")">
+                                <header>
+                                    <div>
+                                        <span>@Text("3D viewer", "ตัวแสดง 3D")</span>
+                                        <strong>@SelectedUploadedPart.FileName</strong>
+                                    </div>
+                                    <small>@UploadedPartStatus(SelectedUploadedPart)</small>
+                                </header>
+                                <div class="qe-agent-artifact-viewer-canvas">
+                                    <QePartViewer GlbUrl="@SelectedUploadedPart.GlbUrl"
+                                                  FileExtension="@ResolveUploadedPartViewerExtension(SelectedUploadedPart)"
+                                                  IsDarkMode="@IsDarkMode"
+                                                  PartColor="@SelectedUploadedPart.Color"
+                                                  ProcessId="@SelectedUploadedPart.ProcessId"
+                                                  MaterialId="@SelectedUploadedPart.MaterialId"
+                                                  BrowserFileClientId="@SelectedUploadedPart.ClientFileId"
+                                                  BrowserFileName="@SelectedUploadedPart.FileName"
+                                                  StoragePath="@SelectedUploadedPart.StoragePath"
+                                                  FinishCode="@SelectedUploadedPart.FinishCode"
+                                                  RoughnessCode="@SelectedUploadedPart.RoughnessCode"
+                                                  ViewerSettings="@SelectedUploadedPart.ViewerSettings" />
                                 </div>
-                                <small>@UploadedPartStatus(SelectedUploadedPart)</small>
-                            </header>
-                            <div class="qe-agent-artifact-viewer-canvas">
-                                <QePartViewer GlbUrl="@SelectedUploadedPart.GlbUrl"
-                                              FileExtension="@ResolveUploadedPartViewerExtension(SelectedUploadedPart)"
-                                              IsDarkMode="@IsDarkMode"
-                                              PartColor="@SelectedUploadedPart.Color"
-                                              ProcessId="@SelectedUploadedPart.ProcessId"
-                                              MaterialId="@SelectedUploadedPart.MaterialId"
-                                              BrowserFileClientId="@SelectedUploadedPart.ClientFileId"
-                                              BrowserFileName="@SelectedUploadedPart.FileName"
-                                              StoragePath="@SelectedUploadedPart.StoragePath"
-                                              FinishCode="@SelectedUploadedPart.FinishCode"
-                                              RoughnessCode="@SelectedUploadedPart.RoughnessCode"
-                                              ViewerSettings="@SelectedUploadedPart.ViewerSettings" />
-                            </div>
-                        </section>
-                    }
-                    else
-                    {
-                        <section class="qe-agent-artifact-context" aria-label="@Text("Supplemental uploaded file", "ไฟล์ประกอบที่อัปโหลด")">
-                            <header>
-                                <div>
-                                    <span>@SupplementalArtifactLabel(SelectedUploadedPart)</span>
-                                    <strong>@SelectedUploadedPart.FileName</strong>
+                            </section>
+                        }
+                        else
+                        {
+                            <section class="qe-agent-artifact-context" aria-label="@Text("Supplemental uploaded file", "ไฟล์ประกอบที่อัปโหลด")">
+                                <header>
+                                    <div>
+                                        <span>@SupplementalArtifactLabel(SelectedUploadedPart)</span>
+                                        <strong>@SelectedUploadedPart.FileName</strong>
+                                    </div>
+                                    <small>@UploadedPartStatus(SelectedUploadedPart)</small>
+                                </header>
+                                <div class="qe-agent-artifact-context-body">
+                                    <button type="button"
+                                            class="qe-agent-artifact-context-preview"
+                                            @onclick="@(() => OpenUploadedPreviewAsync(SelectedPartIndex))"
+                                            title="@Text("Preview file", "ดูตัวอย่างไฟล์")">
+                                        @if (!string.IsNullOrWhiteSpace(SelectedUploadedPart.ThumbnailUrl))
+                                        {
+                                            <img src="@SelectedUploadedPart.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@UploadedPartIcon(SelectedUploadedPart)" Size="Size.Large" />
+                                        }
+                                    </button>
+                                    <p>@SupplementalArtifactHint(SelectedUploadedPart)</p>
                                 </div>
-                                <small>@UploadedPartStatus(SelectedUploadedPart)</small>
-                            </header>
-                            <div class="qe-agent-artifact-context-body">
-                                @if (!string.IsNullOrWhiteSpace(SelectedUploadedPart.ThumbnailUrl))
-                                {
-                                    <img src="@SelectedUploadedPart.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
-                                }
-                                else
-                                {
-                                    <MudIcon Icon="@UploadedPartIcon(SelectedUploadedPart)" Size="Size.Large" />
-                                }
-                                <p>@SupplementalArtifactHint(SelectedUploadedPart)</p>
-                            </div>
-                        </section>
-                    }
+                            </section>
+                        }
+                    </div>
                     <section class="qe-agent-artifact-section" aria-label="@Text("Uploaded files", "ไฟล์ที่อัปโหลด")">
                         <header>@Text("Uploaded files", "ไฟล์ที่อัปโหลด")</header>
                         <div class="qe-agent-artifacts">
@@ -1150,7 +1157,8 @@
                                 var part = UploadedParts[i];
                                 <button type="button"
                                         class="@($"qe-agent-artifact qe-agent-artifact--button {(i == SelectedPartIndex ? "active" : string.Empty)}")"
-                                        @onclick="@(() => SelectUploadedPartAsync(index))">
+                                        @onclick="@(() => SelectUploadedPartAsync(index))"
+                                        @ondblclick="@(() => OpenUploadedPreviewAsync(index))">
                                     @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
                                     {
                                         <img class="qe-agent-artifact-thumb" src="@part.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
@@ -1179,13 +1187,12 @@
                             </div>
                             @if (!string.IsNullOrWhiteSpace(artifact.Url))
                             {
-                                <a class="qe-agent-artifact-link"
-                                   href="@artifact.Url"
-                                   target="_blank"
-                                   rel="noopener noreferrer">
+                                <button type="button"
+                                        class="qe-agent-artifact-link"
+                                        @onclick="@(() => OpenArtifactPreview(artifact))">
                                     <span>@ArtifactActionLabel(artifact)</span>
-                                    <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
-                                </a>
+                                    <MudIcon Icon="@Icons.Material.Outlined.Preview" Size="Size.Small" />
+                                </button>
                             }
                         </div>
                     }
@@ -1216,7 +1223,62 @@
                     }
                 </section>
             }
-        </aside>
+            </aside>
+    }
+
+    @if (_previewDialogOpen && CurrentPreviewItem is not null)
+    {
+        var preview = CurrentPreviewItem;
+        <div class="qe-agent-preview-modal" role="dialog" aria-modal="true" aria-label="@Text("File preview", "ดูตัวอย่างไฟล์")">
+            <button type="button"
+                    class="qe-agent-preview-backdrop"
+                    aria-label="@Text("Close preview", "ปิดตัวอย่าง")"
+                    @onclick="ClosePreviewDialog"></button>
+            <section class="qe-agent-preview-dialog">
+                <header>
+                    <div>
+                        <span>@preview.KindLabel</span>
+                        <strong>@preview.Title</strong>
+                        <small>@preview.Status</small>
+                    </div>
+                    <button type="button" class="qe-agent-round-btn" @onclick="ClosePreviewDialog" title="@Text("Close", "ปิด")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
+                </header>
+                <button type="button"
+                        class="qe-agent-preview-nav qe-agent-preview-nav--prev"
+                        @onclick="@(() => MovePreview(-1))"
+                        disabled="@(PreviewItems.Count < 2)"
+                        aria-label="@Text("Previous file", "ไฟล์ก่อนหน้า")">
+                    <MudIcon Icon="@Icons.Material.Outlined.ChevronLeft" Size="Size.Medium" />
+                </button>
+                <div class="qe-agent-preview-stage">
+                    @if (IsImagePreview(preview))
+                    {
+                        <img src="@preview.Url" alt="@preview.Title" />
+                    }
+                    else if (IsPdfPreview(preview))
+                    {
+                        <iframe src="@preview.Url" title="@preview.Title"></iframe>
+                    }
+                    else
+                    {
+                        <div class="qe-agent-preview-fallback">
+                            <MudIcon Icon="@preview.Icon" Size="Size.Large" />
+                            <strong>@preview.Title</strong>
+                            <p>@Text("This file is attached to the quote workspace. Preview support for this format will appear here when the artifact is ready.", "ไฟล์นี้แนบอยู่ในพื้นที่เสนอราคา ตัวอย่างสำหรับชนิดไฟล์นี้จะแสดงที่นี่เมื่อไฟล์งานพร้อม")</p>
+                        </div>
+                    }
+                </div>
+                <button type="button"
+                        class="qe-agent-preview-nav qe-agent-preview-nav--next"
+                        @onclick="@(() => MovePreview(1))"
+                        disabled="@(PreviewItems.Count < 2)"
+                        aria-label="@Text("Next file", "ไฟล์ถัดไป")">
+                    <MudIcon Icon="@Icons.Material.Outlined.ChevronRight" Size="Size.Medium" />
+                </button>
+            </section>
+        </div>
     }
 
     @if (_artifactPanelOpen || _summaryPanelOpen)
@@ -1245,6 +1307,8 @@
     private bool _sending;
     private bool _artifactPanelOpen;
     private bool _summaryPanelOpen;
+    private bool _previewDialogOpen;
+    private int _previewIndex;
     private bool _railCollapsed;
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
@@ -1409,6 +1473,10 @@
     private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
     private int ArtifactCount => _artifacts.Count + UploadedParts.Count;
     private QuotePartViewModel SelectedUploadedPart => UploadedParts[Math.Clamp(SelectedPartIndex, 0, Math.Max(UploadedParts.Count - 1, 0))];
+    private IReadOnlyList<PreviewItem> PreviewItems => BuildPreviewItems();
+    private PreviewItem? CurrentPreviewItem => PreviewItems.Count == 0
+        ? null
+        : PreviewItems[Math.Clamp(_previewIndex, 0, PreviewItems.Count - 1)];
     private AgentWorkbenchSnapshot? LatestWorkbench => _messages.LastOrDefault(message => message.Workbench is not null)?.Workbench;
     private string ProjectSummaryTitle => string.IsNullOrWhiteSpace(_projectName)
         ? Text("Untitled project", "โปรเจกต์ยังไม่มีชื่อ")
@@ -1874,6 +1942,80 @@
     {
         _artifactPanelOpen = false;
         _summaryPanelOpen = false;
+    }
+
+    private async Task OpenUploadedPreviewAsync(int uploadedPartIndex)
+    {
+        if (UploadedParts.Count == 0)
+        {
+            return;
+        }
+
+        var clampedIndex = Math.Clamp(uploadedPartIndex, 0, UploadedParts.Count - 1);
+        await SelectUploadedPartAsync(clampedIndex);
+        var previewIndex = PreviewItems.ToList().FindIndex(item =>
+            item.Source.Equals("uploaded", StringComparison.OrdinalIgnoreCase) &&
+            item.SourceIndex == clampedIndex);
+        _previewIndex = previewIndex >= 0 ? previewIndex : 0;
+        _previewDialogOpen = true;
+    }
+
+    private void OpenArtifactPreview(QuoteAgentArtifactDto artifact)
+    {
+        var previewIndex = PreviewItems.ToList().FindIndex(item =>
+            item.Source.Equals("artifact", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Url, artifact.Url, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Title, artifact.Title, StringComparison.OrdinalIgnoreCase));
+        _previewIndex = previewIndex >= 0 ? previewIndex : 0;
+        _previewDialogOpen = CurrentPreviewItem is not null;
+    }
+
+    private void ClosePreviewDialog()
+    {
+        _previewDialogOpen = false;
+    }
+
+    private void MovePreview(int direction)
+    {
+        var items = PreviewItems;
+        if (items.Count == 0)
+        {
+            _previewDialogOpen = false;
+            return;
+        }
+
+        _previewIndex = (_previewIndex + direction + items.Count) % items.Count;
+    }
+
+    private IReadOnlyList<PreviewItem> BuildPreviewItems()
+    {
+        var items = new List<PreviewItem>();
+        for (var i = 0; i < UploadedParts.Count; i++)
+        {
+            var part = UploadedParts[i];
+            items.Add(new PreviewItem(
+                "uploaded",
+                i,
+                part.FileName,
+                UploadedPartStatus(part),
+                PreviewUrlForUploadedPart(part),
+                SupplementalArtifactLabel(part),
+                UploadedPartIcon(part)));
+        }
+
+        foreach (var artifact in _artifacts.Where(item => !string.IsNullOrWhiteSpace(item.Url)))
+        {
+            items.Add(new PreviewItem(
+                "artifact",
+                -1,
+                artifact.Title,
+                artifact.Status,
+                artifact.Url!,
+                ArtifactKindLabel(artifact),
+                ArtifactIcon(artifact.ArtifactType)));
+        }
+
+        return items;
     }
 
     private void ToggleRail()
@@ -2470,12 +2612,41 @@
     {
         return artifact.ArtifactType.ToLowerInvariant() switch
         {
-            "formal_quote" => Text("Open quote", "เปิดใบเสนอราคา"),
+            "formal_quote" => Text("Preview quote", "ดูตัวอย่างใบเสนอราคา"),
             "quote_approval" => Text("Review quote", "ตรวจใบเสนอราคา"),
-            "payment" => Text("Open payment", "เปิดการชำระเงิน"),
-            "viewer" => Text("Open viewer", "เปิดตัวแสดงผล"),
-            _ => Text("Open", "เปิด")
+            "payment" => Text("Preview payment", "ดูตัวอย่างการชำระเงิน"),
+            "viewer" => Text("Preview viewer", "ดูตัวอย่างตัวแสดงผล"),
+            _ => Text("Preview", "ดูตัวอย่าง")
         };
+    }
+
+    private string ArtifactKindLabel(QuoteAgentArtifactDto artifact)
+    {
+        return artifact.ArtifactType.ToLowerInvariant() switch
+        {
+            "formal_quote" => Text("Quote PDF", "PDF ใบเสนอราคา"),
+            "quote_approval" => Text("Quote approval", "การอนุมัติใบเสนอราคา"),
+            "payment" => Text("Payment handoff", "การชำระเงิน"),
+            "viewer" => Text("3D viewer artifact", "ไฟล์ตัวแสดงผล 3D"),
+            _ => Text("Quote artifact", "ไฟล์งานใบเสนอราคา")
+        };
+    }
+
+    private static string PreviewUrlForUploadedPart(QuotePartViewModel part)
+    {
+        return part.ThumbnailUrl ?? part.GlbUrl ?? string.Empty;
+    }
+
+    private static bool IsImagePreview(PreviewItem item)
+    {
+        var extension = Path.GetExtension(item.Url).TrimStart('.');
+        return QuoteUploadConstraints.SupplementalImageExtensions.Any(value =>
+            value.Equals(extension, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsPdfPreview(PreviewItem item)
+    {
+        return Path.GetExtension(item.Url).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string AuthMethodIcon(QuoteAgentAuthMethodDto method)
@@ -3075,6 +3246,15 @@
         Projects,
         Settings
     }
+
+    private sealed record PreviewItem(
+        string Source,
+        int SourceIndex,
+        string Title,
+        string Status,
+        string Url,
+        string KindLabel,
+        string Icon);
 
     private sealed record ComposerAttachmentPreview(
         Guid AttachmentId,
