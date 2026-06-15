@@ -15,6 +15,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Maliev.QuoteEngine.Tests;
 
+[Collection(QuoteEngineEndpointTestCollection.Name)]
 public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory factory)
     : IClassFixture<QuoteEngineWebApplicationFactory>
 {

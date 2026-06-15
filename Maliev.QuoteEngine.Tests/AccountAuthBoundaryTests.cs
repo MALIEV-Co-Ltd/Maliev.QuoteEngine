@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Maliev.QuoteEngine.Tests;
 
+[Collection(QuoteEngineEndpointTestCollection.Name)]
 public sealed class AccountAuthBoundaryTests(QuoteEngineWebApplicationFactory factory)
     : IClassFixture<QuoteEngineWebApplicationFactory>
 {

@@ -4,6 +4,7 @@ using Maliev.QuoteEngine.Shared.Quotes;
 
 namespace Maliev.QuoteEngine.Tests;
 
+[Collection(QuoteEngineEndpointTestCollection.Name)]
 public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory factory)
     : IClassFixture<QuoteEngineWebApplicationFactory>
 {

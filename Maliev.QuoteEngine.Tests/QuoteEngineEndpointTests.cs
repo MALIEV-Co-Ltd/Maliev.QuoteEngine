@@ -20,6 +20,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Polly.Timeout;
@@ -63,6 +64,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         builder.ConfigureLogging(logging => logging.ClearProviders());
         builder.ConfigureTestServices(services =>
         {
+            RemoveMassTransitHostedService(services);
+
             // Replace the real UploadService HTTP client with a no-op test double.
             services.RemoveAll<QuoteUploadServiceClient>();
             services.AddSingleton<QuoteUploadServiceClient>(new NoOpQuoteUploadServiceClient());
@@ -101,6 +104,19 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             // Replaces the removed /quote/v1/auth/sign-in endpoint for test authentication.
             services.AddTransient<IStartupFilter, TestSignInStartupFilter>();
         });
+    }
+
+    private static void RemoveMassTransitHostedService(IServiceCollection services)
+    {
+        for (var index = services.Count - 1; index >= 0; index--)
+        {
+            var descriptor = services[index];
+            if (descriptor.ServiceType == typeof(IHostedService) &&
+                descriptor.ImplementationType?.FullName == "MassTransit.MassTransitHostedService")
+            {
+                services.RemoveAt(index);
+            }
+        }
     }
 
     public sealed record CapturedOrderDeliverySnapshot(
@@ -823,6 +839,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     }
 }
 
+[Collection(QuoteEngineEndpointTestCollection.Name)]
 public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory factory)
     : IClassFixture<QuoteEngineWebApplicationFactory>
 {
