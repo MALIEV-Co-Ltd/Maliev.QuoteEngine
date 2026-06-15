@@ -42,14 +42,23 @@
             </button>
             <div class="qe-agent-rail-search" aria-label="@Text("Search customer data", "ค้นหาข้อมูลลูกค้า")">
                 <label class="sr-only" for="qe-agent-search-input">@Text("Search everything", "ค้นหาทั้งหมด")</label>
-                <div class="@($"qe-agent-global-search {(SearchHasMinimumQuery ? "active" : string.Empty)}")">
+                <div class="@($"qe-agent-global-search {(SearchHasMinimumQuery ? "active" : string.Empty)}")"
+                     @onmouseenter="SuppressSearchPromptOnHover"
+                     @onmouseleave="ResumeSearchPromptAfterHover"
+                     @onpointerenter="SuppressSearchPromptOnHover"
+                     @onpointerleave="ResumeSearchPromptAfterHover">
                     <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+                    @if (ShowAnimatedSearchPrompt)
+                    {
+                        <span class="qe-agent-search-prompt" aria-hidden="true">@_animatedSearchPrompt</span>
+                    }
                     <input id="qe-agent-search-input"
                            @ref="_searchInput"
                            value="@_searchQuery"
-                           @onfocus="OpenSearchAsync"
+                           @onfocus="OnSearchFocusAsync"
+                           @onblur="OnSearchBlur"
                            @oninput="OnSearchInputAsync"
-                           placeholder="@Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...")"
+                           placeholder="@SearchInputPlaceholder"
                            aria-label="@Text("Search all projects, orders, files, and artifacts", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์ และไฟล์งานทั้งหมด")" />
                 </div>
             </div>
@@ -1323,12 +1332,16 @@
     private bool _dictating;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
+    private bool _searchPromptHovered;
+    private bool _searchPromptFocused;
     private WorkspacePage _activeWorkspacePage = WorkspacePage.Chat;
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
+    private string _animatedSearchPrompt = string.Empty;
     private string _sketchTitle = "Manufacturing sketch";
     private string _sketchColor = "#161616";
     private string? _lastSketchDataUrl;
+    private CancellationTokenSource? _searchPromptAnimationCts;
     private ElementReference _composerTextarea;
     private ElementReference _searchInput;
     private ElementReference _dictationButton;
@@ -1416,6 +1429,15 @@
         new("Quote spare parts from old drawings", "ขอราคาชิ้นส่วนอะไหล่จาก drawing เก่า", "I have old scanned drawings. Extract the quote requirements, flag unreadable notes, and tell me what needs confirmation.", "มี drawing scan เก่า ช่วยดึงข้อกำหนดสำหรับเสนอราคา ชี้ note ที่อ่านไม่ได้ และบอกสิ่งที่ต้องยืนยัน"),
         new("Check minimum order quantity", "ตรวจ MOQ", "For this part, explain the price drivers, MOQ, setup costs, and best quantity break for a pilot run.", "สำหรับชิ้นงานนี้ ช่วยอธิบายปัจจัยราคา MOQ ค่า setup และ quantity break ที่เหมาะสำหรับ pilot run"),
         new("Quote production-ready revision", "ขอราคา revision พร้อมผลิต", "Quote the latest revision, compare it to the previous uploaded version, and call out any manufacturing-impacting changes.", "ขอราคา revision ล่าสุด เปรียบเทียบกับเวอร์ชันก่อนที่อัปโหลด และชี้การเปลี่ยนแปลงที่กระทบการผลิต")
+    ];
+
+    private static readonly SearchPromptOption[] SearchPromptExamples =
+    [
+        new("Find my black anodized bracket quote", "ค้นหาใบเสนอราคาขายึดอโนไดซ์ดำ"),
+        new("Search orders waiting for payment", "ค้นหาออเดอร์ที่รอชำระเงิน"),
+        new("Find uploaded STEP files from last week", "ค้นหาไฟล์ STEP ที่อัปโหลดสัปดาห์ที่แล้ว"),
+        new("Search projects with DFM issues", "ค้นหาโปรเจกต์ที่มีปัญหา DFM"),
+        new("Find quotes for 6061-T6 aluminum", "ค้นหาใบเสนอราคาอะลูมิเนียม 6061-T6")
     ];
 
     [Parameter]
@@ -1536,6 +1558,11 @@
     private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
     private bool SearchHasMinimumQuery => _searchQuery.Trim().Length >= SearchMinimumCharacters;
+    private bool CanAnimateSearchPrompt => string.IsNullOrEmpty(_searchQuery) && !_searchPromptHovered && !_searchPromptFocused;
+    private bool ShowAnimatedSearchPrompt => CanAnimateSearchPrompt && !string.IsNullOrWhiteSpace(_animatedSearchPrompt);
+    private string SearchInputPlaceholder => CanAnimateSearchPrompt
+        ? string.Empty
+        : Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...");
 
     private bool IsWorkspacePage(WorkspacePage page)
     {
@@ -1564,6 +1591,8 @@
         _useCaseDeck = SampleUseCases
             .OrderBy(_ => Random.Shared.Next())
             .ToArray();
+        _searchPromptAnimationCts = new CancellationTokenSource();
+        _ = AnimateSearchPromptAsync(_searchPromptAnimationCts.Token);
     }
 
     protected override async Task OnParametersSetAsync()
@@ -3022,11 +3051,111 @@
         await RefreshSearchResultsAsync();
     }
 
+    private async Task OnSearchFocusAsync()
+    {
+        _searchPromptFocused = true;
+        ClearAnimatedSearchPrompt();
+        await OpenSearchAsync();
+    }
+
+    private void OnSearchBlur()
+    {
+        _searchPromptFocused = false;
+    }
+
+    private void SuppressSearchPromptOnHover()
+    {
+        _searchPromptHovered = true;
+        ClearAnimatedSearchPrompt();
+    }
+
+    private void ResumeSearchPromptAfterHover()
+    {
+        _searchPromptHovered = false;
+    }
+
     private async Task OnSearchInputAsync(ChangeEventArgs args)
     {
         _searchQuery = args.Value?.ToString() ?? string.Empty;
+        if (!string.IsNullOrEmpty(_searchQuery))
+        {
+            ClearAnimatedSearchPrompt();
+        }
+
         _searchOpen = SearchHasMinimumQuery;
         await RefreshSearchResultsAsync();
+    }
+
+    private void ClearAnimatedSearchPrompt()
+    {
+        if (!string.IsNullOrEmpty(_animatedSearchPrompt))
+        {
+            _animatedSearchPrompt = string.Empty;
+        }
+    }
+
+    private async Task AnimateSearchPromptAsync(CancellationToken cancellationToken)
+    {
+        var promptIndex = Random.Shared.Next(SearchPromptExamples.Length);
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (!CanAnimateSearchPrompt)
+                {
+                    await InvokeAsync(() =>
+                    {
+                        ClearAnimatedSearchPrompt();
+                        StateHasChanged();
+                    });
+                    await Task.Delay(220, cancellationToken);
+                    continue;
+                }
+
+                var prompt = Text(SearchPromptExamples[promptIndex].TextEn, SearchPromptExamples[promptIndex].TextTh);
+                promptIndex = (promptIndex + 1) % SearchPromptExamples.Length;
+
+                for (var length = 1; length <= prompt.Length && !cancellationToken.IsCancellationRequested; length++)
+                {
+                    if (!CanAnimateSearchPrompt)
+                    {
+                        break;
+                    }
+
+                    var current = prompt[..length];
+                    await InvokeAsync(() =>
+                    {
+                        _animatedSearchPrompt = current;
+                        StateHasChanged();
+                    });
+                    await Task.Delay(56, cancellationToken);
+                }
+
+                await Task.Delay(1000, cancellationToken);
+
+                for (var length = prompt.Length - 1; length >= 0 && !cancellationToken.IsCancellationRequested; length--)
+                {
+                    if (!CanAnimateSearchPrompt)
+                    {
+                        break;
+                    }
+
+                    var current = prompt[..length];
+                    await InvokeAsync(() =>
+                    {
+                        _animatedSearchPrompt = current;
+                        StateHasChanged();
+                    });
+                    await Task.Delay(28, cancellationToken);
+                }
+
+                await Task.Delay(260, cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when the component is disposed.
+        }
     }
 
     private async Task RefreshSearchResultsAsync()
@@ -3255,6 +3384,10 @@
         string Url,
         string KindLabel,
         string Icon);
+
+    private sealed record SearchPromptOption(
+        string TextEn,
+        string TextTh);
 
     private sealed record ComposerAttachmentPreview(
         Guid AttachmentId,
@@ -3518,6 +3651,12 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_searchPromptAnimationCts is not null)
+        {
+            await _searchPromptAnimationCts.CancelAsync();
+            _searchPromptAnimationCts.Dispose();
+        }
+
         if (_composerModule is not null)
         {
             await _composerModule.InvokeVoidAsync("disposeComposer", _composerTextarea);
