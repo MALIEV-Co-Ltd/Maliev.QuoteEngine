@@ -26,14 +26,6 @@
                 <span>@Text("New project", "โปรเจกต์ใหม่")</span>
             </button>
             <button type="button"
-                    class="@(_searchOpen ? "active" : string.Empty)"
-                    aria-expanded="@AriaExpanded(_searchOpen)"
-                    aria-controls="qe-agent-search-panel"
-                    @onclick="ToggleSearch">
-                <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
-                <span>@Text("Search", "ค้นหา")</span>
-            </button>
-            <button type="button"
                     class="@PageNavClass(WorkspacePage.Plugins)"
                     aria-current="@(IsWorkspacePage(WorkspacePage.Plugins) ? "page" : null)"
                     @onclick="OpenPluginsPageAsync">
@@ -47,6 +39,19 @@
                 <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
                 <span>@Text("Projects", "โปรเจกต์")</span>
             </button>
+            <div class="qe-agent-rail-search" aria-label="@Text("Search customer data", "ค้นหาข้อมูลลูกค้า")">
+                <label class="sr-only" for="qe-agent-search-input">@Text("Search everything", "ค้นหาทั้งหมด")</label>
+                <div class="@($"qe-agent-global-search {(SearchHasMinimumQuery ? "active" : string.Empty)}")">
+                    <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+                    <input id="qe-agent-search-input"
+                           @ref="_searchInput"
+                           value="@_searchQuery"
+                           @onfocus="OpenSearchAsync"
+                           @oninput="OnSearchInputAsync"
+                           placeholder="@Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...")"
+                           aria-label="@Text("Search all projects, orders, files, and artifacts", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์ และไฟล์งานทั้งหมด")" />
+                </div>
+            </div>
             @if (IsSignedIn)
             {
                 <button type="button"
@@ -63,16 +68,6 @@
             @if (_searchOpen)
             {
                 <section id="qe-agent-search-panel" class="qe-agent-search-panel" aria-label="@Text("Search customer data", "ค้นหาข้อมูลลูกค้า")">
-                    <label for="qe-agent-search-input">@Text("Search everything", "ค้นหาทั้งหมด")</label>
-                    <div class="@($"qe-agent-global-search {(_searchOpen ? "active" : string.Empty)}")">
-                        <input id="qe-agent-search-input"
-                               @ref="_searchInput"
-                               value="@_searchQuery"
-                               @onfocus="OpenSearchAsync"
-                               @oninput="OnSearchInputAsync"
-                               placeholder="@Text("Projects, orders, files, quotes...", "โปรเจกต์ ออเดอร์ ไฟล์ ใบเสนอราคา...")"
-                               aria-label="@Text("Search all projects, orders, files, and artifacts", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์ และไฟล์งานทั้งหมด")" />
-                    </div>
                     <div class="qe-agent-search-results" aria-live="polite">
                         @if (_searchLoading)
                         {
@@ -1269,6 +1264,7 @@
     private readonly List<ProjectNavItem> _projects = [];
     private readonly List<QuoteAgentSearchResultDto> _customerSearchResults = [];
     private readonly List<ComposerAttachmentPreview> _pendingComposerAttachments = [];
+    private const int SearchMinimumCharacters = 3;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1501,6 +1497,7 @@
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned && !project.IsArchived);
     private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
+    private bool SearchHasMinimumQuery => _searchQuery.Trim().Length >= SearchMinimumCharacters;
 
     private bool IsWorkspacePage(WorkspacePage page)
     {
@@ -2864,35 +2861,30 @@
         _activeWorkspacePage = WorkspacePage.Projects;
     }
 
-    private async Task ToggleSearch()
-    {
-        _searchOpen = !_searchOpen;
-        if (_searchOpen)
-        {
-            await RefreshSearchResultsAsync();
-        }
-
-        _focusSearchPending = _searchOpen;
-    }
-
     private async Task OpenSearchAsync()
     {
-        _searchOpen = true;
         _focusSearchPending = false;
+        _searchOpen = SearchHasMinimumQuery;
         await RefreshSearchResultsAsync();
     }
 
     private async Task OnSearchInputAsync(ChangeEventArgs args)
     {
         _searchQuery = args.Value?.ToString() ?? string.Empty;
-        if (_searchOpen)
-        {
-            await RefreshSearchResultsAsync();
-        }
+        _searchOpen = SearchHasMinimumQuery;
+        await RefreshSearchResultsAsync();
     }
 
     private async Task RefreshSearchResultsAsync()
     {
+        if (!SearchHasMinimumQuery)
+        {
+            _searchLoading = false;
+            _customerSearchResults.Clear();
+            _customerSearchUnavailable = false;
+            return;
+        }
+
         if (!IsSignedIn || SessionId == Guid.Empty)
         {
             _customerSearchResults.Clear();
@@ -3002,6 +2994,11 @@
 
     private IEnumerable<SearchNavItem> BuildSearchResults()
     {
+        if (!SearchHasMinimumQuery)
+        {
+            return [];
+        }
+
         var items = new List<SearchNavItem>();
 
         if (!_customerSearchUnavailable || _customerSearchResults.Count > 0)

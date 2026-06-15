@@ -691,6 +691,7 @@
 
 .qe-agent-shell--rail-collapsed .qe-agent-brand,
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav span,
+.qe-agent-shell--rail-collapsed .qe-agent-rail-search,
 .qe-agent-shell--rail-collapsed .qe-agent-account-action span:not(.qe-agent-account-dot),
 .qe-agent-shell--rail-collapsed .qe-agent-signin-btn {
     display: none;
@@ -762,14 +763,24 @@
     padding: 0 4px 8px;
 }
 
+.qe-agent-rail-search {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    padding: 2px 0 0;
+}
+
 .qe-agent-global-search {
-    display: block;
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
     inline-size: 100%;
     max-inline-size: 100%;
     min-width: 0;
     min-height: 36px;
-    padding: 0;
-    margin: 0 0 10px;
+    padding: 0 10px;
+    margin: 0;
     border: 1px solid var(--qe-agent-line);
     border-radius: 9px;
     background: transparent;
@@ -789,7 +800,7 @@
     width: 100%;
     min-width: 0;
     min-height: 36px;
-    padding: 0 12px;
+    padding: 0;
     border: 0;
     outline: 0;
     background: transparent;
