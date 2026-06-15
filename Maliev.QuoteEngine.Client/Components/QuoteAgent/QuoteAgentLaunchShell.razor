@@ -799,7 +799,10 @@
                         <a href="@method.Url">
                             <MudIcon Icon="@AuthMethodIcon(method)" Size="Size.Small" />
                             <span>
-                                <strong>@method.DisplayName</strong>
+                                <strong>
+                                    @method.DisplayName
+                                    <em class="@AuthMethodStatusClass(method)">@AuthMethodStatusLabel(method)</em>
+                                </strong>
                                 <small>@AuthMethodDescription(method)</small>
                             </span>
                         </a>
@@ -2408,6 +2411,28 @@
         return method.RequiresBrowserSupport
             ? Text($"{method.Description} Browser support required.", $"{method.Description} ต้องใช้เบราว์เซอร์ที่รองรับ")
             : method.Description;
+    }
+
+    private string AuthMethodStatusLabel(QuoteAgentAuthMethodDto method)
+    {
+        return method.Status.ToLowerInvariant() switch
+        {
+            "preferred" => Text("Recommended", "แนะนำ"),
+            "available_when_supported" => Text("When available", "เมื่อรองรับ"),
+            "fallback" => Text("Fallback", "สำรอง"),
+            _ => method.Status
+        };
+    }
+
+    private static string AuthMethodStatusClass(QuoteAgentAuthMethodDto method)
+    {
+        return method.Status.ToLowerInvariant() switch
+        {
+            "preferred" => "qe-agent-auth-method-status is-preferred",
+            "available_when_supported" => "qe-agent-auth-method-status is-conditional",
+            "fallback" => "qe-agent-auth-method-status is-fallback",
+            _ => "qe-agent-auth-method-status"
+        };
     }
 
     private static string StepIcon(string status)

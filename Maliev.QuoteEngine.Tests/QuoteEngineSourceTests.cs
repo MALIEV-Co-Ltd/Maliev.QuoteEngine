@@ -1327,8 +1327,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("method.DisplayName", component, StringComparison.Ordinal);
         Assert.Contains("AuthMethodIcon(method)", component, StringComparison.Ordinal);
         Assert.Contains("AuthMethodDescription(method)", component, StringComparison.Ordinal);
+        Assert.Contains("AuthMethodStatusLabel(method)", component, StringComparison.Ordinal);
+        Assert.Contains("AuthMethodStatusClass(method)", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-auth-handoff", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-auth-methods", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-auth-method-status", styles, StringComparison.Ordinal);
     }
 
     [Fact]

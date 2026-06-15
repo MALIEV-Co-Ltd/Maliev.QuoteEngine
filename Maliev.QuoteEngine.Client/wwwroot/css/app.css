@@ -1513,6 +1513,9 @@
 }
 
 .qe-agent-auth-methods strong {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 14px;
 }
 
@@ -1521,6 +1524,36 @@
     color: var(--qe-agent-muted);
     font-size: 12px;
     line-height: 1.35;
+}
+
+.qe-agent-auth-method-status {
+    display: inline-flex;
+    align-items: center;
+    min-height: 18px;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-muted);
+    font-size: 10px;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.qe-agent-auth-method-status.is-preferred {
+    background: color-mix(in srgb, var(--qe-agent-primary) 15%, transparent);
+    color: var(--qe-agent-primary);
+}
+
+.qe-agent-auth-method-status.is-conditional {
+    background: color-mix(in srgb, var(--qe-agent-warning) 18%, transparent);
+    color: var(--qe-agent-warning);
+}
+
+.qe-agent-auth-method-status.is-fallback {
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-muted);
 }
 
 .qe-agent-prompt {
