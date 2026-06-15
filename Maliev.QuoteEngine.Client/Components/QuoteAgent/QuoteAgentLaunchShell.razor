@@ -1938,7 +1938,7 @@
 
         QueueComposerAttachment(part);
         await InvokeAsync(StateHasChanged);
-        await PreviewThenAutoSubmitPendingAttachmentsAsync();
+        await RefreshPendingAttachmentPreviewAsync();
     }
 
     private void QueueComposerAttachment(QuotePartViewModel part)
@@ -2242,7 +2242,7 @@
         }
 
         _sketchOpen = false;
-        await PreviewThenAutoSubmitPendingAttachmentsAsync();
+        await RefreshPendingAttachmentPreviewAsync();
         await FocusComposerAsync();
     }
 
@@ -2265,16 +2265,15 @@
         _pendingComposerAttachments.Add(attachment);
     }
 
-    private async Task PreviewThenAutoSubmitPendingAttachmentsAsync()
+    private async Task RefreshPendingAttachmentPreviewAsync()
     {
-        if (_pendingComposerAttachments.Count == 0 || _sending)
+        if (_pendingComposerAttachments.Count == 0)
         {
             return;
         }
 
         await InvokeAsync(StateHasChanged);
-        await Task.Yield();
-        await HandleSubmitAsync();
+        await FocusComposerAsync();
     }
 
     private static string BuildSketchFileName(string title)

@@ -1215,7 +1215,7 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_previews_then_auto_sends_completed_attachments()
+    public void QuoteAgentLaunchShell_previews_completed_attachments_until_next_message_send()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
@@ -1233,15 +1233,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("QueueComposerAttachment(part);", uploadStartedBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("_messages.Add", uploadStartedBlock, StringComparison.Ordinal);
         Assert.Contains("QueueComposerAttachment(part);", uploadCompletedBlock, StringComparison.Ordinal);
-        Assert.Contains("await PreviewThenAutoSubmitPendingAttachmentsAsync();", uploadCompletedBlock, StringComparison.Ordinal);
+        Assert.Contains("await RefreshPendingAttachmentPreviewAsync();", uploadCompletedBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("await HandleSubmitAsync();", uploadCompletedBlock, StringComparison.Ordinal);
 
         Assert.Contains("QueueSketchComposerAttachment", sketchBlock, StringComparison.Ordinal);
-        Assert.Contains("await PreviewThenAutoSubmitPendingAttachmentsAsync();", sketchBlock, StringComparison.Ordinal);
-        Assert.Contains("private async Task PreviewThenAutoSubmitPendingAttachmentsAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("await RefreshPendingAttachmentPreviewAsync();", sketchBlock, StringComparison.Ordinal);
+        Assert.Contains("private async Task RefreshPendingAttachmentPreviewAsync()", component, StringComparison.Ordinal);
         Assert.Contains("await InvokeAsync(StateHasChanged);", component, StringComparison.Ordinal);
-        Assert.Contains("await Task.Yield();", component, StringComparison.Ordinal);
         Assert.Contains("_pendingComposerAttachments.Count == 0", component, StringComparison.Ordinal);
-        Assert.Contains("await HandleSubmitAsync();", component, StringComparison.Ordinal);
 
         Assert.Contains("message.Attachments.Count > 0", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-message-attachments\"", component, StringComparison.Ordinal);
