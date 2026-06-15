@@ -464,6 +464,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var summaryJson = await ExecuteToolAsync(client, body.SessionId, "quote_get_project_summary");
         var summary = JsonSerializer.Deserialize<QuoteAgentProjectSummaryResponse>(summaryJson, JsonOptions);
         Assert.NotNull(summary);
+        Assert.Equal(2, summary.AttachmentCount);
+        Assert.Equal("sketch, technical_drawing", summary.RequirementFacts["sourceTypes"]);
         Assert.Equal("50", summary.RequirementFacts["quantity"]);
         Assert.Equal("3 mm", summary.RequirementFacts["thicknessHint"]);
         Assert.Contains("slot", summary.RequirementFacts["featureHints"], StringComparison.OrdinalIgnoreCase);
@@ -640,6 +642,16 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Equal("STANDARD", analysisArtifact.Metadata["inferredLeadTime"]);
         Assert.Equal("true", analysisArtifact.Metadata["needsCadGeometry"]);
         Assert.Equal("false", analysisArtifact.Metadata["usableForFinalPricing"]);
+
+        var summary = await GetProjectSummaryAsync(client, sessionId);
+        Assert.Equal(2, summary.AttachmentCount);
+        Assert.Equal("sketch, technical_drawing", summary.RequirementFacts["sourceTypes"]);
+        Assert.Equal("50", summary.RequirementFacts["quantity"]);
+        Assert.Equal("cnc", summary.RequirementFacts["process"]);
+        Assert.Equal("al6061", summary.RequirementFacts["material"]);
+        Assert.Equal("STANDARD", summary.RequirementFacts["leadTime"]);
+        Assert.Equal("true", summary.RequirementFacts["needsCadGeometry"]);
+        Assert.Equal("bracket-sketch.jpg, bracket-notes.pdf", summary.RequirementFacts["supplementalFiles"]);
     }
 
     [Fact]

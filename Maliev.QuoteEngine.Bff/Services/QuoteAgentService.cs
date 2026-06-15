@@ -2439,6 +2439,18 @@ internal sealed class QuoteAgentService(
             }
         }
 
+        var supplementalFiles = state.Attachments
+            .Where(attachment => !attachment.SatisfiesGeometryGate)
+            .Select(attachment => attachment.FileName)
+            .Where(fileName => !string.IsNullOrWhiteSpace(fileName))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(5)
+            .ToArray();
+        if (supplementalFiles.Length > 0)
+        {
+            facts.TryAdd("supplementalFiles", string.Join(", ", supplementalFiles));
+        }
+
         return facts;
     }
 
