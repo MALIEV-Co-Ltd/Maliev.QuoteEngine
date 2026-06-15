@@ -140,6 +140,9 @@ public sealed class QuoteAgentTurnResponse
 
     /// <summary>Gets or sets thinking steps returned by the agent harness.</summary>
     public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
+
+    /// <summary>Gets or sets customer-safe UI focus directives the client may apply.</summary>
+    public List<QuoteAgentUiDirectiveDto> UiDirectives { get; set; } = [];
 }
 
 /// <summary>
@@ -196,6 +199,50 @@ public sealed class QuoteAgentStateResponse
 
     /// <summary>Gets or sets the current estimate.</summary>
     public QuoteEstimateResponse? Estimate { get; set; }
+
+    /// <summary>Gets or sets customer-safe UI focus directives for the current state.</summary>
+    public List<QuoteAgentUiDirectiveDto> UiDirectives { get; set; } = [];
+}
+
+/// <summary>
+/// Customer-safe instruction for the Make Studio UI to open a panel and highlight a referenced item.
+/// </summary>
+public sealed class QuoteAgentUiDirectiveDto
+{
+    /// <summary>Gets or sets the directive ID.</summary>
+    public Guid DirectiveId { get; set; } = Guid.NewGuid();
+
+    /// <summary>Gets or sets the panel to open, such as workbench, artifacts, summary, or none.</summary>
+    [StringLength(40)]
+    public string Panel { get; set; } = "none";
+
+    /// <summary>Gets or sets the target type, such as artifact, uploaded_file, dfm_issue, summary, or canvas_location.</summary>
+    [StringLength(60)]
+    public string TargetType { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the target ID when the UI can map directly to an artifact, part, file, or issue.</summary>
+    [StringLength(160)]
+    public string? TargetId { get; set; }
+
+    /// <summary>Gets or sets a stable highlight key used by the client to pulse the target.</summary>
+    [StringLength(160)]
+    public string HighlightKey { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets customer-safe text describing why the target is being highlighted.</summary>
+    [StringLength(280)]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets a normalized X coordinate for canvas highlights, when available.</summary>
+    [Range(0, 1)]
+    public double? CanvasX { get; set; }
+
+    /// <summary>Gets or sets a normalized Y coordinate for canvas highlights, when available.</summary>
+    [Range(0, 1)]
+    public double? CanvasY { get; set; }
+
+    /// <summary>Gets or sets an optional normalized Z coordinate or depth hint for 3D canvas highlights.</summary>
+    [Range(0, 1)]
+    public double? CanvasZ { get; set; }
 }
 
 /// <summary>

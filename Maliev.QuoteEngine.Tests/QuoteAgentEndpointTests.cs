@@ -185,16 +185,52 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "viewer" && artifact.Status == "ready");
         Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "dfm" && artifact.Status == "ready");
         Assert.DoesNotContain(body.Artifacts, artifact => artifact.ArtifactType == "pricing");
+        Assert.Contains(body.UiDirectives, directive =>
+            directive.Panel == "artifacts" &&
+            directive.TargetType == "viewer" &&
+            directive.HighlightKey.StartsWith("part:", StringComparison.OrdinalIgnoreCase) &&
+            directive.CanvasX.HasValue &&
+            directive.CanvasY.HasValue);
 
         var state = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
             $"/quote/v1/agent/sessions/{body.SessionId:D}");
         Assert.NotNull(state);
         Assert.Single(state.Parts);
         Assert.Null(state.Estimate);
+        Assert.Contains(state.UiDirectives, directive => directive.Panel == "artifacts" && directive.TargetType == "viewer");
         Assert.NotNull(chatbot.LastSendRequest);
         Assert.Contains("Current parts: fixture.stl", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("Current artifacts:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.DoesNotContain("Current estimate:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Agent_focus_ui_tool_returns_panel_directive_for_client_highlight()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var state = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_focus_ui",
+            new Dictionary<string, JsonElement>
+            {
+                ["panel"] = JsonSerializer.SerializeToElement("artifacts", JsonOptions),
+                ["target_type"] = JsonSerializer.SerializeToElement("dfm_issue", JsonOptions),
+                ["target_id"] = JsonSerializer.SerializeToElement("THIN_WALL", JsonOptions),
+                ["highlight_key"] = JsonSerializer.SerializeToElement("dfm", JsonOptions),
+                ["label"] = JsonSerializer.SerializeToElement("Show the DFM issue.", JsonOptions),
+                ["canvas_x"] = JsonSerializer.SerializeToElement(0.42, JsonOptions),
+                ["canvas_y"] = JsonSerializer.SerializeToElement(0.35, JsonOptions)
+            });
+
+        var directive = Assert.Single(state.UiDirectives, item => item.HighlightKey == "dfm");
+        Assert.Equal("artifacts", directive.Panel);
+        Assert.Equal("dfm_issue", directive.TargetType);
+        Assert.Equal("THIN_WALL", directive.TargetId);
+        Assert.Equal(0.42, directive.CanvasX);
+        Assert.Equal(0.35, directive.CanvasY);
     }
 
     [Fact]

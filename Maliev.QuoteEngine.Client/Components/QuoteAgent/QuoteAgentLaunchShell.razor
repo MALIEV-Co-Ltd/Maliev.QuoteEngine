@@ -550,7 +550,7 @@
 
                                     @if (message.Workbench.DfmIssues.Count > 0)
                                     {
-                                        <article class="qe-agent-flow-card qe-agent-dfm-card">
+                                        <article class="@($"qe-agent-flow-card qe-agent-dfm-card {UiFocusClass("dfm")}")">
                                             <header>
                                                 <div>
                                                     <strong>@Text("Manufacturability (DFM)", "ความสามารถในการผลิต (DFM)")</strong>
@@ -580,7 +580,7 @@
 
                                     @if (message.Workbench.ShowModelPreview)
                                     {
-                                        <article class="qe-agent-flow-card qe-agent-model-card">
+                                        <article class="@($"qe-agent-flow-card qe-agent-model-card {UiFocusClass("viewer", "canvas")}")">
                                             <header>
                                                 <div>
                                                     <strong>@Text("3D model preview", "ตัวอย่างโมเดล 3D")</strong>
@@ -1019,7 +1019,7 @@
 
     @if (_summaryPanelOpen)
     {
-        <aside class="qe-agent-summary-drawer" aria-label="@Text("Project summary", "สรุปโปรเจกต์")">
+        <aside class="@($"qe-agent-summary-drawer {UiFocusClass("summary", "summary:actions")}")" aria-label="@Text("Project summary", "สรุปโปรเจกต์")">
             <header>
                 <div>
                     <span>@Text("Project", "โปรเจกต์")</span>
@@ -1030,7 +1030,7 @@
                 </button>
             </header>
 
-            <section class="qe-agent-summary-card">
+            <section class="@($"qe-agent-summary-card {UiFocusClass("summary")}")">
                 <span>@Text("Current project", "โปรเจกต์ปัจจุบัน")</span>
                 <strong>@ProjectSummaryTitle</strong>
                 <p>@ProjectSummaryStatus</p>
@@ -1046,7 +1046,7 @@
                 }
             </section>
 
-            <section class="qe-agent-summary-section">
+            <section class="@($"qe-agent-summary-section {UiFocusClass("summary:actions")}")">
                 <header>@Text("Manufacturing state", "สถานะงานผลิต")</header>
                 <div class="qe-agent-summary-list">
                     @foreach (var item in ProjectSummaryDetails)
@@ -1083,7 +1083,7 @@
 
     @if (_artifactPanelOpen)
     {
-        <aside class="qe-agent-artifact-drawer" aria-label="@Text("Quote artifacts", "ไฟล์งานใบเสนอราคา")">
+        <aside class="@($"qe-agent-artifact-drawer {UiFocusClass("artifacts", "workbench")}")" aria-label="@Text("Quote artifacts", "ไฟล์งานใบเสนอราคา")">
             <header>
                 <div>
                     <span>@Text("Workbench", "พื้นที่งาน")</span>
@@ -1104,7 +1104,7 @@
                     <div class="qe-agent-artifact-preview-shell">
                         @if (CanRenderUploadedPartViewer(SelectedUploadedPart))
                         {
-                            <section class="qe-agent-artifact-viewer" aria-label="@Text("Selected 3D file viewer", "ตัวแสดงไฟล์ 3D ที่เลือก")">
+                            <section class="@($"qe-agent-artifact-viewer {UiFocusClass("viewer", PartFocusKey(SelectedUploadedPart.PartId))}")" aria-label="@Text("Selected 3D file viewer", "ตัวแสดงไฟล์ 3D ที่เลือก")">
                                 <header>
                                     <div>
                                         <span>@Text("3D viewer", "ตัวแสดง 3D")</span>
@@ -1125,12 +1125,18 @@
                                                   FinishCode="@SelectedUploadedPart.FinishCode"
                                                   RoughnessCode="@SelectedUploadedPart.RoughnessCode"
                                                   ViewerSettings="@SelectedUploadedPart.ViewerSettings" />
+                                    @if (TryGetCanvasFocusPoint(out var canvasFocusStyle))
+                                    {
+                                        <span class="qe-agent-canvas-focus qe-agent-focus-pulse"
+                                              style="@canvasFocusStyle"
+                                              aria-hidden="true"></span>
+                                    }
                                 </div>
                             </section>
                         }
                         else
                         {
-                            <section class="qe-agent-artifact-context" aria-label="@Text("Supplemental uploaded file", "ไฟล์ประกอบที่อัปโหลด")">
+                            <section class="@($"qe-agent-artifact-context {UiFocusClass(PartFocusKey(SelectedUploadedPart.PartId))}")" aria-label="@Text("Supplemental uploaded file", "ไฟล์ประกอบที่อัปโหลด")">
                                 <header>
                                     <div>
                                         <span>@SupplementalArtifactLabel(SelectedUploadedPart)</span>
@@ -1165,7 +1171,7 @@
                                 var index = i;
                                 var part = UploadedParts[i];
                                 <button type="button"
-                                        class="@($"qe-agent-artifact qe-agent-artifact--button {(i == SelectedPartIndex ? "active" : string.Empty)}")"
+                                        class="@($"qe-agent-artifact qe-agent-artifact--button {(i == SelectedPartIndex ? "active" : string.Empty)} {UiFocusClass(PartFocusKey(part.PartId), UploadedPartFocusKey(part))}")"
                                         @onclick="@(() => SelectUploadedPartAsync(index))"
                                         @ondblclick="@(() => OpenUploadedPreviewAsync(index))">
                                     @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
@@ -1188,7 +1194,7 @@
                 <div class="qe-agent-artifacts">
                     @foreach (var artifact in _artifacts)
                     {
-                        <div class="qe-agent-artifact">
+                        <div class="@($"qe-agent-artifact {UiFocusClass(ArtifactFocusKey(artifact), ArtifactTypeFocusKey(artifact.ArtifactType))}")">
                             <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
                             <div>
                                 <strong>@artifact.Title</strong>
@@ -1304,10 +1310,12 @@
     private readonly List<ProjectNavItem> _projects = [];
     private readonly List<QuoteAgentSearchResultDto> _customerSearchResults = [];
     private readonly List<ComposerAttachmentPreview> _pendingComposerAttachments = [];
+    private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
     private const int SearchMinimumCharacters = 3;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
+    private List<QuoteAgentUiDirectiveDto> _uiFocusDirectives = [];
     private QuoteAgentAuthHandoffResponse? _authHandoff;
     private List<QuoteAgentConnectorDto> _connectors = [];
     private Guid _loadedSessionId;
@@ -1334,6 +1342,7 @@
     private bool _composerPluginsOpen;
     private bool _searchPromptHovered;
     private bool _searchPromptFocused;
+    private int _uiFocusVersion;
     private WorkspacePage _activeWorkspacePage = WorkspacePage.Chat;
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
@@ -1756,6 +1765,7 @@
                     _artifacts = streamEvent.Response.Artifacts;
                     _proposedActions = streamEvent.Response.ProposedActions;
                     ApplyAuthHandoff(streamEvent.Response.AuthHandoff);
+                    await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives);
                     await InvokeAsync(StateHasChanged);
                 }
                 else if (streamEvent.Type.Equals("error", StringComparison.OrdinalIgnoreCase))
@@ -1909,7 +1919,11 @@
             if (result.State is not null)
             {
                 ApplyState(result.State);
-                if (result.State.Artifacts.Count > previousArtifactCount)
+                if (result.State.UiDirectives.Count > 0)
+                {
+                    await ApplyUiDirectivesAsync(result.State.UiDirectives);
+                }
+                else if (result.State.Artifacts.Count > previousArtifactCount)
                 {
                     _artifactPanelOpen = true;
                     _summaryPanelOpen = false;
@@ -1934,6 +1948,99 @@
         _gates = state.Gates;
         _artifacts = state.Artifacts;
         _proposedActions = state.ProposedActions;
+        _ = ApplyUiDirectivesAsync(state.UiDirectives);
+    }
+
+    private async Task ApplyUiDirectivesAsync(IReadOnlyCollection<QuoteAgentUiDirectiveDto> directives)
+    {
+        if (directives.Count == 0)
+        {
+            return;
+        }
+
+        _uiFocusDirectives = directives.ToList();
+        OpenDirectivePanel(_uiFocusDirectives);
+        SelectDirectiveUploadTarget(_uiFocusDirectives);
+        ActivateUiHighlights(_uiFocusDirectives);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void OpenDirectivePanel(IReadOnlyCollection<QuoteAgentUiDirectiveDto> directives)
+    {
+        var panel = directives
+            .Select(directive => directive.Panel)
+            .FirstOrDefault(item =>
+                item.Equals("summary", StringComparison.OrdinalIgnoreCase) ||
+                item.Equals("artifacts", StringComparison.OrdinalIgnoreCase) ||
+                item.Equals("workbench", StringComparison.OrdinalIgnoreCase));
+
+        if (string.IsNullOrWhiteSpace(panel))
+        {
+            return;
+        }
+
+        if (panel.Equals("summary", StringComparison.OrdinalIgnoreCase))
+        {
+            _summaryPanelOpen = true;
+            _artifactPanelOpen = false;
+            return;
+        }
+
+        _artifactPanelOpen = true;
+        _summaryPanelOpen = false;
+    }
+
+    private void SelectDirectiveUploadTarget(IReadOnlyCollection<QuoteAgentUiDirectiveDto> directives)
+    {
+        if (UploadedParts.Count == 0)
+        {
+            return;
+        }
+
+        var partTarget = directives
+            .Select(directive => directive.TargetId)
+            .FirstOrDefault(target => Guid.TryParse(target, out _));
+        if (string.IsNullOrWhiteSpace(partTarget))
+        {
+            return;
+        }
+
+        var index = UploadedParts
+            .Select((part, partIndex) => new { part, partIndex })
+            .FirstOrDefault(item => item.part.PartId.ToString("D").Equals(partTarget, StringComparison.OrdinalIgnoreCase))
+            ?.partIndex ?? -1;
+        if (index >= 0 && OnUploadedPartSelected.HasDelegate)
+        {
+            _ = SelectUploadedPartAsync(index);
+        }
+    }
+
+    private void ActivateUiHighlights(IReadOnlyCollection<QuoteAgentUiDirectiveDto> directives)
+    {
+        _activeUiHighlightKeys.Clear();
+        foreach (var directive in directives)
+        {
+            if (!string.IsNullOrWhiteSpace(directive.HighlightKey))
+            {
+                _activeUiHighlightKeys.Add(directive.HighlightKey);
+            }
+        }
+
+        var focusVersion = ++_uiFocusVersion;
+        _ = ClearUiFocusHighlightsLaterAsync(focusVersion);
+    }
+
+    private async Task ClearUiFocusHighlightsLaterAsync(int focusVersion)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(7));
+        if (focusVersion != _uiFocusVersion)
+        {
+            return;
+        }
+
+        _activeUiHighlightKeys.Clear();
+        _uiFocusDirectives = [];
+        await InvokeAsync(StateHasChanged);
     }
 
     private bool ShouldShowAuthHandoff =>
@@ -2115,6 +2222,61 @@
     private static string AriaExpanded(bool value)
     {
         return value ? "true" : "false";
+    }
+
+    private string UiFocusClass(params string[] keys)
+    {
+        return keys.Any(key =>
+            !string.IsNullOrWhiteSpace(key) &&
+            _activeUiHighlightKeys.Contains(key))
+            ? "qe-agent-focus-pulse"
+            : string.Empty;
+    }
+
+    private static string PartFocusKey(Guid partId)
+    {
+        return $"part:{partId:D}";
+    }
+
+    private static string UploadedPartFocusKey(QuotePartViewModel part)
+    {
+        if (!string.IsNullOrWhiteSpace(part.UploadId))
+        {
+            return $"upload:{part.UploadId}";
+        }
+
+        return string.IsNullOrWhiteSpace(part.StoragePath)
+            ? $"file:{part.FileName}"
+            : $"storage:{part.StoragePath}";
+    }
+
+    private static string ArtifactFocusKey(QuoteAgentArtifactDto artifact)
+    {
+        return $"artifact:{artifact.ArtifactId:D}";
+    }
+
+    private static string ArtifactTypeFocusKey(string artifactType)
+    {
+        return $"artifact-type:{artifactType}";
+    }
+
+    private bool TryGetCanvasFocusPoint(out string style)
+    {
+        var directive = _uiFocusDirectives.FirstOrDefault(item =>
+            item.TargetType.Equals("canvas_location", StringComparison.OrdinalIgnoreCase) ||
+            item.TargetType.Equals("viewer", StringComparison.OrdinalIgnoreCase));
+        if (directive?.CanvasX is null || directive.CanvasY is null)
+        {
+            style = string.Empty;
+            return false;
+        }
+
+        var x = (Math.Clamp(directive.CanvasX.Value, 0.05, 0.95) * 100).ToString("0.##", CultureInfo.InvariantCulture);
+        var y = (Math.Clamp(directive.CanvasY.Value, 0.05, 0.95) * 100).ToString("0.##", CultureInfo.InvariantCulture);
+        x += "%";
+        y += "%";
+        style = $"left: {x}; top: {y};";
+        return true;
     }
 
     private Task ToggleThemeAsync()

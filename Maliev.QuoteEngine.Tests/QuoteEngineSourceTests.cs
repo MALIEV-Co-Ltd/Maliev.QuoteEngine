@@ -715,9 +715,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-rail\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"@ComposerClass\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-artifact-toggle\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-artifact-drawer\"", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-artifact-drawer", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-summary-toggle\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-summary-drawer\"", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-summary-drawer", component, StringComparison.Ordinal);
         Assert.Contains("ProjectSummaryMetrics", component, StringComparison.Ordinal);
         Assert.Contains("ProjectSummaryDetails", component, StringComparison.Ordinal);
         Assert.Contains("LatestWorkbench", component, StringComparison.Ordinal);
@@ -877,6 +877,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Navigation.NavigateTo(handoff.HandoffUrl)", component, StringComparison.Ordinal);
         Assert.Contains("handoff.Message", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentConnectorDto", component, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentUiDirectiveDto", component, StringComparison.Ordinal);
         Assert.Contains("ConnectorStatus", component, StringComparison.Ordinal);
         Assert.Contains("ApplyConnector", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-plugin-panel\"", component, StringComparison.Ordinal);
@@ -898,6 +899,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-markdown\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-thinking\"", component, StringComparison.Ordinal);
         Assert.Contains("assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps", component, StringComparison.Ordinal);
+        Assert.Contains("await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives);", component, StringComparison.Ordinal);
+        Assert.Contains("private async Task ApplyUiDirectivesAsync", component, StringComparison.Ordinal);
+        Assert.Contains("OpenDirectivePanel(_uiFocusDirectives)", component, StringComparison.Ordinal);
+        Assert.Contains("SelectDirectiveUploadTarget(_uiFocusDirectives)", component, StringComparison.Ordinal);
+        Assert.Contains("ActivateUiHighlights(_uiFocusDirectives)", component, StringComparison.Ordinal);
+        Assert.Contains("UiFocusClass(\"viewer\", PartFocusKey(SelectedUploadedPart.PartId))", component, StringComparison.Ordinal);
+        Assert.Contains("TryGetCanvasFocusPoint(out var canvasFocusStyle)", component, StringComparison.Ordinal);
         Assert.Contains("<details class=\"qe-agent-thinking\">", component, StringComparison.Ordinal);
         Assert.Contains("streamEvent.Type.Equals(\"delta\"", component, StringComparison.Ordinal);
         Assert.Contains("streamEvent.Type.Equals(\"final\"", component, StringComparison.Ordinal);
@@ -993,6 +1001,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SearchCustomerDataAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("GetConnectorHandoffAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/tools/quote_get_connector_handoff", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote_focus_ui", ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs"), StringComparison.Ordinal);
         Assert.Contains("connector_id", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/search", apiClient, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-page", agentStyles, StringComparison.Ordinal);
@@ -1045,13 +1054,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("is-failed", component, StringComparison.Ordinal);
         Assert.Contains("Task HandleSubmitAsync()", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-workflow\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-flow-card qe-agent-analysis-card\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-flow-card qe-agent-requirements-card\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-flow-card qe-agent-dfm-card\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-flow-card qe-agent-model-card\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-flow-card qe-agent-options-card\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-flow-card qe-agent-price-card\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-flow-card qe-agent-order-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-flow-card qe-agent-analysis-card", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-flow-card qe-agent-requirements-card", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-flow-card qe-agent-dfm-card", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-flow-card qe-agent-model-card", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-flow-card qe-agent-options-card", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-flow-card qe-agent-price-card", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-flow-card qe-agent-order-card", component, StringComparison.Ordinal);
         Assert.Contains("TryBuildLocalDemoTurn", component, StringComparison.Ordinal);
         Assert.Contains("BuildSketchDemoTurn", component, StringComparison.Ordinal);
         Assert.Contains("Hole too close to bend", component, StringComparison.Ordinal);
@@ -1209,6 +1218,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("--qe-dictation-ring", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-dictation-scale", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-btn.active[data-dictation-level=\"quiet\"]", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-focus-pulse", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes qe-agent-focus-pulse", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifact-viewer-canvas .qe-viewer-toolbar", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-canvas-focus", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-btn.active[data-dictation-level=\"good\"]", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-btn.active[data-dictation-level=\"loud\"]", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-add-menu", agentStyles, StringComparison.Ordinal);
@@ -1326,7 +1339,7 @@ public sealed class QuoteEngineSourceTests
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var threadBlock = ExtractSourceBlock(component, "<div class=\"qe-agent-thread\"", "<section class=\"qe-agent-composer-wrap\"");
-        var artifactDrawerBlock = ExtractSourceBlock(component, "<aside class=\"qe-agent-artifact-drawer\"", "</aside>");
+        var artifactDrawerBlock = ExtractSourceBlock(component, "qe-agent-artifact-drawer", "</aside>");
         var confirmBlock = ExtractSourceBlock(component, "private async Task ConfirmActionAsync", "public Task ApplyAgentStateAsync");
 
         Assert.Contains("class=\"qe-agent-chat-actions\"", threadBlock, StringComparison.Ordinal);
@@ -1440,7 +1453,7 @@ public sealed class QuoteEngineSourceTests
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
-        var drawer = ExtractSourceBlock(shell, "<aside class=\"qe-agent-artifact-drawer\"", "</aside>");
+        var drawer = ExtractSourceBlock(shell, "qe-agent-artifact-drawer", "</aside>");
 
         Assert.Contains("@if (CanRenderUploadedPartViewer(SelectedUploadedPart))", drawer, StringComparison.Ordinal);
         Assert.Contains("qe-agent-artifact-context", drawer, StringComparison.Ordinal);
@@ -1453,17 +1466,18 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_RendersArtifactUrlActionsInArtifactDrawer()
+    public void QuoteAgentLaunchShell_RendersArtifactPreviewActionsInArtifactDrawer()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
-        var drawer = ExtractSourceBlock(shell, "<aside class=\"qe-agent-artifact-drawer\"", "</aside>");
+        var drawer = ExtractSourceBlock(shell, "qe-agent-artifact-drawer", "</aside>");
 
         Assert.Contains("!string.IsNullOrWhiteSpace(artifact.Url)", drawer, StringComparison.Ordinal);
-        Assert.Contains("href=\"@artifact.Url\"", drawer, StringComparison.Ordinal);
-        Assert.Contains("target=\"_blank\"", drawer, StringComparison.Ordinal);
-        Assert.Contains("rel=\"noopener noreferrer\"", drawer, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"@(() => OpenArtifactPreview(artifact))\"", drawer, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"@artifact.Url\"", drawer, StringComparison.Ordinal);
+        Assert.DoesNotContain("target=\"_blank\"", drawer, StringComparison.Ordinal);
         Assert.Contains("ArtifactActionLabel(artifact)", drawer, StringComparison.Ordinal);
+        Assert.Contains("private void OpenArtifactPreview(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
         Assert.Contains("private string ArtifactActionLabel(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-link", styles, StringComparison.Ordinal);
     }

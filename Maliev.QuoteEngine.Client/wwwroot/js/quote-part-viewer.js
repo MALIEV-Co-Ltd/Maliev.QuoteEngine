@@ -382,7 +382,7 @@ const CONFIG = {
         coneHeight: 0.18,
         coneTessellation: 8,
         labelFontSize: '11px',
-        viewportPosition: { x: 0.84, y: 0.76, width: 0.16, height: 0.24 },
+        viewportPosition: { x: 0.80, y: 0.76, width: 0.16, height: 0.24 },
     },
 
     /** Grid configuration */

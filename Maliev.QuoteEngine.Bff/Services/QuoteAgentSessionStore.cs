@@ -148,7 +148,8 @@ internal sealed class QuoteAgentSessionStore
                     .Where(action => action.Status.Equals("pending_confirmation", StringComparison.OrdinalIgnoreCase))
                     .Select(CloneAction)
                     .ToList(),
-                Estimate = state.Estimate
+                Estimate = state.Estimate,
+                UiDirectives = state.UiDirectives.Select(CloneUiDirective).ToList()
             };
         }
     }
@@ -301,6 +302,22 @@ internal sealed class QuoteAgentSessionStore
         };
     }
 
+    private static QuoteAgentUiDirectiveDto CloneUiDirective(QuoteAgentUiDirectiveDto source)
+    {
+        return new QuoteAgentUiDirectiveDto
+        {
+            DirectiveId = source.DirectiveId,
+            Panel = source.Panel,
+            TargetType = source.TargetType,
+            TargetId = source.TargetId,
+            HighlightKey = source.HighlightKey,
+            Label = source.Label,
+            CanvasX = source.CanvasX,
+            CanvasY = source.CanvasY,
+            CanvasZ = source.CanvasZ
+        };
+    }
+
     private static QuotePartDraftDto ClonePart(QuotePartDraftDto source)
     {
         return new QuotePartDraftDto
@@ -383,6 +400,8 @@ internal sealed class QuoteAgentSessionState
     public List<QuoteAgentArtifactDto> Artifacts { get; } = [];
 
     public List<QuoteAgentProposedActionDto> ProposedActions { get; } = [];
+
+    public List<QuoteAgentUiDirectiveDto> UiDirectives { get; } = [];
 
     public QuoteEstimateResponse? Estimate { get; set; }
 

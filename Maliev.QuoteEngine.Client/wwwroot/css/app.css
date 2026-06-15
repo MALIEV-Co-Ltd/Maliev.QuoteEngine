@@ -2042,6 +2042,35 @@
     background: var(--qe-agent-raised);
 }
 
+.qe-agent-focus-pulse {
+    position: relative;
+    outline: 2px solid color-mix(in srgb, var(--qe-agent-primary) 78%, transparent);
+    outline-offset: 2px;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--qe-agent-primary) 32%, transparent),
+        0 0 0 8px color-mix(in srgb, var(--qe-agent-primary) 10%, transparent),
+        var(--maliev-shadow-card);
+    animation: qe-agent-focus-pulse 1.35s ease-in-out infinite;
+    scroll-margin: 84px;
+}
+
+@keyframes qe-agent-focus-pulse {
+    0%,
+    100% {
+        box-shadow:
+            0 0 0 1px color-mix(in srgb, var(--qe-agent-primary) 30%, transparent),
+            0 0 0 6px color-mix(in srgb, var(--qe-agent-primary) 9%, transparent),
+            var(--maliev-shadow-card);
+    }
+
+    50% {
+        box-shadow:
+            0 0 0 1px color-mix(in srgb, var(--qe-agent-primary) 64%, transparent),
+            0 0 0 14px color-mix(in srgb, var(--qe-agent-primary) 18%, transparent),
+            var(--maliev-shadow-card);
+    }
+}
+
 .qe-agent-flow-card > header {
     display: flex;
     align-items: start;
@@ -3567,6 +3596,7 @@
 }
 
 .qe-agent-artifact-viewer-canvas {
+    position: relative;
     min-height: 300px;
     height: min(42dvh, 360px);
     overflow: hidden;
@@ -3577,6 +3607,34 @@
 
 .qe-agent-artifact-viewer-canvas .qe-viewer-wrap {
     min-height: 260px;
+}
+
+.qe-agent-artifact-viewer-canvas .qe-viewer-toolbar,
+.qe-agent-artifact-viewer-canvas .qe-viewer-measure-readout {
+    display: none;
+}
+
+.qe-agent-artifact-viewer-canvas .axis-gizmo-label {
+    margin-left: -10px;
+}
+
+.qe-agent-canvas-focus {
+    position: absolute;
+    z-index: 6;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--qe-agent-primary) 76%, transparent);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+}
+
+.qe-agent-canvas-focus::after {
+    content: "";
+    position: absolute;
+    inset: -10px;
+    border: 1px solid color-mix(in srgb, var(--qe-agent-primary) 72%, transparent);
+    border-radius: inherit;
 }
 
 .qe-agent-artifact-context {

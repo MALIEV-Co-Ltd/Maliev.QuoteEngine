@@ -122,7 +122,8 @@ internal sealed class QuoteAgentService(
             Gates = currentState.Gates,
             ProposedActions = currentState.ProposedActions,
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
-            ThinkingSteps = chatbotResponse?.ThinkingSteps ?? []
+            ThinkingSteps = chatbotResponse?.ThinkingSteps ?? [],
+            UiDirectives = currentState.UiDirectives
         };
     }
 
@@ -228,7 +229,8 @@ internal sealed class QuoteAgentService(
             Gates = currentState.Gates,
             ProposedActions = currentState.ProposedActions,
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
-            ThinkingSteps = finalMessage?.ThinkingSteps ?? []
+            ThinkingSteps = finalMessage?.ThinkingSteps ?? [],
+            UiDirectives = currentState.UiDirectives
         };
 
         if (!receivedDelta)
@@ -317,6 +319,7 @@ internal sealed class QuoteAgentService(
             "quote_get_reference_data" => prototypeStore.ReferenceData,
             "quote_get_account_context" => BuildAccountContext(state),
             "quote_get_auth_handoff" => BuildAuthHandoff(state, request.Arguments),
+            "quote_focus_ui" => FocusUi(state, request.Arguments),
             "quote_get_settings" => BuildSettings(state),
             "quote_update_settings" => UpdateSettings(state, request.Arguments),
             "quote_update_account_profile" => PrepareActionOrGateError(
@@ -484,7 +487,174 @@ internal sealed class QuoteAgentService(
     private QuoteAgentStateResponse ToStateResponse(QuoteAgentSessionState state)
     {
         var customerId = ResolveCustomerId();
-        return sessionStore.ToResponse(state, customerId.HasValue, customerId);
+        var response = sessionStore.ToResponse(state, customerId.HasValue, customerId);
+        response.UiDirectives = BuildUiDirectives(response);
+        return response;
+    }
+
+    private static List<QuoteAgentUiDirectiveDto> BuildUiDirectives(QuoteAgentStateResponse state)
+    {
+        var directives = state.UiDirectives.ToList();
+
+        var firstViewer = state.Artifacts.FirstOrDefault(artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase));
+        if (firstViewer is not null)
+        {
+            directives.Add(new QuoteAgentUiDirectiveDto
+            {
+                Panel = "artifacts",
+                TargetType = "viewer",
+                TargetId = firstViewer.PartId?.ToString("D") ?? firstViewer.ArtifactId.ToString("D"),
+                HighlightKey = firstViewer.PartId.HasValue
+                    ? $"part:{firstViewer.PartId.Value:D}"
+                    : $"artifact:{firstViewer.ArtifactId:D}",
+                Label = $"Opened the 3D viewer for {firstViewer.Title}.",
+                CanvasX = 0.62,
+                CanvasY = 0.42,
+                CanvasZ = 0.5
+            });
+        }
+
+        var firstDfmIssue = state.Parts
+            .SelectMany(CollectPartDfmIssueCodes)
+            .FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(firstDfmIssue))
+        {
+            directives.Add(new QuoteAgentUiDirectiveDto
+            {
+                Panel = "artifacts",
+                TargetType = "dfm_issue",
+                TargetId = firstDfmIssue,
+                HighlightKey = "dfm",
+                Label = $"Highlighted the DFM issue {firstDfmIssue}."
+            });
+        }
+
+        var firstArtifact = state.Artifacts.FirstOrDefault(artifact =>
+            !artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase));
+        if (firstArtifact is not null)
+        {
+            directives.Add(new QuoteAgentUiDirectiveDto
+            {
+                Panel = "artifacts",
+                TargetType = "artifact",
+                TargetId = firstArtifact.ArtifactId.ToString("D"),
+                HighlightKey = $"artifact-type:{firstArtifact.ArtifactType}",
+                Label = $"Highlighted {firstArtifact.Title}."
+            });
+        }
+
+        if (state.ProposedActions.Count > 0)
+        {
+            directives.Add(new QuoteAgentUiDirectiveDto
+            {
+                Panel = "summary",
+                TargetType = "confirmation_action",
+                TargetId = state.ProposedActions[0].ActionId.ToString("D"),
+                HighlightKey = "summary:actions",
+                Label = "Opened the summary so you can review the confirmation action."
+            });
+        }
+        else if (state.Gates.Any(gate =>
+                     gate.Code.Equals("customer_authenticated", StringComparison.OrdinalIgnoreCase) &&
+                     gate.Status.Equals("blocked", StringComparison.OrdinalIgnoreCase)))
+        {
+            directives.Add(new QuoteAgentUiDirectiveDto
+            {
+                Panel = "summary",
+                TargetType = "summary",
+                TargetId = "customer_authenticated",
+                HighlightKey = "summary",
+                Label = "Opened the summary to show what is still needed before formal quote or order steps."
+            });
+        }
+
+        return directives
+            .GroupBy(directive => directive.HighlightKey, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Take(5)
+            .ToList();
+    }
+
+    private QuoteAgentStateResponse FocusUi(
+        QuoteAgentSessionState state,
+        IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var directive = new QuoteAgentUiDirectiveDto
+        {
+            Panel = NormalizeUiPanel(ReadString(arguments, "panel")),
+            TargetType = ReadString(arguments, "target_type") ?? ReadString(arguments, "targetType") ?? "summary",
+            TargetId = ReadString(arguments, "target_id") ?? ReadString(arguments, "targetId"),
+            HighlightKey = ReadString(arguments, "highlight_key") ?? ReadString(arguments, "highlightKey") ?? "summary",
+            Label = ReadString(arguments, "label") ?? "The agent highlighted the relevant workspace area.",
+            CanvasX = ReadDouble(arguments, "canvas_x") ?? ReadDouble(arguments, "canvasX"),
+            CanvasY = ReadDouble(arguments, "canvas_y") ?? ReadDouble(arguments, "canvasY"),
+            CanvasZ = ReadDouble(arguments, "canvas_z") ?? ReadDouble(arguments, "canvasZ")
+        };
+
+        if (string.IsNullOrWhiteSpace(directive.HighlightKey))
+        {
+            directive.HighlightKey = directive.TargetType;
+        }
+
+        lock (state.SyncRoot)
+        {
+            state.UiDirectives.RemoveAll(item =>
+                item.HighlightKey.Equals(directive.HighlightKey, StringComparison.OrdinalIgnoreCase));
+            state.UiDirectives.Add(directive);
+        }
+
+        return ToStateResponse(state);
+    }
+
+    private static string NormalizeUiPanel(string? panel)
+    {
+        return panel?.Trim().ToLowerInvariant() switch
+        {
+            "artifact" or "artifacts" or "workbench" => "artifacts",
+            "summary" or "project_summary" => "summary",
+            _ => "none"
+        };
+    }
+
+    private static IEnumerable<string> CollectPartDfmIssueCodes(QuotePartDraftDto part)
+    {
+        foreach (var finding in part.Findings)
+        {
+            if (!string.IsNullOrWhiteSpace(finding.Code))
+            {
+                yield return finding.Code;
+            }
+        }
+
+        foreach (var issue in part.FdmReport?.Issues ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(issue.Code))
+            {
+                yield return issue.Code;
+            }
+        }
+
+        foreach (var issue in part.SlaReport?.Issues ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(issue.Code))
+            {
+                yield return issue.Code;
+            }
+        }
+
+        foreach (var issue in part.CncReport?.Issues ?? [])
+        {
+            if (!string.IsNullOrWhiteSpace(issue.Code))
+            {
+                yield return issue.Code;
+            }
+        }
+
+        if (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason))
+        {
+            yield return "NON_MANIFOLD";
+        }
     }
 
     private QuoteAgentProjectSummaryResponse BuildProjectSummary(QuoteAgentSessionState state)
@@ -3322,6 +3492,22 @@ Customer message:
         return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : fallback;
+    }
+
+    private static double? ReadDouble(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        string key)
+    {
+        if (!arguments.TryGetValue(key, out var element) ||
+            element.ValueKind is not (JsonValueKind.Number or JsonValueKind.String))
+        {
+            return null;
+        }
+
+        var raw = element.ValueKind == JsonValueKind.String ? element.GetString() : element.GetRawText();
+        return double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? Math.Clamp(parsed, 0, 1)
+            : null;
     }
 
     private static bool TryReadDecimal(
