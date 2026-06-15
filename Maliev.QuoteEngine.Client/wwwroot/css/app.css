@@ -660,7 +660,7 @@
     grid-template-rows: auto auto minmax(0, 1fr) auto;
     padding: 12px 8px;
     background: var(--qe-agent-bg);
-    border-right: 0;
+    border-right: 1px solid var(--qe-agent-line);
     min-width: 0;
     overflow: hidden;
     transition: padding 260ms cubic-bezier(.2, .8, .2, 1);

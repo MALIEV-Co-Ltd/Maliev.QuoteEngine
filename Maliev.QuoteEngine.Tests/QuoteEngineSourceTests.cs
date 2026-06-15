@@ -1127,6 +1127,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-drawer", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border-right: 1px solid var(--qe-agent-line);", ExtractSourceBlock(agentStyles, ".qe-agent-rail {", ".qe-agent-rail-head"), StringComparison.Ordinal);
+        Assert.Contains("border-left: 1px solid var(--qe-agent-line);", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-drawer,", ".qe-agent-artifact-backdrop"), StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-toggle", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-grid", agentStyles, StringComparison.Ordinal);
