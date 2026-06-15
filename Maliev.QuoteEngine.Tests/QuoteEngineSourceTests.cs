@@ -1243,12 +1243,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-composer-attachment-heading\"", component, StringComparison.Ordinal);
         Assert.Contains("ComposerAttachmentQueueHint()", component, StringComparison.Ordinal);
         Assert.Contains("Will send with your next message", component, StringComparison.Ordinal);
+        Assert.Contains("RemainingComposerAttachmentCount", component, StringComparison.Ordinal);
+        Assert.Contains("ComposerAttachmentOverflowLabel()", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-composer-attachment-overflow\"", component, StringComparison.Ordinal);
         Assert.Contains("_pendingComposerAttachments.Count == 0", component, StringComparison.Ordinal);
         Assert.Contains("RemovePendingComposerAttachmentAsync(index)", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-composer-attachment-remove\"", component, StringComparison.Ordinal);
         Assert.Contains("_pendingComposerAttachments.RemoveAt(index);", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-attachment-remove", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-attachment-heading", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-attachment-overflow", styles, StringComparison.Ordinal);
 
         Assert.Contains("message.Attachments.Count > 0", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-message-attachments\"", component, StringComparison.Ordinal);

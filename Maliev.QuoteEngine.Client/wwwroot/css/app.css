@@ -2565,6 +2565,30 @@
     height: 16px;
 }
 
+.qe-agent-composer-attachment-overflow {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 70px;
+    min-height: 58px;
+    border: 1px dashed var(--qe-agent-line);
+    border-radius: 16px;
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-muted);
+    text-align: center;
+}
+
+.qe-agent-composer-attachment-overflow strong {
+    color: var(--qe-agent-ink);
+    font-size: 15px;
+    line-height: 1;
+}
+
+.qe-agent-composer-attachment-overflow small {
+    font-size: 11px;
+    line-height: 1;
+}
+
 .qe-agent-upload-progress {
     position: absolute;
     inset: 0;

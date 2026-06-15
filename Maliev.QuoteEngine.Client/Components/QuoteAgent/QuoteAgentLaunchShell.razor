@@ -896,6 +896,13 @@
                                 </button>
                             </div>
                         }
+                        @if (RemainingComposerAttachmentCount > 0)
+                        {
+                            <div class="qe-agent-composer-attachment-overflow" aria-label="@ComposerAttachmentOverflowLabel()">
+                                <strong>+@RemainingComposerAttachmentCount</strong>
+                                <small>@Text("more", "เพิ่ม")</small>
+                            </div>
+                        }
                     </div>
                 }
                 <button type="button"
@@ -2026,6 +2033,15 @@
     private string ComposerAttachmentQueueHint()
     {
         return Text("Will send with your next message", "จะส่งไปพร้อมข้อความถัดไป");
+    }
+
+    private int RemainingComposerAttachmentCount => Math.Max(0, _pendingComposerAttachments.Count - 5);
+
+    private string ComposerAttachmentOverflowLabel()
+    {
+        return Text(
+            $"{RemainingComposerAttachmentCount} more attachments queued",
+            "มีไฟล์แนบเพิ่มในคิว");
     }
 
     private string UploadedPartStatus(QuotePartViewModel part)
