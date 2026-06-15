@@ -1968,7 +1968,7 @@
         QueueComposerAttachment(part);
         SetComposerAttachmentNotice(part);
         await InvokeAsync(StateHasChanged);
-        await RefreshPendingAttachmentPreviewAsync();
+        await SendPendingAttachmentsImmediatelyAsync();
     }
 
     private void QueueComposerAttachment(QuotePartViewModel part)
@@ -2039,7 +2039,7 @@
 
     private string ComposerAttachmentQueueHint()
     {
-        return Text("Will send with your next message", "จะส่งไปพร้อมข้อความถัดไป");
+        return Text("Sending with this message", "กำลังส่งไปพร้อมข้อความนี้");
     }
 
     private string ComposerAttachmentNotice()
@@ -2050,8 +2050,8 @@
         }
 
         return Text(
-            "Uploaded now. Add a note or press send to analyze.",
-            "อัปโหลดแล้ว เพิ่มข้อความหรือกดส่งเพื่อวิเคราะห์");
+            "Attached now. I am sending it for analysis.",
+            "แนบแล้ว กำลังส่งเพื่อวิเคราะห์");
     }
 
     private void SetComposerAttachmentNotice(QuotePartViewModel part)
@@ -2061,19 +2061,19 @@
                 $"Uploading {part.FileName}. It will stay in this message preview.",
                 $"กำลังอัปโหลด {part.FileName} และจะแสดงในตัวอย่างข้อความนี้")
             : Text(
-                $"{part.FileName} is uploaded. Add a note or press send to analyze.",
-                $"{part.FileName} อัปโหลดแล้ว เพิ่มข้อความหรือกดส่งเพื่อวิเคราะห์");
+                $"{part.FileName} is uploaded. Sending it for analysis now.",
+                $"{part.FileName} อัปโหลดแล้ว กำลังส่งเพื่อวิเคราะห์");
     }
 
     private void SetComposerAttachmentNotice(ComposerAttachmentPreview attachment)
     {
         _composerAttachmentNotice = attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase)
             ? Text(
-                $"{attachment.FileName} is attached. Add a note or press send to analyze.",
-                $"{attachment.FileName} แนบแล้ว เพิ่มข้อความหรือกดส่งเพื่อวิเคราะห์")
+                $"{attachment.FileName} is attached. Sending it for analysis now.",
+                $"{attachment.FileName} แนบแล้ว กำลังส่งเพื่อวิเคราะห์")
             : Text(
-                $"{attachment.FileName} is uploaded. Add a note or press send to analyze.",
-                $"{attachment.FileName} อัปโหลดแล้ว เพิ่มข้อความหรือกดส่งเพื่อวิเคราะห์");
+                $"{attachment.FileName} is uploaded. Sending it for analysis now.",
+                $"{attachment.FileName} อัปโหลดแล้ว กำลังส่งเพื่อวิเคราะห์");
     }
 
     private int RemainingComposerAttachmentCount => Math.Max(0, _pendingComposerAttachments.Count - 5);
@@ -2332,7 +2332,7 @@
         }
 
         _sketchOpen = false;
-        await RefreshPendingAttachmentPreviewAsync();
+        await SendPendingAttachmentsImmediatelyAsync();
         await FocusComposerAsync();
     }
 
@@ -2365,6 +2365,18 @@
 
         await InvokeAsync(StateHasChanged);
         await FocusComposerAsync();
+    }
+
+    private async Task SendPendingAttachmentsImmediatelyAsync()
+    {
+        await RefreshPendingAttachmentPreviewAsync();
+
+        if (_pendingComposerAttachments.Count == 0 || _sending)
+        {
+            return;
+        }
+
+        await HandleSubmitAsync();
     }
 
     private static string BuildSketchFileName(string title)
