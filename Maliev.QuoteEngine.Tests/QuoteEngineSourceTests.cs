@@ -1241,6 +1241,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private async Task RefreshPendingAttachmentPreviewAsync()", component, StringComparison.Ordinal);
         Assert.Contains("await InvokeAsync(StateHasChanged);", component, StringComparison.Ordinal);
         Assert.Contains("_pendingComposerAttachments.Count == 0", component, StringComparison.Ordinal);
+        Assert.Contains("RemovePendingComposerAttachmentAsync(index)", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-composer-attachment-remove\"", component, StringComparison.Ordinal);
+        Assert.Contains("_pendingComposerAttachments.RemoveAt(index);", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-attachment-remove", styles, StringComparison.Ordinal);
 
         Assert.Contains("message.Attachments.Count > 0", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-message-attachments\"", component, StringComparison.Ordinal);

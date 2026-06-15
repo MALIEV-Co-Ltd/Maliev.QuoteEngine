@@ -857,28 +857,37 @@
                         {
                             var index = i;
                             var part = _pendingComposerAttachments[i];
-                            <button type="button"
-                                    class="@($"qe-agent-composer-attachment-card {(i == _pendingComposerAttachments.Count - 1 ? "active" : string.Empty)}")"
-                                    @onclick="@(() => SelectPendingComposerAttachmentAsync(index))">
-                                <span class="qe-agent-composer-attachment-preview">
-                                    @if (!string.IsNullOrWhiteSpace(part.PreviewUrl))
-                                    {
-                                        <img src="@part.PreviewUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
-                                    }
-                                    else
-                                    {
-                                        <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
-                                    }
-                                    @if (IsUploadBusy(part))
-                                    {
-                                        <span class="qe-agent-upload-progress" aria-hidden="true"></span>
-                                    }
-                                </span>
-                                <span class="qe-agent-composer-attachment-copy">
-                                    <strong>@part.FileName</strong>
-                                    <small>@AttachmentStatusLabel(part)</small>
-                                </span>
-                            </button>
+                            <div class="@($"qe-agent-composer-attachment-card {(i == _pendingComposerAttachments.Count - 1 ? "active" : string.Empty)}")">
+                                <button type="button"
+                                        class="qe-agent-composer-attachment-main"
+                                        @onclick="@(() => SelectPendingComposerAttachmentAsync(index))">
+                                    <span class="qe-agent-composer-attachment-preview">
+                                        @if (!string.IsNullOrWhiteSpace(part.PreviewUrl))
+                                        {
+                                            <img src="@part.PreviewUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
+                                        }
+                                        @if (IsUploadBusy(part))
+                                        {
+                                            <span class="qe-agent-upload-progress" aria-hidden="true"></span>
+                                        }
+                                    </span>
+                                    <span class="qe-agent-composer-attachment-copy">
+                                        <strong>@part.FileName</strong>
+                                        <small>@AttachmentStatusLabel(part)</small>
+                                    </span>
+                                </button>
+                                <button type="button"
+                                        class="qe-agent-composer-attachment-remove"
+                                        title="@Text("Remove attachment", "นำไฟล์แนบออก")"
+                                        aria-label="@Text($"Remove {part.FileName}", $"นำ {part.FileName} ออก")"
+                                        @onclick="@(() => RemovePendingComposerAttachmentAsync(index))">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                                </button>
+                            </div>
                         }
                     </div>
                 }
@@ -1971,6 +1980,18 @@
         {
             await SelectUploadedPartAsync(uploadedPartIndex);
         }
+    }
+
+    private async Task RemovePendingComposerAttachmentAsync(int index)
+    {
+        if (index < 0 || index >= _pendingComposerAttachments.Count)
+        {
+            return;
+        }
+
+        _pendingComposerAttachments.RemoveAt(index);
+        await InvokeAsync(StateHasChanged);
+        await FocusComposerAsync();
     }
 
     private string AttachmentStatusLabel(ComposerAttachmentPreview part)

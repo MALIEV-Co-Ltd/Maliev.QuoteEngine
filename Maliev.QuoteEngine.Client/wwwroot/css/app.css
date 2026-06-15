@@ -2399,7 +2399,7 @@
 .qe-agent-composer-attachment-card {
     position: relative;
     display: grid;
-    grid-template-columns: 46px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr) 24px;
     align-items: center;
     gap: 10px;
     flex: 0 0 auto;
@@ -2412,6 +2412,20 @@
     color: var(--qe-agent-ink);
     cursor: pointer;
     overflow: hidden;
+    text-align: left;
+}
+
+.qe-agent-composer-attachment-main {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
     text-align: left;
 }
 
@@ -2469,6 +2483,31 @@
 .qe-agent-composer-attachment-copy small {
     color: var(--qe-agent-muted);
     font-size: 12px;
+}
+
+.qe-agent-composer-attachment-remove {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--qe-agent-muted);
+    cursor: pointer;
+}
+
+.qe-agent-composer-attachment-remove:hover,
+.qe-agent-composer-attachment-remove:focus-visible {
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-ink);
+    outline: none;
+}
+
+.qe-agent-composer-attachment-remove svg {
+    width: 16px;
+    height: 16px;
 }
 
 .qe-agent-upload-progress {
