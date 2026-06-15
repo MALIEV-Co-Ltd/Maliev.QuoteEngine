@@ -1108,6 +1108,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("setTextareaSelection(textarea, session.before.length", composerScript, StringComparison.Ordinal);
         Assert.Contains("resolveSpeechRecognitionLanguage", composerScript, StringComparison.Ordinal);
         Assert.Contains("navigator.mediaDevices.getUserMedia", composerScript, StringComparison.Ordinal);
+        Assert.Contains("session.recognition.onsoundstart", composerScript, StringComparison.Ordinal);
+        Assert.Contains("session.recognition.onspeechstart", composerScript, StringComparison.Ordinal);
+        Assert.Contains("boostDictationLevel(session, 0.45, \"good\", 1400)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("session.speechBoostUntil && Date.now() < session.speechBoostUntil", composerScript, StringComparison.Ordinal);
         Assert.Contains("setDictationLevel(button, level, state)", composerScript, StringComparison.Ordinal);
         Assert.Contains("data-dictation-level", agentStyles, StringComparison.Ordinal);
         Assert.Contains("typingAnimations", composerScript, StringComparison.Ordinal);

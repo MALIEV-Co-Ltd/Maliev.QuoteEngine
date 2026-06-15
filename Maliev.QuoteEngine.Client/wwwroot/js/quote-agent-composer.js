@@ -204,8 +204,24 @@ export async function beginDictation(textarea, dictationButton) {
   session.recognition.interimResults = true;
   session.recognition.maxAlternatives = 1;
   session.recognition.lang = resolveSpeechRecognitionLanguage();
+  session.recognition.onaudiostart = () => {
+    boostDictationLevel(session, 0.16, "quiet", 450);
+  };
+  session.recognition.onsoundstart = () => {
+    boostDictationLevel(session, 0.34, "good", 900);
+  };
+  session.recognition.onspeechstart = () => {
+    boostDictationLevel(session, 0.5, "good", 1200);
+  };
+  session.recognition.onspeechend = () => {
+    boostDictationLevel(session, 0.18, "quiet", 300);
+  };
+  session.recognition.onaudioend = () => {
+    boostDictationLevel(session, 0, "quiet", 0);
+  };
 
   session.recognition.onresult = event => {
+    boostDictationLevel(session, 0.45, "good", 1400);
     let finalText = "";
     let interimText = "";
     for (let index = event.resultIndex || 0; index < event.results.length; index += 1) {
@@ -449,7 +465,11 @@ async function startDictationMeter(session) {
       }
 
       const rms = Math.sqrt(sum / samples.length);
-      const level = Math.min(1, rms * 7);
+      let level = Math.min(1, rms * 7);
+      if (session.speechBoostUntil && Date.now() < session.speechBoostUntil) {
+        level = Math.max(level, session.speechBoostLevel || 0);
+      }
+
       const state = level > 0.82 ? "loud" : level < 0.12 ? "quiet" : "good";
       setDictationLevel(button, level, state);
       session.audioFrame = window.requestAnimationFrame(tick);
@@ -459,6 +479,17 @@ async function startDictationMeter(session) {
   } catch {
     setDictationLevel(button, 0, "quiet");
   }
+}
+
+function boostDictationLevel(session, level, state, milliseconds) {
+  if (!session?.button || !session.active) {
+    return;
+  }
+
+  const normalized = Math.max(0, Math.min(1, level));
+  session.speechBoostLevel = normalized;
+  session.speechBoostUntil = milliseconds > 0 ? Date.now() + milliseconds : 0;
+  setDictationLevel(session.button, normalized, state);
 }
 
 function setDictationLevel(button, level, state) {
