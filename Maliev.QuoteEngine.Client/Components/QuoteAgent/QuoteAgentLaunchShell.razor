@@ -856,6 +856,10 @@
                 @if (_pendingComposerAttachments.Count > 0)
                 {
                     <div class="qe-agent-composer-attachments" aria-label="@Text("Attached artifacts", "อาร์ติแฟกต์ที่แนบ")">
+                        <div class="qe-agent-composer-attachment-heading">
+                            <span>@Text("Attachments", "ไฟล์แนบ")</span>
+                            <small>@ComposerAttachmentQueueHint()</small>
+                        </div>
                         @for (var i = 0; i < Math.Min(_pendingComposerAttachments.Count, 5); i++)
                         {
                             var index = i;
@@ -2017,6 +2021,11 @@
         return part.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase)
             ? Text("Image attached", "แนบรูปภาพแล้ว")
             : Text("File attached", "แนบไฟล์แล้ว");
+    }
+
+    private string ComposerAttachmentQueueHint()
+    {
+        return Text("Will send with your next message", "จะส่งไปพร้อมข้อความถัดไป");
     }
 
     private string UploadedPartStatus(QuotePartViewModel part)
