@@ -7,6 +7,7 @@ using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -68,7 +69,16 @@ builder.Services.AddScoped<QuoteUploadHandoffToken>();
 builder.Services.AddScoped<QuoteAgentContextToken>();
 builder.Services.AddScoped<ICustomerChatbotService, CustomerChatbotService>();
 builder.Services.AddSingleton<QuoteAgentSessionStore>();
-builder.Services.AddSingleton<IGoogleDriveConnectorStore, InMemoryGoogleDriveConnectorStore>();
+builder.Services.AddSingleton<IGoogleDriveConnectorStore>(sp =>
+{
+    var redis = sp.GetService<IConnectionMultiplexer>();
+    return redis is null
+        ? new InMemoryGoogleDriveConnectorStore()
+        : new RedisGoogleDriveConnectorStore(
+            redis,
+            sp.GetRequiredService<IDataProtectionProvider>(),
+            sp.GetRequiredService<ILogger<RedisGoogleDriveConnectorStore>>());
+});
 builder.Services.AddScoped<IQuoteAgentService, QuoteAgentService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(45));

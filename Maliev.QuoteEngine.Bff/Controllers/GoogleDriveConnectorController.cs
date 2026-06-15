@@ -130,6 +130,69 @@ public sealed class GoogleDriveConnectorController(
         });
     }
 
+    /// <summary>
+    /// Lists Google Drive files available to attach to the current Make Studio message.
+    /// </summary>
+    [HttpGet("quote/v1/connectors/google-drive/files")]
+    [ProducesResponseType(typeof(GoogleDriveFileListResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<GoogleDriveFileListResponse>> ListFiles(
+        [FromQuery] string? query = null,
+        [FromQuery] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        var connection = connectorStore.Get(customerId);
+        if (connection is null)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Google Drive is not connected.",
+                Detail = "Connect Google Drive before browsing Drive files.",
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+
+        var accessToken = await GetUsableAccessTokenAsync(connection, cancellationToken);
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            connectorStore.Remove(customerId);
+            return Conflict(new ProblemDetails
+            {
+                Title = "Google Drive needs to be reconnected.",
+                Detail = "The previous Google Drive authorization expired. Please connect Google Drive again.",
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, BuildDriveFilesUrl(query, limit));
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await httpClientFactory.CreateClient().SendAsync(request, cancellationToken);
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            connectorStore.Remove(customerId);
+            return Conflict(new ProblemDetails
+            {
+                Title = "Google Drive needs to be reconnected.",
+                Detail = "Google rejected the stored Drive authorization. Please connect Google Drive again.",
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+
+        response.EnsureSuccessStatusCode();
+        var result = await response.Content.ReadFromJsonAsync<GoogleDriveFileListResponse>(cancellationToken)
+            ?? new GoogleDriveFileListResponse();
+        result.Files = result.Files
+            .Where(file => !string.IsNullOrWhiteSpace(file.Id) && !string.IsNullOrWhiteSpace(file.Name))
+            .ToList();
+        return Ok(result);
+    }
+
     private async Task<GoogleDriveTokenResponse> ExchangeCodeAsync(string code, CancellationToken cancellationToken)
     {
         using var form = new FormUrlEncodedContent(new Dictionary<string, string?>
@@ -147,6 +210,68 @@ public sealed class GoogleDriveConnectorController(
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadFromJsonAsync<GoogleDriveTokenResponse>(cancellationToken)
             ?? throw new InvalidOperationException("Google did not return an OAuth token response.");
+    }
+
+    private async Task<string?> GetUsableAccessTokenAsync(GoogleDriveConnection connection, CancellationToken cancellationToken)
+    {
+        if (connection.ExpiresAt > DateTimeOffset.UtcNow.AddMinutes(1))
+        {
+            return connection.AccessToken;
+        }
+
+        if (string.IsNullOrWhiteSpace(connection.RefreshToken))
+        {
+            return null;
+        }
+
+        using var form = new FormUrlEncodedContent(new Dictionary<string, string?>
+        {
+            ["client_id"] = GoogleClientId(),
+            ["client_secret"] = GoogleClientSecret(),
+            ["refresh_token"] = connection.RefreshToken,
+            ["grant_type"] = "refresh_token"
+        });
+        using var response = await httpClientFactory.CreateClient().PostAsync(
+            "https://oauth2.googleapis.com/token",
+            form,
+            cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        var tokenResponse = await response.Content.ReadFromJsonAsync<GoogleDriveTokenResponse>(cancellationToken);
+        if (tokenResponse is null || string.IsNullOrWhiteSpace(tokenResponse.AccessToken))
+        {
+            return null;
+        }
+
+        var refreshed = connection with
+        {
+            AccessToken = tokenResponse.AccessToken,
+            RefreshToken = tokenResponse.RefreshToken ?? connection.RefreshToken,
+            ExpiresAt = DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, tokenResponse.ExpiresIn))
+        };
+        connectorStore.Save(refreshed);
+        return refreshed.AccessToken;
+    }
+
+    private static string BuildDriveFilesUrl(string? query, int limit)
+    {
+        var pageSize = Math.Clamp(limit, 1, 50);
+        var driveQuery = "trashed = false";
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var escaped = query.Trim().Replace("'", "\\'", StringComparison.Ordinal);
+            driveQuery = $"{driveQuery} and name contains '{escaped}'";
+        }
+
+        return QueryHelpers.AddQueryString("https://www.googleapis.com/drive/v3/files", new Dictionary<string, string?>
+        {
+            ["pageSize"] = pageSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["q"] = driveQuery,
+            ["fields"] = "files(id,name,mimeType,size,modifiedTime,iconLink,thumbnailLink,webViewLink)"
+        });
     }
 
     private bool TryReadState(string? state, out GoogleDriveOAuthState value)
@@ -226,4 +351,52 @@ public sealed class GoogleDriveConnectorStatusResponse
 
     /// <summary>Gets or sets whether the signed-in customer has connected Google Drive.</summary>
     public bool IsConnected { get; set; }
+}
+
+/// <summary>
+/// Customer-safe Google Drive file list response.
+/// </summary>
+public sealed class GoogleDriveFileListResponse
+{
+    /// <summary>Gets or sets the Drive files.</summary>
+    [JsonPropertyName("files")]
+    public List<GoogleDriveFileResponse> Files { get; set; } = [];
+}
+
+/// <summary>
+/// Customer-safe Google Drive file metadata.
+/// </summary>
+public sealed class GoogleDriveFileResponse
+{
+    /// <summary>Gets or sets the Drive file ID.</summary>
+    [JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the file name.</summary>
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the MIME type.</summary>
+    [JsonPropertyName("mimeType")]
+    public string MimeType { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the file size in bytes when Google provides it.</summary>
+    [JsonPropertyName("size")]
+    public string? Size { get; set; }
+
+    /// <summary>Gets or sets the modified time when Google provides it.</summary>
+    [JsonPropertyName("modifiedTime")]
+    public DateTimeOffset? ModifiedTime { get; set; }
+
+    /// <summary>Gets or sets the Google Drive icon link.</summary>
+    [JsonPropertyName("iconLink")]
+    public string? IconLink { get; set; }
+
+    /// <summary>Gets or sets the thumbnail link when available.</summary>
+    [JsonPropertyName("thumbnailLink")]
+    public string? ThumbnailLink { get; set; }
+
+    /// <summary>Gets or sets the browser view link when available.</summary>
+    [JsonPropertyName("webViewLink")]
+    public string? WebViewLink { get; set; }
 }

@@ -2032,6 +2032,28 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Google_drive_connector_files_lists_drive_files_with_customer_token()
+    {
+        var google = new RecordingGoogleDriveHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithConnectedGoogleDrive(google);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-files@example.com");
+
+        var response = await client.GetAsync("/quote/v1/connectors/google-drive/files?query=bracket&limit=7");
+
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var file = Assert.Single(document.RootElement.GetProperty("files").EnumerateArray());
+        Assert.Equal("drive-file-1", file.GetProperty("id").GetString());
+        Assert.Equal("bracket.step", file.GetProperty("name").GetString());
+        Assert.NotNull(google.LastRequest);
+        Assert.Equal("Bearer", google.LastRequest!.Headers.Authorization?.Scheme);
+        Assert.Equal("access-token", google.LastRequest.Headers.Authorization?.Parameter);
+        Assert.Contains("drive/v3/files", google.LastRequest.RequestUri!.OriginalString, StringComparison.Ordinal);
+        Assert.Contains("name%20contains%20%27bracket%27", google.LastRequest.RequestUri.OriginalString, StringComparison.Ordinal);
+        Assert.Contains("pageSize=7", google.LastRequest.RequestUri.OriginalString, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Agent_settings_tool_returns_and_updates_customer_safe_session_settings()
     {
         using var client = factory.CreateClient();
@@ -2557,7 +2579,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         });
     }
 
-    private WebApplicationFactory<Program> CreateAgentFactoryWithConnectedGoogleDrive()
+    private WebApplicationFactory<Program> CreateAgentFactoryWithConnectedGoogleDrive(IHttpClientFactory? googleHttpClientFactory = null)
     {
         return factory.WithWebHostBuilder(builder =>
         {
@@ -2576,6 +2598,11 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
                 services.AddSingleton<IChatbotServiceClient, RecordingChatbotServiceClient>();
                 services.RemoveAll<IGoogleDriveConnectorStore>();
                 services.AddSingleton<IGoogleDriveConnectorStore, AlwaysConnectedGoogleDriveConnectorStore>();
+                if (googleHttpClientFactory is not null)
+                {
+                    services.RemoveAll<IHttpClientFactory>();
+                    services.AddSingleton(googleHttpClientFactory);
+                }
             });
         });
     }
@@ -2601,6 +2628,46 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         public void Remove(Guid customerId)
         {
+        }
+    }
+
+    private sealed class RecordingGoogleDriveHttpClientFactory : IHttpClientFactory
+    {
+        private readonly RecordingGoogleDriveHandler _handler = new();
+
+        public HttpRequestMessage? LastRequest => _handler.LastRequest;
+
+        public HttpClient CreateClient(string name)
+        {
+            return new HttpClient(_handler, disposeHandler: false);
+        }
+    }
+
+    private sealed class RecordingGoogleDriveHandler : HttpMessageHandler
+    {
+        public HttpRequestMessage? LastRequest { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            LastRequest = request;
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    files = new[]
+                    {
+                        new
+                        {
+                            id = "drive-file-1",
+                            name = "bracket.step",
+                            mimeType = "model/step",
+                            size = "12345",
+                            webViewLink = "https://drive.google.com/file/d/drive-file-1/view"
+                        }
+                    }
+                })
+            };
+            return Task.FromResult(response);
         }
     }
 
