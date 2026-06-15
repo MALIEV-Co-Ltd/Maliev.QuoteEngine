@@ -1469,7 +1469,7 @@
     position: static;
     width: min(820px, calc(100% - 32px));
     margin: auto auto 0;
-    padding: 0 0 12px;
+    padding: 0 0 54px;
     transform: none;
 }
 
@@ -1659,6 +1659,11 @@
     line-height: 1.2;
     user-select: none;
     -webkit-user-select: none;
+}
+
+.qe-agent-prompt h1::selection {
+    background: transparent;
+    color: currentColor;
 }
 
 .qe-agent-prompt span,
