@@ -31,38 +31,52 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
 
   let holdTimer = 0;
   let holdStarted = false;
+  let pressStartedActive = false;
   let suppressClick = false;
-  const pointerDown = event => {
+  const pointerDown = async event => {
     if (event.button !== undefined && event.button !== 0) {
       return;
     }
 
+    pressStartedActive = isDictationActive(textarea);
     holdStarted = false;
     window.clearTimeout(holdTimer);
+    if (pressStartedActive) {
+      return;
+    }
+
+    suppressClick = true;
+    await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
     holdTimer = window.setTimeout(async () => {
       holdStarted = true;
-      suppressClick = true;
       dictationButton?.setPointerCapture?.(event.pointerId);
-      await dotNetRef.invokeMethodAsync("BeginDictationFromHoldAsync");
     }, 220);
   };
   const pointerUp = async event => {
     window.clearTimeout(holdTimer);
+    if (pressStartedActive) {
+      return;
+    }
+
     if (!holdStarted) {
       return;
     }
 
     dictationButton?.releasePointerCapture?.(event.pointerId);
-    await dotNetRef.invokeMethodAsync("StopDictationAsync");
+    await finishDictationFromUserAction(textarea, dotNetRef);
   };
   const pointerCancel = async event => {
     window.clearTimeout(holdTimer);
+    if (pressStartedActive) {
+      return;
+    }
+
     if (!holdStarted) {
       return;
     }
 
     dictationButton?.releasePointerCapture?.(event.pointerId);
-    await dotNetRef.invokeMethodAsync("StopDictationAsync");
+    await finishDictationFromUserAction(textarea, dotNetRef);
   };
   const click = async event => {
     if (suppressClick) {
@@ -71,7 +85,12 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
       return;
     }
 
-    await dotNetRef.invokeMethodAsync("ToggleDictationAsync");
+    if (isDictationActive(textarea)) {
+      await finishDictationFromUserAction(textarea, dotNetRef);
+      return;
+    }
+
+    await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
   };
 
   textarea.addEventListener("keydown", keydown);
@@ -111,6 +130,34 @@ export function disposeComposer(textarea) {
   cancelDictation(textarea);
   composerDotNetRefs.delete(textarea);
   composerHandlers.delete(textarea);
+}
+
+function isDictationActive(textarea) {
+  const session = dictationSessions.get(textarea);
+  return !!session?.active && !session.settled && !session.dotNetStopRequested;
+}
+
+async function startDictationFromUserAction(textarea, dictationButton, dotNetRef) {
+  try {
+    await beginDictation(textarea, dictationButton);
+    await dotNetRef.invokeMethodAsync("DictationStartedAsync");
+  } catch (error) {
+    await dotNetRef.invokeMethodAsync(
+      "ReportDictationErrorAsync",
+      error?.name || error?.message || "dictation-failed");
+  }
+}
+
+async function finishDictationFromUserAction(textarea, dotNetRef) {
+  try {
+    await dotNetRef.invokeMethodAsync("BeginDictationProcessingAsync");
+    const dictatedText = await endDictation(textarea);
+    await dotNetRef.invokeMethodAsync("CompleteDictationAsync", dictatedText || "");
+  } catch (error) {
+    await dotNetRef.invokeMethodAsync(
+      "ReportDictationErrorAsync",
+      error?.name || error?.message || "dictation-failed");
+  }
 }
 
 export function focusComposer(textarea) {
@@ -191,19 +238,21 @@ export async function beginDictation(textarea, dictationButton) {
     dotNetStopRequested: false,
     finalTranscript: "",
     interimTranscript: "",
+    languageIndex: 0,
+    languages: resolveSpeechRecognitionLanguages(),
+    noSpeechError: false,
     recognition: new SpeechRecognition(),
+    restartTimer: 0,
     settled: false,
     active: true,
     dotNetRef: composerDotNetRefs.get(textarea)
   };
   dictationSessions.set(textarea, session);
   prepareDictationPreview(textarea, session);
-  startDictationMeter(session);
 
   session.recognition.continuous = true;
   session.recognition.interimResults = true;
   session.recognition.maxAlternatives = 1;
-  session.recognition.lang = resolveSpeechRecognitionLanguage();
   session.recognition.onaudiostart = () => {
     boostDictationLevel(session, 0.16, "quiet", 450);
   };
@@ -221,6 +270,7 @@ export async function beginDictation(textarea, dictationButton) {
   };
 
   session.recognition.onresult = event => {
+    session.noSpeechError = false;
     boostDictationLevel(session, 0.45, "good", 1400);
     let finalText = "";
     let interimText = "";
@@ -240,13 +290,22 @@ export async function beginDictation(textarea, dictationButton) {
   };
 
   session.recognition.onerror = event => {
-    if (event.error === "no-speech") {
+    if (event.error === "no-speech" || event.error === "no-match") {
+      session.noSpeechError = true;
       session.interimTranscript = "";
       updateDictationPreview(textarea, session, false);
       return;
     }
 
+    if (event.error === "aborted") {
+      // Raised by our own cancelDictation/abort; not a failure to report.
+      return;
+    }
+
+    reportDictationError(session, event.error || "dictation-failed");
     session.error = event.error || "Dictation failed.";
+    session.settled = true;
+    finishDictation(textarea, session);
     try {
       session.recognition.stop();
     } catch {
@@ -259,13 +318,18 @@ export async function beginDictation(textarea, dictationButton) {
       return;
     }
 
-    session.settled = true;
-    finishDictation(textarea, session);
-    session.dotNetRef?.invokeMethodAsync("StopDictationAsync");
+    if (session.error) {
+      session.settled = true;
+      finishDictation(textarea, session);
+      return;
+    }
+
+    scheduleDictationRestart(textarea, session);
   };
 
   try {
-    session.recognition.start();
+    startRecognitionSession(session);
+    void startDictationMeter(session);
   } catch (error) {
     cancelDictation(textarea);
     throw error;
@@ -279,6 +343,7 @@ export async function endDictation(textarea) {
   }
 
   session.dotNetStopRequested = true;
+  clearDictationRestart(session);
   try {
     session.recognition.stop();
   } catch {
@@ -294,6 +359,7 @@ function cancelDictation(textarea) {
     return;
   }
 
+  clearDictationRestart(session);
   try {
     session.recognition.abort();
   } catch {
@@ -337,6 +403,7 @@ function updateDictationPreview(textarea, session, finalizing) {
 }
 
 function finishDictation(textarea, session) {
+  clearDictationRestart(session);
   stopDictationMeter(session);
   session.active = false;
   if (session.error) {
@@ -413,16 +480,94 @@ function setTextareaSelection(textarea, start, end) {
 }
 
 function resolveSpeechRecognitionLanguage() {
-  const language = document.documentElement.lang || navigator.language || "en-US";
-  if (language.toLowerCase() === "th") {
+  return resolveSpeechRecognitionLanguages()[0] || "en-US";
+}
+
+function resolveSpeechRecognitionLanguages() {
+  const candidates = [
+    document.documentElement.lang,
+    ...(Array.isArray(navigator.languages) ? navigator.languages : []),
+    navigator.language,
+    "en-US",
+    "th-TH"
+  ];
+  const languages = [];
+  for (const candidate of candidates) {
+    const language = normalizeSpeechRecognitionLanguage(candidate);
+    if (language && !languages.some(existing => existing.toLowerCase() === language.toLowerCase())) {
+      languages.push(language);
+    }
+  }
+
+  return languages.length > 0 ? languages : ["en-US"];
+}
+
+function normalizeSpeechRecognitionLanguage(language) {
+  const value = String(language || "").trim();
+  if (!value) {
+    return "";
+  }
+
+  const lower = value.toLowerCase();
+  if (lower === "th" || lower.startsWith("th-")) {
     return "th-TH";
   }
 
-  if (language.toLowerCase() === "en") {
+  if (lower === "en") {
     return navigator.language?.startsWith("en-") ? navigator.language : "en-US";
   }
 
-  return language;
+  return value;
+}
+
+function startRecognitionSession(session) {
+  if (!session?.active || session.dotNetStopRequested || session.settled) {
+    return;
+  }
+
+  session.recognition.lang = session.languages[session.languageIndex] || resolveSpeechRecognitionLanguage();
+  session.noSpeechError = false;
+  session.recognition.start();
+}
+
+function scheduleDictationRestart(textarea, session) {
+  if (!session?.active || session.dotNetStopRequested || session.settled || session.restartTimer) {
+    return;
+  }
+
+  if (session.noSpeechError && session.languages.length > 1 && !session.finalTranscript) {
+    session.languageIndex = (session.languageIndex + 1) % session.languages.length;
+  }
+
+  session.restartTimer = window.setTimeout(() => {
+    session.restartTimer = 0;
+    if (!session.active || session.dotNetStopRequested || session.settled) {
+      return;
+    }
+
+    try {
+      startRecognitionSession(session);
+    } catch (error) {
+      if (error?.name === "InvalidStateError") {
+        scheduleDictationRestart(textarea, session);
+        return;
+      }
+
+      reportDictationError(session, error?.name || error?.message || "dictation-failed");
+      session.error = error?.name || error?.message || "Dictation failed.";
+      session.settled = true;
+      finishDictation(textarea, session);
+    }
+  }, 140);
+}
+
+function clearDictationRestart(session) {
+  if (!session?.restartTimer) {
+    return;
+  }
+
+  window.clearTimeout(session.restartTimer);
+  session.restartTimer = 0;
 }
 
 async function startDictationMeter(session) {
@@ -436,8 +581,13 @@ async function startDictationMeter(session) {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioContext();
+    if (audioContext.state === "suspended") {
+      await audioContext.resume().catch(() => {});
+    }
+
     const analyser = audioContext.createAnalyser();
     analyser.fftSize = 1024;
+    analyser.smoothingTimeConstant = 0.72;
     const source = audioContext.createMediaStreamSource(stream);
     const samples = new Uint8Array(analyser.fftSize);
 
@@ -465,20 +615,36 @@ async function startDictationMeter(session) {
       }
 
       const rms = Math.sqrt(sum / samples.length);
-      let level = Math.min(1, rms * 7);
+      const noiseFloor = session.noiseFloor ?? 0.012;
+      if (rms < noiseFloor * 1.8) {
+        session.noiseFloor = noiseFloor * 0.94 + rms * 0.06;
+      }
+
+      const activeSignal = Math.max(0, rms - (session.noiseFloor ?? noiseFloor));
+      let level = Math.min(1, activeSignal * 32 + rms * 4);
       if (session.speechBoostUntil && Date.now() < session.speechBoostUntil) {
         level = Math.max(level, session.speechBoostLevel || 0);
       }
 
-      const state = level > 0.82 ? "loud" : level < 0.12 ? "quiet" : "good";
+      const state = level > 0.82 ? "loud" : level < 0.16 ? "quiet" : "good";
       setDictationLevel(button, level, state);
       session.audioFrame = window.requestAnimationFrame(tick);
     };
 
     tick();
-  } catch {
+  } catch (error) {
     setDictationLevel(button, 0, "quiet");
+    session.meterUnavailable = error?.name || error?.message || "audio-capture";
   }
+}
+
+function reportDictationError(session, code) {
+  if (!session || session.reported) {
+    return;
+  }
+
+  session.reported = true;
+  session.dotNetRef?.invokeMethodAsync("ReportDictationErrorAsync", String(code || "dictation-failed"));
 }
 
 function boostDictationLevel(session, level, state, milliseconds) {
@@ -493,16 +659,26 @@ function boostDictationLevel(session, level, state, milliseconds) {
 }
 
 function setDictationLevel(button, level, state) {
-  if (!button) {
+  const composer = button?.closest?.(".qe-agent-composer");
+  if (!composer) {
     return;
   }
 
   const normalized = Math.max(0, Math.min(1, level));
-  button.style.setProperty("--qe-dictation-level", normalized.toFixed(2));
-  button.style.setProperty("--qe-dictation-ring", `${Math.round(4 + normalized * 16)}px`);
-  button.style.setProperty("--qe-dictation-glow", `${Math.round(10 + normalized * 22)}px`);
-  button.style.setProperty("--qe-dictation-scale", (1 + normalized * 0.12).toFixed(3));
-  button.dataset.dictationLevel = state;
+  // The composer's box-shadow widens with the level; quiet collapses it back
+  // to the resting shadow so the composer itself is the volume indicator.
+  composer.style.setProperty("--qe-dictation-level", normalized.toFixed(2));
+  composer.dataset.dictationLevel = state;
+}
+
+function clearDictationLevel(button) {
+  const composer = button?.closest?.(".qe-agent-composer");
+  if (!composer) {
+    return;
+  }
+
+  composer.style.removeProperty("--qe-dictation-level");
+  delete composer.dataset.dictationLevel;
 }
 
 function stopDictationMeter(session) {
@@ -512,13 +688,7 @@ function stopDictationMeter(session) {
 
   session.audioStream?.getTracks?.().forEach(track => track.stop());
   session.audioContext?.close?.();
-  if (session.button) {
-    session.button.style.removeProperty("--qe-dictation-level");
-    session.button.style.removeProperty("--qe-dictation-ring");
-    session.button.style.removeProperty("--qe-dictation-glow");
-    session.button.style.removeProperty("--qe-dictation-scale");
-    delete session.button.dataset.dictationLevel;
-  }
+  clearDictationLevel(session.button);
 }
 
 
@@ -554,18 +724,88 @@ function normalizeCaretAfterInput(textarea) {
   });
 }
 
+let composerShapeMirror = null;
+
+function ensureComposerShapeMirror() {
+  if (composerShapeMirror && composerShapeMirror.isConnected) {
+    return composerShapeMirror;
+  }
+
+  const mirror = document.createElement("div");
+  mirror.setAttribute("aria-hidden", "true");
+  mirror.style.position = "absolute";
+  mirror.style.top = "0";
+  mirror.style.left = "-9999px";
+  mirror.style.visibility = "hidden";
+  mirror.style.pointerEvents = "none";
+  mirror.style.boxSizing = "content-box";
+  mirror.style.margin = "0";
+  mirror.style.border = "0";
+  mirror.style.padding = "0";
+  document.body.appendChild(mirror);
+  composerShapeMirror = mirror;
+  return mirror;
+}
+
+function isComposerTextWrapped(textarea, value) {
+  if (!value) {
+    return false;
+  }
+
+  const composer = textarea.closest?.(".qe-agent-composer");
+  if (!composer) {
+    return false;
+  }
+
+  const textareaStyles = getComputedStyle(textarea);
+  const lineHeight = Number.parseFloat(textareaStyles.lineHeight) || 24;
+
+  // The composer grid keeps the same four column tracks in both the pill and the
+  // multiline layouts, so the second (text) track is a stable reference for the
+  // single-line text width. Measuring wrap against that fixed width — instead of
+  // the textarea's live width, which changes when the layout switches — is what
+  // stops the pill <-> rectangle shape from oscillating frame to frame.
+  const columns = getComputedStyle(composer).gridTemplateColumns.split(" ");
+  const pillTextTrack = columns.length >= 2 ? Number.parseFloat(columns[1]) : Number.NaN;
+  if (!Number.isFinite(pillTextTrack) || pillTextTrack <= 0) {
+    // Fallback for engines that do not resolve grid tracks to pixels.
+    return textarea.scrollHeight > lineHeight * 1.8;
+  }
+
+  const horizontalInset = (Number.parseFloat(textareaStyles.paddingLeft) || 0)
+    + (Number.parseFloat(textareaStyles.paddingRight) || 0)
+    + (Number.parseFloat(textareaStyles.borderLeftWidth) || 0)
+    + (Number.parseFloat(textareaStyles.borderRightWidth) || 0);
+  const contentWidth = Math.max(0, pillTextTrack - horizontalInset);
+
+  const mirror = ensureComposerShapeMirror();
+  mirror.style.width = `${contentWidth}px`;
+  mirror.style.fontFamily = textareaStyles.fontFamily;
+  mirror.style.fontSize = textareaStyles.fontSize;
+  mirror.style.fontWeight = textareaStyles.fontWeight;
+  mirror.style.fontStyle = textareaStyles.fontStyle;
+  mirror.style.lineHeight = textareaStyles.lineHeight;
+  mirror.style.letterSpacing = textareaStyles.letterSpacing;
+  mirror.style.textTransform = textareaStyles.textTransform;
+  mirror.style.tabSize = textareaStyles.tabSize;
+  // Mirror the textarea's real wrapping rules so the measured line count matches.
+  mirror.style.whiteSpace = "pre-wrap";
+  mirror.style.overflowWrap = textareaStyles.overflowWrap;
+  mirror.style.wordBreak = textareaStyles.wordBreak;
+  mirror.textContent = value;
+
+  return mirror.scrollHeight > lineHeight * 1.5;
+}
+
 function updateComposerShape(textarea) {
   const composer = textarea.closest?.(".qe-agent-composer");
   if (!composer) {
     return;
   }
 
-  window.requestAnimationFrame(() => {
-    const lineHeight = Number.parseFloat(getComputedStyle(textarea).lineHeight) || 24;
-    const value = textarea.value || "";
-    const isMultiline = value.includes("\n") || value.length > 68 || value.length > 0 && textarea.scrollHeight > lineHeight * 1.55;
-    composer.classList.toggle("qe-agent-composer--multiline", isMultiline);
-  });
+  const value = textarea.value || "";
+  const isMultiline = value.includes("\n") || isComposerTextWrapped(textarea, value);
+  composer.classList.toggle("qe-agent-composer--multiline", isMultiline);
 }
 
 function wait(milliseconds) {

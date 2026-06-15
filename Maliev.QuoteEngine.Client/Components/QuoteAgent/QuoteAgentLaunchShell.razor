@@ -196,7 +196,7 @@
                             <div class="qe-agent-management-list">
                                 @foreach (var connector in _connectors)
                                 {
-                                    <article class="qe-agent-management-row">
+                                    <article class="@ConnectorRowClass(connector)">
                                         <span class="qe-agent-plugin-icon" aria-hidden="true">
                                             @if (IsGoogleDriveConnector(connector))
                                             {
@@ -895,13 +895,31 @@
                           autofocus
                           placeholder="@Text("Describe your part, paste dimensions, attach files, or drag and drop files...", "อธิบายชิ้นงาน วางขนาด แนบไฟล์ หรือลากไฟล์มาวาง...")"
                           aria-label="@Text("Message MALIEV Quote Agent", "ข้อความถึงผู้ช่วยขอราคา MALIEV")"></textarea>
+                <div class="qe-agent-dictation-meter" aria-hidden="@(!_dictating)">
+                    <span class="qe-agent-dictation-meter-line"></span>
+                    <span class="qe-agent-dictation-meter-bars">
+                        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+                    </span>
+                </div>
                 <button type="button"
                         @ref="_dictationButton"
-                        class="@($"qe-agent-round-btn qe-agent-dictation-btn {(_dictating ? "active" : string.Empty)}")"
-                        title="@Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง")"
-                        aria-label="@Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง")"
+                        class="@($"qe-agent-round-btn qe-agent-dictation-btn {(_dictating ? "active" : string.Empty)} {(_dictationProcessing ? "processing" : string.Empty)}")"
+                        title="@DictationButtonTitle"
+                        aria-label="@DictationButtonTitle"
                         aria-pressed="@_dictating">
-                    <MudIcon Icon="@Icons.Material.Outlined.MicNone" Size="Size.Small" />
+                    @if (_dictationProcessing)
+                    {
+                        <span class="qe-agent-dictation-spinner" aria-hidden="true"></span>
+                    }
+                    else if (_dictating)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Stop" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Outlined.MicNone" Size="Size.Small" />
+                    }
                 </button>
                 <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@_sending">
                     @if (_sending)
@@ -1312,6 +1330,7 @@
     private readonly List<ComposerAttachmentPreview> _pendingComposerAttachments = [];
     private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
     private const int SearchMinimumCharacters = 3;
+    private const int SearchPromptVisibleCharacters = 22;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1338,6 +1357,7 @@
     private bool _searchLoading;
     private bool _customerSearchUnavailable;
     private bool _dictating;
+    private bool _dictationProcessing;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
     private bool _searchPromptHovered;
@@ -1347,6 +1367,7 @@
     private string _projectName = string.Empty;
     private string _searchQuery = string.Empty;
     private string _animatedSearchPrompt = string.Empty;
+    private string? _highlightConnectorId;
     private string _sketchTitle = "Manufacturing sketch";
     private string _sketchColor = "#161616";
     private string? _lastSketchDataUrl;
@@ -1492,6 +1513,16 @@
                 classes.Add("is-sending");
             }
 
+            if (_dictating)
+            {
+                classes.Add("qe-agent-composer--dictating");
+            }
+
+            if (_dictationProcessing)
+            {
+                classes.Add("qe-agent-composer--dictation-processing");
+            }
+
             if (_pendingComposerAttachments.Count > 0)
             {
                 classes.Add("qe-agent-composer--has-attachments");
@@ -1500,6 +1531,12 @@
             return string.Join(" ", classes);
         }
     }
+
+    private string DictationButtonTitle => _dictationProcessing
+        ? Text("Processing dictated speech", "กำลังประมวลผลเสียงพูด")
+        : _dictating
+            ? Text("Stop dictation", "หยุดพูดตามคำบอก")
+            : Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง");
 
     private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
     private int ArtifactCount => _artifacts.Count + UploadedParts.Count;
@@ -1854,6 +1891,62 @@
         return EndDictationAsync();
     }
 
+    [JSInvokable]
+    public async Task ReportDictationErrorAsync(string? code)
+    {
+        _dictating = false;
+        _dictationProcessing = false;
+        _error = DictationErrorMessage(code);
+        await InvokeAsync(StateHasChanged);
+        await FocusComposerAsync();
+    }
+
+    [JSInvokable]
+    public async Task DictationStartedAsync()
+    {
+        _dictating = true;
+        _dictationProcessing = false;
+        _error = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task BeginDictationProcessingAsync()
+    {
+        _dictating = false;
+        _dictationProcessing = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task CompleteDictationAsync(string? dictatedText)
+    {
+        _draftMessage = dictatedText ?? string.Empty;
+        _dictating = false;
+        _dictationProcessing = false;
+        await InvokeAsync(StateHasChanged);
+        await FocusComposerAsync();
+    }
+
+    private string DictationErrorMessage(string? code)
+    {
+        return (code ?? string.Empty).Trim().ToLowerInvariant() switch
+        {
+            "not-allowed" or "service-not-allowed" or "notallowederror" or "securityerror" => Text(
+                "Microphone access is blocked. Allow microphone permission for this site in your browser, then try dictation again.",
+                "ไมโครโฟนถูกบล็อก โปรดอนุญาตให้เว็บไซต์นี้ใช้ไมโครโฟนในเบราว์เซอร์ แล้วลองพูดอีกครั้ง"),
+            "audio-capture" or "notfounderror" or "notreadableerror" => Text(
+                "No microphone was detected. Connect a microphone, make sure it is not muted, then try again.",
+                "ไม่พบไมโครโฟน โปรดเชื่อมต่อไมโครโฟนและตรวจสอบว่าไม่ได้ปิดเสียง แล้วลองอีกครั้ง"),
+            "network" => Text(
+                "The speech service is unreachable. Check your internet connection, then try dictation again.",
+                "เชื่อมต่อบริการแปลงเสียงไม่ได้ โปรดตรวจสอบการเชื่อมต่ออินเทอร์เน็ต แล้วลองอีกครั้ง"),
+            _ => Text(
+                "Dictation stopped unexpectedly. Please try again.",
+                "การพูดตามคำบอกหยุดทำงานกะทันหัน โปรดลองอีกครั้ง"),
+        };
+    }
+
     private async Task BeginDictationAsync()
     {
         if (_composerModule is null || _dictating)
@@ -1863,6 +1956,7 @@
         }
 
         _dictating = true;
+        _dictationProcessing = false;
         _error = null;
         try
         {
@@ -1877,6 +1971,7 @@
                 friendly,
                 friendly);
             _dictating = false;
+            _dictationProcessing = false;
             await InvokeAsync(StateHasChanged);
             await FocusComposerAsync();
         }
@@ -1892,6 +1987,8 @@
 
         try
         {
+            _dictationProcessing = true;
+            await InvokeAsync(StateHasChanged);
             var dictatedText = await _composerModule.InvokeAsync<string>("endDictation", _composerTextarea);
             _draftMessage = dictatedText;
         }
@@ -1904,6 +2001,7 @@
         finally
         {
             _dictating = false;
+            _dictationProcessing = false;
             await InvokeAsync(StateHasChanged);
             await FocusComposerAsync();
         }
@@ -2565,10 +2663,8 @@
     {
         _composerMenuOpen = false;
         _composerPluginsOpen = false;
-        _draftMessage = Text(
-            "Connect Google Drive so I can choose manufacturing files from my Drive.",
-            "เชื่อมต่อ Google Drive เพื่อเลือกไฟล์งานผลิตจาก Drive ของฉัน");
-        await FocusComposerAsync();
+        _highlightConnectorId = "google-drive";
+        await OpenPluginsPageAsync();
     }
 
     private async Task CloseSketchAsync()
@@ -3287,7 +3383,7 @@
                     var current = prompt[..length];
                     await InvokeAsync(() =>
                     {
-                        _animatedSearchPrompt = current;
+                        _animatedSearchPrompt = FormatAnimatedSearchPrompt(current);
                         StateHasChanged();
                     });
                     await Task.Delay(56, cancellationToken);
@@ -3305,7 +3401,7 @@
                     var current = prompt[..length];
                     await InvokeAsync(() =>
                     {
-                        _animatedSearchPrompt = current;
+                        _animatedSearchPrompt = FormatAnimatedSearchPrompt(current);
                         StateHasChanged();
                     });
                     await Task.Delay(28, cancellationToken);
@@ -3318,6 +3414,13 @@
         {
             // Expected when the component is disposed.
         }
+    }
+
+    private static string FormatAnimatedSearchPrompt(string prompt)
+    {
+        return prompt.Length <= SearchPromptVisibleCharacters
+            ? prompt
+            : prompt[^SearchPromptVisibleCharacters..];
     }
 
     private async Task RefreshSearchResultsAsync()
@@ -3392,7 +3495,7 @@
     {
         if (connector.IsConnected)
         {
-            return Text("Connected", "เชื่อมต่อแล้ว");
+            return Text("Browse", "เลือกไฟล์");
         }
 
         if (connector.Status.Equals("available", StringComparison.OrdinalIgnoreCase))
@@ -3403,6 +3506,23 @@
         return connector.Status.Equals("planned", StringComparison.OrdinalIgnoreCase)
             ? Text("Planned", "วางแผนแล้ว")
             : Text("Future", "อนาคต");
+    }
+
+    private string ConnectorRowClass(QuoteAgentConnectorDto connector)
+    {
+        var classes = new List<string> { "qe-agent-management-row" };
+        if (_highlightConnectorId is not null &&
+            _highlightConnectorId.Equals(connector.ConnectorId, StringComparison.OrdinalIgnoreCase))
+        {
+            classes.Add("qe-agent-management-row--highlight");
+        }
+
+        if (connector.IsConnected)
+        {
+            classes.Add("is-connected");
+        }
+
+        return string.Join(" ", classes);
     }
 
     private static bool IsGoogleDriveConnector(QuoteAgentConnectorDto connector)
@@ -3423,8 +3543,27 @@
                 return;
             }
 
-            _draftMessage = string.IsNullOrWhiteSpace(handoff.Message)
-                ? Text($"Tell me how the {connector.DisplayName} connector will work.", $"อธิบายว่าตัวเชื่อมต่อ {connector.DisplayName} จะทำงานอย่างไร")
+            if (IsGoogleDriveConnector(connector) &&
+                handoff.Status.Equals("ready_to_connect", StringComparison.OrdinalIgnoreCase))
+            {
+                Navigation.NavigateTo(
+                    $"/quote/v1/connectors/google-drive/start?returnUrl={Uri.EscapeDataString("/quotes?connect=google-drive")}",
+                    forceLoad: true);
+                return;
+            }
+
+            if (IsGoogleDriveConnector(connector) && connector.IsConnected)
+            {
+                _error = Text(
+                    "Google Drive is connected. Type @drive in the composer to choose files from Drive.",
+                    "เชื่อมต่อ Google Drive แล้ว พิมพ์ @drive ในช่องข้อความเพื่อเลือกไฟล์จาก Drive");
+                _activeWorkspacePage = WorkspacePage.Chat;
+                await FocusComposerAsync();
+                return;
+            }
+
+            _error = string.IsNullOrWhiteSpace(handoff.Message)
+                ? Text($"The {connector.DisplayName} connector is not ready yet.", $"ตัวเชื่อมต่อ {connector.DisplayName} ยังไม่พร้อมใช้งาน")
                 : handoff.Message;
         }
         catch (QuoteEngineApiException ex)

@@ -828,14 +828,14 @@
 .qe-agent-search-prompt {
     position: absolute;
     inset-block: 0;
-    inset-inline: 40px 10px;
+    inset-inline: 40px 26px;
     z-index: 1;
     display: block;
     overflow: hidden;
     color: var(--qe-agent-muted);
     font-size: 14px;
     line-height: 36px;
-    text-align: right;
+    text-align: left;
     white-space: nowrap;
     pointer-events: none;
     user-select: none;
@@ -2510,10 +2510,15 @@
 }
 
 .qe-agent-composer {
+    /* --qe-dictation-level (0..1) and --qe-dictation-color are set by the
+       dictation meter; at level 0 the reactive glow layer is fully transparent
+       and zero-sized, so the resting shadow is unchanged. */
+    --qe-dictation-level: 0;
+    --qe-dictation-color: var(--qe-agent-primary);
     display: grid;
     position: relative;
-    grid-template-columns: 42px minmax(0, 1fr) 48px 42px;
-    grid-template-areas: "add text dictate send";
+    grid-template-columns: 42px minmax(0, 1fr) 0 48px 42px;
+    grid-template-areas: "add text meter dictate send";
     align-items: center;
     gap: 8px;
     width: 100%;
@@ -2521,7 +2526,10 @@
     padding: 8px;
     border-radius: 999px;
     background: #ffffff;
-    box-shadow: 0 18px 44px rgba(16, 24, 40, .10), 0 2px 8px rgba(16, 24, 40, .06);
+    box-shadow:
+        0 18px 44px rgba(16, 24, 40, .10),
+        0 2px 8px rgba(16, 24, 40, .06),
+        0 0 calc(var(--qe-dictation-level) * 64px) calc(var(--qe-dictation-level) * 18px) color-mix(in srgb, var(--qe-dictation-color) calc(var(--qe-dictation-level) * 55%), transparent);
     border: 1px solid color-mix(in srgb, var(--qe-agent-line) 80%, #ffffff);
     overflow: visible;
     transition:
@@ -2532,10 +2540,33 @@
         align-items 220ms ease;
 }
 
+/* While dictating, the shadow tracks the mic level, so it needs to respond
+   quickly rather than easing over 220ms. */
+.qe-agent-composer[data-dictation-level] {
+    transition:
+        border-radius 220ms cubic-bezier(.2, .8, .2, 1),
+        min-height 220ms cubic-bezier(.2, .8, .2, 1),
+        padding 220ms cubic-bezier(.2, .8, .2, 1),
+        box-shadow 90ms linear,
+        align-items 220ms ease;
+}
+
+.qe-agent-composer[data-dictation-level="quiet"] {
+    --qe-dictation-color: #8b949e;
+}
+
+.qe-agent-composer[data-dictation-level="good"] {
+    --qe-dictation-color: var(--qe-agent-primary);
+}
+
+.qe-agent-composer[data-dictation-level="loud"] {
+    --qe-dictation-color: #ef4444;
+}
+
 .qe-agent-composer.qe-agent-composer--has-attachments {
     grid-template-areas:
-        "attachments attachments attachments attachments"
-        "add text dictate send";
+        "attachments attachments attachments attachments attachments"
+        "add text meter dictate send";
     align-items: start;
     padding: 10px;
     border-radius: 28px;
@@ -2768,20 +2799,42 @@
     align-items: end;
     border-radius: 28px;
     padding: 10px;
-    min-height: 136px;
     grid-template-areas:
-        "text text text text"
-        "add controls dictate send";
-    grid-template-rows: minmax(72px, auto) 38px;
+        "text text text text text"
+        "add meter meter dictate send";
+    /* Rows size to the text content so the rectangle hugs the message instead of
+       snapping to a fixed tall box at the wrap point. Keeps the pill -> rectangle
+       growth continuous as more lines are typed. */
+    grid-template-rows: auto 38px;
 }
 
 .qe-agent-composer.qe-agent-composer--has-attachments.qe-agent-composer--multiline {
     grid-template-areas:
-        "attachments attachments attachments attachments"
-        "text text text text"
-        "add controls dictate send";
-    grid-template-rows: auto minmax(72px, auto) 38px;
-    min-height: 188px;
+        "attachments attachments attachments attachments attachments"
+        "text text text text text"
+        "add meter meter dictate send";
+    grid-template-rows: auto auto 38px;
+}
+
+.qe-agent-composer.qe-agent-composer--dictating,
+.qe-agent-composer.qe-agent-composer--dictation-processing {
+    align-items: end;
+    border-radius: 28px;
+    padding: 10px;
+    grid-template-columns: 42px minmax(0, 1fr) minmax(160px, 260px) 42px 42px;
+    grid-template-areas:
+        "text text text text text"
+        "add meter meter dictate send";
+    grid-template-rows: auto 38px;
+}
+
+.qe-agent-composer.qe-agent-composer--has-attachments.qe-agent-composer--dictating,
+.qe-agent-composer.qe-agent-composer--has-attachments.qe-agent-composer--dictation-processing {
+    grid-template-areas:
+        "attachments attachments attachments attachments attachments"
+        "text text text text text"
+        "add meter meter dictate send";
+    grid-template-rows: auto auto 38px;
 }
 
 .qe-agent-composer textarea {
@@ -2808,7 +2861,7 @@
 
 .qe-agent-composer textarea.qe-agent-dictation-source {
     color: transparent !important;
-    caret-color: var(--qe-agent-primary);
+    caret-color: transparent;
 }
 
 .qe-agent-dictation-preview {
@@ -2876,7 +2929,7 @@
 }
 
 .qe-agent-composer.qe-agent-composer--multiline textarea {
-    min-height: 72px;
+    min-height: 44px;
     padding-top: 10px;
     padding-bottom: 10px;
     align-self: stretch;
@@ -2897,6 +2950,76 @@
     background: var(--qe-agent-hover);
 }
 
+.qe-agent-dictation-meter {
+    grid-area: meter;
+    display: none;
+    align-items: center;
+    justify-self: stretch;
+    min-width: 0;
+    height: 30px;
+    gap: 10px;
+    color: var(--qe-agent-muted);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.qe-agent-composer--dictating .qe-agent-dictation-meter,
+.qe-agent-composer--dictation-processing .qe-agent-dictation-meter {
+    display: flex;
+    opacity: 1;
+}
+
+.qe-agent-dictation-meter-line {
+    flex: 1 1 80px;
+    min-width: 42px;
+    height: 0;
+    border-top: 2px dotted color-mix(in srgb, var(--qe-agent-muted) 34%, transparent);
+}
+
+.qe-agent-dictation-meter-bars {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+    flex: 0 0 auto;
+    height: 28px;
+}
+
+.qe-agent-dictation-meter-bars i {
+    --qe-bar-amp: .42;
+    display: block;
+    width: 2px;
+    height: calc(5px + (var(--qe-dictation-level) * var(--qe-bar-amp) * 24px));
+    min-height: 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--qe-agent-ink) 78%, var(--qe-dictation-color));
+    transform-origin: center;
+    transition:
+        background-color 90ms linear,
+        height 90ms linear;
+}
+
+.qe-agent-dictation-meter-bars i:nth-child(2n) {
+    --qe-bar-amp: .72;
+}
+
+.qe-agent-dictation-meter-bars i:nth-child(3n) {
+    --qe-bar-amp: 1;
+}
+
+.qe-agent-dictation-meter-bars i:nth-child(5n) {
+    --qe-bar-amp: .86;
+}
+
+.qe-agent-composer--dictation-processing .qe-agent-dictation-meter {
+    opacity: .58;
+}
+
+.qe-agent-composer--dictation-processing .qe-agent-dictation-meter-bars i {
+    height: 8px;
+    background: color-mix(in srgb, var(--qe-agent-muted) 58%, transparent);
+}
+
 .qe-agent-dictation-btn {
     grid-area: dictate;
     justify-self: end;
@@ -2915,35 +3038,29 @@
     background: var(--qe-agent-hover);
 }
 
+/* The mic button only signals that recording is active; the live volume level
+   is shown by the composer's reactive shadow (.qe-agent-composer[data-dictation-level]),
+   not by the button. */
 .qe-agent-dictation-btn.active {
-    --qe-dictation-level: .2;
-    --qe-dictation-ring: 8px;
-    --qe-dictation-glow: 14px;
-    --qe-dictation-scale: 1.02;
-    --qe-dictation-color: var(--qe-agent-primary);
-    color: var(--qe-dictation-color);
-    background: color-mix(in srgb, var(--qe-dictation-color) 16%, var(--qe-agent-hover));
-    box-shadow:
-        0 0 0 var(--qe-dictation-ring) color-mix(in srgb, var(--qe-dictation-color) 28%, transparent),
-        0 0 var(--qe-dictation-glow) color-mix(in srgb, var(--qe-dictation-color) 32%, transparent);
-    transform: scale(var(--qe-dictation-scale));
+    color: var(--qe-agent-primary);
+    background: color-mix(in srgb, var(--qe-agent-primary) 16%, var(--qe-agent-hover));
     transition:
-        background-color 80ms linear,
-        box-shadow 80ms linear,
-        color 80ms linear,
-        transform 80ms linear;
+        background-color 120ms ease,
+        color 120ms ease;
 }
 
-.qe-agent-dictation-btn.active[data-dictation-level="quiet"] {
-    --qe-dictation-color: #8b949e;
+.qe-agent-dictation-btn.processing {
+    cursor: progress;
+    color: var(--qe-agent-muted);
 }
 
-.qe-agent-dictation-btn.active[data-dictation-level="good"] {
-    --qe-dictation-color: var(--qe-agent-primary);
-}
-
-.qe-agent-dictation-btn.active[data-dictation-level="loud"] {
-    --qe-dictation-color: #ef4444;
+.qe-agent-dictation-spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid color-mix(in srgb, var(--qe-agent-muted) 30%, transparent);
+    border-top-color: var(--qe-agent-primary);
+    border-radius: 999px;
+    animation: qe-agent-spin 700ms linear infinite;
 }
 
 .qe-agent-send-btn {
@@ -3319,6 +3436,27 @@
     border: 1px solid var(--qe-agent-line);
     border-radius: 14px;
     background: var(--qe-agent-surface);
+}
+
+.qe-agent-management-row--highlight {
+    border-color: var(--qe-agent-primary);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--qe-agent-primary) 14%, transparent);
+    animation: qe-agent-connector-pulse 1.4s ease-in-out infinite;
+}
+
+.qe-agent-management-row.is-connected {
+    border-color: color-mix(in srgb, #22c55e 46%, var(--qe-agent-line));
+}
+
+@keyframes qe-agent-connector-pulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--qe-agent-primary) 12%, transparent);
+    }
+
+    50% {
+        box-shadow: 0 0 0 8px color-mix(in srgb, var(--qe-agent-primary) 22%, transparent);
+    }
 }
 
 .qe-agent-management-row > .mud-icon-root,
