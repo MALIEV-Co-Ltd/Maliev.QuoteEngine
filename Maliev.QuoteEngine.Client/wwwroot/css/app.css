@@ -702,7 +702,6 @@
 }
 
 .qe-agent-shell--rail-collapsed .qe-agent-brand-wordmark,
-.qe-agent-shell--rail-collapsed .qe-agent-primary-nav span,
 .qe-agent-shell--rail-collapsed .qe-agent-rail-search,
 .qe-agent-shell--rail-collapsed .qe-agent-account-action span:not(.qe-agent-account-dot),
 .qe-agent-shell--rail-collapsed .qe-agent-signin-card {
@@ -723,12 +722,34 @@
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav a,
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav button {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
     justify-items: center;
+    gap: 3px;
+    min-height: 54px;
     padding-inline: 0;
+    font-size: 10px;
+    line-height: 1.1;
+    text-align: center;
 }
 
 .qe-agent-shell--rail-collapsed .qe-agent-rail-foot {
     padding-inline: 0;
+}
+
+.qe-agent-rail-footer-settings {
+    width: 100%;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-rail-footer-settings {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    justify-items: center;
+    gap: 3px;
+    min-height: 54px;
+    padding-inline: 0;
+    font-size: 10px;
+    line-height: 1.1;
+    text-align: center;
 }
 
 :root[data-maliev-theme="dark"] .qe-agent-brand-wordmark {
@@ -739,6 +760,7 @@
 .qe-agent-round-btn,
 .qe-agent-artifact-toggle,
 .qe-agent-primary-nav button,
+.qe-agent-rail-footer-settings,
 .qe-agent-quick-actions button,
 .qe-agent-action button {
     font: inherit;
@@ -880,6 +902,7 @@
 
 .qe-agent-primary-nav a,
 .qe-agent-primary-nav button,
+.qe-agent-rail-footer-settings,
 .qe-agent-rail-group a,
 .qe-agent-pin-btn {
     display: grid;
@@ -907,6 +930,8 @@
 .qe-agent-primary-nav button.active,
 .qe-agent-primary-nav a:hover,
 .qe-agent-primary-nav button:hover,
+.qe-agent-rail-footer-settings.active,
+.qe-agent-rail-footer-settings:hover,
 .qe-agent-rail-group a:hover,
 .qe-agent-project-row:hover {
     background: var(--qe-agent-soft);
@@ -4652,9 +4677,27 @@
     }
 
     .qe-agent-rail-head,
-    .qe-agent-rail-scroll,
-    .qe-agent-rail-foot {
+    .qe-agent-rail-scroll {
         display: none;
+    }
+
+    .qe-agent-rail-foot {
+        display: contents;
+    }
+
+    .qe-agent-account-action {
+        display: none;
+    }
+
+    .qe-agent-rail-footer-settings {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        align-content: center;
+        gap: 2px;
+        min-height: 0;
+        padding: 5px 2px;
+        font-size: 10px;
+        line-height: 1.1;
     }
 
     .qe-agent-primary-nav {
@@ -4662,7 +4705,8 @@
     }
 
     .qe-agent-primary-nav a,
-    .qe-agent-primary-nav button {
+    .qe-agent-primary-nav button,
+    .qe-agent-rail-footer-settings {
         grid-template-columns: 1fr;
         justify-items: center;
         align-content: center;
@@ -4674,7 +4718,8 @@
     }
 
     .qe-agent-primary-nav a span,
-    .qe-agent-primary-nav button span {
+    .qe-agent-primary-nav button span,
+    .qe-agent-rail-footer-settings span {
         max-width: 100%;
         overflow: hidden;
         white-space: nowrap;

@@ -71,16 +71,6 @@
                            aria-label="@Text("Search all projects, orders, files, and artifacts", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์ และไฟล์งานทั้งหมด")" />
                 </div>
             </div>
-            @if (IsSignedIn)
-            {
-                <button type="button"
-                        class="@PageNavClass(WorkspacePage.Settings)"
-                        aria-current="@(IsWorkspacePage(WorkspacePage.Settings) ? "page" : null)"
-                        @onclick="OpenSettingsPage">
-                    <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
-                    <span>@Text("Settings", "ตั้งค่า")</span>
-                </button>
-            }
         </nav>
 
         <div class="qe-agent-rail-scroll">
@@ -113,6 +103,16 @@
         </div>
 
         <div class="qe-agent-rail-foot">
+            @if (IsSignedIn)
+            {
+                <button type="button"
+                        class="@PageNavClass(WorkspacePage.Settings) qe-agent-rail-footer-settings"
+                        aria-current="@(IsWorkspacePage(WorkspacePage.Settings) ? "page" : null)"
+                        @onclick="OpenSettingsPage">
+                    <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
+                    <span>@Text("Settings", "ตั้งค่า")</span>
+                </button>
+            }
             <div class="qe-agent-account-action">
                 @if (IsSignedIn)
                 {
