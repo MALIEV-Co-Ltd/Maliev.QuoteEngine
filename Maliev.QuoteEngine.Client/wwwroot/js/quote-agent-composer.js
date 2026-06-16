@@ -127,6 +127,10 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
   focusComposer(textarea);
 }
 
+export function isComposerInitialized(textarea) {
+  return composerHandlers.has(textarea);
+}
+
 export function disposeComposer(textarea) {
   const handlers = composerHandlers.get(textarea);
   if (!textarea || !handlers) {

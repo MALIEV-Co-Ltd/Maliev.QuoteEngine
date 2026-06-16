@@ -1948,6 +1948,14 @@
             await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef, _dictationButton);
             await _composerModule.InvokeVoidAsync("focusComposer", _composerTextarea);
         }
+        else if (_composerModule is not null)
+        {
+            var hasHandlers = await _composerModule.InvokeAsync<bool>("isComposerInitialized", _composerTextarea);
+            if (!hasHandlers)
+            {
+                await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef, _dictationButton);
+            }
+        }
 
         if (_scrollToLatestMessageRequested)
         {
@@ -3218,39 +3226,43 @@
             sketchDataUrl = await _sketchModule.InvokeAsync<string>("exportSketchCanvas", SketchCanvasId);
         }
 
-        if (string.IsNullOrWhiteSpace(sketchDataUrl))
-        {
-            return;
-        }
-
         try
         {
-            var fileName = BuildSketchFileName(_sketchTitle);
-            var base64Data = sketchDataUrl[(sketchDataUrl.IndexOf(',') + 1)..];
-            var imageBytes = Convert.FromBase64String(base64Data);
+            if (!string.IsNullOrWhiteSpace(sketchDataUrl))
+            {
+                var fileName = BuildSketchFileName(_sketchTitle);
+                var base64Data = sketchDataUrl[(sketchDataUrl.IndexOf(',') + 1)..];
+                var imageBytes = Convert.FromBase64String(base64Data);
 
-            var sketchUploadUrl = Navigation.ToAbsoluteUri($"/quote/v1/agent/sessions/{SessionId}/sketches").ToString();
-            using var formContent = new MultipartFormDataContent();
-            formContent.Add(new ByteArrayContent(imageBytes), "file", fileName);
-            var uploadResponse = await Http.PostAsync(sketchUploadUrl, formContent);
-            uploadResponse.EnsureSuccessStatusCode();
-            var result = await uploadResponse.Content.ReadFromJsonAsync<UploadSketchResponse>();
+                var sketchUploadUrl = Navigation.ToAbsoluteUri($"/quote/v1/agent/sessions/{SessionId}/sketches").ToString();
+                using var formContent = new MultipartFormDataContent();
+                var pngContent = new ByteArrayContent(imageBytes);
+                pngContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/png");
+                formContent.Add(pngContent, "file", fileName);
+                var uploadResponse = await Http.PostAsync(sketchUploadUrl, formContent);
+                uploadResponse.EnsureSuccessStatusCode();
+                var result = await uploadResponse.Content.ReadFromJsonAsync<UploadSketchResponse>();
 
-            var attachmentId = Guid.NewGuid();
-            var attachment = new ComposerAttachmentPreview(
-                attachmentId,
-                fileName,
-                "image/png",
-                imageBytes.Length,
-                sketchDataUrl,
-                "sketch",
-                result!.UploadId,
-                result.StoragePath,
-                null,
-                false,
-                "Ready");
+                var attachmentId = Guid.NewGuid();
+                var attachment = new ComposerAttachmentPreview(
+                    attachmentId,
+                    fileName,
+                    "image/png",
+                    imageBytes.Length,
+                    sketchDataUrl,
+                    "sketch",
+                    result!.UploadId,
+                    result.StoragePath,
+                    null,
+                    false,
+                    "Ready");
 
-            _pendingComposerAttachments.Add(attachment);
+                _pendingComposerAttachments.Add(attachment);
+            }
+        }
+        catch
+        {
+            _error = Text("Sketch could not be uploaded. Please try again.", "ไม่สามารถอัปโหลดสเก็ตช์ได้ กรุณาลองใหม่อีกครั้ง");
         }
         finally
         {
