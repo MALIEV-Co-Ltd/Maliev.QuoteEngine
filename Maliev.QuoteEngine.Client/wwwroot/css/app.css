@@ -1596,12 +1596,13 @@
     align-content: start;
     display: grid;
     gap: 28px;
-    max-width: 880px;
-    padding: 34px 20px 24px;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 34px max(20px, calc((100% - 880px) / 2)) 24px;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
-    scrollbar-gutter: stable;
 }
 
 .qe-agent-scroll-to-bottom {
@@ -2345,30 +2346,50 @@
     font-size: 12px;
 }
 
-.qe-agent-thinking ol {
+.qe-agent-thinking-steps {
     display: grid;
-    gap: 10px;
-    margin: 0;
-    max-width: 680px;
-    padding: 2px 0 8px 26px;
+    gap: 5px;
+    padding: 2px 0 6px;
 }
 
-.qe-agent-thinking li {
-    padding-left: 4px;
+.qe-agent-thinking-step {
+    padding: 7px 10px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 8px;
+    background: var(--qe-agent-raised);
 }
 
-.qe-agent-thinking li strong {
-    display: block;
+.qe-agent-thinking-step-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.qe-agent-thinking-step-title {
     color: var(--qe-agent-muted);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
 }
 
-.qe-agent-thinking li p,
-.qe-agent-thinking li small {
-    margin: 3px 0 0;
+.qe-agent-thinking-step-header small {
+    flex-shrink: 0;
     color: var(--qe-agent-muted);
-    font-size: 12px;
+    font-size: 11px;
+}
+
+.qe-agent-thinking-step .qe-agent-markdown {
+    margin-top: 5px;
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+}
+
+.qe-agent-thinking-step .qe-agent-markdown p,
+.qe-agent-thinking-step .qe-agent-markdown ul,
+.qe-agent-thinking-step .qe-agent-markdown li,
+.qe-agent-thinking-step .qe-agent-markdown strong {
+    color: var(--qe-agent-muted);
+    font-size: 11px;
 }
 
 .qe-agent-message--workbench,

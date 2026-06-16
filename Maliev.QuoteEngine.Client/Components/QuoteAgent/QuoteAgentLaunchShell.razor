@@ -496,22 +496,24 @@
                                             <span>@Text("Thinking", "การวิเคราะห์")</span>
                                             <small>@ThinkingSummary(message.ThinkingSteps)</small>
                                         </summary>
-                                        <ol>
+                                        <div class="qe-agent-thinking-steps">
                                             @foreach (var step in message.ThinkingSteps.OrderBy(step => step.StepNumber))
                                             {
-                                                <li>
-                                                    <strong>@ThinkingStepTitle(step)</strong>
+                                                <div class="qe-agent-thinking-step">
+                                                    <div class="qe-agent-thinking-step-header">
+                                                        <span class="qe-agent-thinking-step-title">@ThinkingStepTitle(step)</span>
+                                                        @if (step.DurationMs is > 0)
+                                                        {
+                                                            <small>@FormatDuration(step.DurationMs.Value)</small>
+                                                        }
+                                                    </div>
                                                     @if (!string.IsNullOrWhiteSpace(step.Detail))
                                                     {
                                                         <div class="qe-agent-markdown">@ThinkingStepDetailMarkup(step)</div>
                                                     }
-                                                    @if (step.DurationMs is > 0)
-                                                    {
-                                                        <small>@FormatDuration(step.DurationMs.Value)</small>
-                                                    }
-                                                </li>
+                                                </div>
                                             }
-                                        </ol>
+                                        </div>
                                     </details>
                                 }
                             }
@@ -3348,15 +3350,22 @@
         {
             try
             {
-                using var doc = JsonDocument.Parse(jsonStr);
-                var markdown = FormatJsonAsBullets(doc.RootElement);
-                if (!string.IsNullOrWhiteSpace(markdown))
-                    return QuoteAgentMarkdownRenderer.Render(markdown);
+                using var doc = JsonDocument.Parse(NormalizeJsonLiterals(jsonStr));
+                return QuoteAgentMarkdownRenderer.Render(FormatJsonAsBullets(doc.RootElement));
             }
             catch (JsonException) { }
         }
 
         return QuoteAgentMarkdownRenderer.Render(HumanizeAgentActivity(detail));
+    }
+
+    private static string NormalizeJsonLiterals(string json)
+    {
+        json = Regex.Replace(json, @"\bTrue\b", "true");
+        json = Regex.Replace(json, @"\bFalse\b", "false");
+        json = Regex.Replace(json, @"\bNull\b", "null");
+        json = Regex.Replace(json, @"\bNone\b", "null");
+        return json;
     }
 
     private static readonly HashSet<string> SkippedJsonKeys = new(StringComparer.OrdinalIgnoreCase)
