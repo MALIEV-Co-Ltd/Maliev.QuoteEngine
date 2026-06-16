@@ -57,6 +57,12 @@ public sealed class AgentController(
         }
 
         Response.ContentType = "application/x-ndjson; charset=utf-8";
+        Response.Headers["X-Accel-Buffering"] = "no";
+        Response.Headers["Cache-Control"] = "no-cache";
+        var bufferingFeature = Response.HttpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>();
+        bufferingFeature?.DisableBuffering();
+        await Response.StartAsync(cancellationToken);
+
         await foreach (var streamEvent in agentService.StreamAsync(request, cancellationToken))
         {
             await Response.WriteAsync(JsonSerializer.Serialize(streamEvent, StreamJsonOptions), cancellationToken);
@@ -198,6 +204,41 @@ public sealed class AgentController(
                 Detail = ex.Message
             });
         }
+    }
+
+    /// <summary>
+    /// Uploads a sketch image attached to an agent message, returning a storage path reference.
+    /// </summary>
+    [HttpPost("sessions/{sessionId:guid}/sketches")]
+    [RequestSizeLimit(10_000_000)]
+    [ProducesResponseType(typeof(UploadSketchResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<UploadSketchResponse>> UploadSketch(
+        Guid sessionId,
+        IFormFile file,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return ValidationProblem("Sketch file is required.");
+        }
+
+        if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return ValidationProblem("Sketch must be an image file.");
+        }
+
+        using var memoryStream = new MemoryStream();
+        await file.CopyToAsync(memoryStream, cancellationToken);
+
+        var result = await agentService.UploadSketchAsync(
+            sessionId,
+            file.FileName,
+            file.ContentType,
+            memoryStream.ToArray(),
+            cancellationToken);
+
+        return Ok(result);
     }
 
     /// <summary>

@@ -88,8 +88,8 @@ public sealed class QuoteAgentAttachmentDto
     public long FileSizeBytes { get; set; }
 
     /// <summary>Gets or sets a browser-visible URL or data reference.</summary>
-    /// <remarks>Sketch canvas exports produce base64 data URLs up to several million characters.</remarks>
-    [StringLength(10_000_000)]
+    /// <remarks>Sketches are uploaded as image files via UploadSketch endpoint and referenced by StoragePath.</remarks>
+    [StringLength(10_000)]
     public string? Url { get; set; }
 
     /// <summary>Gets or sets the attachment kind such as cad, drawing, photo, sketch, or supplemental.</summary>
@@ -634,6 +634,18 @@ public sealed class QuoteAgentActionResultResponse
 
     /// <summary>Gets or sets updated agent state.</summary>
     public QuoteAgentStateResponse? State { get; set; }
+}
+
+/// <summary>
+/// Result of uploading a sketch image to the upload service.
+/// </summary>
+public sealed class UploadSketchResponse
+{
+    /// <summary>Gets or sets the upload service ID.</summary>
+    public string UploadId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the storage path for the uploaded sketch.</summary>
+    public string StoragePath { get; set; } = string.Empty;
 }
 
 /// <summary>

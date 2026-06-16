@@ -84,40 +84,6 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task Agent_message_accepts_large_sketch_data_url_attachment()
-    {
-        var chatbot = new RecordingChatbotServiceClient();
-        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
-        {
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IChatbotServiceClient>();
-                services.AddSingleton<IChatbotServiceClient>(chatbot);
-            });
-        });
-        using var client = scopedFactory.CreateClient();
-
-        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
-        {
-            Message = "Here is my sketch.",
-            Language = "en",
-            Attachments =
-            [
-                new QuoteAgentAttachmentDto
-                {
-                    FileName = "sketch.png",
-                    ContentType = "image/png",
-                    FileSizeBytes = 500_000,
-                    Kind = "sketch",
-                    Url = "data:image/png;base64," + new string('A', 500_000)
-                }
-            ]
-        });
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-    }
-
-    [Fact]
     public async Task Agent_message_stream_returns_incremental_events_before_final_state()
     {
         var chatbot = new RecordingChatbotServiceClient();

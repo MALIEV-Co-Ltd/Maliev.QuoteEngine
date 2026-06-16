@@ -10,6 +10,7 @@
 @inject PreferenceService Preferences
 @inject IJSRuntime Js
 @inject NavigationManager Navigation
+@inject HttpClient Http
 
 <section class="@ShellClass" aria-label="@Text("Quote agent workspace", "พื้นที่ผู้ช่วยขอราคา")">
     <aside class="qe-agent-rail" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
@@ -1523,7 +1524,6 @@
     private string? _highlightConnectorId;
     private string _sketchTitle = "Manufacturing sketch";
     private string _sketchColor = "#161616";
-    private string? _lastSketchDataUrl;
     private CancellationTokenSource? _searchPromptAnimationCts;
     private ElementReference _composerTextarea;
     private ElementReference _searchInput;
@@ -3213,39 +3213,57 @@
             _sketchTitle = Text("Manufacturing sketch", "สเก็ตช์งานผลิต");
         }
 
+        string? sketchDataUrl = null;
         if (_sketchModule is not null)
         {
-            _lastSketchDataUrl = await _sketchModule.InvokeAsync<string>("exportSketchCanvas", SketchCanvasId);
+            sketchDataUrl = await _sketchModule.InvokeAsync<string>("exportSketchCanvas", SketchCanvasId);
         }
 
-        QueueSketchComposerAttachment(_sketchTitle, _lastSketchDataUrl);
-        if (_sketchModule is not null)
+        if (string.IsNullOrWhiteSpace(sketchDataUrl))
         {
-            await _sketchModule.InvokeVoidAsync("disposeSketchCanvas", SketchCanvasId);
+            return;
         }
 
-        _sketchOpen = false;
-        await RefreshPendingAttachmentPreviewAsync();
-        await FocusComposerAsync();
-    }
+        try
+        {
+            var fileName = BuildSketchFileName(_sketchTitle);
+            var base64Data = sketchDataUrl[(sketchDataUrl.IndexOf(',') + 1)..];
+            var imageBytes = Convert.FromBase64String(base64Data);
 
-    private void QueueSketchComposerAttachment(string title, string? previewDataUrl)
-    {
-        var fileName = BuildSketchFileName(title);
-        var attachment = new ComposerAttachmentPreview(
-            Guid.NewGuid(),
-            fileName,
-            "image/png",
-            previewDataUrl?.Length ?? 0,
-            previewDataUrl,
-            "sketch",
-            null,
-            null,
-            previewDataUrl,
-            false,
-            "Ready");
+            var sketchUploadUrl = Navigation.ToAbsoluteUri($"/quote/v1/agent/sessions/{SessionId}/sketches").ToString();
+            using var formContent = new MultipartFormDataContent();
+            formContent.Add(new ByteArrayContent(imageBytes), "file", fileName);
+            var uploadResponse = await Http.PostAsync(sketchUploadUrl, formContent);
+            uploadResponse.EnsureSuccessStatusCode();
+            var result = await uploadResponse.Content.ReadFromJsonAsync<UploadSketchResponse>();
 
-        _pendingComposerAttachments.Add(attachment);
+            var attachmentId = Guid.NewGuid();
+            var attachment = new ComposerAttachmentPreview(
+                attachmentId,
+                fileName,
+                "image/png",
+                imageBytes.Length,
+                sketchDataUrl,
+                "sketch",
+                result!.UploadId,
+                result.StoragePath,
+                null,
+                false,
+                "Ready");
+
+            _pendingComposerAttachments.Add(attachment);
+        }
+        finally
+        {
+            if (_sketchModule is not null)
+            {
+                await _sketchModule.InvokeVoidAsync("disposeSketchCanvas", SketchCanvasId);
+            }
+
+            _sketchOpen = false;
+            await RefreshPendingAttachmentPreviewAsync();
+            await FocusComposerAsync();
+        }
     }
 
     private async Task RefreshPendingAttachmentPreviewAsync()

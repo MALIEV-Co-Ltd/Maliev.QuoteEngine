@@ -998,7 +998,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-message-attachments\"", component, StringComparison.Ordinal);
         Assert.Contains("NotifyUploadStartedAsync", component, StringComparison.Ordinal);
         Assert.Contains("NotifyUploadCompletedAsync", component, StringComparison.Ordinal);
-        Assert.Contains("QueueSketchComposerAttachment(_sketchTitle, _lastSketchDataUrl);", component, StringComparison.Ordinal);
+        Assert.Contains("exportSketchCanvas", component, StringComparison.Ordinal);
+        Assert.Contains(".PostAsync(sketchUploadUrl, formContent)", component, StringComparison.Ordinal);
         Assert.Contains("await RefreshPendingAttachmentPreviewAsync();", component, StringComparison.Ordinal);
         Assert.DoesNotContain("SendPendingAttachmentsImmediatelyAsync", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Attached file:", component, StringComparison.Ordinal);
@@ -1420,9 +1421,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("window.removeEventListener(\"paste\", entry.paste)", sketchScript, StringComparison.Ordinal);
         Assert.Contains("export function setSketchBrushColor", sketchScript, StringComparison.Ordinal);
         Assert.Contains("SketchPreviewDataUrl", component, StringComparison.Ordinal);
-        Assert.Contains("_lastSketchDataUrl", component, StringComparison.Ordinal);
-        Assert.Contains("message.SketchPreviewDataUrl", component, StringComparison.Ordinal);
-        Assert.Contains("QueueSketchComposerAttachment", component, StringComparison.Ordinal);
+        Assert.Contains("sketchUploadUrl", component, StringComparison.Ordinal);
+        Assert.Contains("ComposerAttachmentPreview", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-message-sketch-preview\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Attached hand sketch:", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message-attachments", agentStyles, StringComparison.Ordinal);
@@ -1500,7 +1500,6 @@ public sealed class QuoteEngineSourceTests
         var uploadStartedBlock = ExtractSourceBlock(component, "public async Task NotifyUploadStartedAsync", "public async Task NotifyUploadCompletedAsync");
         var uploadCompletedBlock = ExtractSourceBlock(component, "public async Task NotifyUploadCompletedAsync", "private string UploadedPartStatus");
         var sketchBlock = ExtractSourceBlock(component, "private async Task AttachSketchAsync()", "private string RoleLabel");
-        var queueSketchBlock = ExtractSourceBlock(component, "private void QueueSketchComposerAttachment", "private async Task RefreshPendingAttachmentPreviewAsync()");
 
         Assert.Contains("var pendingAttachments = BuildPendingMessageAttachments();", submitBlock, StringComparison.Ordinal);
         Assert.Contains("string.IsNullOrWhiteSpace(message) && pendingAttachments.Count == 0", submitBlock, StringComparison.Ordinal);
@@ -1514,7 +1513,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("await RefreshPendingAttachmentPreviewAsync();", uploadCompletedBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("await HandleSubmitAsync();", uploadCompletedBlock, StringComparison.Ordinal);
 
-        Assert.Contains("QueueSketchComposerAttachment", sketchBlock, StringComparison.Ordinal);
+        Assert.Contains("ComposerAttachmentPreview", sketchBlock, StringComparison.Ordinal);
         Assert.Contains("await RefreshPendingAttachmentPreviewAsync();", sketchBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("await HandleSubmitAsync();", sketchBlock, StringComparison.Ordinal);
         Assert.Contains("private async Task RefreshPendingAttachmentPreviewAsync()", component, StringComparison.Ordinal);

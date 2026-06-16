@@ -48,6 +48,10 @@ public interface IQuoteAgentService
 
     /// <summary>Relays a thinking step to the quote notifications hub.</summary>
     Task RelayThinkingStepAsync(Guid sessionId, QuoteAgentThinkingStepDto step, CancellationToken cancellationToken);
+
+    /// <summary>Uploads a sketch image attached to an agent message.</summary>
+    Task<UploadSketchResponse> UploadSketchAsync(
+        Guid sessionId, string fileName, string contentType, byte[] imageBytes, CancellationToken cancellationToken);
 }
 
 internal sealed class QuoteAgentService(
@@ -60,7 +64,8 @@ internal sealed class QuoteAgentService(
     IHttpContextAccessor httpContextAccessor,
     IHubContext<QuoteNotificationsHub> hubContext,
     IConfiguration configuration,
-    ILogger<QuoteAgentService> logger) : IQuoteAgentService
+    ILogger<QuoteAgentService> logger,
+    QuoteUploadServiceClient uploadClient) : IQuoteAgentService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] ArtifactContextMetadataKeys =
@@ -98,13 +103,14 @@ internal sealed class QuoteAgentService(
 
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
+        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments);
         var chatbotResponse = await chatbotClient.SendMessageAsync(new ChatbotSendMessageRequest
         {
             SessionId = chatbotSessionId,
             Content = ComposeAgentMessage(request.Message, request.CustomerContext, state),
             Language = language,
             ModelName = request.ModelName,
-            Attachments = BuildChatbotAttachments(request.Attachments),
+            Attachments = chatbotAttachments,
             CallbackUrl = BuildThinkingCallbackUrl(state.SessionId),
             QuoteAgentContextToken = token
         }, cancellationToken);
@@ -118,7 +124,7 @@ internal sealed class QuoteAgentService(
             MessageId = chatbotResponse?.MessageId,
             AssistantText = string.IsNullOrWhiteSpace(chatbotResponse?.Content)
                 ? FallbackAgentAnswer(currentState)
-                : chatbotResponse.Content,
+                : StripToolTraces(chatbotResponse.Content),
             Role = string.IsNullOrWhiteSpace(chatbotResponse?.Role) ? "assistant" : chatbotResponse.Role,
             Language = NormalizeLanguage(chatbotResponse?.Language, request.Message),
             CreatedAt = chatbotResponse?.CreatedAt == default ? DateTimeOffset.UtcNow : chatbotResponse!.CreatedAt,
@@ -153,13 +159,14 @@ internal sealed class QuoteAgentService(
         var receivedError = false;
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
+        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments);
         var chatbotStream = chatbotClient.SendMessageStreamAsync(new ChatbotSendMessageRequest
         {
             SessionId = chatbotSessionId,
             Content = ComposeAgentMessage(request.Message, request.CustomerContext, state),
             Language = language,
             ModelName = request.ModelName,
-            Attachments = BuildChatbotAttachments(request.Attachments),
+            Attachments = chatbotAttachments,
             CallbackUrl = BuildThinkingCallbackUrl(state.SessionId),
             QuoteAgentContextToken = token
         }, cancellationToken).GetAsyncEnumerator(cancellationToken);
@@ -229,7 +236,7 @@ internal sealed class QuoteAgentService(
             MessageId = finalMessage?.MessageId,
             AssistantText = string.IsNullOrWhiteSpace(finalMessage?.Content)
                 ? FallbackAgentAnswer(currentState)
-                : finalMessage.Content,
+                : StripToolTraces(finalMessage.Content),
             Role = string.IsNullOrWhiteSpace(finalMessage?.Role) ? "assistant" : finalMessage.Role,
             Language = NormalizeLanguage(finalMessage?.Language, request.Message),
             CreatedAt = finalMessage?.CreatedAt == default ? DateTimeOffset.UtcNow : finalMessage!.CreatedAt,
@@ -472,6 +479,40 @@ internal sealed class QuoteAgentService(
         return hubContext.Clients
             .Group(QuoteNotificationsHub.QuoteSessionGroup(sessionId))
             .SendAsync("QuoteAgentThinkingStep", step, cancellationToken);
+    }
+
+    public async Task<UploadSketchResponse> UploadSketchAsync(
+        Guid sessionId,
+        string fileName,
+        string contentType,
+        byte[] imageBytes,
+        CancellationToken cancellationToken)
+    {
+        var storagePath = $"agent/sketches/{sessionId:N}/{fileName}";
+        var uploadId = await uploadClient.InitiateResumableUploadAsync(
+            fileName,
+            contentType,
+            imageBytes.Length,
+            storagePath,
+            metadataTags: null,
+            cancellationToken);
+
+        using var stream = new MemoryStream(imageBytes);
+        var contentRange = $"bytes 0-{imageBytes.Length - 1}/{imageBytes.Length}";
+        await uploadClient.StreamUploadAsync(
+            stream,
+            contentType,
+            imageBytes.Length,
+            contentRange,
+            uploadId,
+            storagePath,
+            cancellationToken);
+
+        return new UploadSketchResponse
+        {
+            UploadId = uploadId,
+            StoragePath = storagePath
+        };
     }
 
     private async Task<Guid> EnsureChatbotSessionAsync(
@@ -3288,25 +3329,53 @@ Customer message:
             .Take(8));
     }
 
-    private static List<ChatbotMessageAttachmentRequest>? BuildChatbotAttachments(
+    private async Task<List<ChatbotMessageAttachmentRequest>?> BuildChatbotAttachmentsAsync(
         IReadOnlyCollection<QuoteAgentAttachmentDto> attachments)
     {
-        var supported = attachments
-            .Where(attachment =>
-                !string.IsNullOrWhiteSpace(attachment.Url) &&
-                (attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
-                 attachment.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase)))
-            .Select(attachment => new ChatbotMessageAttachmentRequest
+        var supported = new List<ChatbotMessageAttachmentRequest>(attachments.Count);
+        foreach (var attachment in attachments)
+        {
+            var url = attachment.Url;
+            if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(attachment.StoragePath))
+            {
+                url = await ResolveSketchUrlAsync(attachment.StoragePath);
+            }
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                continue;
+            }
+
+            if (!attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
+                !attachment.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            supported.Add(new ChatbotMessageAttachmentRequest
             {
                 Type = attachment.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ? "pdf" : "image",
-                Url = attachment.Url!,
+                Url = url,
                 MimeType = attachment.ContentType,
                 Filename = attachment.FileName,
                 SizeBytes = attachment.FileSizeBytes
-            })
-            .ToList();
+            });
+        }
 
         return supported.Count == 0 ? null : supported;
+    }
+
+    private async Task<string> ResolveSketchUrlAsync(string storagePath)
+    {
+        try
+        {
+            return await uploadClient.GetDownloadUrlByPathAsync(storagePath, expirationMinutes: 60);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to resolve signed URL for sketch at {StoragePath}", storagePath);
+            return storagePath;
+        }
     }
 
     private static IEnumerable<string> ChunkAssistantText(string text)
@@ -3336,6 +3405,38 @@ Customer message:
             yield return text.Substring(index, length);
             index += length;
         }
+    }
+
+    private static string StripToolTraces(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return content;
+        }
+
+        var lines = content.Split('\n');
+        var startIndex = 0;
+
+        while (startIndex < lines.Length)
+        {
+            var trimmed = lines[startIndex].Trim();
+
+            if (string.IsNullOrWhiteSpace(trimmed) ||
+                trimmed.StartsWith("Calling ", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("Got Result From ", StringComparison.OrdinalIgnoreCase) ||
+                trimmed is ['{', ..] or ['[', ..])
+            {
+                startIndex++;
+                continue;
+            }
+
+            break;
+        }
+
+        return startIndex >= lines.Length || startIndex == 0
+            ? content
+            : string.Join('\n', lines[startIndex..]).Trim();
     }
 
     private string? BuildThinkingCallbackUrl(Guid sessionId)
