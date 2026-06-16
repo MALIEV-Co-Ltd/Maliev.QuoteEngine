@@ -743,9 +743,7 @@ function renderDictationMeterHistory(button, history) {
   for (let index = 0; index < bars.length; index += 1) {
     const value = Math.max(0, Math.min(1, history?.[index] || 0));
     bars[index].style.setProperty("--qe-bar-level", value.toFixed(2));
-    // Keep a faint resting nub for every bar so the waveform reads as one
-    // continuous field; louder samples ramp the bar up toward full opacity.
-    bars[index].style.opacity = (0.24 + value * 0.76).toFixed(2);
+    bars[index].style.opacity = (0.40 + value * 0.60).toFixed(2);
   }
 }
 

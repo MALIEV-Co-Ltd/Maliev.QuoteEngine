@@ -938,7 +938,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_dictationProcessing", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-spinner", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-meter", component, StringComparison.Ordinal);
-        Assert.Contains("DictationMeterBarCount = 56", component, StringComparison.Ordinal);
+        Assert.Contains("DictationMeterBarCount = 116", component, StringComparison.Ordinal);
         Assert.Contains("ComposerWrapClass", component, StringComparison.Ordinal);
         Assert.Contains("lang=\"@SpeechRecognitionLanguage\"", component, StringComparison.Ordinal);
         Assert.Contains("data-speech-languages=\"@SpeechRecognitionLanguages\"", component, StringComparison.Ordinal);
@@ -1175,7 +1175,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("appendDictationMeterLevel(session, smoothedLevel);", composerScript, StringComparison.Ordinal);
         Assert.Contains("function renderDictationMeterHistory", composerScript, StringComparison.Ordinal);
         Assert.Contains("bars[index].style.setProperty(\"--qe-bar-level\"", composerScript, StringComparison.Ordinal);
-        Assert.Contains("bars[index].style.opacity = (0.24 + value * 0.76).toFixed(2);", composerScript, StringComparison.Ordinal);
+        Assert.Contains("bars[index].style.opacity = (0.40 + value * 0.60).toFixed(2);", composerScript, StringComparison.Ordinal);
         Assert.Contains("renderDictationMeterHistory(button, []);", composerScript, StringComparison.Ordinal);
         Assert.Contains("setDictationLevel(button, level, state)", composerScript, StringComparison.Ordinal);
         Assert.Contains("button?.closest?.(\".qe-agent-composer\")", composerScript, StringComparison.Ordinal);
@@ -1293,13 +1293,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("--qe-dictation-color", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-bar-level", agentStyles, StringComparison.Ordinal);
         Assert.Contains("inset-inline: 0;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("justify-content: space-between;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("justify-content: flex-end;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("width: 100%;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("flex: 0 0 2.5px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("width: 2.5px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("min-height: 4px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 2px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("width: 2px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("min-height: 3px;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("transition: height", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("height: calc(4px + var(--qe-bar-level) * 20px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("height: calc(3px + var(--qe-bar-level) * 22px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap--dictation-active", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("--qe-bar-amp", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer[data-dictation-level]", agentStyles, StringComparison.Ordinal);
