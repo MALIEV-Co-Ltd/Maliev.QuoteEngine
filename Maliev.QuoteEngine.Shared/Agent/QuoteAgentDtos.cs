@@ -88,7 +88,8 @@ public sealed class QuoteAgentAttachmentDto
     public long FileSizeBytes { get; set; }
 
     /// <summary>Gets or sets a browser-visible URL or data reference.</summary>
-    [StringLength(10_000)]
+    /// <remarks>Sketch canvas exports produce base64 data URLs up to several million characters.</remarks>
+    [StringLength(10_000_000)]
     public string? Url { get; set; }
 
     /// <summary>Gets or sets the attachment kind such as cad, drawing, photo, sketch, or supplemental.</summary>
