@@ -1293,7 +1293,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("--qe-dictation-color", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-bar-level", agentStyles, StringComparison.Ordinal);
         Assert.Contains("inset-inline: 0;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("justify-content: flex-end;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("justify-content: flex-start;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("width: 100%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("flex: 0 0 2px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("width: 2px;", agentStyles, StringComparison.Ordinal);

@@ -3179,6 +3179,7 @@
 }
 
 .qe-agent-dictation-meter-line {
+    display: none;
     position: absolute;
     inset-inline: 0;
     top: 50%;
@@ -3193,16 +3194,13 @@
     z-index: 1;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 1px;
     flex: 1 1 auto;
     width: 100%;
     min-width: 0;
     height: 28px;
     overflow: hidden;
-    /* Reserve room on the right so the bars never run underneath the time
-       readout that floats over the waveform's trailing edge. */
-    padding-right: 48px;
 }
 
 .qe-agent-dictation-meter-bars i {
@@ -3218,13 +3216,8 @@
 }
 
 .qe-agent-dictation-time {
-    /* Floats over the trailing edge of the waveform with a soft backing chip so
-       it stays legible against the bars; the bars reserve space for it above. */
-    position: absolute;
-    right: 0;
-    top: 50%;
-    z-index: 2;
-    transform: translateY(-50%);
+    flex: 0 0 auto;
+    white-space: nowrap;
     padding: 2px 7px;
     border-radius: 999px;
     background: color-mix(in srgb, var(--qe-agent-bg) 78%, transparent);
