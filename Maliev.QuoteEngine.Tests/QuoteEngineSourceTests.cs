@@ -1100,7 +1100,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("AgentStatusClass", component, StringComparison.Ordinal);
         Assert.Contains("AgentStatusTooltip", component, StringComparison.Ordinal);
         Assert.Contains("is-connected", component, StringComparison.Ordinal);
-        Assert.Contains("is-warning", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("is-warning", component, StringComparison.Ordinal);
         Assert.Contains("is-failed", component, StringComparison.Ordinal);
         Assert.Contains("Task HandleSubmitAsync()", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-workflow\"", component, StringComparison.Ordinal);

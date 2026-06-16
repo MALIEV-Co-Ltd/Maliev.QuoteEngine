@@ -474,9 +474,20 @@
                             }
                             else
                             {
-                                <div class="qe-agent-markdown">
-                                    @QuoteAgentMarkdownRenderer.Render(message.Content)
-                                </div>
+                                @if (_sending && string.IsNullOrEmpty(message.Content))
+                                {
+                                    <div class="qe-agent-typing" aria-label="@Text("Agent is thinking…", "เอเจนต์กำลังคิด…")">
+                                        <span aria-hidden="true"></span>
+                                        <span aria-hidden="true"></span>
+                                        <span aria-hidden="true"></span>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="qe-agent-markdown">
+                                        @QuoteAgentMarkdownRenderer.Render(message.Content)
+                                    </div>
+                                }
                                 @if (message.ThinkingSteps.Count > 0)
                                 {
                                     <details class="qe-agent-thinking">
@@ -1755,19 +1766,13 @@
     };
     private string AgentStatusClass => _error is not null
         ? "qe-agent-status is-failed"
-        : _sending || _searchLoading
-            ? "qe-agent-status is-warning"
-            : "qe-agent-status is-connected";
+        : "qe-agent-status is-connected";
     private string AgentStatusTooltip => _error is not null
         ? Text("Agent connection failed. Try again or refresh Make Studio.", "เชื่อมต่อเอเจนต์ไม่สำเร็จ กรุณาลองใหม่หรือรีเฟรช Make Studio")
-        : _sending || _searchLoading
-            ? Text("Agent is working or reconnecting.", "เอเจนต์กำลังทำงานหรือเชื่อมต่อใหม่")
-            : Text("Agent connected and ready.", "เอเจนต์เชื่อมต่อและพร้อมใช้งาน");
+        : Text("Agent connected and ready.", "เอเจนต์เชื่อมต่อและพร้อมใช้งาน");
     private string AgentStatusLabel => _error is not null
         ? Text("failed", "ล้มเหลว")
-        : _sending || _searchLoading
-            ? Text("connecting", "กำลังเชื่อมต่อ")
-            : Text("connected", "เชื่อมต่อแล้ว");
+        : Text("connected", "เชื่อมต่อแล้ว");
     private string AuthReturnUrl => "/quotes";
     private string AuthDialogTitle => _authDialogMode.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
         ? Text("Create your MALIEV account", "สร้างบัญชี MALIEV")
