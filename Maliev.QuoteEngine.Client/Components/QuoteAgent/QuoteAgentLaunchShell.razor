@@ -1,6 +1,7 @@
 @namespace Maliev.QuoteEngine.Client.Components.QuoteAgent
 @using System.Globalization
 @using System.IO
+@using System.Text.Json
 @using System.Text.RegularExpressions
 @using Maliev.QuoteEngine.Client.Components
 @using Microsoft.AspNetCore.Components.Forms
@@ -491,7 +492,7 @@
                                                     <strong>@ThinkingStepTitle(step)</strong>
                                                     @if (!string.IsNullOrWhiteSpace(step.Detail))
                                                     {
-                                                        <p>@ThinkingStepDetail(step)</p>
+                                                        <div class="qe-agent-markdown">@ThinkingStepDetailMarkup(step)</div>
                                                     }
                                                     @if (step.DurationMs is > 0)
                                                     {
@@ -3310,9 +3311,88 @@
         return HumanizeAgentActivity(title);
     }
 
-    private string ThinkingStepDetail(QuoteAgentThinkingStepDto step)
+    private static MarkupString ThinkingStepDetailMarkup(QuoteAgentThinkingStepDto step)
     {
-        return HumanizeAgentActivity(step.Detail ?? string.Empty);
+        var detail = step.Detail;
+        if (string.IsNullOrWhiteSpace(detail))
+            return new MarkupString(string.Empty);
+
+        string? jsonStr = null;
+        if (detail.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase))
+            jsonStr = detail["Arguments:".Length..].Trim();
+        else
+        {
+            var trimmed = detail.TrimStart();
+            if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+                jsonStr = trimmed;
+        }
+
+        if (jsonStr is not null)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonStr);
+                var markdown = FormatJsonAsBullets(doc.RootElement);
+                if (!string.IsNullOrWhiteSpace(markdown))
+                    return QuoteAgentMarkdownRenderer.Render(markdown);
+            }
+            catch (JsonException) { }
+        }
+
+        return QuoteAgentMarkdownRenderer.Render(HumanizeAgentActivity(detail));
+    }
+
+    private static readonly HashSet<string> SkippedJsonKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "sessionId", "customerId", "uploadId", "storagePath", "url", "contentType",
+        "fileSizeBytes", "kind", "messageId", "attachments"
+    };
+
+    private static string FormatJsonAsBullets(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            return string.Empty;
+
+        var result = string.Empty;
+        foreach (var prop in element.EnumerateObject())
+        {
+            if (SkippedJsonKeys.Contains(prop.Name))
+                continue;
+
+            var value = FormatJsonValue(prop.Value);
+            if (value is null)
+                continue;
+
+            result += $"- **{HumanizeCamelCase(prop.Name)}**: {value}\n";
+        }
+
+        return result;
+    }
+
+    private static string? FormatJsonValue(JsonElement element)
+    {
+        return element.ValueKind switch
+        {
+            JsonValueKind.Null => null,
+            JsonValueKind.True => "Yes",
+            JsonValueKind.False => "No",
+            JsonValueKind.String => element.GetString(),
+            JsonValueKind.Number => element.ToString(),
+            _ => null
+        };
+    }
+
+    private static string HumanizeCamelCase(string key)
+    {
+        var spaced = string.Empty;
+        for (var i = 0; i < key.Length; i++)
+        {
+            if (i > 0 && char.IsUpper(key[i]))
+                spaced += ' ';
+            spaced += key[i];
+        }
+
+        return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(spaced.Trim().ToLowerInvariant());
     }
 
     private static string HumanizeAgentActivity(string value)
