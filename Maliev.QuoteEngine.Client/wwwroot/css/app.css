@@ -681,19 +681,14 @@
     height: auto;
 }
 
-.qe-agent-brand-icon {
+/* When collapsed: hide brand link entirely so only the hamburger shows in the head */
+.qe-agent-shell--rail-collapsed .qe-agent-brand {
     display: none;
-    width: 28px;
-    height: 28px;
-    border-radius: 6px;
-}
-
-.qe-agent-shell--rail-collapsed .qe-agent-brand-icon {
-    display: block;
 }
 
 .qe-agent-shell--rail-collapsed .qe-agent-rail {
     padding-inline: 8px;
+    overflow: visible;
 }
 
 .qe-agent-shell--rail-collapsed .qe-agent-rail-head {
@@ -701,9 +696,9 @@
     padding-inline: 0;
 }
 
+/* Elements hidden when collapsed */
 .qe-agent-shell--rail-collapsed .qe-agent-brand-wordmark,
 .qe-agent-shell--rail-collapsed .qe-agent-rail-search,
-.qe-agent-shell--rail-collapsed .qe-agent-account-action span:not(.qe-agent-account-dot),
 .qe-agent-shell--rail-collapsed .qe-agent-signin-card {
     display: none;
 }
@@ -719,37 +714,60 @@
     padding-inline: 0;
 }
 
+/* Collapsed nav: icon-only, no inline text */
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav a,
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav button {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
     justify-items: center;
-    gap: 3px;
-    min-height: 54px;
     padding-inline: 0;
-    font-size: 10px;
-    line-height: 1.1;
-    text-align: center;
+    position: relative;
 }
 
+/* Collapsed foot: stack items centred */
 .qe-agent-shell--rail-collapsed .qe-agent-rail-foot {
-    padding-inline: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0 8px;
+    gap: 4px;
 }
 
-.qe-agent-rail-footer-settings {
-    width: 100%;
-}
-
-.qe-agent-shell--rail-collapsed .qe-agent-rail-footer-settings {
+/* Collapsed user-btn: icon only, tooltip on hover */
+.qe-agent-shell--rail-collapsed .qe-agent-user-btn {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto;
     justify-items: center;
-    gap: 3px;
-    min-height: 54px;
     padding-inline: 0;
-    font-size: 10px;
-    line-height: 1.1;
-    text-align: center;
+    position: relative;
+}
+
+/* Floating tooltip for nav spans, user-btn label, and sign-in icon btn */
+.qe-agent-shell--rail-collapsed .qe-agent-primary-nav span,
+.qe-agent-shell--rail-collapsed .qe-agent-user-btn span:not(.qe-agent-user-avatar),
+.qe-agent-shell--rail-collapsed .qe-agent-signin-icon-btn span {
+    display: block;
+    position: absolute;
+    left: calc(100% + 10px);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 200;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: var(--qe-agent-ink);
+    color: var(--qe-agent-bg);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 100ms;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-primary-nav button:hover span,
+.qe-agent-shell--rail-collapsed .qe-agent-primary-nav a:hover span,
+.qe-agent-shell--rail-collapsed .qe-agent-user-btn:hover span:not(.qe-agent-user-avatar),
+.qe-agent-shell--rail-collapsed .qe-agent-signin-icon-btn:hover span {
+    opacity: 1;
 }
 
 :root[data-maliev-theme="dark"] .qe-agent-brand-wordmark {
@@ -760,7 +778,8 @@
 .qe-agent-round-btn,
 .qe-agent-artifact-toggle,
 .qe-agent-primary-nav button,
-.qe-agent-rail-footer-settings,
+.qe-agent-user-btn,
+.qe-agent-signin-icon-btn,
 .qe-agent-quick-actions button,
 .qe-agent-action button {
     font: inherit;
@@ -902,7 +921,6 @@
 
 .qe-agent-primary-nav a,
 .qe-agent-primary-nav button,
-.qe-agent-rail-footer-settings,
 .qe-agent-rail-group a,
 .qe-agent-pin-btn {
     display: grid;
@@ -930,8 +948,6 @@
 .qe-agent-primary-nav button.active,
 .qe-agent-primary-nav a:hover,
 .qe-agent-primary-nav button:hover,
-.qe-agent-rail-footer-settings.active,
-.qe-agent-rail-footer-settings:hover,
 .qe-agent-rail-group a:hover,
 .qe-agent-project-row:hover {
     background: var(--qe-agent-soft);
@@ -1269,20 +1285,46 @@
     text-decoration: none;
 }
 
-.qe-agent-account-action {
-    display: flex;
+.qe-agent-user-btn {
+    display: inline-grid;
+    grid-template-columns: 24px minmax(0, 1fr);
     align-items: center;
-    min-width: 0;
     gap: 8px;
+    min-height: 36px;
+    width: 100%;
+    padding: 8px 9px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--qe-agent-muted);
+    cursor: pointer;
+    text-align: left;
 }
 
-.qe-agent-account-action > span:not(.qe-agent-account-dot) {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--qe-agent-muted);
+.qe-agent-user-btn:hover,
+.qe-agent-user-btn.active {
+    background: var(--qe-agent-soft);
+    color: var(--qe-agent-ink);
+}
+
+.qe-agent-user-btn span:not(.qe-agent-user-avatar) {
     font-size: 13px;
-    text-overflow: ellipsis;
     white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.qe-agent-user-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    color: inherit;
+}
+
+.qe-agent-signin-icon-btn {
+    display: none;
 }
 
 .qe-agent-signin-card {
@@ -1381,16 +1423,6 @@
     color: var(--qe-agent-muted);
 }
 
-.qe-agent-account-dot {
-    display: grid;
-    place-items: center;
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-    background: var(--qe-agent-soft);
-    color: var(--qe-agent-ink);
-    font-weight: 700;
-}
 
 .qe-agent-main {
     position: relative;
@@ -4685,19 +4717,21 @@
         display: contents;
     }
 
-    .qe-agent-account-action {
+    .qe-agent-signin-card {
         display: none;
     }
 
-    .qe-agent-rail-footer-settings {
-        grid-template-columns: 1fr;
-        justify-items: center;
-        align-content: center;
-        gap: 2px;
-        min-height: 0;
-        padding: 5px 2px;
-        font-size: 10px;
-        line-height: 1.1;
+    .qe-agent-signin-icon-btn {
+        display: grid;
+        place-items: center;
+        position: relative;
+        width: auto;
+        height: auto;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--qe-agent-ink);
+        cursor: pointer;
     }
 
     .qe-agent-primary-nav {
@@ -4706,7 +4740,8 @@
 
     .qe-agent-primary-nav a,
     .qe-agent-primary-nav button,
-    .qe-agent-rail-footer-settings {
+    .qe-agent-user-btn,
+    .qe-agent-signin-icon-btn {
         grid-template-columns: 1fr;
         justify-items: center;
         align-content: center;
@@ -4717,9 +4752,21 @@
         line-height: 1.1;
     }
 
+    .qe-agent-user-btn {
+        width: auto;
+        border-radius: 9px;
+        color: var(--qe-agent-ink);
+    }
+
+    .qe-agent-user-btn span:not(.qe-agent-user-avatar) {
+        font-size: 10px;
+        line-height: 1.1;
+    }
+
     .qe-agent-primary-nav a span,
     .qe-agent-primary-nav button span,
-    .qe-agent-rail-footer-settings span {
+    .qe-agent-user-btn span:not(.qe-agent-user-avatar),
+    .qe-agent-signin-icon-btn span {
         max-width: 100%;
         overflow: hidden;
         white-space: nowrap;
