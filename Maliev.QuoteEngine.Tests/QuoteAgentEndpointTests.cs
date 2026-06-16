@@ -2777,5 +2777,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         {
             return Task.FromResult<ChatbotConversationMessagesResponse?>(null);
         }
+
+        public Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<string?>(speech);
+        }
     }
 }

@@ -634,3 +634,27 @@ public sealed class QuoteAgentActionResultResponse
     /// <summary>Gets or sets updated agent state.</summary>
     public QuoteAgentStateResponse? State { get; set; }
 }
+
+/// <summary>
+/// Request to clean up raw dictated speech text.
+/// </summary>
+public sealed class QuoteAgentCleanSpeechRequest
+{
+    /// <summary>Gets or sets the raw dictated speech text.</summary>
+    [Required]
+    [StringLength(2000, MinimumLength = 1)]
+    public string Speech { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the speech language code (en or th).</summary>
+    [RegularExpression("^(en|th)?$", ErrorMessage = "Language must be 'en' or 'th'.")]
+    public string Language { get; set; } = "en";
+}
+
+/// <summary>
+/// Response containing the cleaned speech text.
+/// </summary>
+public sealed class QuoteAgentCleanSpeechResponse
+{
+    /// <summary>Gets or sets the cleaned speech text.</summary>
+    public string CleanedText { get; set; } = string.Empty;
+}

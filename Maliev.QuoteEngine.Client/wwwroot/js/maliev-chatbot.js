@@ -134,5 +134,34 @@ window.malievChatbot = {
         behavior: smooth ? 'smooth' : 'auto'
       });
     });
+  },
+
+  scrollToElementBottom: function (element, smooth) {
+    if (!element) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      element.scrollTo({
+        top: element.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
+    });
+  },
+
+  getScrollInfo: function (element) {
+    if (!element) {
+      return { scrollTop: 0, scrollHeight: 0, clientHeight: 0 };
+    }
+
+    return {
+      scrollTop: Number(element.scrollTop || 0),
+      scrollHeight: Number(element.scrollHeight || 0),
+      clientHeight: Number(element.clientHeight || 0)
+    };
+  },
+
+  isAtScrollBottom: function (scrollTop, scrollHeight, clientHeight) {
+    return scrollHeight - scrollTop - clientHeight <= 2;
   }
 };

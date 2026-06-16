@@ -287,6 +287,14 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return PostAsync<QuoteAgentMessageRequest, QuoteAgentTurnResponse>("quote/v1/agent/messages", request, cancellationToken);
     }
 
+    public async Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken = default)
+    {
+        var request = new QuoteAgentCleanSpeechRequest { Speech = speech, Language = language };
+        var response = await PostAsync<QuoteAgentCleanSpeechRequest, QuoteAgentCleanSpeechResponse>(
+            "quote/v1/agent/clean-speech", request, cancellationToken);
+        return response.CleanedText;
+    }
+
     public async IAsyncEnumerable<QuoteAgentStreamEvent> SendAgentMessageStreamAsync(
         QuoteAgentMessageRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)

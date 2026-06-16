@@ -696,6 +696,17 @@ function computeSceneBounds(scene) {
     return { min: { x: minX, y: minY, z: minZ }, max: { x: maxX, y: maxY, z: maxZ } };
 }
 
+function getSceneBoundingBoxMm(canvasId) {
+    const bb = sceneBoundingBoxes[canvasId];
+    if (!bb?.min || !bb?.max) return null;
+
+    return {
+        x: Math.max(0, bb.max.x - bb.min.x),
+        y: Math.max(0, bb.max.y - bb.min.y),
+        z: Math.max(0, bb.max.z - bb.min.z),
+    };
+}
+
 function toWorldPoint(point) {
     return new BABYLON.Vector3(point.x, point.y, point.z);
 }
@@ -4167,6 +4178,11 @@ export async function runLocalAdvisoryGeometry(canvasId, options = {}) {
         result.inputTriangleCount = inputTriangleCount > 0
             ? inputTriangleCount
             : Math.max(0, Math.round(Number(result?.metrics?.faceCount ?? 0)));
+        const boundingBoxMm = getSceneBoundingBoxMm(canvasId);
+        if (boundingBoxMm) {
+            result.metrics = result.metrics ?? {};
+            result.metrics.boundingBoxMm = boundingBoxMm;
+        }
         if (localAdvisoryRuns[canvasId] !== runId ||
             !isBrowserFirstRuntimeContract(result)) {
             clearLocalAdvisoryPanel(canvasId);

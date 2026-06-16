@@ -24,6 +24,9 @@ public interface IChatbotServiceClient
 
     /// <summary>Gets internal session messages for BFF-owned handoff hydration.</summary>
     Task<ChatbotConversationMessagesResponse?> GetConversationMessagesAsync(Guid sessionId, CancellationToken cancellationToken);
+
+    /// <summary>Cleans up raw dictated speech text using Gemini directly.</summary>
+    Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken);
 }
 
 internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<ChatbotServiceClient> logger) : IChatbotServiceClient
@@ -134,6 +137,28 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
             logger.LogWarning(ex, "ChatbotService history hydration failed for session {SessionId}", sessionId);
             return null;
         }
+    }
+
+    public async Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken)
+    {
+        var result = await SendAsync<CleanSpeechRequestBody, CleanSpeechResponseBody>(
+            HttpMethod.Post,
+            "/chatbot/v1/extraction/clean-speech",
+            new CleanSpeechRequestBody { Speech = speech, Language = language },
+            "cleaning speech text",
+            cancellationToken);
+        return result?.CleanedText;
+    }
+
+    private sealed class CleanSpeechRequestBody
+    {
+        public string Speech { get; set; } = string.Empty;
+        public string Language { get; set; } = "en";
+    }
+
+    private sealed class CleanSpeechResponseBody
+    {
+        public string CleanedText { get; set; } = string.Empty;
     }
 
     private async Task<TResponse?> SendAsync<TRequest, TResponse>(

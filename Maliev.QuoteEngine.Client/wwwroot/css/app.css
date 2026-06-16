@@ -1547,6 +1547,28 @@
     scrollbar-gutter: stable;
 }
 
+.qe-agent-scroll-to-bottom {
+    position: fixed;
+    right: clamp(18px, 4vw, 72px);
+    bottom: 96px;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 999px;
+    color: var(--qe-agent-primary);
+    background: var(--qe-agent-raised);
+    box-shadow: var(--qe-agent-shadow);
+    cursor: pointer;
+}
+
+.qe-agent-scroll-to-bottom:hover {
+    border-color: var(--qe-agent-primary);
+    background: var(--qe-agent-soft);
+}
+
 .qe-agent-chat-actions {
     display: grid;
     gap: 10px;
@@ -4088,6 +4110,17 @@
 .qe-agent-artifact-viewer > header small {
     color: var(--qe-agent-muted);
     font-size: 12px;
+}
+
+.qe-agent-artifact-viewer-metadata,
+.qe-agent-artifact-metadata {
+    display: block;
+    margin-top: 3px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--qe-agent-muted);
+    font-size: 11px;
 }
 
 .qe-agent-artifact-viewer > header strong {

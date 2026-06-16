@@ -3240,6 +3240,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
                 ]
             });
         }
+
+        public Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken)
+        {
+            return Task.FromResult<string?>(speech);
+        }
     }
 }
 

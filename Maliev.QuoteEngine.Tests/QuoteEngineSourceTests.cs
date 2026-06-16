@@ -1,10 +1,13 @@
+using System.Collections;
 using System.Diagnostics.Metrics;
+using System.Reflection;
 using MassTransit;
 using Maliev.MessagingContracts.Contracts.Geometry;
 using Maliev.MessagingContracts.Contracts.Payments;
 using Maliev.MessagingContracts.Contracts.Shared;
 using Maliev.QuoteEngine.Bff;
 using Maliev.QuoteEngine.Client.Components;
+using Maliev.QuoteEngine.Client.Components.QuoteAgent;
 using Maliev.QuoteEngine.Client.Components.QuoteEngine;
 using Maliev.QuoteEngine.Client.Models;
 using Maliev.QuoteEngine.Bff.Clients;
@@ -697,6 +700,34 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("Temporary upload storage until you sign in", source, StringComparison.Ordinal);
         Assert.DoesNotContain("max 10 GB per file", source, StringComparison.Ordinal);
         Assert.DoesNotContain("Sign in before uploading customer-owned manufacturing files.", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_preserves_existing_project_name_when_message_changes()
+    {
+        var sessionId = Guid.NewGuid();
+        var shellType = typeof(QuoteAgentLaunchShell);
+        var shell = Activator.CreateInstance(shellType, nonPublic: true)!;
+        shellType.GetProperty(nameof(QuoteAgentLaunchShell.SessionId))!.SetValue(shell, sessionId);
+        shellType.GetField("_projectName", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(shell, "Original project title");
+
+        var projectType = shellType.GetNestedType("ProjectNavItem", BindingFlags.NonPublic)!;
+        var projectCtor = projectType.GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool)])!;
+        var project = projectCtor.Invoke([sessionId, string.Empty, "Original project title", "Original project title", "draft", false, false]);
+        var projects = Activator.CreateInstance(typeof(List<>).MakeGenericType(projectType))!;
+        ((IList)projects).Add(project);
+        shellType.GetField("_projects", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(shell, projects);
+
+        shellType.GetMethod("EnsureLocalProjectFromMessage", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(shell, ["Quote this updated fixture plate"]);
+
+        Assert.Equal("Original project title", projectType.GetProperty("NameEn")!.GetValue(project));
+        Assert.Equal("Original project title", projectType.GetProperty("NameTh")!.GetValue(project));
+        Assert.Equal("draft", projectType.GetProperty("Status")!.GetValue(project));
     }
 
     [Fact]

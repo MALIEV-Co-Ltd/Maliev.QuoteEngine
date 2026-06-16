@@ -2,6 +2,7 @@
 @using System.Globalization
 @using System.IO
 @using System.Text.RegularExpressions
+@using Maliev.QuoteEngine.Client.Components
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Web
 @implements IAsyncDisposable
@@ -425,7 +426,10 @@
         }
         else
         {
-        <div class="qe-agent-thread" aria-live="polite">
+        <div class="qe-agent-thread"
+             @ref="_threadElement"
+             @onscroll="@(async e => await OnThreadScrollAsync(e))"
+             aria-live="polite">
             @if (_messages.Count == 0)
             {
                 <div class="qe-agent-prompt">
@@ -739,6 +743,17 @@
                 }
             }
         </div>
+
+        @if (_showScrollToBottomButton)
+        {
+            <button type="button"
+                    class="qe-agent-scroll-to-bottom"
+                    title="@Text("Scroll to latest message", "เลื่อนไปข้อความล่าสุด")"
+                    aria-label="@Text("Scroll to latest message", "เลื่อนไปข้อความล่าสุด")"
+                    @onclick="ScrollToLatestMessageAsync">
+                <MudIcon Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Small" />
+            </button>
+        }
 
         @if (!string.IsNullOrWhiteSpace(_error))
         {
@@ -1194,6 +1209,10 @@
                                     <div>
                                         <span>@Text("3D viewer", "ตัวแสดง 3D")</span>
                                         <strong>@SelectedUploadedPart.FileName</strong>
+                                        @if (QuoteUploadConstraints.IsSupportedCadFileName(SelectedUploadedPart.FileName))
+                                        {
+                                            <small class="qe-agent-artifact-viewer-metadata">@QuoteAgentUiHelpers.FormatUploadedPartMetadata(SelectedUploadedPart)</small>
+                                        }
                                     </div>
                                     <small>@UploadedPartStatus(SelectedUploadedPart)</small>
                                 </header>
@@ -1209,7 +1228,8 @@
                                                   StoragePath="@SelectedUploadedPart.StoragePath"
                                                   FinishCode="@SelectedUploadedPart.FinishCode"
                                                   RoughnessCode="@SelectedUploadedPart.RoughnessCode"
-                                                  ViewerSettings="@SelectedUploadedPart.ViewerSettings" />
+                                                  ViewerSettings="@SelectedUploadedPart.ViewerSettings"
+                                                  OnLocalGeometryRuntimeCompleted="ApplyLocalGeometryRuntimeResultAsync" />
                                     @if (TryGetCanvasFocusPoint(out var canvasFocusStyle))
                                     {
                                         <span class="qe-agent-canvas-focus qe-agent-focus-pulse"
@@ -1270,6 +1290,10 @@
                                     <div>
                                         <strong>@part.FileName</strong>
                                         <small>@UploadedPartStatus(part)</small>
+                                        @if (QuoteUploadConstraints.IsSupportedCadFileName(part.FileName))
+                                        {
+                                            <small class="qe-agent-artifact-metadata">@QuoteAgentUiHelpers.FormatUploadedPartMetadata(part)</small>
+                                        }
                                     </div>
                                 </button>
                             }
@@ -1277,7 +1301,7 @@
                     </section>
                 }
                 <div class="qe-agent-artifacts">
-                    @foreach (var artifact in _artifacts)
+                    @foreach (var artifact in _artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact))
                     {
                         <div class="@($"qe-agent-artifact {UiFocusClass(ArtifactFocusKey(artifact), ArtifactTypeFocusKey(artifact.ArtifactType))}")">
                             <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
@@ -1504,6 +1528,10 @@
     private ElementReference _composerTextarea;
     private ElementReference _searchInput;
     private ElementReference _dictationButton;
+    private ElementReference _threadElement;
+    private bool _scrollToLatestMessageRequested;
+    private bool _scrollUpdatePending;
+    private bool _showScrollToBottomButton;
     private DotNetObjectReference<QuoteAgentLaunchShell>? _composerDotNetRef;
     private IJSObjectReference? _composerModule;
     private IJSObjectReference? _sketchModule;
@@ -1680,7 +1708,7 @@
         : "en-US,th-TH";
 
     private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
-    private int ArtifactCount => _artifacts.Count + UploadedParts.Count;
+    private int ArtifactCount => _artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact) + UploadedParts.Count;
     private QuotePartViewModel SelectedUploadedPart => UploadedParts[Math.Clamp(SelectedPartIndex, 0, Math.Max(UploadedParts.Count - 1, 0))];
     private IReadOnlyList<PreviewItem> PreviewItems => BuildPreviewItems();
     private PreviewItem? CurrentPreviewItem => PreviewItems.Count == 0
@@ -1922,6 +1950,12 @@
             await _composerModule.InvokeVoidAsync("focusComposer", _composerTextarea);
         }
 
+        if (_scrollToLatestMessageRequested)
+        {
+            _scrollToLatestMessageRequested = false;
+            await ScrollToLatestMessageAsync();
+        }
+
         if (!_sketchInitPending)
         {
             if (_focusSearchPending && _searchOpen)
@@ -2022,6 +2056,7 @@
         _messages.Add(new AgentMessageRow("user", message, attachments: pendingAttachments));
         var assistantMessage = new AgentMessageRow("assistant", string.Empty);
         _messages.Add(assistantMessage);
+        RequestScrollToLatestMessage();
 
         try
         {
@@ -2052,6 +2087,7 @@
                     {
                         await Preferences.SetCultureAsync(streamEvent.Response.UiCulture);
                     }
+                    RequestScrollToLatestMessage();
                     await InvokeAsync(StateHasChanged);
                 }
                 else if (streamEvent.Type.Equals("error", StringComparison.OrdinalIgnoreCase))
@@ -2079,6 +2115,7 @@
             {
                 _messages.Add(new AgentMessageRow("assistant", BuildAgentConnectionFallbackMessage(message)));
             }
+            RequestScrollToLatestMessage();
         }
         finally
         {
@@ -2577,7 +2614,7 @@
                 UploadedPartIcon(part)));
         }
 
-        foreach (var artifact in _artifacts.Where(item => !string.IsNullOrWhiteSpace(item.Url)))
+        foreach (var artifact in _artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact).Where(item => !string.IsNullOrWhiteSpace(item.Url)))
         {
             items.Add(new PreviewItem(
                 "artifact",
@@ -2745,6 +2782,60 @@
         }
     }
 
+    private void RequestScrollToLatestMessage()
+    {
+        _scrollToLatestMessageRequested = true;
+        _showScrollToBottomButton = false;
+    }
+
+    private async Task OnThreadScrollAsync(EventArgs _)
+    {
+        if (_scrollUpdatePending)
+        {
+            return;
+        }
+
+        _scrollUpdatePending = true;
+        try
+        {
+            await Task.Delay(80);
+            var scrollInfo = await Js.InvokeAsync<ChatScrollInfo>("malievChatbot.getScrollInfo", _threadElement);
+            _showScrollToBottomButton = !QuoteAgentUiHelpers.IsAtScrollBottom(
+                scrollInfo.scrollTop,
+                scrollInfo.scrollHeight,
+                scrollInfo.clientHeight);
+            await InvokeAsync(StateHasChanged);
+        }
+        finally
+        {
+            _scrollUpdatePending = false;
+        }
+    }
+
+    private async Task ScrollToLatestMessageAsync()
+    {
+        await Js.InvokeVoidAsync("malievChatbot.scrollToElementBottom", _threadElement, true);
+        _showScrollToBottomButton = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<bool> ApplyLocalGeometryRuntimeResultAsync(LocalGeometryRuntimeResult result)
+    {
+        var selectedPart = SelectedUploadedPart;
+        if (result.Metrics?.VolumeMm3 is > 0)
+        {
+            selectedPart.VolumeCc = (decimal)(result.Metrics.VolumeMm3.Value / 1000d);
+        }
+
+        if (result.Metrics?.BoundingBoxMm is not null)
+        {
+            selectedPart.BoundingBox = result.Metrics.BoundingBoxMm;
+        }
+
+        await InvokeAsync(StateHasChanged);
+        return true;
+    }
+
     public async Task NotifyUploadStartedAsync(QuotePartViewModel part)
     {
         if (string.IsNullOrWhiteSpace(part.FileName))
@@ -2865,6 +2956,12 @@
     private string UploadedPartStatus(QuotePartViewModel part)
     {
         var status = string.IsNullOrWhiteSpace(part.Status) ? Text("Attached", "แนบแล้ว") : part.Status;
+        if (QuoteUploadConstraints.IsSupportedCadFileName(part.FileName))
+        {
+            var metadata = QuoteAgentUiHelpers.FormatUploadedPartMetadata(part);
+            return string.IsNullOrWhiteSpace(metadata) ? status : $"{status} · {metadata}";
+        }
+
         var metrics = part.VolumeCc > 0
             ? FormattableString.Invariant($"{part.VolumeCc:0.##} cc")
             : part.SurfaceAreaCm2 > 0
@@ -3375,6 +3472,7 @@
         _messages.Add(new AgentMessageRow("assistant", Text(turn.TextEn, turn.TextTh), turn.Workbench));
         _artifacts = turn.Artifacts;
         _proposedActions = [];
+        RequestScrollToLatestMessage();
     }
 
     private string BuildAgentConnectionFallbackMessage(string message)
@@ -3486,19 +3584,34 @@
 
     private void EnsureLocalProjectFromMessage(string message)
     {
+        var existingProject = _projects.FirstOrDefault(project => project.ProjectId == SessionId);
+        if (existingProject is not null)
+        {
+            if (string.IsNullOrWhiteSpace(_projectName))
+            {
+                _projectName = string.IsNullOrWhiteSpace(existingProject.NameEn)
+                    ? BuildLocalProjectTitle(message)
+                    : existingProject.NameEn;
+            }
+
+            if (string.IsNullOrWhiteSpace(existingProject.NameEn))
+            {
+                existingProject.NameEn = _projectName;
+            }
+
+            if (string.IsNullOrWhiteSpace(existingProject.NameTh))
+            {
+                existingProject.NameTh = _projectName;
+            }
+
+            existingProject.Status = "draft";
+            return;
+        }
+
         var title = BuildLocalProjectTitle(message);
         if (string.IsNullOrWhiteSpace(_projectName))
         {
             _projectName = title;
-        }
-
-        var existingProject = _projects.FirstOrDefault(project => project.ProjectId == SessionId);
-        if (existingProject is not null)
-        {
-            existingProject.NameEn = _projectName;
-            existingProject.NameTh = _projectName;
-            existingProject.Status = "draft";
-            return;
         }
 
         _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, _projectName, _projectName, "draft", false, false));
@@ -4132,6 +4245,8 @@
                    string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
         }
     }
+
+    private sealed record ChatScrollInfo(double scrollTop, double scrollHeight, double clientHeight);
 
     private sealed class AgentMessageRow(
         string role,

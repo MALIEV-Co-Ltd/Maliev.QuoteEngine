@@ -34,6 +34,7 @@ public sealed class QuotePartViewModel
     public int Quantity { get; set; } = 1;
     public decimal VolumeCc { get; set; }
     public decimal SurfaceAreaCm2 { get; set; }
+    public QuoteBoundingBoxDto? BoundingBox { get; set; }
     public bool DfmAcknowledged { get; set; }
     public bool LocalDfmRuntimeUnavailable { get; set; }
     public string? LocalDfmRuntimeUnavailableReason { get; set; }

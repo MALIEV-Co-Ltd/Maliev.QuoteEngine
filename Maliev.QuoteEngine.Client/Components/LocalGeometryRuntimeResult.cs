@@ -1,3 +1,5 @@
+using Maliev.QuoteEngine.Client.Models;
+
 namespace Maliev.QuoteEngine.Client.Components;
 
 /// <summary>
@@ -67,6 +69,9 @@ public sealed class LocalGeometryRuntimeMetrics
 
     /// <summary>Computed volume in cubic millimeters.</summary>
     public double? VolumeMm3 { get; set; }
+
+    /// <summary>Computed model bounding box in millimeters.</summary>
+    public QuoteBoundingBoxDto? BoundingBoxMm { get; set; }
 
     /// <summary>Computed surface area in square millimeters.</summary>
     public double? SurfaceAreaMm2 { get; set; }

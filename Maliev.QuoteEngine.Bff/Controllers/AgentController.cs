@@ -1,4 +1,5 @@
 using Asp.Versioning;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Agent;
@@ -15,7 +16,8 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 [Route("quote/v{version:apiVersion}/agent")]
 public sealed class AgentController(
     IQuoteAgentService agentService,
-    QuoteAgentContextToken contextToken) : ControllerBase
+    QuoteAgentContextToken contextToken,
+    IChatbotServiceClient chatbotServiceClient) : ControllerBase
 {
     private const string AgentContextHeader = "X-Maliev-Agent-Context";
     private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web);
@@ -63,6 +65,25 @@ public sealed class AgentController(
         }
 
         return new EmptyResult();
+    }
+
+    /// <summary>
+    /// Cleans up raw dictated speech text via Gemini, bypassing the agent pipeline.
+    /// </summary>
+    [HttpPost("clean-speech")]
+    [ProducesResponseType(typeof(QuoteAgentCleanSpeechResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<QuoteAgentCleanSpeechResponse>> CleanSpeech(
+        [FromBody] QuoteAgentCleanSpeechRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var cleaned = await chatbotServiceClient.CleanSpeechAsync(request.Speech, request.Language, cancellationToken);
+        return Ok(new QuoteAgentCleanSpeechResponse { CleanedText = cleaned ?? request.Speech });
     }
 
     /// <summary>
