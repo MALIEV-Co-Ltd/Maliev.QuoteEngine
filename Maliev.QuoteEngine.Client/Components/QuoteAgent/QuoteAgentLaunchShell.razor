@@ -14,7 +14,8 @@
     <aside class="qe-agent-rail" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
         <div class="qe-agent-rail-head">
             <a class="qe-agent-brand" href="/" aria-label="MALIEV">
-                <img src="/images/logo.svg" alt="MALIEV" />
+                <img class="qe-agent-brand-wordmark" src="/images/logo.svg" alt="MALIEV" />
+                <img class="qe-agent-brand-icon" src="/images/m-mark.svg" alt="M" />
             </a>
         </div>
 
@@ -112,10 +113,34 @@
                 }
                 else
                 {
-                    <button type="button" class="qe-agent-signin-btn" @onclick='@(() => OpenAuthDialog("sign-in"))'>
-                        <span>@Text("Start pricing", "เริ่มดูราคา")</span>
-                        <small>@Text("Sign in or create account", "เข้าสู่ระบบหรือสมัคร")</small>
-                    </button>
+                    <div class="qe-agent-signin-card">
+                        <strong>@Text("Sign in to start pricing", "เข้าสู่ระบบเพื่อดูราคา")</strong>
+                        <p>@Text("Unlock the full power of MALIEV.", "ปลดล็อกพลังเต็มของ MALIEV")</p>
+                        <ul>
+                            <li>
+                                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
+                                <span>@Text("Save projects", "บันทึกโปรเจกต์")</span>
+                            </li>
+                            <li>
+                                <MudIcon Icon="@Icons.Material.Outlined.RequestQuote" Size="Size.Small" />
+                                <span>@Text("Instant pricing", "ราคาทันที")</span>
+                            </li>
+                            <li>
+                                <MudIcon Icon="@Icons.Material.Outlined.BarChart" Size="Size.Small" />
+                                <span>@Text("Track quotes", "ติดตามใบเสนอราคา")</span>
+                            </li>
+                        </ul>
+                        <button type="button" class="qe-agent-signin-btn" @onclick='@(() => OpenAuthDialog("sign-in"))'>
+                            @Text("Sign in", "เข้าสู่ระบบ")
+                        </button>
+                        <button type="button" class="qe-agent-signin-secondary-btn" @onclick='@(() => OpenAuthDialog("sign-up"))'>
+                            @Text("Create account", "สร้างบัญชี")
+                        </button>
+                        <p class="qe-agent-signin-secure">
+                            <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Small" />
+                            <span>@Text("Secure and private", "ปลอดภัยและเป็นส่วนตัว")</span>
+                        </p>
+                    </div>
                 }
             </div>
             <button type="button"
@@ -1458,6 +1483,8 @@
     private bool _customerSearchUnavailable;
     private bool _dictating;
     private bool _dictationProcessing;
+    private string _dictationBefore = string.Empty;
+    private string _dictationAfter = string.Empty;
     private string _dictationTimeLabel = string.Empty;
     private CancellationTokenSource? _dictationTimerCts;
     private bool _authDialogOpen;
@@ -2134,53 +2161,46 @@
     }
 
     [JSInvokable]
-    public async Task CompleteDictationAsync(string? dictatedText)
+    public async Task CompleteDictationAsync(string? before, string? speech, string? after)
     {
-        _draftMessage = dictatedText ?? string.Empty;
+        _dictationBefore = before ?? string.Empty;
+        _dictationAfter = after ?? string.Empty;
+        var speechText = speech ?? string.Empty;
+        _draftMessage = _dictationBefore + speechText + _dictationAfter;
         _dictating = false;
         StopDictationTimer();
         await InvokeAsync(StateHasChanged);
-        await SubmitDictatedMessageAsync();
+        await SubmitDictatedMessageAsync(speechText);
     }
 
-    private async Task SubmitDictatedMessageAsync()
+    private async Task SubmitDictatedMessageAsync(string? speechToClean = null)
     {
-        var rawText = _draftMessage;
+        var rawText = speechToClean ?? _draftMessage;
+        var fullText = _draftMessage;
         try
         {
-            if (string.IsNullOrWhiteSpace(rawText))
+            if (!string.IsNullOrWhiteSpace(rawText))
             {
-                return;
-            }
-
-            var request = new QuoteAgentMessageRequest
-            {
-                SessionId = SessionId == Guid.Empty ? null : SessionId,
-                Message = $"Clean up this dictated speech. Remove filler words, fix punctuation, capitalize correctly, and return ONLY the cleaned text without any prefix, explanation, or commentary: {rawText}",
-                Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en",
-                ModelName = "gemini-2.5-flash-lite"
-            };
-
-            var response = await Api.SendAgentMessageAsync(request);
-            var cleaned = (response.AssistantText ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(cleaned))
-            {
-                return;
-            }
-
-            _draftMessage = cleaned;
-            if (_composerModule is not null)
-            {
-                await _composerModule.InvokeVoidAsync("setComposerText", _composerTextarea, cleaned);
+                var language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en";
+                var cleaned = (await Api.CleanSpeechAsync(rawText, language) ?? string.Empty).Trim();
+                if (!string.IsNullOrWhiteSpace(cleaned))
+                {
+                    fullText = _dictationBefore + cleaned + _dictationAfter;
+                }
             }
         }
         catch
         {
-            _draftMessage = rawText;
+            fullText = _dictationBefore + rawText + _dictationAfter;
         }
         finally
         {
+            _draftMessage = fullText;
             _dictationProcessing = false;
+            if (_composerModule is not null)
+            {
+                await _composerModule.InvokeVoidAsync("setComposerText", _composerTextarea, fullText);
+            }
             await InvokeAsync(StateHasChanged);
             await FocusComposerAsync();
         }
@@ -2298,6 +2318,10 @@
             _dictating = false;
             _dictationProcessing = false;
             StopDictationTimer();
+            if (_composerModule is not null)
+            {
+                try { await _composerModule.InvokeVoidAsync("setComposerText", _composerTextarea, _draftMessage); } catch { }
+            }
             await InvokeAsync(StateHasChanged);
             await FocusComposerAsync();
         }

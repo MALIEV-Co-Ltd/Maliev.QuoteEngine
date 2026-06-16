@@ -744,7 +744,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-signin-btn\"", component, StringComparison.Ordinal);
-        Assert.Contains("@Text(\"Start pricing\", \"เริ่มดูราคา\")", component, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Sign in to start pricing\", \"เข้าสู่ระบบเพื่อดูราคา\")", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Sign in / Sign up", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-signup-btn\"", component, StringComparison.Ordinal);
         Assert.Contains("OpenAuthDialog(\"sign-in\")", component, StringComparison.Ordinal);
@@ -1161,8 +1161,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("boostDictationLevel(session, 0.45, \"good\", 1400)", composerScript, StringComparison.Ordinal);
         Assert.Contains("session.speechBoostUntil && Date.now() < session.speechBoostUntil", composerScript, StringComparison.Ordinal);
         Assert.Contains("export function setComposerText", composerScript, StringComparison.Ordinal);
-        Assert.Contains("InvokeVoidAsync(\"setComposerText\", _composerTextarea, cleaned)", component, StringComparison.Ordinal);
-        Assert.Contains("ModelName = \"gemini-2.5-flash-lite\"", component, StringComparison.Ordinal);
+        Assert.Contains("InvokeVoidAsync(\"setComposerText\", _composerTextarea, fullText)", component, StringComparison.Ordinal);
+        Assert.Contains("Api.CleanSpeechAsync(rawText, language)", component, StringComparison.Ordinal);
         Assert.Contains("if (rawSpeech)", composerScript, StringComparison.Ordinal);
         Assert.Contains("createDictationSpan(finalizing ? \"qe-agent-dictation-preview-final\" : \"qe-agent-dictation-preview-live\", rawSpeech)", composerScript, StringComparison.Ordinal);
         Assert.Contains("analyser.smoothingTimeConstant = 0.72", composerScript, StringComparison.Ordinal);
@@ -1282,6 +1282,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-dictation-preview", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-preview-live", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-dictation-preview-caret", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-dictation-preview-final", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer[data-dictation-active] .qe-agent-dictation-preview", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer textarea.qe-agent-dictation-source", agentStyles, StringComparison.Ordinal);
         Assert.Contains("caret-color: transparent;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("-webkit-text-fill-color: transparent;", agentStyles, StringComparison.Ordinal);
@@ -1293,7 +1295,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("--qe-dictation-color", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-bar-level", agentStyles, StringComparison.Ordinal);
         Assert.Contains("inset-inline: 0;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("justify-content: flex-start;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("justify-content: space-between;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("width: 100%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("flex: 0 0 2px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("width: 2px;", agentStyles, StringComparison.Ordinal);
