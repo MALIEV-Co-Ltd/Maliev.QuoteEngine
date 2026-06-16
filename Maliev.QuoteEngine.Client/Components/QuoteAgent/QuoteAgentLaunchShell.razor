@@ -17,6 +17,13 @@
                 <img class="qe-agent-brand-wordmark" src="/images/logo.svg" alt="MALIEV" />
                 <img class="qe-agent-brand-icon" src="/images/m-mark.svg" alt="M" />
             </a>
+            <button type="button"
+                    class="qe-agent-collapse"
+                    aria-expanded="@AriaExpanded(!_railCollapsed)"
+                    title="@(_railCollapsed ? Text("Expand sidebar", "ขยายแถบด้านข้าง") : Text("Collapse sidebar", "ยุบแถบด้านข้าง"))"
+                    @onclick="ToggleRail">
+                <MudIcon Icon="@(_railCollapsed ? Icons.Material.Outlined.Menu : Icons.Material.Outlined.MenuOpen)" Size="Size.Small" />
+            </button>
         </div>
 
         <nav class="qe-agent-primary-nav" aria-label="@Text("Quote workspace", "พื้นที่ขอราคา")">
@@ -131,10 +138,7 @@
                             </li>
                         </ul>
                         <button type="button" class="qe-agent-signin-btn" @onclick='@(() => OpenAuthDialog("sign-in"))'>
-                            @Text("Sign in", "เข้าสู่ระบบ")
-                        </button>
-                        <button type="button" class="qe-agent-signin-secondary-btn" @onclick='@(() => OpenAuthDialog("sign-up"))'>
-                            @Text("Create account", "สร้างบัญชี")
+                            @Text("Get started", "เริ่มต้นใช้งาน")
                         </button>
                         <p class="qe-agent-signin-secure">
                             <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Small" />
@@ -143,13 +147,6 @@
                     </div>
                 }
             </div>
-            <button type="button"
-                    class="qe-agent-collapse"
-                    aria-expanded="@AriaExpanded(!_railCollapsed)"
-                    title="@(_railCollapsed ? Text("Expand sidebar", "ขยายแถบด้านข้าง") : Text("Collapse sidebar", "ยุบแถบด้านข้าง"))"
-                    @onclick="ToggleRail">
-                <MudIcon Icon="@(_railCollapsed ? Icons.Material.Outlined.Menu : Icons.Material.Outlined.MenuOpen)" Size="Size.Small" />
-            </button>
         </div>
     </aside>
 
@@ -159,7 +156,6 @@
                  title="@AgentStatusTooltip"
                  aria-label="@AgentStatusTooltip">
                 <span class="qe-agent-status-dot" aria-hidden="true"></span>
-                <span class="qe-agent-status-label">@AgentStatusLabel</span>
                 @if (!string.IsNullOrWhiteSpace(_projectName))
                 {
                     <input class="qe-agent-project-name"
@@ -1878,9 +1874,23 @@
         }
     }
 
-    private void ContinueWithGoogle()
+    private async Task ContinueWithGoogle()
     {
-        NavigateToMalievAccount();
+        var authPath = "/auth/sign-in?returnUrl=%2Fauth%2Fchatbot-complete";
+        var opened = await Js.InvokeAsync<bool>("malievChatbot.openSignInPopup", authPath);
+        if (!opened)
+        {
+            NavigateToMalievAccount();
+            return;
+        }
+        await _composerModule!.InvokeVoidAsync("listenForAuthComplete", _composerDotNetRef);
+    }
+
+    [JSInvokable]
+    public void OnAuthPopupCompleted()
+    {
+        CloseAuthDialog();
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
     }
 
     private void NavigateToMalievAccount()

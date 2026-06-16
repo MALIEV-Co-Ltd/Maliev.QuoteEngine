@@ -513,7 +513,8 @@
 
     .qe-agent-rail-mark span,
     .qe-agent-rail-nav span,
-    .qe-agent-rail-foot {
+    .qe-agent-rail-foot,
+    .qe-agent-collapse {
         display: none;
     }
 
@@ -727,8 +728,6 @@
 }
 
 .qe-agent-shell--rail-collapsed .qe-agent-rail-foot {
-    grid-template-columns: 1fr;
-    justify-items: center;
     padding-inline: 0;
 }
 
@@ -1236,10 +1235,6 @@
 }
 
 .qe-agent-rail-foot {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 34px;
-    align-items: start;
-    gap: 8px;
     min-height: 44px;
     padding: 8px 10px 6px;
 }
@@ -1350,28 +1345,6 @@
     color: var(--qe-agent-inverse-text) !important;
 }
 
-.qe-agent-signin-secondary-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: 34px;
-    padding: 6px 13px;
-    border: 1px solid var(--qe-agent-line);
-    border-radius: 12px;
-    background: transparent;
-    color: var(--qe-agent-ink);
-    font-size: 13px;
-    font-weight: 600;
-    text-decoration: none;
-    white-space: nowrap;
-    cursor: pointer;
-}
-
-.qe-agent-signin-secondary-btn:hover {
-    border-color: color-mix(in srgb, var(--qe-agent-ink) 40%, transparent);
-    background: var(--qe-agent-soft);
-}
 
 .qe-agent-signin-secure {
     display: flex;

@@ -171,8 +171,26 @@ async function startDictationFromUserAction(textarea, dictationButton, dotNetRef
 async function finishDictationFromUserAction(textarea, dotNetRef) {
   try {
     await dotNetRef.invokeMethodAsync("BeginDictationProcessingAsync");
-    const dictatedText = await endDictation(textarea);
-    await dotNetRef.invokeMethodAsync("CompleteDictationAsync", dictatedText || "");
+    const session = dictationSessions.get(textarea);
+    if (!textarea || !session) {
+      await dotNetRef.invokeMethodAsync("CompleteDictationAsync", "", "", "");
+      return;
+    }
+
+    session.dotNetStopRequested = true;
+    clearDictationRestart(session);
+    try {
+      session.recognition.stop();
+    } catch {
+      // Browser recognition may already be stopped.
+    }
+
+    const result = finishDictation(textarea, session);
+    if (typeof result === "object") {
+      await dotNetRef.invokeMethodAsync("CompleteDictationAsync", result.contextBefore || "", result.speech || "", result.contextAfter || "");
+    } else if (!session.error) {
+      await dotNetRef.invokeMethodAsync("CompleteDictationAsync", "", result || "", "");
+    }
   } catch (error) {
     await dotNetRef.invokeMethodAsync(
       "ReportDictationErrorAsync",
@@ -234,6 +252,7 @@ export function setComposerText(textarea, text) {
     return;
   }
 
+  removeDictationPreview(textarea);
   typingAnimations.delete(textarea);
   clearTextSelection();
   const value = String(text ?? "");
@@ -387,7 +406,8 @@ export async function endDictation(textarea) {
     // Browser recognition may already be stopped.
   }
 
-  return finishDictation(textarea, session);
+  const result = finishDictation(textarea, session);
+  return typeof result === "object" ? result.fullText : result;
 }
 
 function cancelDictation(textarea) {
@@ -413,10 +433,15 @@ function prepareDictationPreview(textarea, session) {
   clearTextSelection();
   textarea.focus({ preventScroll: true });
   setTextareaSelection(textarea, session.before.length, session.before.length);
-  // The textarea itself is the single visible source of truth during dictation:
-  // the live transcript is written straight into textarea.value below. We do NOT
-  // hide the textarea text and paint a second copy in an overlay — that dual
-  // render is what caused the transcript to double up / mis-align after stopping.
+  // Show the overlay immediately so speech is rendered in blue from the first word.
+  // The textarea text becomes transparent via qe-agent-dictation-source while the
+  // overlay mirrors it. This state persists through the finalizing phase and is
+  // cleared only when setComposerText is called with the LLM-cleaned result.
+  const composer = textarea.closest?.(".qe-agent-composer");
+  if (composer) {
+    composer.setAttribute("data-dictation-active", "");
+  }
+  textarea.classList.add("qe-agent-dictation-source");
   updateDictationPreview(textarea, session, false);
 }
 
@@ -463,9 +488,17 @@ function finishDictation(textarea, session) {
   textarea.dispatchEvent(new Event("input", { bubbles: true }));
   setTextareaSelection(textarea, session.before.length + speechPrefix.length + refinedSpeech.length, session.before.length + speechPrefix.length + refinedSpeech.length);
   updateComposerShape(textarea);
-  removeDictationPreview(textarea);
+  // Overlay is already visible via data-dictation-active (set in prepareDictationPreview).
+  // Flip to final (solid blue) state while the LLM cleans the text. The attribute and
+  // class are cleared when setComposerText is called with the cleaned result.
+  updateDictationPreview(textarea, session, true);
   dictationSessions.delete(textarea);
-  return nextValue;
+  return {
+    contextBefore: session.before + speechPrefix,
+    speech: refinedSpeech,
+    contextAfter: speechSuffix + session.after,
+    fullText: nextValue
+  };
 }
 
 function ensureDictationOverlay(textarea) {
@@ -489,8 +522,9 @@ function createDictationSpan(className, text) {
 }
 
 function removeDictationPreview(textarea) {
-  textarea?.classList.remove("qe-agent-dictation-source");
   const composer = textarea?.closest?.(".qe-agent-composer");
+  composer?.removeAttribute("data-dictation-active");
+  textarea?.classList.remove("qe-agent-dictation-source");
   composer?.querySelector(".qe-agent-dictation-preview")?.remove();
 }
 
@@ -984,4 +1018,16 @@ function summarizeDictation(text) {
   return String(text ?? "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+
+export function listenForAuthComplete(dotNetRef) {
+  const handler = event => {
+    if (event.origin !== location.origin || !event.data || event.data.type !== 'maliev.chatbot.authenticated') {
+      return;
+    }
+    window.removeEventListener('message', handler);
+    dotNetRef.invokeMethodAsync('OnAuthPopupCompleted');
+  };
+  window.addEventListener('message', handler);
 }
