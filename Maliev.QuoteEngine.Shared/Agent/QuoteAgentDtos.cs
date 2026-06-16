@@ -147,6 +147,9 @@ public sealed class QuoteAgentTurnResponse
 
     /// <summary>Gets or sets customer-safe UI focus directives the client may apply.</summary>
     public List<QuoteAgentUiDirectiveDto> UiDirectives { get; set; } = [];
+
+    /// <summary>Gets or sets the desired UI culture to apply immediately, such as en-US or th-TH, set by agent-initiated language change.</summary>
+    public string? UiCulture { get; set; }
 }
 
 /// <summary>

@@ -109,6 +109,8 @@ internal sealed class QuoteAgentService(
             QuoteAgentContextToken = token
         }, cancellationToken);
 
+        var pendingUiCulture = state.UiCulture;
+        state.UiCulture = null;
         var currentState = ToStateResponse(state);
         return new QuoteAgentTurnResponse
         {
@@ -125,7 +127,8 @@ internal sealed class QuoteAgentService(
             ProposedActions = currentState.ProposedActions,
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
             ThinkingSteps = chatbotResponse?.ThinkingSteps ?? [],
-            UiDirectives = currentState.UiDirectives
+            UiDirectives = currentState.UiDirectives,
+            UiCulture = pendingUiCulture
         };
     }
 
@@ -217,6 +220,8 @@ internal sealed class QuoteAgentService(
             yield break;
         }
 
+        var pendingUiCulture = state.UiCulture;
+        state.UiCulture = null;
         var currentState = ToStateResponse(state);
         var response = new QuoteAgentTurnResponse
         {
@@ -233,7 +238,8 @@ internal sealed class QuoteAgentService(
             ProposedActions = currentState.ProposedActions,
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
             ThinkingSteps = finalMessage?.ThinkingSteps ?? [],
-            UiDirectives = currentState.UiDirectives
+            UiDirectives = currentState.UiDirectives,
+            UiCulture = pendingUiCulture
         };
 
         if (!receivedDelta)
@@ -401,6 +407,7 @@ internal sealed class QuoteAgentService(
                 requiresAuthentication: true,
                 request.Arguments),
             "quote_start_payment" => PreparePaymentActionOrGateError(state, request.Arguments),
+            "quote_set_ui_language" => SetUiLanguage(state, request.Arguments),
             _ => new { error = $"Unknown QuoteEngine tool: {toolName}" }
         };
         return Task.FromResult<object>(result);
@@ -3557,6 +3564,39 @@ Customer message:
         }
 
         return message.Any(ch => ch >= '\u0E00' && ch <= '\u0E7F') ? "th" : "en";
+    }
+
+    private static object SetUiLanguage(QuoteAgentSessionState state, Dictionary<string, JsonElement> arguments)
+    {
+        var culture = NormalizeUiCulture(ReadString(arguments, "culture") ?? ReadString(arguments, "ui_culture"));
+        lock (state.SyncRoot)
+        {
+            state.UiCulture = culture;
+            state.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        return new
+        {
+            culture,
+            language = culture == "th-TH" ? "th" : "en",
+            message = culture == "th-TH"
+                ? "UI language will be switched to Thai (th-TH). The interface will update immediately."
+                : "UI language will be switched to English (en-US). The interface will update immediately."
+        };
+    }
+
+    private static string NormalizeUiCulture(string? culture)
+    {
+        if (string.IsNullOrWhiteSpace(culture))
+        {
+            return "en-US";
+        }
+
+        return culture.Trim().ToLowerInvariant() switch
+        {
+            "th" or "th-th" or "thai" => "th-TH",
+            _ => "en-US"
+        };
     }
 
     private static string NormalizeUnits(string? units, string fallback)

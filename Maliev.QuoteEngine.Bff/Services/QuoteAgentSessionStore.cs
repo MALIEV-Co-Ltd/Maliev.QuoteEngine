@@ -379,6 +379,8 @@ internal sealed class QuoteAgentSessionState
 
     public string Language { get; set; } = "en";
 
+    public string? UiCulture { get; set; }
+
     public string Units { get; set; } = "mm";
 
     public string Currency { get; set; } = "THB";

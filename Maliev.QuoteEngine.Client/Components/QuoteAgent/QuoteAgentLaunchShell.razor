@@ -2011,6 +2011,10 @@
                     _proposedActions = streamEvent.Response.ProposedActions;
                     ApplyAuthHandoff(streamEvent.Response.AuthHandoff);
                     await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives);
+                    if (!string.IsNullOrWhiteSpace(streamEvent.Response.UiCulture))
+                    {
+                        await Preferences.SetCultureAsync(streamEvent.Response.UiCulture);
+                    }
                     await InvokeAsync(StateHasChanged);
                 }
                 else if (streamEvent.Type.Equals("error", StringComparison.OrdinalIgnoreCase))
