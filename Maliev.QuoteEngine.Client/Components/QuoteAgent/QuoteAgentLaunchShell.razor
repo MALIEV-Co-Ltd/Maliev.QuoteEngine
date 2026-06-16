@@ -940,6 +940,13 @@
                     }
                     <span class="sr-only">@(_sending ? Text("Processing", "กำลังประมวลผล") : Text("Send", "ส่ง"))</span>
                 </button>
+                <button type="button"
+                        class="qe-agent-round-btn qe-agent-quick-actions-btn"
+                        @onclick="() => _quickActionsMenuOpen = true"
+                        aria-label="@Text("Quick actions", "คำสั่งลัด")"
+                        title="@Text("Quick actions", "คำสั่งลัด")">
+                    <MudIcon Icon="@Icons.Material.Outlined.Menu" Size="Size.Small" />
+                </button>
                 <div class="qe-agent-quick-actions" aria-label="@Text("Quick quote prompts", "คำสั่งลัดขอราคา")">
                     <button type="button" @onclick="RequestUploadAsync">
                         <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
@@ -1039,6 +1046,37 @@
                     </button>
                 </footer>
             </section>
+        }
+
+        @if (_quickActionsMenuOpen)
+        {
+            <div class="qe-agent-quick-actions-menu"
+                 role="dialog" aria-modal="true"
+                 aria-label="@Text("Quick actions", "คำสั่งลัด")">
+                <header class="qe-agent-quick-actions-menu-header">
+                    <span>@Text("Quick actions", "คำสั่งลัด")</span>
+                    <button type="button" class="qe-agent-round-btn"
+                            @onclick="() => _quickActionsMenuOpen = false"
+                            aria-label="@Text("Close", "ปิด")"
+                            title="@Text("Close", "ปิด")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
+                </header>
+                <div class="qe-agent-quick-actions-menu-items">
+                    <button type="button" @onclick="RequestUploadFromQuickActionsAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
+                        <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
+                    </button>
+                    <button type="button" @onclick="RequestUploadFromQuickActionsAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" />
+                        <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
+                    </button>
+                    <button type="button" @onclick="OpenSketchFromQuickActionsAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.Draw" />
+                        <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
+                    </button>
+                </div>
+            </div>
         }
 
     </main>
@@ -1409,6 +1447,7 @@
     private bool _railCollapsed;
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
+    private bool _quickActionsMenuOpen;
     private bool _sketchOpen;
     private bool _sketchInitPending;
     private bool _searchOpen;
@@ -2920,6 +2959,18 @@
         _composerMenuOpen = false;
         _composerPluginsOpen = false;
         await OpenSketchAsync();
+    }
+
+    private async Task RequestUploadFromQuickActionsAsync()
+    {
+        _quickActionsMenuOpen = false;
+        await RequestUploadAsync();
+    }
+
+    private Task OpenSketchFromQuickActionsAsync()
+    {
+        _quickActionsMenuOpen = false;
+        return OpenSketchAsync();
     }
 
     private async Task ApplyGoogleDriveConnectorAsync()
