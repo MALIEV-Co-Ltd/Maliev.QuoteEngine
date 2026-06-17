@@ -488,8 +488,7 @@
                                 {
                                     <details class="qe-agent-thinking">
                                         <summary>
-                                            <MudIcon Icon="@Icons.Material.Outlined.Psychology" Size="Size.Small" />
-                                            <span>@Text("Thinking", "การวิเคราะห์")</span>
+                                            <span>@Text("Thought process", "กระบวนการคิด")</span>
                                             <small>@ThinkingSummary(message.ThinkingSteps)</small>
                                         </summary>
                                         <div class="qe-agent-thinking-steps">
@@ -497,7 +496,7 @@
                                             {
                                                 var stepTitle = ThinkingStepTitle(step);
                                                 var stepMarkup = ThinkingStepDetailMarkup(step);
-                                                @if (!string.IsNullOrWhiteSpace(stepTitle) || stepMarkup.Value.Length > 0)
+                                                @if (stepMarkup.Value.Length > 0 || (!string.IsNullOrWhiteSpace(stepTitle) && string.IsNullOrWhiteSpace(step.Detail)))
                                                 {
                                                     <div class="qe-agent-thinking-step">
                                                         @if (!string.IsNullOrWhiteSpace(stepTitle))
@@ -3427,13 +3426,20 @@
             return new MarkupString(string.Empty);
 
         string? jsonStr = null;
+        var isJsonLike = false;
         if (detail.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase))
+        {
             jsonStr = detail["Arguments:".Length..].Trim();
+            isJsonLike = true;
+        }
         else
         {
             var trimmed = detail.TrimStart();
             if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
+            {
                 jsonStr = trimmed;
+                isJsonLike = true;
+            }
         }
 
         if (jsonStr is not null)
@@ -3441,10 +3447,21 @@
             try
             {
                 using var doc = JsonDocument.Parse(NormalizeJsonLiterals(jsonStr));
-                return QuoteAgentMarkdownRenderer.Render(FormatJsonAsBullets(doc.RootElement));
+                var bullets = FormatJsonAsBullets(doc.RootElement);
+                // Return empty when the JSON structure produces no human-readable bullets
+                // (e.g. tool results whose values are nested object arrays) to avoid
+                // rendering a meaningless empty step.
+                if (string.IsNullOrWhiteSpace(bullets))
+                    return new MarkupString(string.Empty);
+                return QuoteAgentMarkdownRenderer.Render(bullets);
             }
             catch (JsonException) { }
         }
+
+        // If the detail looked like JSON but failed to parse (e.g. truncated or
+        // escaped differently), suppress it rather than leaking raw JSON to the UI.
+        if (isJsonLike)
+            return new MarkupString(string.Empty);
 
         return QuoteAgentMarkdownRenderer.Render(HumanizeAgentActivity(detail));
     }
