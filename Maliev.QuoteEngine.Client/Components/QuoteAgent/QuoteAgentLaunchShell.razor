@@ -998,14 +998,44 @@
                     }
                     <span class="sr-only">@(_sending ? Text("Processing", "กำลังประมวลผล") : Text("Send", "ส่ง"))</span>
                 </button>
-                <button type="button"
-                        class="qe-agent-quick-actions-btn"
-                        @onclick="() => _quickActionsMenuOpen = true"
-                        aria-label="@Text("Tools", "เครื่องมือ")"
-                        title="@Text("Tools", "เครื่องมือ")">
-                    <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
-                    <span>@Text("Tools", "เครื่องมือ")</span>
-                </button>
+                <div class="qe-agent-quick-actions-wrapper">
+                    <button type="button"
+                            class="qe-agent-quick-actions-btn"
+                            @onclick="ToggleQuickActionsMenu"
+                            aria-label="@Text("Tools", "เครื่องมือ")"
+                            title="@Text("Tools", "เครื่องมือ")"
+                            aria-expanded="@_quickActionsMenuOpen">
+                        <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
+                        <span>@Text("Tools", "เครื่องมือ")</span>
+                    </button>
+                    @if (_quickActionsMenuOpen)
+                    {
+                        <div class="qe-agent-quick-actions-menu" role="menu" aria-label="@Text("Tools", "เครื่องมือ")">
+                            <button type="button" role="menuitem" @onclick="RequestUploadFromQuickActionsAsync">
+                                <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
+                                <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
+                            </button>
+                            <button type="button" role="menuitem" @onclick="RequestUploadFromQuickActionsAsync">
+                                <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" />
+                                <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
+                            </button>
+                            <button type="button" role="menuitem" @onclick="OpenSketchFromQuickActionsAsync">
+                                <MudIcon Icon="@Icons.Material.Outlined.Draw" />
+                                <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
+                            </button>
+                            <button type="button" role="menuitem" @onclick="ApplyGoogleDriveConnectorFromToolsAsync">
+                                <span class="qe-agent-google-drive-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24" focusable="false">
+                                        <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                        <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                        <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                                    </svg>
+                                </span>
+                                <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
+                            </button>
+                        </div>
+                    }
+                </div>
             </form>
             @if (_messages.Count == 0)
             {
@@ -1117,46 +1147,7 @@
             </section>
         }
 
-        @if (_quickActionsMenuOpen)
-        {
-            <div class="qe-agent-quick-actions-menu"
-                 role="dialog" aria-modal="true"
-                 aria-label="@Text("Tools", "เครื่องมือ")">
-                <header class="qe-agent-quick-actions-menu-header">
-                    <span>@Text("Tools", "เครื่องมือ")</span>
-                    <button type="button" class="qe-agent-round-btn"
-                            @onclick="() => _quickActionsMenuOpen = false"
-                            aria-label="@Text("Close", "ปิด")"
-                            title="@Text("Close", "ปิด")">
-                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
-                    </button>
-                </header>
-                <div class="qe-agent-quick-actions-menu-items">
-                    <button type="button" @onclick="RequestUploadFromQuickActionsAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
-                        <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
-                    </button>
-                    <button type="button" @onclick="RequestUploadFromQuickActionsAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" />
-                        <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
-                    </button>
-                    <button type="button" @onclick="OpenSketchFromQuickActionsAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.Draw" />
-                        <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
-                    </button>
-                    <button type="button" @onclick="ApplyGoogleDriveConnectorFromToolsAsync">
-                        <span class="qe-agent-google-drive-icon" aria-hidden="true">
-                            <svg viewBox="0 0 24 24" focusable="false">
-                                <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
-                                <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
-                                <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
-                            </svg>
-                        </span>
-                        <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
-                    </button>
-                </div>
-            </div>
-        }
+
 
     </main>
 
@@ -3233,6 +3224,11 @@
         _composerMenuOpen = false;
         _composerPluginsOpen = false;
         await OpenSketchAsync();
+    }
+
+    private void ToggleQuickActionsMenu()
+    {
+        _quickActionsMenuOpen = !_quickActionsMenuOpen;
     }
 
     private async Task RequestUploadFromQuickActionsAsync()

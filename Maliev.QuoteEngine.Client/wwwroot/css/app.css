@@ -3700,13 +3700,17 @@
     color: var(--qe-agent-ink);
 }
 
+.qe-agent-quick-actions-wrapper {
+    position: relative;
+    grid-area: tools;
+    align-self: center;
+    justify-self: start;
+}
+
 .qe-agent-quick-actions-btn {
     display: flex;
     align-items: center;
     gap: 5px;
-    grid-area: tools;
-    align-self: center;
-    justify-self: start;
     height: 34px;
     padding: 0 12px 0 10px;
     border: 0;
@@ -3725,48 +3729,40 @@
 }
 
 .qe-agent-quick-actions-menu {
-    position: fixed;
-    inset: 0;
-    z-index: 200;
-    display: flex;
-    flex-direction: column;
-    background: var(--qe-agent-bg);
-    color: var(--qe-agent-ink);
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 36;
+    display: grid;
+    gap: 2px;
+    width: 248px;
+    padding: 7px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 14px;
+    background: var(--qe-agent-raised);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, .14);
 }
 
-.qe-agent-quick-actions-menu-header {
-    display: flex;
+.qe-agent-quick-actions-menu button {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
-    padding: 16px 20px;
-    border-bottom: 1px solid var(--qe-agent-line);
-    font-size: 17px;
-    font-weight: 600;
-}
-
-.qe-agent-quick-actions-menu-items {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow-y: auto;
-}
-
-.qe-agent-quick-actions-menu-items button {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 20px 24px;
+    gap: 8px;
+    width: 100%;
+    min-height: 42px;
+    padding: 8px 10px;
     border: 0;
-    border-bottom: 1px solid var(--qe-agent-line);
+    border-radius: 9px;
     background: transparent;
     color: var(--qe-agent-ink);
-    font: inherit;
-    font-size: 16px;
     cursor: pointer;
     text-align: left;
+    font-size: 13px;
+    line-height: 1.2;
 }
 
-.qe-agent-quick-actions-menu-items button:active {
+.qe-agent-quick-actions-menu button:hover,
+.qe-agent-quick-actions-menu button:focus-visible {
     background: var(--qe-agent-hover);
 }
 
