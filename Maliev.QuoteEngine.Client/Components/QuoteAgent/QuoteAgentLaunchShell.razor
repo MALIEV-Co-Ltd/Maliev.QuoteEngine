@@ -490,6 +490,12 @@
                                         @QuoteAgentMarkdownRenderer.Render(message.Content)
                                     </div>
                                 }
+                                @if (message.InlineViewer is not null)
+                                {
+                                    <section class="qe-agent-inline-viewer">
+                                        <QeInlinePartViewer PrimitivesJson="@message.InlineViewer.PrimitivesJson" />
+                                    </section>
+                                }
                                 @if (message.ThinkingSteps.Count > 0)
                                 {
                                     <details class="qe-agent-thinking">
@@ -2173,6 +2179,10 @@
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
                     _proposedActions = streamEvent.Response.ProposedActions;
+                    if (streamEvent.Response.Artifacts is { Count: > 0 })
+                    {
+                        assistantMessage.InlineViewer = FindInlinePreview(streamEvent.Response.Artifacts);
+                    }
                     ApplyAuthHandoff(streamEvent.Response.AuthHandoff);
                     await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives, suppressPanelAutoOpen: true);
                     if (!string.IsNullOrWhiteSpace(streamEvent.Response.UiCulture))
@@ -3631,6 +3641,25 @@
         };
     }
 
+    private static InlineViewerInfo? FindInlinePreview(IReadOnlyList<QuoteAgentArtifactDto> artifacts)
+    {
+        var generated = artifacts.FirstOrDefault(a =>
+            a.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            a.Metadata.TryGetValue("generated", out var gen) && gen == "true");
+        if (generated is null)
+        {
+            return null;
+        }
+
+        if (!generated.Metadata.TryGetValue("primitives", out var primitivesJson) ||
+            string.IsNullOrWhiteSpace(primitivesJson))
+        {
+            return null;
+        }
+
+        return new InlineViewerInfo { PrimitivesJson = primitivesJson };
+    }
+
     private static string PreviewUrlForUploadedPart(QuotePartViewModel part)
     {
         return part.ThumbnailUrl ?? part.GlbUrl ?? string.Empty;
@@ -4517,6 +4546,13 @@
         public AgentWorkbenchSnapshot? Workbench { get; } = workbench;
 
         public string? SketchPreviewDataUrl { get; } = sketchPreviewDataUrl;
+
+        public InlineViewerInfo? InlineViewer { get; set; }
+    }
+
+    private sealed class InlineViewerInfo
+    {
+        public string PrimitivesJson { get; set; } = string.Empty;
     }
 
     private sealed record LocalDemoTurn(

@@ -437,6 +437,7 @@ internal sealed class QuoteAgentService(
             "quote_set_ui_language" => SetUiLanguage(state, request.Arguments),
             "quote_set_project_name" => SetProjectName(state, request.Arguments),
             "quote_ask_customer" => AskCustomer(state, request.Arguments),
+            "quote_generate_3d_preview" => Generate3DPreview(state, request.Arguments),
             _ => new { error = $"Unknown QuoteEngine tool: {toolName}" }
         };
         return Task.FromResult<object>(result);
@@ -3327,7 +3328,10 @@ internal sealed class QuoteAgentService(
             "Default to qty=1, standard tolerance, and standard lead time when not stated. " +
             "State your inferred assumptions first, then ask only for genuinely missing critical information. " +
             "If the customer attaches a photo or sketch: analyze it first — describe the part shape, visible features, likely material and process — then state your assumptions and give a rough ballpark estimate. " +
-            "Only after engaging with what you can see should you mention that a CAD file is needed for a precise quote. Never respond to a photo by redirecting to CAD as the first and only message.");
+            "NEVER respond by asking the customer to upload or send a 3D/CAD file as your first or only message. Never reject the customer. " +
+            "If you can infer enough shape and size information — even from a text description, photo, sketch, or drawing — call quote_generate_3d_preview to create a 3D preview GLB of the inferred part. " +
+            "Describe what you created, list your assumptions, and ask the customer to verify the shape and dimensions. " +
+            "Only mention CAD file uploads as an optional refinement step, never as a gate.");
         contextLines.Add(
             "Project naming: When calling quote_set_project_name, derive a short descriptive title from the part file name and inferred process/material " +
             "(e.g. 'Flower Oval – FDM PLA', 'L-Bracket – SLA Resin'). Never set the project name to the customer's literal question.");
@@ -3634,6 +3638,35 @@ Customer message:
             : 0;
     }
 
+    private static double? ReadElementDouble(JsonElement element, params string[] keys)
+    {
+        var value = ReadElementString(element, keys);
+        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static bool ReadElementBool(JsonElement element, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!element.TryGetProperty(key, out var value))
+            {
+                continue;
+            }
+
+            return value.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.String => bool.TryParse(value.GetString(), out var parsed) && parsed,
+                _ => false
+            };
+        }
+
+        return false;
+    }
+
     private static bool TryReadGuid(
         IReadOnlyDictionary<string, JsonElement> arguments,
         string key,
@@ -3870,11 +3903,137 @@ Customer message:
             : fallback;
     }
 
+    private static object Generate3DPreview(QuoteAgentSessionState state, IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var description = ReadString(arguments, "description") ?? "Generated 3D preview";
+        var processHint = ReadString(arguments, "process_hint") ?? ReadString(arguments, "processHint");
+        var primitives = ReadPrimitives(arguments);
+
+        if (primitives.Count == 0)
+        {
+            return new { error = "At least one primitive shape is required." };
+        }
+
+        var process = !string.IsNullOrWhiteSpace(processHint) ? processHint : "fdm";
+        var primitivesJson = JsonSerializer.Serialize(primitives, JsonOptions);
+        var partId = Guid.NewGuid();
+
+        lock (state.SyncRoot)
+        {
+            state.Parts.Add(new QuotePartDraftDto
+            {
+                PartId = partId,
+                FileId = Guid.NewGuid(),
+                UploadId = $"generated-{partId:N}",
+                FileName = $"[Preview] {description}",
+                ProcessId = InferProcessFromMessage(description) ?? process,
+                MaterialId = InferMaterial(process, description),
+                Quantity = InferQuantity(description),
+                VolumeCc = EstimateVolume(primitives),
+                SurfaceAreaCm2 = EstimateSurfaceArea(primitives),
+                Status = "ModelGenerated",
+                IsManifold = true,
+                BodyCount = primitives.Count,
+                SelectedBodyIndex = 0,
+                PartNotes = "Generated 3D preview from inferred description."
+            });
+
+            var artifact = new QuoteAgentArtifactDto
+            {
+                ArtifactType = "viewer",
+                Title = $"3D preview - {description}",
+                Status = "ready",
+                PartId = partId
+            };
+            artifact.Metadata["generated"] = "true";
+            artifact.Metadata["description"] = EscapeMetadataValue(description);
+            artifact.Metadata["primitives"] = primitivesJson;
+            artifact.Metadata["primitiveCount"] = primitives.Count.ToString(CultureInfo.InvariantCulture);
+
+            state.Artifacts.RemoveAll(item =>
+                item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+                item.Metadata.TryGetValue("generated", out var gen) && gen == "true");
+            state.Artifacts.Add(artifact);
+            state.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        return new
+        {
+            success = true,
+            artifact_id = state.Artifacts.Last().ArtifactId,
+            part_id = partId,
+            description,
+            primitive_count = primitives.Count,
+            message = $"Generated 3D preview with {primitives.Count} primitive(s): {description}"
+        };
+    }
+
+    private static IReadOnlyList<QuoteModelPrimitiveDto> ReadPrimitives(IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        if (!arguments.TryGetValue("primitives", out var value) || value.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return value.EnumerateArray()
+            .Select(ReadPrimitive)
+            .Where(p => p is not null)
+            .Select(p => p!)
+            .ToArray();
+    }
+
+    private static QuoteModelPrimitiveDto? ReadPrimitive(JsonElement element)
+    {
+        var shapeType = ReadElementString(element, "shape_type", "shapeType") ?? "box";
+
+        return new QuoteModelPrimitiveDto
+        {
+            ShapeType = shapeType,
+            LengthX = ReadElementDouble(element, "length_x_mm", "lengthXmm", "length_x", "lengthX") ?? 10,
+            LengthY = ReadElementDouble(element, "length_y_mm", "lengthYmm", "length_y", "lengthY") ?? 10,
+            LengthZ = ReadElementDouble(element, "length_z_mm", "lengthZmm", "length_z", "lengthZ") ?? 10,
+            Diameter = ReadElementDouble(element, "diameter_mm", "diameterMm", "diameter"),
+            Height = ReadElementDouble(element, "height_mm", "heightMm", "height"),
+            OffsetX = ReadElementDouble(element, "offset_x_mm", "offsetXmm", "offset_x", "offsetX") ?? 0,
+            OffsetY = ReadElementDouble(element, "offset_y_mm", "offsetYmm", "offset_y", "offsetY") ?? 0,
+            OffsetZ = ReadElementDouble(element, "offset_z_mm", "offsetZmm", "offset_z", "offsetZ") ?? 0,
+            IsHoleIndicator = ReadElementBool(element, "is_hole_indicator", "isHoleIndicator")
+        };
+    }
+
+    private static decimal EstimateVolume(IReadOnlyList<QuoteModelPrimitiveDto> primitives)
+    {
+        return Math.Round(primitives.Sum(p => p.ShapeType.ToLowerInvariant() switch
+        {
+            "box" => (decimal)(p.LengthX * p.LengthY * p.LengthZ),
+            "cylinder" => (decimal)(Math.PI * Math.Pow(p.Diameter ?? 10, 2) / 4 * (p.Height ?? 10)),
+            "sphere" => (decimal)(Math.PI * Math.Pow(p.Diameter ?? 10, 3) / 6),
+            "cone" => (decimal)(Math.PI * Math.Pow(p.Diameter ?? 10, 2) / 4 * (p.Height ?? 10) / 3),
+            _ => 1000m
+        }), 2);
+    }
+
+    private static decimal EstimateSurfaceArea(IReadOnlyList<QuoteModelPrimitiveDto> primitives)
+    {
+        return Math.Round(primitives.Sum(p => p.ShapeType.ToLowerInvariant() switch
+        {
+            "box" => (decimal)(2 * (p.LengthX * p.LengthY + p.LengthY * p.LengthZ + p.LengthZ * p.LengthX)),
+            "cylinder" when p.Height.HasValue && p.Diameter.HasValue =>
+                (decimal)(2 * Math.PI * Math.Pow(p.Diameter.Value, 2) / 4 + Math.PI * p.Diameter.Value * p.Height.Value),
+            _ => 1000m
+        }), 2);
+    }
+
+    private static string EscapeMetadataValue(string value)
+    {
+        return value.Length > 500 ? value[..500] : value;
+    }
+
     private static string FallbackAgentAnswer(QuoteAgentStateResponse state)
     {
-        var geometryGate = state.Gates.FirstOrDefault(gate => gate.Code == "geometry_required");
-        return geometryGate?.Status == "passed"
-            ? "I can continue configuring this quote. Tell me the material, finish, tolerance, quantity, or lead time you want."
-            : "Upload a CAD or 3D file and I can analyze geometry, DFM, materials, lead time, and pricing.";
+        var hasParts = state.Parts.Count > 0;
+        return hasParts
+            ? "Tell me the material, finish, tolerance, quantity, or lead time you want, or describe the part for a 3D preview."
+            : "Describe the part you need — shape, size, material, and quantity — and I can create a 3D preview and estimate for you.";
     }
 }

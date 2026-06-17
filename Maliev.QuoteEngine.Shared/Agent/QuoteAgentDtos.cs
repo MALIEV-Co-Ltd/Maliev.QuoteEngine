@@ -697,3 +697,57 @@ public sealed class QuoteAgentCleanSpeechResponse
     /// <summary>Gets or sets the cleaned speech text.</summary>
     public string CleanedText { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// A primitive shape composing a generated 3D preview model.
+/// </summary>
+public sealed class QuoteModelPrimitiveDto
+{
+    /// <summary>Gets or sets the shape type: box, cylinder, sphere, or cone.</summary>
+    public string ShapeType { get; set; } = "box";
+
+    /// <summary>Gets or sets the size along X in mm.</summary>
+    public double LengthX { get; set; }
+
+    /// <summary>Gets or sets the size along Y in mm.</summary>
+    public double LengthY { get; set; }
+
+    /// <summary>Gets or sets the size along Z in mm.</summary>
+    public double LengthZ { get; set; }
+
+    /// <summary>Gets or sets the diameter in mm (for cylinder, sphere, cone).</summary>
+    public double? Diameter { get; set; }
+
+    /// <summary>Gets or sets the height in mm (for cylinder, cone).</summary>
+    public double? Height { get; set; }
+
+    /// <summary>Gets or sets the X offset from origin in mm.</summary>
+    public double OffsetX { get; set; }
+
+    /// <summary>Gets or sets the Y offset from origin in mm.</summary>
+    public double OffsetY { get; set; }
+
+    /// <summary>Gets or sets the Z offset from origin in mm.</summary>
+    public double OffsetZ { get; set; }
+
+    /// <summary>Gets or sets whether this primitive marks a hole/opening (rendered in contrasting color).</summary>
+    public bool IsHoleIndicator { get; set; }
+}
+
+/// <summary>
+/// Result of generating a 3D preview model from inferred primitives.
+/// </summary>
+public sealed class QuoteGenerateModelResponse
+{
+    /// <summary>Gets or sets the artifact ID for the generated preview.</summary>
+    public Guid ArtifactId { get; set; }
+
+    /// <summary>Gets or sets the part ID if a part placeholder was created.</summary>
+    public Guid? PartId { get; set; }
+
+    /// <summary>Gets or sets the human-readable description of the generated preview.</summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the number of primitives in the generated preview.</summary>
+    public int PrimitiveCount { get; set; }
+}

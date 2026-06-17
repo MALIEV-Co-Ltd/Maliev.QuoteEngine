@@ -2918,6 +2918,85 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         }
     }
 
+    [Fact]
+    public async Task Generate_3d_preview_tool_creates_viewer_artifact_with_primitives()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] primitives =
+        [
+            new
+            {
+                shape_type = "box",
+                length_x_mm = 50.0,
+                length_y_mm = 30.0,
+                length_z_mm = 5.0,
+                offset_x_mm = 0.0,
+                offset_y_mm = 0.0,
+                offset_z_mm = 0.0,
+                is_hole_indicator = false
+            },
+            new
+            {
+                shape_type = "cylinder",
+                diameter_mm = 6.0,
+                height_mm = 5.0,
+                offset_x_mm = 18.0,
+                offset_y_mm = 0.0,
+                offset_z_mm = 0.0,
+                is_hole_indicator = true
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Bracket 50x30x5mm with mounting hole", JsonOptions),
+                ["primitives"] = JsonSerializer.SerializeToElement(primitives, JsonOptions),
+                ["process_hint"] = JsonSerializer.SerializeToElement("fdm", JsonOptions)
+            });
+
+        var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("artifact_id", out var artifactId) && artifactId.ValueKind == JsonValueKind.String);
+        Assert.True(root.TryGetProperty("part_id", out var partId) && partId.ValueKind == JsonValueKind.String);
+        Assert.True(root.TryGetProperty("primitive_count", out var count) && count.GetInt32() == 2);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+
+        var viewerArtifact = state.Artifacts.FirstOrDefault(a =>
+            a.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            a.Metadata.TryGetValue("generated", out var gen) && gen == "true");
+
+        Assert.NotNull(viewerArtifact);
+        Assert.True(viewerArtifact.Metadata.ContainsKey("primitives"));
+        Assert.True(viewerArtifact.Metadata.ContainsKey("description"));
+
+        Assert.Contains(state.Parts, part =>
+            part.FileName.StartsWith("[Preview]", StringComparison.OrdinalIgnoreCase) &&
+            part.Status == "ModelGenerated");
+    }
+
+    [Fact]
+    public async Task Generate_3d_preview_tool_requires_at_least_one_primitive()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Test", JsonOptions),
+                ["primitives"] = JsonSerializer.SerializeToElement(Array.Empty<object>(), JsonOptions),
+            });
+
+        var doc = JsonDocument.Parse(json);
+        Assert.True(doc.RootElement.TryGetProperty("error", out _));
+    }
+
     private sealed class RecordingChatbotServiceClient : IChatbotServiceClient
     {
         public ChatbotInitiateSessionRequest? LastInitiateRequest { get; private set; }

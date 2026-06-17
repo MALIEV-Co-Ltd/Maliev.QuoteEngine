@@ -1,0 +1,51 @@
+@inject IJSRuntime JS
+
+<div @ref="_container"
+     id="@_containerId"
+     class="qe-inline-viewer">
+    <div class="qe-inline-viewer-loading">
+        <span>@Text("Loading 3D preview…", "กำลังโหลดตัวอย่าง 3D…")</span>
+    </div>
+</div>
+
+@code {
+    private string _containerId = $"qe-inline-{Guid.NewGuid():N}";
+    private ElementReference _container;
+    private bool _initialized;
+
+    [Parameter]
+    public string PrimitivesJson { get; set; } = string.Empty;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            if (!string.IsNullOrWhiteSpace(PrimitivesJson))
+            {
+                try
+                {
+                    await JS.InvokeVoidAsync("quoteInlineViewer.createPreview", _containerId, PrimitivesJson);
+                }
+                catch
+                {
+                    // Inline viewer is optional; silently degrade if BabylonJS fails
+                }
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("quoteInlineViewer.disposePreview", _containerId);
+        }
+        catch
+        {
+            // Ignore cleanup errors
+        }
+    }
+
+    private static string Text(string en, string th) => th;
+}
