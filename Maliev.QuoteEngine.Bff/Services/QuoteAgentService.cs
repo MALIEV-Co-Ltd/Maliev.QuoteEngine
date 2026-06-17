@@ -132,7 +132,7 @@ internal sealed class QuoteAgentService(
             Gates = currentState.Gates,
             ProposedActions = currentState.ProposedActions,
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
-            ThinkingSteps = chatbotResponse?.ThinkingSteps ?? [],
+            ThinkingSteps = EnrichSteps(chatbotResponse?.ThinkingSteps),
             UiDirectives = currentState.UiDirectives,
             UiCulture = pendingUiCulture
         };
@@ -244,7 +244,7 @@ internal sealed class QuoteAgentService(
             Gates = currentState.Gates,
             ProposedActions = currentState.ProposedActions,
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
-            ThinkingSteps = finalMessage?.ThinkingSteps ?? [],
+            ThinkingSteps = EnrichSteps(finalMessage?.ThinkingSteps),
             UiDirectives = currentState.UiDirectives,
             UiCulture = pendingUiCulture
         };
@@ -476,9 +476,19 @@ internal sealed class QuoteAgentService(
         QuoteAgentThinkingStepDto step,
         CancellationToken cancellationToken)
     {
+        ThinkingStepSummarizer.Summarize(step);
         return hubContext.Clients
             .Group(QuoteNotificationsHub.QuoteSessionGroup(sessionId))
             .SendAsync("QuoteAgentThinkingStep", step, cancellationToken);
+    }
+
+    private static List<QuoteAgentThinkingStepDto> EnrichSteps(List<QuoteAgentThinkingStepDto>? steps)
+    {
+        if (steps is null or { Count: 0 })
+            return [];
+        foreach (var step in steps)
+            ThinkingStepSummarizer.Summarize(step);
+        return steps;
     }
 
     public async Task<UploadSketchResponse> UploadSketchAsync(

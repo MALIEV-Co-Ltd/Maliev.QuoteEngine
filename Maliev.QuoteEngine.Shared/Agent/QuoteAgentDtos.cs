@@ -334,6 +334,9 @@ public sealed class QuoteAgentThinkingStepDto
     /// <summary>Gets or sets the step detail.</summary>
     public string? Detail { get; set; }
 
+    /// <summary>Gets or sets a human-readable one-line summary synthesized by the BFF.</summary>
+    public string? Summary { get; set; }
+
     /// <summary>Gets or sets the step timestamp.</summary>
     public DateTimeOffset Timestamp { get; set; } = DateTimeOffset.UtcNow;
 

@@ -3423,6 +3423,9 @@
 
     private static string? ThinkingStepCompact(QuoteAgentThinkingStepDto step)
     {
+        if (!string.IsNullOrWhiteSpace(step.Summary))
+            return step.Summary;
+
         var detail = step.Detail;
         if (string.IsNullOrWhiteSpace(detail))
             return null;
