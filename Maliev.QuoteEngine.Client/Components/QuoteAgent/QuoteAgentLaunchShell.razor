@@ -2358,10 +2358,10 @@
         _dictating = false;
         StopDictationTimer();
         await InvokeAsync(StateHasChanged);
-        await SubmitDictatedMessageAsync(speechText);
+        await ApplyDictatedTextAsync(speechText);
     }
 
-    private async Task SubmitDictatedMessageAsync(string? speechToClean = null)
+    private async Task ApplyDictatedTextAsync(string? speechToClean = null)
     {
         var rawText = speechToClean ?? _draftMessage;
         var fullText = _draftMessage;

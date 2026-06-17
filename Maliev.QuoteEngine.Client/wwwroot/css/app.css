@@ -1640,6 +1640,10 @@
     overflow: hidden;
 }
 
+.qe-agent-main--empty .qe-agent-thread-wrap {
+    margin-top: auto;
+}
+
 .qe-agent-scroll-to-bottom {
     position: absolute;
     left: 50%;
@@ -3530,6 +3534,11 @@
     transition:
         background-color 120ms ease,
         color 120ms ease;
+}
+
+.qe-agent-composer .qe-agent-dictation-btn.active:hover {
+    background: color-mix(in srgb, var(--qe-agent-primary) 22%, var(--qe-agent-hover));
+    color: var(--qe-agent-primary);
 }
 
 .qe-agent-dictation-btn.processing {
