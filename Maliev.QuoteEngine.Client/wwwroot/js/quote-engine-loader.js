@@ -197,6 +197,10 @@
     }
   }
 
+  function markReady() {
+    maybeFinish();
+  }
+
   function markFailed(error) {
     console.error("MALIEV Make Studio startup failed", error);
     setStatus(currentStrings.status.failed);
