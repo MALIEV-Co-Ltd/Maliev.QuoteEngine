@@ -107,6 +107,11 @@ internal sealed class QuoteAgentService(
         MaterializeSupplementalAnalysis(state, request);
         MaterializePrototypeParts(state, request);
 
+        lock (state.SyncRoot)
+        {
+            state.PendingCustomerQuestion = null;
+        }
+
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments);
@@ -140,7 +145,9 @@ internal sealed class QuoteAgentService(
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
             ThinkingSteps = EnrichSteps(chatbotResponse?.ThinkingSteps),
             UiDirectives = currentState.UiDirectives,
-            UiCulture = pendingUiCulture
+            UiCulture = pendingUiCulture,
+            ProjectName = state.ProjectName,
+            CustomerQuestion = state.PendingCustomerQuestion
         };
     }
 
@@ -159,6 +166,11 @@ internal sealed class QuoteAgentService(
         sessionStore.AddAttachments(state, request.Attachments);
         MaterializeSupplementalAnalysis(state, request);
         MaterializePrototypeParts(state, request);
+
+        lock (state.SyncRoot)
+        {
+            state.PendingCustomerQuestion = null;
+        }
 
         ChatbotMessageResponse? finalMessage = null;
         var receivedDelta = false;
@@ -253,7 +265,8 @@ internal sealed class QuoteAgentService(
             ThinkingSteps = EnrichSteps(finalMessage?.ThinkingSteps),
             UiDirectives = currentState.UiDirectives,
             UiCulture = pendingUiCulture,
-            ProjectName = state.ProjectName
+            ProjectName = state.ProjectName,
+            CustomerQuestion = state.PendingCustomerQuestion
         };
 
         if (!receivedDelta)
@@ -423,6 +436,7 @@ internal sealed class QuoteAgentService(
             "quote_start_payment" => PreparePaymentActionOrGateError(state, request.Arguments),
             "quote_set_ui_language" => SetUiLanguage(state, request.Arguments),
             "quote_set_project_name" => SetProjectName(state, request.Arguments),
+            "quote_ask_customer" => AskCustomer(state, request.Arguments),
             _ => new { error = $"Unknown QuoteEngine tool: {toolName}" }
         };
         return Task.FromResult<object>(result);
@@ -3316,6 +3330,10 @@ internal sealed class QuoteAgentService(
         contextLines.Add(
             "Project naming: When calling quote_set_project_name, derive a short descriptive title from the part file name and inferred process/material " +
             "(e.g. 'Flower Oval – FDM PLA', 'L-Bracket – SLA Resin'). Never set the project name to the customer's literal question.");
+        contextLines.Add(
+            "Customer questions: Use quote_ask_customer ONLY when a decision is genuinely ambiguous with 2–4 discrete mutually exclusive options " +
+            "(e.g. process selection when the message contains no material hint). " +
+            "Do NOT use it for open-ended questions, inferable details, quantity, lead time, or any detail you can assume from context. At most once per turn.");
 
         return $"""
 {string.Join("\n", contextLines)}
@@ -3744,6 +3762,39 @@ Customer message:
                 ? "Project name cleared."
                 : $"Project name set to \"{name}\"."
         };
+    }
+
+    private static object AskCustomer(QuoteAgentSessionState state, IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var question = (ReadString(arguments, "question") ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(question))
+        {
+            return new { error = "question is required." };
+        }
+
+        if (question.Length > 300)
+        {
+            question = question[..300];
+        }
+
+        var options = ReadStringArray(arguments, "options");
+        if (options.Count < 2 || options.Count > 4)
+        {
+            return new { error = "options must contain 2 to 4 items." };
+        }
+
+        var dto = new QuoteAgentCustomerQuestionDto
+        {
+            Question = question,
+            Options = options.Select(o => o.Length > 120 ? o[..120] : o).ToList()
+        };
+
+        lock (state.SyncRoot)
+        {
+            state.PendingCustomerQuestion = dto;
+        }
+
+        return new { success = true };
     }
 
     private static object SetUiLanguage(QuoteAgentSessionState state, Dictionary<string, JsonElement> arguments)

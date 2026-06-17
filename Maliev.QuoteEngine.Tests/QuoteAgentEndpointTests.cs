@@ -2540,6 +2540,115 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains("FDM", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("Project naming:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("quote_set_project_name", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("quote_ask_customer", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Quote_ask_customer_sets_pending_question_on_session()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_ask_customer",
+            new Dictionary<string, JsonElement>
+            {
+                ["question"] = JsonSerializer.SerializeToElement("Which manufacturing process do you need?", JsonOptions),
+                ["options"] = JsonSerializer.SerializeToElement(new[] { "FDM (filament)", "SLA (resin)", "SLS (nylon)" }, JsonOptions)
+            });
+
+        using var document = JsonDocument.Parse(json);
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Quote_ask_customer_returns_error_for_too_few_options()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_ask_customer",
+            new Dictionary<string, JsonElement>
+            {
+                ["question"] = JsonSerializer.SerializeToElement("Which process?", JsonOptions),
+                ["options"] = JsonSerializer.SerializeToElement(new[] { "FDM" }, JsonOptions)
+            });
+
+        using var document = JsonDocument.Parse(json);
+        Assert.True(document.RootElement.TryGetProperty("error", out _));
+    }
+
+    [Fact]
+    public async Task Quote_ask_customer_returns_error_for_too_many_options()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_ask_customer",
+            new Dictionary<string, JsonElement>
+            {
+                ["question"] = JsonSerializer.SerializeToElement("Which process?", JsonOptions),
+                ["options"] = JsonSerializer.SerializeToElement(new[] { "FDM", "SLA", "SLS", "CNC", "Sheet Metal" }, JsonOptions)
+            });
+
+        using var document = JsonDocument.Parse(json);
+        Assert.True(document.RootElement.TryGetProperty("error", out _));
+    }
+
+    [Fact]
+    public async Task Quote_ask_customer_appears_in_stream_response_and_clears_on_next_message()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        // First turn: inject a question into state via tool endpoint
+        var firstResponse = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "I need a part manufactured but not sure which process.",
+            Language = "en"
+        }, JsonOptions);
+        firstResponse.EnsureSuccessStatusCode();
+        var firstBody = await firstResponse.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+        Assert.NotNull(firstBody);
+        var sessionId = firstBody.SessionId;
+
+        await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_ask_customer",
+            new Dictionary<string, JsonElement>
+            {
+                ["question"] = JsonSerializer.SerializeToElement("Which process suits your part?", JsonOptions),
+                ["options"] = JsonSerializer.SerializeToElement(new[] { "FDM (plastic)", "CNC (metal)" }, JsonOptions)
+            });
+
+        // Second turn: question should be cleared from state (PendingCustomerQuestion cleared at turn start)
+        var secondResponse = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "FDM please.",
+            Language = "en"
+        }, JsonOptions);
+        secondResponse.EnsureSuccessStatusCode();
+        var secondBody = await secondResponse.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+        Assert.NotNull(secondBody);
+        Assert.Null(secondBody.CustomerQuestion);
     }
 
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)

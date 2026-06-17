@@ -155,6 +155,21 @@ public sealed class QuoteAgentTurnResponse
     /// <summary>Gets or sets the project name set by the agent via quote_set_project_name tool.</summary>
     [StringLength(120)]
     public string? ProjectName { get; set; }
+
+    /// <summary>Gets or sets a focused question with answer options presented to the customer by the agent.</summary>
+    public QuoteAgentCustomerQuestionDto? CustomerQuestion { get; set; }
+}
+
+/// <summary>
+/// A focused clarifying question with discrete answer options presented to the customer by the agent.
+/// </summary>
+public sealed class QuoteAgentCustomerQuestionDto
+{
+    /// <summary>Gets or sets the question text.</summary>
+    public string Question { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the 2–4 discrete answer options.</summary>
+    public List<string> Options { get; set; } = [];
 }
 
 /// <summary>

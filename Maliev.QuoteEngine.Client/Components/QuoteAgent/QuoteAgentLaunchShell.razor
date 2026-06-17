@@ -843,6 +843,23 @@
             </section>
         }
 
+        @if (_customerQuestion is not null && !_sending)
+        {
+            <section class="qe-agent-question" aria-label="@Text("Question from agent", "คำถามจากผู้ช่วย")">
+                <p class="qe-agent-question-text">@_customerQuestion.Question</p>
+                <div class="qe-agent-question-options" role="group" aria-label="@Text("Answer options", "ตัวเลือกคำตอบ")">
+                    @foreach (var option in _customerQuestion.Options)
+                    {
+                        <button type="button"
+                                class="qe-agent-question-option"
+                                @onclick="@(() => SubmitQuestionOptionAsync(option))">
+                            @option
+                        </button>
+                    }
+                </div>
+            </section>
+        }
+
         <section class="@ComposerWrapClass" aria-label="@Text("Message composer", "กล่องข้อความ")">
             <form class="@ComposerClass" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
                 @if (_composerMenuOpen)
@@ -1587,6 +1604,7 @@
     private WorkspacePage _activeWorkspacePage = WorkspacePage.Chat;
     private string _projectName = string.Empty;
     private bool _projectNameUserSet;
+    private QuoteAgentCustomerQuestionDto? _customerQuestion;
     private string _searchQuery = string.Empty;
     private string _animatedSearchPrompt = string.Empty;
     private string? _highlightConnectorId;
@@ -2126,6 +2144,7 @@
         _error = null;
         _composerMenuOpen = false;
         _draftMessage = string.Empty;
+        _customerQuestion = null;
         _pendingComposerAttachments.Clear();
         EnsureLocalProjectFromMessage(message);
         _messages.Add(new AgentMessageRow("user", message, attachments: pendingAttachments));
@@ -2169,6 +2188,7 @@
                         await Preferences.SetCultureAsync(streamEvent.Response.UiCulture);
                     }
                     ApplyAgentProjectName(streamEvent.Response.ProjectName);
+                    _customerQuestion = streamEvent.Response.CustomerQuestion;
                     RequestScrollToLatestMessage();
                     await InvokeAsync(StateHasChanged);
                 }
@@ -3733,6 +3753,12 @@
     private void ApplyWorkbenchPrompt(string prompt)
     {
         _draftMessage = prompt;
+    }
+
+    private Task SubmitQuestionOptionAsync(string option)
+    {
+        _draftMessage = option;
+        return HandleSubmitAsync();
     }
 
     private bool TryBuildLocalDemoTurn(string message, out LocalDemoTurn turn)

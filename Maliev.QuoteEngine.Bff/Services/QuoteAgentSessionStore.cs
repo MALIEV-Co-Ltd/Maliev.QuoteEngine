@@ -416,6 +416,8 @@ internal sealed class QuoteAgentSessionState
 
     public string? ProjectName { get; set; }
 
+    public QuoteAgentCustomerQuestionDto? PendingCustomerQuestion { get; set; }
+
     public Guid? CheckoutBillingAddressId { get; set; }
 
     public Guid? CheckoutShippingAddressId { get; set; }

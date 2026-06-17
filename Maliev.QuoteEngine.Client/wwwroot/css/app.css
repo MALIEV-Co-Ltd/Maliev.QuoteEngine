@@ -1382,9 +1382,9 @@
 
 .qe-agent-signin-card li {
     display: grid;
-    grid-template-columns: 14px minmax(0, 1fr);
+    grid-template-columns: 16px minmax(0, 1fr);
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-size: 12px;
     color: var(--qe-agent-muted);
 }
@@ -1435,10 +1435,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 4px;
+    gap: 8px;
     margin: 0;
     font-size: 11px;
     color: var(--qe-agent-muted);
+}
+
+.qe-agent-signin-secure .mud-icon-size-small {
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
 }
 
 
@@ -13500,4 +13506,49 @@ button.qe-dfm-overlay-header {
         flex-direction: column;
         justify-content: center;
     }
+}
+
+/* ── Customer question card ─────────────────────────────────────────────────── */
+.qe-agent-question {
+    padding: 0.625rem 1rem 0.75rem;
+    border-top: 1px solid var(--qe-agent-line);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.qe-agent-question-text {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--qe-agent-muted);
+    margin: 0;
+    line-height: 1.4;
+}
+
+.qe-agent-question-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem;
+}
+
+.qe-agent-question-option {
+    padding: 0.3125rem 0.75rem;
+    border-radius: 1.25rem;
+    border: 1px solid var(--qe-agent-line);
+    background: transparent;
+    color: var(--qe-agent-ink);
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.qe-agent-question-option:hover {
+    background: var(--qe-agent-soft);
+    border-color: var(--qe-agent-muted);
+}
+
+.qe-agent-question-option:focus-visible {
+    outline: 2px solid var(--qe-agent-ink);
+    outline-offset: 2px;
 }
