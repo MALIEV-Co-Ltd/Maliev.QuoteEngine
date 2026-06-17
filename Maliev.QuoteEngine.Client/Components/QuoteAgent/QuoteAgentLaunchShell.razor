@@ -58,9 +58,9 @@
                      @onpointerenter="SuppressSearchPromptOnHover"
                      @onpointerleave="ResumeSearchPromptAfterHover">
                     <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
-                    @if (ShowAnimatedSearchPrompt)
+                    @if (ShowSearchPrompt)
                     {
-                        <span class="qe-agent-search-prompt" aria-hidden="true">@_animatedSearchPrompt</span>
+                        <span class="qe-agent-search-prompt" aria-hidden="true">@SearchPromptDisplayText</span>
                     }
                     <input id="qe-agent-search-input"
                            @ref="_searchInput"
@@ -495,23 +495,20 @@
                                             @foreach (var step in message.ThinkingSteps.OrderBy(step => step.StepNumber))
                                             {
                                                 var stepTitle = ThinkingStepTitle(step);
-                                                var stepMarkup = ThinkingStepDetailMarkup(step);
-                                                @if (stepMarkup.Value.Length > 0 || (!string.IsNullOrWhiteSpace(stepTitle) && string.IsNullOrWhiteSpace(step.Detail)))
+                                                var stepCompact = ThinkingStepCompact(step);
+                                                @if (!string.IsNullOrWhiteSpace(stepTitle))
                                                 {
                                                     <div class="qe-agent-thinking-step">
-                                                        @if (!string.IsNullOrWhiteSpace(stepTitle))
+                                                        <div class="qe-agent-thinking-step-header">
+                                                            <span class="qe-agent-thinking-step-title">@stepTitle</span>
+                                                            @if (step.DurationMs is > 0)
+                                                            {
+                                                                <small>@FormatDuration(step.DurationMs.Value)</small>
+                                                            }
+                                                        </div>
+                                                        @if (!string.IsNullOrWhiteSpace(stepCompact))
                                                         {
-                                                            <div class="qe-agent-thinking-step-header">
-                                                                <span class="qe-agent-thinking-step-title">@stepTitle</span>
-                                                                @if (step.DurationMs is > 0)
-                                                                {
-                                                                    <small>@FormatDuration(step.DurationMs.Value)</small>
-                                                                }
-                                                            </div>
-                                                        }
-                                                        @if (stepMarkup.Value.Length > 0)
-                                                        {
-                                                            <div class="qe-agent-markdown">@stepMarkup</div>
+                                                            <p class="qe-agent-thinking-step-compact">@stepCompact</p>
                                                         }
                                                     </div>
                                                 }
@@ -1833,9 +1830,14 @@
     private bool SearchHasMinimumQuery => _searchQuery.Trim().Length >= SearchMinimumCharacters;
     private bool CanAnimateSearchPrompt => string.IsNullOrEmpty(_searchQuery) && !_searchPromptHovered && !_searchPromptFocused;
     private bool ShowAnimatedSearchPrompt => CanAnimateSearchPrompt && !string.IsNullOrWhiteSpace(_animatedSearchPrompt);
-    private string SearchInputPlaceholder => CanAnimateSearchPrompt
-        ? string.Empty
-        : Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...");
+    private bool ShowSearchPrompt => string.IsNullOrEmpty(_searchQuery) && !_searchPromptFocused &&
+        (_searchPromptHovered || !string.IsNullOrWhiteSpace(_animatedSearchPrompt));
+    private string SearchPromptDisplayText => _searchPromptHovered
+        ? Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...")
+        : _animatedSearchPrompt;
+    private string SearchInputPlaceholder => _searchPromptFocused
+        ? Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...")
+        : string.Empty;
 
     private bool IsWorkspacePage(WorkspacePage page)
     {
@@ -3419,11 +3421,11 @@
         return HumanizeAgentActivity(title);
     }
 
-    private static MarkupString ThinkingStepDetailMarkup(QuoteAgentThinkingStepDto step)
+    private static string? ThinkingStepCompact(QuoteAgentThinkingStepDto step)
     {
         var detail = step.Detail;
         if (string.IsNullOrWhiteSpace(detail))
-            return new MarkupString(string.Empty);
+            return null;
 
         string? jsonStr = null;
         var isJsonLike = false;
@@ -3447,23 +3449,15 @@
             try
             {
                 using var doc = JsonDocument.Parse(NormalizeJsonLiterals(jsonStr));
-                var bullets = FormatJsonAsBullets(doc.RootElement);
-                // Return empty when the JSON structure produces no human-readable bullets
-                // (e.g. tool results whose values are nested object arrays) to avoid
-                // rendering a meaningless empty step.
-                if (string.IsNullOrWhiteSpace(bullets))
-                    return new MarkupString(string.Empty);
-                return QuoteAgentMarkdownRenderer.Render(bullets);
+                return FormatJsonAsInline(doc.RootElement);
             }
             catch (JsonException) { }
         }
 
-        // If the detail looked like JSON but failed to parse (e.g. truncated or
-        // escaped differently), suppress it rather than leaking raw JSON to the UI.
         if (isJsonLike)
-            return new MarkupString(string.Empty);
+            return null;
 
-        return QuoteAgentMarkdownRenderer.Render(HumanizeAgentActivity(detail));
+        return HumanizeAgentActivity(detail);
     }
 
     private static string NormalizeJsonLiterals(string json)
@@ -3481,25 +3475,23 @@
         "fileSizeBytes", "kind", "messageId", "attachments"
     };
 
-    private static string FormatJsonAsBullets(JsonElement element)
+    private static string? FormatJsonAsInline(JsonElement element)
     {
         if (element.ValueKind != JsonValueKind.Object)
-            return string.Empty;
+            return null;
 
-        var result = string.Empty;
+        var values = new List<string>();
         foreach (var prop in element.EnumerateObject())
         {
             if (SkippedJsonKeys.Contains(prop.Name))
                 continue;
 
             var value = FormatJsonValue(prop.Value);
-            if (value is null)
-                continue;
-
-            result += $"- **{HumanizeCamelCase(prop.Name)}**: {value}\n";
+            if (value is not null)
+                values.Add(value);
         }
 
-        return result;
+        return values.Count > 0 ? string.Join(" · ", values) : null;
     }
 
     private static string? FormatJsonValue(JsonElement element)
@@ -3527,19 +3519,6 @@
         }
 
         return items.Count > 0 ? string.Join(", ", items) : null;
-    }
-
-    private static string HumanizeCamelCase(string key)
-    {
-        var spaced = string.Empty;
-        for (var i = 0; i < key.Length; i++)
-        {
-            if (i > 0 && char.IsUpper(key[i]))
-                spaced += ' ';
-            spaced += key[i];
-        }
-
-        return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(spaced.Trim().ToLowerInvariant());
     }
 
     private static string HumanizeAgentActivity(string value)
@@ -4032,7 +4011,6 @@
     private void SuppressSearchPromptOnHover()
     {
         _searchPromptHovered = true;
-        ClearAnimatedSearchPrompt();
     }
 
     private void ResumeSearchPromptAfterHover()

@@ -872,6 +872,7 @@
     color: var(--qe-agent-ink);
     font: inherit;
     font-size: 14px;
+    letter-spacing: inherit;
     appearance: none;
     box-shadow: none !important;
 }
@@ -879,17 +880,21 @@
 .qe-agent-search-prompt {
     position: absolute;
     inset-block: 0;
-    inset-inline: 40px 26px;
+    inset-inline: 40px 10px;
     z-index: 1;
     display: block;
     overflow: hidden;
     color: var(--qe-agent-muted);
+    font-family: inherit;
     font-size: 14px;
+    font-weight: inherit;
+    letter-spacing: inherit;
     line-height: 36px;
     text-align: left;
     white-space: nowrap;
     pointer-events: none;
     user-select: none;
+    transition: opacity 160ms ease;
 }
 
 .qe-agent-search-prompt::after {
@@ -903,7 +908,6 @@
     animation: qe-agent-search-caret 1s steps(1, end) infinite;
 }
 
-.qe-agent-global-search:hover .qe-agent-search-prompt,
 .qe-agent-global-search:focus-within .qe-agent-search-prompt {
     display: none;
 }
@@ -2401,6 +2405,12 @@
     color: var(--qe-agent-muted);
     font-size: 12px;
     font-weight: 600;
+}
+
+.qe-agent-thinking-step-compact {
+    margin: 2px 0 0;
+    color: color-mix(in srgb, var(--qe-agent-muted) 65%, transparent);
+    font-size: 11px;
 }
 
 .qe-agent-thinking-step-header small {
