@@ -786,17 +786,6 @@
                 @onclick="ScrollToLatestMessageAsync">
             <MudIcon Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Small" />
         </button>
-        @if (_messages.Count > 0)
-        {
-            <button type="button"
-                    class="qe-agent-pdf-export"
-                    disabled="@_exportingPdf"
-                    title="@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")"
-                    aria-label="@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")"
-                    @onclick="ExportChatPdfAsync">
-                <MudIcon Icon="@Icons.Material.Outlined.PictureAsPdf" Size="Size.Small" />
-            </button>
-        }
         </div>
 
         @if (!string.IsNullOrWhiteSpace(_error))
@@ -1022,50 +1011,40 @@
                                 <MudIcon Icon="@Icons.Material.Outlined.Draw" />
                                 <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
                             </button>
-                        </div>
-                    }
-                </div>
-                <div class="qe-agent-plugins-wrapper">
-                    <button type="button"
-                            class="qe-agent-plugins-btn"
-                            @onclick="TogglePluginsMenu"
-                            aria-label="@Text("Plugins", "ปลั๊กอิน")"
-                            title="@Text("Plugins", "ปลั๊กอิน")"
-                            aria-expanded="@_pluginsMenuOpen">
-                        <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
-                        <span>@Text("Plugins", "ปลั๊กอิน")</span>
-                    </button>
-                    @if (_pluginsMenuOpen)
-                    {
-                        <div class="qe-agent-plugins-menu" role="menu" aria-label="@Text("Plugins", "ปลั๊กอิน")">
-                            @if (_connectors.Count == 0)
+                            @if (_connectors.Count > 0)
                             {
-                                <div class="qe-agent-plugins-menu-empty">
-                                    <small>@Text("No connectors available", "ไม่มีตัวเชื่อมต่อ")</small>
-                                </div>
+                                <hr class="qe-agent-quick-actions-separator" />
+                                @foreach (var connector in _connectors)
+                                {
+                                    <button type="button" role="menuitem" @onclick="@(() => ApplyConnectorFromPluginsAsync(connector))">
+                                        <span class="qe-agent-plugin-menu-icon" aria-hidden="true">
+                                            @if (IsGoogleDriveConnector(connector))
+                                            {
+                                                <svg viewBox="0 0 24 24" focusable="false">
+                                                    <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                                    <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                                    <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                                                </svg>
+                                            }
+                                            else
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
+                                            }
+                                        </span>
+                                        <span class="qe-agent-plugin-menu-text">
+                                            <strong>@connector.DisplayName</strong>
+                                            <small>@connector.Description</small>
+                                        </span>
+                                        <span class="qe-agent-plugin-menu-status">@ConnectorStatus(connector)</span>
+                                    </button>
+                                }
                             }
-                            @foreach (var connector in _connectors)
+                            @if (_messages.Count > 0)
                             {
-                                <button type="button" role="menuitem" @onclick="@(() => ApplyConnectorFromPluginsAsync(connector))">
-                                    <span class="qe-agent-plugin-menu-icon" aria-hidden="true">
-                                        @if (IsGoogleDriveConnector(connector))
-                                        {
-                                            <svg viewBox="0 0 24 24" focusable="false">
-                                                <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
-                                                <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
-                                                <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
-                                            </svg>
-                                        }
-                                        else
-                                        {
-                                            <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
-                                        }
-                                    </span>
-                                    <span class="qe-agent-plugin-menu-text">
-                                        <strong>@connector.DisplayName</strong>
-                                        <small>@connector.Description</small>
-                                    </span>
-                                    <span class="qe-agent-plugin-menu-status">@ConnectorStatus(connector)</span>
+                                <hr class="qe-agent-quick-actions-separator" />
+                                <button type="button" role="menuitem" @onclick="ExportChatPdfAsync" disabled="@_exportingPdf">
+                                    <MudIcon Icon="@Icons.Material.Outlined.PictureAsPdf" />
+                                    <span>@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")</span>
                                 </button>
                             }
                         </div>
@@ -1340,12 +1319,10 @@
                     <section class="qe-agent-artifact-section" aria-label="@Text("Uploaded files", "ไฟล์ที่อัปโหลด")">
                         <header>@Text("Uploaded files", "ไฟล์ที่อัปโหลด")</header>
                         <div class="qe-agent-artifacts">
-                            @for (var i = 0; i < UploadedParts.Count; i++)
+                            @foreach (var (index, part) in UniqueUploadedPartsWithIndex)
                             {
-                                var index = i;
-                                var part = UploadedParts[i];
                                 <button type="button"
-                                        class="@($"qe-agent-artifact qe-agent-artifact--button {(i == SelectedPartIndex ? "active" : string.Empty)} {UiFocusClass(PartFocusKey(part.PartId), UploadedPartFocusKey(part))}")"
+                                        class="@($"qe-agent-artifact qe-agent-artifact--button {(index == SelectedPartIndex ? "active" : string.Empty)} {UiFocusClass(PartFocusKey(part.PartId), UploadedPartFocusKey(part))}")"
                                         @onclick="@(() => SelectUploadedPartAsync(index))"
                                         @ondblclick="@(() => OpenUploadedPreviewAsync(index))">
                                     @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
@@ -1368,6 +1345,33 @@
                             }
                         </div>
                     </section>
+                    @if (MessageSketches.Count > 0)
+                    {
+                        <section class="qe-agent-artifact-section" aria-label="@Text("Sketches", "สเก็ตช์")">
+                            <header>@Text("Sketches", "สเก็ตช์")</header>
+                            <div class="qe-agent-artifacts">
+                                @foreach (var sketch in MessageSketches)
+                                {
+                                    <button type="button"
+                                            class="qe-agent-artifact qe-agent-artifact--button"
+                                            @onclick="@(() => OpenSketchPreview(sketch))">
+                                        @if (!string.IsNullOrWhiteSpace(sketch.PreviewUrl))
+                                        {
+                                            <img class="qe-agent-artifact-thumb" src="@sketch.PreviewUrl" alt="" loading="lazy" />
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
+                                        }
+                                        <div>
+                                            <strong>@sketch.FileName</strong>
+                                            <small>@AttachmentStatusLabel(sketch)</small>
+                                        </div>
+                                    </button>
+                                }
+                            </div>
+                        </section>
+                    }
                 }
                 <div class="qe-agent-artifacts">
                     @foreach (var artifact in _artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact))
@@ -1579,7 +1583,6 @@
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
     private bool _quickActionsMenuOpen;
-    private bool _pluginsMenuOpen;
     private bool _sketchOpen;
     private bool _sketchInitPending;
     private bool _searchOpen;
@@ -1801,7 +1804,31 @@
         : "en-US,th-TH";
 
     private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
-    private int ArtifactCount => _artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact) + UploadedParts.Count;
+    private int ArtifactCount => _artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact) + UploadedParts.Count + MessageSketches.Count;
+
+    private IReadOnlyList<(int OriginalIndex, QuotePartViewModel Part)> UniqueUploadedPartsWithIndex
+    {
+        get
+        {
+            var seen = new HashSet<Guid>();
+            var result = new List<(int, QuotePartViewModel)>();
+            for (var i = 0; i < UploadedParts.Count; i++)
+            {
+                if (seen.Add(UploadedParts[i].PartId))
+                {
+                    result.Add((i, UploadedParts[i]));
+                }
+            }
+            return result;
+        }
+    }
+
+    private IReadOnlyList<ComposerAttachmentPreview> MessageSketches =>
+        _messages
+            .Where(m => m.Role.Equals("user", StringComparison.OrdinalIgnoreCase))
+            .SelectMany(m => m.Attachments)
+            .Where(a => a.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase))
+            .ToList();
     private QuotePartViewModel SelectedUploadedPart => UploadedParts[Math.Clamp(SelectedPartIndex, 0, Math.Max(UploadedParts.Count - 1, 0))];
     private IReadOnlyList<PreviewItem> PreviewItems => BuildPreviewItems();
     private PreviewItem? CurrentPreviewItem => PreviewItems.Count == 0
@@ -2698,6 +2725,19 @@
         _previewDialogOpen = CurrentPreviewItem is not null;
     }
 
+    private void OpenSketchPreview(ComposerAttachmentPreview sketch)
+    {
+        var previewUrl = sketch.PreviewUrl ?? string.Empty;
+        var previewIndex = PreviewItems.ToList().FindIndex(item =>
+            item.Source.Equals("sketch", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Url, previewUrl, StringComparison.Ordinal));
+        if (previewIndex >= 0)
+        {
+            _previewIndex = previewIndex;
+            _previewDialogOpen = true;
+        }
+    }
+
     private void SelectArtifact(QuoteAgentArtifactDto artifact)
     {
         _selectedArtifact = _selectedArtifact?.ArtifactId == artifact.ArtifactId ? null : artifact;
@@ -2746,6 +2786,18 @@
                 artifact.Url!,
                 ArtifactKindLabel(artifact),
                 ArtifactIcon(artifact.ArtifactType)));
+        }
+
+        foreach (var sketch in MessageSketches)
+        {
+            items.Add(new PreviewItem(
+                "sketch",
+                -1,
+                sketch.FileName,
+                sketch.Status,
+                sketch.PreviewUrl ?? string.Empty,
+                Text("Sketch", "สเก็ตช์"),
+                Icons.Material.Outlined.Draw));
         }
 
         return items;
@@ -3251,18 +3303,11 @@
     private void ToggleQuickActionsMenu()
     {
         _quickActionsMenuOpen = !_quickActionsMenuOpen;
-        if (_quickActionsMenuOpen) _pluginsMenuOpen = false;
-    }
-
-    private void TogglePluginsMenu()
-    {
-        _pluginsMenuOpen = !_pluginsMenuOpen;
-        if (_pluginsMenuOpen) _quickActionsMenuOpen = false;
     }
 
     private async Task ApplyConnectorFromPluginsAsync(QuoteAgentConnectorDto connector)
     {
-        _pluginsMenuOpen = false;
+        _quickActionsMenuOpen = false;
         _highlightConnectorId = connector.ConnectorId;
         await ApplyConnectorAsync(connector);
     }
@@ -3727,6 +3772,10 @@
 
     private static bool IsImagePreview(PreviewItem item)
     {
+        if (item.Url.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
         var extension = Path.GetExtension(item.Url).TrimStart('.');
         return QuoteUploadConstraints.SupplementalImageExtensions.Any(value =>
             value.Equals(extension, StringComparison.OrdinalIgnoreCase));
