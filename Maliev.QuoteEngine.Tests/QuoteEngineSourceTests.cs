@@ -1831,9 +1831,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("href=\"/preferences\"", layout, StringComparison.Ordinal);
         Assert.Contains("ToggleThemeAsync", layout, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"@Text(\"Toggle light or dark mode\"", layout, StringComparison.Ordinal);
-        Assert.Contains("<CascadingValue Value=\"OpenAssistantCallback\" Name=\"OpenAssistant\">", layout, StringComparison.Ordinal);
-        Assert.Contains("private Func<Task> OpenAssistantCallback => OpenAssistantDrawerAsync;", layout, StringComparison.Ordinal);
-        Assert.Contains("private Task OpenAssistantDrawerAsync()", layout, StringComparison.Ordinal);
+        Assert.Contains("<CascadingValue Value=\"new Func<Task>(() => Task.CompletedTask)\" Name=\"OpenAssistant\">", layout, StringComparison.Ordinal);
         Assert.Contains("Class=\"quote-currency-autocomplete\"", layout, StringComparison.Ordinal);
         Assert.Contains("PersistCurrencyAsync", layout, StringComparison.Ordinal);
         Assert.Contains("<CascadingValue Value=\"_isDarkMode\" Name=\"IsDarkMode\">", layout, StringComparison.Ordinal);
@@ -2302,25 +2300,6 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-pn-mobile-toolbar", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-pn-parts-drawer", styles, StringComparison.Ordinal);
         Assert.Contains("@media (max-width: 1200px)", styles, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void Customer_assistant_drawer_is_integrated_into_quote_layout()
-    {
-        var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");
-        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
-        var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
-        var authComplete = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "AuthChatbotComplete.razor");
-
-        Assert.Contains("topbar-chat-toggle", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"topbar-chat-icon\"", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("Icon=\"@Icons.Material.Outlined.Chat\"", layout, StringComparison.Ordinal);
-        Assert.Contains("quote-chat-backdrop", layout, StringComparison.Ordinal);
-        Assert.Contains("role=\"dialog\"", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("MudDrawer", layout, StringComparison.Ordinal);
-        Assert.Contains("chatbot-open", styles, StringComparison.Ordinal);
-        Assert.Contains("js/maliev-chatbot.js", index, StringComparison.Ordinal);
-        Assert.Contains("@page \"/auth/chatbot-complete\"", authComplete, StringComparison.Ordinal);
     }
 
     [Fact]

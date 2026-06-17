@@ -74,20 +74,7 @@
                     </ItemTemplate>
                 </MudAutocomplete>
             }
-            @if (!IsQuoteWorkspace)
-            {
-                <button type="button"
-                        class="topbar-chat-toggle"
-                        title="@Text("MALIEV assistant", "ผู้ช่วย MALIEV")"
-                        aria-label="@Text("Open MALIEV assistant", "เปิดผู้ช่วย MALIEV")"
-                        @onclick="ToggleChatDrawerAsync">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" class="topbar-chat-icon">
-                        <path d="M5 13a7 7 0 0 1 14 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
-                        <path d="M4 13h3v5H5a1 1 0 0 1-1-1v-4Zm13 0h3v4a1 1 0 0 1-1 1h-2v-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"></path>
-                        <path d="M17 18c-.8 1.4-2.2 2-4 2h-1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"></path>
-                    </svg>
-                </button>
-            }
+
             @if (_authStatus.IsSignedIn)
             {
                 <details class="billing-account-menu">
@@ -141,19 +128,11 @@
         </div>
     </header>
 
-    @if (_chatDrawerOpen)
-    {
-        <button type="button" class="quote-chat-backdrop" aria-label="@Text("Close assistant", "ปิดผู้ช่วย")" @onclick="CloseChatDrawerAsync"></button>
-        <aside class="quote-chat-drawer customer-chatbot" role="dialog" aria-modal="true" aria-label="@Text("MALIEV customer assistant", "ผู้ช่วยลูกค้า MALIEV")">
-            <CustomerAssistantDrawer OnClose="CloseChatDrawerAsync" />
-        </aside>
-    }
-
     <main class="@WorkspaceClass">
         <CascadingValue Value="_isDarkMode" Name="IsDarkMode">
             <CascadingValue Value="_selectedCulture" Name="Culture">
                 <CascadingValue Value="_authStatus.IsSignedIn" Name="IsSignedIn">
-                <CascadingValue Value="OpenAssistantCallback" Name="OpenAssistant">
+                <CascadingValue Value="new Func<Task>(() => Task.CompletedTask)" Name="OpenAssistant">
                     @if (IsQuoteWorkspace)
                     {
                         <div class="quote-workspace-host">
@@ -265,7 +244,6 @@
     private bool IsQuoteWorkspace => IsQuoteWorkspacePath(new Uri(Navigation.Uri).AbsolutePath);
     private bool IsHomePage => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Length == 0 && !IsQuoteWorkspace;
     private string WorkspaceClass => IsQuoteWorkspace ? "workspace workspace--quote" : "workspace";
-    private bool _chatDrawerOpen;
     private bool _isDarkMode;
     private List<CurrencyOptionDto> _currencyOptions = [FallbackCurrency];
     private string _selectedCurrency = "THB";
@@ -275,7 +253,7 @@
     private CustomerProfileResponse? _profile;
     private string _selectedBillingAccountId = "personal";
     private string AppShellClass =>
-        $"app-shell{(_chatDrawerOpen ? " chatbot-open" : "")}{(IsHomePage ? " is-home" : "")}{(IsQuoteWorkspace ? " is-quote-workspace" : "")}";
+        $"app-shell{(IsHomePage ? " is-home" : "")}{(IsQuoteWorkspace ? " is-quote-workspace" : "")}";
     private bool HasCompanyBillingAccount => !string.IsNullOrWhiteSpace(_profile?.CompanyName);
     private string PersonalBillingName => _profile?.DisplayName ?? _authStatus.DisplayName ?? Text("Customer account", "บัญชีลูกค้า");
     private string BillingAccountTitle => _selectedBillingAccountId == "company" && HasCompanyBillingAccount
@@ -286,7 +264,6 @@
         : Text("Private order", "คำสั่งซื้อส่วนตัว");
     private string ThemeToggleIcon => _isDarkMode ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode;
     private string ThemeToggleTitle => _isDarkMode ? Text("Use light mode", "ใช้โหมดสว่าง") : Text("Use dark mode", "ใช้โหมดมืด");
-    private Func<Task> OpenAssistantCallback => OpenAssistantDrawerAsync;
     private string AvatarInitials => GetInitials(_profile?.DisplayName ?? _authStatus.DisplayName ?? "Customer");
     private MarkupString CustomerAvatarMarkup => !string.IsNullOrWhiteSpace(_profile?.ProfileImageUrl)
         ? new MarkupString($"<img class=\"customer-avatar customer-avatar--image\" src=\"{System.Net.WebUtility.HtmlEncode(_profile.ProfileImageUrl)}\" alt=\"\" />")
@@ -526,28 +503,6 @@
         _isDarkMode = Preferences.IsDarkMode;
         _selectedCulture = Preferences.Culture;
         _ = InvokeAsync(StateHasChanged);
-    }
-
-    private Task ToggleChatDrawerAsync()
-    {
-        return SetChatDrawerOpenAsync(!_chatDrawerOpen);
-    }
-
-    private Task OpenAssistantDrawerAsync()
-    {
-        return SetChatDrawerOpenAsync(true);
-    }
-
-    private Task CloseChatDrawerAsync()
-    {
-        return SetChatDrawerOpenAsync(false);
-    }
-
-    private Task SetChatDrawerOpenAsync(bool open)
-    {
-        _chatDrawerOpen = open;
-        StateHasChanged();
-        return Task.CompletedTask;
     }
 
     public void Dispose()

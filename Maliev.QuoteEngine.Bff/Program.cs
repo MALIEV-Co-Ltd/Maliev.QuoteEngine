@@ -67,7 +67,6 @@ builder.Services.AddScoped<CustomerSessionResolver>();
 builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
 builder.Services.AddScoped<QuoteUploadHandoffToken>();
 builder.Services.AddScoped<QuoteAgentContextToken>();
-builder.Services.AddScoped<ICustomerChatbotService, CustomerChatbotService>();
 builder.Services.AddSingleton<QuoteAgentSessionStore>();
 builder.Services.AddSingleton<IGoogleDriveConnectorStore>(sp =>
 {

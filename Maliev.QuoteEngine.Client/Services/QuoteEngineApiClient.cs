@@ -266,22 +266,6 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             ?? throw new InvalidOperationException("The QuoteEngine API returned an empty document download response.");
     }
 
-    public Task<CustomerChatbotResponse> SendChatbotMessageAsync(CustomerChatbotRequest request, CancellationToken cancellationToken = default)
-    {
-        return PostAsync<CustomerChatbotRequest, CustomerChatbotResponse>("quote/v1/chatbot/messages", request, cancellationToken);
-    }
-
-    public Task<CustomerChatbotHydrateResponse> HydrateChatbotAsync(CustomerChatbotHydrateRequest request, CancellationToken cancellationToken = default)
-    {
-        return PostAsync<CustomerChatbotHydrateRequest, CustomerChatbotHydrateResponse>("quote/v1/chatbot/hydrate", request, cancellationToken);
-    }
-
-    public async Task<CustomerChatbotSessionResponse> GetChatbotSessionAsync(CancellationToken cancellationToken = default)
-    {
-        return await httpClient.GetFromJsonAsync<CustomerChatbotSessionResponse>("quote/v1/chatbot/session", cancellationToken)
-            ?? new CustomerChatbotSessionResponse();
-    }
-
     public Task<QuoteAgentTurnResponse> SendAgentMessageAsync(QuoteAgentMessageRequest request, CancellationToken cancellationToken = default)
     {
         return PostAsync<QuoteAgentMessageRequest, QuoteAgentTurnResponse>("quote/v1/agent/messages", request, cancellationToken);

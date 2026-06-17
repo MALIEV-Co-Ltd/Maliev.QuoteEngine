@@ -3046,56 +3046,6 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.StartsWith("https://pay.test.example.com/hosted/", payment.PaymentUrl);
     }
 
-    [Fact]
-    public async Task Chatbot_message_routes_through_quote_boundary()
-    {
-        using var chatbotFactory = CreateChatbotFactory();
-        using var client = chatbotFactory.CreateClient();
-
-        var response = await client.PostAsJsonAsync("/quote/v1/chatbot/messages", new CustomerChatbotRequest
-        {
-            Message = "Can you help with CNC aluminum fixtures?",
-            Language = "en"
-        });
-        var body = await response.Content.ReadFromJsonAsync<CustomerChatbotResponse>();
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.NotNull(body);
-        Assert.Equal("assistant", body.Role);
-        Assert.NotEqual(Guid.Empty, body.SessionId);
-    }
-
-    [Fact]
-    public async Task Chatbot_session_endpoint_reports_quote_auth_state()
-    {
-        using var client = await CreateSignedInClientAsync("quote-chat@example.com");
-
-        var session = await client.GetFromJsonAsync<CustomerChatbotSessionResponse>("/quote/v1/chatbot/session");
-
-        Assert.NotNull(session);
-        Assert.True(session.IsAuthenticated);
-        Assert.Equal("quote-chat@example.com", session.Email);
-        Assert.NotNull(session.CustomerId);
-    }
-
-    [Fact]
-    public async Task Chatbot_hydrate_validates_shared_session_request()
-    {
-        using var client = factory.CreateClient();
-        var knownSessionId = Guid.NewGuid();
-
-        var response = await client.PostAsJsonAsync("/quote/v1/chatbot/hydrate", new CustomerChatbotHydrateRequest
-        {
-            SessionId = knownSessionId
-        });
-        var body = await response.Content.ReadFromJsonAsync<CustomerChatbotHydrateResponse>();
-
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.NotNull(body);
-        Assert.Equal(knownSessionId, body.SessionId);
-        Assert.False(body.Hydrated);
-        Assert.NotNull(body.ContinuationMessage);
-    }
 
     private static async Task<CreateDraftProjectResponse> CreateDraftProjectAsync(HttpClient client, string title)
     {
