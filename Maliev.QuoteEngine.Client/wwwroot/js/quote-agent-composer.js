@@ -305,12 +305,15 @@ export async function beginDictation(textarea, dictationButton) {
     restartTimer: 0,
     settled: false,
     active: true,
+    thaiRetryCount: 0,
     dotNetRef: composerDotNetRefs.get(textarea)
   };
   dictationSessions.set(textarea, session);
   prepareDictationPreview(textarea, session);
 
-  session.recognition.continuous = true;
+  const primaryLanguage = session.languages[0] || "en-US";
+  const isThaiPrimary = primaryLanguage.toLowerCase() === "th-th" || primaryLanguage.toLowerCase().startsWith("th-");
+  session.recognition.continuous = !isThaiPrimary;
   session.recognition.interimResults = true;
   session.recognition.maxAlternatives = 1;
   session.recognition.onaudiostart = () => {
@@ -620,8 +623,15 @@ function scheduleDictationRestart(textarea, session) {
     return;
   }
 
-  if (session.noSpeechError && session.languages.length > 1 && !session.finalTranscript) {
-    session.languageIndex = (session.languageIndex + 1) % session.languages.length;
+  if (session.noSpeechError && !session.finalTranscript) {
+    const currentLanguage = session.languages[session.languageIndex] || "";
+    const isThaiCurrent = currentLanguage.toLowerCase() === "th-th" || currentLanguage.toLowerCase().startsWith("th-");
+    if (isThaiCurrent && session.thaiRetryCount < 2) {
+      session.thaiRetryCount += 1;
+    } else if (session.languages.length > 1) {
+      session.languageIndex = (session.languageIndex + 1) % session.languages.length;
+      session.thaiRetryCount = 0;
+    }
   }
 
   session.restartTimer = window.setTimeout(() => {

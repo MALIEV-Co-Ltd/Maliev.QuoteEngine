@@ -983,7 +983,7 @@
                         <MudIcon Icon="@Icons.Material.Outlined.MicNone" Size="Size.Small" />
                     }
                 </button>
-                <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@_sending">
+                <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@(_sending || _dictationProcessing)">
                     @if (_sending)
                     {
                         <span class="qe-agent-send-spinner" aria-hidden="true"></span>
@@ -2090,7 +2090,7 @@
     {
         var message = _draftMessage.Trim();
         var pendingAttachments = BuildPendingMessageAttachments();
-        if ((string.IsNullOrWhiteSpace(message) && pendingAttachments.Count == 0) || _sending)
+        if ((string.IsNullOrWhiteSpace(message) && pendingAttachments.Count == 0) || _sending || _dictationProcessing)
         {
             return;
         }
