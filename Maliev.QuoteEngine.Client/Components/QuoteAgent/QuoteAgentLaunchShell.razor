@@ -777,6 +777,18 @@
                 @onclick="ScrollToLatestMessageAsync">
             <MudIcon Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Small" />
         </button>
+        @if (_messages.Count > 0)
+        {
+            <button type="button"
+                    class="qe-agent-scroll-to-bottom is-visible"
+                    disabled="@_exportingPdf"
+                    style="bottom: 5.5rem;"
+                    title="@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")"
+                    aria-label="@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")"
+                    @onclick="ExportChatPdfAsync">
+                <MudIcon Icon="@Icons.Material.Outlined.PictureAsPdf" Size="Size.Small" />
+            </button>
+        }
         </div>
 
         @if (!string.IsNullOrWhiteSpace(_error))
@@ -1567,6 +1579,7 @@
     private string _draftMessage = string.Empty;
     private string? _error;
     private bool _sending;
+    private bool _exportingPdf;
     private bool _artifactPanelOpen;
     private bool _summaryPanelOpen;
     private bool _previewDialogOpen;
@@ -2867,6 +2880,28 @@
     private Task ToggleThemeAsync()
     {
         return Preferences.SetThemeAsync(IsDarkMode ? PreferenceService.LightTheme : PreferenceService.DarkTheme);
+    }
+
+    private async Task ExportChatPdfAsync()
+    {
+        if (_exportingPdf) return;
+        _exportingPdf = true;
+        try
+        {
+            var result = await Api.ExportAgentChatPdfAsync(SessionId);
+            if (!string.IsNullOrWhiteSpace(result?.PdfUrl))
+            {
+                await Js.InvokeVoidAsync("open", result.PdfUrl, "_blank");
+            }
+        }
+        catch
+        {
+            // Silently fail — the chat export is a secondary action.
+        }
+        finally
+        {
+            _exportingPdf = false;
+        }
     }
 
     private async Task RequestUploadAsync()
