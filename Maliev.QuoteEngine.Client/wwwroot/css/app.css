@@ -2102,9 +2102,9 @@
 }
 
 .qe-agent-response-loader {
-    width: 48px;
+    width: 20px;
     aspect-ratio: 2;
-    margin: 6px 0;
+    margin: 4px 0;
     --_g: no-repeat radial-gradient(circle closest-side, var(--qe-agent-muted) 90%, transparent);
     background:
         var(--_g) 0%   50%,
