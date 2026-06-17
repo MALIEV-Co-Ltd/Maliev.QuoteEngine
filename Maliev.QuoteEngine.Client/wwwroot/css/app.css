@@ -1609,10 +1609,16 @@
     overflow-x: hidden;
 }
 
+.qe-agent-thread-wrap {
+    position: relative;
+    min-height: 0;
+    min-width: 0;
+}
+
 .qe-agent-scroll-to-bottom {
     position: absolute;
     left: 50%;
-    bottom: 100px;
+    bottom: 16px;
     z-index: 20;
     display: grid;
     place-items: center;

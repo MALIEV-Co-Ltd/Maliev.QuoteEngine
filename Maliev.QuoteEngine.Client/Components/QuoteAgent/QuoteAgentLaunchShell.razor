@@ -426,6 +426,7 @@
         }
         else
         {
+        <div class="qe-agent-thread-wrap">
         <div class="qe-agent-thread"
              @ref="_threadElement"
              @onscroll="@(async e => await OnThreadScrollAsync(e))"
@@ -765,6 +766,7 @@
                 @onclick="ScrollToLatestMessageAsync">
             <MudIcon Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Small" />
         </button>
+        </div>
 
         @if (!string.IsNullOrWhiteSpace(_error))
         {
