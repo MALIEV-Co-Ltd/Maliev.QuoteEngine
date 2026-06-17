@@ -462,8 +462,117 @@ export async function beginDictation(textarea, dictationButton) {
   const insertion = resolveDictationInsertion(textarea.value, rawSelectionStart, rawSelectionEnd);
 
   const dotNetRef = composerDotNetRefs.get(textarea);
-  const useWhisper = await loadWhisperModel(dotNetRef);
 
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    const languages = resolveSpeechRecognitionLanguages(textarea);
+    const session = {
+      after: textarea.value.slice(insertion.end),
+      before: textarea.value.slice(0, insertion.start),
+      button: dictationButton || dictationButtonHandlers.get(textarea)?.dictationButton || null,
+      dotNetStopRequested: false,
+      finalTranscript: "",
+      interimTranscript: "",
+      languageIndex: 0,
+      languages,
+      noSpeechError: false,
+      recognition: new SpeechRecognition(),
+      restartTimer: 0,
+      settled: false,
+      active: true,
+      thaiRetryCount: 0,
+      dotNetRef,
+      useWhisper: false
+    };
+    dictationSessions.set(textarea, session);
+    prepareDictationPreview(textarea, session);
+
+    session.recognition.continuous = true;
+    session.recognition.interimResults = true;
+    session.recognition.maxAlternatives = 1;
+    session.recognition.onaudiostart = () => {
+      boostDictationLevel(session, 0, "quiet", 0);
+    };
+    session.recognition.onsoundstart = () => {
+      boostDictationLevel(session, 0.34, "good", 900);
+    };
+    session.recognition.onspeechstart = () => {
+      boostDictationLevel(session, 0.5, "good", 1200);
+    };
+    session.recognition.onspeechend = () => {
+      boostDictationLevel(session, 0, "quiet", 0);
+    };
+    session.recognition.onaudioend = () => {
+      boostDictationLevel(session, 0, "quiet", 0);
+    };
+
+    session.recognition.onresult = event => {
+      session.noSpeechError = false;
+      boostDictationLevel(session, 0.45, "good", 1400);
+      let finalText = "";
+      let interimText = "";
+      for (let index = event.resultIndex || 0; index < event.results.length; index += 1) {
+        const result = event.results[index];
+        const text = result[0]?.transcript || "";
+        if (result.isFinal) {
+          finalText += ` ${text}`;
+        } else {
+          interimText += ` ${text}`;
+        }
+      }
+
+      session.finalTranscript = summarizeDictation(`${session.finalTranscript} ${finalText}`);
+      session.interimTranscript = summarizeDictation(interimText);
+      updateDictationPreview(textarea, session, false);
+    };
+
+    session.recognition.onerror = event => {
+      if (event.error === "no-speech" || event.error === "no-match") {
+        session.noSpeechError = true;
+        session.interimTranscript = "";
+        updateDictationPreview(textarea, session, false);
+        return;
+      }
+
+      if (event.error === "aborted") {
+        return;
+      }
+
+      reportDictationError(session, event.error || "dictation-failed");
+      session.error = event.error || "Dictation failed.";
+      session.settled = true;
+      finishDictation(textarea, session);
+      try {
+        session.recognition.stop();
+      } catch {
+      }
+    };
+
+    session.recognition.onend = () => {
+      if (session.settled || session.dotNetStopRequested) {
+        return;
+      }
+
+      if (session.error) {
+        session.settled = true;
+        finishDictation(textarea, session);
+        return;
+      }
+
+      scheduleDictationRestart(textarea, session);
+    };
+
+    try {
+      startRecognitionSession(session);
+      void startDictationMeter(session);
+    } catch (error) {
+      cancelDictation(textarea);
+      throw error;
+    }
+    return;
+  }
+
+  const useWhisper = await loadWhisperModel(dotNetRef);
   if (useWhisper) {
     const session = {
       after: textarea.value.slice(insertion.end),
@@ -486,116 +595,7 @@ export async function beginDictation(textarea, dictationButton) {
     return;
   }
 
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    throw new Error("Speech recognition is not supported in this browser.");
-  }
-
-  const session = {
-    after: textarea.value.slice(insertion.end),
-    before: textarea.value.slice(0, insertion.start),
-    button: dictationButton || dictationButtonHandlers.get(textarea)?.dictationButton || null,
-    dotNetStopRequested: false,
-    finalTranscript: "",
-    interimTranscript: "",
-    languageIndex: 0,
-    languages: resolveSpeechRecognitionLanguages(textarea),
-    noSpeechError: false,
-    recognition: new SpeechRecognition(),
-    restartTimer: 0,
-    settled: false,
-    active: true,
-    thaiRetryCount: 0,
-    dotNetRef: composerDotNetRefs.get(textarea),
-    useWhisper: false
-  };
-  dictationSessions.set(textarea, session);
-  prepareDictationPreview(textarea, session);
-
-  const primaryLanguage = session.languages[0] || "en-US";
-  const isThaiPrimary = primaryLanguage.toLowerCase() === "th-th" || primaryLanguage.toLowerCase().startsWith("th-");
-  session.recognition.continuous = !isThaiPrimary;
-  session.recognition.interimResults = true;
-  session.recognition.maxAlternatives = 1;
-  session.recognition.onaudiostart = () => {
-    boostDictationLevel(session, 0, "quiet", 0);
-  };
-  session.recognition.onsoundstart = () => {
-    boostDictationLevel(session, 0.34, "good", 900);
-  };
-  session.recognition.onspeechstart = () => {
-    boostDictationLevel(session, 0.5, "good", 1200);
-  };
-  session.recognition.onspeechend = () => {
-    boostDictationLevel(session, 0, "quiet", 0);
-  };
-  session.recognition.onaudioend = () => {
-    boostDictationLevel(session, 0, "quiet", 0);
-  };
-
-  session.recognition.onresult = event => {
-    session.noSpeechError = false;
-    boostDictationLevel(session, 0.45, "good", 1400);
-    let finalText = "";
-    let interimText = "";
-    for (let index = event.resultIndex || 0; index < event.results.length; index += 1) {
-      const result = event.results[index];
-      const text = result[0]?.transcript || "";
-      if (result.isFinal) {
-        finalText += ` ${text}`;
-      } else {
-        interimText += ` ${text}`;
-      }
-    }
-
-    session.finalTranscript = summarizeDictation(`${session.finalTranscript} ${finalText}`);
-    session.interimTranscript = summarizeDictation(interimText);
-    updateDictationPreview(textarea, session, false);
-  };
-
-  session.recognition.onerror = event => {
-    if (event.error === "no-speech" || event.error === "no-match") {
-      session.noSpeechError = true;
-      session.interimTranscript = "";
-      updateDictationPreview(textarea, session, false);
-      return;
-    }
-
-    if (event.error === "aborted") {
-      return;
-    }
-
-    reportDictationError(session, event.error || "dictation-failed");
-    session.error = event.error || "Dictation failed.";
-    session.settled = true;
-    finishDictation(textarea, session);
-    try {
-      session.recognition.stop();
-    } catch {
-    }
-  };
-
-  session.recognition.onend = () => {
-    if (session.settled || session.dotNetStopRequested) {
-      return;
-    }
-
-    if (session.error) {
-      session.settled = true;
-      finishDictation(textarea, session);
-      return;
-    }
-
-    scheduleDictationRestart(textarea, session);
-  };
-
-  try {
-    startRecognitionSession(session);
-    void startDictationMeter(session);
-  } catch (error) {
-    cancelDictation(textarea);
-    throw error;
-  }
+  throw new Error("Speech recognition is not supported in this browser.");
 }
 
 export async function endDictation(textarea) {

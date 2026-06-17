@@ -1176,7 +1176,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("setTextareaSelection(textarea, session.before.length", composerScript, StringComparison.Ordinal);
         Assert.Contains("resolveSpeechRecognitionLanguage", composerScript, StringComparison.Ordinal);
         Assert.Contains("resolveSpeechRecognitionLanguages", composerScript, StringComparison.Ordinal);
-        Assert.Contains("languages: resolveSpeechRecognitionLanguages(textarea)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("const languages = resolveSpeechRecognitionLanguages(textarea)", composerScript, StringComparison.Ordinal);
         Assert.Contains("textarea?.dataset?.speechLanguages", composerScript, StringComparison.Ordinal);
         Assert.Contains("startRecognitionSession(session);", composerScript, StringComparison.Ordinal);
         Assert.Contains("void startDictationMeter(session);", composerScript, StringComparison.Ordinal);
