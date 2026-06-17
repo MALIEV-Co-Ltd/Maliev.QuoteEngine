@@ -1676,6 +1676,35 @@
     background: var(--qe-agent-soft);
 }
 
+.qe-agent-pdf-export {
+    position: absolute;
+    right: 16px;
+    bottom: 16px;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    height: 42px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 999px;
+    color: var(--qe-agent-primary);
+    background: var(--qe-agent-raised);
+    box-shadow: var(--qe-agent-shadow);
+    cursor: pointer;
+    transition: opacity 0.15s ease, border-color 0.15s ease;
+}
+
+.qe-agent-pdf-export:hover {
+    border-color: var(--qe-agent-primary);
+    background: var(--qe-agent-soft);
+}
+
+.qe-agent-pdf-export:disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+}
+
 .qe-agent-chat-actions {
     display: grid;
     gap: 10px;

@@ -789,9 +789,8 @@
         @if (_messages.Count > 0)
         {
             <button type="button"
-                    class="qe-agent-scroll-to-bottom is-visible"
+                    class="qe-agent-pdf-export"
                     disabled="@_exportingPdf"
-                    style="bottom: 5.5rem;"
                     title="@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")"
                     aria-label="@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")"
                     @onclick="ExportChatPdfAsync">
@@ -1023,16 +1022,52 @@
                                 <MudIcon Icon="@Icons.Material.Outlined.Draw" />
                                 <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
                             </button>
-                            <button type="button" role="menuitem" @onclick="ApplyGoogleDriveConnectorFromToolsAsync">
-                                <span class="qe-agent-google-drive-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" focusable="false">
-                                        <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
-                                        <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
-                                        <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
-                                    </svg>
-                                </span>
-                                <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
-                            </button>
+                        </div>
+                    }
+                </div>
+                <div class="qe-agent-plugins-wrapper">
+                    <button type="button"
+                            class="qe-agent-plugins-btn"
+                            @onclick="TogglePluginsMenu"
+                            aria-label="@Text("Plugins", "ปลั๊กอิน")"
+                            title="@Text("Plugins", "ปลั๊กอิน")"
+                            aria-expanded="@_pluginsMenuOpen">
+                        <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
+                        <span>@Text("Plugins", "ปลั๊กอิน")</span>
+                    </button>
+                    @if (_pluginsMenuOpen)
+                    {
+                        <div class="qe-agent-plugins-menu" role="menu" aria-label="@Text("Plugins", "ปลั๊กอิน")">
+                            @if (_connectors.Count == 0)
+                            {
+                                <div class="qe-agent-plugins-menu-empty">
+                                    <small>@Text("No connectors available", "ไม่มีตัวเชื่อมต่อ")</small>
+                                </div>
+                            }
+                            @foreach (var connector in _connectors)
+                            {
+                                <button type="button" role="menuitem" @onclick="@(() => ApplyConnectorFromPluginsAsync(connector))">
+                                    <span class="qe-agent-plugin-menu-icon" aria-hidden="true">
+                                        @if (IsGoogleDriveConnector(connector))
+                                        {
+                                            <svg viewBox="0 0 24 24" focusable="false">
+                                                <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                                <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                                <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                                            </svg>
+                                        }
+                                        else
+                                        {
+                                            <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
+                                        }
+                                    </span>
+                                    <span class="qe-agent-plugin-menu-text">
+                                        <strong>@connector.DisplayName</strong>
+                                        <small>@connector.Description</small>
+                                    </span>
+                                    <span class="qe-agent-plugin-menu-status">@ConnectorStatus(connector)</span>
+                                </button>
+                            }
                         </div>
                     }
                 </div>
@@ -1544,6 +1579,7 @@
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
     private bool _quickActionsMenuOpen;
+    private bool _pluginsMenuOpen;
     private bool _sketchOpen;
     private bool _sketchInitPending;
     private bool _searchOpen;
@@ -2151,21 +2187,7 @@
                          streamEvent.Response is not null)
                 {
                     assistantMessage.IsThinking = false;
-                    if (!string.IsNullOrWhiteSpace(assistantMessage.ModelThoughtContent))
-                    {
-                        if (streamEvent.Response.ThinkingSteps is { } steps)
-                        {
-                            steps.Add(new QuoteAgentThinkingStepDto
-                            {
-                                StepNumber = steps.Count + 1,
-                                Type = "reasoning",
-                                Title = "Model reasoning",
-                                Detail = assistantMessage.ModelThoughtContent,
-                                Timestamp = DateTimeOffset.UtcNow
-                            });
-                        }
-                    }
-                    assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps;
+                    assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps ?? [];
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
                     _proposedActions = streamEvent.Response.ProposedActions;
@@ -3229,6 +3251,20 @@
     private void ToggleQuickActionsMenu()
     {
         _quickActionsMenuOpen = !_quickActionsMenuOpen;
+        if (_quickActionsMenuOpen) _pluginsMenuOpen = false;
+    }
+
+    private void TogglePluginsMenu()
+    {
+        _pluginsMenuOpen = !_pluginsMenuOpen;
+        if (_pluginsMenuOpen) _quickActionsMenuOpen = false;
+    }
+
+    private async Task ApplyConnectorFromPluginsAsync(QuoteAgentConnectorDto connector)
+    {
+        _pluginsMenuOpen = false;
+        _highlightConnectorId = connector.ConnectorId;
+        await ApplyConnectorAsync(connector);
     }
 
     private async Task RequestUploadFromQuickActionsAsync()

@@ -903,7 +903,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("_pluginsOpen", component, StringComparison.Ordinal);
         Assert.Contains("_composerPluginsOpen", component, StringComparison.Ordinal);
         Assert.Contains("ToggleComposerPluginsMenu", component, StringComparison.Ordinal);
-        Assert.Contains("qe-agent-google-drive-icon", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-plugin-menu-icon", component, StringComparison.Ordinal);
         Assert.Contains("GetConnectorRegistryAsync", component, StringComparison.Ordinal);
         Assert.Contains("GetConnectorHandoffAsync", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentConnectorHandoffResponse", component, StringComparison.Ordinal);
@@ -1009,7 +1009,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"sr-only\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-quick-actions-menu\"", component, StringComparison.Ordinal);
         Assert.Contains("Hand sketch", component, StringComparison.Ordinal);
-        Assert.Contains("Google Drive connector", component, StringComparison.Ordinal);
+        Assert.Contains("ApplyConnectorFromPluginsAsync", component, StringComparison.Ordinal);
         Assert.Contains("Google Drive is available first; CAD tools follow after MVP.", component, StringComparison.Ordinal);
         Assert.Contains("connector.Status.Equals(\"available\"", component, StringComparison.Ordinal);
         Assert.Contains("Text(\"Connect\", \"เชื่อมต่อ\")", component, StringComparison.Ordinal);
