@@ -496,6 +496,15 @@
                                         <QeInlinePartViewer CommandsJson="@message.InlineViewer.CommandsJson" />
                                     </section>
                                 }
+                                @if (message.IsThinking && !string.IsNullOrWhiteSpace(message.ModelThoughtContent))
+                                {
+                                    <details class="qe-agent-model-thinking" open>
+                                        <summary>
+                                            <span>@Text("Model reasoning…", "การคิดของโมเดล...")</span>
+                                        </summary>
+                                        <div class="qe-agent-model-thinking-content">@message.ModelThoughtContent</div>
+                                    </details>
+                                }
                                 @if (message.ThinkingSteps.Count > 0)
                                 {
                                     <details class="qe-agent-thinking">
@@ -2184,10 +2193,31 @@
                     assistantMessage.Content += streamEvent.Delta;
                     await InvokeAsync(StateHasChanged);
                 }
+                else if (streamEvent.Type.Equals("thought", StringComparison.OrdinalIgnoreCase) &&
+                         !string.IsNullOrWhiteSpace(streamEvent.Thought))
+                {
+                    assistantMessage.ModelThoughtContent += streamEvent.Thought;
+                    assistantMessage.IsThinking = true;
+                    await InvokeAsync(StateHasChanged);
+                }
                 else if (streamEvent.Type.Equals("final", StringComparison.OrdinalIgnoreCase) &&
                          streamEvent.Response is not null)
                 {
-                    assistantMessage.Content = streamEvent.Response.AssistantText;
+                    assistantMessage.IsThinking = false;
+                    if (!string.IsNullOrWhiteSpace(assistantMessage.ModelThoughtContent))
+                    {
+                        if (streamEvent.Response.ThinkingSteps is { } steps)
+                        {
+                            steps.Add(new QuoteAgentThinkingStepDto
+                            {
+                                StepNumber = steps.Count + 1,
+                                Type = "reasoning",
+                                Title = "Model reasoning",
+                                Detail = assistantMessage.ModelThoughtContent,
+                                Timestamp = DateTimeOffset.UtcNow
+                            });
+                        }
+                    }
                     assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps;
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
@@ -4573,6 +4603,10 @@
         public string Content { get; set; } = content;
 
         public bool IsProcessing { get; set; }
+
+        public bool IsThinking { get; set; }
+
+        public string ModelThoughtContent { get; set; } = string.Empty;
 
         public IReadOnlyList<ComposerAttachmentPreview> Attachments { get; } = attachments ?? [];
 

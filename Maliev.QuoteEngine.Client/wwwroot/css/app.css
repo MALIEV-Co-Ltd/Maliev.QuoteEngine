@@ -2492,6 +2492,31 @@
     font-size: 11px;
 }
 
+.qe-agent-model-thinking {
+    background: var(--mud-palette-info-hover, rgba(33, 150, 243, 0.08));
+    border: 1px solid var(--mud-palette-info-default, #2196f3);
+    border-radius: 8px;
+    margin: 8px 0;
+    padding: 8px 12px;
+}
+
+.qe-agent-model-thinking summary {
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    opacity: 0.8;
+    user-select: none;
+}
+
+.qe-agent-model-thinking-content {
+    font-size: 0.82rem;
+    line-height: 1.5;
+    margin-top: 6px;
+    opacity: 0.75;
+    font-style: italic;
+    white-space: pre-wrap;
+}
+
 .qe-agent-message--workbench,
 .qe-agent-message--workbench .qe-agent-bubble {
     max-width: min(860px, 100%);

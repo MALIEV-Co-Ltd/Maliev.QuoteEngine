@@ -177,13 +177,16 @@ public sealed class QuoteAgentCustomerQuestionDto
 /// </summary>
 public sealed class QuoteAgentStreamEvent
 {
-    /// <summary>Gets or sets the event type: started, delta, final, or error.</summary>
+    /// <summary>Gets or sets the event type: started, delta, thought, final, or error.</summary>
     [Required]
     [StringLength(40)]
     public string Type { get; set; } = "delta";
 
     /// <summary>Gets or sets the text delta for assistant content.</summary>
     public string? Delta { get; set; }
+
+    /// <summary>Gets or sets incremental thought text for thought-type events.</summary>
+    public string? Thought { get; set; }
 
     /// <summary>Gets or sets the final complete turn response.</summary>
     public QuoteAgentTurnResponse? Response { get; set; }

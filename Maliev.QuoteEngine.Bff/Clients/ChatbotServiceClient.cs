@@ -299,11 +299,14 @@ public sealed class ChatbotMessageResponse
 /// <summary>ChatbotService streamed message event.</summary>
 public sealed class ChatbotMessageStreamEvent
 {
-    /// <summary>Gets or sets the event type: started, delta, final, or error.</summary>
+    /// <summary>Gets or sets the event type: started, delta, thought, final, or error.</summary>
     public string Type { get; set; } = "delta";
 
     /// <summary>Gets or sets the assistant text delta for delta events.</summary>
     public string? Delta { get; set; }
+
+    /// <summary>Gets or sets incremental thought text for thought-type events.</summary>
+    public string? Thought { get; set; }
 
     /// <summary>Gets or sets the final assistant message for final events.</summary>
     public ChatbotMessageResponse? Message { get; set; }

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Maliev.QuoteEngine.Bff.Clients;
@@ -175,6 +176,7 @@ internal sealed class QuoteAgentService(
         ChatbotMessageResponse? finalMessage = null;
         var receivedDelta = false;
         var receivedError = false;
+        var accumulatedThought = new StringBuilder();
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments);
@@ -223,6 +225,16 @@ internal sealed class QuoteAgentService(
                     Delta = streamEvent.Delta
                 };
             }
+            else if (streamEvent.Type.Equals("thought", StringComparison.OrdinalIgnoreCase) &&
+                     !string.IsNullOrEmpty(streamEvent.Thought))
+            {
+                accumulatedThought.Append(streamEvent.Thought);
+                yield return new QuoteAgentStreamEvent
+                {
+                    Type = "thought",
+                    Thought = streamEvent.Thought
+                };
+            }
             else if (streamEvent.Type.Equals("final", StringComparison.OrdinalIgnoreCase))
             {
                 finalMessage = streamEvent.Message;
@@ -262,7 +274,7 @@ internal sealed class QuoteAgentService(
             Gates = currentState.Gates,
             ProposedActions = currentState.ProposedActions,
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
-            ThinkingSteps = EnrichSteps(finalMessage?.ThinkingSteps),
+            ThinkingSteps = BuildThinkingStepsWithModelThought(finalMessage?.ThinkingSteps, accumulatedThought),
             UiDirectives = currentState.UiDirectives,
             UiCulture = pendingUiCulture,
             ProjectName = state.ProjectName,
@@ -512,6 +524,26 @@ internal sealed class QuoteAgentService(
         foreach (var step in steps)
             ThinkingStepSummarizer.Summarize(step);
         return steps;
+    }
+
+    private static List<QuoteAgentThinkingStepDto> BuildThinkingStepsWithModelThought(
+        List<QuoteAgentThinkingStepDto>? steps,
+        StringBuilder accumulatedThought)
+    {
+        var result = EnrichSteps(steps);
+        if (accumulatedThought.Length > 0)
+        {
+            var maxStep = result.Count > 0 ? result.Max(s => s.StepNumber) : 0;
+            result.Add(new QuoteAgentThinkingStepDto
+            {
+                StepNumber = maxStep + 1,
+                Type = "reasoning",
+                Title = "Model reasoning",
+                Detail = accumulatedThought.ToString(),
+                Timestamp = DateTimeOffset.UtcNow
+            });
+        }
+        return result;
     }
 
     public async Task<UploadSketchResponse> UploadSketchAsync(
