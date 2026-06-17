@@ -3329,7 +3329,17 @@ internal sealed class QuoteAgentService(
             "State your inferred assumptions first, then ask only for genuinely missing critical information. " +
             "If the customer attaches a photo or sketch: analyze it first — describe the part shape, visible features, likely material and process — then state your assumptions and give a rough ballpark estimate. " +
             "NEVER respond by asking the customer to upload or send a 3D/CAD file as your first or only message. Never reject the customer. " +
-            "If you can infer enough shape and size information — even from a text description, photo, sketch, or drawing — call quote_generate_3d_preview to create a 3D preview GLB of the inferred part. " +
+            "If you can infer enough shape and size information — even from a text description, photo, sketch, or drawing — call quote_generate_3d_preview to create a 3D preview of the inferred part. " +
+            "The tool accepts a cad_commands array. Each command has an op, id, and op-specific params. " +
+            "Primitives: {op:'box',id:'base',params:[50,30,5]} (w,d,h); {op:'cylinder',id:'hole',params:[3,5]} (radius,height); " +
+            "{op:'sphere',id:'ball',params:[10]} (radius); {op:'cone',id:'tip',params:[5,0,20]} (radiusBottom,radiusTop,height). " +
+            "Boolean ops: {op:'cut',targetId:'base',toolId:'hole',resultId:'bracket'} — subtract tool from target. " +
+            "{op:'fuse',targetId:'a',toolId:'b',resultId:'combined'} — union. " +
+            "Edge ops: {op:'fillet',targetId:'bracket',radius:2,resultId:'finished'} — rounds edges. " +
+            "Extrude: {op:'extrude',id:'part',params:[10],profile:{plane:'XY',segments:[{type:'line',params:[0,0,30,0]},{type:'line',params:[30,0,30,20]},{type:'line',params:[30,20,0,20]}]}} — sketch + extrude. " +
+            "Revolve: {op:'revolve',id:'vase',profile:{...},axis:[0,0,1],angle:6.2832} — revolve sketch around axis (angle in radians, 2π = full). " +
+            "Translation: {op:'translate',targetId:'part',offset:[10,0,0],resultId:'moved'} — offset in mm. " +
+            "Plan the command sequence logically: build primitives, position with translate, combine with bool ops, apply edge ops last. " +
             "Describe what you created, list your assumptions, and ask the customer to verify the shape and dimensions. " +
             "Only mention CAD file uploads as an optional refinement step, never as a gate.");
         contextLines.Add(
@@ -3387,9 +3397,17 @@ Customer message:
         foreach (var attachment in attachments)
         {
             var url = attachment.Url;
-            if (string.IsNullOrWhiteSpace(url) && !string.IsNullOrWhiteSpace(attachment.StoragePath))
+            if (string.IsNullOrWhiteSpace(url) ||
+                url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
             {
-                url = await ResolveSketchUrlAsync(attachment.StoragePath);
+                if (!string.IsNullOrWhiteSpace(attachment.StoragePath))
+                {
+                    url = await ResolveSketchUrlAsync(attachment.StoragePath);
+                }
+                else
+                {
+                    url = null;
+                }
             }
 
             if (string.IsNullOrWhiteSpace(url))
@@ -3397,15 +3415,9 @@ Customer message:
                 continue;
             }
 
-            if (!attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) &&
-                !attachment.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
             supported.Add(new ChatbotMessageAttachmentRequest
             {
-                Type = attachment.ContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ? "pdf" : "image",
+                Type = InferAttachmentType(attachment.ContentType),
                 Url = url,
                 MimeType = attachment.ContentType,
                 Filename = attachment.FileName,
@@ -3416,7 +3428,32 @@ Customer message:
         return supported.Count == 0 ? null : supported;
     }
 
-    private async Task<string> ResolveSketchUrlAsync(string storagePath)
+    private static string InferAttachmentType(string contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return "image";
+        }
+
+        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return "image";
+        }
+
+        if (contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            return "pdf";
+        }
+
+        if (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))
+        {
+            return "document";
+        }
+
+        return "image";
+    }
+
+    private async Task<string?> ResolveSketchUrlAsync(string storagePath)
     {
         try
         {
@@ -3425,7 +3462,7 @@ Customer message:
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Failed to resolve signed URL for sketch at {StoragePath}", storagePath);
-            return storagePath;
+            return null;
         }
     }
 
@@ -3636,35 +3673,6 @@ Customer message:
         return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : 0;
-    }
-
-    private static double? ReadElementDouble(JsonElement element, params string[] keys)
-    {
-        var value = ReadElementString(element, keys);
-        return double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)
-            ? parsed
-            : null;
-    }
-
-    private static bool ReadElementBool(JsonElement element, params string[] keys)
-    {
-        foreach (var key in keys)
-        {
-            if (!element.TryGetProperty(key, out var value))
-            {
-                continue;
-            }
-
-            return value.ValueKind switch
-            {
-                JsonValueKind.True => true,
-                JsonValueKind.False => false,
-                JsonValueKind.String => bool.TryParse(value.GetString(), out var parsed) && parsed,
-                _ => false
-            };
-        }
-
-        return false;
     }
 
     private static bool TryReadGuid(
@@ -3907,15 +3915,15 @@ Customer message:
     {
         var description = ReadString(arguments, "description") ?? "Generated 3D preview";
         var processHint = ReadString(arguments, "process_hint") ?? ReadString(arguments, "processHint");
-        var primitives = ReadPrimitives(arguments);
+        var commands = ReadCommands(arguments);
 
-        if (primitives.Count == 0)
+        if (commands.Count == 0)
         {
-            return new { error = "At least one primitive shape is required." };
+            return new { error = "At least one CAD command is required." };
         }
 
         var process = !string.IsNullOrWhiteSpace(processHint) ? processHint : "fdm";
-        var primitivesJson = JsonSerializer.Serialize(primitives, JsonOptions);
+        var commandsJson = JsonSerializer.Serialize(commands, JsonOptions);
         var partId = Guid.NewGuid();
 
         lock (state.SyncRoot)
@@ -3929,11 +3937,11 @@ Customer message:
                 ProcessId = InferProcessFromMessage(description) ?? process,
                 MaterialId = InferMaterial(process, description),
                 Quantity = InferQuantity(description),
-                VolumeCc = EstimateVolume(primitives),
-                SurfaceAreaCm2 = EstimateSurfaceArea(primitives),
+                VolumeCc = EstimateCommandsVolume(commands),
+                SurfaceAreaCm2 = EstimateCommandsArea(commands),
                 Status = "ModelGenerated",
                 IsManifold = true,
-                BodyCount = primitives.Count,
+                BodyCount = commands.Count,
                 SelectedBodyIndex = 0,
                 PartNotes = "Generated 3D preview from inferred description."
             });
@@ -3947,8 +3955,8 @@ Customer message:
             };
             artifact.Metadata["generated"] = "true";
             artifact.Metadata["description"] = EscapeMetadataValue(description);
-            artifact.Metadata["primitives"] = primitivesJson;
-            artifact.Metadata["primitiveCount"] = primitives.Count.ToString(CultureInfo.InvariantCulture);
+            artifact.Metadata["cad_commands"] = commandsJson;
+            artifact.Metadata["commandCount"] = commands.Count.ToString(CultureInfo.InvariantCulture);
 
             state.Artifacts.RemoveAll(item =>
                 item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
@@ -3963,63 +3971,39 @@ Customer message:
             artifact_id = state.Artifacts.Last().ArtifactId,
             part_id = partId,
             description,
-            primitive_count = primitives.Count,
-            message = $"Generated 3D preview with {primitives.Count} primitive(s): {description}"
+            command_count = commands.Count,
+            message = $"Generated 3D preview with {commands.Count} command(s): {description}"
         };
     }
 
-    private static IReadOnlyList<QuoteModelPrimitiveDto> ReadPrimitives(IReadOnlyDictionary<string, JsonElement> arguments)
+    private static IReadOnlyList<CadCommandDto> ReadCommands(IReadOnlyDictionary<string, JsonElement> arguments)
     {
-        if (!arguments.TryGetValue("primitives", out var value) || value.ValueKind != JsonValueKind.Array)
+        if (!arguments.TryGetValue("cad_commands", out var value) || value.ValueKind != JsonValueKind.Array)
         {
             return [];
         }
 
-        return value.EnumerateArray()
-            .Select(ReadPrimitive)
-            .Where(p => p is not null)
-            .Select(p => p!)
-            .ToArray();
+        return JsonSerializer.Deserialize<List<CadCommandDto>>(value.GetRawText(), JsonOptions) ?? [];
     }
 
-    private static QuoteModelPrimitiveDto? ReadPrimitive(JsonElement element)
+    private static decimal EstimateCommandsVolume(IReadOnlyList<CadCommandDto> commands)
     {
-        var shapeType = ReadElementString(element, "shape_type", "shapeType") ?? "box";
-
-        return new QuoteModelPrimitiveDto
+        return Math.Round(commands.Sum(c => c.Op.ToLowerInvariant() switch
         {
-            ShapeType = shapeType,
-            LengthX = ReadElementDouble(element, "length_x_mm", "lengthXmm", "length_x", "lengthX") ?? 10,
-            LengthY = ReadElementDouble(element, "length_y_mm", "lengthYmm", "length_y", "lengthY") ?? 10,
-            LengthZ = ReadElementDouble(element, "length_z_mm", "lengthZmm", "length_z", "lengthZ") ?? 10,
-            Diameter = ReadElementDouble(element, "diameter_mm", "diameterMm", "diameter"),
-            Height = ReadElementDouble(element, "height_mm", "heightMm", "height"),
-            OffsetX = ReadElementDouble(element, "offset_x_mm", "offsetXmm", "offset_x", "offsetX") ?? 0,
-            OffsetY = ReadElementDouble(element, "offset_y_mm", "offsetYmm", "offset_y", "offsetY") ?? 0,
-            OffsetZ = ReadElementDouble(element, "offset_z_mm", "offsetZmm", "offset_z", "offsetZ") ?? 0,
-            IsHoleIndicator = ReadElementBool(element, "is_hole_indicator", "isHoleIndicator")
-        };
-    }
-
-    private static decimal EstimateVolume(IReadOnlyList<QuoteModelPrimitiveDto> primitives)
-    {
-        return Math.Round(primitives.Sum(p => p.ShapeType.ToLowerInvariant() switch
-        {
-            "box" => (decimal)(p.LengthX * p.LengthY * p.LengthZ),
-            "cylinder" => (decimal)(Math.PI * Math.Pow(p.Diameter ?? 10, 2) / 4 * (p.Height ?? 10)),
-            "sphere" => (decimal)(Math.PI * Math.Pow(p.Diameter ?? 10, 3) / 6),
-            "cone" => (decimal)(Math.PI * Math.Pow(p.Diameter ?? 10, 2) / 4 * (p.Height ?? 10) / 3),
+            "box" when c.Params is { Length: >= 3 } => (decimal)(c.Params[0] * c.Params[1] * c.Params[2]),
+            "cylinder" when c.Params is { Length: >= 2 } => (decimal)(Math.PI * Math.Pow(c.Params[0], 2) * c.Params[1]),
+            "sphere" when c.Params is { Length: >= 1 } => (decimal)(Math.PI * Math.Pow(c.Params[0], 3) * 4 / 3),
+            "cone" when c.Params is { Length: >= 3 } => (decimal)(Math.PI * (c.Params[0] * c.Params[0] + c.Params[0] * c.Params[1] + c.Params[1] * c.Params[1]) * c.Params[2] / 3),
             _ => 1000m
         }), 2);
     }
 
-    private static decimal EstimateSurfaceArea(IReadOnlyList<QuoteModelPrimitiveDto> primitives)
+    private static decimal EstimateCommandsArea(IReadOnlyList<CadCommandDto> commands)
     {
-        return Math.Round(primitives.Sum(p => p.ShapeType.ToLowerInvariant() switch
+        return Math.Round(commands.Sum(c => c.Op.ToLowerInvariant() switch
         {
-            "box" => (decimal)(2 * (p.LengthX * p.LengthY + p.LengthY * p.LengthZ + p.LengthZ * p.LengthX)),
-            "cylinder" when p.Height.HasValue && p.Diameter.HasValue =>
-                (decimal)(2 * Math.PI * Math.Pow(p.Diameter.Value, 2) / 4 + Math.PI * p.Diameter.Value * p.Height.Value),
+            "box" when c.Params is { Length: >= 3 } => (decimal)(2 * (c.Params[0] * c.Params[1] + c.Params[1] * c.Params[2] + c.Params[2] * c.Params[0])),
+            "cylinder" when c.Params is { Length: >= 2 } => (decimal)(2 * Math.PI * c.Params[0] * (c.Params[0] + c.Params[1])),
             _ => 1000m
         }), 2);
     }

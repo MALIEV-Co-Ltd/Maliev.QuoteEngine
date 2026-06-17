@@ -2,9 +2,15 @@
   "name": "maliev-quote-engine-client",
   "private": true,
   "scripts": {
-    "build-js": "esbuild js-src/home-shader.js --bundle --format=iife --global-name=homeShader --outfile=wwwroot/js/home-shader.bundle.js"
+    "build-js": "esbuild js-src/home-shader.js --bundle --format=iife --global-name=homeShader --outfile=wwwroot/js/home-shader.bundle.js",
+    "build-worker": "esbuild js-src/replicad-worker.js --bundle --external:fs --external:path --outfile=wwwroot/js/replicad-worker.bundle.js",
+    "build": "npm run build-js && npm run build-worker"
   },
   "devDependencies": {
-    "esbuild": "latest"
+    "esbuild": "^0.28.1"
+  },
+  "dependencies": {
+    "replicad": "^0.23.1",
+    "replicad-opencascadejs": "^0.23.0"
   }
 }

@@ -493,7 +493,7 @@
                                 @if (message.InlineViewer is not null)
                                 {
                                     <section class="qe-agent-inline-viewer">
-                                        <QeInlinePartViewer PrimitivesJson="@message.InlineViewer.PrimitivesJson" />
+                                        <QeInlinePartViewer CommandsJson="@message.InlineViewer.CommandsJson" />
                                     </section>
                                 }
                                 @if (message.ThinkingSteps.Count > 0)
@@ -3651,13 +3651,13 @@
             return null;
         }
 
-        if (!generated.Metadata.TryGetValue("primitives", out var primitivesJson) ||
-            string.IsNullOrWhiteSpace(primitivesJson))
+        if (!generated.Metadata.TryGetValue("cad_commands", out var commandsJson) ||
+            string.IsNullOrWhiteSpace(commandsJson))
         {
             return null;
         }
 
-        return new InlineViewerInfo { PrimitivesJson = primitivesJson };
+        return new InlineViewerInfo { CommandsJson = commandsJson };
     }
 
     private static string PreviewUrlForUploadedPart(QuotePartViewModel part)
@@ -4552,7 +4552,7 @@
 
     private sealed class InlineViewerInfo
     {
-        public string PrimitivesJson { get; set; } = string.Empty;
+        public string CommandsJson { get; set; } = string.Empty;
     }
 
     private sealed record LocalDemoTurn(

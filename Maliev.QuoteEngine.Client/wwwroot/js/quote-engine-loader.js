@@ -21,6 +21,7 @@
       status: {
         preparing: "Preparing Make Studio",
         loading: "Loading Make Studio",
+        loadingEngine: "Loading 3D engine",
         starting: "Starting your studio",
         ready: "Make Studio ready",
         failed: "Make Studio failed to start"
@@ -37,6 +38,7 @@
       status: {
         preparing: "กำลังเตรียม Make Studio",
         loading: "กำลังโหลด Make Studio",
+        loadingEngine: "กำลังโหลด 3D engine",
         starting: "กำลังเปิดสตูดิโอของคุณ",
         ready: "Make Studio พร้อมแล้ว",
         failed: "เริ่ม Make Studio ไม่สำเร็จ"
@@ -138,21 +140,61 @@
       });
   }
 
-  function markRuntimeReady() {
-    setProgress(100, true);
-    setStatus(currentStrings.status.starting);
+  let replicadReady = false;
+  let blazorReady = false;
+  let loadingProgress = 0;
+
+  function updateLoadingProgress() {
+    const blazorProgress = blazorReady ? 50 : (loadedResources / Math.max(totalResources + 2, 1)) * 50;
+    const replicadProgress = replicadReady ? 50 : 0;
+    loadingProgress = Math.max(loadingProgress, blazorProgress + replicadProgress);
+    setProgress(loadingProgress);
   }
 
-  function markReady() {
-    runtimeReady = true;
-    if (firstWasmStoryPending) {
-      rememberFirstWasmLoaded();
-      firstWasmStoryPending = false;
+  function markRuntimeReady() {
+    blazorReady = true;
+    setStatus(currentStrings.status.starting);
+    updateLoadingProgress();
+    checkAllReady();
+  }
+
+  function markReplicadReady() {
+    replicadReady = true;
+    updateLoadingProgress();
+    checkAllReady();
+  }
+
+  function checkAllReady() {
+    if (blazorReady && replicadReady) {
+      runtimeReady = true;
+      if (firstWasmStoryPending) {
+        rememberFirstWasmLoaded();
+        firstWasmStoryPending = false;
+      }
+      setProgress(100, true);
+      setStatus(currentStrings.status.ready);
+      enableSkipStory();
+      maybeFinish();
     }
-    setProgress(100, true);
-    setStatus(currentStrings.status.ready);
-    enableSkipStory();
-    maybeFinish();
+  }
+
+  function startLoadingReplicad() {
+    setStatus(currentStrings.status.loadingEngine);
+    updateResourceProgress();
+    try {
+      const worker = new Worker('js/replicad-worker.bundle.js');
+      worker.onmessage = function (e) {
+        if (e.data.type === 'ready') {
+          window.replicadWorker = worker;
+          window.quoteEngineLoader.markReplicadReady();
+        }
+      };
+      worker.onerror = function () {
+        window.quoteEngineLoader.markReplicadReady();
+      };
+    } catch (e) {
+      window.quoteEngineLoader.markReplicadReady();
+    }
   }
 
   function markFailed(error) {
@@ -461,6 +503,8 @@
     beginBoot(isWorkspaceHandoff || isFirstWasmLoad);
     setStatus(isWorkspaceHandoff ? currentStrings.status.starting : currentStrings.status.preparing);
 
+    startLoadingReplicad();
+
     if (!window.Blazor || typeof window.Blazor.start !== "function") {
       markFailed(new Error("Blazor startup script is not available."));
       return Promise.resolve();
@@ -492,6 +536,7 @@
   window.quoteEngineLoader = {
     loadBootResource,
     markRuntimeReady,
+    markReplicadReady,
     markReady,
     markFailed,
     setProgress,

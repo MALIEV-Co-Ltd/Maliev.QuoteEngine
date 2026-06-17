@@ -31,4 +31,16 @@
           BeforeTargets="BeforeBuild;BeforePublish">
     <Exec Command="npm run build-js" WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
+
+  <!-- Replicad worker + WASM copy for client-side 3D CAD -->
+  <Target Name="BuildReplicadWorker"
+          Inputs="$(MSBuildProjectDirectory)/js-src/replicad-worker.js;$(MSBuildProjectDirectory)/node_modules/.package-lock.json"
+          Outputs="$(MSBuildProjectDirectory)/wwwroot/js/replicad-worker.bundle.js;$(MSBuildProjectDirectory)/wwwroot/lib/replicad/replicad_single.wasm"
+          BeforeTargets="BeforeBuild;BeforePublish">
+    <Exec Command="npm run build-worker" WorkingDirectory="$(MSBuildProjectDirectory)" />
+    <MakeDir Directories="$(MSBuildProjectDirectory)/wwwroot/lib/replicad/" Condition="!Exists('$(MSBuildProjectDirectory)/wwwroot/lib/replicad/')" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/node_modules/replicad-opencascadejs/src/replicad_single.wasm"
+          DestinationFolder="$(MSBuildProjectDirectory)/wwwroot/lib/replicad/"
+          SkipUnchangedFiles="true" />
+  </Target>
 </Project>

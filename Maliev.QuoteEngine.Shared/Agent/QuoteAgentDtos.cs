@@ -699,55 +699,80 @@ public sealed class QuoteAgentCleanSpeechResponse
 }
 
 /// <summary>
-/// A primitive shape composing a generated 3D preview model.
+/// A CAD command in the parametric construction sequence.
 /// </summary>
-public sealed class QuoteModelPrimitiveDto
+public sealed class CadCommandDto
 {
-    /// <summary>Gets or sets the shape type: box, cylinder, sphere, or cone.</summary>
-    public string ShapeType { get; set; } = "box";
+    /// <summary>Operation: box, cylinder, sphere, cone, extrude, revolve,
+    /// fuse, cut, intersect, fillet, chamfer, sweep, loft, translate, rotate.</summary>
+    public string Op { get; set; } = string.Empty;
 
-    /// <summary>Gets or sets the size along X in mm.</summary>
-    public double LengthX { get; set; }
+    /// <summary>Identifier for referencing this shape in subsequent commands.</summary>
+    public string? Id { get; set; }
 
-    /// <summary>Gets or sets the size along Y in mm.</summary>
-    public double LengthY { get; set; }
+    /// <summary>Target shape reference (for boolean ops, fillet, translate, etc.).</summary>
+    public string? TargetId { get; set; }
 
-    /// <summary>Gets or sets the size along Z in mm.</summary>
-    public double LengthZ { get; set; }
+    /// <summary>Tool shape reference (for boolean ops, sweep, loft).</summary>
+    public string? ToolId { get; set; }
 
-    /// <summary>Gets or sets the diameter in mm (for cylinder, sphere, cone).</summary>
-    public double? Diameter { get; set; }
+    /// <summary>Result identifier — alias for the output of this command.</summary>
+    public string? ResultId { get; set; }
 
-    /// <summary>Gets or sets the height in mm (for cylinder, cone).</summary>
-    public double? Height { get; set; }
+    /// <summary>Numeric parameters, op-dependent:
+    /// box: [w, d, h]; cylinder: [radius, height]; sphere: [radius];
+    /// cone: [radiusBottom, radiusTop, height]; extrude/revolve: [height/angle];
+    /// fillet/chamfer: [radius].</summary>
+    public double[]? Params { get; set; }
 
-    /// <summary>Gets or sets the X offset from origin in mm.</summary>
-    public double OffsetX { get; set; }
+    /// <summary>Translation offset [x, y, z] for the translate op.</summary>
+    public double[]? Offset { get; set; }
 
-    /// <summary>Gets or sets the Y offset from origin in mm.</summary>
-    public double OffsetY { get; set; }
+    /// <summary>Rotation axis [x, y, z] for the rotate or revolve op.</summary>
+    public double[]? Axis { get; set; }
 
-    /// <summary>Gets or sets the Z offset from origin in mm.</summary>
-    public double OffsetZ { get; set; }
+    /// <summary>Rotation angle in radians.</summary>
+    public double? Angle { get; set; }
 
-    /// <summary>Gets or sets whether this primitive marks a hole/opening (rendered in contrasting color).</summary>
-    public bool IsHoleIndicator { get; set; }
+    /// <summary>Fillet or chamfer radius.</summary>
+    public double? Radius { get; set; }
+
+    /// <summary>2D profile definition for extrude/revolve operations.</summary>
+    public CadProfileDto? Profile { get; set; }
 }
 
 /// <summary>
-/// Result of generating a 3D preview model from inferred primitives.
+/// A 2D profile / sketch for extrude or revolve operations.
 /// </summary>
-public sealed class QuoteGenerateModelResponse
+public sealed class CadProfileDto
 {
-    /// <summary>Gets or sets the artifact ID for the generated preview.</summary>
-    public Guid ArtifactId { get; set; }
+    /// <summary>Sketch plane: "XY", "XZ", or "YZ". Default "XY".</summary>
+    public string Plane { get; set; } = "XY";
 
-    /// <summary>Gets or sets the part ID if a part placeholder was created.</summary>
-    public Guid? PartId { get; set; }
+    /// <summary>Sketch segments defining the 2D profile.</summary>
+    public List<CadSegmentDto> Segments { get; set; } = [];
 
-    /// <summary>Gets or sets the human-readable description of the generated preview.</summary>
-    public string Description { get; set; } = string.Empty;
+    /// <summary>Whether to auto-close the profile. Default true.</summary>
+    public bool Close { get; set; } = true;
 
-    /// <summary>Gets or sets the number of primitives in the generated preview.</summary>
-    public int PrimitiveCount { get; set; }
+    /// <summary>Circle radius (shorthand — sets a full circle profile).</summary>
+    public double? Radius { get; set; }
+
+    /// <summary>Rectangle width (shorthand — sets a full rect profile).</summary>
+    public double? Width { get; set; }
+
+    /// <summary>Rectangle height (shorthand — sets a full rect profile).</summary>
+    public double? Height { get; set; }
+}
+
+/// <summary>
+/// A single segment in a 2D sketch profile.
+/// </summary>
+public sealed class CadSegmentDto
+{
+    /// <summary>Segment type: move, line, hLine, vLine, arc, bezier.</summary>
+    public string Type { get; set; } = "line";
+
+    /// <summary>Segment parameters, type-dependent.</summary>
+    public double[]? Params { get; set; }
 }

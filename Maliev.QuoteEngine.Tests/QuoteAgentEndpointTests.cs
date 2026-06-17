@@ -2919,33 +2919,38 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task Generate_3d_preview_tool_creates_viewer_artifact_with_primitives()
+    public async Task Generate_3d_preview_tool_creates_viewer_artifact_with_commands()
     {
         using var client = factory.CreateClient();
         var sessionId = Guid.NewGuid();
 
-        object[] primitives =
+        object[] commands =
         [
             new
             {
-                shape_type = "box",
-                length_x_mm = 50.0,
-                length_y_mm = 30.0,
-                length_z_mm = 5.0,
-                offset_x_mm = 0.0,
-                offset_y_mm = 0.0,
-                offset_z_mm = 0.0,
-                is_hole_indicator = false
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
             },
             new
             {
-                shape_type = "cylinder",
-                diameter_mm = 6.0,
-                height_mm = 5.0,
-                offset_x_mm = 18.0,
-                offset_y_mm = 0.0,
-                offset_z_mm = 0.0,
-                is_hole_indicator = true
+                op = "cylinder",
+                id = "hole",
+                Params = new[] { 3.0, 5.0 }
+            },
+            new
+            {
+                op = "cut",
+                targetId = "base",
+                toolId = "hole",
+                resultId = "bracket"
+            },
+            new
+            {
+                op = "fillet",
+                targetId = "bracket",
+                radius = 2.0,
+                resultId = "finished"
             }
         ];
 
@@ -2953,7 +2958,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             new Dictionary<string, JsonElement>
             {
                 ["description"] = JsonSerializer.SerializeToElement("Bracket 50x30x5mm with mounting hole", JsonOptions),
-                ["primitives"] = JsonSerializer.SerializeToElement(primitives, JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions),
                 ["process_hint"] = JsonSerializer.SerializeToElement("fdm", JsonOptions)
             });
 
@@ -2963,7 +2968,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
         Assert.True(root.TryGetProperty("artifact_id", out var artifactId) && artifactId.ValueKind == JsonValueKind.String);
         Assert.True(root.TryGetProperty("part_id", out var partId) && partId.ValueKind == JsonValueKind.String);
-        Assert.True(root.TryGetProperty("primitive_count", out var count) && count.GetInt32() == 2);
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 4);
 
         var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
 
@@ -2972,7 +2977,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             a.Metadata.TryGetValue("generated", out var gen) && gen == "true");
 
         Assert.NotNull(viewerArtifact);
-        Assert.True(viewerArtifact.Metadata.ContainsKey("primitives"));
+        Assert.True(viewerArtifact.Metadata.ContainsKey("cad_commands"));
         Assert.True(viewerArtifact.Metadata.ContainsKey("description"));
 
         Assert.Contains(state.Parts, part =>
@@ -2981,7 +2986,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task Generate_3d_preview_tool_requires_at_least_one_primitive()
+    public async Task Generate_3d_preview_tool_requires_at_least_one_command()
     {
         using var client = factory.CreateClient();
         var sessionId = Guid.NewGuid();
@@ -2990,7 +2995,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             new Dictionary<string, JsonElement>
             {
                 ["description"] = JsonSerializer.SerializeToElement("Test", JsonOptions),
-                ["primitives"] = JsonSerializer.SerializeToElement(Array.Empty<object>(), JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(Array.Empty<object>(), JsonOptions),
             });
 
         var doc = JsonDocument.Parse(json);
