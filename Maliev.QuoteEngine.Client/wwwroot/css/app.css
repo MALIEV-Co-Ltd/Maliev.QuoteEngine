@@ -1611,6 +1611,8 @@
 }
 
 .qe-agent-main--chat .qe-agent-thread {
+    flex: 1;
+    min-height: 0;
     align-content: start;
     display: grid;
     gap: 28px;
@@ -1624,9 +1626,12 @@
 }
 
 .qe-agent-thread-wrap {
+    display: flex;
+    flex-direction: column;
     position: relative;
     min-height: 0;
     min-width: 0;
+    overflow: hidden;
 }
 
 .qe-agent-scroll-to-bottom {
