@@ -211,6 +211,10 @@ function insertImageData(entry, dataUrl) {
         const image = new Image();
         image.onload = () => {
             const { canvas, state } = entry;
+            if (entry.saveSnapshot) {
+                entry.saveSnapshot();
+            }
+
             const padding = 72;
             const availableWidth = Math.max(canvas.width - padding * 2, 1);
             const availableHeight = Math.max(canvas.height - padding * 2, 1);
@@ -265,6 +269,46 @@ function updateCanvasMode(canvas, state) {
     canvas.classList.toggle("is-eraser", state.mode === "eraser");
 }
 
+function undoEntry(entry) {
+    const { state } = entry;
+    if (state.history.length === 0) {
+        return;
+    }
+
+    state.future.push({
+        strokes: state.strokes.map(s => ({ ...s, points: [...s.points] })),
+        images: state.images.map(img => ({ ...img }))
+    });
+
+    const snapshot = state.history.pop();
+    state.strokes = snapshot.strokes.map(s => ({ ...s, points: [...s.points] }));
+    state.images = snapshot.images.map(img => ({ ...img }));
+    state.currentStroke = null;
+    state.transform = null;
+    state.drawing = false;
+    renderScene(entry);
+}
+
+function redoEntry(entry) {
+    const { state } = entry;
+    if (state.future.length === 0) {
+        return;
+    }
+
+    state.history.push({
+        strokes: state.strokes.map(s => ({ ...s, points: [...s.points] })),
+        images: state.images.map(img => ({ ...img }))
+    });
+
+    const snapshot = state.future.pop();
+    state.strokes = snapshot.strokes.map(s => ({ ...s, points: [...s.points] }));
+    state.images = snapshot.images.map(img => ({ ...img }));
+    state.currentStroke = null;
+    state.transform = null;
+    state.drawing = false;
+    renderScene(entry);
+}
+
 export function initSketchCanvas(canvasId, dotNetRef) {
     const canvas = getCanvas(canvasId);
     if (!canvas || canvases.has(canvasId)) {
@@ -286,10 +330,31 @@ export function initSketchCanvas(canvasId, dotNetRef) {
         cursorPoint: null,
         eraserRadius: 18,
         strokes: [],
-        images: []
+        images: [],
+        history: [],
+        future: []
     };
 
-    const entry = { canvas, ctx, state, start: null, move: null, stop: null, leave: null, paste: null, dotNetRef };
+    const entry = { canvas, ctx, state, start: null, move: null, stop: null, leave: null, paste: null, keydown: null, saveSnapshot: null, dotNetRef };
+
+    const saveSnapshot = () => {
+        state.history.push({
+            strokes: state.strokes.map(s => ({ ...s, points: [...s.points] })),
+            images: state.images.map(img => ({ ...img }))
+        });
+        if (state.history.length > 64) {
+            state.history.shift();
+        }
+        state.future = [];
+    };
+
+    const applySnapshot = (snapshot) => {
+        state.strokes = snapshot.strokes.map(s => ({ ...s, points: [...s.points] }));
+        state.images = snapshot.images.map(img => ({ ...img }));
+        state.currentStroke = null;
+        state.transform = null;
+        state.drawing = false;
+    };
 
     const start = (event) => {
         event.preventDefault();
@@ -300,6 +365,7 @@ export function initSketchCanvas(canvasId, dotNetRef) {
         canvas.setPointerCapture(event.pointerId);
 
         if (hit) {
+            saveSnapshot();
             selectImage(state, hit.item);
             bringImageToFront(state, hit.item);
             state.transform = {
@@ -315,6 +381,7 @@ export function initSketchCanvas(canvasId, dotNetRef) {
             return;
         }
 
+        saveSnapshot();
         selectImage(state, null);
         state.drawing = true;
         state.currentStroke = {
@@ -399,11 +466,31 @@ export function initSketchCanvas(canvasId, dotNetRef) {
         await insertClipboardFile(entry, image);
     };
 
+    const keydown = (event) => {
+        const ctrl = event.ctrlKey || event.metaKey;
+        if (!ctrl) {
+            return;
+        }
+
+        if ((event.key === "z" || event.key === "Z") && event.shiftKey) {
+            event.preventDefault();
+            redoEntry(entry);
+        } else if (event.key === "z" || event.key === "Z") {
+            event.preventDefault();
+            undoEntry(entry);
+        } else if (event.key === "y" || event.key === "Y") {
+            event.preventDefault();
+            redoEntry(entry);
+        }
+    };
+
     entry.start = start;
     entry.move = move;
     entry.stop = stop;
     entry.leave = leave;
     entry.paste = paste;
+    entry.keydown = keydown;
+    entry.saveSnapshot = saveSnapshot;
     canvas.addEventListener("pointerdown", start);
     canvas.addEventListener("pointermove", move);
     canvas.addEventListener("pointerup", stop);
@@ -411,6 +498,7 @@ export function initSketchCanvas(canvasId, dotNetRef) {
     canvas.addEventListener("lostpointercapture", stop);
     canvas.addEventListener("pointerleave", leave);
     window.addEventListener("paste", paste);
+    window.addEventListener("keydown", keydown);
     canvases.set(canvasId, entry);
     updateCanvasMode(canvas, state);
     renderScene(entry);
@@ -449,6 +537,10 @@ export function clearSketchCanvas(canvasId) {
         }
 
         return;
+    }
+
+    if (entry.saveSnapshot) {
+        entry.saveSnapshot();
     }
 
     entry.state.strokes = [];
@@ -521,5 +613,20 @@ export function disposeSketchCanvas(canvasId) {
     entry.canvas.removeEventListener("lostpointercapture", entry.stop);
     entry.canvas.removeEventListener("pointerleave", entry.leave);
     window.removeEventListener("paste", entry.paste);
+    window.removeEventListener("keydown", entry.keydown);
     canvases.delete(canvasId);
+}
+
+export function undoSketchCanvas(canvasId) {
+    const entry = canvases.get(canvasId);
+    if (entry) {
+        undoEntry(entry);
+    }
+}
+
+export function redoSketchCanvas(canvasId) {
+    const entry = canvases.get(canvasId);
+    if (entry) {
+        redoEntry(entry);
+    }
 }

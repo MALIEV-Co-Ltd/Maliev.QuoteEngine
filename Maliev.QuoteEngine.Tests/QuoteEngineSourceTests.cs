@@ -934,7 +934,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-markdown\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-thinking\"", component, StringComparison.Ordinal);
         Assert.Contains("assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps", component, StringComparison.Ordinal);
-        Assert.Contains("await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives);", component, StringComparison.Ordinal);
+        Assert.Contains("await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives, suppressPanelAutoOpen: true);", component, StringComparison.Ordinal);
         Assert.Contains("private async Task ApplyUiDirectivesAsync", component, StringComparison.Ordinal);
         Assert.Contains("OpenDirectivePanel(_uiFocusDirectives)", component, StringComparison.Ordinal);
         Assert.Contains("SelectDirectiveUploadTarget(_uiFocusDirectives)", component, StringComparison.Ordinal);
@@ -1358,7 +1358,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-preview-dialog\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-preview-nav qe-agent-preview-nav--prev\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-preview-nav qe-agent-preview-nav--next\"", component, StringComparison.Ordinal);
-        Assert.Contains("OpenArtifactPreview(artifact)", component, StringComparison.Ordinal);
+        Assert.Contains("SelectArtifact(artifact)", component, StringComparison.Ordinal);
         Assert.Contains("OpenUploadedPreviewAsync(SelectedPartIndex)", component, StringComparison.Ordinal);
         Assert.Contains("PreviewItems", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-preview-shell", agentStyles, StringComparison.Ordinal);
@@ -1607,14 +1607,15 @@ public sealed class QuoteEngineSourceTests
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var drawer = ExtractSourceBlock(shell, "qe-agent-artifact-drawer", "</aside>");
 
-        Assert.Contains("!string.IsNullOrWhiteSpace(artifact.Url)", drawer, StringComparison.Ordinal);
-        Assert.Contains("@onclick=\"@(() => OpenArtifactPreview(artifact))\"", drawer, StringComparison.Ordinal);
-        Assert.DoesNotContain("href=\"@artifact.Url\"", drawer, StringComparison.Ordinal);
-        Assert.DoesNotContain("target=\"_blank\"", drawer, StringComparison.Ordinal);
-        Assert.Contains("ArtifactActionLabel(artifact)", drawer, StringComparison.Ordinal);
-        Assert.Contains("private void OpenArtifactPreview(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
+        Assert.Contains("SelectArtifact(artifact)", drawer, StringComparison.Ordinal);
+        Assert.Contains("_selectedArtifact", drawer, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-artifact-inline-preview", drawer, StringComparison.Ordinal);
+        Assert.Contains("ArtifactActionLabel(_selectedArtifact)", drawer, StringComparison.Ordinal);
+        Assert.Contains("target=\"_blank\"", drawer, StringComparison.Ordinal);
+        Assert.Contains("private void SelectArtifact(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
         Assert.Contains("private string ArtifactActionLabel(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-link", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifact-inline-preview", styles, StringComparison.Ordinal);
     }
 
     [Fact]

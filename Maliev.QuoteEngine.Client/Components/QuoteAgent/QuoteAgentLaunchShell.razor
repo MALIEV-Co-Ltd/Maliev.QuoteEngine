@@ -499,19 +499,27 @@
                                         <div class="qe-agent-thinking-steps">
                                             @foreach (var step in message.ThinkingSteps.OrderBy(step => step.StepNumber))
                                             {
-                                                <div class="qe-agent-thinking-step">
-                                                    <div class="qe-agent-thinking-step-header">
-                                                        <span class="qe-agent-thinking-step-title">@ThinkingStepTitle(step)</span>
-                                                        @if (step.DurationMs is > 0)
+                                                var stepTitle = ThinkingStepTitle(step);
+                                                var stepMarkup = ThinkingStepDetailMarkup(step);
+                                                @if (!string.IsNullOrWhiteSpace(stepTitle) || stepMarkup.Value.Length > 0)
+                                                {
+                                                    <div class="qe-agent-thinking-step">
+                                                        @if (!string.IsNullOrWhiteSpace(stepTitle))
                                                         {
-                                                            <small>@FormatDuration(step.DurationMs.Value)</small>
+                                                            <div class="qe-agent-thinking-step-header">
+                                                                <span class="qe-agent-thinking-step-title">@stepTitle</span>
+                                                                @if (step.DurationMs is > 0)
+                                                                {
+                                                                    <small>@FormatDuration(step.DurationMs.Value)</small>
+                                                                }
+                                                            </div>
+                                                        }
+                                                        @if (stepMarkup.Value.Length > 0)
+                                                        {
+                                                            <div class="qe-agent-markdown">@stepMarkup</div>
                                                         }
                                                     </div>
-                                                    @if (!string.IsNullOrWhiteSpace(step.Detail))
-                                                    {
-                                                        <div class="qe-agent-markdown">@ThinkingStepDetailMarkup(step)</div>
-                                                    }
-                                                </div>
+                                                }
                                             }
                                         </div>
                                     </details>
@@ -757,16 +765,14 @@
             }
         </div>
 
-        @if (_showScrollToBottomButton)
-        {
-            <button type="button"
-                    class="qe-agent-scroll-to-bottom"
-                    title="@Text("Scroll to latest message", "เลื่อนไปข้อความล่าสุด")"
-                    aria-label="@Text("Scroll to latest message", "เลื่อนไปข้อความล่าสุด")"
-                    @onclick="ScrollToLatestMessageAsync">
-                <MudIcon Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Small" />
-            </button>
-        }
+        <button type="button"
+                class="@($"qe-agent-scroll-to-bottom {(_showScrollToBottomButton ? "is-visible" : string.Empty)}")"
+                title="@Text("Scroll to latest message", "เลื่อนไปข้อความล่าสุด")"
+                aria-label="@Text("Scroll to latest message", "เลื่อนไปข้อความล่าสุด")"
+                aria-hidden="@(!_showScrollToBottomButton)"
+                @onclick="ScrollToLatestMessageAsync">
+            <MudIcon Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Small" />
+        </button>
 
         @if (!string.IsNullOrWhiteSpace(_error))
         {
@@ -1072,13 +1078,30 @@
                         }
                     </div>
                     <div class="qe-agent-sketch-actions">
-                        <button type="button" class="qe-agent-secondary-btn" @onclick="UseSketchEraserAsync">
+                        <button type="button"
+                                class="@($"qe-agent-sketch-tool-btn {(_sketchMode == "eraser" ? "active" : string.Empty)}")"
+                                title="@Text("Eraser", "ยางลบ")"
+                                aria-label="@Text("Eraser", "ยางลบ")"
+                                aria-pressed="@(_sketchMode == "eraser")"
+                                @onclick="UseSketchEraserAsync">
                             <MudIcon Icon="@Icons.Material.Outlined.AutoFixOff" Size="Size.Small" />
-                            <span>@Text("Eraser", "ยางลบ")</span>
                         </button>
-                        <label class="qe-agent-secondary-btn" for="@SketchImageInputId">
+                        <button type="button"
+                                class="qe-agent-sketch-tool-btn"
+                                title="@Text("Undo", "เลิกทำ")"
+                                aria-label="@Text("Undo", "เลิกทำ")"
+                                @onclick="UndoSketchAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.Undo" Size="Size.Small" />
+                        </button>
+                        <button type="button"
+                                class="qe-agent-sketch-tool-btn"
+                                title="@Text("Redo", "ทำซ้ำ")"
+                                aria-label="@Text("Redo", "ทำซ้ำ")"
+                                @onclick="RedoSketchAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.Redo" Size="Size.Small" />
+                        </button>
+                        <label class="qe-agent-sketch-tool-btn qe-agent-sketch-tool-btn--label" for="@SketchImageInputId" title="@Text("Insert image", "เพิ่มรูปภาพ")" aria-label="@Text("Insert image", "เพิ่มรูปภาพ")">
                             <MudIcon Icon="@Icons.Material.Outlined.AddPhotoAlternate" Size="Size.Small" />
-                            <span>@Text("Insert image", "เพิ่มรูปภาพ")</span>
                         </label>
                     </div>
                     <InputFile id="@SketchImageInputId"
@@ -1089,8 +1112,15 @@
                         <MudIcon Icon="@Icons.Material.Outlined.DeleteOutline" Size="Size.Small" />
                         <span class="sr-only">@Text("Clear sketch", "ล้างสเก็ตช์")</span>
                     </button>
-                    <button type="button" class="qe-agent-primary-btn" @onclick="AttachSketchAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.Check" Size="Size.Small" />
+                    <button type="button" class="qe-agent-primary-btn" disabled="@_sketchAttaching" @onclick="AttachSketchAsync">
+                        @if (_sketchAttaching)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Outlined.Check" Size="Size.Small" />
+                        }
                         <span>@Text("Attach sketch", "แนบสเก็ตช์")</span>
                     </button>
                 </footer>
@@ -1316,24 +1346,39 @@
                 <div class="qe-agent-artifacts">
                     @foreach (var artifact in _artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact))
                     {
-                        <div class="@($"qe-agent-artifact {UiFocusClass(ArtifactFocusKey(artifact), ArtifactTypeFocusKey(artifact.ArtifactType))}")">
+                        var isSelected = _selectedArtifact?.ArtifactId == artifact.ArtifactId;
+                        <button type="button"
+                                class="@($"qe-agent-artifact qe-agent-artifact--button {(isSelected ? "active" : string.Empty)} {UiFocusClass(ArtifactFocusKey(artifact), ArtifactTypeFocusKey(artifact.ArtifactType))}")"
+                                @onclick="@(() => SelectArtifact(artifact))">
                             <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
                             <div>
                                 <strong>@artifact.Title</strong>
                                 <small>@artifact.Status</small>
                             </div>
-                            @if (!string.IsNullOrWhiteSpace(artifact.Url))
-                            {
-                                <button type="button"
-                                        class="qe-agent-artifact-link"
-                                        @onclick="@(() => OpenArtifactPreview(artifact))">
-                                    <span>@ArtifactActionLabel(artifact)</span>
-                                    <MudIcon Icon="@Icons.Material.Outlined.Preview" Size="Size.Small" />
-                                </button>
-                            }
-                        </div>
+                        </button>
                     }
                 </div>
+                @if (_selectedArtifact is not null && !string.IsNullOrWhiteSpace(_selectedArtifact.Url))
+                {
+                    <section class="qe-agent-artifact-inline-preview" aria-label="@Text("Artifact preview", "ตัวอย่างไฟล์งาน")">
+                        <header>
+                            <strong>@_selectedArtifact.Title</strong>
+                            <a href="@_selectedArtifact.Url"
+                               target="_blank"
+                               rel="noopener noreferrer"
+                               class="qe-agent-artifact-link"
+                               title="@Text("Open in new tab", "เปิดในแท็บใหม่")">
+                                <span>@ArtifactActionLabel(_selectedArtifact)</span>
+                                <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                            </a>
+                        </header>
+                        <iframe src="@_selectedArtifact.Url"
+                                class="qe-agent-artifact-frame"
+                                title="@_selectedArtifact.Title"
+                                loading="lazy"
+                                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+                    </section>
+                }
             }
 
             @if (_proposedActions.Count > 0)
@@ -1491,6 +1536,7 @@
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
+    private QuoteAgentArtifactDto? _selectedArtifact;
     private List<QuoteAgentUiDirectiveDto> _uiFocusDirectives = [];
     private QuoteAgentAuthHandoffResponse? _authHandoff;
     private List<QuoteAgentConnectorDto> _connectors = [];
@@ -1536,6 +1582,8 @@
     private string? _highlightConnectorId;
     private string _sketchTitle = "Manufacturing sketch";
     private string _sketchColor = "#161616";
+    private string _sketchMode = "ink";
+    private bool _sketchAttaching;
     private CancellationTokenSource? _searchPromptAnimationCts;
     private ElementReference _composerTextarea;
     private ElementReference _searchInput;
@@ -2096,7 +2144,7 @@
                     _artifacts = streamEvent.Response.Artifacts;
                     _proposedActions = streamEvent.Response.ProposedActions;
                     ApplyAuthHandoff(streamEvent.Response.AuthHandoff);
-                    await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives);
+                    await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives, suppressPanelAutoOpen: true);
                     if (!string.IsNullOrWhiteSpace(streamEvent.Response.UiCulture))
                     {
                         await Preferences.SetCultureAsync(streamEvent.Response.UiCulture);
@@ -2400,7 +2448,7 @@
                 ApplyState(result.State);
                 if (result.State.UiDirectives.Count > 0)
                 {
-                    await ApplyUiDirectivesAsync(result.State.UiDirectives);
+                    await ApplyUiDirectivesAsync(result.State.UiDirectives, suppressPanelAutoOpen: true);
                 }
                 else if (result.State.Artifacts.Count > previousArtifactCount)
                 {
@@ -2593,6 +2641,11 @@
             string.Equals(item.Title, artifact.Title, StringComparison.OrdinalIgnoreCase));
         _previewIndex = previewIndex >= 0 ? previewIndex : 0;
         _previewDialogOpen = CurrentPreviewItem is not null;
+    }
+
+    private void SelectArtifact(QuoteAgentArtifactDto artifact)
+    {
+        _selectedArtifact = _selectedArtifact?.ArtifactId == artifact.ArtifactId ? null : artifact;
     }
 
     private void ClosePreviewDialog()
@@ -3151,6 +3204,7 @@
 
     private async Task UseSketchEraserAsync()
     {
+        _sketchMode = "eraser";
         if (_sketchModule is not null)
         {
             await _sketchModule.InvokeVoidAsync("setSketchEraser", SketchCanvasId);
@@ -3190,9 +3244,26 @@
     private async Task SelectSketchColorAsync(string color)
     {
         _sketchColor = color;
+        _sketchMode = "ink";
         if (_sketchModule is not null)
         {
             await _sketchModule.InvokeVoidAsync("setSketchBrushColor", SketchCanvasId, _sketchColor);
+        }
+    }
+
+    private async Task UndoSketchAsync()
+    {
+        if (_sketchModule is not null)
+        {
+            await _sketchModule.InvokeVoidAsync("undoSketchCanvas", SketchCanvasId);
+        }
+    }
+
+    private async Task RedoSketchAsync()
+    {
+        if (_sketchModule is not null)
+        {
+            await _sketchModule.InvokeVoidAsync("redoSketchCanvas", SketchCanvasId);
         }
     }
 
@@ -3221,6 +3292,13 @@
 
     private async Task AttachSketchAsync()
     {
+        if (_sketchAttaching)
+        {
+            return;
+        }
+
+        _sketchAttaching = true;
+
         if (string.IsNullOrWhiteSpace(_sketchTitle) ||
             _sketchTitle.Equals("Untitled sketch", StringComparison.OrdinalIgnoreCase))
         {
@@ -3264,7 +3342,15 @@
                     false,
                     "Ready");
 
-                _pendingComposerAttachments.Add(attachment);
+                var existingSketchIndex = _pendingComposerAttachments.FindIndex(item => item.Matches(attachment));
+                if (existingSketchIndex >= 0)
+                {
+                    _pendingComposerAttachments[existingSketchIndex] = attachment;
+                }
+                else
+                {
+                    _pendingComposerAttachments.Add(attachment);
+                }
             }
         }
         catch
@@ -3273,6 +3359,8 @@
         }
         finally
         {
+            _sketchAttaching = false;
+
             if (_sketchModule is not null)
             {
                 await _sketchModule.InvokeVoidAsync("disposeSketchCanvas", SketchCanvasId);
@@ -3404,8 +3492,22 @@
             JsonValueKind.False => "No",
             JsonValueKind.String => element.GetString(),
             JsonValueKind.Number => element.ToString(),
+            JsonValueKind.Array => FormatJsonArrayValue(element),
             _ => null
         };
+    }
+
+    private static string? FormatJsonArrayValue(JsonElement element)
+    {
+        var items = new List<string>();
+        foreach (var item in element.EnumerateArray())
+        {
+            var val = FormatJsonValue(item);
+            if (val is not null)
+                items.Add(val);
+        }
+
+        return items.Count > 0 ? string.Join(", ", items) : null;
     }
 
     private static string HumanizeCamelCase(string key)
