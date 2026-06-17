@@ -4,6 +4,130 @@ const dictationSessions = new WeakMap();
 const dictationButtonHandlers = new WeakMap();
 const composerDotNetRefs = new WeakMap();
 
+let transformersPipeline = null;
+let transformersLoadPromise = null;
+let transformersReady = false;
+let transformersFailed = false;
+
+async function loadWhisperModel(dotNetRef) {
+  if (transformersReady) return true;
+  if (transformersFailed) return false;
+  if (transformersLoadPromise) return transformersLoadPromise;
+
+  transformersLoadPromise = (async () => {
+    dotNetRef?.invokeMethodAsync("ReportDictationModelProgressAsync", 0.01, "Loading speech engine...");
+    try {
+      const module = await import("https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.4/dist/transformers.min.js");
+      const { pipeline } = module;
+
+      dotNetRef?.invokeMethodAsync("ReportDictationModelProgressAsync", 0.1, "Loading voice model (39MB)...");
+
+      transformersPipeline = await pipeline(
+        "automatic-speech-recognition",
+        "onnx-community/whisper-tiny",
+        {
+          progress_callback: progress => {
+            if (progress?.status === "progress") {
+              const pct = 0.1 + (progress.progress / 100) * 0.9;
+              dotNetRef?.invokeMethodAsync("ReportDictationModelProgressAsync", pct,
+                `Loading voice model${progress.file ? " (" + progress.file.split("/").pop() + ")" : ""}... ${Math.round(progress.progress)}%`);
+            }
+          }
+        }
+      );
+
+      transformersReady = true;
+      dotNetRef?.invokeMethodAsync("ReportDictationModelProgressAsync", 1, "Ready");
+      return true;
+    } catch (error) {
+      console.warn("Whisper model unavailable, falling back to browser native:", error);
+      transformersFailed = true;
+      dotNetRef?.invokeMethodAsync("ReportDictationModelProgressAsync", 0, "fallback");
+      return false;
+    }
+  })();
+
+  return transformersLoadPromise;
+}
+
+async function startWhisperCapture(session) {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true }
+    });
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioContext = new AudioContext({ sampleRate: 16000 });
+
+    if (audioContext.state === "suspended") {
+      await audioContext.resume().catch(() => {});
+    }
+
+    const source = audioContext.createMediaStreamSource(stream);
+    const processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+    const chunks = [];
+    processor.onaudioprocess = event => {
+      if (!session?.active) return;
+      chunks.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+    };
+
+    source.connect(processor);
+    processor.connect(audioContext.destination);
+
+    session.whisperChunks = chunks;
+    session.whisperStream = stream;
+    session.whisperAudioContext = audioContext;
+    session.whisperProcessor = processor;
+    session.whisperSource = source;
+
+    return stream;
+  } catch (error) {
+    console.warn("Microphone capture failed:", error);
+    throw error;
+  }
+}
+
+function stopWhisperCapture(session) {
+  if (session.whisperProcessor) {
+    try { session.whisperProcessor.disconnect(); } catch {}
+  }
+  if (session.whisperSource) {
+    try { session.whisperSource.disconnect(); } catch {}
+  }
+  if (session.whisperAudioContext) {
+    try { session.whisperAudioContext.close(); } catch {}
+  }
+  if (session.whisperStream) {
+    session.whisperStream.getTracks().forEach(t => t.stop());
+  }
+}
+
+function getWhisperAudioBuffer(session) {
+  const chunks = session.whisperChunks;
+  if (!chunks || chunks.length === 0) return null;
+  const totalLength = chunks.reduce((s, c) => s + c.length, 0);
+  const result = new Float32Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return result;
+}
+
+function resolveWhisperLanguage(culture) {
+  const lower = String(culture || "").toLowerCase();
+  if (lower.startsWith("th")) return "th";
+  if (lower.startsWith("zh")) return "zh";
+  if (lower.startsWith("ja")) return "ja";
+  if (lower.startsWith("ko")) return "ko";
+  if (lower.startsWith("de")) return "de";
+  if (lower.startsWith("fr")) return "fr";
+  if (lower.startsWith("es")) return "es";
+  return "en";
+}
+
 export function initComposer(textarea, dotNetRef, dictationButton) {
   if (!textarea || !dotNetRef) {
     return;
@@ -182,11 +306,49 @@ async function finishDictationFromUserAction(textarea, dotNetRef) {
     }
 
     session.dotNetStopRequested = true;
+
+    if (session.useWhisper) {
+      stopWhisperCapture(session);
+      stopDictationMeter(session);
+      session.active = false;
+
+      const audioData = getWhisperAudioBuffer(session);
+      if (audioData && transformersPipeline) {
+        try {
+          const culture = session.culture || "en";
+          const language = resolveWhisperLanguage(culture);
+          const result = await transformersPipeline(audioData, {
+            language,
+            task: "transcribe",
+            return_timestamps: false
+          });
+          const text = String(result?.text || "").trim();
+
+          const speechPrefix = text && session.before && !/\s$/.test(session.before) ? " " : "";
+          const speechSuffix = text && session.after && !/^\s/.test(session.after) ? " " : "";
+          const fullText = `${session.before}${speechPrefix}${text}${speechSuffix}${session.after}`;
+          session.settled = true;
+          textarea.value = fullText;
+          textarea.dispatchEvent(new Event("input", { bubbles: true }));
+          setTextareaSelection(textarea, fullText.length, fullText.length);
+          updateComposerShape(textarea);
+
+          await dotNetRef.invokeMethodAsync("CompleteDictationAsync", session.before + speechPrefix, text, speechSuffix + session.after);
+        } catch (error) {
+          console.warn("Whisper inference failed:", error);
+          await dotNetRef.invokeMethodAsync("CompleteDictationAsync", "", "", "");
+        }
+      } else {
+        await dotNetRef.invokeMethodAsync("CompleteDictationAsync", "", "", "");
+      }
+      dictationSessions.delete(textarea);
+      return;
+    }
+
     clearDictationRestart(session);
     try {
       session.recognition.stop();
     } catch {
-      // Browser recognition may already be stopped.
     }
 
     const result = finishDictation(textarea, session);
@@ -272,17 +434,20 @@ export async function dictateComposerText(textarea) {
   return endDictation(textarea);
 }
 
-export async function beginDictation(textarea, dictationButton) {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
-    throw new Error("Speech recognition is not supported in this browser.");
-  }
+export async function loadDictationModel(dotNetRef) {
+  return loadWhisperModel(dotNetRef);
+}
 
+export async function beginDictation(textarea, dictationButton) {
   if (!textarea) {
     return;
   }
 
   cancelDictation(textarea);
+
+  if (!dictationButton && textarea) {
+    dictationButton = dictationButtonHandlers.get(textarea)?.dictationButton || null;
+  }
 
   const rawSelectionStart = typeof textarea.selectionStart === "number"
     ? textarea.selectionStart
@@ -291,6 +456,35 @@ export async function beginDictation(textarea, dictationButton) {
     ? textarea.selectionEnd
     : rawSelectionStart;
   const insertion = resolveDictationInsertion(textarea.value, rawSelectionStart, rawSelectionEnd);
+
+  const dotNetRef = composerDotNetRefs.get(textarea);
+  const useWhisper = await loadWhisperModel(dotNetRef);
+
+  if (useWhisper) {
+    const session = {
+      after: textarea.value.slice(insertion.end),
+      before: textarea.value.slice(0, insertion.start),
+      button: dictationButton,
+      culture: textarea?.dataset?.speechLanguages?.split(",")[0]?.trim() || document.documentElement.lang || navigator.language || "en",
+      dotNetStopRequested: false,
+      settled: false,
+      active: true,
+      useWhisper: true,
+      dotNetRef
+    };
+    dictationSessions.set(textarea, session);
+    prepareDictationPreview(textarea, session);
+
+    await startWhisperCapture(session);
+    void startDictationMeter(session, session.whisperStream);
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    throw new Error("Speech recognition is not supported in this browser.");
+  }
+
   const session = {
     after: textarea.value.slice(insertion.end),
     before: textarea.value.slice(0, insertion.start),
@@ -306,7 +500,8 @@ export async function beginDictation(textarea, dictationButton) {
     settled: false,
     active: true,
     thaiRetryCount: 0,
-    dotNetRef: composerDotNetRefs.get(textarea)
+    dotNetRef: composerDotNetRefs.get(textarea),
+    useWhisper: false
   };
   dictationSessions.set(textarea, session);
   prepareDictationPreview(textarea, session);
@@ -361,7 +556,6 @@ export async function beginDictation(textarea, dictationButton) {
     }
 
     if (event.error === "aborted") {
-      // Raised by our own cancelDictation/abort; not a failure to report.
       return;
     }
 
@@ -372,7 +566,6 @@ export async function beginDictation(textarea, dictationButton) {
     try {
       session.recognition.stop();
     } catch {
-      // Browser recognition may already be stopped.
     }
   };
 
@@ -406,11 +599,43 @@ export async function endDictation(textarea) {
   }
 
   session.dotNetStopRequested = true;
+
+  if (session.useWhisper) {
+    stopWhisperCapture(session);
+    stopDictationMeter(session);
+    session.active = false;
+
+    const audioData = getWhisperAudioBuffer(session);
+    if (audioData && transformersPipeline) {
+      try {
+        const culture = session.culture || "en";
+        const language = resolveWhisperLanguage(culture);
+        const result = await transformersPipeline(audioData, {
+          language,
+          task: "transcribe",
+          return_timestamps: false
+        });
+        const text = String(result?.text || "").trim();
+        const speechPrefix = text && session.before && !/\s$/.test(session.before) ? " " : "";
+        const speechSuffix = text && session.after && !/^\s/.test(session.after) ? " " : "";
+        session.settled = true;
+        dictationSessions.delete(textarea);
+        return `${session.before}${speechPrefix}${text}${speechSuffix}${session.after}`;
+      } catch {
+        session.settled = true;
+        dictationSessions.delete(textarea);
+        return textarea.value || "";
+      }
+    }
+    session.settled = true;
+    dictationSessions.delete(textarea);
+    return textarea.value || "";
+  }
+
   clearDictationRestart(session);
   try {
     session.recognition.stop();
   } catch {
-    // Browser recognition may already be stopped.
   }
 
   const result = finishDictation(textarea, session);
@@ -423,11 +648,19 @@ function cancelDictation(textarea) {
     return;
   }
 
+  if (session.useWhisper) {
+    stopWhisperCapture(session);
+    stopDictationMeter(session);
+    session.active = false;
+    removeDictationPreview(textarea);
+    dictationSessions.delete(textarea);
+    return;
+  }
+
   clearDictationRestart(session);
   try {
     session.recognition.abort();
   } catch {
-    // Ignore aborted or unavailable sessions.
   }
 
   stopDictationMeter(session);
@@ -665,7 +898,7 @@ function clearDictationRestart(session) {
   session.restartTimer = 0;
 }
 
-async function startDictationMeter(session) {
+async function startDictationMeter(session, sharedStream) {
   const button = session.button;
   if (!button || !navigator.mediaDevices?.getUserMedia || !window.AudioContext && !window.webkitAudioContext) {
     setDictationLevel(button, 0, "quiet");
@@ -673,7 +906,7 @@ async function startDictationMeter(session) {
   }
 
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const stream = sharedStream || await navigator.mediaDevices.getUserMedia({ audio: true });
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const audioContext = new AudioContext();
     if (audioContext.state === "suspended") {

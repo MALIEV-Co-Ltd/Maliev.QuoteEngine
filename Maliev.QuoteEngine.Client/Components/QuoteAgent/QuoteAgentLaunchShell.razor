@@ -966,11 +966,18 @@
                 </div>
                 <button type="button"
                         @ref="_dictationButton"
-                        class="@($"qe-agent-round-btn qe-agent-dictation-btn {(_dictating ? "active" : string.Empty)} {(_dictationProcessing ? "processing" : string.Empty)}")"
+                        class="@($"qe-agent-round-btn qe-agent-dictation-btn {(_dictating ? "active" : string.Empty)} {(_dictationProcessing ? "processing" : string.Empty)} {(_dictationModelLoading ? "loading" : string.Empty)}")"
                         title="@DictationButtonTitle"
                         aria-label="@DictationButtonTitle"
                         aria-pressed="@_dictating">
-                    @if (_dictationProcessing)
+                    @if (_dictationModelLoading)
+                    {
+                        <span class="qe-agent-dictation-loading" title="@_dictationModelStatus">
+                            <span class="qe-agent-dictation-spinner" aria-hidden="true"></span>
+                            <span class="qe-agent-dictation-progress">@((int)(_dictationModelProgress * 100))%</span>
+                        </span>
+                    }
+                    else if (_dictationProcessing)
                     {
                         <span class="qe-agent-dictation-spinner" aria-hidden="true"></span>
                     }
@@ -1561,6 +1568,9 @@
     private bool _customerSearchUnavailable;
     private bool _dictating;
     private bool _dictationProcessing;
+    private bool _dictationModelLoading;
+    private double _dictationModelProgress;
+    private string _dictationModelStatus = string.Empty;
     private string _dictationBefore = string.Empty;
     private string _dictationAfter = string.Empty;
     private string _dictationTimeLabel = string.Empty;
@@ -1753,11 +1763,13 @@
         }
     }
 
-    private string DictationButtonTitle => _dictationProcessing
-        ? Text("Processing dictated speech", "กำลังประมวลผลเสียงพูด")
-        : _dictating
-            ? Text("Stop dictation", "หยุดพูดตามคำบอก")
-            : Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง");
+    private string DictationButtonTitle => _dictationModelLoading
+        ? string.IsNullOrWhiteSpace(_dictationModelStatus) ? Text("Loading voice model...", "กำลังโหลดโมเดลเสียง...") : _dictationModelStatus
+        : _dictationProcessing
+            ? Text("Processing dictated speech", "กำลังประมวลผลเสียงพูด")
+            : _dictating
+                ? Text("Stop dictation", "หยุดพูดตามคำบอก")
+                : Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง");
 
     private string SpeechRecognitionLanguage => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture
         ? "th-TH"
@@ -2001,6 +2013,7 @@
             _composerDotNetRef = DotNetObjectReference.Create(this);
             _composerModule = await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-composer.js");
             await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef, _dictationButton);
+            _ = BackgroundLoadDictationModelAsync();
             await _composerModule.InvokeVoidAsync("focusComposer", _composerTextarea);
         }
         else if (_composerModule is not null)
@@ -2265,6 +2278,45 @@
         _error = null;
         StartDictationTimer();
         await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task ReportDictationModelProgressAsync(double progress, string status)
+    {
+        if (progress >= 1)
+        {
+            _dictationModelLoading = false;
+            _dictationModelProgress = 0;
+            _dictationModelStatus = string.Empty;
+        }
+        else if (status == "fallback")
+        {
+            _dictationModelLoading = false;
+            _dictationModelProgress = 0;
+            _dictationModelStatus = string.Empty;
+        }
+        else
+        {
+            _dictationModelLoading = progress > 0 && progress < 1;
+            _dictationModelProgress = progress;
+            _dictationModelStatus = status;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task BackgroundLoadDictationModelAsync()
+    {
+        if (_composerModule is null || _dictationModelLoading || _dictationModelProgress >= 1)
+            return;
+        try
+        {
+            await _composerModule.InvokeVoidAsync("loadDictationModel", _composerDotNetRef);
+        }
+        catch
+        {
+            _dictationModelLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     [JSInvokable]
