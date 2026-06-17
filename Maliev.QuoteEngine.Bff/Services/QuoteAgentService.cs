@@ -3326,7 +3326,8 @@ internal sealed class QuoteAgentService(
             "Material keywords indicate process: PLA/ABS/PETG/TPU/filament → FDM, resin/photopolymer/SLA → SLA, nylon/PA/PP/SLS → SLS, aluminum/steel/titanium/brass/CNC → CNC. " +
             "Default to qty=1, standard tolerance, and standard lead time when not stated. " +
             "State your inferred assumptions first, then ask only for genuinely missing critical information. " +
-            "If the customer attaches a photo or sketch, analyze it and propose assumptions based on what you see.");
+            "If the customer attaches a photo or sketch: analyze it first — describe the part shape, visible features, likely material and process — then state your assumptions and give a rough ballpark estimate. " +
+            "Only after engaging with what you can see should you mention that a CAD file is needed for a precise quote. Never respond to a photo by redirecting to CAD as the first and only message.");
         contextLines.Add(
             "Project naming: When calling quote_set_project_name, derive a short descriptive title from the part file name and inferred process/material " +
             "(e.g. 'Flower Oval – FDM PLA', 'L-Bracket – SLA Resin'). Never set the project name to the customer's literal question.");
