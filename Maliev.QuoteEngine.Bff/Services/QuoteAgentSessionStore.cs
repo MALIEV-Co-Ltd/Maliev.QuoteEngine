@@ -149,7 +149,8 @@ internal sealed class QuoteAgentSessionStore
                     .Select(CloneAction)
                     .ToList(),
                 Estimate = state.Estimate,
-                UiDirectives = state.UiDirectives.Select(CloneUiDirective).ToList()
+                UiDirectives = state.UiDirectives.Select(CloneUiDirective).ToList(),
+                ProjectName = state.ProjectName
             };
         }
     }
@@ -412,6 +413,8 @@ internal sealed class QuoteAgentSessionState
     public bool QuoteApproved { get; set; }
 
     public CreateManufacturingOrderResponse? Order { get; set; }
+
+    public string? ProjectName { get; set; }
 
     public Guid? CheckoutBillingAddressId { get; set; }
 

@@ -164,7 +164,8 @@
                 @if (!string.IsNullOrWhiteSpace(_projectName))
                 {
                     <input class="qe-agent-project-name"
-                           @bind="_projectName"
+                           value="@_projectName"
+                           @oninput="OnProjectNameInputAsync"
                            maxlength="120"
                            aria-label="@Text("Project name", "ชื่อโปรเจกต์")" />
                 }
@@ -1575,6 +1576,7 @@
     private int _uiFocusVersion;
     private WorkspacePage _activeWorkspacePage = WorkspacePage.Chat;
     private string _projectName = string.Empty;
+    private bool _projectNameUserSet;
     private string _searchQuery = string.Empty;
     private string _animatedSearchPrompt = string.Empty;
     private string? _highlightConnectorId;
@@ -2153,6 +2155,7 @@
                     {
                         await Preferences.SetCultureAsync(streamEvent.Response.UiCulture);
                     }
+                    ApplyAgentProjectName(streamEvent.Response.ProjectName);
                     RequestScrollToLatestMessage();
                     await InvokeAsync(StateHasChanged);
                 }
@@ -2482,6 +2485,7 @@
         _gates = state.Gates;
         _artifacts = state.Artifacts;
         _proposedActions = state.ProposedActions;
+        ApplyAgentProjectName(state.ProjectName);
         _ = ApplyUiDirectivesAsync(state.UiDirectives, suppressPanelAutoOpen);
     }
 
@@ -2881,6 +2885,14 @@
         {
             _scrollUpdatePending = false;
         }
+    }
+
+    private Task OnProjectNameInputAsync(ChangeEventArgs args)
+    {
+        _projectName = args.Value?.ToString() ?? string.Empty;
+        _projectNameUserSet = true;
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     private async Task ScrollToLatestMessageAsync()
@@ -3813,51 +3825,31 @@
         var existingProject = _projects.FirstOrDefault(project => project.ProjectId == SessionId);
         if (existingProject is not null)
         {
-            if (string.IsNullOrWhiteSpace(_projectName))
-            {
-                _projectName = string.IsNullOrWhiteSpace(existingProject.NameEn)
-                    ? BuildLocalProjectTitle(message)
-                    : existingProject.NameEn;
-            }
-
             if (string.IsNullOrWhiteSpace(existingProject.NameEn))
             {
-                existingProject.NameEn = _projectName;
+                existingProject.NameEn = DefaultProjectTitle;
             }
 
             if (string.IsNullOrWhiteSpace(existingProject.NameTh))
             {
-                existingProject.NameTh = _projectName;
+                existingProject.NameTh = DefaultProjectTitle;
             }
 
             existingProject.Status = "draft";
             return;
         }
 
-        var title = BuildLocalProjectTitle(message);
-        if (string.IsNullOrWhiteSpace(_projectName))
-        {
-            _projectName = title;
-        }
-
-        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, _projectName, _projectName, "draft", false, false));
+        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, DefaultProjectTitle, DefaultProjectTitle, "draft", false, false));
     }
 
-    private static string BuildLocalProjectTitle(string message)
+    private string DefaultProjectTitle => Text("New manufacturing project", "โปรเจกต์ผลิตใหม่");
+
+    private void ApplyAgentProjectName(string? projectName)
     {
-        var words = Regex.Matches(message, "[\\p{L}\\p{N}]+")
-            .Select(match => match.Value)
-            .Where(word => word.Length > 1)
-            .Take(6)
-            .ToArray();
-
-        if (words.Length == 0)
+        if (!_projectNameUserSet && !string.IsNullOrWhiteSpace(projectName))
         {
-            return "New manufacturing project";
+            _projectName = projectName;
         }
-
-        var title = string.Join(' ', words);
-        return title.Length <= 70 ? title : $"{title[..67]}...";
     }
 
     private static string ProjectHref(ProjectNavItem project)

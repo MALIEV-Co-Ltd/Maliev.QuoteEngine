@@ -784,7 +784,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("forceLoad: true", component, StringComparison.Ordinal);
         Assert.DoesNotContain("href=\"/auth/sign-in?returnUrl=/quotes\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("href=\"/auth/sign-up?returnUrl=/quotes\"", component, StringComparison.Ordinal);
-        Assert.Contains("@bind=\"_projectName\"", component, StringComparison.Ordinal);
+        Assert.Contains("OnProjectNameInputAsync", component, StringComparison.Ordinal);
         Assert.Contains("private string _projectName = string.Empty;", component, StringComparison.Ordinal);
         Assert.Contains("OpenSketchAsync", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-sketch.js", component, StringComparison.Ordinal);
@@ -1024,7 +1024,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("RequestUploadFromComposerMenuAsync", component, StringComparison.Ordinal);
         Assert.Contains("OpenSketchFromComposerMenuAsync", component, StringComparison.Ordinal);
         Assert.Contains("EnsureLocalProjectFromMessage(message);", component, StringComparison.Ordinal);
-        Assert.Contains("BuildLocalProjectTitle", component, StringComparison.Ordinal);
+        Assert.Contains("DefaultProjectTitle", component, StringComparison.Ordinal);
         Assert.Contains("ThinkingStepTitle(step)", component, StringComparison.Ordinal);
         Assert.Contains("HumanizeAgentActivity", component, StringComparison.Ordinal);
         Assert.Contains("await FocusComposerAsync();", component, StringComparison.Ordinal);

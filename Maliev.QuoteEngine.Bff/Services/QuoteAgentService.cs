@@ -246,7 +246,8 @@ internal sealed class QuoteAgentService(
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
             ThinkingSteps = EnrichSteps(finalMessage?.ThinkingSteps),
             UiDirectives = currentState.UiDirectives,
-            UiCulture = pendingUiCulture
+            UiCulture = pendingUiCulture,
+            ProjectName = state.ProjectName
         };
 
         if (!receivedDelta)
@@ -415,6 +416,7 @@ internal sealed class QuoteAgentService(
                 request.Arguments),
             "quote_start_payment" => PreparePaymentActionOrGateError(state, request.Arguments),
             "quote_set_ui_language" => SetUiLanguage(state, request.Arguments),
+            "quote_set_project_name" => SetProjectName(state, request.Arguments),
             _ => new { error = $"Unknown QuoteEngine tool: {toolName}" }
         };
         return Task.FromResult<object>(result);
@@ -3675,6 +3677,29 @@ Customer message:
         }
 
         return message.Any(ch => ch >= '\u0E00' && ch <= '\u0E7F') ? "th" : "en";
+    }
+
+    private static object SetProjectName(QuoteAgentSessionState state, IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var name = ReadString(arguments, "name") ?? string.Empty;
+        if (name.Length > 120)
+        {
+            name = name[..120];
+        }
+
+        lock (state.SyncRoot)
+        {
+            state.ProjectName = name;
+            state.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        return new
+        {
+            project_name = name,
+            message = string.IsNullOrWhiteSpace(name)
+                ? "Project name cleared."
+                : $"Project name set to \"{name}\"."
+        };
     }
 
     private static object SetUiLanguage(QuoteAgentSessionState state, Dictionary<string, JsonElement> arguments)

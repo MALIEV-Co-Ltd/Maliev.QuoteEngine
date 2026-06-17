@@ -151,6 +151,10 @@ public sealed class QuoteAgentTurnResponse
 
     /// <summary>Gets or sets the desired UI culture to apply immediately, such as en-US or th-TH, set by agent-initiated language change.</summary>
     public string? UiCulture { get; set; }
+
+    /// <summary>Gets or sets the project name set by the agent via quote_set_project_name tool.</summary>
+    [StringLength(120)]
+    public string? ProjectName { get; set; }
 }
 
 /// <summary>
@@ -210,6 +214,10 @@ public sealed class QuoteAgentStateResponse
 
     /// <summary>Gets or sets customer-safe UI focus directives for the current state.</summary>
     public List<QuoteAgentUiDirectiveDto> UiDirectives { get; set; } = [];
+
+    /// <summary>Gets or sets the project name set by the agent via quote_set_project_name tool.</summary>
+    [StringLength(120)]
+    public string? ProjectName { get; set; }
 }
 
 /// <summary>
