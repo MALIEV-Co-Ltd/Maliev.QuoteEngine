@@ -58,9 +58,13 @@
                      @onpointerenter="SuppressSearchPromptOnHover"
                      @onpointerleave="ResumeSearchPromptAfterHover">
                     <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
-                    @if (ShowSearchPrompt)
+                    @if (string.IsNullOrEmpty(_searchQuery) && !_searchPromptFocused)
                     {
-                        <span class="qe-agent-search-prompt" aria-hidden="true">@SearchPromptDisplayText</span>
+                        @if (!string.IsNullOrWhiteSpace(_animatedSearchPrompt))
+                        {
+                            <span class="qe-agent-search-prompt" aria-hidden="true">@_animatedSearchPrompt</span>
+                        }
+                        <span class="qe-agent-search-prompt-hover" aria-hidden="true">@Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...")</span>
                     }
                     <input id="qe-agent-search-input"
                            @ref="_searchInput"
@@ -1525,7 +1529,7 @@
     private readonly List<ComposerAttachmentPreview> _pendingComposerAttachments = [];
     private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
     private const int SearchMinimumCharacters = 3;
-    private const int SearchPromptVisibleCharacters = 22;
+    private const int SearchPromptVisibleCharacters = 28;
     private const int DictationMeterBarCount = 116;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
@@ -1832,11 +1836,6 @@
     private bool SearchHasMinimumQuery => _searchQuery.Trim().Length >= SearchMinimumCharacters;
     private bool CanAnimateSearchPrompt => string.IsNullOrEmpty(_searchQuery) && !_searchPromptHovered && !_searchPromptFocused;
     private bool ShowAnimatedSearchPrompt => CanAnimateSearchPrompt && !string.IsNullOrWhiteSpace(_animatedSearchPrompt);
-    private bool ShowSearchPrompt => string.IsNullOrEmpty(_searchQuery) && !_searchPromptFocused &&
-        (_searchPromptHovered || !string.IsNullOrWhiteSpace(_animatedSearchPrompt));
-    private string SearchPromptDisplayText => _searchPromptHovered
-        ? Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...")
-        : _animatedSearchPrompt;
     private string SearchInputPlaceholder => _searchPromptFocused
         ? Text("Search projects, orders, files...", "ค้นหาโปรเจกต์ ออเดอร์ ไฟล์...")
         : string.Empty;
@@ -4021,6 +4020,7 @@
     private void ResumeSearchPromptAfterHover()
     {
         _searchPromptHovered = false;
+        ClearAnimatedSearchPrompt();
     }
 
     private async Task OnSearchInputAsync(ChangeEventArgs args)

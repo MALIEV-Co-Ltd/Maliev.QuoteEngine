@@ -1039,8 +1039,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("pointer-events: none;", ExtractSourceBlock(agentStyles, ".qe-agent-search-prompt", ".qe-agent-search-prompt::after"), StringComparison.Ordinal);
         Assert.Contains("SearchPromptVisibleCharacters", component, StringComparison.Ordinal);
         Assert.Contains("FormatAnimatedSearchPrompt(current)", component, StringComparison.Ordinal);
-        Assert.Contains("ShowSearchPrompt", component, StringComparison.Ordinal);
-        Assert.Contains("SearchPromptDisplayText", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-search-prompt-hover", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-global-search:hover .qe-agent-search-prompt-hover", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-global-search:focus-within .qe-agent-search-prompt", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-rail-search", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border: 1px solid color-mix(in srgb, var(--qe-agent-line) 82%, transparent);", agentStyles, StringComparison.Ordinal);

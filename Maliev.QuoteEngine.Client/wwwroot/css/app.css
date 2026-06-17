@@ -877,10 +877,11 @@
     box-shadow: none !important;
 }
 
-.qe-agent-search-prompt {
+.qe-agent-search-prompt,
+.qe-agent-search-prompt-hover {
     position: absolute;
     inset-block: 0;
-    inset-inline: 40px 10px;
+    inset-inline: 40px 4px;
     z-index: 1;
     display: block;
     overflow: hidden;
@@ -897,6 +898,10 @@
     transition: opacity 160ms ease;
 }
 
+.qe-agent-search-prompt-hover {
+    opacity: 0;
+}
+
 .qe-agent-search-prompt::after {
     display: inline-block;
     width: 1px;
@@ -908,7 +913,16 @@
     animation: qe-agent-search-caret 1s steps(1, end) infinite;
 }
 
-.qe-agent-global-search:focus-within .qe-agent-search-prompt {
+.qe-agent-global-search:hover .qe-agent-search-prompt {
+    opacity: 0;
+}
+
+.qe-agent-global-search:hover .qe-agent-search-prompt-hover {
+    opacity: 1;
+}
+
+.qe-agent-global-search:focus-within .qe-agent-search-prompt,
+.qe-agent-global-search:focus-within .qe-agent-search-prompt-hover {
     display: none;
 }
 
