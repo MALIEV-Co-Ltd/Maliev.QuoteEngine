@@ -135,13 +135,6 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints("quote");
 app.UseForwardedHeaders();
-app.Use(async (context, next) =>
-{
-    // Required for SharedArrayBuffer (threaded ONNX WASM for on-device Whisper).
-    context.Response.Headers["Cross-Origin-Opener-Policy"] = "same-origin";
-    context.Response.Headers["Cross-Origin-Embedder-Policy"] = "credentialless";
-    await next();
-});
 app.UseStaticFiles();
 app.MapStaticAssets().ShortCircuit();
 

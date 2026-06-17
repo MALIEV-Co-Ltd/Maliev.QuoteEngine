@@ -1164,7 +1164,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("invokeMethodAsync(\"BeginDictationProcessingAsync\")", composerScript, StringComparison.Ordinal);
         Assert.Contains("invokeMethodAsync(\"CompleteDictationAsync\"", composerScript, StringComparison.Ordinal);
         Assert.Contains("function isDictationActive", composerScript, StringComparison.Ordinal);
-        Assert.DoesNotContain("invokeMethodAsync(\"ToggleDictationAsync\")", composerScript, StringComparison.Ordinal);
+        Assert.Contains("isSpeechRecognitionSupported", composerScript, StringComparison.Ordinal);
+        Assert.Contains("_dictationUnsupported", component, StringComparison.Ordinal);
+        Assert.Contains("disabled=\"@_dictationUnsupported\"", component, StringComparison.Ordinal);
+        Assert.Contains("Dictation is not supported in this browser", component, StringComparison.Ordinal);
         Assert.DoesNotContain("invokeMethodAsync(\"BeginDictationFromHoldAsync\")", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("invokeMethodAsync(\"StopDictationAsync\")", composerScript, StringComparison.Ordinal);
         Assert.Contains("event.error === \"no-speech\" || event.error === \"no-match\"", composerScript, StringComparison.Ordinal);
