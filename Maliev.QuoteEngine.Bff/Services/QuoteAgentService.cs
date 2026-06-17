@@ -87,6 +87,12 @@ internal sealed class QuoteAgentService(
         "status"
     ];
 
+    private static readonly string[] ProjectQuestionPrefixes =
+    [
+        "how ", "what ", "where ", "when ", "why ", "who ", "which ",
+        "can ", "could ", "would ", "will ", "is ", "are ", "do ", "does "
+    ];
+
     public async Task<QuoteAgentTurnResponse> SendAsync(
         QuoteAgentMessageRequest request,
         CancellationToken cancellationToken)
@@ -3301,6 +3307,16 @@ internal sealed class QuoteAgentService(
             contextLines.Add($"Browser context: {customerContext.Trim()}");
         }
 
+        contextLines.Add(
+            "Guidance: Infer as many manufacturing parameters as possible from the customer message, file names, and context before asking. " +
+            "Material keywords indicate process: PLA/ABS/PETG/TPU/filament → FDM, resin/photopolymer/SLA → SLA, nylon/PA/PP/SLS → SLS, aluminum/steel/titanium/brass/CNC → CNC. " +
+            "Default to qty=1, standard tolerance, and standard lead time when not stated. " +
+            "State your inferred assumptions first, then ask only for genuinely missing critical information. " +
+            "If the customer attaches a photo or sketch, analyze it and propose assumptions based on what you see.");
+        contextLines.Add(
+            "Project naming: When calling quote_set_project_name, derive a short descriptive title from the part file name and inferred process/material " +
+            "(e.g. 'Flower Oval – FDM PLA', 'L-Bracket – SLA Resin'). Never set the project name to the customer's literal question.");
+
         return $"""
 {string.Join("\n", contextLines)}
 
@@ -3685,6 +3701,34 @@ Customer message:
         if (name.Length > 120)
         {
             name = name[..120];
+        }
+
+        // Detect question-form names the AI might echo verbatim from the customer message
+        // and derive a filename-based title instead.
+        var sanitized = name.TrimEnd('?').TrimEnd();
+        if (ProjectQuestionPrefixes.Any(p => sanitized.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            var part = state.Parts.Count > 0 ? state.Parts[0] : null;
+            if (part is not null)
+            {
+                var dot = part.FileName.LastIndexOf('.');
+                var baseName = (dot > 0 ? part.FileName[..dot] : part.FileName)
+                    .Replace("-", " ")
+                    .Replace("_", " ")
+                    .Trim();
+                name = baseName.Length > 0
+                    ? char.ToUpperInvariant(baseName[0]) + baseName[1..]
+                    : string.Empty;
+            }
+            else
+            {
+                name = string.Empty;
+            }
+
+            if (name.Length > 120)
+            {
+                name = name[..120];
+            }
         }
 
         lock (state.SyncRoot)

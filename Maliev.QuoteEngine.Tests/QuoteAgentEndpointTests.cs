@@ -2429,6 +2429,119 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Empty(document.RootElement.GetProperty("methods").EnumerateArray());
     }
 
+    [Fact]
+    public async Task Agent_set_project_name_tool_accepts_descriptive_name()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_set_project_name",
+            new Dictionary<string, JsonElement>
+            {
+                ["name"] = JsonSerializer.SerializeToElement("Flower Oval – FDM PLA", JsonOptions)
+            });
+
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("Flower Oval – FDM PLA", document.RootElement.GetProperty("project_name").GetString());
+        Assert.Contains("Flower Oval – FDM PLA", document.RootElement.GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Agent_set_project_name_tool_derives_name_from_filename_when_question_form_given()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        // Register a part first so state has a FileName to derive from.
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement("How much for 3D printing this in PLA?", JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "bbdb-flower-3-oval.STEP",
+                        content_type = "model/step",
+                        file_size_bytes = 180_000,
+                        kind = "cad",
+                        upload_id = "pn-test-cad",
+                        storage_path = "quotes/temp/session/pn-test-cad/bbdb-flower-3-oval.STEP"
+                    }
+                }, JsonOptions)
+            });
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_set_project_name",
+            new Dictionary<string, JsonElement>
+            {
+                ["name"] = JsonSerializer.SerializeToElement("How much for 3D printing this in PLA?", JsonOptions)
+            });
+
+        using var document = JsonDocument.Parse(json);
+        var projectName = document.RootElement.GetProperty("project_name").GetString();
+        Assert.NotNull(projectName);
+        // Should be derived from filename, not the raw question
+        Assert.DoesNotContain("?", projectName, StringComparison.Ordinal);
+        Assert.False(projectName.StartsWith("how ", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("bbdb", projectName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_set_project_name_tool_clears_name_when_question_form_given_and_no_parts()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_set_project_name",
+            new Dictionary<string, JsonElement>
+            {
+                ["name"] = JsonSerializer.SerializeToElement("How much for this?", JsonOptions)
+            });
+
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal(string.Empty, document.RootElement.GetProperty("project_name").GetString());
+    }
+
+    [Fact]
+    public async Task Agent_message_context_includes_inference_and_naming_guidance()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "How much for 3D printing in PLA?",
+            Language = "en"
+        }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains("Guidance:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("FDM", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Project naming:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("quote_set_project_name", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+    }
+
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)
     {
         var now = DateTimeOffset.UtcNow;
