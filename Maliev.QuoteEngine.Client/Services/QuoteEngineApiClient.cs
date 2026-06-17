@@ -395,6 +395,17 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public Task<QuoteAgentExportPdfResponse> ExportAgentChatPdfAsync(
+        Guid sessionId,
+        string? language = null,
+        CancellationToken cancellationToken = default)
+    {
+        return PostAsync<QuoteAgentExportPdfRequest, QuoteAgentExportPdfResponse>(
+            "quote/v1/agent/export-pdf",
+            new QuoteAgentExportPdfRequest { SessionId = sessionId, Language = language },
+            cancellationToken);
+    }
+
     private async Task<TResponse> PostAsync<TRequest, TResponse>(string uri, TRequest request, CancellationToken cancellationToken)
     {
         using var response = await httpClient.PostAsJsonAsync(uri, request, cancellationToken);

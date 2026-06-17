@@ -17,7 +17,8 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 public sealed class AgentController(
     IQuoteAgentService agentService,
     QuoteAgentContextToken contextToken,
-    IChatbotServiceClient chatbotServiceClient) : ControllerBase
+    IChatbotServiceClient chatbotServiceClient,
+    IPdfServiceClient pdfServiceClient) : ControllerBase
 {
     private const string AgentContextHeader = "X-Maliev-Agent-Context";
     private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web);
@@ -253,5 +254,60 @@ public sealed class AgentController(
     {
         await agentService.RelayThinkingStepAsync(sessionId, step, cancellationToken);
         return Accepted();
+    }
+
+    /// <summary>
+    /// Exports the chat transcript for a Make Studio session as a PDF.
+    /// </summary>
+    [HttpPost("export-pdf")]
+    [ProducesResponseType(typeof(QuoteAgentExportPdfResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<QuoteAgentExportPdfResponse>> ExportChatPdf(
+        [FromBody] QuoteAgentExportPdfRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        var conversation = await chatbotServiceClient.GetConversationMessagesAsync(request.SessionId, cancellationToken);
+        if (conversation is null || conversation.Messages.Count == 0)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "No messages found.",
+                Detail = "The specified session has no messages to export."
+            });
+        }
+
+        var data = new
+        {
+            sessionId = request.SessionId.ToString("D"),
+            language = request.Language ?? conversation.Language ?? "en",
+            generatedAt = DateTimeOffset.UtcNow,
+            messages = conversation.Messages.Select(m => new
+            {
+                role = m.Role,
+                content = m.Content,
+                timestamp = m.CreatedAt
+            }).ToList()
+        };
+
+        var result = await pdfServiceClient.GeneratePdfAsync("ChatTranscript", request.SessionId.ToString("D"), data, cancellationToken);
+        if (result is null)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "PDF generation failed.",
+                Detail = "The PDF service returned an error."
+            });
+        }
+
+        return Ok(new QuoteAgentExportPdfResponse
+        {
+            PdfUrl = result.StorageUrl,
+            RequestId = result.RequestId
+        });
     }
 }

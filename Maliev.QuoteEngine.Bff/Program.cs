@@ -81,6 +81,8 @@ builder.Services.AddSingleton<IGoogleDriveConnectorStore>(sp =>
 builder.Services.AddScoped<IQuoteAgentService, QuoteAgentService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromSeconds(45));
+builder.AddAuthenticatedServiceClient<IPdfServiceClient, PdfServiceClient>("PdfService")
+    .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromMinutes(2));
 
 // ── Real downstream service clients ──────────────────────────────────────────
 builder.AddAuthenticatedServiceClient<IMaterialCatalogClient, MaterialCatalogClient>("MaterialService");

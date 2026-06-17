@@ -776,3 +776,29 @@ public sealed class CadSegmentDto
     /// <summary>Segment parameters, type-dependent.</summary>
     public double[]? Params { get; set; }
 }
+
+/// <summary>
+/// Request to export the Make Studio chat transcript as a PDF.
+/// </summary>
+public sealed class QuoteAgentExportPdfRequest
+{
+    /// <summary>Gets or sets the QuoteEngine agent session ID.</summary>
+    [Required]
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets the preferred language for the PDF.</summary>
+    [RegularExpression("^(en|th)?$")]
+    public string? Language { get; set; }
+}
+
+/// <summary>
+/// Response containing the PDF download URL for an exported chat transcript.
+/// </summary>
+public sealed class QuoteAgentExportPdfResponse
+{
+    /// <summary>Gets or sets the PDF download URL.</summary>
+    public string PdfUrl { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the PDF generation request ID for tracking.</summary>
+    public Guid? RequestId { get; set; }
+}
