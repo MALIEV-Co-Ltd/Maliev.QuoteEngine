@@ -474,15 +474,11 @@
                             }
                             else
                             {
-                                @if (_sending && string.IsNullOrEmpty(message.Content))
+                                @if (message.IsProcessing && string.IsNullOrEmpty(message.Content))
                                 {
-                                    <div class="qe-agent-typing" aria-label="@Text("Agent is thinking…", "เอเจนต์กำลังคิด…")">
-                                        <span aria-hidden="true"></span>
-                                        <span aria-hidden="true"></span>
-                                        <span aria-hidden="true"></span>
-                                    </div>
+                                    <div class="qe-agent-response-loader" aria-label="@Text("Agent is thinking…", "เอเจนต์กำลังคิด…")" aria-live="polite"></div>
                                 }
-                                else
+                                else if (!string.IsNullOrEmpty(message.Content))
                                 {
                                     <div class="qe-agent-markdown">
                                         @QuoteAgentMarkdownRenderer.Render(message.Content)
@@ -2130,6 +2126,12 @@
                 Attachments = pendingAttachments.Select(attachment => attachment.ToAgentAttachment()).ToList()
             }))
             {
+                if (!assistantMessage.IsProcessing)
+                {
+                    assistantMessage.IsProcessing = true;
+                    await InvokeAsync(StateHasChanged);
+                }
+
                 if (streamEvent.Type.Equals("delta", StringComparison.OrdinalIgnoreCase))
                 {
                     assistantMessage.Content += streamEvent.Delta;
@@ -4482,6 +4484,8 @@
         public string Role { get; } = role;
 
         public string Content { get; set; } = content;
+
+        public bool IsProcessing { get; set; }
 
         public IReadOnlyList<ComposerAttachmentPreview> Attachments { get; } = attachments ?? [];
 
