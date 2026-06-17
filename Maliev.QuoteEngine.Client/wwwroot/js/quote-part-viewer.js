@@ -3778,7 +3778,8 @@ function analyzeWithLocalAdvisoryWorker(canvasId, workerUrl, wasmUrl, input, pro
             terminateLocalAdvisoryWorker(canvasId);
             reject(new Error(event?.message || 'Local advisory geometry worker failed.'));
         };
-        worker.postMessage({ id: messageId, input, processCode, wasmUrl });
+        const transferFiles = input?.fileBytes?.buffer ? [input.fileBytes.buffer] : [];
+        worker.postMessage({ id: messageId, input, processCode, wasmUrl }, transferFiles);
     });
 }
 
@@ -3991,7 +3992,8 @@ function extractLocalViewerMeshWithRuntime(canvasId, workerUrl, wasmUrl, input, 
             terminateLocalAdvisoryWorker(canvasId);
             reject(new Error(event?.message || 'Local viewer mesh worker failed.'));
         };
-        worker.postMessage({ id: messageId, operation: 'extract_mesh', input, wasmUrl });
+        const transferMesh = input?.fileBytes?.buffer ? [input.fileBytes.buffer] : [];
+        worker.postMessage({ id: messageId, operation: 'extract_mesh', input, wasmUrl }, transferMesh);
     });
 }
 

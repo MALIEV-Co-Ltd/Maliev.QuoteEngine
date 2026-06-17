@@ -87,6 +87,7 @@
     private QuoteAgentLaunchShell? _agentShell;
     private readonly List<string> _liveNotifications = [];
     private readonly HashSet<string> _registeredDropzoneIds = [];
+    private readonly List<(QuotePartViewModel Part, string GlbUrl, string FileExtension)> _pendingViewerParts = [];
     private static readonly HashSet<string> DefaultBrowserViewerExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".3mf",
@@ -462,8 +463,12 @@
                 part.UploadId = upload.UploadId;
                 part.StoragePath = upload.StoragePath;
                 part.Status = "Processing";
-                var completedLocally = await TryCompleteBrowserPrimaryViewerLocallyAsync(part);
-                if (!completedLocally)
+                var (viewerResolved, viewerUrl, viewerExt) = await TryResolveViewerUrlDeferredAsync(part);
+                if (viewerResolved)
+                {
+                    _pendingViewerParts.Add((part, viewerUrl!, viewerExt!));
+                }
+                else
                 {
                     var status = await Api.GetAnalysisStatusAsync(upload.UploadId);
                     part.Status = status.Status;
@@ -492,6 +497,17 @@
                 await InvokeAsync(StateHasChanged);
             }
         }
+
+        foreach (var (part, glbUrl, fileExtension) in _pendingViewerParts)
+        {
+            part.GlbUrl = glbUrl;
+            part.ViewerFileExtension = fileExtension;
+            part.Status = "Ready";
+            part.LocalDfmRuntimeUnavailable = false;
+            part.LocalDfmRuntimeUnavailableReason = null;
+        }
+        _pendingViewerParts.Clear();
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task TryApplyLocalSupplementalPreviewUrlAsync(QuotePartViewModel part, UploadCandidate candidate)
@@ -1057,6 +1073,33 @@
         catch (JSException)
         {
             return false;
+        }
+    }
+
+    private async Task<(bool Resolved, string? GlbUrl, string? FileExtension)> TryResolveViewerUrlDeferredAsync(QuotePartViewModel part)
+    {
+        var viewerExtension = await ResolveBrowserFileViewerExtensionAsync(part);
+        if (viewerExtension is null || string.IsNullOrWhiteSpace(part.ClientFileId))
+        {
+            return (false, null, null);
+        }
+
+        try
+        {
+            var objectUrl = await Js.InvokeAsync<string?>(
+                "quoteEngineUploads.getObjectUrl",
+                part.ClientFileId);
+            if (string.IsNullOrWhiteSpace(objectUrl))
+            {
+                return (false, null, null);
+            }
+
+            part.ViewerStoragePath ??= part.StoragePath;
+            return (true, objectUrl, viewerExtension);
+        }
+        catch (JSException)
+        {
+            return (false, null, null);
         }
     }
 

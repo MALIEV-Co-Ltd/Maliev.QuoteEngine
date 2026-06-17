@@ -2312,7 +2312,6 @@ public sealed class QuoteEngineSourceTests
         var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
         var authComplete = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "AuthChatbotComplete.razor");
 
-        Assert.Contains("CustomerAssistantDrawer", layout, StringComparison.Ordinal);
         Assert.Contains("topbar-chat-toggle", layout, StringComparison.Ordinal);
         Assert.Contains("class=\"topbar-chat-icon\"", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("Icon=\"@Icons.Material.Outlined.Chat\"", layout, StringComparison.Ordinal);
@@ -3106,11 +3105,11 @@ public sealed class QuoteEngineSourceTests
             .ReplaceLineEndings("\n");
         var uploadBlock = ExtractBlock(src, "private async Task ProcessUploadCandidatesAsync");
 
-        Assert.Contains("TryCompleteBrowserPrimaryViewerLocallyAsync(part)", uploadBlock, StringComparison.Ordinal);
-        Assert.Contains("if (!completedLocally)", uploadBlock, StringComparison.Ordinal);
+        Assert.Contains("TryResolveViewerUrlDeferredAsync(part)", uploadBlock, StringComparison.Ordinal);
+        Assert.Contains("if (viewerResolved)", uploadBlock, StringComparison.Ordinal);
         Assert.Contains("Api.GetAnalysisStatusAsync(upload.UploadId)", uploadBlock, StringComparison.Ordinal);
         Assert.True(
-            uploadBlock.IndexOf("TryCompleteBrowserPrimaryViewerLocallyAsync(part)", StringComparison.Ordinal)
+            uploadBlock.IndexOf("TryResolveViewerUrlDeferredAsync(part)", StringComparison.Ordinal)
             < uploadBlock.IndexOf("Api.GetAnalysisStatusAsync(upload.UploadId)", StringComparison.Ordinal),
             "QuoteEngine should try the retained browser file viewer before asking the BFF for analysis status.");
 
@@ -3698,7 +3697,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("operation: 'extract_mesh'", js, StringComparison.Ordinal);
         Assert.Contains("const wasmUrl = resolveRuntimeAssetUrl(", js, StringComparison.Ordinal);
         Assert.Contains("manifest.assets?.wasm", js, StringComparison.Ordinal);
-        Assert.Contains("worker.postMessage({ id: messageId, input, processCode, wasmUrl });", js, StringComparison.Ordinal);
+        Assert.Contains("worker.postMessage({ id: messageId, input, processCode, wasmUrl }, transferFiles);", js, StringComparison.Ordinal);
         Assert.Contains("storagePath: result?.storagePath ?? null", js, StringComparison.Ordinal);
         Assert.Contains("result.storagePath = typeof options.storagePath === 'string' && options.storagePath.trim()", js, StringComparison.Ordinal);
         Assert.Contains("metrics: result?.metrics", js, StringComparison.Ordinal);

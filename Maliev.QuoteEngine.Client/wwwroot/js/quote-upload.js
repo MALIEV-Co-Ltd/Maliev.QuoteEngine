@@ -371,9 +371,15 @@ window.quoteEngineUploads = (() => {
     clearTimerMap.set(clientFileId, timer);
   }
 
+  const MAX_LOCAL_BYTES = 50 * 1024 * 1024; // Skip local geometry for files > 50 MB
+
   async function getFileBytes(clientFileId) {
     const file = fileMap.get(clientFileId);
     if (!file?.blob || typeof file.blob.arrayBuffer !== "function") {
+      return null;
+    }
+
+    if (file.size > MAX_LOCAL_BYTES) {
       return null;
     }
 
