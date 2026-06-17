@@ -312,7 +312,8 @@ async function finishDictationFromUserAction(textarea, dotNetRef) {
             task: "transcribe",
             return_timestamps: false
           });
-          const text = String(result?.text || "").trim();
+          const rawText = String(result?.text || "").trim();
+          const text = /^\[BLANK_AUDIO\]$/i.test(rawText) ? "" : rawText;
 
           const speechPrefix = text && session.before && !/\s$/.test(session.before) ? " " : "";
           const speechSuffix = text && session.after && !/^\s/.test(session.after) ? " " : "";
