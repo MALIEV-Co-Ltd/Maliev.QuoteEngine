@@ -29,8 +29,12 @@ async function loadWhisperModel(dotNetRef) {
           progress_callback: progress => {
             if (progress?.status === "progress") {
               const pct = 0.1 + (progress.progress / 100) * 0.9;
+              const rounded = Math.round(progress.progress);
+              if (rounded % 5 !== 0 && rounded < 100) return;
+              if (rounded === loadWhisperModel._lastReportedPct) return;
+              loadWhisperModel._lastReportedPct = rounded;
               dotNetRef?.invokeMethodAsync("ReportDictationModelProgressAsync", pct,
-                `Loading voice model${progress.file ? " (" + progress.file.split("/").pop() + ")" : ""}... ${Math.round(progress.progress)}%`);
+                `Loading voice model${progress.file ? " (" + progress.file.split("/").pop() + ")" : ""}... ${rounded}%`);
             }
           }
         }
@@ -467,6 +471,8 @@ export async function beginDictation(textarea, dictationButton) {
       button: dictationButton,
       culture: textarea?.dataset?.speechLanguages?.split(",")[0]?.trim() || document.documentElement.lang || navigator.language || "en",
       dotNetStopRequested: false,
+      finalTranscript: "",
+      interimTranscript: "",
       settled: false,
       active: true,
       useWhisper: true,
