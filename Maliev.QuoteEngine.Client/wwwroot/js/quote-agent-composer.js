@@ -120,17 +120,6 @@ function getWhisperAudioBuffer(session) {
   return result;
 }
 
-function resolveWhisperLanguage(culture) {
-  const lower = String(culture || "").toLowerCase();
-  if (lower.startsWith("th")) return "th";
-  if (lower.startsWith("zh")) return "zh";
-  if (lower.startsWith("ja")) return "ja";
-  if (lower.startsWith("ko")) return "ko";
-  if (lower.startsWith("de")) return "de";
-  if (lower.startsWith("fr")) return "fr";
-  if (lower.startsWith("es")) return "es";
-  return "en";
-}
 
 export function initComposer(textarea, dotNetRef, dictationButton) {
   if (!textarea || !dotNetRef) {
@@ -319,10 +308,7 @@ async function finishDictationFromUserAction(textarea, dotNetRef) {
       const audioData = getWhisperAudioBuffer(session);
       if (audioData && transformersPipeline) {
         try {
-          const culture = session.culture || "en";
-          const language = resolveWhisperLanguage(culture);
           const result = await transformersPipeline(audioData, {
-            language,
             task: "transcribe",
             return_timestamps: false
           });
@@ -469,7 +455,6 @@ export async function beginDictation(textarea, dictationButton) {
       after: textarea.value.slice(insertion.end),
       before: textarea.value.slice(0, insertion.start),
       button: dictationButton,
-      culture: textarea?.dataset?.speechLanguages?.split(",")[0]?.trim() || document.documentElement.lang || navigator.language || "en",
       dotNetStopRequested: false,
       finalTranscript: "",
       interimTranscript: "",
@@ -614,10 +599,7 @@ export async function endDictation(textarea) {
     const audioData = getWhisperAudioBuffer(session);
     if (audioData && transformersPipeline) {
       try {
-        const culture = session.culture || "en";
-        const language = resolveWhisperLanguage(culture);
         const result = await transformersPipeline(audioData, {
-          language,
           task: "transcribe",
           return_timestamps: false
         });
