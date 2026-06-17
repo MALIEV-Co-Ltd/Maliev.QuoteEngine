@@ -977,7 +977,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("I did not hear speech", component, StringComparison.Ordinal);
         Assert.Contains("_composerMenuOpen", component, StringComparison.Ordinal);
         Assert.Contains("CloseComposerMenuAsync", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-add-backdrop\"", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-add-btn", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-composer-attachments\"", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-composer-attachment-card", component, StringComparison.Ordinal);
         Assert.Contains("@part.FileName", component, StringComparison.Ordinal);
@@ -1007,12 +1007,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-send-spinner", component, StringComparison.Ordinal);
         Assert.Contains("Text(\"Processing\", \"กำลังประมวลผล\")", component, StringComparison.Ordinal);
         Assert.Contains("class=\"sr-only\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-add-menu\"", component, StringComparison.Ordinal);
-        Assert.True(
-            component.IndexOf("<form class=\"@ComposerClass\"", StringComparison.Ordinal) <
-            component.IndexOf("class=\"qe-agent-add-menu\"", StringComparison.Ordinal));
-        Assert.Contains("Add photos and files", component, StringComparison.Ordinal);
-        Assert.Contains("Add hand sketch", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-quick-actions-menu\"", component, StringComparison.Ordinal);
+        Assert.Contains("Hand sketch", component, StringComparison.Ordinal);
         Assert.Contains("Google Drive connector", component, StringComparison.Ordinal);
         Assert.Contains("Google Drive is available first; CAD tools follow after MVP.", component, StringComparison.Ordinal);
         Assert.Contains("connector.Status.Equals(\"available\"", component, StringComparison.Ordinal);

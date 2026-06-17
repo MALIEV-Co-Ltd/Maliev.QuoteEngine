@@ -889,46 +889,6 @@
 
         <section class="@ComposerWrapClass" aria-label="@Text("Message composer", "กล่องข้อความ")">
             <form class="@ComposerClass" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
-                @if (_composerMenuOpen)
-                {
-                    <button type="button"
-                            class="qe-agent-add-backdrop"
-                            aria-label="@Text("Close add menu", "ปิดเมนูเพิ่มไฟล์")"
-                            @onclick="CloseComposerMenuAsync"></button>
-                    <section class="qe-agent-add-menu" role="menu" aria-label="@Text("Add to message", "เพิ่มในข้อความ")">
-                        <button type="button" role="menuitem" @onclick="RequestUploadFromComposerMenuAsync">
-                            <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
-                            <span>@Text("Add photos and files", "เพิ่มรูปและไฟล์")</span>
-                        </button>
-                        <button type="button" role="menuitem" @onclick="OpenSketchFromComposerMenuAsync">
-                            <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
-                            <span>@Text("Add hand sketch", "เพิ่มสเก็ตช์มือ")</span>
-                        </button>
-                        <button type="button"
-                                role="menuitem"
-                                aria-expanded="@AriaExpanded(_composerPluginsOpen)"
-                                @onclick="ToggleComposerPluginsMenu">
-                            <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
-                            <span>@Text("Plugins", "ปลั๊กอิน")</span>
-                            <MudIcon Icon="@(_composerPluginsOpen ? Icons.Material.Outlined.ExpandMore : Icons.Material.Outlined.ChevronRight)" Size="Size.Small" />
-                        </button>
-                    </section>
-                    @if (_composerPluginsOpen)
-                    {
-                        <section class="qe-agent-add-submenu" role="group" aria-label="@Text("Plugin connectors", "ตัวเชื่อมต่อปลั๊กอิน")">
-                            <button type="button" role="menuitem" @onclick="ApplyGoogleDriveConnectorAsync">
-                                <span class="qe-agent-google-drive-icon" aria-hidden="true">
-                                    <svg viewBox="0 0 24 24" focusable="false">
-                                        <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
-                                        <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
-                                        <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
-                                    </svg>
-                                </span>
-                                <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
-                            </button>
-                        </section>
-                    }
-                }
                 @if (_pendingComposerAttachments.Count > 0)
                 {
                     <div class="qe-agent-composer-attachments"
@@ -981,11 +941,10 @@
                     </div>
                 }
                 <button type="button"
-                        class="@($"qe-agent-round-btn qe-agent-add-btn {(_composerMenuOpen ? "active" : string.Empty)}")"
-                        title="@Text("Add files, sketches, or plugins", "เพิ่มไฟล์ สเก็ตช์ หรือปลั๊กอิน")"
-                        aria-label="@Text("Add files, sketches, or plugins", "เพิ่มไฟล์ สเก็ตช์ หรือปลั๊กอิน")"
-                        aria-expanded="@AriaExpanded(_composerMenuOpen)"
-                        @onclick="ToggleComposerMenuAsync">
+                        class="qe-agent-round-btn qe-agent-add-btn"
+                        title="@Text("Add files", "เพิ่มไฟล์")"
+                        aria-label="@Text("Add files", "เพิ่มไฟล์")"
+                        @onclick="RequestUploadAsync">
                     <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
                 </button>
                 <textarea @ref="_composerTextarea"
@@ -1040,26 +999,13 @@
                     <span class="sr-only">@(_sending ? Text("Processing", "กำลังประมวลผล") : Text("Send", "ส่ง"))</span>
                 </button>
                 <button type="button"
-                        class="qe-agent-round-btn qe-agent-quick-actions-btn"
+                        class="qe-agent-quick-actions-btn"
                         @onclick="() => _quickActionsMenuOpen = true"
-                        aria-label="@Text("Quick actions", "คำสั่งลัด")"
-                        title="@Text("Quick actions", "คำสั่งลัด")">
-                    <MudIcon Icon="@Icons.Material.Outlined.Menu" Size="Size.Small" />
+                        aria-label="@Text("Tools", "เครื่องมือ")"
+                        title="@Text("Tools", "เครื่องมือ")">
+                    <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
+                    <span>@Text("Tools", "เครื่องมือ")</span>
                 </button>
-                <div class="qe-agent-quick-actions" aria-label="@Text("Quick quote prompts", "คำสั่งลัดขอราคา")">
-                    <button type="button" @onclick="RequestUploadAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
-                        <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
-                    </button>
-                    <button type="button" @onclick="RequestUploadAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" Size="Size.Small" />
-                        <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
-                    </button>
-                    <button type="button" @onclick="OpenSketchAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
-                        <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
-                    </button>
-                </div>
             </form>
             @if (_messages.Count == 0)
             {
@@ -1175,9 +1121,9 @@
         {
             <div class="qe-agent-quick-actions-menu"
                  role="dialog" aria-modal="true"
-                 aria-label="@Text("Quick actions", "คำสั่งลัด")">
+                 aria-label="@Text("Tools", "เครื่องมือ")">
                 <header class="qe-agent-quick-actions-menu-header">
-                    <span>@Text("Quick actions", "คำสั่งลัด")</span>
+                    <span>@Text("Tools", "เครื่องมือ")</span>
                     <button type="button" class="qe-agent-round-btn"
                             @onclick="() => _quickActionsMenuOpen = false"
                             aria-label="@Text("Close", "ปิด")"
@@ -1197,6 +1143,16 @@
                     <button type="button" @onclick="OpenSketchFromQuickActionsAsync">
                         <MudIcon Icon="@Icons.Material.Outlined.Draw" />
                         <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
+                    </button>
+                    <button type="button" @onclick="ApplyGoogleDriveConnectorFromToolsAsync">
+                        <span class="qe-agent-google-drive-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                            </svg>
+                        </span>
+                        <span>@Text("Google Drive connector", "ตัวเชื่อมต่อ Google Drive")</span>
                     </button>
                 </div>
             </div>
@@ -3295,6 +3251,13 @@
     {
         _composerMenuOpen = false;
         _composerPluginsOpen = false;
+        _highlightConnectorId = "google-drive";
+        await OpenPluginsPageAsync();
+    }
+
+    private async Task ApplyGoogleDriveConnectorFromToolsAsync()
+    {
+        _quickActionsMenuOpen = false;
         _highlightConnectorId = "google-drive";
         await OpenPluginsPageAsync();
     }

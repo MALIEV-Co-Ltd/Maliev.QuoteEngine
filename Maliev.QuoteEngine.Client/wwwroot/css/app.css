@@ -3701,10 +3701,27 @@
 }
 
 .qe-agent-quick-actions-btn {
-    display: none;
+    display: flex;
+    align-items: center;
+    gap: 5px;
     grid-area: tools;
     align-self: center;
     justify-self: start;
+    height: 34px;
+    padding: 0 12px 0 10px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-ink);
+    font: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.qe-agent-quick-actions-btn:hover {
+    background: var(--qe-agent-line);
 }
 
 .qe-agent-quick-actions-menu {
@@ -3753,14 +3770,8 @@
     background: var(--qe-agent-hover);
 }
 
-@media (max-width: 640px) {
-    .qe-agent-quick-actions {
-        display: none;
-    }
-
-    .qe-agent-quick-actions-btn {
-        display: grid;
-    }
+.qe-agent-quick-actions {
+    display: none;
 }
 
 .qe-agent-use-cases {
