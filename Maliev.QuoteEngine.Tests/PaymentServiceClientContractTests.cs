@@ -26,9 +26,9 @@ public sealed class PaymentServiceClientContractTests
                 customerId = "customer-1",
                 orderId = "order-1",
                 description = "Manufacturing order ORD-2026-0001",
-                selectedProvider = "Stripe",
-                providerTransactionId = "pi_test_123",
-                paymentUrl = "https://checkout.stripe.com/c/pay/test"
+                selectedProvider = "omise",
+                providerTransactionId = "chrg_test_123",
+                paymentUrl = "https://pay.omise.co/payments/paym_test_123"
             })
         });
         using var http = new HttpClient(handler)
@@ -52,7 +52,7 @@ public sealed class PaymentServiceClientContractTests
 
         Assert.NotNull(result);
         Assert.Equal(transactionId, result.TransactionId);
-        Assert.Equal("https://checkout.stripe.com/c/pay/test", result.PaymentUrl);
+        Assert.Equal("https://pay.omise.co/payments/paym_test_123", result.PaymentUrl);
         Assert.Equal("1", result.Status);
 
         Assert.Equal(HttpMethod.Post, handler.Request?.Method);
