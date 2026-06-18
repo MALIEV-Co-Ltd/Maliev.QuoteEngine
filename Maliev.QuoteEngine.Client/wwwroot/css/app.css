@@ -3916,7 +3916,7 @@
 }
 
 .qe-agent-use-cases .qe-agent-use-case-card:first-child span {
-    font-weight: 700;
+    font-weight: 500;
 }
 
 .qe-agent-main--empty .qe-agent-use-cases {
@@ -3970,7 +3970,7 @@
     display: block;
     margin: 0;
     font-size: 15px;
-    font-weight: 600;
+    font-weight: 500;
     line-height: 1.3;
 }
 
