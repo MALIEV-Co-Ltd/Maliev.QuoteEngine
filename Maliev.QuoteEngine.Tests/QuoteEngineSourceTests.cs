@@ -4283,6 +4283,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("transitionMs = transition.TransitionMs", viewer, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ChatbotServiceClient_ReadinessCheck_DoesNotWarnForExpectedOfflinePolling()
+    {
+        var client = ReadRepoFile("Maliev.QuoteEngine.Bff", "Clients", "ChatbotServiceClient.cs");
+        var readinessBlock = ExtractSourceBlock(
+            client,
+            "public async Task<bool> CheckReadinessAsync",
+            "public Task<ChatbotSessionResponse?> InitiateSessionAsync");
+
+        Assert.DoesNotContain("LogWarning", readinessBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("LogError", readinessBlock, StringComparison.Ordinal);
+    }
+
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)
     {
         var start = source.IndexOf(startMarker, StringComparison.Ordinal);

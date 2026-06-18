@@ -46,7 +46,7 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
             using var response = await httpClient.GetAsync("/chatbot/readiness", cancellationToken);
             if (!response.IsSuccessStatusCode)
             {
-                logger.LogWarning(
+                logger.LogDebug(
                     "ChatbotService readiness returned {StatusCode}.",
                     response.StatusCode);
                 return false;
@@ -60,7 +60,7 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "ChatbotService readiness check failed.");
+            logger.LogDebug(ex, "ChatbotService readiness check failed.");
             return false;
         }
     }
