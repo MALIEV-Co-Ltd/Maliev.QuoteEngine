@@ -1093,7 +1093,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OpenSketchFromComposerMenuAsync", component, StringComparison.Ordinal);
         Assert.Contains("EnsureLocalProjectFromMessage(message);", component, StringComparison.Ordinal);
         Assert.Contains("DefaultProjectTitle", component, StringComparison.Ordinal);
-        Assert.Contains("ThinkingStepTitle(step)", component, StringComparison.Ordinal);
+        Assert.Contains("ThinkingStepDisplayTitle(step)", component, StringComparison.Ordinal);
         Assert.Contains("HumanizeAgentActivity", component, StringComparison.Ordinal);
         Assert.Contains("await FocusComposerAsync();", component, StringComparison.Ordinal);
         Assert.Contains("focusComposer", component, StringComparison.Ordinal);
@@ -1626,9 +1626,9 @@ public sealed class QuoteEngineSourceTests
         var loaderBlock = ExtractSourceBlock(component, "<div class=\"qe-agent-response-loader\"", "</div>");
         var loaderStyleBlock = ExtractSourceBlock(styles, ".qe-agent-response-loader {", "@keyframes qe-response-loader-dot");
 
-        Assert.Contains("<span></span>", loaderBlock, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-response-loader span", styles, StringComparison.Ordinal);
-        Assert.Contains("animation: qe-response-loader-dot 900ms ease-in-out infinite;", loaderStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-response-dot", loaderBlock, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-response-dot", loaderStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("animation: qe-response-loader-dot 900ms", loaderStyleBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-response-loader span:nth-child(2)", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-response-loader span:nth-child(3)", styles, StringComparison.Ordinal);
     }
@@ -1660,11 +1660,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-thinking-summary-meta\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-thinking-step-index\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-thinking-step-card\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-thinking-step-status\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-thinking-step-compact\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-thinking-step-duration\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-thinking-footer\"", component, StringComparison.Ordinal);
-        Assert.Contains("grid-template-columns: 56px minmax(0, 1fr);", styles, StringComparison.Ordinal);
-        Assert.Contains("grid-template-columns: minmax(0, 1fr) auto;", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-thinking-step-duration", styles, StringComparison.Ordinal);
         Assert.Contains("justify-self: end;", styles, StringComparison.Ordinal);
         Assert.Contains("text-align: right;", styles, StringComparison.Ordinal);
     }

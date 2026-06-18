@@ -4304,14 +4304,12 @@
             && !string.IsNullOrWhiteSpace(responseCompact)
             && string.Equals(normalizedRequest, normalizedResponse, StringComparison.OrdinalIgnoreCase))
         {
-            yield return requestCompact;
+            yield return $"{Text("Tool call", "คำสั่ง")}: {requestCompact}";
             yield break;
         }
 
         if (!string.IsNullOrWhiteSpace(requestCompact))
-            yield return bundle.Response is null
-                ? $"{Text("Tool call", "คำสั่ง")}: {requestCompact}"
-                : requestCompact;
+            yield return $"{Text("Tool call", "คำสั่ง")}: {requestCompact}";
 
         if (string.IsNullOrWhiteSpace(responseCompact))
             yield break;
