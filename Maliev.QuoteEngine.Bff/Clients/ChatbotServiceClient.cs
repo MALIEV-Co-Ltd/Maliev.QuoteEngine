@@ -34,6 +34,7 @@ public interface IChatbotServiceClient
 
 internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<ChatbotServiceClient> logger) : IChatbotServiceClient
 {
+    private static readonly TimeSpan ChatbotReadinessTimeout = TimeSpan.FromSeconds(1);
     private static readonly JsonSerializerOptions SnakeCaseJson = new(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
@@ -43,7 +44,9 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
     {
         try
         {
-            using var response = await httpClient.GetAsync("/chatbot/readiness", cancellationToken);
+            using var readinessCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            readinessCts.CancelAfter(ChatbotReadinessTimeout);
+            using var response = await httpClient.GetAsync("/chatbot/readiness", readinessCts.Token);
             if (!response.IsSuccessStatusCode)
             {
                 logger.LogDebug(
@@ -53,6 +56,11 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
             }
 
             return true;
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogDebug(ex, "ChatbotService readiness check timed out.");
+            return false;
         }
         catch (OperationCanceledException)
         {

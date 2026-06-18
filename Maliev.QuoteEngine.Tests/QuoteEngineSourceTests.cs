@@ -4299,6 +4299,21 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("LogError", readinessBlock, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ChatbotServiceClient_ReadinessCheck_UsesBoundedTimeoutForOfflineServices()
+    {
+        var client = ReadRepoFile("Maliev.QuoteEngine.Bff", "Clients", "ChatbotServiceClient.cs");
+        var readinessBlock = ExtractSourceBlock(
+            client,
+            "public async Task<bool> CheckReadinessAsync",
+            "public Task<ChatbotSessionResponse?> InitiateSessionAsync");
+
+        Assert.Contains("ChatbotReadinessTimeout", client, StringComparison.Ordinal);
+        Assert.Contains("CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)", readinessBlock, StringComparison.Ordinal);
+        Assert.Contains("CancelAfter(ChatbotReadinessTimeout)", readinessBlock, StringComparison.Ordinal);
+        Assert.Contains("!cancellationToken.IsCancellationRequested", readinessBlock, StringComparison.Ordinal);
+    }
+
     private static string ExtractSourceBlock(string source, string startMarker, string endMarker)
     {
         var start = source.IndexOf(startMarker, StringComparison.Ordinal);
