@@ -357,15 +357,14 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         string connectorId,
         CancellationToken cancellationToken = default)
     {
-        return PostAsync<QuoteAgentToolRequest, QuoteAgentConnectorHandoffResponse>(
-            "quote/v1/agent/tools/quote_get_connector_handoff",
-            new QuoteAgentToolRequest
+        return GetFromJsonOrFallbackAsync(
+            $"quote/v1/agent/sessions/{sessionId:D}/connectors/{Uri.EscapeDataString(connectorId)}/handoff",
+            new QuoteAgentConnectorHandoffResponse
             {
-                Arguments = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["session_id"] = JsonSerializer.SerializeToElement(sessionId),
-                    ["connector_id"] = JsonSerializer.SerializeToElement(connectorId)
-                }
+                SessionId = sessionId,
+                ConnectorId = connectorId,
+                Status = "unavailable",
+                Message = "Connector handoff is temporarily unavailable."
             },
             cancellationToken);
     }

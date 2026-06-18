@@ -1085,9 +1085,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
         Assert.Contains("SearchCustomerDataAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("GetConnectorHandoffAsync", apiClient, StringComparison.Ordinal);
-        Assert.Contains("quote/v1/agent/tools/quote_get_connector_handoff", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/connectors/{Uri.EscapeDataString(connectorId)}/handoff", apiClient, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote/v1/agent/tools/quote_get_connector_handoff", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote_focus_ui", ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs"), StringComparison.Ordinal);
-        Assert.Contains("connector_id", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/search", apiClient, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-page", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-row", agentStyles, StringComparison.Ordinal);

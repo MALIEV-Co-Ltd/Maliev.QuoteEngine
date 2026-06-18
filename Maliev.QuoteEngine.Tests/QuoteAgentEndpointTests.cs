@@ -2255,6 +2255,27 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_connector_handoff_endpoint_allows_signed_in_browser_without_agent_context_token()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-connector-browser@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var response = await client.GetAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/connectors/google-drive/handoff");
+
+        response.EnsureSuccessStatusCode();
+        var handoff = await response.Content.ReadFromJsonAsync<QuoteAgentConnectorHandoffResponse>();
+        Assert.NotNull(handoff);
+        Assert.Equal(sessionId, handoff.SessionId);
+        Assert.Equal("google-drive", handoff.ConnectorId);
+        Assert.True(handoff.IsAuthenticated);
+        Assert.True(handoff.IsAvailableToConnect);
+        Assert.Equal("ready_to_connect", handoff.Status);
+        Assert.Equal("connect_google_drive", handoff.ActionHint);
+    }
+
+    [Fact]
     public async Task Agent_connector_handoff_for_google_drive_requires_trusted_auth_when_anonymous()
     {
         using var client = factory.CreateClient();

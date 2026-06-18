@@ -138,6 +138,19 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Gets customer-safe connector handoff details for the QuoteEngine agent workspace.
+    /// </summary>
+    [HttpGet("sessions/{sessionId:guid}/connectors/{connectorId}/handoff")]
+    [ProducesResponseType(typeof(QuoteAgentConnectorHandoffResponse), StatusCodes.Status200OK)]
+    public ActionResult<QuoteAgentConnectorHandoffResponse> GetConnectorHandoff(
+        Guid sessionId,
+        string connectorId,
+        [FromQuery] string? returnUrl = null)
+    {
+        return Ok(agentService.GetConnectorHandoff(sessionId, connectorId, returnUrl));
+    }
+
+    /// <summary>
     /// Registers browser-uploaded files with a QuoteEngine agent session.
     /// </summary>
     [HttpPost("sessions/{sessionId:guid}/attachments")]

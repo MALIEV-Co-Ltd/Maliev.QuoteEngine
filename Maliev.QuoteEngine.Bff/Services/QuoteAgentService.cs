@@ -32,6 +32,9 @@ public interface IQuoteAgentService
     /// <summary>Gets customer-safe connector definitions for the quote agent workspace.</summary>
     QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId);
 
+    /// <summary>Gets customer-safe connector handoff details for the quote agent workspace.</summary>
+    QuoteAgentConnectorHandoffResponse GetConnectorHandoff(Guid sessionId, string connectorId, string? returnUrl);
+
     /// <summary>Registers uploaded browser files with the current agent session.</summary>
     QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request);
 
@@ -337,6 +340,20 @@ internal sealed class QuoteAgentService(
     public QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId)
     {
         return BuildConnectorRegistry(sessionStore.GetOrCreate(sessionId));
+    }
+
+    public QuoteAgentConnectorHandoffResponse GetConnectorHandoff(Guid sessionId, string connectorId, string? returnUrl)
+    {
+        var arguments = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["connector_id"] = JsonSerializer.SerializeToElement(connectorId, JsonOptions)
+        };
+        if (!string.IsNullOrWhiteSpace(returnUrl))
+        {
+            arguments["return_url"] = JsonSerializer.SerializeToElement(returnUrl, JsonOptions);
+        }
+
+        return BuildConnectorHandoff(sessionStore.GetOrCreate(sessionId), arguments);
     }
 
     public QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request)
