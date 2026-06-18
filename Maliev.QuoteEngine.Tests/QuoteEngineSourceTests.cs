@@ -2580,7 +2580,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".ms-tagline {\n    font-family: var(--maliev-font-mono);\n    font-size: 11px;\n    letter-spacing: 0.42em;\n    text-transform: uppercase;\n    opacity: 1;\n    color: currentColor;", styles, StringComparison.Ordinal);
         Assert.Contains(".ms-progress-fill {", styles, StringComparison.Ordinal);
         Assert.Contains("width: var(--ms-progress, 0%)", styles, StringComparison.Ordinal);
-        Assert.Contains("prefers-reduced-motion", styles, StringComparison.Ordinal);
+        Assert.Contains(":root[data-motion-reduced", styles, StringComparison.Ordinal);
         Assert.Contains(":root[data-culture=\"th-TH\"] .ms-beat", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".maliev-logo-loader", styles, StringComparison.Ordinal);
 

@@ -11,6 +11,7 @@ public sealed class PreferenceService(IJSRuntime js)
     public const string LightTheme = "light";
     public const string DarkTheme = "dark";
     public const string DefaultCurrency = "THB";
+    public const string MotionReducedPreferenceKey = "maliev.quote.motion-reduced";
 
     private bool _initialized;
 
@@ -21,6 +22,8 @@ public sealed class PreferenceService(IJSRuntime js)
     public string Theme { get; private set; } = LightTheme;
 
     public string Currency { get; private set; } = DefaultCurrency;
+
+    public bool IsMotionReduced { get; private set; }
 
     public bool IsInitialized => _initialized;
 
@@ -45,8 +48,13 @@ public sealed class PreferenceService(IJSRuntime js)
             "quoteEnginePreferences.getPreference",
             "maliev.quote.currency"));
 
+        IsMotionReduced = await js.InvokeAsync<bool>(
+            "quoteEnginePreferences.resolveMotion",
+            false);
+
         await js.InvokeVoidAsync("quoteEnginePreferences.setCulture", Culture);
         await js.InvokeVoidAsync("quoteEnginePreferences.setTheme", Theme);
+        await js.InvokeVoidAsync("quoteEnginePreferences.setMotion", IsMotionReduced);
 
         _initialized = true;
         Changed?.Invoke();
@@ -82,6 +90,18 @@ public sealed class PreferenceService(IJSRuntime js)
     {
         Currency = NormalizeCurrency(currency);
         await js.InvokeVoidAsync("quoteEnginePreferences.setPreference", "maliev.quote.currency", Currency);
+        Changed?.Invoke();
+    }
+
+    public async Task SetMotionReducedAsync(bool reduced)
+    {
+        if (IsMotionReduced == reduced)
+        {
+            return;
+        }
+
+        IsMotionReduced = reduced;
+        await js.InvokeVoidAsync("quoteEnginePreferences.setMotion", IsMotionReduced);
         Changed?.Invoke();
     }
 

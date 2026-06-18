@@ -45,6 +45,17 @@
 
     <div class="preferences-row">
         <div>
+            <span class="eyebrow">@Text("Motion", "การเคลื่อนไหว")</span>
+            <strong>@Text("Animation preference", "การตั้งค่าการเคลื่อนไหว")</strong>
+        </div>
+        <div class="preferences-segmented" role="group" aria-label="@Text("Animation preference", "การตั้งค่าการเคลื่อนไหว")">
+            <button type="button" class="@MotionButtonClass(false)" @onclick="() => SetMotionReducedAsync(false)">@Text("Normal", "ปกติ")</button>
+            <button type="button" class="@MotionButtonClass(true)" @onclick="() => SetMotionReducedAsync(true)">@Text("Reduced", "ลดการเคลื่อนไหว")</button>
+        </div>
+    </div>
+
+    <div class="preferences-row">
+        <div>
             <span class="eyebrow">@Text("Currency", "สกุลเงิน")</span>
             <strong>@Text("Quote display currency", "สกุลเงินสำหรับแสดงราคา")</strong>
         </div>
@@ -131,6 +142,7 @@
     private const string QuoteDefaultLeadTimeKey = "maliev.quote.default.leadTime";
     private static readonly CurrencyOptionDto FallbackCurrency = new("THB", "฿", "Thai Baht", true, true);
     private bool _isDarkMode;
+    private bool _isMotionReduced;
     private List<CurrencyOptionDto> _currencyOptions = [FallbackCurrency];
     private QuoteReferenceDataResponse? _referenceData;
     private string _selectedCurrency = "THB";
@@ -159,6 +171,7 @@
 
         await PreferenceState.InitializeAsync();
         _isDarkMode = PreferenceState.IsDarkMode;
+        _isMotionReduced = PreferenceState.IsMotionReduced;
         _selectedCulture = PreferenceState.Culture;
         _selectedCurrency = NormalizeCurrency(PreferenceState.Currency);
         await LoadQuoteDefaultsAsync();
@@ -173,6 +186,11 @@
     private async Task SetCultureAsync(string culture)
     {
         await PreferenceState.SetCultureAsync(culture);
+    }
+
+    private async Task SetMotionReducedAsync(bool reduced)
+    {
+        await PreferenceState.SetMotionReducedAsync(reduced);
     }
 
     private async Task HandleCurrencyChanged(ChangeEventArgs args)
@@ -268,6 +286,11 @@
             : "preferences-segment";
     }
 
+    private string MotionButtonClass(bool reduced)
+    {
+        return _isMotionReduced == reduced ? "preferences-segment is-active" : "preferences-segment";
+    }
+
     private string Text(string en, string th)
     {
         return PreferenceState.Text(en, th);
@@ -276,6 +299,7 @@
     private void OnPreferencesChanged()
     {
         _isDarkMode = PreferenceState.IsDarkMode;
+        _isMotionReduced = PreferenceState.IsMotionReduced;
         _selectedCulture = PreferenceState.Culture;
         _selectedCurrency = NormalizeCurrency(PreferenceState.Currency);
         _ = InvokeAsync(StateHasChanged);

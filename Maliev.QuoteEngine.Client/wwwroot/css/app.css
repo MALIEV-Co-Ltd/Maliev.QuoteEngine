@@ -2598,13 +2598,10 @@
 }
 
 .qe-agent-thinking-shell {
-    margin-top: 18px;
-    border: 1px solid color-mix(in srgb, var(--qe-agent-line) 72%, transparent);
-    border-radius: 18px;
-    background:
-        radial-gradient(circle at 12% 18%, color-mix(in srgb, var(--qe-agent-primary) 10%, transparent), transparent 34%),
-        linear-gradient(180deg, color-mix(in srgb, var(--qe-agent-raised) 92%, #0b1118), var(--qe-agent-surface));
-    box-shadow: 0 18px 46px color-mix(in srgb, #000 28%, transparent);
+    margin-top: 6px;
+    border: 1px solid color-mix(in srgb, var(--qe-agent-line) 52%, transparent);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--qe-agent-surface) 98%, var(--qe-agent-raised) 2%);
     color: var(--qe-agent-muted);
     overflow: hidden;
 }
@@ -2618,13 +2615,13 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
-    gap: 18px;
-    min-height: 74px;
-    padding: 22px 28px;
+    gap: 6px;
+    min-height: 28px;
+    padding: 6px 8px;
     cursor: pointer;
     list-style: none;
     user-select: none;
-    border-bottom: 1px solid color-mix(in srgb, var(--qe-agent-line) 70%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--qe-agent-line) 54%, transparent);
 }
 
 .qe-agent-thinking summary::-webkit-details-marker {
@@ -2636,10 +2633,10 @@
     display: inline-grid;
     place-items: center;
     justify-self: end;
-    width: 24px;
-    height: 24px;
+    width: 14px;
+    height: 14px;
     color: color-mix(in srgb, var(--qe-agent-ink) 78%, transparent);
-    font-size: 21px;
+    font-size: 11px;
     line-height: 1;
     transform: rotate(0deg);
     transition: transform 0.2s ease;
@@ -2658,36 +2655,36 @@
 
 .qe-agent-thinking-summary-main {
     min-width: 0;
-    gap: 16px;
+    gap: 5px;
 }
 
 .qe-agent-thinking-icon {
     display: inline-grid;
     place-items: center;
-    width: 38px;
-    height: 38px;
+    width: 16px;
+    height: 16px;
     border: 1px solid color-mix(in srgb, var(--qe-agent-line) 72%, transparent);
-    border-radius: 10px;
+    border-radius: 999px;
     color: color-mix(in srgb, var(--qe-agent-ink) 84%, transparent);
     background: color-mix(in srgb, var(--qe-agent-raised) 84%, transparent);
 }
 
 .qe-agent-thinking-title {
     color: color-mix(in srgb, var(--qe-agent-ink) 88%, transparent);
-    font-size: 18px;
-    font-weight: 760;
+    font-size: 11px;
+    font-weight: 600;
     line-height: 1.2;
 }
 
 .qe-agent-thinking-summary-meta {
-    gap: 18px;
+    gap: 5px;
     justify-self: start;
     color: color-mix(in srgb, var(--qe-agent-muted) 86%, transparent);
-    font-size: 15px;
+    font-size: 9px;
 }
 
 .qe-agent-thinking-count {
-    padding: 7px 16px;
+    padding: 1px 5px;
     border: 1px solid color-mix(in srgb, var(--qe-agent-line) 72%, transparent);
     border-radius: 10px;
     background: color-mix(in srgb, var(--qe-agent-raised) 82%, transparent);
@@ -2696,54 +2693,44 @@
 }
 
 .qe-agent-thinking-total {
-    gap: 8px;
+    gap: 3px;
     white-space: nowrap;
 }
 
 .qe-agent-thinking-steps {
     display: grid;
-    gap: 16px;
-    padding: 26px 36px 18px;
+    gap: 4px;
+    padding: 6px 8px 5px;
 }
 
 .qe-agent-thinking-step-row {
     display: grid;
-    grid-template-columns: 56px minmax(0, 1fr);
-    gap: 18px;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
     align-items: stretch;
     position: relative;
 }
 
 .qe-agent-thinking-step-row::after {
-    content: "";
-    position: absolute;
-    top: 50px;
-    bottom: -18px;
-    left: 27px;
-    width: 2px;
-    background: color-mix(in srgb, var(--qe-agent-line) 74%, transparent);
+    display: none;
 }
 
 .qe-agent-thinking-step-row:last-child::after {
-    bottom: -8px;
-    background: repeating-linear-gradient(
-        to bottom,
-        color-mix(in srgb, var(--qe-agent-line) 70%, transparent) 0 6px,
-        transparent 6px 12px);
+    display: none;
 }
 
 .qe-agent-thinking-step-index {
-    display: inline-grid;
-    place-items: center;
+    display: none;
     align-self: start;
-    width: 42px;
-    height: 42px;
-    margin-top: 8px;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    margin-top: 1px;
     border: 1px solid color-mix(in srgb, var(--qe-agent-line) 80%, transparent);
     border-radius: 999px;
     background: color-mix(in srgb, var(--qe-agent-raised) 88%, #111820);
     color: color-mix(in srgb, var(--qe-agent-ink) 84%, transparent);
-    font-size: 16px;
+    font-size: 8px;
     font-weight: 650;
     position: relative;
     z-index: 1;
@@ -2751,43 +2738,40 @@
 
 .qe-agent-thinking-step-card {
     display: grid;
-    gap: 16px;
+    gap: 3px;
     min-width: 0;
-    padding: 22px 28px;
-    border: 1px solid color-mix(in srgb, var(--qe-agent-line) 76%, transparent);
-    border-radius: 12px;
-    background: linear-gradient(180deg, color-mix(in srgb, var(--qe-agent-raised) 92%, transparent), color-mix(in srgb, var(--qe-agent-surface) 96%, transparent));
+    padding: 4px 6px;
+    border: 0;
 }
 
 .qe-agent-thinking-step-header {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
 }
 
 .qe-agent-thinking-step-heading {
-    display: flex;
-    align-items: center;
-    gap: 14px;
+    display: block;
     min-width: 0;
+    flex: 1 1 auto;
 }
 
 .qe-agent-thinking-step-title {
     min-width: 0;
     color: color-mix(in srgb, var(--qe-agent-ink) 86%, transparent);
-    font-size: 18px;
-    font-weight: 760;
-    line-height: 1.25;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
 }
 
 .qe-agent-thinking-step-status {
     flex: 0 0 auto;
-    padding: 6px 14px;
+    padding: 2px 6px;
     border-radius: 10px;
     background: color-mix(in srgb, var(--qe-agent-raised) 82%, transparent);
     color: color-mix(in srgb, var(--qe-agent-muted) 88%, transparent);
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
@@ -2795,33 +2779,27 @@
 
 .qe-agent-thinking-step-duration {
     justify-self: end;
+    flex: 0 0 auto;
     text-align: right;
     color: color-mix(in srgb, var(--qe-agent-muted) 92%, transparent);
-    font-size: 16px;
-    line-height: 1.3;
+    font-size: 9px;
+    line-height: 1.2;
     white-space: nowrap;
+    margin-left: auto;
 }
 
 .qe-agent-thinking-step-caret {
-    grid-column: 2;
-    justify-self: end;
-    color: color-mix(in srgb, var(--qe-agent-muted) 80%, transparent);
+    display: none;
 }
 
 .qe-agent-thinking-step-compact {
     margin: 0;
     color: color-mix(in srgb, var(--qe-agent-muted) 82%, transparent);
-    font-size: 15px;
-    line-height: 1.55;
-}
-
-.qe-agent-thinking-footer {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 4px 44px 24px;
-    color: color-mix(in srgb, var(--qe-agent-muted) 66%, transparent);
-    font-size: 14px;
+    font-size: 10px;
+    line-height: 1.3;
+    max-height: 3.6em;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .qe-agent-model-thinking {
@@ -4322,10 +4300,8 @@
     animation-delay: 455ms;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .qe-agent-main--empty .qe-agent-use-case-card {
-        animation: none;
-    }
+:root[data-motion-reduced="true"] .qe-agent-main--empty .qe-agent-use-case-card {
+    animation: none;
 }
 
 @media (max-height: 760px), (max-width: 760px) {
@@ -5642,14 +5618,12 @@
     }
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .qe-agent-shell,
-    .qe-agent-rail,
-    .qe-agent-rail-scroll,
-    .qe-agent-artifact-drawer {
-        animation: none !important;
-        transition: none !important;
-    }
+:root[data-motion-reduced="true"] .qe-agent-shell,
+:root[data-motion-reduced="true"] .qe-agent-rail,
+:root[data-motion-reduced="true"] .qe-agent-rail-scroll,
+:root[data-motion-reduced="true"] .qe-agent-artifact-drawer {
+    animation: none !important;
+    transition: none !important;
 }
 /* End quote agent chat-first shell */
 
@@ -5991,15 +5965,14 @@ body.quote-loading-failed .ms-stage {
     opacity: 0.55;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .ms-beat {
-        transition: opacity 0.2s ease;
-        transform: none;
-    }
-    .ms-wordmark::after {
-        animation: none;
-        background-position: 200% 0;
-    }
+:root[data-motion-reduced="true"] .ms-beat {
+    transition: opacity 0.2s ease;
+    transform: none;
+}
+
+:root[data-motion-reduced="true"] .ms-wordmark::after {
+    animation: none;
+    background-position: 200% 0;
 }
 
 #components-reconnect-modal.maliev-reconnect-modal {
@@ -11056,11 +11029,9 @@ textarea::placeholder {
     }
 }
 
-@media (prefers-reduced-motion: reduce) {
-    .home-typewriter-cursor {
-        animation: none;
-        opacity: 0.75;
-    }
+:root[data-motion-reduced="true"] .home-typewriter-cursor {
+    animation: none;
+    opacity: 0.75;
 }
 
 .home-sub {
@@ -11238,12 +11209,10 @@ textarea::placeholder {
 
 /* ─── End home landing page ──────────────────────────────────────────── */
 
-@media (prefers-reduced-motion: reduce) {
-    .qe-pn-root.is-workspace-ready .qe-plp-root,
-    .qe-pn-root.is-workspace-ready .qe-pn-detail-row,
-    .qe-pn-root.is-workspace-ready .qe-qsb-root {
-        animation: none;
-    }
+:root[data-motion-reduced="true"] .qe-pn-root.is-workspace-ready .qe-plp-root,
+:root[data-motion-reduced="true"] .qe-pn-root.is-workspace-ready .qe-pn-detail-row,
+:root[data-motion-reduced="true"] .qe-pn-root.is-workspace-ready .qe-qsb-root {
+    animation: none;
 }
 
 @media (max-width: 980px) {
@@ -11816,7 +11785,7 @@ body.mud-blazor {
    Reduced-motion preference (DESIGN.md doesn't prescribe but Vercel
    ships motion-safe defaults).
    ──────────────────────────────────────────────────────────────────── */
-@media (prefers-reduced-motion: reduce) {
+:root[data-motion-reduced="true"] {
     *,
     *::before,
     *::after {
@@ -11825,6 +11794,28 @@ body.mud-blazor {
         animation-iteration-count: 1 !important;
         scroll-behavior: auto !important;
     }
+}
+
+/* Keep live chatbot affordances readable and responsive during reduce-motion mode. */
+:root[data-motion-reduced="true"] .qe-agent-shell .qe-agent-status-dot,
+:root[data-motion-reduced="true"] .qe-agent-shell .qe-agent-status > span:first-child {
+    animation: qe-agent-status-pulse 1.7s ease-in-out infinite !important;
+    animation-duration: 1.7s !important;
+}
+
+:root[data-motion-reduced="true"] .qe-agent-shell .qe-agent-response-loader .qe-agent-response-dot,
+:root[data-motion-reduced="true"] .qe-agent-shell .qe-agent-response-loader span {
+    animation: qe-response-loader-dot 900ms cubic-bezier(.2, .8, .35, 1) infinite !important;
+    animation-duration: 900ms !important;
+    animation-iteration-count: infinite !important;
+}
+
+:root[data-motion-reduced="true"] .qe-agent-shell .qe-agent-send-spinner,
+:root[data-motion-reduced="true"] .qe-agent-shell .qe-agent-dictation-spinner,
+:root[data-motion-reduced="true"] .qe-agent-shell .qe-agent-upload-progress::after {
+    animation: qe-agent-spin 700ms linear infinite !important;
+    animation-duration: 700ms !important;
+    animation-iteration-count: infinite !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════

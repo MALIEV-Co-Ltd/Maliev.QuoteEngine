@@ -4,6 +4,7 @@
   const bootVersion = Date.now().toString(36);
   const staleBootRetryKey = "maliev.quote.boot.retry";
   const firstWasmLoadKey = "maliev.makestudio.first-wasm-loaded";
+  const motionPreferenceKey = "maliev.quote.motion-reduced";
   let loadedResources = 0;
   let totalResources = 0;
   let displayedProgress = 0;
@@ -313,9 +314,23 @@
     finishStartupStory();
   }
 
-  function prefersReducedMotion() {
-    return Boolean(
-      window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  function resolveMotion(fallback) {
+    const stored = getPreference(motionPreferenceKey);
+    if (stored === "1" || stored === "true") {
+      return true;
+    }
+
+    if (stored === "0" || stored === "false") {
+      return false;
+    }
+
+    return Boolean(fallback);
+  }
+
+  function setMotion(isReduced) {
+    const reduced = Boolean(isReduced);
+    root.setAttribute("data-motion-reduced", reduced ? "true" : "false");
+    setPreference(motionPreferenceKey, reduced ? "true" : "false");
   }
 
   function beginBoot(wantsStory) {
@@ -332,13 +347,14 @@
       return;
     }
 
-    storyMode = !prefersReducedMotion() ? "full" : "quiet";
+    const isMotionReduced = resolveMotion(false);
+    storyMode = !isMotionReduced ? "full" : "quiet";
 
     if (storyMode === "full") {
       minVisibleMs = STORY_BEAT_MS.reduce(function (sum, ms) { return sum + ms; }, 0) + FINALE_HOLD_MS;
       showBeat(0);
     } else {
-      minVisibleMs = prefersReducedMotion() ? 0 : 500;
+      minVisibleMs = isMotionReduced ? 0 : 500;
       showBeat(storyBeats.length - 1);
     }
 
@@ -536,6 +552,7 @@
   setCulture(resolveCulture("en-US"));
   setStatus(currentStrings.status.preparing);
   setTheme(resolveTheme("light"));
+  setMotion(resolveMotion(false));
 
   window.quoteEngineLoader = {
     loadBootResource,
@@ -554,6 +571,8 @@
     resolveCulture,
     setCulture,
     resolveTheme,
-    setTheme
+    setTheme,
+    resolveMotion,
+    setMotion
   };
 })();
