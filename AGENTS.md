@@ -56,6 +56,28 @@ dotnet test Maliev.QuoteEngine.slnx --configuration Release --filter "FullyQuali
 
 ## Goal Execution Workflow
 
+### Automatic Active Goal Setup
+
+Every user request in this repository must be translated into an active working goal before making file edits. This is a standing repo instruction to use goal recording automatically; do not wait for the user to separately ask for `/goal`.
+
+Before any file edit, record an active goal using the first available mechanism:
+
+1. If a callable `/goal` tool is explicitly available in the active tool list, call it.
+2. Otherwise, if a Codex goal-recording tool is callable, such as `create_goal`, use it to create the active goal.
+3. Otherwise, write a visible `Active goal` block in chat.
+
+When using a tool-based goal recorder, keep the tool objective concise and still make the required MALIEV goal details visible in chat before editing. When using the chat fallback, the `Active goal` block is the active goal record.
+
+The goal record must include:
+
+- Outcome: the observable state that should be true when complete.
+- Scope: the repo, files, components, services, or user flow affected.
+- Boundary/contract: the client, BFF, service, message contract, DTO, JSON payload, auth/session, UI state, or downstream boundary being checked.
+- Validation: the focused tests, build checks, browser checks, log checks, or manual verification that will prove the goal.
+- Commit boundary: the coherent validated slice that should be committed.
+
+Keep the goal narrow and tied to the user's current request. If investigation proves the original goal is incomplete or wrong, record a `Revised active goal` before continuing.
+
 Use the lightest validation lane that still protects the affected behavior. Do not run every gate for every checkpoint.
 
 ### Lane 1: UI Polish And Interaction
