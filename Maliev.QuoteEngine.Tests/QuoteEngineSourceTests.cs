@@ -1672,7 +1672,9 @@ public sealed class QuoteEngineSourceTests
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
 
-        Assert.Contains("Use quote_ask_customer for short confirmation prompts", service, StringComparison.Ordinal);
+        Assert.Contains("Use quote_ask_customer for short confirmation prompts, missing quote requirements", service, StringComparison.Ordinal);
+        Assert.Contains("When multiple quote details are missing, ask one focused question with quote_ask_customer", service, StringComparison.Ordinal);
+        Assert.Contains("Do not put a checklist of multiple missing details in assistant text", service, StringComparison.Ordinal);
         Assert.Contains("never leave those as only plain assistant text", service, StringComparison.Ordinal);
         Assert.Contains("Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables", service, StringComparison.Ordinal);
         Assert.Contains("Feature | Value | Source", service, StringComparison.Ordinal);

@@ -3527,7 +3527,7 @@ internal sealed class QuoteAgentService(
             "Default to qty=1, standard tolerance, and standard lead time when not stated. " +
             "State your inferred assumptions first, then ask only for genuinely missing critical information. " +
             "For UI language changes, call quote_set_ui_language only. " +
-            "For short customer confirmations, call quote_ask_customer with 2-4 discrete options. " +
+            "For customer follow-up questions, call quote_ask_customer with 2-4 discrete options. " +
             "Project naming: call quote_set_project_name with a short part/process/material title, not the customer's literal question. " +
             "For photos/sketches, describe visible shape/features; numeric dimensions are facts only when written or readable. " +
             "Unlabeled sketches need dimension confirmation and must not trigger a 3D preview by themselves. " +
@@ -3555,9 +3555,11 @@ internal sealed class QuoteAgentService(
             "Project naming: When calling quote_set_project_name, derive a short descriptive title from the part file name and inferred process/material " +
             "(e.g. 'Flower Oval – FDM PLA', 'L-Bracket – SLA Resin'). Never set the project name to the customer's literal question.");
         contextLines.Add(
-            "Customer questions: Use quote_ask_customer for short confirmation prompts and customer decisions with 2–4 discrete mutually exclusive options, " +
+            "Customer questions: Use quote_ask_customer for short confirmation prompts, missing quote requirements, and customer decisions with 2–4 discrete mutually exclusive options, " +
             "including yes/no confirmations such as whether to use inferred details or edit them; never leave those as only plain assistant text. " +
-            "Use normal text for open-ended questions or details you can confidently infer. At most once per turn.");
+            "When multiple quote details are missing, ask one focused question with quote_ask_customer, wait for the customer response, then ask the next missing detail in the following turn. " +
+            "Do not put a checklist of multiple missing details in assistant text when quote_ask_customer can ask the first question. " +
+            "Use normal text only for details you can confidently infer. At most once per turn.");
 
         var content = $"""
 {string.Join("\n", contextLines)}
