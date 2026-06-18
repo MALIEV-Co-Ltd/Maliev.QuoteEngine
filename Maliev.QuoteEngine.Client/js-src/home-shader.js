@@ -146,9 +146,18 @@ function uploadQuad(gl, prog) {
 // Per-canvas instance
 // ---------------------------------------------------------------------------
 
+function resolveMotionPreference() {
+    if (window.quoteEnginePreferences &&
+        typeof window.quoteEnginePreferences.resolveMotion === "function") {
+        return Boolean(window.quoteEnginePreferences.resolveMotion(false));
+    }
+
+    return document.documentElement.getAttribute("data-motion-reduced") === "true";
+}
+
 function createInstance(canvas, isDark) {
     const dpr     = window.devicePixelRatio || 1;
-    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduced = resolveMotionPreference();
 
     const gl = canvas.getContext('webgl',              { alpha: false, antialias: false, powerPreference: 'low-power' })
             || canvas.getContext('experimental-webgl', { alpha: false, antialias: false });
