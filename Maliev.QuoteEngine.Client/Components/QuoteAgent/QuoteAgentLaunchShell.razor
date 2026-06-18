@@ -642,13 +642,11 @@
                                         .OrderBy(step => step.StepNumber <= 0 ? int.MaxValue : step.StepNumber)
                                         .ThenBy(step => step.Timestamp)
                                         .ToList();
+                                    var bundledThoughtSteps = BuildBundledThoughtSteps(orderedThinkingSteps);
                                     <section class="qe-agent-thinking-shell" aria-label="@ThinkingSummary(message.ThinkingSteps)">
-                                        <details class="qe-agent-thinking" open>
+                                        <details class="qe-agent-thinking">
                                             <summary>
                                                 <span class="qe-agent-thinking-summary-main">
-                                                    <span class="qe-agent-thinking-icon" aria-hidden="true">
-                                                        <MudIcon Icon="@Icons.Material.Outlined.Psychology" Size="Size.Small" />
-                                                    </span>
                                                     <span class="qe-agent-thinking-title">@Text("Thought process", "กระบวนการคิด")</span>
                                                 </span>
                                                 <span class="qe-agent-thinking-summary-meta">
@@ -663,41 +661,35 @@
                                                 </span>
                                             </summary>
                                             <div class="qe-agent-thinking-steps">
-                                                @for (var stepIndex = 0; stepIndex < orderedThinkingSteps.Count; stepIndex++)
+                                                @for (var stepIndex = 0; stepIndex < bundledThoughtSteps.Count; stepIndex++)
                                                 {
-                                                    var step = orderedThinkingSteps[stepIndex];
-                                                    var stepTitle = ThinkingStepTitle(step);
-                                                    var stepCompact = ThinkingStepCompact(step);
-                                                    var displayStepNumber = step.StepNumber > 0 ? step.StepNumber : stepIndex + 1;
+                                                    var step = bundledThoughtSteps[stepIndex];
+                                                    var stepTitle = ThinkingStepDisplayTitle(step);
+                                                    var compactLines = ThinkingStepDisplayCompacts(step).ToArray();
+                                                    var displayStepNumber = step.DisplayIndex > 0 ? step.DisplayIndex : stepIndex + 1;
                                                     if (!string.IsNullOrWhiteSpace(stepTitle))
                                                     {
-                                                        <div class="qe-agent-thinking-step-row">
-                                                            <span class="qe-agent-thinking-step-index">@displayStepNumber</span>
-                                                            <article class="qe-agent-thinking-step-card">
-                                                                <header class="qe-agent-thinking-step-header">
-                                                                    <span class="qe-agent-thinking-step-heading">
-                                                                        <span class="qe-agent-thinking-step-title">@stepTitle</span>
-                                                                        <span class="qe-agent-thinking-step-status">@Text("Completed", "เสร็จแล้ว")</span>
-                                                                    </span>
-                                                                    @if (step.DurationMs is > 0)
+                                                            <div class="qe-agent-thinking-step-row">
+                                                                <span class="qe-agent-thinking-step-index">@displayStepNumber</span>
+                                                                <article class="qe-agent-thinking-step-card">
+                                                                    <header class="qe-agent-thinking-step-header">
+                                                                        <span class="qe-agent-thinking-step-heading">
+                                                                            <span class="qe-agent-thinking-step-title">@stepTitle</span>
+                                                                        </span>
+                                                                        @if (step.TotalDurationMs is > 0)
+                                                                        {
+                                                                            <span class="qe-agent-thinking-step-duration">@FormatDuration(step.TotalDurationMs.Value)</span>
+                                                                        }
+                                                                    </header>
+                                                                    @foreach (var compactLine in compactLines)
                                                                     {
-                                                                        <span class="qe-agent-thinking-step-duration">@FormatDuration(step.DurationMs.Value)</span>
+                                                                        <p class="qe-agent-thinking-step-compact">@compactLine</p>
                                                                     }
-                                                                    <MudIcon Class="qe-agent-thinking-step-caret" Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Small" />
-                                                                </header>
-                                                                @if (!string.IsNullOrWhiteSpace(stepCompact))
-                                                                {
-                                                                    <p class="qe-agent-thinking-step-compact">@stepCompact</p>
-                                                                }
-                                                            </article>
+                                                                </article>
                                                         </div>
                                                     }
                                                 }
                                             </div>
-                                            <footer class="qe-agent-thinking-footer">
-                                                <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" />
-                                                <span>@Text("These are internal steps used to complete your request.", "นี่คือขั้นตอนภายในที่ใช้เพื่อทำคำขอของคุณให้เสร็จ")</span>
-                                            </footer>
                                         </details>
                                     </section>
                                 }
@@ -4172,7 +4164,170 @@
         return totalDuration > 0 ? FormatDuration(totalDuration) : string.Empty;
     }
 
-    private string ThinkingStepTitle(QuoteAgentThinkingStepDto step)
+    private sealed class ThoughtStepBundle
+    {
+        public required QuoteAgentThinkingStepDto Request { get; init; }
+        public QuoteAgentThinkingStepDto? Response { get; init; }
+        public int DisplayIndex { get; init; }
+        public long? TotalDurationMs { get; init; }
+        public bool IsToolPair => Response is not null;
+    }
+
+    private static IReadOnlyList<ThoughtStepBundle> BuildBundledThoughtSteps(IReadOnlyList<QuoteAgentThinkingStepDto> orderedSteps)
+    {
+        if (orderedSteps.Count == 0)
+            return [];
+
+        var bundles = new List<ThoughtStepBundle>();
+
+        var index = 1;
+        for (var i = 0; i < orderedSteps.Count; i++)
+        {
+            var current = orderedSteps[i];
+            var next = i + 1 < orderedSteps.Count ? orderedSteps[i + 1] : null;
+
+            if (next is not null &&
+                LooksLikeToolRequestStep(current) &&
+                !LooksLikeToolRequestStep(next) &&
+                LooksLikeToolResultStep(next) &&
+                ShouldBundleToolSteps(current, next))
+            {
+                bundles.Add(BuildThoughtStepBundle(current, next, index));
+                i++;
+                index++;
+                continue;
+            }
+
+            bundles.Add(BuildThoughtStepBundle(current, null, index));
+            index++;
+        }
+
+        return bundles;
+    }
+
+    private static ThoughtStepBundle BuildThoughtStepBundle(
+        QuoteAgentThinkingStepDto request,
+        QuoteAgentThinkingStepDto? response,
+        int displayIndex)
+    {
+        return new ThoughtStepBundle
+        {
+            Request = request,
+            Response = response,
+            DisplayIndex = displayIndex,
+            TotalDurationMs = request.DurationMs.GetValueOrDefault() + (response?.DurationMs.GetValueOrDefault() ?? 0L)
+        };
+    }
+
+    private static string? ThinkingStepDisplayTitle(ThoughtStepBundle bundle)
+    {
+        var requestTitle = ThinkingStepTitle(bundle.Request);
+        if (!string.IsNullOrWhiteSpace(requestTitle))
+        {
+            if (bundle.Response is null)
+                return requestTitle;
+
+            var responseTitle = ThinkingStepTitle(bundle.Response);
+            if (string.Equals(
+                    NormalizeThoughtStepType(bundle.Response.Type),
+                    NormalizeThoughtStepType(bundle.Request.Type),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return string.Equals(responseTitle, requestTitle, StringComparison.OrdinalIgnoreCase)
+                    ? requestTitle
+                    : responseTitle;
+            }
+        }
+
+        return ThinkingStepTitle(bundle.Request);
+    }
+
+    private IEnumerable<string> ThinkingStepDisplayCompacts(ThoughtStepBundle bundle)
+    {
+        var requestCompact = ThinkingStepCompact(bundle.Request);
+        var responseCompact = bundle.Response is null ? null : ThinkingStepCompact(bundle.Response);
+
+        var normalizedRequest = NormalizeCompactTextForDisplayDedupe(requestCompact);
+        var normalizedResponse = NormalizeCompactTextForDisplayDedupe(responseCompact);
+
+        if (!string.IsNullOrWhiteSpace(requestCompact)
+            && !string.IsNullOrWhiteSpace(responseCompact)
+            && string.Equals(normalizedRequest, normalizedResponse, StringComparison.OrdinalIgnoreCase))
+        {
+            yield return requestCompact;
+            yield break;
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestCompact))
+            yield return $"{Text("Tool call", "คำสั่ง")}: {requestCompact}";
+
+        if (string.IsNullOrWhiteSpace(responseCompact))
+            yield break;
+
+        yield return $"{Text("Result", "ผลลัพธ์")}: {responseCompact}";
+    }
+
+    private static string? NormalizeCompactTextForDisplayDedupe(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        return Regex.Replace(text.Trim(), "\\s+", " ");
+    }
+
+    private static bool ShouldBundleToolSteps(QuoteAgentThinkingStepDto request, QuoteAgentThinkingStepDto result)
+    {
+        var requestType = NormalizeThoughtStepType(request.Type);
+        var resultType = NormalizeThoughtStepType(result.Type);
+
+        if (string.IsNullOrWhiteSpace(requestType) || string.IsNullOrWhiteSpace(resultType))
+            return false;
+
+        if (string.Equals(requestType, resultType, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return requestType.Contains(resultType, StringComparison.OrdinalIgnoreCase) ||
+               resultType.Contains(requestType, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeToolRequestStep(QuoteAgentThinkingStepDto step)
+    {
+        return (step.Detail?.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase) == true) ||
+               (step.Summary?.Contains("tool", StringComparison.OrdinalIgnoreCase) == true) ||
+               (step.Type?.Contains("tool", StringComparison.OrdinalIgnoreCase) == true) ||
+               (step.Title?.Contains("tool", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    private static bool LooksLikeToolResultStep(QuoteAgentThinkingStepDto step)
+    {
+        return (step.Detail is null || !step.Detail.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase)) &&
+               (step.Detail?.Contains("Result", StringComparison.OrdinalIgnoreCase) == true ||
+                step.Title?.Contains("result", StringComparison.OrdinalIgnoreCase) == true ||
+                step.Type?.Contains("result", StringComparison.OrdinalIgnoreCase) == true ||
+                step.Summary?.Contains("result", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    private static string NormalizeThoughtStepType(string? raw)
+    {
+        var normalized = (raw ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(normalized))
+            return string.Empty;
+
+        normalized = normalized.Replace("-", "_", StringComparison.OrdinalIgnoreCase);
+        if (normalized.StartsWith("quote_", StringComparison.OrdinalIgnoreCase))
+            normalized = normalized["quote_".Length..];
+
+        normalized = normalized
+            .Replace("tool_call", "")
+            .Replace("toolresult", "")
+            .Replace("tool_result", "")
+            .Replace("_call", "")
+            .Replace("_result", "");
+
+        return Regex.Replace(normalized, "_{2,}", "_").Trim('_');
+    }
+
+    private static string ThinkingStepTitle(QuoteAgentThinkingStepDto step)
     {
         var title = string.IsNullOrWhiteSpace(step.Title) ? step.Type : step.Title;
         return HumanizeAgentActivity(title);
