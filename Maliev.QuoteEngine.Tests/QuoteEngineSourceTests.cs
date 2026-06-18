@@ -923,6 +923,22 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Icons.Material.Outlined.Add", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.Mic", component, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.ArrowUpward", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-composer-tooltip qe-agent-add-tooltip\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-tooltip-panel\" role=\"tooltip\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-tooltip-content\"", component, StringComparison.Ordinal);
+        Assert.Contains("<kbd>Space</kbd>", component, StringComparison.Ordinal);
+        Assert.Contains("<kbd>Alt+Enter</kbd>", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("title=\"@DictationButtonTitle\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-send-btn\" title=", component, StringComparison.Ordinal);
+        Assert.Contains("event.key !== \"Enter\" || !event.altKey", composerScript, StringComparison.Ordinal);
+        Assert.Contains("dictationButton.addEventListener(\"keydown\", dictationKeydown);", composerScript, StringComparison.Ordinal);
+        Assert.Contains("dictationButton.addEventListener(\"keyup\", dictationKeyup);", composerScript, StringComparison.Ordinal);
+        Assert.Contains("updateComposerTooltipPlacement", composerScript, StringComparison.Ordinal);
+        Assert.Contains("wrapper.dataset.tooltipPlacement = spaceBelow >= panelHeight + margin ? \"bottom\" : \"top\";", composerScript, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-tooltip:hover .qe-agent-tooltip-panel", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-tooltip[data-tooltip-placement=\"top\"] .qe-agent-tooltip-panel", styles, StringComparison.Ordinal);
+        Assert.Contains("top: calc(100% + 10px);", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-tooltip-content kbd", styles, StringComparison.Ordinal);
         Assert.Contains("SendAgentMessageStreamAsync", component, StringComparison.Ordinal);
         Assert.Contains("QueueAssistantStreamDelta(assistantMessage, streamEvent.Delta)", component, StringComparison.Ordinal);
         Assert.Contains("private async Task RevealAssistantStreamAsync", component, StringComparison.Ordinal);
@@ -953,6 +969,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@ref=\"_composerTextarea\"", component, StringComparison.Ordinal);
         Assert.Contains("@bind:event=\"oninput\"", component, StringComparison.Ordinal);
         Assert.Contains("autofocus", component, StringComparison.Ordinal);
+        Assert.Contains("<h1 tabindex=\"-1\">@Text(\"What do you want to make today?\"", component, StringComparison.Ordinal);
         Assert.Contains("maxlength=\"@QuoteAgentTextLimits.MaxMessageCharacters\"", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-composer.js", component, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", component, StringComparison.Ordinal);
@@ -1031,6 +1048,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("HumanizeAgentActivity", component, StringComparison.Ordinal);
         Assert.Contains("await FocusComposerAsync();", component, StringComparison.Ordinal);
         Assert.Contains("focusComposer", component, StringComparison.Ordinal);
+        var firstRenderBlock = ExtractSourceBlock(
+            component,
+            "if (firstRender)",
+            "else if (_composerModule is not null)");
+        Assert.Contains("InvokeVoidAsync(\"initComposer\", _composerTextarea, _composerDotNetRef, _dictationButton)", firstRenderBlock, StringComparison.Ordinal);
+        Assert.Contains("InvokeVoidAsync(\"focusComposer\", _composerTextarea)", firstRenderBlock, StringComparison.Ordinal);
         Assert.Contains("class=\"@UseCaseListClass\"", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-global-search", agentStyles, StringComparison.Ordinal);
@@ -1143,6 +1166,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("export function focusComposer", composerScript, StringComparison.Ordinal);
         Assert.Contains("moveCaretToEnd(textarea)", composerScript, StringComparison.Ordinal);
         Assert.Contains("textarea.setSelectionRange(end, end)", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("focusComposer(textarea);", ExtractSourceBlock(composerScript, "export function initComposer", "export function isComposerInitialized"), StringComparison.Ordinal);
         Assert.Contains("clearTextSelection", composerScript, StringComparison.Ordinal);
         Assert.Contains("selection.rangeCount > 0", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("window.addEventListener(\"focus\", windowFocus)", composerScript, StringComparison.Ordinal);

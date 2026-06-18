@@ -93,6 +93,7 @@ internal sealed class QuoteAgentService(
         "how ", "what ", "where ", "when ", "why ", "who ", "which ",
         "can ", "could ", "would ", "will ", "is ", "are ", "do ", "does "
     ];
+    private const int ChatbotServiceMaxContentCharacters = 4000;
 
     public async Task<QuoteAgentTurnResponse> SendAsync(
         QuoteAgentMessageRequest request,
@@ -1570,14 +1571,13 @@ internal sealed class QuoteAgentService(
                 SessionId = state.SessionId,
                 ConnectorId = connectorId,
                 Status = "connector_not_found",
-                IsAuthenticated = ResolveCustomerId().HasValue,
+                IsAuthenticated = customerId.HasValue,
                 IsAvailableToConnect = false,
                 Message = "That connector is not available in Make Studio.",
                 ActionHint = "choose_available_connector"
             };
         }
 
-        var customerId = ResolveCustomerId();
         var returnUrl = NormalizeAuthReturnUrl(
             ReadString(arguments, "return_url") ??
             ReadString(arguments, "returnUrl") ??
@@ -3388,11 +3388,46 @@ internal sealed class QuoteAgentService(
             "including yes/no confirmations such as whether to use inferred details or edit them; never leave those as only plain assistant text. " +
             "Use normal text for open-ended questions or details you can confidently infer. At most once per turn.");
 
-        return $"""
+        var content = $"""
 {string.Join("\n", contextLines)}
 
 Customer message:
 {message.Trim()}
+""";
+        return TrimChatbotContent(content, message);
+    }
+
+    private static string TrimChatbotContent(string content, string customerMessage)
+    {
+        if (content.Length <= ChatbotServiceMaxContentCharacters)
+        {
+            return content;
+        }
+
+        var messageBlock = $"""
+Customer message:
+{customerMessage.Trim()}
+""";
+        const string prefix = "Surface: QuoteEngine chat-based custom manufacturing platform.\n";
+        const string truncationNotice = "Context was truncated to satisfy ChatbotService request limits; use tools for authoritative QuoteEngine state.\n";
+        var availableContextLength = ChatbotServiceMaxContentCharacters -
+            prefix.Length -
+            truncationNotice.Length -
+            messageBlock.Length -
+            2;
+
+        if (availableContextLength <= 0)
+        {
+            return messageBlock.Length <= ChatbotServiceMaxContentCharacters
+                ? messageBlock
+                : messageBlock[..ChatbotServiceMaxContentCharacters];
+        }
+
+        var contextStart = content[..Math.Min(content.Length, availableContextLength)].TrimEnd();
+        return $"""
+{prefix}{truncationNotice}{contextStart}
+
+{messageBlock}
 """;
     }
 
@@ -3470,6 +3505,7 @@ Customer message:
         {
             var url = attachment.Url;
             if (string.IsNullOrWhiteSpace(url) ||
+                url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
                 url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
             {
                 if (!string.IsNullOrWhiteSpace(attachment.StoragePath))
@@ -4052,12 +4088,36 @@ Customer message:
 
     private static IReadOnlyList<CadCommandDto> ReadCommands(IReadOnlyDictionary<string, JsonElement> arguments)
     {
-        if (!arguments.TryGetValue("cad_commands", out var value) || value.ValueKind != JsonValueKind.Array)
+        if (!arguments.TryGetValue("cad_commands", out var value))
         {
             return [];
         }
 
-        return JsonSerializer.Deserialize<List<CadCommandDto>>(value.GetRawText(), JsonOptions) ?? [];
+        // Normal path: a real JSON array.
+        if (value.ValueKind == JsonValueKind.Array)
+        {
+            return JsonSerializer.Deserialize<List<CadCommandDto>>(value.GetRawText(), JsonOptions) ?? [];
+        }
+
+        // Defense-in-depth: some LLM / tool-forwarding paths flatten the array into a JSON
+        // string (e.g. "[{\"op\":\"box\",\"params\":[30,50,100]}]"). Recover it instead of
+        // rejecting the call with "At least one CAD command is required."
+        if (value.ValueKind == JsonValueKind.String)
+        {
+            var raw = value.GetString();
+            if (!string.IsNullOrWhiteSpace(raw) && raw.TrimStart().StartsWith('['))
+            {
+                try
+                {
+                    return JsonSerializer.Deserialize<List<CadCommandDto>>(raw, JsonOptions) ?? [];
+                }
+                catch (JsonException)
+                {
+                }
+            }
+        }
+
+        return [];
     }
 
     private static decimal EstimateCommandsVolume(IReadOnlyList<CadCommandDto> commands)

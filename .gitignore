@@ -61,3 +61,7 @@ Maliev.QuoteEngine.Client/node_modules/
 
 # esbuild output (regenerated on dotnet build)
 Maliev.QuoteEngine.Client/wwwroot/js/home-shader.bundle.js
+
+# Codex/automation runtime logs
+.codex-*.log
+.codex-*.err.log

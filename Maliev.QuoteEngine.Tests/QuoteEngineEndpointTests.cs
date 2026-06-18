@@ -3142,6 +3142,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     {
         private static readonly Guid SessionId = Guid.Parse("50d1d515-4c9b-4de2-ad10-840a19f4f64a");
 
+        public Task<bool> CheckReadinessAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(true);
+        }
+
         public Task<ChatbotSessionResponse?> InitiateSessionAsync(ChatbotInitiateSessionRequest request, CancellationToken cancellationToken)
         {
             return Task.FromResult<ChatbotSessionResponse?>(new ChatbotSessionResponse

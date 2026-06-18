@@ -13,7 +13,7 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
   composerDotNetRefs.set(textarea, dotNetRef);
 
   const keydown = event => {
-    if (event.key !== "Enter" || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.isComposing) {
+    if (event.key !== "Enter" || !event.altKey || event.shiftKey || event.ctrlKey || event.metaKey || event.isComposing) {
       return;
     }
 
@@ -31,6 +31,7 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
 
   let holdTimer = 0;
   let holdStarted = false;
+  let keyboardHoldStarted = false;
   let pressStartedActive = false;
   let suppressClick = false;
   const pointerDown = async event => {
@@ -99,6 +100,29 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
 
     await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
   };
+  const dictationKeydown = async event => {
+    if (event.key !== " " || event.repeat || event.altKey || event.ctrlKey || event.metaKey) {
+      return;
+    }
+
+    event.preventDefault();
+    if (isDictationActive(textarea)) {
+      return;
+    }
+
+    keyboardHoldStarted = true;
+    suppressClick = true;
+    await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
+  };
+  const dictationKeyup = async event => {
+    if (event.key !== " " || !keyboardHoldStarted) {
+      return;
+    }
+
+    event.preventDefault();
+    keyboardHoldStarted = false;
+    await finishDictationFromUserAction(textarea, dotNetRef);
+  };
 
   textarea.addEventListener("keydown", keydown);
   textarea.addEventListener("input", input);
@@ -108,23 +132,44 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     dictationButton.addEventListener("pointerleave", pointerCancel);
     dictationButton.addEventListener("pointercancel", pointerCancel);
     dictationButton.addEventListener("click", click);
-    dictationButtonHandlers.set(textarea, { dictationButton, pointerDown, pointerUp, pointerCancel, click });
+    dictationButton.addEventListener("keydown", dictationKeydown);
+    dictationButton.addEventListener("keyup", dictationKeyup);
+    dictationButtonHandlers.set(textarea, { dictationButton, pointerDown, pointerUp, pointerCancel, click, dictationKeydown, dictationKeyup });
   }
 
   const composer = textarea.closest?.(".qe-agent-composer");
   const resizeObserver = composer && window.ResizeObserver
-    ? new ResizeObserver(() => updateComposerExpansionOffset(textarea))
+    ? new ResizeObserver(() => {
+      updateComposerExpansionOffset(textarea);
+      updateComposerTooltipPlacements(composer);
+    })
     : null;
   resizeObserver?.observe(composer);
 
   const mutationObserver = composer
-    ? new MutationObserver(() => updateComposerExpansionOffset(textarea))
+    ? new MutationObserver(() => {
+      updateComposerExpansionOffset(textarea);
+      updateComposerTooltipPlacements(composer);
+    })
     : null;
   mutationObserver?.observe(composer, { attributes: true, attributeFilter: ["class"] });
 
-  composerHandlers.set(textarea, { keydown, input, resizeObserver, mutationObserver });
+  const updateTooltipPlacement = event => {
+    const wrapper = event.target?.closest?.(".qe-agent-composer-tooltip");
+    if (wrapper && composer?.contains(wrapper)) {
+      updateComposerTooltipPlacement(wrapper);
+    }
+  };
+  const updateAllTooltipPlacements = () => updateComposerTooltipPlacements(composer);
+  if (composer) {
+    composer.addEventListener("pointerenter", updateTooltipPlacement, true);
+    composer.addEventListener("focusin", updateTooltipPlacement);
+    window.addEventListener("resize", updateAllTooltipPlacements);
+    updateComposerTooltipPlacements(composer);
+  }
+
+  composerHandlers.set(textarea, { keydown, input, resizeObserver, mutationObserver, composer, updateTooltipPlacement, updateAllTooltipPlacements });
   updateComposerShape(textarea);
-  focusComposer(textarea);
 }
 
 export function isComposerInitialized(textarea) {
@@ -141,6 +186,11 @@ export function disposeComposer(textarea) {
   textarea.removeEventListener("input", handlers.input);
   handlers.resizeObserver?.disconnect?.();
   handlers.mutationObserver?.disconnect?.();
+  if (handlers.composer) {
+    handlers.composer.removeEventListener("pointerenter", handlers.updateTooltipPlacement, true);
+    handlers.composer.removeEventListener("focusin", handlers.updateTooltipPlacement);
+  }
+  window.removeEventListener("resize", handlers.updateAllTooltipPlacements);
   const dictationHandlers = dictationButtonHandlers.get(textarea);
   if (dictationHandlers?.dictationButton) {
     dictationHandlers.dictationButton.removeEventListener("pointerdown", dictationHandlers.pointerDown);
@@ -148,6 +198,8 @@ export function disposeComposer(textarea) {
     dictationHandlers.dictationButton.removeEventListener("pointerleave", dictationHandlers.pointerCancel);
     dictationHandlers.dictationButton.removeEventListener("pointercancel", dictationHandlers.pointerCancel);
     dictationHandlers.dictationButton.removeEventListener("click", dictationHandlers.click);
+    dictationHandlers.dictationButton.removeEventListener("keydown", dictationHandlers.dictationKeydown);
+    dictationHandlers.dictationButton.removeEventListener("keyup", dictationHandlers.dictationKeyup);
     dictationButtonHandlers.delete(textarea);
   }
 
@@ -980,6 +1032,32 @@ function updateComposerExpansionOffset(textarea) {
   const collapsedHeight = Number.parseFloat(styles.getPropertyValue("--qe-composer-collapsed-height")) || 58;
   const growth = Math.max(0, composer.getBoundingClientRect().height - collapsedHeight);
   composer.style.setProperty("--qe-composer-expansion-offset", `${Math.round(growth)}px`);
+}
+
+function updateComposerTooltipPlacements(composer) {
+  if (!composer) {
+    return;
+  }
+
+  composer
+    .querySelectorAll(".qe-agent-composer-tooltip")
+    .forEach(updateComposerTooltipPlacement);
+}
+
+function updateComposerTooltipPlacement(wrapper) {
+  const panel = wrapper?.querySelector?.(".qe-agent-tooltip-panel");
+  if (!wrapper || !panel) {
+    return;
+  }
+
+  const wrapperRect = wrapper.getBoundingClientRect();
+  const panelRect = panel.getBoundingClientRect();
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+  const panelHeight = Math.max(panelRect.height, 28);
+  const margin = 14;
+  const spaceBelow = viewportHeight - wrapperRect.bottom;
+
+  wrapper.dataset.tooltipPlacement = spaceBelow >= panelHeight + margin ? "bottom" : "top";
 }
 
 function wait(milliseconds) {

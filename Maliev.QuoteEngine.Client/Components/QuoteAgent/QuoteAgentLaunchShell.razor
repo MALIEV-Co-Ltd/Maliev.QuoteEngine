@@ -14,17 +14,19 @@
 @inject HttpClient Http
 
 <section class="@ShellClass" aria-label="@Text("Quote agent workspace", "พื้นที่ผู้ช่วยขอราคา")">
-    <aside class="qe-agent-rail" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
+    @if (_navigationDrawerOpen)
+    {
+    <aside class="qe-agent-rail" role="dialog" aria-modal="true" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
         <div class="qe-agent-rail-head">
             <a class="qe-agent-brand" href="/" aria-label="MALIEV">
                 <img class="qe-agent-brand-wordmark" src="/images/logo.svg" alt="MALIEV" />
             </a>
             <button type="button"
                     class="qe-agent-collapse"
-                    aria-expanded="@AriaExpanded(!_railCollapsed)"
-                    title="@(_railCollapsed ? Text("Expand sidebar", "ขยายแถบด้านข้าง") : Text("Collapse sidebar", "ยุบแถบด้านข้าง"))"
-                    @onclick="ToggleRail">
-                <MudIcon Icon="@(_railCollapsed ? Icons.Material.Outlined.Menu : Icons.Material.Outlined.MenuOpen)" Size="Size.Small" />
+                    title="@Text("Close menu", "ปิดเมนู")"
+                    aria-label="@Text("Close menu", "ปิดเมนู")"
+                    @onclick="CloseNavigationDrawer">
+                <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
             </button>
         </div>
 
@@ -105,6 +107,79 @@
                     </div>
                 </section>
             }
+
+            @if (IsSignedIn)
+            {
+                @if (PinnedProjects.Any())
+                {
+                    <section class="qe-agent-rail-group" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
+                        <button type="button"
+                                class="qe-agent-rail-group-toggle"
+                                aria-expanded="@AriaExpanded(!_pinnedProjectsCollapsed)"
+                                @onclick="TogglePinnedProjects">
+                            <span>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</span>
+                            <MudIcon Icon="@(_pinnedProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                        </button>
+                        @if (!_pinnedProjectsCollapsed)
+                        {
+                            @foreach (var project in PinnedProjects)
+                            {
+                                <div class="qe-agent-project-row">
+                                    <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
+                                        <span>@ProjectName(project)</span>
+                                    </a>
+                                    <button type="button"
+                                            class="qe-agent-pin-btn active"
+                                            title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
+                                            aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
+                                            @onclick="@(() => ToggleProjectPinAsync(project))">
+                                        <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
+                                    </button>
+                                </div>
+                            }
+                        }
+                    </section>
+                }
+
+                <section class="qe-agent-rail-group" aria-label="@Text("Projects", "โปรเจกต์")">
+                    <button type="button"
+                            class="qe-agent-rail-group-toggle"
+                            aria-expanded="@AriaExpanded(!_projectsCollapsed)"
+                            @onclick="ToggleProjects">
+                        <span>@Text("Projects", "โปรเจกต์")</span>
+                        <MudIcon Icon="@(_projectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                    </button>
+                    @if (!_projectsCollapsed)
+                    {
+                        @if (RegularProjects.Any())
+                        {
+                            @foreach (var project in RegularProjects)
+                            {
+                                <div class="qe-agent-project-row">
+                                    <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
+                                        <span>@ProjectName(project)</span>
+                                    </a>
+                                    <button type="button"
+                                            class="qe-agent-pin-btn"
+                                            title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
+                                            aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
+                                            @onclick="@(() => ToggleProjectPinAsync(project))">
+                                        <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
+                                    </button>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <p class="qe-agent-empty-projects">@Text("No unpinned projects.", "ไม่มีโปรเจกต์ที่ไม่ได้ปักหมุด")</p>
+                        }
+                    }
+                </section>
+            }
+            else
+            {
+                <p class="qe-agent-empty-projects">@Text("Sign in to see pinned projects and saved projects.", "เข้าสู่ระบบเพื่อดูโปรเจกต์ที่ปักหมุดและโปรเจกต์ที่บันทึกไว้")</p>
+            }
         </div>
 
         <div class="qe-agent-rail-foot">
@@ -154,9 +229,18 @@
             }
         </div>
     </aside>
+    }
 
     <main class="@MainClass">
         <div class="qe-agent-topline">
+            <button type="button"
+                    class="qe-agent-menu-trigger"
+                    aria-expanded="@AriaExpanded(_navigationDrawerOpen)"
+                    title="@Text("Open menu", "เปิดเมนู")"
+                    aria-label="@Text("Open menu", "เปิดเมนู")"
+                    @onclick="OpenNavigationDrawerAsync">
+                <MudIcon Icon="@Icons.Material.Outlined.Menu" Size="Size.Small" />
+            </button>
             <div class="@AgentStatusClass"
                  title="@AgentStatusTooltip"
                  aria-label="@AgentStatusTooltip">
@@ -443,7 +527,7 @@
             @if (_messages.Count == 0)
             {
                 <div class="qe-agent-prompt">
-                    <h1>@Text("What do you want to make today?", "วันนี้ต้องการผลิตอะไร?")</h1>
+                    <h1 tabindex="-1">@Text("What do you want to make today?", "วันนี้ต้องการผลิตอะไร?")</h1>
                 </div>
             }
             else
@@ -934,13 +1018,20 @@
                 }
                 @if (!IsDictationActive)
                 {
-                    <button type="button"
-                            class="qe-agent-round-btn qe-agent-add-btn"
-                            title="@Text("Add files", "เพิ่มไฟล์")"
-                            aria-label="@Text("Add files", "เพิ่มไฟล์")"
-                            @onclick="RequestUploadAsync">
-                        <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
-                    </button>
+                    <div class="qe-agent-composer-tooltip qe-agent-add-tooltip">
+                        <button type="button"
+                                class="qe-agent-round-btn qe-agent-add-btn"
+                                aria-describedby="qe-agent-add-tooltip"
+                                aria-label="@Text("Add files", "เพิ่มไฟล์")"
+                                @onclick="RequestUploadAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
+                        </button>
+                        <span id="qe-agent-add-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
+                            <span class="qe-agent-tooltip-content">
+                                <span>@Text("Add files", "เพิ่มไฟล์")</span>
+                            </span>
+                        </span>
+                    </div>
                 }
                 <textarea @ref="_composerTextarea"
                           @bind="_draftMessage"
@@ -962,49 +1053,79 @@
                     </span>
                     <span class="qe-agent-dictation-time">@_dictationTimeLabel</span>
                 </div>
-                <button type="button"
-                        @ref="_dictationButton"
-                        class="@($"qe-agent-round-btn qe-agent-dictation-btn {(_dictating ? "active" : string.Empty)} {(_dictationProcessing ? "processing" : string.Empty)}")"
-                        title="@DictationButtonTitle"
-                        aria-label="@DictationButtonTitle"
-                        aria-pressed="@_dictating"
-                        disabled="@_dictationUnsupported">
-                    @if (_dictationProcessing)
-                    {
-                        <span class="qe-agent-dictation-spinner" aria-hidden="true"></span>
-                    }
-                    else if (_dictating)
-                    {
-                        <MudIcon Icon="@Icons.Material.Filled.Stop" Size="Size.Small" />
-                    }
-                    else
-                    {
-                        <MudIcon Icon="@Icons.Material.Outlined.MicNone" Size="Size.Small" />
-                    }
-                </button>
-                <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@IsComposerSendDisabled">
-                    @if (_sending)
-                    {
-                        <span class="qe-agent-send-spinner" aria-hidden="true"></span>
-                    }
-                    else
-                    {
-                        <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" />
-                    }
-                    <span class="sr-only">@(_sending ? Text("Processing", "กำลังประมวลผล") : Text("Send", "ส่ง"))</span>
-                </button>
+                <div class="qe-agent-composer-tooltip qe-agent-dictation-tooltip">
+                    <button type="button"
+                            @ref="_dictationButton"
+                            class="@($"qe-agent-round-btn qe-agent-dictation-btn {(_dictating ? "active" : string.Empty)} {(_dictationProcessing ? "processing" : string.Empty)}")"
+                            aria-describedby="qe-agent-dictation-tooltip"
+                            aria-label="@DictationButtonTitle"
+                            aria-pressed="@_dictating"
+                            disabled="@_dictationUnsupported">
+                        @if (_dictationProcessing)
+                        {
+                            <span class="qe-agent-dictation-spinner" aria-hidden="true"></span>
+                        }
+                        else if (_dictating)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Stop" Size="Size.Small" />
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Outlined.MicNone" Size="Size.Small" />
+                        }
+                    </button>
+                    <span id="qe-agent-dictation-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
+                        <span class="qe-agent-tooltip-content">
+                            <span>@DictationButtonTitle</span>
+                            @if (!_dictating && !_dictationProcessing && !_dictationUnsupported)
+                            {
+                                <kbd>Space</kbd>
+                            }
+                        </span>
+                    </span>
+                </div>
+                <div class="qe-agent-composer-tooltip qe-agent-send-tooltip">
+                    <button type="submit"
+                            class="qe-agent-send-btn"
+                            aria-describedby="qe-agent-send-tooltip"
+                            aria-label="@Text("Send message", "ส่งข้อความ")"
+                            disabled="@IsComposerSendDisabled">
+                        @if (_sending)
+                        {
+                            <span class="qe-agent-send-spinner" aria-hidden="true"></span>
+                        }
+                        else
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.ArrowUpward" Size="Size.Small" />
+                        }
+                        <span class="sr-only">@(_sending ? Text("Processing", "กำลังประมวลผล") : Text("Send", "ส่ง"))</span>
+                    </button>
+                    <span id="qe-agent-send-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
+                        <span class="qe-agent-tooltip-content">
+                            <span>@Text("Send message", "ส่งข้อความ")</span>
+                            <kbd>Alt+Enter</kbd>
+                        </span>
+                    </span>
+                </div>
                 @if (!IsDictationActive)
                 {
                     <div class="qe-agent-quick-actions-wrapper">
-                        <button type="button"
-                                class="qe-agent-quick-actions-btn"
-                                @onclick="ToggleQuickActionsMenu"
-                                aria-label="@Text("Tools", "เครื่องมือ")"
-                                title="@Text("Tools", "เครื่องมือ")"
-                                aria-expanded="@_quickActionsMenuOpen">
-                            <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
-                            <span>@Text("Tools", "เครื่องมือ")</span>
-                        </button>
+                        <div class="qe-agent-composer-tooltip">
+                            <button type="button"
+                                    class="qe-agent-quick-actions-btn"
+                                    @onclick="ToggleQuickActionsMenu"
+                                    aria-describedby="qe-agent-tools-tooltip"
+                                    aria-label="@Text("Tools", "เครื่องมือ")"
+                                    aria-expanded="@_quickActionsMenuOpen">
+                                <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
+                                <span>@Text("Tools", "เครื่องมือ")</span>
+                            </button>
+                            <span id="qe-agent-tools-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
+                                <span class="qe-agent-tooltip-content">
+                                    <span>@Text("Tools", "เครื่องมือ")</span>
+                                </span>
+                            </span>
+                        </div>
                         @if (_quickActionsMenuOpen)
                         {
                             <div class="qe-agent-quick-actions-menu" role="menu" aria-label="@Text("Tools", "เครื่องมือ")">
@@ -1592,7 +1713,7 @@
     private bool _summaryPanelOpen;
     private bool _previewDialogOpen;
     private int _previewIndex;
-    private bool _railCollapsed;
+    private bool _navigationDrawerOpen;
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
     private bool _quickActionsMenuOpen;
@@ -1773,7 +1894,7 @@
     private bool IsDarkMode { get; set; }
 
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.DarkMode : Icons.Material.Outlined.LightMode;
-    private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(RightPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
+    private string ShellClass => $"qe-agent-shell{(_navigationDrawerOpen ? " qe-agent-shell--menu-open" : string.Empty)}{(RightPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
     private bool IsDictationActive => _dictating || _dictationProcessing;
     private bool HasPendingComposerUpload => _pendingComposerAttachments.Any(IsComposerUploadPending);
@@ -2407,6 +2528,7 @@
         assistantMessage.Content += assistantMessage.PendingStreamContent[..revealLength];
         assistantMessage.PendingStreamContent = assistantMessage.PendingStreamContent[revealLength..];
     }
+
     private string BuildAttachmentOnlyMessage(IReadOnlyList<ComposerAttachmentPreview> attachments)
     {
         var hasSketch = attachments.Any(attachment => attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase));
@@ -2938,19 +3060,26 @@
         return items;
     }
 
-    private void ToggleRail()
+    private async Task OpenNavigationDrawerAsync()
     {
-        _railCollapsed = !_railCollapsed;
-        if (_railCollapsed)
+        _navigationDrawerOpen = true;
+        if (IsSignedIn && !_projectNavigationLoaded)
         {
-            _searchOpen = false;
+            await LoadProjectNavigationAsync();
         }
+    }
+
+    private void CloseNavigationDrawer()
+    {
+        _navigationDrawerOpen = false;
+        _searchOpen = false;
     }
 
     private async Task OpenChatWorkspaceAsync()
     {
         _activeWorkspacePage = WorkspacePage.Chat;
         _searchOpen = false;
+        _navigationDrawerOpen = false;
         await FocusComposerAsync();
     }
 
@@ -2958,6 +3087,7 @@
     {
         _activeWorkspacePage = WorkspacePage.Plugins;
         _searchOpen = false;
+        _navigationDrawerOpen = false;
         if (!_connectorRegistryLoaded)
         {
             await LoadConnectorRegistryAsync();
@@ -2968,6 +3098,7 @@
     {
         _activeWorkspacePage = WorkspacePage.Projects;
         _searchOpen = false;
+        _navigationDrawerOpen = false;
         if (IsSignedIn && !_projectNavigationLoaded)
         {
             await LoadProjectNavigationAsync();
@@ -2978,6 +3109,7 @@
     {
         _activeWorkspacePage = WorkspacePage.Settings;
         _searchOpen = false;
+        _navigationDrawerOpen = false;
     }
 
     private async Task ToggleComposerMenuAsync()
@@ -4723,7 +4855,7 @@
                 FileName = FileName,
                 ContentType = ContentType,
                 FileSizeBytes = FileSizeBytes,
-                Url = Url,
+                Url = IsBrowserOnlyUrl(Url) ? null : Url,
                 Kind = Kind,
                 UploadId = UploadId,
                 StoragePath = StoragePath,
@@ -4769,6 +4901,13 @@
                    !string.IsNullOrWhiteSpace(right) &&
                    string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
         }
+
+        private static bool IsBrowserOnlyUrl(string? url)
+        {
+            return !string.IsNullOrWhiteSpace(url) &&
+                   (url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase) ||
+                    url.StartsWith("data:", StringComparison.OrdinalIgnoreCase));
+        }
     }
 
     private sealed record ChatScrollInfo(double scrollTop, double scrollHeight, double clientHeight);
@@ -4787,7 +4926,6 @@
         public string PendingStreamContent { get; set; } = string.Empty;
 
         public bool StreamRevealRunning { get; set; }
-
 
         public bool IsProcessing { get; set; }
 

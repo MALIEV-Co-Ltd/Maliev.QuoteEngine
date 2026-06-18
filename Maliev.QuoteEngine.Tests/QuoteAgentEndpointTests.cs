@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Maliev.QuoteEngine.Tests;
 
@@ -71,6 +72,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Equal("unavailable", body.Status);
         Assert.False(body.ChatbotServiceAvailable);
     }
+
     [Fact]
     public async Task Agent_message_starts_anonymous_quote_engine_session_with_gate_state()
     {
@@ -258,6 +260,56 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Equal("image", attachment.Type);
         Assert.Equal("https://files.example.test/manufacturing-sketch.png", attachment.Url);
         Assert.Equal("image/png", attachment.MimeType);
+    }
+
+    [Fact]
+    public async Task Agent_message_stream_with_uploaded_sketch_prefers_signed_storage_url_over_inline_preview()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(new RecordingUploadServiceClient());
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var inlinePreview = $"data:image/png;base64,{new string('A', 1_200)}";
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Please quote this hand sketch.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "manufacturing-sketch.png",
+                        ContentType = "image/png",
+                        FileSizeBytes = 120_000,
+                        Kind = "sketch",
+                        Url = inlinePreview,
+                        StoragePath = "quotes/temp/session/manufacturing-sketch.png"
+                    }
+                ]
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        Assert.True(chatbot.LastStreamRequest.Content.Length <= 4000);
+        Assert.Contains("Please quote this hand sketch.", chatbot.LastStreamRequest.Content, StringComparison.Ordinal);
+        var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
+        Assert.Equal("https://upload.example.test/download/quotes%2Ftemp%2Fsession%2Fmanufacturing-sketch.png", attachment.Url);
+        Assert.False(attachment.Url.StartsWith("data:", StringComparison.OrdinalIgnoreCase));
+        Assert.True(attachment.Url.Length < 10_000);
     }
 
     [Fact]
@@ -3120,6 +3172,37 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.True(doc.RootElement.TryGetProperty("error", out _));
     }
 
+    [Fact]
+    public async Task Generate_3d_preview_tool_accepts_stringified_cad_commands()
+    {
+        // Defense-in-depth: if an upstream path flattens cad_commands into a JSON string
+        // (e.g. an LLM stringifies the array argument), the BFF must still recover it
+        // rather than rejecting with "At least one CAD command is required."
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        const string stringifiedCommands = """[{"op":"box","id":"part","params":[30,50,100]}]""";
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Rectangular part 30x50x100mm", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(stringifiedCommands, JsonOptions),
+                ["process_hint"] = JsonSerializer.SerializeToElement("fdm", JsonOptions)
+            });
+
+        var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 1);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.Contains(state.Artifacts, a =>
+            a.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            a.Metadata.TryGetValue("generated", out var gen) && gen == "true");
+    }
+
     private sealed class RecordingChatbotServiceClient : IChatbotServiceClient
     {
         public ChatbotInitiateSessionRequest? LastInitiateRequest { get; private set; }
@@ -3136,6 +3219,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         {
             return Task.FromResult(HealthAvailable);
         }
+
         public Task<ChatbotSessionResponse?> InitiateSessionAsync(
             ChatbotInitiateSessionRequest request,
             CancellationToken cancellationToken)
@@ -3211,6 +3295,18 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         public Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken)
         {
             return Task.FromResult<string?>(speech);
+        }
+    }
+
+    private sealed class RecordingUploadServiceClient()
+        : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
+    {
+        public override Task<string> GetDownloadUrlByPathAsync(
+            string storagePath,
+            int expirationMinutes = 60,
+            CancellationToken ct = default)
+        {
+            return Task.FromResult($"https://upload.example.test/download/{Uri.EscapeDataString(storagePath)}");
         }
     }
 
