@@ -1492,6 +1492,18 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentPrompt_routes_choice_questions_and_requirements_to_structured_ui()
+    {
+        var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
+
+        Assert.Contains("Use quote_ask_customer for short confirmation prompts", service, StringComparison.Ordinal);
+        Assert.Contains("never leave those as only plain assistant text", service, StringComparison.Ordinal);
+        Assert.Contains("Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables", service, StringComparison.Ordinal);
+        Assert.Contains("Feature | Value | Source", service, StringComparison.Ordinal);
+        Assert.DoesNotContain("Use quote_ask_customer ONLY when", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_previews_attachments_until_customer_sends_message()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");

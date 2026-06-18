@@ -3375,12 +3375,16 @@ internal sealed class QuoteAgentService(
             "Describe what you created, list your assumptions, and ask the customer to verify the shape and dimensions. " +
             "Only mention CAD file uploads as an optional refinement step, never as a gate.");
         contextLines.Add(
+            "Structured presentation: Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables " +
+            "instead of bullet-only prose when there are 3 or more comparable fields. Prefer columns like Feature | Value | Source, " +
+            "Line | Qty | Unit price | Total, or Requirement | Selection | Basis. Keep explanatory text short around the table.");
+        contextLines.Add(
             "Project naming: When calling quote_set_project_name, derive a short descriptive title from the part file name and inferred process/material " +
             "(e.g. 'Flower Oval – FDM PLA', 'L-Bracket – SLA Resin'). Never set the project name to the customer's literal question.");
         contextLines.Add(
-            "Customer questions: Use quote_ask_customer ONLY when a decision is genuinely ambiguous with 2–4 discrete mutually exclusive options " +
-            "(e.g. process selection when the message contains no material hint). " +
-            "Do NOT use it for open-ended questions, inferable details, quantity, lead time, or any detail you can assume from context. At most once per turn.");
+            "Customer questions: Use quote_ask_customer for short confirmation prompts and customer decisions with 2–4 discrete mutually exclusive options, " +
+            "including yes/no confirmations such as whether to use inferred details or edit them; never leave those as only plain assistant text. " +
+            "Use normal text for open-ended questions or details you can confidently infer. At most once per turn.");
 
         return $"""
 {string.Join("\n", contextLines)}
