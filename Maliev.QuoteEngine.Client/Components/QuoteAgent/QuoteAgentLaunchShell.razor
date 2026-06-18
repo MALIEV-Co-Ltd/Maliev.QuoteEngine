@@ -610,9 +610,9 @@
                                 @if (message.IsProcessing && string.IsNullOrEmpty(message.Content))
                                 {
                                     <div class="qe-agent-response-loader" aria-label="@Text("Agent is thinking…", "เอเจนต์กำลังคิด…")" aria-live="polite">
-                                        <span></span>
-                                        <span></span>
-                                        <span></span>
+                                        <span class="qe-agent-response-dot" aria-hidden="true"></span>
+                                        <span class="qe-agent-response-dot" aria-hidden="true"></span>
+                                        <span class="qe-agent-response-dot" aria-hidden="true"></span>
                                     </div>
                                 }
                                 else if (!string.IsNullOrEmpty(message.Content))

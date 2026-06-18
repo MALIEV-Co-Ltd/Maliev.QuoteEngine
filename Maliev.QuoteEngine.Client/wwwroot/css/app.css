@@ -2353,6 +2353,7 @@
     margin: 4px 0;
 }
 
+.qe-agent-response-loader .qe-agent-response-dot,
 .qe-agent-response-loader span {
     display: block;
     width: 6px;
@@ -2360,13 +2361,17 @@
     border-radius: 999px;
     background: var(--qe-agent-muted);
     opacity: .38;
-    animation: qe-response-loader-dot 900ms ease-in-out infinite;
+    animation: qe-response-loader-dot 900ms cubic-bezier(.2, .8, .35, 1) infinite;
+    animation-play-state: running;
+    will-change: transform, opacity;
 }
 
+.qe-agent-response-loader .qe-agent-response-dot:nth-child(2),
 .qe-agent-response-loader span:nth-child(2) {
     animation-delay: 120ms;
 }
 
+.qe-agent-response-loader .qe-agent-response-dot:nth-child(3),
 .qe-agent-response-loader span:nth-child(3) {
     animation-delay: 240ms;
 }
