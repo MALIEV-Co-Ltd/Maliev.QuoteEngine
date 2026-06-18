@@ -11,6 +11,9 @@ namespace Maliev.QuoteEngine.Bff.Clients;
 /// </summary>
 public interface IChatbotServiceClient
 {
+    /// <summary>Checks whether ChatbotService is ready to receive assistant traffic.</summary>
+    Task<bool> CheckReadinessAsync(CancellationToken cancellationToken);
+
     /// <summary>Initiates a chatbot session.</summary>
     Task<ChatbotSessionResponse?> InitiateSessionAsync(ChatbotInitiateSessionRequest request, CancellationToken cancellationToken);
 
@@ -35,6 +38,32 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
+
+    public async Task<bool> CheckReadinessAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await httpClient.GetAsync("/chatbot/readiness", cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "ChatbotService readiness returned {StatusCode}.",
+                    response.StatusCode);
+                return false;
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ChatbotService readiness check failed.");
+            return false;
+        }
+    }
 
     public Task<ChatbotSessionResponse?> InitiateSessionAsync(ChatbotInitiateSessionRequest request, CancellationToken cancellationToken)
     {

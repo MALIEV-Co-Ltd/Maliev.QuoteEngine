@@ -24,6 +24,29 @@ public sealed class AgentController(
     private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
+    /// Gets the assistant backend readiness state, including downstream ChatbotService readiness.
+    /// </summary>
+    [HttpGet("health")]
+    [ProducesResponseType(typeof(QuoteAgentHealthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(QuoteAgentHealthResponse), StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<QuoteAgentHealthResponse>> GetHealth(CancellationToken cancellationToken)
+    {
+        var chatbotAvailable = await chatbotServiceClient.CheckReadinessAsync(cancellationToken);
+        var body = new QuoteAgentHealthResponse
+        {
+            Status = chatbotAvailable ? "ready" : "unavailable",
+            ChatbotServiceAvailable = chatbotAvailable,
+            Message = chatbotAvailable
+                ? "Assistant backend is ready."
+                : "Assistant backend is temporarily unavailable."
+        };
+
+        return chatbotAvailable
+            ? Ok(body)
+            : StatusCode(StatusCodes.Status503ServiceUnavailable, body);
+    }
+
+    /// <summary>
     /// Sends a customer message through the QuoteEngine agent workflow.
     /// </summary>
     [HttpPost("messages")]

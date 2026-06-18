@@ -1569,6 +1569,7 @@
     private const int SearchMinimumCharacters = 3;
     private const int SearchPromptVisibleCharacters = 28;
     private const int DictationMeterBarCount = 320;
+    private static readonly TimeSpan AgentHealthRefreshInterval = TimeSpan.FromSeconds(5);
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1603,6 +1604,7 @@
     private string _dictationAfter = string.Empty;
     private string _dictationTimeLabel = string.Empty;
     private CancellationTokenSource? _dictationTimerCts;
+    private CancellationTokenSource? _agentHealthCts;
     private bool _authDialogOpen;
     private string _authDialogMode = "sign-in";
     private string _lastInitialAuthMode = string.Empty;
@@ -1636,6 +1638,8 @@
     private IJSObjectReference? _composerModule;
     private IJSObjectReference? _sketchModule;
     private IReadOnlyList<UseCaseOption> _useCaseDeck = [];
+    private AgentBackendStatus _agentBackendStatus = AgentBackendStatus.Checking;
+    private string? _agentBackendStatusMessage;
     private string SketchCanvasId { get; } = $"qe-agent-sketch-{Guid.NewGuid():N}";
     private string SketchImageInputId { get; } = $"qe-agent-sketch-image-{Guid.NewGuid():N}";
     private static readonly SketchColorOption[] SketchColors =
@@ -1883,15 +1887,27 @@
         WorkspacePage.Settings => Text("Settings", "ตั้งค่า"),
         _ => Text("New project", "โปรเจกต์ใหม่")
     };
-    private string AgentStatusClass => _error is not null
-        ? "qe-agent-status is-failed"
-        : "qe-agent-status is-connected";
-    private string AgentStatusTooltip => _error is not null
-        ? Text("Agent connection failed. Try again or refresh Make Studio.", "เชื่อมต่อเอเจนต์ไม่สำเร็จ กรุณาลองใหม่หรือรีเฟรช Make Studio")
-        : Text("Agent connected and ready.", "เอเจนต์เชื่อมต่อและพร้อมใช้งาน");
-    private string AgentStatusLabel => _error is not null
-        ? Text("failed", "ล้มเหลว")
-        : Text("connected", "เชื่อมต่อแล้ว");
+    private string AgentStatusClass => _agentBackendStatus switch
+    {
+        AgentBackendStatus.Checking => "qe-agent-status is-checking",
+        AgentBackendStatus.Offline => "qe-agent-status is-offline",
+        _ when _error is not null => "qe-agent-status is-failed",
+        _ => "qe-agent-status is-connected"
+    };
+    private string AgentStatusTooltip => _agentBackendStatus switch
+    {
+        AgentBackendStatus.Checking => Text("Checking assistant backend status.", "กำลังตรวจสอบสถานะแบ็กเอนด์ผู้ช่วย"),
+        AgentBackendStatus.Offline => _agentBackendStatusMessage ?? Text("Assistant backend is offline. Messages may use fallback mode until it reconnects.", "แบ็กเอนด์ผู้ช่วยออฟไลน์ ข้อความอาจใช้โหมดสำรองจนกว่าจะเชื่อมต่อใหม่"),
+        _ when _error is not null => Text("Agent connection failed. Try again or refresh Make Studio.", "เชื่อมต่อเอเจนต์ไม่สำเร็จ กรุณาลองใหม่หรือรีเฟรช Make Studio"),
+        _ => Text("Agent connected and ready.", "เอเจนต์เชื่อมต่อและพร้อมใช้งาน")
+    };
+    private string AgentStatusLabel => _agentBackendStatus switch
+    {
+        AgentBackendStatus.Checking => Text("checking", "กำลังตรวจสอบ"),
+        AgentBackendStatus.Offline => Text("offline", "ออฟไลน์"),
+        _ when _error is not null => Text("failed", "ล้มเหลว"),
+        _ => Text("connected", "เชื่อมต่อแล้ว")
+    };
     private string AuthReturnUrl => "/quotes";
     private string AuthDialogTitle => _authDialogMode.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
         ? Text("Create your MALIEV account", "สร้างบัญชี MALIEV")
@@ -1940,6 +1956,52 @@
             .ToArray();
         _searchPromptAnimationCts = new CancellationTokenSource();
         _ = AnimateSearchPromptAsync(_searchPromptAnimationCts.Token);
+        _agentHealthCts = new CancellationTokenSource();
+        _ = RunAgentHealthLoopAsync(_agentHealthCts.Token);
+    }
+
+    private async Task RunAgentHealthLoopAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await RefreshAgentHealthAsync(cancellationToken);
+            using var timer = new PeriodicTimer(AgentHealthRefreshInterval);
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await RefreshAgentHealthAsync(cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task RefreshAgentHealthAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var health = await Api.GetAgentHealthAsync(cancellationToken);
+            _agentBackendStatus = health.ChatbotServiceAvailable &&
+                health.Status.Equals("ready", StringComparison.OrdinalIgnoreCase)
+                    ? AgentBackendStatus.Connected
+                    : AgentBackendStatus.Offline;
+            _agentBackendStatusMessage = string.IsNullOrWhiteSpace(health.Message)
+                ? null
+                : health.Message;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or QuoteEngineApiException)
+        {
+            _agentBackendStatus = AgentBackendStatus.Offline;
+            _agentBackendStatusMessage = Text(
+                "Assistant backend is offline. Messages may use fallback mode until it reconnects.",
+                "แบ็กเอนด์ผู้ช่วยออฟไลน์ ข้อความอาจใช้โหมดสำรองจนกว่าจะเชื่อมต่อใหม่");
+        }
+
+        await InvokeAsync(StateHasChanged);
     }
 
     protected override async Task OnParametersSetAsync()
@@ -4831,6 +4893,12 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_agentHealthCts is not null)
+        {
+            await _agentHealthCts.CancelAsync();
+            _agentHealthCts.Dispose();
+        }
+
         if (_searchPromptAnimationCts is not null)
         {
             await _searchPromptAnimationCts.CancelAsync();
@@ -4854,5 +4922,12 @@
 
             await _sketchModule.DisposeAsync();
         }
+    }
+
+    private enum AgentBackendStatus
+    {
+        Checking,
+        Connected,
+        Offline
     }
 }

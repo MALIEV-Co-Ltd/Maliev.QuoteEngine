@@ -1524,6 +1524,29 @@
     color: #b45309;
 }
 
+.qe-agent-status.is-checking span.qe-agent-status-dot,
+.qe-agent-status.is-checking .qe-agent-status-dot,
+.qe-agent-status.is-checking > span:first-child {
+    background: #64748b;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #64748b 20%, transparent);
+}
+
+.qe-agent-status.is-checking {
+    color: #475569;
+}
+
+.qe-agent-status.is-offline span.qe-agent-status-dot,
+.qe-agent-status.is-offline .qe-agent-status-dot,
+.qe-agent-status.is-offline > span:first-child {
+    background: #dc2626;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #dc2626 20%, transparent);
+    animation: none;
+}
+
+.qe-agent-status.is-offline {
+    color: #dc2626;
+}
+
 .qe-agent-status.is-failed span.qe-agent-status-dot,
 .qe-agent-status.is-failed .qe-agent-status-dot,
 .qe-agent-status.is-failed > span:first-child {

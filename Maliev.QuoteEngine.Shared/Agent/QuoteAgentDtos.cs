@@ -21,6 +21,21 @@ public static class QuoteAgentTextLimits
 }
 
 /// <summary>
+/// Customer-safe health state for the QuoteEngine assistant backend boundary.
+/// </summary>
+public sealed class QuoteAgentHealthResponse
+{
+    /// <summary>Gets or sets the aggregate agent status.</summary>
+    public string Status { get; set; } = "checking";
+
+    /// <summary>Gets or sets whether ChatbotService is reachable and ready.</summary>
+    public bool ChatbotServiceAvailable { get; set; }
+
+    /// <summary>Gets or sets a customer-safe status message.</summary>
+    public string Message { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Customer message request for the chat-based QuoteEngine agent.
 /// </summary>
 public sealed class QuoteAgentMessageRequest

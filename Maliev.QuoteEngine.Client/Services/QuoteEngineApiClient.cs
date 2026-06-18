@@ -271,6 +271,25 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return PostAsync<QuoteAgentMessageRequest, QuoteAgentTurnResponse>("quote/v1/agent/messages", request, cancellationToken);
     }
 
+    public async Task<QuoteAgentHealthResponse> GetAgentHealthAsync(CancellationToken cancellationToken = default)
+    {
+        const string uri = "quote/v1/agent/health";
+        using var response = await httpClient.GetAsync(uri, cancellationToken);
+        if (!response.IsSuccessStatusCode &&
+            response.StatusCode != HttpStatusCode.ServiceUnavailable)
+        {
+            await ThrowApiExceptionAsync(uri, response, cancellationToken);
+        }
+
+        return await response.Content.ReadFromJsonAsync<QuoteAgentHealthResponse>(cancellationToken)
+            ?? new QuoteAgentHealthResponse
+            {
+                Status = "unavailable",
+                ChatbotServiceAvailable = false,
+                Message = "Assistant backend is temporarily unavailable."
+            };
+    }
+
     public async Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken = default)
     {
         var request = new QuoteAgentCleanSpeechRequest { Speech = speech, Language = language };

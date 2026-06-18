@@ -27,6 +27,51 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     private static readonly Guid CheckoutShippingAddressId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     [Fact]
+    public async Task Agent_health_reports_ready_when_chatbot_service_is_available()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.GetAsync("/quote/v1/agent/health");
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentHealthResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal("ready", body.Status);
+        Assert.True(body.ChatbotServiceAvailable);
+    }
+
+    [Fact]
+    public async Task Agent_health_reports_unavailable_when_chatbot_service_is_offline()
+    {
+        var chatbot = new RecordingChatbotServiceClient { HealthAvailable = false };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.GetAsync("/quote/v1/agent/health");
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentHealthResponse>();
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal("unavailable", body.Status);
+        Assert.False(body.ChatbotServiceAvailable);
+    }
+    [Fact]
     public async Task Agent_message_starts_anonymous_quote_engine_session_with_gate_state()
     {
         var chatbot = new RecordingChatbotServiceClient();
@@ -3101,6 +3146,12 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         public bool ThrowStreamException { get; init; }
 
+        public bool HealthAvailable { get; init; } = true;
+
+        public Task<bool> CheckReadinessAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(HealthAvailable);
+        }
         public Task<ChatbotSessionResponse?> InitiateSessionAsync(
             ChatbotInitiateSessionRequest request,
             CancellationToken cancellationToken)
