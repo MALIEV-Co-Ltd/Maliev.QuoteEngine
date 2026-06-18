@@ -56,7 +56,8 @@
                                    UploadedParts="@_parts"
                                    SelectedPartIndex="@_selectedPartIndex"
                                    OnUploadedPartSelected="SelectPart"
-                                   OnUploadRequested="OpenFilePickerAsync" />
+                                   OnUploadRequested="OpenFilePickerAsync"
+                                   OnNewProjectRequested="StartNewProjectAsync" />
         </main>
     </div>
 </div>
@@ -251,6 +252,48 @@
         }
 
         await Js.InvokeVoidAsync("quoteEngineUploads.openFilePicker", UploadInputId);
+    }
+
+    private async Task StartNewProjectAsync()
+    {
+        try
+        {
+            _error = null;
+            await SaveCurrentProjectBeforeResetAsync();
+            Navigation.NavigateTo("/projects/new", replace: true);
+            await ResetWorkspaceStateAsync();
+            _lastWorkspacePath = CurrentWorkspacePath();
+            _lastHandoff = null;
+            _liveNotifications.Insert(0, Text("New project started.", "เริ่มโปรเจกต์ใหม่แล้ว"));
+
+            if (_agentShell is not null)
+            {
+                await _agentShell.OpenCurrentChatAsync();
+            }
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = Text("We could not save the current project before starting a new one. Please try again.", "ไม่สามารถบันทึกโปรเจกต์ปัจจุบันก่อนเริ่มโปรเจกต์ใหม่ได้ กรุณาลองอีกครั้ง");
+        }
+    }
+
+    private async Task SaveCurrentProjectBeforeResetAsync()
+    {
+        if (!IsSignedIn || IsDemoMode || _draftProjectId.HasValue || _parts.Count == 0)
+        {
+            return;
+        }
+
+        var draft = await Api.CreateDraftProjectAsync(new CreateDraftProjectRequest(
+            _quoteSessionId,
+            _parts.Select(x => x.ToDraft()).ToArray(),
+            "Saved automatically before the customer started a new project.",
+            string.IsNullOrWhiteSpace(_title) ? "New project" : _title));
+        _draftProjectId = draft.ProjectId;
     }
 
     private async Task SynchronizeRouteStateAsync(bool force)

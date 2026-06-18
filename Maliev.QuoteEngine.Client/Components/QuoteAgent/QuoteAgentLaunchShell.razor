@@ -32,7 +32,7 @@
             <button type="button"
                     class="@PageNavClass(WorkspacePage.Chat)"
                     aria-current="@(IsWorkspacePage(WorkspacePage.Chat) ? "page" : null)"
-                    @onclick="OpenChatWorkspaceAsync">
+                    @onclick="StartNewProjectAsync">
                 <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
                 <span>@Text("New project", "โปรเจกต์ใหม่")</span>
             </button>
@@ -282,6 +282,14 @@
                 @if (IsWorkspacePage(WorkspacePage.Plugins))
                 {
                     <header class="qe-agent-management-head">
+                        <button type="button"
+                                class="qe-agent-management-back"
+                                title="@Text("Back to chat", "กลับไปที่แชท")"
+                                aria-label="@Text("Back to current chat", "กลับไปที่แชทปัจจุบัน")"
+                                @onclick="ReturnToCurrentChatAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.ArrowBack" Size="Size.Small" />
+                            <span>@Text("Back", "กลับ")</span>
+                        </button>
                         <div>
                             <span>@Text("Connectors", "ตัวเชื่อมต่อ")</span>
                             <h1>@Text("Plugins", "ปลั๊กอิน")</h1>
@@ -344,6 +352,14 @@
                 else if (IsWorkspacePage(WorkspacePage.Projects))
                 {
                     <header class="qe-agent-management-head">
+                        <button type="button"
+                                class="qe-agent-management-back"
+                                title="@Text("Back to chat", "กลับไปที่แชท")"
+                                aria-label="@Text("Back to current chat", "กลับไปที่แชทปัจจุบัน")"
+                                @onclick="ReturnToCurrentChatAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.ArrowBack" Size="Size.Small" />
+                            <span>@Text("Back", "กลับ")</span>
+                        </button>
                         <div>
                             <span>@Text("Make Studio", "Make Studio")</span>
                             <h1>@Text("Projects", "โปรเจกต์")</h1>
@@ -487,6 +503,14 @@
                 else if (IsWorkspacePage(WorkspacePage.Settings))
                 {
                     <header class="qe-agent-management-head">
+                        <button type="button"
+                                class="qe-agent-management-back"
+                                title="@Text("Back to chat", "กลับไปที่แชท")"
+                                aria-label="@Text("Back to current chat", "กลับไปที่แชทปัจจุบัน")"
+                                @onclick="ReturnToCurrentChatAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.ArrowBack" Size="Size.Small" />
+                            <span>@Text("Back", "กลับ")</span>
+                        </button>
                         <div>
                             <span>@Text("Account", "บัญชี")</span>
                             <h1>@Text("Settings", "ตั้งค่า")</h1>
@@ -1889,6 +1913,9 @@
     public EventCallback OnUploadRequested { get; set; }
 
     [Parameter]
+    public EventCallback OnNewProjectRequested { get; set; }
+
+    [Parameter]
     public EventCallback<int> OnUploadedPartSelected { get; set; }
 
     [CascadingParameter(Name = "IsDarkMode")]
@@ -3101,6 +3128,25 @@
         _searchOpen = false;
         _navigationDrawerOpen = false;
         await FocusComposerAsync();
+    }
+
+    private async Task StartNewProjectAsync()
+    {
+        _searchOpen = false;
+        _navigationDrawerOpen = false;
+        await OnNewProjectRequested.InvokeAsync();
+        await OpenCurrentChatAsync();
+    }
+
+    public async Task OpenCurrentChatAsync()
+    {
+        await OpenChatWorkspaceAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ReturnToCurrentChatAsync()
+    {
+        await OpenCurrentChatAsync();
     }
 
     private async Task OpenPluginsPageAsync()

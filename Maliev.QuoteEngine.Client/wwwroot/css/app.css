@@ -4112,6 +4112,31 @@
     gap: 20px;
 }
 
+.qe-agent-management-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 8px 12px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 999px;
+    background: var(--qe-agent-surface);
+    color: var(--qe-agent-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.qe-agent-management-back:hover {
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-management-back:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--qe-agent-primary) 40%, transparent);
+    outline-offset: 3px;
+}
+
 .qe-agent-management-head span,
 .qe-agent-management-section > header small {
     color: var(--qe-agent-muted);

@@ -731,6 +731,42 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_starts_new_sessions_and_returns_from_management_pages()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("[Parameter]\n    public EventCallback OnNewProjectRequested", component, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"StartNewProjectAsync\"", component, StringComparison.Ordinal);
+        Assert.Contains("private async Task StartNewProjectAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("await OnNewProjectRequested.InvokeAsync();", component, StringComparison.Ordinal);
+        Assert.Contains("public async Task OpenCurrentChatAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("private async Task ReturnToCurrentChatAsync()", component, StringComparison.Ordinal);
+
+        var pluginsPage = ExtractSourceBlock(component, "WorkspacePage.Plugins", "else if (IsWorkspacePage(WorkspacePage.Projects))");
+        var projectsPage = ExtractSourceBlock(component, "WorkspacePage.Projects", "else if (IsWorkspacePage(WorkspacePage.Settings))");
+        var settingsPage = ExtractSourceBlock(component, "WorkspacePage.Settings", "</section>\n                }");
+        Assert.Contains("qe-agent-management-back", pluginsPage, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-management-back", projectsPage, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-management-back", settingsPage, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"ReturnToCurrentChatAsync\"", pluginsPage, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"ReturnToCurrentChatAsync\"", projectsPage, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"ReturnToCurrentChatAsync\"", settingsPage, StringComparison.Ordinal);
+
+        Assert.Contains("OnNewProjectRequested=\"StartNewProjectAsync\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("private async Task StartNewProjectAsync()", workspace, StringComparison.Ordinal);
+        Assert.Contains("await SaveCurrentProjectBeforeResetAsync();", workspace, StringComparison.Ordinal);
+        Assert.Contains("await ResetWorkspaceStateAsync();", workspace, StringComparison.Ordinal);
+        Assert.Contains("await _agentShell.OpenCurrentChatAsync();", workspace, StringComparison.Ordinal);
+        Assert.Contains("private async Task SaveCurrentProjectBeforeResetAsync()", workspace, StringComparison.Ordinal);
+        Assert.Contains("CreateDraftProjectAsync(new CreateDraftProjectRequest", workspace, StringComparison.Ordinal);
+        Assert.Contains("New project", workspace, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-agent-management-back", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_has_monochrome_chatgpt_like_contract()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
