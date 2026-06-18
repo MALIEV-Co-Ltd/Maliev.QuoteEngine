@@ -437,6 +437,7 @@
             }
 
             await InvokeAsync(StateHasChanged);
+            await Task.Yield();
             try
             {
                 var initiation = await Api.InitiateUploadAsync(

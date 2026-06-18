@@ -581,7 +581,7 @@ public sealed class QuoteEngineSourceTests
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         Assert.Contains(
-            "_parts.Add(part);\n            _selectedPartIndex = _parts.Count - 1;\n            if (_agentShell is not null)\n            {\n                await _agentShell.NotifyUploadStartedAsync(part);\n            }\n\n            await InvokeAsync(StateHasChanged);\n            try",
+            "_parts.Add(part);\n            _selectedPartIndex = _parts.Count - 1;\n            if (_agentShell is not null)\n            {\n                await _agentShell.NotifyUploadStartedAsync(part);\n            }\n\n            await InvokeAsync(StateHasChanged);\n            await Task.Yield();\n            try",
             workspace,
             StringComparison.Ordinal);
         var uploadFailureBlock = ExtractSourceBlock(
@@ -969,7 +969,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_dictationProcessing", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-spinner", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-meter", component, StringComparison.Ordinal);
-        Assert.Contains("DictationMeterBarCount = 116", component, StringComparison.Ordinal);
+        Assert.Contains("DictationMeterBarCount = 320", component, StringComparison.Ordinal);
+        Assert.Contains("IsComposerSendDisabled => _sending || IsDictationActive || HasPendingComposerUpload", component, StringComparison.Ordinal);
         Assert.Contains("ComposerWrapClass", component, StringComparison.Ordinal);
         Assert.Contains("lang=\"@SpeechRecognitionLanguage\"", component, StringComparison.Ordinal);
         Assert.Contains("data-speech-languages=\"@SpeechRecognitionLanguages\"", component, StringComparison.Ordinal);
@@ -992,6 +993,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_pendingComposerAttachments", component, StringComparison.Ordinal);
         Assert.Contains("BuildPendingMessageAttachments()", component, StringComparison.Ordinal);
         Assert.Contains("pendingAttachments.Count == 0", component, StringComparison.Ordinal);
+        Assert.Contains("|| IsComposerSendDisabled", component, StringComparison.Ordinal);
         Assert.Contains("new AgentMessageRow(\"user\", message, attachments: pendingAttachments)", component, StringComparison.Ordinal);
         Assert.Contains("Attachments = pendingAttachments.Select(attachment => attachment.ToAgentAttachment()).ToList()", component, StringComparison.Ordinal);
         Assert.Contains("message.Attachments.Count > 0", component, StringComparison.Ordinal);
@@ -1329,8 +1331,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("inset-inline: 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("justify-content: space-between;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("width: 100%;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("flex: 0 0 2px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("width: 2px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("flex: 1 1 1px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("width: 1px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-width: 2px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("min-height: 3px;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("transition: height", agentStyles, StringComparison.Ordinal);
         Assert.Contains("height: calc(3px + var(--qe-bar-level) * 22px);", agentStyles, StringComparison.Ordinal);

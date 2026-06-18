@@ -928,13 +928,16 @@
                         }
                     </div>
                 }
-                <button type="button"
-                        class="qe-agent-round-btn qe-agent-add-btn"
-                        title="@Text("Add files", "เพิ่มไฟล์")"
-                        aria-label="@Text("Add files", "เพิ่มไฟล์")"
-                        @onclick="RequestUploadAsync">
-                    <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
-                </button>
+                @if (!IsDictationActive)
+                {
+                    <button type="button"
+                            class="qe-agent-round-btn qe-agent-add-btn"
+                            title="@Text("Add files", "เพิ่มไฟล์")"
+                            aria-label="@Text("Add files", "เพิ่มไฟล์")"
+                            @onclick="RequestUploadAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
+                    </button>
+                }
                 <textarea @ref="_composerTextarea"
                           @bind="_draftMessage"
                           @bind:event="oninput"
@@ -975,7 +978,7 @@
                         <MudIcon Icon="@Icons.Material.Outlined.MicNone" Size="Size.Small" />
                     }
                 </button>
-                <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@(_sending || _dictationProcessing)">
+                <button type="submit" class="qe-agent-send-btn" title="@Text("Send", "ส่ง")" disabled="@IsComposerSendDisabled">
                     @if (_sending)
                     {
                         <span class="qe-agent-send-spinner" aria-hidden="true"></span>
@@ -986,19 +989,21 @@
                     }
                     <span class="sr-only">@(_sending ? Text("Processing", "กำลังประมวลผล") : Text("Send", "ส่ง"))</span>
                 </button>
-                <div class="qe-agent-quick-actions-wrapper">
-                    <button type="button"
-                            class="qe-agent-quick-actions-btn"
-                            @onclick="ToggleQuickActionsMenu"
-                            aria-label="@Text("Tools", "เครื่องมือ")"
-                            title="@Text("Tools", "เครื่องมือ")"
-                            aria-expanded="@_quickActionsMenuOpen">
-                        <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
-                        <span>@Text("Tools", "เครื่องมือ")</span>
-                    </button>
-                    @if (_quickActionsMenuOpen)
-                    {
-                        <div class="qe-agent-quick-actions-menu" role="menu" aria-label="@Text("Tools", "เครื่องมือ")">
+                @if (!IsDictationActive)
+                {
+                    <div class="qe-agent-quick-actions-wrapper">
+                        <button type="button"
+                                class="qe-agent-quick-actions-btn"
+                                @onclick="ToggleQuickActionsMenu"
+                                aria-label="@Text("Tools", "เครื่องมือ")"
+                                title="@Text("Tools", "เครื่องมือ")"
+                                aria-expanded="@_quickActionsMenuOpen">
+                            <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
+                            <span>@Text("Tools", "เครื่องมือ")</span>
+                        </button>
+                        @if (_quickActionsMenuOpen)
+                        {
+                            <div class="qe-agent-quick-actions-menu" role="menu" aria-label="@Text("Tools", "เครื่องมือ")">
                             <button type="button" role="menuitem" @onclick="RequestUploadFromQuickActionsAsync">
                                 <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
                                 <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
@@ -1047,9 +1052,10 @@
                                     <span>@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")</span>
                                 </button>
                             }
-                        </div>
-                    }
-                </div>
+                            </div>
+                        }
+                    </div>
+                }
             </form>
             @if (_messages.Count == 0)
             {
@@ -1562,7 +1568,7 @@
     private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
     private const int SearchMinimumCharacters = 3;
     private const int SearchPromptVisibleCharacters = 28;
-    private const int DictationMeterBarCount = 116;
+    private const int DictationMeterBarCount = 320;
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1757,7 +1763,10 @@
     private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.DarkMode : Icons.Material.Outlined.LightMode;
     private string ShellClass => $"qe-agent-shell{(_railCollapsed ? " qe-agent-shell--rail-collapsed" : string.Empty)}{(RightPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
-    private string ComposerWrapClass => $"qe-agent-composer-wrap{(_dictating || _dictationProcessing ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
+    private bool IsDictationActive => _dictating || _dictationProcessing;
+    private bool HasPendingComposerUpload => _pendingComposerAttachments.Any(IsComposerUploadPending);
+    private bool IsComposerSendDisabled => _sending || IsDictationActive || HasPendingComposerUpload;
+    private string ComposerWrapClass => $"qe-agent-composer-wrap{(IsDictationActive ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
     private string ComposerClass
     {
         get
@@ -2151,7 +2160,7 @@
     {
         var message = _draftMessage.Trim();
         var pendingAttachments = BuildPendingMessageAttachments();
-        if ((string.IsNullOrWhiteSpace(message) && pendingAttachments.Count == 0) || _sending || _dictationProcessing)
+        if ((string.IsNullOrWhiteSpace(message) && pendingAttachments.Count == 0) || IsComposerSendDisabled)
         {
             return;
         }
@@ -2336,6 +2345,7 @@
     {
         _dictating = true;
         _dictationProcessing = false;
+        _quickActionsMenuOpen = false;
         _error = null;
         StartDictationTimer();
         await InvokeAsync(StateHasChanged);
@@ -2346,6 +2356,7 @@
     {
         _dictating = false;
         _dictationProcessing = true;
+        _quickActionsMenuOpen = false;
         StopDictationTimer();
         await InvokeAsync(StateHasChanged);
     }
@@ -2462,6 +2473,7 @@
 
         _dictating = true;
         _dictationProcessing = false;
+        _quickActionsMenuOpen = false;
         _error = null;
         try
         {
