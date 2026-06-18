@@ -1109,6 +1109,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("is-checking", component, StringComparison.Ordinal);
         Assert.Contains("is-offline", component, StringComparison.Ordinal);
         Assert.Contains("ChatbotServiceAvailable", component, StringComparison.Ordinal);
+        Assert.Contains("private bool IsAgentBackendConnected => _agentBackendStatus == AgentBackendStatus.Connected", component, StringComparison.Ordinal);
+        Assert.Contains("!IsAgentBackendConnected", component, StringComparison.Ordinal);
         Assert.Contains("is-failed", component, StringComparison.Ordinal);
         Assert.Contains("Task HandleSubmitAsync()", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-workflow\"", component, StringComparison.Ordinal);
