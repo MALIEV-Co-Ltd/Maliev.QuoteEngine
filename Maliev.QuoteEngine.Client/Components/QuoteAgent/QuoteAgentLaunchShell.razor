@@ -6,6 +6,7 @@
 @using Maliev.QuoteEngine.Client.Components
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject PreferenceService Preferences
@@ -556,7 +557,7 @@
                 @foreach (var message in _messages)
                 {
                     <article class="@($"qe-agent-message qe-agent-message--{message.Role} {(message.Workbench is not null ? "qe-agent-message--workbench" : string.Empty)}")">
-                        <div class="qe-agent-bubble">
+                        <div class="@($"qe-agent-bubble {(message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ? "qe-agent-message-stack" : string.Empty)}")">
                             <span>@RoleLabel(message.Role)</span>
                             @if (message.Role.Equals("user", StringComparison.OrdinalIgnoreCase))
                             {
@@ -571,7 +572,9 @@
                                     <div class="qe-agent-message-attachments" aria-label="@Text("Attached files", "ไฟล์ที่แนบ")">
                                         @foreach (var attachment in message.Attachments)
                                         {
-                                            <span>
+                                            <span class="@MessageAttachmentClass(attachment)"
+                                                  title="@attachment.FileName"
+                                                  aria-label="@attachment.FileName">
                                                 @if (!string.IsNullOrWhiteSpace(attachment.PreviewUrl))
                                                 {
                                                     <img src="@attachment.PreviewUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
@@ -586,6 +589,21 @@
                                     </div>
                                 }
                                 <p>@message.Content</p>
+                                <div class="qe-agent-message-footer" aria-label="@Text("Message actions", "ตัวเลือกข้อความ")">
+                                    <time datetime="@FormatMessageTimestamp(message.CreatedAt)">@FormatMessageTime(message.CreatedAt)</time>
+                                    <button type="button"
+                                            title="@Text("Copy message", "คัดลอกข้อความ")"
+                                            aria-label="@Text("Copy message", "คัดลอกข้อความ")"
+                                            @onclick="@(() => CopyUserMessageAsync(message))">
+                                        <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                                    </button>
+                                    <button type="button"
+                                            title="@Text("Edit message", "แก้ไขข้อความ")"
+                                            aria-label="@Text("Edit message", "แก้ไขข้อความ")"
+                                            @onclick="@(() => EditUserMessageAsync(message))">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
+                                    </button>
+                                </div>
                             }
                             else
                             {
@@ -620,35 +638,68 @@
                                 }
                                 @if (message.ThinkingSteps.Count > 0)
                                 {
-                                    <details class="qe-agent-thinking">
-                                        <summary>
-                                            <span>@Text("Thought process", "กระบวนการคิด")</span>
-                                            <small>@ThinkingSummary(message.ThinkingSteps)</small>
-                                        </summary>
-                                        <div class="qe-agent-thinking-steps">
-                                            @foreach (var step in message.ThinkingSteps.OrderBy(step => step.StepNumber))
-                                            {
-                                                var stepTitle = ThinkingStepTitle(step);
-                                                var stepCompact = ThinkingStepCompact(step);
-                                                @if (!string.IsNullOrWhiteSpace(stepTitle))
+                                    var orderedThinkingSteps = message.ThinkingSteps
+                                        .OrderBy(step => step.StepNumber <= 0 ? int.MaxValue : step.StepNumber)
+                                        .ThenBy(step => step.Timestamp)
+                                        .ToList();
+                                    <section class="qe-agent-thinking-shell" aria-label="@ThinkingSummary(message.ThinkingSteps)">
+                                        <details class="qe-agent-thinking" open>
+                                            <summary>
+                                                <span class="qe-agent-thinking-summary-main">
+                                                    <span class="qe-agent-thinking-icon" aria-hidden="true">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.Psychology" Size="Size.Small" />
+                                                    </span>
+                                                    <span class="qe-agent-thinking-title">@Text("Thought process", "กระบวนการคิด")</span>
+                                                </span>
+                                                <span class="qe-agent-thinking-summary-meta">
+                                                    <span class="qe-agent-thinking-count">@ThinkingStepCountLabel(message.ThinkingSteps)</span>
+                                                    @if (ThinkingDurationLabel(message.ThinkingSteps) is { Length: > 0 } thinkingDuration)
+                                                    {
+                                                        <span class="qe-agent-thinking-total">
+                                                            <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
+                                                            <span>@thinkingDuration</span>
+                                                        </span>
+                                                    }
+                                                </span>
+                                            </summary>
+                                            <div class="qe-agent-thinking-steps">
+                                                @for (var stepIndex = 0; stepIndex < orderedThinkingSteps.Count; stepIndex++)
                                                 {
-                                                    <div class="qe-agent-thinking-step">
-                                                        <div class="qe-agent-thinking-step-header">
-                                                            <span class="qe-agent-thinking-step-title">@stepTitle</span>
-                                                            @if (step.DurationMs is > 0)
-                                                            {
-                                                                <small>@FormatDuration(step.DurationMs.Value)</small>
-                                                            }
+                                                    var step = orderedThinkingSteps[stepIndex];
+                                                    var stepTitle = ThinkingStepTitle(step);
+                                                    var stepCompact = ThinkingStepCompact(step);
+                                                    var displayStepNumber = step.StepNumber > 0 ? step.StepNumber : stepIndex + 1;
+                                                    if (!string.IsNullOrWhiteSpace(stepTitle))
+                                                    {
+                                                        <div class="qe-agent-thinking-step-row">
+                                                            <span class="qe-agent-thinking-step-index">@displayStepNumber</span>
+                                                            <article class="qe-agent-thinking-step-card">
+                                                                <header class="qe-agent-thinking-step-header">
+                                                                    <span class="qe-agent-thinking-step-heading">
+                                                                        <span class="qe-agent-thinking-step-title">@stepTitle</span>
+                                                                        <span class="qe-agent-thinking-step-status">@Text("Completed", "เสร็จแล้ว")</span>
+                                                                    </span>
+                                                                    @if (step.DurationMs is > 0)
+                                                                    {
+                                                                        <span class="qe-agent-thinking-step-duration">@FormatDuration(step.DurationMs.Value)</span>
+                                                                    }
+                                                                    <MudIcon Class="qe-agent-thinking-step-caret" Icon="@Icons.Material.Outlined.KeyboardArrowDown" Size="Size.Small" />
+                                                                </header>
+                                                                @if (!string.IsNullOrWhiteSpace(stepCompact))
+                                                                {
+                                                                    <p class="qe-agent-thinking-step-compact">@stepCompact</p>
+                                                                }
+                                                            </article>
                                                         </div>
-                                                        @if (!string.IsNullOrWhiteSpace(stepCompact))
-                                                        {
-                                                            <p class="qe-agent-thinking-step-compact">@stepCompact</p>
-                                                        }
-                                                    </div>
+                                                    }
                                                 }
-                                            }
-                                        </div>
-                                    </details>
+                                            </div>
+                                            <footer class="qe-agent-thinking-footer">
+                                                <MudIcon Icon="@Icons.Material.Outlined.Info" Size="Size.Small" />
+                                                <span>@Text("These are internal steps used to complete your request.", "นี่คือขั้นตอนภายในที่ใช้เพื่อทำคำขอของคุณให้เสร็จ")</span>
+                                            </footer>
+                                        </details>
+                                    </section>
                                 }
                             }
                             @if (message.Workbench is not null)
@@ -1404,7 +1455,52 @@
             }
             else
             {
-                @if (UploadedParts.Count > 0)
+                var selectedArtifactPreview = SelectedArtifactPreviewItem;
+                if (selectedArtifactPreview is not null)
+                {
+                    <div class="qe-agent-artifact-preview-shell">
+                        <section class="@($"qe-agent-artifact-context {UiFocusClass("artifact", selectedArtifactPreview.Source)}")" aria-label="@Text("Selected artifact preview", "ตัวอย่างไฟล์งานที่เลือก")">
+                            <header>
+                                <div>
+                                    <span>@selectedArtifactPreview.KindLabel</span>
+                                    <strong>@selectedArtifactPreview.Title</strong>
+                                </div>
+                                <div class="qe-agent-artifact-preview-actions">
+                                    <small>@selectedArtifactPreview.Status</small>
+                                    <a href="@selectedArtifactPreview.Url"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="qe-agent-artifact-link qe-agent-artifact-open-link"
+                                       title="@Text("Open in new tab", "เปิดในแท็บใหม่")"
+                                       aria-label="@Text("Open selected artifact in a new tab", "เปิดไฟล์งานที่เลือกในแท็บใหม่")">
+                                        <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                                    </a>
+                                </div>
+                            </header>
+                            <div class="qe-agent-artifact-context-body">
+                                @if (IsImagePreview(selectedArtifactPreview))
+                                {
+                                    <img class="qe-agent-artifact-preview-media" src="@selectedArtifactPreview.Url" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                }
+                                else if (IsPdfPreview(selectedArtifactPreview))
+                                {
+                                    <iframe src="@selectedArtifactPreview.Url"
+                                            class="qe-agent-artifact-frame"
+                                            title="@selectedArtifactPreview.Title"
+                                            loading="lazy"
+                                            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+                                }
+                                else
+                                {
+                                    <div class="qe-agent-artifact-preview-fallback">
+                                        <MudIcon Icon="@selectedArtifactPreview.Icon" Size="Size.Large" />
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    </div>
+                }
+                else if (UploadedParts.Count > 0)
                 {
                     <div class="qe-agent-artifact-preview-shell">
                         @if (CanRenderUploadedPartViewer(SelectedUploadedPart))
@@ -1446,33 +1542,55 @@
                         }
                         else
                         {
+                            var uploadedPreviewItem = BuildUploadedPreviewItem(SelectedPartIndex, SelectedUploadedPart);
                             <section class="@($"qe-agent-artifact-context {UiFocusClass(PartFocusKey(SelectedUploadedPart.PartId))}")" aria-label="@Text("Supplemental uploaded file", "ไฟล์ประกอบที่อัปโหลด")">
                                 <header>
                                     <div>
                                         <span>@SupplementalArtifactLabel(SelectedUploadedPart)</span>
                                         <strong>@SelectedUploadedPart.FileName</strong>
                                     </div>
-                                    <small>@UploadedPartStatus(SelectedUploadedPart)</small>
+                                    <div class="qe-agent-artifact-preview-actions">
+                                        <small>@UploadedPartStatus(SelectedUploadedPart)</small>
+                                        @if (!string.IsNullOrWhiteSpace(uploadedPreviewItem.Url))
+                                        {
+                                            <a href="@uploadedPreviewItem.Url"
+                                               target="_blank"
+                                               rel="noopener noreferrer"
+                                               class="qe-agent-artifact-link qe-agent-artifact-open-link"
+                                               title="@Text("Open in new tab", "เปิดในแท็บใหม่")"
+                                               aria-label="@Text("Open uploaded file in a new tab", "เปิดไฟล์ที่อัปโหลดในแท็บใหม่")">
+                                                <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                                            </a>
+                                        }
+                                    </div>
                                 </header>
                                 <div class="qe-agent-artifact-context-body">
-                                    <button type="button"
-                                            class="qe-agent-artifact-context-preview"
-                                            @onclick="@(() => OpenUploadedPreviewAsync(SelectedPartIndex))"
-                                            title="@Text("Preview file", "ดูตัวอย่างไฟล์")">
-                                        @if (!string.IsNullOrWhiteSpace(SelectedUploadedPart.ThumbnailUrl))
-                                        {
-                                            <img src="@SelectedUploadedPart.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
-                                        }
-                                        else
-                                        {
+                                    @if (!string.IsNullOrWhiteSpace(uploadedPreviewItem.Url) && IsImagePreview(uploadedPreviewItem))
+                                    {
+                                        <img class="qe-agent-artifact-preview-media" src="@uploadedPreviewItem.Url" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(uploadedPreviewItem.Url) && IsPdfPreview(uploadedPreviewItem))
+                                    {
+                                        <iframe src="@uploadedPreviewItem.Url"
+                                                class="qe-agent-artifact-frame"
+                                                title="@uploadedPreviewItem.Title"
+                                                loading="lazy"
+                                                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+                                    }
+                                    else
+                                    {
+                                        <div class="qe-agent-artifact-preview-fallback">
                                             <MudIcon Icon="@UploadedPartIcon(SelectedUploadedPart)" Size="Size.Large" />
-                                        }
-                                    </button>
+                                        </div>
+                                    }
                                     <p>@SupplementalArtifactHint(SelectedUploadedPart)</p>
                                 </div>
                             </section>
                         }
                     </div>
+                }
+                @if (UploadedParts.Count > 0)
+                {
                     <section class="qe-agent-artifact-section" aria-label="@Text("Uploaded files", "ไฟล์ที่อัปโหลด")">
                         <header>@Text("Uploaded files", "ไฟล์ที่อัปโหลด")</header>
                         <div class="qe-agent-artifacts">
@@ -1545,31 +1663,6 @@
                         </button>
                     }
                 </div>
-                @if (_selectedArtifact is not null)
-                {
-                    var selectedArtifactUrl = ArtifactPreviewUrl(_selectedArtifact);
-                    if (!string.IsNullOrWhiteSpace(selectedArtifactUrl))
-                    {
-                        <section class="qe-agent-artifact-inline-preview" aria-label="@Text("Artifact preview", "ตัวอย่างไฟล์งาน")">
-                            <header>
-                                <strong>@_selectedArtifact.Title</strong>
-                                <a href="@selectedArtifactUrl"
-                                   target="_blank"
-                                   rel="noopener noreferrer"
-                                   class="qe-agent-artifact-link"
-                                   title="@Text("Open in new tab", "เปิดในแท็บใหม่")">
-                                    <span>@ArtifactActionLabel(_selectedArtifact)</span>
-                                    <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
-                                </a>
-                            </header>
-                            <iframe src="@selectedArtifactUrl"
-                                    class="qe-agent-artifact-frame"
-                                    title="@_selectedArtifact.Title"
-                                    loading="lazy"
-                                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
-                        </section>
-                    }
-                }
             }
 
             @if (_proposedActions.Count > 0)
@@ -1763,6 +1856,8 @@
     private string _dictationTimeLabel = string.Empty;
     private CancellationTokenSource? _dictationTimerCts;
     private CancellationTokenSource? _agentHealthCts;
+    private HubConnection? _notificationConnection;
+    private Guid? _joinedQuoteSessionId;
     private bool _authDialogOpen;
     private string _authDialogMode = "sign-in";
     private string _lastInitialAuthMode = string.Empty;
@@ -2011,6 +2106,9 @@
     private PreviewItem? CurrentPreviewItem => PreviewItems.Count == 0
         ? null
         : PreviewItems[Math.Clamp(_previewIndex, 0, PreviewItems.Count - 1)];
+    private PreviewItem? SelectedArtifactPreviewItem => _selectedArtifact is null
+        ? null
+        : BuildArtifactPreviewItem(_selectedArtifact);
     private AgentWorkbenchSnapshot? LatestWorkbench => _messages.LastOrDefault(message => message.Workbench is not null)?.Workbench;
     private string ProjectSummaryTitle => string.IsNullOrWhiteSpace(_projectName)
         ? Text("Untitled project", "โปรเจกต์ยังไม่มีชื่อ")
@@ -2055,21 +2153,18 @@
     {
         AgentBackendStatus.Checking => "qe-agent-status is-checking",
         AgentBackendStatus.Offline => "qe-agent-status is-offline",
-        _ when _error is not null => "qe-agent-status is-failed",
         _ => "qe-agent-status is-connected"
     };
     private string AgentStatusTooltip => _agentBackendStatus switch
     {
         AgentBackendStatus.Checking => Text("Checking assistant backend status.", "กำลังตรวจสอบสถานะแบ็กเอนด์ผู้ช่วย"),
         AgentBackendStatus.Offline => _agentBackendStatusMessage ?? Text("Assistant backend is offline. Messages may use fallback mode until it reconnects.", "แบ็กเอนด์ผู้ช่วยออฟไลน์ ข้อความอาจใช้โหมดสำรองจนกว่าจะเชื่อมต่อใหม่"),
-        _ when _error is not null => Text("Agent connection failed. Try again or refresh Make Studio.", "เชื่อมต่อเอเจนต์ไม่สำเร็จ กรุณาลองใหม่หรือรีเฟรช Make Studio"),
         _ => Text("Agent connected and ready.", "เอเจนต์เชื่อมต่อและพร้อมใช้งาน")
     };
     private string AgentStatusLabel => _agentBackendStatus switch
     {
         AgentBackendStatus.Checking => Text("checking", "กำลังตรวจสอบ"),
         AgentBackendStatus.Offline => Text("offline", "ออฟไลน์"),
-        _ when _error is not null => Text("failed", "ล้มเหลว"),
         _ => Text("connected", "เชื่อมต่อแล้ว")
     };
     private string AuthReturnUrl => "/quotes";
@@ -2195,7 +2290,14 @@
             _projectNavigationLoaded = false;
         }
 
-        if (SessionId == Guid.Empty || SessionId == _loadedSessionId)
+        if (SessionId == Guid.Empty)
+        {
+            return;
+        }
+
+        await EnsureAgentNotificationConnectionAsync();
+
+        if (SessionId == _loadedSessionId)
         {
             return;
         }
@@ -2600,6 +2702,54 @@
         }
     }
 
+    private async Task CopyUserMessageAsync(AgentMessageRow message)
+    {
+        if (!message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(message.Content))
+        {
+            return;
+        }
+
+        try
+        {
+            await Js.InvokeVoidAsync("navigator.clipboard.writeText", message.Content);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            _error = Text(
+                "Message could not be copied. Select the text and copy it manually.",
+                "ไม่สามารถคัดลอกข้อความได้ โปรดเลือกข้อความแล้วคัดลอกด้วยตนเอง");
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task EditUserMessageAsync(AgentMessageRow message)
+    {
+        if (!message.Role.Equals("user", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _draftMessage = message.Content;
+        _pendingComposerAttachments.Clear();
+        _pendingComposerAttachments.AddRange(message.Attachments.Select(attachment => attachment with { }));
+
+        if (_composerModule is not null)
+        {
+            try
+            {
+                await _composerModule.InvokeVoidAsync("setComposerText", _composerTextarea, _draftMessage);
+            }
+            catch (InvalidOperationException)
+            {
+                // The composer can be unavailable during teardown or first render.
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+        await FocusComposerAsync();
+    }
+
     [JSInvokable]
     public Task ToggleDictationAsync()
     {
@@ -2866,6 +3016,88 @@
         _ = ApplyUiDirectivesAsync(state.UiDirectives, suppressPanelAutoOpen);
     }
 
+    private async Task EnsureAgentNotificationConnectionAsync()
+    {
+        try
+        {
+            if (_notificationConnection is null)
+            {
+                _notificationConnection = new HubConnectionBuilder()
+                    .WithUrl(Navigation.ToAbsoluteUri("/hubs/quote-notifications"))
+                    .WithAutomaticReconnect()
+                    .Build();
+
+                _notificationConnection.On<QuoteAgentThinkingStepDto>("QuoteAgentThinkingStep", step =>
+                {
+                    _ = InvokeAsync(() => ApplyStreamingThinkingStep(step));
+                });
+            }
+
+            if (_notificationConnection.State == HubConnectionState.Disconnected)
+            {
+                await _notificationConnection.StartAsync();
+            }
+
+            if (_joinedQuoteSessionId != SessionId && _notificationConnection.State == HubConnectionState.Connected)
+            {
+                if (_joinedQuoteSessionId.HasValue)
+                {
+                    await _notificationConnection.InvokeAsync("LeaveQuoteSessionGroup", _joinedQuoteSessionId.Value);
+                }
+
+                await _notificationConnection.InvokeAsync("JoinQuoteSessionGroup", SessionId);
+                _joinedQuoteSessionId = SessionId;
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _agentBackendStatusMessage = Text(
+                "Live reasoning updates are temporarily unavailable. The final response will still include completed steps.",
+                "การอัปเดตขั้นตอนแบบสดยังไม่พร้อมใช้งานชั่วคราว คำตอบสุดท้ายจะยังมีขั้นตอนที่เสร็จแล้ว");
+        }
+    }
+
+    private void ApplyStreamingThinkingStep(QuoteAgentThinkingStepDto step)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        var assistantMessage = _messages.LastOrDefault(message =>
+            message.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) &&
+            message.IsProcessing);
+        if (assistantMessage is null)
+        {
+            return;
+        }
+
+        UpsertThinkingStep(assistantMessage, step);
+        RequestScrollToLatestMessage();
+        StateHasChanged();
+    }
+
+    private static void UpsertThinkingStep(AgentMessageRow assistantMessage, QuoteAgentThinkingStepDto step)
+    {
+        if (step.StepNumber <= 0)
+        {
+            step.StepNumber = assistantMessage.ThinkingSteps.Count + 1;
+        }
+
+        var index = assistantMessage.ThinkingSteps.FindIndex(existing =>
+            existing.StepNumber == step.StepNumber ||
+            (!string.IsNullOrWhiteSpace(step.Type) &&
+             existing.Type.Equals(step.Type, StringComparison.OrdinalIgnoreCase) &&
+             existing.Title.Equals(step.Title, StringComparison.OrdinalIgnoreCase)));
+        if (index >= 0)
+        {
+            assistantMessage.ThinkingSteps[index] = step;
+            return;
+        }
+
+        assistantMessage.ThinkingSteps.Add(step);
+    }
+
     private async Task ApplyUiDirectivesAsync(IReadOnlyCollection<QuoteAgentUiDirectiveDto> directives, bool suppressPanelAutoOpen = false)
     {
         if (directives.Count == 0)
@@ -3020,10 +3252,10 @@
 
     private void OpenArtifactPreview(QuoteAgentArtifactDto artifact)
     {
-        var artifactUrl = ArtifactPreviewUrl(artifact);
+        var preview = BuildArtifactPreviewItem(artifact);
         var previewIndex = PreviewItems.ToList().FindIndex(item =>
             item.Source.Equals("artifact", StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(item.Url, artifactUrl, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Url, preview?.Url, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(item.Title, artifact.Title, StringComparison.OrdinalIgnoreCase));
         _previewIndex = previewIndex >= 0 ? previewIndex : 0;
         _previewDialogOpen = CurrentPreviewItem is not null;
@@ -3070,32 +3302,18 @@
         for (var i = 0; i < UploadedParts.Count; i++)
         {
             var part = UploadedParts[i];
-            items.Add(new PreviewItem(
-                "uploaded",
-                i,
-                part.FileName,
-                UploadedPartStatus(part),
-                PreviewUrlForUploadedPart(part),
-                SupplementalArtifactLabel(part),
-                UploadedPartIcon(part)));
+            items.Add(BuildUploadedPreviewItem(i, part));
         }
 
-        foreach (var artifact in _artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact).Where(item => !string.IsNullOrWhiteSpace(item.Url)))
+        foreach (var artifact in _artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact))
         {
-            var artifactUrl = ArtifactPreviewUrl(artifact);
-            if (string.IsNullOrWhiteSpace(artifactUrl))
+            var preview = BuildArtifactPreviewItem(artifact);
+            if (preview is null)
             {
                 continue;
             }
 
-            items.Add(new PreviewItem(
-                "artifact",
-                -1,
-                artifact.Title,
-                artifact.Status,
-                artifactUrl,
-                ArtifactKindLabel(artifact),
-                ArtifactIcon(artifact.ArtifactType)));
+            items.Add(preview);
         }
 
         foreach (var sketch in MessageSketches)
@@ -3107,7 +3325,8 @@
                 sketch.Status,
                 sketch.PreviewUrl ?? string.Empty,
                 Text("Sketch", "สเก็ตช์"),
-                Icons.Material.Outlined.Draw));
+                Icons.Material.Outlined.Draw,
+                sketch.ContentType));
         }
 
         return items;
@@ -3325,6 +3544,7 @@
 
     private async Task SelectUploadedPartAsync(int index)
     {
+        _selectedArtifact = null;
         if (OnUploadedPartSelected.HasDelegate)
         {
             await OnUploadedPartSelected.InvokeAsync(index);
@@ -3637,6 +3857,17 @@
             : Icons.Material.Outlined.InsertDriveFile;
     }
 
+    private static string MessageAttachmentClass(ComposerAttachmentPreview attachment)
+    {
+        var kindClass = !string.IsNullOrWhiteSpace(attachment.PreviewUrl) ||
+                        attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+                        attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase)
+            ? "qe-agent-message-attachment--image"
+            : "qe-agent-message-attachment--file";
+
+        return $"qe-agent-message-attachment {kindClass}";
+    }
+
     private static string ResolveUploadedPartViewerExtension(QuotePartViewModel part)
     {
         if (!string.IsNullOrWhiteSpace(part.ViewerFileExtension))
@@ -3930,6 +4161,17 @@
         return Text($"{steps.Count} steps", $"{steps.Count} ขั้นตอน");
     }
 
+    private string ThinkingStepCountLabel(IReadOnlyCollection<QuoteAgentThinkingStepDto> steps)
+    {
+        return Text($"{steps.Count} steps", $"{steps.Count} ขั้นตอน");
+    }
+
+    private string ThinkingDurationLabel(IReadOnlyCollection<QuoteAgentThinkingStepDto> steps)
+    {
+        var totalDuration = steps.Sum(step => step.DurationMs.GetValueOrDefault());
+        return totalDuration > 0 ? FormatDuration(totalDuration) : string.Empty;
+    }
+
     private string ThinkingStepTitle(QuoteAgentThinkingStepDto step)
     {
         var title = string.IsNullOrWhiteSpace(step.Title) ? step.Type : step.Title;
@@ -4070,6 +4312,16 @@
             : FormattableString.Invariant($"{durationMs / 1000.0:0.#} s");
     }
 
+    private static string FormatMessageTime(DateTimeOffset timestamp)
+    {
+        return timestamp.ToLocalTime().ToString("h:mm tt", CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatMessageTimestamp(DateTimeOffset timestamp)
+    {
+        return timestamp.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+    }
+
     private static string ArtifactIcon(string artifactType)
     {
         return artifactType.ToLowerInvariant() switch
@@ -4081,18 +4333,6 @@
             "order" => Icons.Material.Outlined.PrecisionManufacturing,
             "viewer" => Icons.Material.Outlined.ViewInAr,
             _ => Icons.Material.Outlined.Inventory2
-        };
-    }
-
-    private string ArtifactActionLabel(QuoteAgentArtifactDto artifact)
-    {
-        return artifact.ArtifactType.ToLowerInvariant() switch
-        {
-            "formal_quote" => Text("Preview quote", "ดูตัวอย่างใบเสนอราคา"),
-            "quote_approval" => Text("Review quote", "ตรวจใบเสนอราคา"),
-            "payment" => Text("Preview payment", "ดูตัวอย่างการชำระเงิน"),
-            "viewer" => Text("Preview viewer", "ดูตัวอย่างตัวแสดงผล"),
-            _ => Text("Preview", "ดูตัวอย่าง")
         };
     }
 
@@ -4144,14 +4384,45 @@
         return new InlineViewerInfo { CommandsJson = commandsJson };
     }
 
+    private PreviewItem? BuildArtifactPreviewItem(QuoteAgentArtifactDto artifact)
+    {
+        var artifactUrl = ArtifactPreviewUrl(artifact);
+        return string.IsNullOrWhiteSpace(artifactUrl)
+            ? null
+            : new PreviewItem(
+                "artifact",
+                -1,
+                artifact.Title,
+                artifact.Status,
+                artifactUrl,
+                ArtifactKindLabel(artifact),
+                ArtifactIcon(artifact.ArtifactType),
+                ArtifactContentType(artifact));
+    }
+
+    private PreviewItem BuildUploadedPreviewItem(int index, QuotePartViewModel part)
+    {
+        return new PreviewItem(
+            "uploaded",
+            index,
+            part.FileName,
+            UploadedPartStatus(part),
+            PreviewUrlForUploadedPart(part),
+            SupplementalArtifactLabel(part),
+            UploadedPartIcon(part),
+            part.ContentType);
+    }
+
     private string? ArtifactPreviewUrl(QuoteAgentArtifactDto artifact)
     {
-        if (string.IsNullOrWhiteSpace(artifact.Url))
+        var url = !string.IsNullOrWhiteSpace(artifact.Url)
+            ? artifact.Url.Trim()
+            : ArtifactMetadata(artifact, "storagePath");
+        if (string.IsNullOrWhiteSpace(url))
         {
             return null;
         }
 
-        var url = artifact.Url.Trim();
         if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
             url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase) ||
             Uri.TryCreate(url, UriKind.Absolute, out _) ||
@@ -4163,25 +4434,84 @@
         return $"/quote/v1/agent/sessions/{SessionId:D}/artifacts/download?path={Uri.EscapeDataString(url)}";
     }
 
-    private static string PreviewUrlForUploadedPart(QuotePartViewModel part)
+    private string PreviewUrlForUploadedPart(QuotePartViewModel part)
     {
-        return part.ThumbnailUrl ?? part.GlbUrl ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
+        {
+            return part.ThumbnailUrl;
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.GlbUrl))
+        {
+            return part.GlbUrl;
+        }
+
+        return !string.IsNullOrWhiteSpace(part.StoragePath) &&
+            IsPreviewableContent(part.ContentType, part.FileName)
+                ? $"/quote/v1/agent/sessions/{SessionId:D}/artifacts/download?path={Uri.EscapeDataString(part.StoragePath)}"
+                : string.Empty;
     }
 
     private static bool IsImagePreview(PreviewItem item)
     {
+        if (!string.IsNullOrWhiteSpace(item.ContentType) &&
+            item.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         if (item.Url.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
-        var extension = Path.GetExtension(item.Url).TrimStart('.');
+        var extension = PreviewExtension(item);
         return QuoteUploadConstraints.SupplementalImageExtensions.Any(value =>
             value.Equals(extension, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsPdfPreview(PreviewItem item)
     {
-        return Path.GetExtension(item.Url).Equals(".pdf", StringComparison.OrdinalIgnoreCase);
+        return string.Equals(item.ContentType, "application/pdf", StringComparison.OrdinalIgnoreCase) ||
+            PreviewExtension(item).Equals("pdf", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ArtifactMetadata(QuoteAgentArtifactDto artifact, string key)
+    {
+        return artifact.Metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : null;
+    }
+
+    private static string? ArtifactContentType(QuoteAgentArtifactDto artifact)
+    {
+        return ArtifactMetadata(artifact, "contentType");
+    }
+
+    private static bool IsPreviewableContent(string? contentType, string fileName)
+    {
+        return contentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true ||
+            string.Equals(contentType, "application/pdf", StringComparison.OrdinalIgnoreCase) ||
+            PreviewExtension(fileName).Equals("pdf", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string PreviewExtension(PreviewItem item)
+    {
+        var extension = PreviewExtension(item.Title);
+        return string.IsNullOrWhiteSpace(extension)
+            ? PreviewExtension(item.Url)
+            : extension;
+    }
+
+    private static string PreviewExtension(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var queryIndex = value.IndexOf('?', StringComparison.Ordinal);
+        var probe = queryIndex >= 0 ? value[..queryIndex] : value;
+        return Path.GetExtension(probe).TrimStart('.');
     }
 
     private static string AuthMethodIcon(QuoteAgentAuthMethodDto method)
@@ -4937,7 +5267,8 @@
         string Status,
         string Url,
         string KindLabel,
-        string Icon);
+        string Icon,
+        string? ContentType);
 
     private sealed record SearchPromptOption(
         string TextEn,
@@ -5048,7 +5379,8 @@
         string content,
         AgentWorkbenchSnapshot? workbench = null,
         IReadOnlyList<ComposerAttachmentPreview>? attachments = null,
-        string? sketchPreviewDataUrl = null)
+        string? sketchPreviewDataUrl = null,
+        DateTimeOffset? createdAt = null)
     {
         public string Role { get; } = role;
 
@@ -5073,6 +5405,10 @@
         public string? SketchPreviewDataUrl { get; } = sketchPreviewDataUrl;
 
         public InlineViewerInfo? InlineViewer { get; set; }
+
+        public DateTimeOffset CreatedAt { get; } = createdAt ?? DateTimeOffset.Now;
+
+        public bool HasExternalAttachments => Attachments.Count > 0 || !string.IsNullOrWhiteSpace(SketchPreviewDataUrl);
     }
 
     private sealed class InlineViewerInfo
@@ -5243,6 +5579,17 @@
         {
             await _searchPromptAnimationCts.CancelAsync();
             _searchPromptAnimationCts.Dispose();
+        }
+
+        if (_notificationConnection is not null)
+        {
+            if (_joinedQuoteSessionId.HasValue &&
+                _notificationConnection.State == HubConnectionState.Connected)
+            {
+                await _notificationConnection.InvokeAsync("LeaveQuoteSessionGroup", _joinedQuoteSessionId.Value);
+            }
+
+            await _notificationConnection.DisposeAsync();
         }
 
         if (_composerModule is not null)

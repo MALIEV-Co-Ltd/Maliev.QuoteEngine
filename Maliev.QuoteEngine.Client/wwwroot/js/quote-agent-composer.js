@@ -3,6 +3,7 @@ const typingAnimations = new WeakMap();
 const dictationSessions = new WeakMap();
 const dictationButtonHandlers = new WeakMap();
 const composerDotNetRefs = new WeakMap();
+const KeyboardDictationHoldDelayMs = 300;
 
 export function initComposer(textarea, dotNetRef, dictationButton) {
   if (!textarea || !dotNetRef) {
@@ -40,8 +41,24 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
   let holdTimer = 0;
   let holdStarted = false;
   let keyboardHoldStarted = false;
+  let keyboardHoldPending = false;
+  let keyboardHoldTimer = 0;
   let pressStartedActive = false;
   let suppressClick = false;
+  const clearKeyboardHold = () => {
+    window.clearTimeout(keyboardHoldTimer);
+    keyboardHoldTimer = 0;
+    keyboardHoldPending = false;
+  };
+  const beginKeyboardDictationHoldAsync = async () => {
+    if (dictationButton?.disabled || isDictationActive(textarea)) {
+      return;
+    }
+
+    keyboardHoldStarted = true;
+    suppressClick = true;
+    await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
+  };
   const pointerDown = async event => {
     if (event.button !== undefined && event.button !== 0) {
       return;
@@ -110,7 +127,6 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
   };
   const documentKeydown = async event => {
     if (!isSpaceKey(event) ||
-        event.repeat ||
         event.altKey ||
         event.ctrlKey ||
         event.metaKey ||
@@ -119,17 +135,45 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
       return;
     }
 
-    event.preventDefault();
-    if (isDictationActive(textarea)) {
+    const isComposerTextInput = event.target === textarea;
+    if (!isComposerTextInput) {
+      event.preventDefault();
+    }
+
+    if (event.repeat) {
+      if (keyboardHoldPending || keyboardHoldStarted) {
+        event.preventDefault();
+      }
       return;
     }
 
-    keyboardHoldStarted = true;
-    suppressClick = true;
-    await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
+    if (isDictationActive(textarea) || keyboardHoldPending || keyboardHoldStarted) {
+      return;
+    }
+
+    keyboardHoldPending = true;
+    window.clearTimeout(keyboardHoldTimer);
+    keyboardHoldTimer = window.setTimeout(async () => {
+      keyboardHoldTimer = 0;
+      if (!keyboardHoldPending) {
+        return;
+      }
+
+      keyboardHoldPending = false;
+      await beginKeyboardDictationHoldAsync();
+    }, KeyboardDictationHoldDelayMs);
   };
   const documentKeyup = async event => {
-    if (!isSpaceKey(event) || !keyboardHoldStarted) {
+    if (!isSpaceKey(event)) {
+      return;
+    }
+
+    if (keyboardHoldPending) {
+      clearKeyboardHold();
+      return;
+    }
+
+    if (!keyboardHoldStarted) {
       return;
     }
 
@@ -201,7 +245,8 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     mutationObserver,
     composer,
     updateTooltipPlacement,
-    updateAllTooltipPlacements
+    updateAllTooltipPlacements,
+    clearKeyboardHold
   });
   updateComposerShape(textarea);
 }
@@ -221,6 +266,7 @@ export function disposeComposer(textarea) {
   document.removeEventListener("keydown", handlers.documentKeydown, true);
   document.removeEventListener("keyup", handlers.documentKeyup, true);
   document.removeEventListener("pointerdown", handlers.outsideQuickActionsPointerDown, true);
+  handlers.clearKeyboardHold?.();
   handlers.resizeObserver?.disconnect?.();
   handlers.mutationObserver?.disconnect?.();
   if (handlers.composer) {

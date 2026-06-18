@@ -23715,11 +23715,28 @@
   }
   function resolve(ref) {
     if (typeof ref === "string") {
-      const s = shapes.get(ref);
+      const key = ref.trim();
+      const s = key ? shapes.get(key) : null;
       if (!s) throw new Error(`Shape not found: ${ref}`);
       return s;
     }
-    return ref;
+    return ref || null;
+  }
+  function resolveOperationTarget(cmd, fallback) {
+    const target = cmd.targetId == null || cmd.targetId === "" ? fallback : resolve(cmd.targetId);
+    if (!target) throw new Error(`CAD operation ${cmd.op} requires a target shape`);
+    return target;
+  }
+  function tryApplyEdgeOperation(target, operation, radius) {
+    const value = Number(radius);
+    if (!Number.isFinite(value) || value <= 0 || typeof target[operation] !== "function") {
+      return target;
+    }
+    try {
+      return target[operation](value);
+    } catch {
+      return target;
+    }
   }
   function buildProfile(profile) {
     const plane = profile.plane || "XY";
@@ -23819,23 +23836,28 @@
           break;
         }
         case "fuse": {
-          shape = resolve(cmd.targetId).fuse(resolve(cmd.toolId));
+          const target = resolveOperationTarget(cmd, result);
+          shape = target.fuse(resolve(cmd.toolId));
           break;
         }
         case "cut": {
-          shape = resolve(cmd.targetId).cut(resolve(cmd.toolId));
+          const target = resolveOperationTarget(cmd, result);
+          shape = target.cut(resolve(cmd.toolId));
           break;
         }
         case "intersect": {
-          shape = resolve(cmd.targetId).intersect(resolve(cmd.toolId));
+          const target = resolveOperationTarget(cmd, result);
+          shape = target.intersect(resolve(cmd.toolId));
           break;
         }
         case "fillet": {
-          shape = resolve(cmd.targetId).fillet(cmd.radius || p[0]);
+          const target = resolveOperationTarget(cmd, result);
+          shape = tryApplyEdgeOperation(target, "fillet", cmd.radius || p[0]);
           break;
         }
         case "chamfer": {
-          shape = resolve(cmd.targetId).chamfer(cmd.radius || p[0]);
+          const target = resolveOperationTarget(cmd, result);
+          shape = tryApplyEdgeOperation(target, "chamfer", cmd.radius || p[0]);
           break;
         }
         case "loft": {
@@ -23845,13 +23867,14 @@
           break;
         }
         case "translate": {
-          shape = resolve(cmd.targetId);
+          shape = resolveOperationTarget(cmd, result);
           if (offset2) shape = shape.translate(offset2[0], offset2[1], offset2[2]);
           else if (p.length >= 3) shape = shape.translate(p[0], p[1], p[2]);
           break;
         }
         case "rotate": {
-          shape = resolve(cmd.targetId).rotate(cmd.axis || [0, 0, 1], cmd.angle || p[0] || 0);
+          const target = resolveOperationTarget(cmd, result);
+          shape = target.rotate(cmd.axis || [0, 0, 1], cmd.angle || p[0] || 0);
           break;
         }
         default:

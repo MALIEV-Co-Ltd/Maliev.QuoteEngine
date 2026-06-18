@@ -65,3 +65,6 @@ Maliev.QuoteEngine.Client/wwwroot/js/home-shader.bundle.js
 # Codex/automation runtime logs
 .codex-*.log
 .codex-*.err.log
+
+# Build output from scripted dotnet builds
+.artifacts/

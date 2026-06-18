@@ -4,6 +4,7 @@ using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Agent;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Text.Json;
 
 namespace Maliev.QuoteEngine.Bff.Controllers;
@@ -51,8 +52,10 @@ public sealed class AgentController(
     /// Sends a customer message through the QuoteEngine agent workflow.
     /// </summary>
     [HttpPost("messages")]
+    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
     [ProducesResponseType(typeof(QuoteAgentTurnResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<QuoteAgentTurnResponse>> Send(
         [FromBody] QuoteAgentMessageRequest request,
         CancellationToken cancellationToken)
@@ -69,9 +72,11 @@ public sealed class AgentController(
     /// Streams a customer message through the QuoteEngine agent workflow.
     /// </summary>
     [HttpPost("messages/stream")]
+    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
     [Produces("application/x-ndjson")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Stream(
         [FromBody] QuoteAgentMessageRequest request,
         CancellationToken cancellationToken)
@@ -102,8 +107,10 @@ public sealed class AgentController(
     /// Cleans up raw dictated speech text via Gemini, bypassing the agent pipeline.
     /// </summary>
     [HttpPost("clean-speech")]
+    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
     [ProducesResponseType(typeof(QuoteAgentCleanSpeechResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<QuoteAgentCleanSpeechResponse>> CleanSpeech(
         [FromBody] QuoteAgentCleanSpeechRequest request,
         CancellationToken cancellationToken)
@@ -290,12 +297,13 @@ public sealed class AgentController(
         [FromQuery] string path,
         CancellationToken cancellationToken)
     {
-        if (!IsSafeSessionArtifactPath(sessionId, path))
+        var storagePath = agentService.ResolveAvailableArtifactStoragePath(sessionId, path);
+        if (storagePath is null)
         {
             return ValidationProblem("Artifact path is not available in this quote session.");
         }
 
-        var signedUrl = await uploadClient.GetDownloadUrlByPathAsync(path, expirationMinutes: 60, ct: cancellationToken);
+        var signedUrl = await uploadClient.GetDownloadUrlByPathAsync(storagePath, expirationMinutes: 60, ct: cancellationToken);
         return Redirect(signedUrl);
     }
 
@@ -328,7 +336,8 @@ public sealed class AgentController(
             return ValidationProblem(ModelState);
         }
 
-        var conversation = await chatbotServiceClient.GetConversationMessagesAsync(request.SessionId, cancellationToken);
+        var conversationSessionId = agentService.ResolveConversationSessionId(request.SessionId);
+        var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId, cancellationToken);
         if (conversation is null || conversation.Messages.Count == 0)
         {
             return NotFound(new ProblemDetails
@@ -368,26 +377,4 @@ public sealed class AgentController(
         });
     }
 
-    private static bool IsSafeSessionArtifactPath(Guid sessionId, string? path)
-    {
-        if (string.IsNullOrWhiteSpace(path))
-        {
-            return false;
-        }
-
-        var normalized = path.Trim().Replace('\\', '/');
-        if (normalized.StartsWith("/", StringComparison.Ordinal) ||
-            normalized.Contains("../", StringComparison.Ordinal) ||
-            normalized.Contains("/..", StringComparison.Ordinal) ||
-            normalized.Contains('%', StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var compactSessionId = sessionId.ToString("N");
-        var dashedSessionId = sessionId.ToString("D");
-        return normalized.StartsWith($"agent/sketches/{compactSessionId}/", StringComparison.OrdinalIgnoreCase) ||
-            normalized.StartsWith($"quotes/temp/{compactSessionId}/", StringComparison.OrdinalIgnoreCase) ||
-            normalized.StartsWith($"quotes/temp/{dashedSessionId}/", StringComparison.OrdinalIgnoreCase);
-    }
 }

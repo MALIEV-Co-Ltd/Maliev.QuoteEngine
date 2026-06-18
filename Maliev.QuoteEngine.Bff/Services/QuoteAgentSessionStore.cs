@@ -22,6 +22,11 @@ internal sealed class QuoteAgentSessionStore
         });
     }
 
+    public bool TryGet(Guid sessionId, out QuoteAgentSessionState state)
+    {
+        return _sessions.TryGetValue(sessionId, out state!);
+    }
+
     public void AddAttachments(QuoteAgentSessionState state, IEnumerable<QuoteAgentAttachmentDto> attachments)
     {
         lock (state.SyncRoot)

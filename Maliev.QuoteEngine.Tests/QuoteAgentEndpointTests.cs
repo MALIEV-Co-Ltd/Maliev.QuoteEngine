@@ -108,6 +108,76 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_export_pdf_uses_mapped_chatbot_session_after_quote_engine_turn()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var downstreamChatbotSessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f");
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ConversationMessages = new ChatbotConversationMessagesResponse
+            {
+                SessionId = downstreamChatbotSessionId,
+                Language = "en",
+                Messages =
+                [
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "user",
+                        Content = "I need a 3D printed bracket.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:00Z")
+                    },
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "assistant",
+                        Content = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:01Z")
+                    }
+                ]
+            }
+        };
+        var pdf = new RecordingPdfServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<IPdfServiceClient>();
+                services.AddSingleton<IPdfServiceClient>(pdf);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var turn = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = quoteSessionId,
+            Message = "I need a 3D printed bracket.",
+            Language = "en"
+        });
+        Assert.Equal(HttpStatusCode.OK, turn.StatusCode);
+
+        var export = await client.PostAsJsonAsync("/quote/v1/agent/export-pdf", new QuoteAgentExportPdfRequest
+        {
+            SessionId = quoteSessionId,
+            Language = "en"
+        });
+        var body = await export.Content.ReadFromJsonAsync<QuoteAgentExportPdfResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+        Assert.NotNull(body);
+        Assert.Equal("/generated/chat-transcript.pdf", body.PdfUrl);
+        Assert.Equal(downstreamChatbotSessionId, chatbot.LastConversationMessagesSessionId);
+        Assert.Equal(quoteSessionId.ToString("D"), pdf.LastReferenceId);
+        Assert.NotNull(pdf.LastDataJson);
+        using var data = JsonDocument.Parse(pdf.LastDataJson!);
+        Assert.Equal(quoteSessionId.ToString("D"), data.RootElement.GetProperty("sessionId").GetString());
+        var messages = data.RootElement.GetProperty("messages");
+        Assert.Equal(2, messages.GetArrayLength());
+        Assert.Equal("user", messages[0].GetProperty("role").GetString());
+        Assert.Equal("assistant", messages[1].GetProperty("role").GetString());
+    }
+
+    [Fact]
     public async Task Agent_message_forwards_optional_model_override_to_chatbot_service()
     {
         var chatbot = new RecordingChatbotServiceClient();
@@ -130,6 +200,34 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("gemini-2.5-flash-lite", chatbot.LastSendRequest?.ModelName);
+    }
+
+    [Fact]
+    public async Task Agent_message_instructs_chatbot_to_reply_only_in_requested_language()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "How much for a 30mm SLA resin part?",
+            Language = "en"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains(
+            "Response language: English (en). Reply only in English; do not include Thai translations or repeat the same answer in another language.",
+            chatbot.LastSendRequest!.Content,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -466,6 +564,73 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var otherSessionPath = $"agent/sketches/{Guid.NewGuid():N}/Manufacturing-sketch.png";
         var blockedResponse = await client.GetAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(otherSessionPath)}");
+        Assert.Equal(HttpStatusCode.BadRequest, blockedResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Agent_artifact_download_allows_registered_pdf_storage_path_without_session_prefix()
+    {
+        var uploadClient = new RecordingUploadServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(uploadClient);
+            });
+        });
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        var sessionId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        var pdfStoragePath = $"customers/{customerId:D}/quotes/{sessionId:D}/drawings/cover motion.pdf";
+
+        var registerResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
+            new QuoteAgentAttachmentRegisterRequest
+            {
+                Message = "Analyze this PDF drawing.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "cover motion.pdf",
+                        ContentType = "application/pdf",
+                        FileSizeBytes = 128_000,
+                        Kind = "drawing",
+                        UploadId = "upload-pdf-drawing",
+                        StoragePath = pdfStoragePath
+                    }
+                ]
+            },
+            JsonOptions);
+        var state = await registerResponse.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, registerResponse.StatusCode);
+        Assert.NotNull(state);
+        Assert.Contains(state.Artifacts, artifact =>
+            artifact.Title == "cover motion.pdf" &&
+            artifact.Metadata.TryGetValue("storagePath", out var storagePath) &&
+            storagePath == pdfStoragePath);
+
+        var redirectResponse = await client.GetAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(pdfStoragePath)}");
+
+        Assert.Equal(HttpStatusCode.Redirect, redirectResponse.StatusCode);
+        var redirectLocation = redirectResponse.Headers.Location?.ToString();
+        Assert.NotNull(redirectLocation);
+        Assert.StartsWith("https://upload.example.test/download/", redirectLocation, StringComparison.Ordinal);
+        Assert.Equal(
+            pdfStoragePath,
+            Uri.UnescapeDataString(redirectLocation["https://upload.example.test/download/".Length..]));
+
+        var unregisteredPath = $"customers/{customerId:D}/quotes/{sessionId:D}/drawings/other.pdf";
+        var blockedResponse = await client.GetAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(unregisteredPath)}");
+
         Assert.Equal(HttpStatusCode.BadRequest, blockedResponse.StatusCode);
     }
 
@@ -2890,6 +3055,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains("quote_set_project_name", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("quote_ask_customer", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("Unlabeled sketches need dimension confirmation", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("For PDF/technical drawings, inspect the attached document as drawing context", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Do not claim you cannot read the PDF", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("must not trigger a 3D preview", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
     }
 
@@ -3391,6 +3558,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         public ChatbotSendMessageRequest? LastStreamRequest { get; private set; }
 
+        public Guid? LastConversationMessagesSessionId { get; private set; }
+
+        public ChatbotConversationMessagesResponse? ConversationMessages { get; init; }
+
         public bool ThrowStreamException { get; init; }
 
         public bool HealthAvailable { get; init; } = true;
@@ -3469,12 +3640,41 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             Guid sessionId,
             CancellationToken cancellationToken)
         {
-            return Task.FromResult<ChatbotConversationMessagesResponse?>(null);
+            LastConversationMessagesSessionId = sessionId;
+            return Task.FromResult(ConversationMessages);
         }
 
         public Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken)
         {
             return Task.FromResult<string?>(speech);
+        }
+    }
+
+    private sealed class RecordingPdfServiceClient : IPdfServiceClient
+    {
+        private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
+
+        public string? LastDocumentType { get; private set; }
+
+        public string? LastReferenceId { get; private set; }
+
+        public string? LastDataJson { get; private set; }
+
+        public Task<PdfGenerationResult?> GeneratePdfAsync(
+            string documentType,
+            string referenceId,
+            object data,
+            CancellationToken ct = default)
+        {
+            LastDocumentType = documentType;
+            LastReferenceId = referenceId;
+            LastDataJson = JsonSerializer.Serialize(data, SerializerOptions);
+            return Task.FromResult<PdfGenerationResult?>(new PdfGenerationResult
+            {
+                RequestId = Guid.Parse("feedfeed-feed-feed-feed-feedfeedfeed"),
+                StorageUrl = "/generated/chat-transcript.pdf",
+                StoragePath = "generated/chat-transcript.pdf"
+            });
         }
     }
 

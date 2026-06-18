@@ -12,10 +12,12 @@ using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -64,6 +66,44 @@ builder.Services.AddSingleton<IPostConfigureOptions<KeyManagementOptions>>(sp =>
 builder.Services.AddAuthorization();
 builder.Services.AddSingleton<QuoteEnginePrototypeStore>();
 builder.Services.AddScoped<CustomerSessionResolver>();
+builder.Services.AddScoped<AnonymousVisitorCookie>();
+
+// Defense-in-depth rate limiting for the public, anonymous agent ingress (S1-extras). The IP partition
+// is the real abuse floor; a signed visitor cookie (when present) gives one user behind a shared NAT
+// their own budget rather than sharing the IP's. Disabled by default under integration tests (0 →
+// NoLimiter) so the suite is unaffected unless a test sets the limit explicitly.
+var agentRateLimitPerMinute = builder.Configuration.GetValue<int?>("QuoteAgent:RateLimit:PerMinute")
+    ?? (builder.Environment.IsEnvironment("Testing") ? 0 : 30);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = (context, _) =>
+    {
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        return ValueTask.CompletedTask;
+    };
+    options.AddPolicy(BffRateLimiterPolicies.QuoteAgent, httpContext =>
+    {
+        if (agentRateLimitPerMinute <= 0)
+        {
+            return RateLimitPartition.GetNoLimiter("disabled");
+        }
+
+        // Key on the visitor id only when it comes from a VALID INBOUND cookie; a freshly minted id must
+        // never become the key, or a cookie-dropping client would get a new partition every request.
+        var visitorCookie = httpContext.RequestServices.GetRequiredService<AnonymousVisitorCookie>();
+        var key = visitorCookie.ReadVisitorId(httpContext.Request)?.ToString()
+            ?? httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = agentRateLimitPerMinute,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        });
+    });
+});
 builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
 builder.Services.AddScoped<QuoteUploadHandoffToken>();
 builder.Services.AddScoped<QuoteAgentContextToken>();
@@ -141,6 +181,20 @@ app.MapStaticAssets().ShortCircuit();
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Issue the anonymous-visitor cookie on agent requests so subsequent requests get per-visitor fairness
+// (the current request is still IP-limited — issuance does not affect this request's partition key).
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/quote/v1/agent"))
+    {
+        context.RequestServices.GetRequiredService<AnonymousVisitorCookie>()
+            .IssueIfMissing(context.Request, context.Response);
+    }
+
+    await next();
+});
+app.UseRateLimiter();
 
 app.MapGet("/", RenderClientAppAsync).ExcludeFromDescription();
 // Auth pages redirect to Maliev.Web — QuoteEngine has no own sign-in surface.

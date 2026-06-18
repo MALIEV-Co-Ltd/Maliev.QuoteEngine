@@ -35,6 +35,9 @@ public interface IQuoteAgentService
     /// <summary>Gets customer-safe connector handoff details for the quote agent workspace.</summary>
     QuoteAgentConnectorHandoffResponse GetConnectorHandoff(Guid sessionId, string connectorId, string? returnUrl);
 
+    /// <summary>Resolves a session-owned artifact storage path for preview/download.</summary>
+    string? ResolveAvailableArtifactStoragePath(Guid sessionId, string? path);
+
     /// <summary>Registers uploaded browser files with the current agent session.</summary>
     QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request);
 
@@ -52,6 +55,9 @@ public interface IQuoteAgentService
 
     /// <summary>Relays a thinking step to the quote notifications hub.</summary>
     Task RelayThinkingStepAsync(Guid sessionId, QuoteAgentThinkingStepDto step, CancellationToken cancellationToken);
+
+    /// <summary>Resolves the downstream chatbot session used for transcript/history operations.</summary>
+    Guid ResolveConversationSessionId(Guid sessionId);
 
     /// <summary>Uploads a sketch image attached to an agent message.</summary>
     Task<UploadSketchResponse> UploadSketchAsync(
@@ -337,6 +343,18 @@ internal sealed class QuoteAgentService(
         return ToStateResponse(sessionStore.GetOrCreate(sessionId));
     }
 
+    public Guid ResolveConversationSessionId(Guid sessionId)
+    {
+        if (sessionStore.TryGet(sessionId, out var state) &&
+            state.ChatbotSessionId is { } chatbotSessionId &&
+            chatbotSessionId != Guid.Empty)
+        {
+            return chatbotSessionId;
+        }
+
+        return sessionId;
+    }
+
     public QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId)
     {
         return BuildConnectorRegistry(sessionStore.GetOrCreate(sessionId));
@@ -354,6 +372,30 @@ internal sealed class QuoteAgentService(
         }
 
         return BuildConnectorHandoff(sessionStore.GetOrCreate(sessionId), arguments);
+    }
+
+    public string? ResolveAvailableArtifactStoragePath(Guid sessionId, string? path)
+    {
+        var normalized = NormalizeArtifactStoragePath(path);
+        if (normalized is null)
+        {
+            return null;
+        }
+
+        if (IsLegacySessionScopedArtifactPath(sessionId, normalized))
+        {
+            return normalized;
+        }
+
+        if (!sessionStore.TryGet(sessionId, out var state))
+        {
+            return null;
+        }
+
+        lock (state.SyncRoot)
+        {
+            return IsRegisteredArtifactPath(state, normalized) ? normalized : null;
+        }
     }
 
     public QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request)
@@ -3452,6 +3494,7 @@ internal sealed class QuoteAgentService(
             $"Current gates: {string.Join(", ", gates)}",
             $"Current settings: language {state.Language}, units {state.Units}, currency {state.Currency}, interaction {state.InteractionMode}, artifact panel {(state.AllowArtifactPanel ? "enabled" : "disabled")}, multilingual {(state.Multilingual ? "enabled" : "disabled")}"
         };
+        contextLines.Add(ResponseLanguageInstruction(state.Language));
 
         if (state.Parts.Count > 0)
         {
@@ -3484,8 +3527,12 @@ internal sealed class QuoteAgentService(
             "Default to qty=1, standard tolerance, and standard lead time when not stated. " +
             "State your inferred assumptions first, then ask only for genuinely missing critical information. " +
             "For UI language changes, call quote_set_ui_language only. " +
+            "For short customer confirmations, call quote_ask_customer with 2-4 discrete options. " +
+            "Project naming: call quote_set_project_name with a short part/process/material title, not the customer's literal question. " +
             "For photos/sketches, describe visible shape/features; numeric dimensions are facts only when written or readable. " +
             "Unlabeled sketches need dimension confirmation and must not trigger a 3D preview by themselves. " +
+            "For PDF/technical drawings, inspect the attached document as drawing context; list readable dimensions, tolerances, material, finish, notes, and quote blockers visible in the document. " +
+            "Do not claim you cannot read the PDF or ask for CAD/manual dimensions before summarizing what the PDF provides. " +
             "NEVER respond by asking the customer to upload or send a 3D/CAD file as your first or only message. Never reject the customer. " +
             "Call quote_generate_3d_preview only when dimensions are explicit/readable, CAD-derived, or customer-confirmed. " +
             "The tool accepts a cad_commands array. Each command has an op, id, and op-specific params. " +
@@ -3519,6 +3566,13 @@ Customer message:
 {message.Trim()}
 """;
         return TrimChatbotContent(content, message);
+    }
+
+    private static string ResponseLanguageInstruction(string language)
+    {
+        return string.Equals(language, "th", StringComparison.OrdinalIgnoreCase)
+            ? "Response language: Thai (th). Reply only in Thai; do not include English translations or repeat the same answer in another language."
+            : "Response language: English (en). Reply only in English; do not include Thai translations or repeat the same answer in another language.";
     }
 
     private static string TrimChatbotContent(string content, string customerMessage)
@@ -3747,6 +3801,59 @@ Customer message:
             !value.StartsWith("data:", StringComparison.OrdinalIgnoreCase) &&
             !value.StartsWith("blob:", StringComparison.OrdinalIgnoreCase) &&
             !Uri.TryCreate(value, UriKind.Absolute, out _);
+    }
+
+    private static string? NormalizeArtifactStoragePath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return null;
+        }
+
+        var normalized = path.Trim().Replace('\\', '/');
+        if (!IsRelativeStoragePath(normalized) ||
+            normalized.Equals("..", StringComparison.Ordinal) ||
+            normalized.StartsWith("../", StringComparison.Ordinal) ||
+            normalized.Contains("../", StringComparison.Ordinal) ||
+            normalized.Contains("/..", StringComparison.Ordinal) ||
+            normalized.Contains('%', StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return normalized;
+    }
+
+    private static bool IsLegacySessionScopedArtifactPath(Guid sessionId, string path)
+    {
+        var compactSessionId = sessionId.ToString("N");
+        var dashedSessionId = sessionId.ToString("D");
+        return path.StartsWith($"agent/sketches/{compactSessionId}/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith($"quotes/temp/{compactSessionId}/", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith($"quotes/temp/{dashedSessionId}/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRegisteredArtifactPath(QuoteAgentSessionState state, string storagePath)
+    {
+        return state.Attachments.Any(attachment =>
+                StoragePathMatches(attachment.StoragePath, storagePath) ||
+                StoragePathMatches(attachment.Url, storagePath)) ||
+            state.Artifacts.Any(artifact =>
+                StoragePathMatches(artifact.Url, storagePath) ||
+                (artifact.Metadata.TryGetValue("storagePath", out var artifactStoragePath) &&
+                    StoragePathMatches(artifactStoragePath, storagePath))) ||
+            state.Parts.Any(part =>
+                StoragePathMatches(part.StoragePath, storagePath) ||
+                StoragePathMatches(part.ViewerStoragePath, storagePath) ||
+                part.DrawingFiles.Any(file => StoragePathMatches(file.StoragePath, storagePath)));
+    }
+
+    private static bool StoragePathMatches(string? candidate, string storagePath)
+    {
+        return string.Equals(
+            NormalizeArtifactStoragePath(candidate),
+            storagePath,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private static string InferArtifactContentType(string fileName, string? url, string artifactType)
