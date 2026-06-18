@@ -139,7 +139,12 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         string OrderNumber,
         string ReturnUrl,
         string CancelUrl,
-        string IdempotencyKey);
+        string IdempotencyKey,
+        string? BillingCompanyName,
+        string? BillingVatNumber,
+        string? DeliveryContactName,
+        string? DeliveryContactPhone,
+        string? DeliveryContactEmail);
 
     // ── Upload no-op ──────────────────────────────────────────────────────────
 
@@ -807,7 +812,10 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             string customerId, string orderId, string orderNumber,
             decimal amount, string currency,
             string returnUrl, string cancelUrl, string idempotencyKey,
-            Guid? billingAddressId, Guid? shippingAddressId, bool acceptedTerms,
+            Guid? billingAddressId, Guid? shippingAddressId,
+            string? billingCompanyName, string? billingVatNumber,
+            string? deliveryContactName, string? deliveryContactPhone, string? deliveryContactEmail,
+            bool acceptedTerms,
             CancellationToken ct = default)
         {
             IdempotencyKeys.Enqueue(idempotencyKey);
@@ -815,7 +823,12 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 orderNumber,
                 returnUrl,
                 cancelUrl,
-                idempotencyKey));
+                idempotencyKey,
+                billingCompanyName,
+                billingVatNumber,
+                deliveryContactName,
+                deliveryContactPhone,
+                deliveryContactEmail));
             return Task.FromResult<PaymentInitiatedResult?>(new PaymentInitiatedResult
             {
                 TransactionId = Guid.NewGuid(),
@@ -2681,6 +2694,12 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("TH-0123456789012", snapshot.BillingVatNumber);
         Assert.Equal("Receiving", snapshot.DeliveryContactName);
         Assert.Equal("+66810000002", snapshot.DeliveryContactPhone);
+
+        var initiation = Assert.Single(factory.PaymentInitiations);
+        Assert.Equal("MALIEV Test Buyer Co., Ltd.", initiation.BillingCompanyName);
+        Assert.Equal("TH-0123456789012", initiation.BillingVatNumber);
+        Assert.Equal("Receiving", initiation.DeliveryContactName);
+        Assert.Equal("+66810000002", initiation.DeliveryContactPhone);
     }
 
     [Fact]

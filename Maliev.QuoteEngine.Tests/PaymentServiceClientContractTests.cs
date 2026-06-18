@@ -48,6 +48,11 @@ public sealed class PaymentServiceClientContractTests
             "customer-1:order-1",
             BillingAddressId,
             ShippingAddressId,
+            "MALIEV Test Buyer Co., Ltd.",
+            "TH-0123456789012",
+            "Receiving",
+            "+66810000002",
+            "receiving@example.com",
             acceptedTerms: true);
 
         Assert.NotNull(result);
@@ -78,6 +83,11 @@ public sealed class PaymentServiceClientContractTests
         Assert.Equal("ORD-2026-0001", body.GetProperty("metadata").GetProperty("orderNumber").GetString());
         Assert.Equal(BillingAddressId.ToString("D"), body.GetProperty("metadata").GetProperty("billingAddressId").GetString());
         Assert.Equal(ShippingAddressId.ToString("D"), body.GetProperty("metadata").GetProperty("shippingAddressId").GetString());
+        Assert.Equal("MALIEV Test Buyer Co., Ltd.", body.GetProperty("metadata").GetProperty("billingCompanyName").GetString());
+        Assert.Equal("TH-0123456789012", body.GetProperty("metadata").GetProperty("billingVatNumber").GetString());
+        Assert.Equal("Receiving", body.GetProperty("metadata").GetProperty("deliveryContactName").GetString());
+        Assert.Equal("+66810000002", body.GetProperty("metadata").GetProperty("deliveryContactPhone").GetString());
+        Assert.Equal("receiving@example.com", body.GetProperty("metadata").GetProperty("deliveryContactEmail").GetString());
         Assert.Equal("true", body.GetProperty("metadata").GetProperty("acceptedTerms").GetString());
     }
 

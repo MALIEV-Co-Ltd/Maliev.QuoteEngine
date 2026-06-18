@@ -23,6 +23,11 @@ public interface IPaymentServiceClient
         string idempotencyKey,
         Guid? billingAddressId,
         Guid? shippingAddressId,
+        string? billingCompanyName,
+        string? billingVatNumber,
+        string? deliveryContactName,
+        string? deliveryContactPhone,
+        string? deliveryContactEmail,
         bool acceptedTerms,
         CancellationToken ct = default);
 }
@@ -51,6 +56,11 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
         string idempotencyKey,
         Guid? billingAddressId,
         Guid? shippingAddressId,
+        string? billingCompanyName,
+        string? billingVatNumber,
+        string? deliveryContactName,
+        string? deliveryContactPhone,
+        string? deliveryContactEmail,
         bool acceptedTerms,
         CancellationToken ct = default)
     {
@@ -72,6 +82,11 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
                         ["orderNumber"] = orderNumber,
                         ["billingAddressId"] = billingAddressId?.ToString("D") ?? string.Empty,
                         ["shippingAddressId"] = shippingAddressId?.ToString("D") ?? string.Empty,
+                        ["billingCompanyName"] = billingCompanyName ?? string.Empty,
+                        ["billingVatNumber"] = billingVatNumber ?? string.Empty,
+                        ["deliveryContactName"] = deliveryContactName ?? string.Empty,
+                        ["deliveryContactPhone"] = deliveryContactPhone ?? string.Empty,
+                        ["deliveryContactEmail"] = deliveryContactEmail ?? string.Empty,
                         ["acceptedTerms"] = acceptedTerms ? "true" : "false"
                     }
                 })

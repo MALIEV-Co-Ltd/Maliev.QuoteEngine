@@ -875,6 +875,11 @@ public sealed class QuoteController(
             idempotencyKey,
             request.BillingAddressId,
             request.ShippingAddressId,
+            request.BillingCompanyName,
+            request.BillingVatNumber,
+            addressValidation.ShippingAddress.DeliveryContactName,
+            addressValidation.ShippingAddress.DeliveryContactPhone,
+            addressValidation.ShippingAddress.DeliveryContactEmail,
             request.AcceptedTerms,
             cancellationToken);
 
