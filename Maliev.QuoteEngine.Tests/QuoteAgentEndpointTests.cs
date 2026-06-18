@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
+using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -81,6 +82,42 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("gemini-2.5-flash-lite", chatbot.LastSendRequest?.ModelName);
+    }
+
+    [Fact]
+    public async Task Agent_message_for_authenticated_customer_includes_customer_service_memory_context()
+    {
+        var customerEmail = $"memory.{Guid.NewGuid():N}@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
+        var chatbot = new RecordingChatbotServiceClient();
+        var customerClient = new MemoryCustomerServiceClient(customerId);
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<ICustomerServiceClient>();
+                services.AddSingleton<ICustomerServiceClient>(customerClient);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(customerEmail)}");
+        Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Quote another functional prototype.",
+            Language = "en"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(customerId, customerClient.LastMemoryCustomerId);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains("Customer memory:", chatbot.LastSendRequest!.Content, StringComparison.Ordinal);
+        Assert.Contains("preferred_material", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("PA12 nylon", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -3140,5 +3177,110 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         {
             return Task.FromResult<string?>(speech);
         }
+    }
+
+    private sealed class MemoryCustomerServiceClient(Guid expectedCustomerId) : ICustomerServiceClient
+    {
+        public Guid? LastMemoryCustomerId { get; private set; }
+
+        public Task<CustomerProfileResponse?> GetByIdAsync(Guid customerId, CancellationToken ct = default)
+        {
+            return Task.FromResult<CustomerProfileResponse?>(BuildProfile(customerId));
+        }
+
+        public Task<CustomerProfileResponse?> GetByEmailAsync(string email, CancellationToken ct = default)
+        {
+            return Task.FromResult<CustomerProfileResponse?>(BuildProfile(expectedCustomerId, email));
+        }
+
+        public Task<CustomerProfileResponse?> EnsureCustomerAsync(
+            string email,
+            string displayName,
+            string phone = "",
+            CancellationToken ct = default)
+        {
+            return Task.FromResult<CustomerProfileResponse?>(BuildProfile(expectedCustomerId, email, displayName));
+        }
+
+        public Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(Array.Empty<CustomerAddressDto>())
+            });
+        }
+
+        public Task<HttpResponseMessage> CreateCustomerAddressAsync(object request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }
+
+        public Task<HttpResponseMessage> UpdateCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }
+
+        public Task<HttpResponseMessage> DeleteCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }
+
+        public Task<CustomerMemoryQueryResponse> GetCustomerMemoriesAsync(
+            Guid customerId,
+            string? query,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            LastMemoryCustomerId = customerId;
+            return Task.FromResult(new CustomerMemoryQueryResponse
+            {
+                CustomerId = customerId,
+                Query = query ?? string.Empty,
+                Limit = limit,
+                Items = customerId == expectedCustomerId
+                    ?
+                    [
+                        new CustomerMemoryResponse
+                        {
+                            Id = Guid.Parse("2e9be30f-6f39-44ed-9a5d-190272c94f45"),
+                            CustomerId = customerId,
+                            MemoryType = "make_studio_preference",
+                            Key = "preferred_material",
+                            Value = "Customer prefers PA12 nylon for functional prototypes.",
+                            Confidence = 0.88m,
+                            Source = "quote_agent",
+                            HitCount = 3,
+                            LastObservedAt = DateTime.UtcNow
+                        }
+                    ]
+                    : []
+            });
+        }
+
+        public Task<CustomerMemoryResponse?> ObserveCustomerMemoryAsync(
+            Guid customerId,
+            CustomerMemoryObserveRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<CustomerMemoryResponse?>(null);
+        }
+
+        private static CustomerProfileResponse BuildProfile(
+            Guid customerId,
+            string email = "memory@example.com",
+            string displayName = "Memory Customer") =>
+            new(
+                customerId,
+                displayName,
+                email,
+                string.Empty,
+                string.Empty,
+                "en");
+    }
+
+    private static Guid DeterministicCustomerId(string email)
+    {
+        var idBytes = MD5.HashData(Encoding.UTF8.GetBytes(email.Trim().ToLowerInvariant()));
+        return new Guid(idBytes);
     }
 }

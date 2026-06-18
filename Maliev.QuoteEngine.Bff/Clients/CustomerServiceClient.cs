@@ -34,6 +34,19 @@ public interface ICustomerServiceClient
 
     /// <summary>Deletes a customer-owned address.</summary>
     Task<HttpResponseMessage> DeleteCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken);
+
+    /// <summary>Gets durable customer-scoped memories.</summary>
+    Task<CustomerMemoryQueryResponse> GetCustomerMemoriesAsync(
+        Guid customerId,
+        string? query,
+        int limit,
+        CancellationToken cancellationToken);
+
+    /// <summary>Observes or reinforces one durable customer-scoped memory.</summary>
+    Task<CustomerMemoryResponse?> ObserveCustomerMemoryAsync(
+        Guid customerId,
+        CustomerMemoryObserveRequest request,
+        CancellationToken cancellationToken);
 }
 
 internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerServiceClient> logger) : ICustomerServiceClient
@@ -183,6 +196,68 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
             Content = JsonContent.Create(request)
         };
         return http.SendAsync(message, cancellationToken);
+    }
+
+    public async Task<CustomerMemoryQueryResponse> GetCustomerMemoriesAsync(
+        Guid customerId,
+        string? query,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        var normalizedLimit = Math.Clamp(limit, 1, 25);
+        var path = $"/customer/v1/customers/{customerId:D}/memories?limit={normalizedLimit}";
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            path += $"&query={Uri.EscapeDataString(query.Trim())}";
+        }
+
+        try
+        {
+            var response = await http.GetFromJsonAsync<CustomerMemoryQueryResponse>(path, cancellationToken);
+            return response ?? new CustomerMemoryQueryResponse { CustomerId = customerId, Limit = normalizedLimit };
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "CustomerService memory query failed for customer {CustomerId}.", customerId);
+            return new CustomerMemoryQueryResponse { CustomerId = customerId, Limit = normalizedLimit };
+        }
+    }
+
+    public async Task<CustomerMemoryResponse?> ObserveCustomerMemoryAsync(
+        Guid customerId,
+        CustomerMemoryObserveRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await http.PostAsJsonAsync(
+                $"/customer/v1/customers/{customerId:D}/memories/observe",
+                request,
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "CustomerService returned {Status} while observing memory for customer {CustomerId}.",
+                    response.StatusCode,
+                    customerId);
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<CustomerMemoryResponse>(cancellationToken: cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "CustomerService memory observe failed for customer {CustomerId}.", customerId);
+            return null;
+        }
     }
 
     private static CustomerProfileResponse MapCustomer(CsCustomerResponse result)

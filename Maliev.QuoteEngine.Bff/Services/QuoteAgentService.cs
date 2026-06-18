@@ -57,6 +57,7 @@ public interface IQuoteAgentService
 
 internal sealed class QuoteAgentService(
     IChatbotServiceClient chatbotClient,
+    ICustomerServiceClient customerClient,
     QuoteEnginePrototypeStore prototypeStore,
     QuoteAgentSessionStore sessionStore,
     QuoteAgentContextToken contextToken,
@@ -115,10 +116,11 @@ internal sealed class QuoteAgentService(
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments);
+        var customerMemoryContext = await BuildCustomerMemoryContextAsync(customerId, cancellationToken);
         var chatbotResponse = await chatbotClient.SendMessageAsync(new ChatbotSendMessageRequest
         {
             SessionId = chatbotSessionId,
-            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state),
+            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state, customerMemoryContext),
             Language = language,
             ModelName = request.ModelName,
             Attachments = chatbotAttachments,
@@ -179,10 +181,11 @@ internal sealed class QuoteAgentService(
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments);
+        var customerMemoryContext = await BuildCustomerMemoryContextAsync(customerId, cancellationToken);
         var chatbotStream = chatbotClient.SendMessageStreamAsync(new ChatbotSendMessageRequest
         {
             SessionId = chatbotSessionId,
-            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state),
+            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state, customerMemoryContext),
             Language = language,
             ModelName = request.ModelName,
             Attachments = chatbotAttachments,
@@ -3319,7 +3322,8 @@ internal sealed class QuoteAgentService(
     private static string ComposeAgentMessage(
         string message,
         string? customerContext,
-        QuoteAgentSessionState state)
+        QuoteAgentSessionState state,
+        string? customerMemoryContext)
     {
         var gates = QuoteAgentSessionStore.BuildGates(state, state.CustomerId.HasValue)
             .Select(gate => $"{gate.Code}: {gate.Status}")
@@ -3346,6 +3350,11 @@ internal sealed class QuoteAgentService(
         if (state.Estimate is not null)
         {
             contextLines.Add($"Current estimate: {state.Estimate.Total.ToString("0.##", CultureInfo.InvariantCulture)} {state.Estimate.Currency}, {state.Estimate.Lines.Count} line(s)");
+        }
+
+        if (!string.IsNullOrWhiteSpace(customerMemoryContext))
+        {
+            contextLines.Add(customerMemoryContext);
         }
 
         if (!string.IsNullOrWhiteSpace(customerContext))
@@ -3391,6 +3400,40 @@ internal sealed class QuoteAgentService(
 Customer message:
 {message.Trim()}
 """;
+    }
+
+    private async Task<string?> BuildCustomerMemoryContextAsync(Guid? customerId, CancellationToken cancellationToken)
+    {
+        if (!customerId.HasValue)
+        {
+            return null;
+        }
+
+        var response = await customerClient.GetCustomerMemoriesAsync(customerId.Value, query: null, limit: 8, cancellationToken);
+        if (response.Items.Count == 0)
+        {
+            return null;
+        }
+
+        var memories = response.Items
+            .Where(memory => !string.IsNullOrWhiteSpace(memory.Key) && !string.IsNullOrWhiteSpace(memory.Value))
+            .Take(8)
+            .Select(memory =>
+            {
+                var value = memory.Value.Trim();
+                if (value.Length > 220)
+                {
+                    value = value[..220] + "...";
+                }
+
+                return $"{memory.MemoryType}/{memory.Key} = {value} " +
+                    $"(confidence {memory.Confidence.ToString("0.##", CultureInfo.InvariantCulture)}, source {memory.Source}, hits {memory.HitCount.ToString(CultureInfo.InvariantCulture)})";
+            })
+            .ToList();
+
+        return memories.Count == 0
+            ? null
+            : $"Customer memory: {string.Join("; ", memories)}";
     }
 
     private static string BuildPartContext(IReadOnlyCollection<QuotePartDraftDto> parts)

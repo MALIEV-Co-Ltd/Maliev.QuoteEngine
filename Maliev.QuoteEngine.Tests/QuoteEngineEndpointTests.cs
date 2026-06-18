@@ -597,6 +597,28 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
         }
 
+        public Task<CustomerMemoryQueryResponse> GetCustomerMemoriesAsync(
+            Guid customerId,
+            string? query,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new CustomerMemoryQueryResponse
+            {
+                CustomerId = customerId,
+                Query = query ?? string.Empty,
+                Limit = limit
+            });
+        }
+
+        public Task<CustomerMemoryResponse?> ObserveCustomerMemoryAsync(
+            Guid customerId,
+            CustomerMemoryObserveRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<CustomerMemoryResponse?>(null);
+        }
+
         private static CustomerProfileResponse CreateProfile(string email, string displayName = "Quote customer", string phone = "")
         {
             var normalizedEmail = string.IsNullOrWhiteSpace(email) ? "customer@example.com" : email.Trim().ToLowerInvariant();

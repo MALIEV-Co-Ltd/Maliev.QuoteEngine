@@ -18,6 +18,64 @@ public sealed record CustomerProfileResponse(
     DateTimeOffset? NdaExpiresAt = null,
     string VatNumber = "");
 
+public sealed class CustomerMemoryObserveRequest
+{
+    [Required]
+    [StringLength(80, MinimumLength = 1)]
+    public string MemoryType { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(120, MinimumLength = 1)]
+    public string Key { get; set; } = string.Empty;
+
+    [Required]
+    [StringLength(1200, MinimumLength = 1)]
+    public string Value { get; set; } = string.Empty;
+
+    [Range(typeof(decimal), "0", "1")]
+    public decimal Confidence { get; set; } = 0.5m;
+
+    [Required]
+    [StringLength(80, MinimumLength = 1)]
+    public string Source { get; set; } = "unknown";
+}
+
+public sealed class CustomerMemoryResponse
+{
+    public Guid Id { get; set; }
+
+    public Guid CustomerId { get; set; }
+
+    public string MemoryType { get; set; } = string.Empty;
+
+    public string Key { get; set; } = string.Empty;
+
+    public string Value { get; set; } = string.Empty;
+
+    public decimal Confidence { get; set; }
+
+    public string Source { get; set; } = string.Empty;
+
+    public int HitCount { get; set; }
+
+    public DateTime LastObservedAt { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+
+    public DateTime UpdatedAt { get; set; }
+}
+
+public sealed class CustomerMemoryQueryResponse
+{
+    public Guid CustomerId { get; set; }
+
+    public string Query { get; set; } = string.Empty;
+
+    public int Limit { get; set; }
+
+    public List<CustomerMemoryResponse> Items { get; set; } = [];
+}
+
 public sealed record CustomerQuoteSummaryDto(
     Guid QuoteId,
     string QuoteNumber,
