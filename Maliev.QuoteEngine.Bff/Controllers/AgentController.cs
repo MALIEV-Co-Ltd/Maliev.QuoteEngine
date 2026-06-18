@@ -18,7 +18,8 @@ public sealed class AgentController(
     IQuoteAgentService agentService,
     QuoteAgentContextToken contextToken,
     IChatbotServiceClient chatbotServiceClient,
-    IPdfServiceClient pdfServiceClient) : ControllerBase
+    IPdfServiceClient pdfServiceClient,
+    QuoteUploadServiceClient uploadClient) : ControllerBase
 {
     private const string AgentContextHeader = "X-Maliev-Agent-Context";
     private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web);
@@ -266,6 +267,26 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Redirects a session-owned workbench artifact storage path to a signed download URL.
+    /// </summary>
+    [HttpGet("sessions/{sessionId:guid}/artifacts/download")]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> DownloadArtifact(
+        Guid sessionId,
+        [FromQuery] string path,
+        CancellationToken cancellationToken)
+    {
+        if (!IsSafeSessionArtifactPath(sessionId, path))
+        {
+            return ValidationProblem("Artifact path is not available in this quote session.");
+        }
+
+        var signedUrl = await uploadClient.GetDownloadUrlByPathAsync(path, expirationMinutes: 60, ct: cancellationToken);
+        return Redirect(signedUrl);
+    }
+
+    /// <summary>
     /// Receives thinking-step callbacks and relays them to the quote notification hub.
     /// </summary>
     [HttpPost("sessions/{sessionId:guid}/thinking")]
@@ -332,5 +353,28 @@ public sealed class AgentController(
             PdfUrl = result.StorageUrl,
             RequestId = result.RequestId
         });
+    }
+
+    private static bool IsSafeSessionArtifactPath(Guid sessionId, string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return false;
+        }
+
+        var normalized = path.Trim().Replace('\\', '/');
+        if (normalized.StartsWith("/", StringComparison.Ordinal) ||
+            normalized.Contains("../", StringComparison.Ordinal) ||
+            normalized.Contains("/..", StringComparison.Ordinal) ||
+            normalized.Contains('%', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var compactSessionId = sessionId.ToString("N");
+        var dashedSessionId = sessionId.ToString("D");
+        return normalized.StartsWith($"agent/sketches/{compactSessionId}/", StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith($"quotes/temp/{compactSessionId}/", StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith($"quotes/temp/{dashedSessionId}/", StringComparison.OrdinalIgnoreCase);
     }
 }

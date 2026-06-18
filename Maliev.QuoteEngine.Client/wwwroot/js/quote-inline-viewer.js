@@ -6,14 +6,34 @@
   const scenes = new Map();
 
   function getWorker() {
-    return new Promise(function (resolve) {
+    return new Promise(function (resolve, reject) {
       if (window.replicadWorker) { resolve(window.replicadWorker); return; }
+      var timeout = setTimeout(function () {
+        reject(new Error('3D worker not ready'));
+      }, 10000);
       const check = function () {
-        if (window.replicadWorker) { resolve(window.replicadWorker); return; }
+        if (window.replicadWorker) {
+          clearTimeout(timeout);
+          resolve(window.replicadWorker);
+          return;
+        }
         setTimeout(check, 100);
       };
       check();
     });
+  }
+
+  function showPreviewError(container, message) {
+    container.innerHTML = '<p class="qe-inline-viewer-error">' + escapeHtml(message || '3D preview could not be loaded') + '</p>';
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   function buildDefaultLighting(scene) {
@@ -158,12 +178,12 @@
       try {
         commands = JSON.parse(commandsJson);
       } catch (e) {
-        container.innerHTML = '<p style="padding:1rem;color:#888">Could not parse 3D commands</p>';
+        showPreviewError(container, 'Could not parse 3D commands');
         return;
       }
 
       if (!Array.isArray(commands) || commands.length === 0) {
-        container.innerHTML = '<p style="padding:1rem;color:#888">No shapes to display</p>';
+        showPreviewError(container, 'No shapes to display');
         return;
       }
 
@@ -171,38 +191,51 @@
       try {
         worker = await getWorker();
       } catch (e) {
-        container.innerHTML = '<p style="padding:1rem;color:#888">3D engine not available</p>';
+        showPreviewError(container, '3D engine not available');
         return;
       }
 
       container.innerHTML = '<div class="qe-inline-viewer-loading">Building 3D model…</div>';
 
-      var buildId = 'bl_' + (++buildCounter);
-      var result = await new Promise(function (resolve, reject) {
-        pendingBuilds.set(buildId, { resolve: resolve, reject: reject });
+      try {
+        var buildId = 'bl_' + (++buildCounter);
+        var result = await new Promise(function (resolve, reject) {
+          pendingBuilds.set(buildId, { resolve: resolve, reject: reject });
 
-        var handler = function (e) {
-          var data = e.data;
-          if (data.type === 'result' && data.id === buildId) {
-            window.replicadWorker.removeEventListener('message', handler);
+          var timeout = setTimeout(function () {
+            worker.removeEventListener('message', handler);
             pendingBuilds.delete(buildId);
-            resolve(data);
-          } else if (data.type === 'error' && data.id === buildId) {
-            window.replicadWorker.removeEventListener('message', handler);
-            pendingBuilds.delete(buildId);
-            reject(new Error(data.message));
-          }
-        };
-        window.replicadWorker.addEventListener('message', handler);
+            reject(new Error('3D model build timed out'));
+          }, 20000);
 
-        worker.postMessage({ type: 'build', id: buildId, commands: commands });
-      });
+          var handler = function (e) {
+            var data = e.data;
+            if (data.type === 'result' && data.id === buildId) {
+              clearTimeout(timeout);
+              worker.removeEventListener('message', handler);
+              pendingBuilds.delete(buildId);
+              resolve(data);
+            } else if (data.type === 'error' && data.id === buildId) {
+              clearTimeout(timeout);
+              worker.removeEventListener('message', handler);
+              pendingBuilds.delete(buildId);
+              reject(new Error(data.message));
+            }
+          };
+          worker.addEventListener('message', handler);
 
-      // Clean up any previous scene for this container
-      disposePreview(containerId);
+          worker.postMessage({ type: 'build', id: buildId, commands: commands });
+        });
 
-      var entry = createScene(container, result);
-      scenes.set(containerId, entry);
+        // Clean up any previous scene for this container
+        disposePreview(containerId);
+
+        var entry = createScene(container, result);
+        scenes.set(containerId, entry);
+      } catch (e) {
+        disposePreview(containerId);
+        showPreviewError(container, e && e.message ? e.message : '3D preview could not be loaded');
+      }
     },
 
     disposePreview: disposePreview,

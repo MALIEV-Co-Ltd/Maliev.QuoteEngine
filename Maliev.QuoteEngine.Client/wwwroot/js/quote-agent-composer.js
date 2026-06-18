@@ -13,15 +13,23 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
   composerDotNetRefs.set(textarea, dotNetRef);
 
   const keydown = event => {
-    if (event.key !== "Enter" || !event.altKey || event.shiftKey || event.ctrlKey || event.metaKey || event.isComposing) {
+    if (event.key !== "Enter" || event.isComposing) {
       return;
     }
 
-    event.preventDefault();
-    textarea.dispatchEvent(new Event("input", { bubbles: true }));
-    window.requestAnimationFrame(() => {
-      dotNetRef.invokeMethodAsync("SubmitComposerFromKeyboardAsync");
-    });
+    if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+      event.preventDefault();
+      insertTextAtSelection(textarea, "\n");
+      return;
+    }
+
+    if (!event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      event.preventDefault();
+      textarea.dispatchEvent(new Event("input", { bubbles: true }));
+      window.requestAnimationFrame(() => {
+        dotNetRef.invokeMethodAsync("SubmitComposerFromKeyboardAsync");
+      });
+    }
   };
 
   const input = () => {
@@ -100,8 +108,14 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
 
     await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
   };
-  const dictationKeydown = async event => {
-    if (event.key !== " " || event.repeat || event.altKey || event.ctrlKey || event.metaKey) {
+  const documentKeydown = async event => {
+    if (!isSpaceKey(event) ||
+        event.repeat ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        dictationButton?.disabled ||
+        !shouldHandleComposerShortcut(event, textarea)) {
       return;
     }
 
@@ -114,8 +128,8 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     suppressClick = true;
     await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
   };
-  const dictationKeyup = async event => {
-    if (event.key !== " " || !keyboardHoldStarted) {
+  const documentKeyup = async event => {
+    if (!isSpaceKey(event) || !keyboardHoldStarted) {
       return;
     }
 
@@ -123,18 +137,27 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     keyboardHoldStarted = false;
     await finishDictationFromUserAction(textarea, dotNetRef);
   };
+  const outsideQuickActionsPointerDown = event => {
+    const target = event.target;
+    if (target?.closest?.(".qe-agent-quick-actions-wrapper")?.closest?.(".qe-agent-composer") === composer) {
+      return;
+    }
+
+    dotNetRef.invokeMethodAsync("CloseQuickActionsMenuFromOutsideAsync");
+  };
 
   textarea.addEventListener("keydown", keydown);
   textarea.addEventListener("input", input);
+  document.addEventListener("keydown", documentKeydown, true);
+  document.addEventListener("keyup", documentKeyup, true);
+  document.addEventListener("pointerdown", outsideQuickActionsPointerDown, true);
   if (dictationButton) {
     dictationButton.addEventListener("pointerdown", pointerDown);
     dictationButton.addEventListener("pointerup", pointerUp);
     dictationButton.addEventListener("pointerleave", pointerCancel);
     dictationButton.addEventListener("pointercancel", pointerCancel);
     dictationButton.addEventListener("click", click);
-    dictationButton.addEventListener("keydown", dictationKeydown);
-    dictationButton.addEventListener("keyup", dictationKeyup);
-    dictationButtonHandlers.set(textarea, { dictationButton, pointerDown, pointerUp, pointerCancel, click, dictationKeydown, dictationKeyup });
+    dictationButtonHandlers.set(textarea, { dictationButton, pointerDown, pointerUp, pointerCancel, click });
   }
 
   const composer = textarea.closest?.(".qe-agent-composer");
@@ -168,7 +191,18 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     updateComposerTooltipPlacements(composer);
   }
 
-  composerHandlers.set(textarea, { keydown, input, resizeObserver, mutationObserver, composer, updateTooltipPlacement, updateAllTooltipPlacements });
+  composerHandlers.set(textarea, {
+    keydown,
+    input,
+    documentKeydown,
+    documentKeyup,
+    outsideQuickActionsPointerDown,
+    resizeObserver,
+    mutationObserver,
+    composer,
+    updateTooltipPlacement,
+    updateAllTooltipPlacements
+  });
   updateComposerShape(textarea);
 }
 
@@ -184,6 +218,9 @@ export function disposeComposer(textarea) {
 
   textarea.removeEventListener("keydown", handlers.keydown);
   textarea.removeEventListener("input", handlers.input);
+  document.removeEventListener("keydown", handlers.documentKeydown, true);
+  document.removeEventListener("keyup", handlers.documentKeyup, true);
+  document.removeEventListener("pointerdown", handlers.outsideQuickActionsPointerDown, true);
   handlers.resizeObserver?.disconnect?.();
   handlers.mutationObserver?.disconnect?.();
   if (handlers.composer) {
@@ -198,14 +235,62 @@ export function disposeComposer(textarea) {
     dictationHandlers.dictationButton.removeEventListener("pointerleave", dictationHandlers.pointerCancel);
     dictationHandlers.dictationButton.removeEventListener("pointercancel", dictationHandlers.pointerCancel);
     dictationHandlers.dictationButton.removeEventListener("click", dictationHandlers.click);
-    dictationHandlers.dictationButton.removeEventListener("keydown", dictationHandlers.dictationKeydown);
-    dictationHandlers.dictationButton.removeEventListener("keyup", dictationHandlers.dictationKeyup);
     dictationButtonHandlers.delete(textarea);
   }
 
   cancelDictation(textarea);
   composerDotNetRefs.delete(textarea);
   composerHandlers.delete(textarea);
+}
+
+function isSpaceKey(event) {
+  return event.code === "Space" || event.key === " " || event.key === "Spacebar";
+}
+
+function shouldHandleComposerShortcut(event, textarea) {
+  const target = event.target;
+  if (!target || target === document.body || target === document.documentElement) {
+    return true;
+  }
+
+  if (target === textarea) {
+    return true;
+  }
+
+  return !isEditableTarget(target);
+}
+
+function isEditableTarget(target) {
+  if (!target) {
+    return false;
+  }
+
+  if (target.isContentEditable) {
+    return true;
+  }
+
+  const tag = target.tagName?.toLowerCase?.();
+  if (tag === "textarea" || tag === "select") {
+    return true;
+  }
+
+  if (tag !== "input") {
+    return false;
+  }
+
+  const type = (target.getAttribute("type") || "text").toLowerCase();
+  return !["button", "checkbox", "color", "file", "hidden", "image", "radio", "range", "reset", "submit"].includes(type);
+}
+
+function insertTextAtSelection(textarea, text) {
+  const start = textarea.selectionStart ?? textarea.value.length;
+  const end = textarea.selectionEnd ?? start;
+  textarea.value = `${textarea.value.slice(0, start)}${text}${textarea.value.slice(end)}`;
+  const next = start + text.length;
+  setTextareaSelection(textarea, next, next);
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  normalizeCaretAfterInput(textarea);
+  updateComposerShape(textarea);
 }
 
 function isDictationActive(textarea) {

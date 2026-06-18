@@ -14,9 +14,7 @@
 @inject HttpClient Http
 
 <section class="@ShellClass" aria-label="@Text("Quote agent workspace", "พื้นที่ผู้ช่วยขอราคา")">
-    @if (_navigationDrawerOpen)
-    {
-    <aside class="qe-agent-rail" role="dialog" aria-modal="true" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
+    <aside class="qe-agent-rail" aria-label="@Text("Quote navigation", "เมนูขอราคา")">
         <div class="qe-agent-rail-head">
             <a class="qe-agent-brand" href="/" aria-label="MALIEV">
                 <img class="qe-agent-brand-wordmark" src="/images/logo.svg" alt="MALIEV" />
@@ -229,7 +227,6 @@
             }
         </div>
     </aside>
-    }
 
     <main class="@MainClass">
         <div class="qe-agent-topline">
@@ -1103,7 +1100,7 @@
                     <span id="qe-agent-send-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
                         <span class="qe-agent-tooltip-content">
                             <span>@Text("Send message", "ส่งข้อความ")</span>
-                            <kbd>Alt+Enter</kbd>
+                            <kbd>Enter</kbd>
                         </span>
                     </span>
                 </div>
@@ -1519,26 +1516,30 @@
                         </button>
                     }
                 </div>
-                @if (_selectedArtifact is not null && !string.IsNullOrWhiteSpace(_selectedArtifact.Url))
+                @if (_selectedArtifact is not null)
                 {
-                    <section class="qe-agent-artifact-inline-preview" aria-label="@Text("Artifact preview", "ตัวอย่างไฟล์งาน")">
-                        <header>
-                            <strong>@_selectedArtifact.Title</strong>
-                            <a href="@_selectedArtifact.Url"
-                               target="_blank"
-                               rel="noopener noreferrer"
-                               class="qe-agent-artifact-link"
-                               title="@Text("Open in new tab", "เปิดในแท็บใหม่")">
-                                <span>@ArtifactActionLabel(_selectedArtifact)</span>
-                                <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
-                            </a>
-                        </header>
-                        <iframe src="@_selectedArtifact.Url"
-                                class="qe-agent-artifact-frame"
-                                title="@_selectedArtifact.Title"
-                                loading="lazy"
-                                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
-                    </section>
+                    var selectedArtifactUrl = ArtifactPreviewUrl(_selectedArtifact);
+                    if (!string.IsNullOrWhiteSpace(selectedArtifactUrl))
+                    {
+                        <section class="qe-agent-artifact-inline-preview" aria-label="@Text("Artifact preview", "ตัวอย่างไฟล์งาน")">
+                            <header>
+                                <strong>@_selectedArtifact.Title</strong>
+                                <a href="@selectedArtifactUrl"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="qe-agent-artifact-link"
+                                   title="@Text("Open in new tab", "เปิดในแท็บใหม่")">
+                                    <span>@ArtifactActionLabel(_selectedArtifact)</span>
+                                    <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                                </a>
+                            </header>
+                            <iframe src="@selectedArtifactUrl"
+                                    class="qe-agent-artifact-frame"
+                                    title="@_selectedArtifact.Title"
+                                    loading="lazy"
+                                    sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+                        </section>
+                    }
                 }
             }
 
@@ -2348,6 +2349,18 @@
         return HandleSubmitAsync();
     }
 
+    [JSInvokable]
+    public Task CloseQuickActionsMenuFromOutsideAsync()
+    {
+        if (!_quickActionsMenuOpen)
+        {
+            return Task.CompletedTask;
+        }
+
+        _quickActionsMenuOpen = false;
+        return InvokeAsync(StateHasChanged);
+    }
+
     private async Task HandleSubmitAsync()
     {
         var message = _draftMessage.Trim();
@@ -2381,6 +2394,7 @@
         _messages.Add(new AgentMessageRow("user", message, attachments: pendingAttachments));
         var assistantMessage = new AgentMessageRow("assistant", string.Empty);
         _messages.Add(assistantMessage);
+        var generatedViewerArtifactIdsBeforeTurn = GeneratedViewerArtifactIds(_artifacts);
         RequestScrollToLatestMessage();
 
         try
@@ -2419,10 +2433,9 @@
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
                     _proposedActions = streamEvent.Response.ProposedActions;
-                    if (streamEvent.Response.Artifacts is { Count: > 0 })
-                    {
-                        assistantMessage.InlineViewer = FindInlinePreview(streamEvent.Response.Artifacts);
-                    }
+                    assistantMessage.InlineViewer = FindInlinePreview(
+                        streamEvent.Response.Artifacts,
+                        generatedViewerArtifactIdsBeforeTurn);
                     ApplyAuthHandoff(streamEvent.Response.AuthHandoff);
                     await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives, suppressPanelAutoOpen: true);
                     if (!string.IsNullOrWhiteSpace(streamEvent.Response.UiCulture))
@@ -2974,9 +2987,10 @@
 
     private void OpenArtifactPreview(QuoteAgentArtifactDto artifact)
     {
+        var artifactUrl = ArtifactPreviewUrl(artifact);
         var previewIndex = PreviewItems.ToList().FindIndex(item =>
             item.Source.Equals("artifact", StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(item.Url, artifact.Url, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Url, artifactUrl, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(item.Title, artifact.Title, StringComparison.OrdinalIgnoreCase));
         _previewIndex = previewIndex >= 0 ? previewIndex : 0;
         _previewDialogOpen = CurrentPreviewItem is not null;
@@ -3035,12 +3049,18 @@
 
         foreach (var artifact in _artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact).Where(item => !string.IsNullOrWhiteSpace(item.Url)))
         {
+            var artifactUrl = ArtifactPreviewUrl(artifact);
+            if (string.IsNullOrWhiteSpace(artifactUrl))
+            {
+                continue;
+            }
+
             items.Add(new PreviewItem(
                 "artifact",
                 -1,
                 artifact.Title,
                 artifact.Status,
-                artifact.Url!,
+                artifactUrl,
                 ArtifactKindLabel(artifact),
                 ArtifactIcon(artifact.ArtifactType)));
         }
@@ -3204,21 +3224,35 @@
     {
         if (_exportingPdf) return;
         _exportingPdf = true;
+        _error = null;
         try
         {
-            var result = await Api.ExportAgentChatPdfAsync(SessionId);
+            var language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en";
+            var result = await Api.ExportAgentChatPdfAsync(SessionId, language);
             if (!string.IsNullOrWhiteSpace(result?.PdfUrl))
             {
                 await Js.InvokeVoidAsync("open", result.PdfUrl, "_blank");
+                return;
             }
+
+            _error = Text(
+                "The chat PDF export completed without a download link. Please try again.",
+                "ส่งออก PDF แชทสำเร็จแต่ไม่มีลิงก์ดาวน์โหลด กรุณาลองอีกครั้ง");
         }
-        catch
+        catch (QuoteEngineApiException ex)
         {
-            // Silently fail — the chat export is a secondary action.
+            _error = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JSException)
+        {
+            _error = Text(
+                "The chat PDF could not be exported right now. Please try again.",
+                "ยังไม่สามารถส่งออกแชทเป็น PDF ได้ในตอนนี้ กรุณาลองอีกครั้ง");
         }
         finally
         {
             _exportingPdf = false;
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -3761,7 +3795,7 @@
                     "sketch",
                     result!.UploadId,
                     result.StoragePath,
-                    null,
+                    result.Url,
                     false,
                     "Ready");
 
@@ -4013,11 +4047,28 @@
         };
     }
 
-    private static InlineViewerInfo? FindInlinePreview(IReadOnlyList<QuoteAgentArtifactDto> artifacts)
+    private static HashSet<Guid> GeneratedViewerArtifactIds(IReadOnlyList<QuoteAgentArtifactDto> artifacts)
     {
-        var generated = artifacts.FirstOrDefault(a =>
-            a.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
-            a.Metadata.TryGetValue("generated", out var gen) && gen == "true");
+        return artifacts
+            .Where(IsGeneratedViewerArtifact)
+            .Select(artifact => artifact.ArtifactId)
+            .ToHashSet();
+    }
+
+    private static bool IsGeneratedViewerArtifact(QuoteAgentArtifactDto artifact)
+    {
+        return artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static InlineViewerInfo? FindInlinePreview(
+        IReadOnlyList<QuoteAgentArtifactDto> artifacts,
+        IReadOnlySet<Guid>? generatedViewerArtifactIdsBeforeTurn = null)
+    {
+        var generated = artifacts.LastOrDefault(a =>
+            IsGeneratedViewerArtifact(a) &&
+            generatedViewerArtifactIdsBeforeTurn?.Contains(a.ArtifactId) != true);
         if (generated is null)
         {
             return null;
@@ -4030,6 +4081,25 @@
         }
 
         return new InlineViewerInfo { CommandsJson = commandsJson };
+    }
+
+    private string? ArtifactPreviewUrl(QuoteAgentArtifactDto artifact)
+    {
+        if (string.IsNullOrWhiteSpace(artifact.Url))
+        {
+            return null;
+        }
+
+        var url = artifact.Url.Trim();
+        if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
+            url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase) ||
+            Uri.TryCreate(url, UriKind.Absolute, out _) ||
+            url.StartsWith("/", StringComparison.Ordinal))
+        {
+            return url;
+        }
+
+        return $"/quote/v1/agent/sessions/{SessionId:D}/artifacts/download?path={Uri.EscapeDataString(url)}";
     }
 
     private static string PreviewUrlForUploadedPart(QuotePartViewModel part)

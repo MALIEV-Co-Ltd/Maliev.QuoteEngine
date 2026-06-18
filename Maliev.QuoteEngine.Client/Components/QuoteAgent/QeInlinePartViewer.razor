@@ -1,13 +1,21 @@
 @inject IJSRuntime JS
 
 <div id="@_containerId" class="qe-inline-viewer">
-    <div class="qe-inline-viewer-loading">Loading 3D preview…</div>
+    @if (_loadFailed)
+    {
+        <p class="qe-inline-viewer-error">3D preview could not be loaded.</p>
+    }
+    else
+    {
+        <div class="qe-inline-viewer-loading">Loading 3D preview…</div>
+    }
 </div>
 
 @code {
     private static int _counter;
 
     private readonly string _containerId = $"qipv-{++_counter}";
+    private bool _loadFailed;
 
     [Parameter]
     public string CommandsJson { get; set; } = string.Empty;
@@ -22,6 +30,8 @@
             }
             catch
             {
+                _loadFailed = true;
+                StateHasChanged();
             }
         }
     }

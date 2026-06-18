@@ -108,6 +108,10 @@ internal sealed class QuoteAgentService(
         sessionStore.AddAttachments(state, request.Attachments);
         MaterializeSupplementalAnalysis(state, request);
         MaterializePrototypeParts(state, request);
+        if (TryBuildUiLanguageTurnResponse(state, request.Message, out var localLanguageResponse))
+        {
+            return localLanguageResponse;
+        }
 
         lock (state.SyncRoot)
         {
@@ -116,7 +120,7 @@ internal sealed class QuoteAgentService(
 
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
-        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments);
+        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts);
         var customerMemoryContext = await BuildCustomerMemoryContextAsync(customerId, cancellationToken);
         var chatbotResponse = await chatbotClient.SendMessageAsync(new ChatbotSendMessageRequest
         {
@@ -169,6 +173,26 @@ internal sealed class QuoteAgentService(
         sessionStore.AddAttachments(state, request.Attachments);
         MaterializeSupplementalAnalysis(state, request);
         MaterializePrototypeParts(state, request);
+        if (TryBuildUiLanguageTurnResponse(state, request.Message, out var localLanguageResponse))
+        {
+            foreach (var delta in ChunkAssistantText(localLanguageResponse.AssistantText))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return new QuoteAgentStreamEvent
+                {
+                    Type = "delta",
+                    Delta = delta
+                };
+                await Task.Delay(12, cancellationToken);
+            }
+
+            yield return new QuoteAgentStreamEvent
+            {
+                Type = "final",
+                Response = localLanguageResponse
+            };
+            yield break;
+        }
 
         lock (state.SyncRoot)
         {
@@ -181,7 +205,7 @@ internal sealed class QuoteAgentService(
         var accumulatedThought = new StringBuilder();
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
-        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments);
+        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts);
         var customerMemoryContext = await BuildCustomerMemoryContextAsync(customerId, cancellationToken);
         var chatbotStream = chatbotClient.SendMessageStreamAsync(new ChatbotSendMessageRequest
         {
@@ -575,11 +599,13 @@ internal sealed class QuoteAgentService(
             uploadId,
             storagePath,
             cancellationToken);
+        var signedUrl = await ResolveSketchUrlAsync(storagePath);
 
         return new UploadSketchResponse
         {
             UploadId = uploadId,
-            StoragePath = storagePath
+            StoragePath = storagePath,
+            Url = signedUrl
         };
     }
 
@@ -609,6 +635,85 @@ internal sealed class QuoteAgentService(
         var response = sessionStore.ToResponse(state, customerId.HasValue, customerId);
         response.UiDirectives = BuildUiDirectives(response);
         return response;
+    }
+
+    private bool TryBuildUiLanguageTurnResponse(
+        QuoteAgentSessionState state,
+        string message,
+        out QuoteAgentTurnResponse response)
+    {
+        var culture = DetectUiCultureChange(message);
+        if (culture is null)
+        {
+            response = default!;
+            return false;
+        }
+
+        var language = culture == "th-TH" ? "th" : "en";
+        lock (state.SyncRoot)
+        {
+            state.Language = language;
+            state.UiCulture = null;
+            state.PendingCustomerQuestion = null;
+            state.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        var currentState = ToStateResponse(state);
+        response = new QuoteAgentTurnResponse
+        {
+            SessionId = state.SessionId,
+            MessageId = Guid.NewGuid(),
+            AssistantText = culture == "th-TH"
+                ? "เปลี่ยนภาษาอินเทอร์เฟซเป็นภาษาไทยแล้วครับ"
+                : "The interface language is now English.",
+            Role = "assistant",
+            Language = language,
+            CreatedAt = DateTimeOffset.UtcNow,
+            Artifacts = currentState.Artifacts,
+            Gates = currentState.Gates,
+            ProposedActions = currentState.ProposedActions,
+            AuthHandoff = BuildTurnAuthHandoff(state, currentState),
+            ThinkingSteps = [],
+            UiDirectives = currentState.UiDirectives,
+            UiCulture = culture,
+            ProjectName = state.ProjectName,
+            CustomerQuestion = null
+        };
+        return true;
+    }
+
+    private static string? DetectUiCultureChange(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        var normalized = message.Trim().ToLowerInvariant();
+        var asksForLanguage = normalized.Contains("language", StringComparison.Ordinal) ||
+            normalized.Contains("interface", StringComparison.Ordinal) ||
+            normalized.Contains("ui", StringComparison.Ordinal) ||
+            normalized.Contains("ภาษา", StringComparison.Ordinal);
+        if (!asksForLanguage)
+        {
+            return null;
+        }
+
+        if (normalized.Contains("english", StringComparison.Ordinal) ||
+            normalized.Contains("en-us", StringComparison.Ordinal) ||
+            normalized.Contains("อังกฤษ", StringComparison.Ordinal))
+        {
+            return "en-US";
+        }
+
+        if (normalized.Contains("thai", StringComparison.Ordinal) ||
+            normalized.Contains("th-th", StringComparison.Ordinal) ||
+            normalized.Contains("ไทย", StringComparison.Ordinal))
+        {
+            return "th-TH";
+        }
+
+        return null;
     }
 
     private static List<QuoteAgentUiDirectiveDto> BuildUiDirectives(QuoteAgentStateResponse state)
@@ -3357,13 +3462,15 @@ internal sealed class QuoteAgentService(
         }
 
         contextLines.Add(
-            "Guidance: Infer as many manufacturing parameters as possible from the customer message, file names, and context before asking. " +
-            "Material keywords indicate process: PLA/ABS/PETG/TPU/filament → FDM, resin/photopolymer/SLA → SLA, nylon/PA/PP/SLS → SLS, aluminum/steel/titanium/brass/CNC → CNC. " +
+            "Guidance: Infer useful manufacturing parameters from the customer message, file names, and context before asking. " +
+            "Process hints: PLA/ABS/PETG/TPU/filament → FDM, resin/photopolymer/SLA → SLA, nylon/PA/PP/SLS → SLS, aluminum/steel/titanium/brass/CNC → CNC. " +
             "Default to qty=1, standard tolerance, and standard lead time when not stated. " +
             "State your inferred assumptions first, then ask only for genuinely missing critical information. " +
-            "If the customer attaches a photo or sketch: analyze it first — describe the part shape, visible features, likely material and process — then state your assumptions and give a rough ballpark estimate. " +
+            "For UI language changes, call quote_set_ui_language only. " +
+            "For photos/sketches, describe visible shape/features; numeric dimensions are facts only when written or readable. " +
+            "Unlabeled sketches need dimension confirmation and must not trigger a 3D preview by themselves. " +
             "NEVER respond by asking the customer to upload or send a 3D/CAD file as your first or only message. Never reject the customer. " +
-            "If you can infer enough shape and size information — even from a text description, photo, sketch, or drawing — call quote_generate_3d_preview to create a 3D preview of the inferred part. " +
+            "Call quote_generate_3d_preview only when dimensions are explicit/readable, CAD-derived, or customer-confirmed. " +
             "The tool accepts a cad_commands array. Each command has an op, id, and op-specific params. " +
             "Primitives: {op:'box',id:'base',params:[50,30,5]} (w,d,h); {op:'cylinder',id:'hole',params:[3,5]} (radius,height); " +
             "{op:'sphere',id:'ball',params:[10]} (radius); {op:'cone',id:'tip',params:[5,0,20]} (radiusBottom,radiusTop,height). " +
@@ -3498,10 +3605,11 @@ Customer message:
     }
 
     private async Task<List<ChatbotMessageAttachmentRequest>?> BuildChatbotAttachmentsAsync(
-        IReadOnlyCollection<QuoteAgentAttachmentDto> attachments)
+        IReadOnlyCollection<QuoteAgentAttachmentDto> attachments,
+        IReadOnlyCollection<QuoteAgentArtifactDto> artifacts)
     {
-        var supported = new List<ChatbotMessageAttachmentRequest>(attachments.Count);
-        foreach (var attachment in attachments)
+        var supported = new List<ChatbotMessageAttachmentRequest>(attachments.Count + Math.Min(artifacts.Count, 6));
+        foreach (var attachment in BuildWorkbenchAttachmentCandidates(attachments, artifacts))
         {
             var url = attachment.Url;
             if (string.IsNullOrWhiteSpace(url) ||
@@ -3534,6 +3642,118 @@ Customer message:
         }
 
         return supported.Count == 0 ? null : supported;
+    }
+
+    private static IEnumerable<QuoteAgentAttachmentDto> BuildWorkbenchAttachmentCandidates(
+        IReadOnlyCollection<QuoteAgentAttachmentDto> attachments,
+        IReadOnlyCollection<QuoteAgentArtifactDto> artifacts)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var attachment in attachments)
+        {
+            if (seen.Add(ResolveAttachmentDedupeKey(attachment)))
+            {
+                yield return attachment;
+            }
+        }
+
+        foreach (var artifact in artifacts.TakeLast(6).Where(IsChatbotAttachableArtifact))
+        {
+            var url = artifact.Url?.Trim();
+            var storagePath = ReadMetadata(artifact.Metadata, "storagePath");
+            if (string.IsNullOrWhiteSpace(storagePath) && IsRelativeStoragePath(url))
+            {
+                storagePath = url;
+                url = null;
+            }
+
+            if (string.IsNullOrWhiteSpace(url) && string.IsNullOrWhiteSpace(storagePath))
+            {
+                continue;
+            }
+
+            var fileName = ReadMetadata(artifact.Metadata, "fileName") ?? artifact.Title;
+            var contentType = ReadMetadata(artifact.Metadata, "contentType") ??
+                InferArtifactContentType(fileName, url, artifact.ArtifactType);
+            var candidate = new QuoteAgentAttachmentDto
+            {
+                AttachmentId = artifact.ArtifactId,
+                Kind = artifact.ArtifactType,
+                FileName = fileName,
+                ContentType = contentType,
+                FileSizeBytes = ParseOptionalLong(ReadMetadata(artifact.Metadata, "fileSizeBytes")) ?? 0,
+                StoragePath = storagePath,
+                Url = string.IsNullOrWhiteSpace(storagePath) ? url : null,
+                SatisfiesGeometryGate = false
+            };
+
+            if (seen.Add(ResolveAttachmentDedupeKey(candidate)))
+            {
+                yield return candidate;
+            }
+        }
+    }
+
+    private static bool IsChatbotAttachableArtifact(QuoteAgentArtifactDto artifact)
+    {
+        if (artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) ||
+            artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase) ||
+            artifact.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase) ||
+            artifact.ArtifactType.Equals("order", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return !string.IsNullOrWhiteSpace(artifact.Url) ||
+            artifact.Metadata.ContainsKey("storagePath");
+    }
+
+    private static string ResolveAttachmentDedupeKey(QuoteAgentAttachmentDto attachment)
+    {
+        return attachment.StoragePath ??
+            attachment.Url ??
+            attachment.UploadId ??
+            attachment.AttachmentId.ToString("D");
+    }
+
+    private static string? ReadMetadata(IReadOnlyDictionary<string, string> metadata, string key)
+    {
+        return metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value.Trim()
+            : null;
+    }
+
+    private static bool IsRelativeStoragePath(string? value)
+    {
+        return !string.IsNullOrWhiteSpace(value) &&
+            !value.StartsWith("/", StringComparison.Ordinal) &&
+            !value.StartsWith("data:", StringComparison.OrdinalIgnoreCase) &&
+            !value.StartsWith("blob:", StringComparison.OrdinalIgnoreCase) &&
+            !Uri.TryCreate(value, UriKind.Absolute, out _);
+    }
+
+    private static string InferArtifactContentType(string fileName, string? url, string artifactType)
+    {
+        var probe = string.IsNullOrWhiteSpace(fileName) ? url ?? artifactType : fileName;
+        var extension = Path.GetExtension(probe).ToLowerInvariant();
+        return extension switch
+        {
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            ".gif" => "image/gif",
+            ".pdf" => "application/pdf",
+            ".txt" => "text/plain",
+            ".md" => "text/markdown",
+            _ => artifactType.Equals("sketch", StringComparison.OrdinalIgnoreCase) ? "image/png" : "application/octet-stream"
+        };
+    }
+
+    private static long? ParseOptionalLong(string? value)
+    {
+        return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
     }
 
     private static string InferAttachmentType(string contentType)

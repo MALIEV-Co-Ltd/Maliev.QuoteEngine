@@ -48,7 +48,12 @@ function buildProfile(profile) {
         sketch.movePointerTo(p);
         break;
       case 'line':
-        sketch.lineTo(p[0], p[1]);
+        if (p.length >= 4) {
+          sketch.movePointerTo([p[0], p[1]]);
+          sketch.lineTo(p[2], p[3]);
+        } else {
+          sketch.lineTo(p[0], p[1]);
+        }
         break;
       case 'hLine':
         sketch.hLine(p[0]);

@@ -735,6 +735,7 @@ public sealed class QuoteEngineSourceTests
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
         var composerScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-agent-composer.js");
         var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
@@ -758,9 +759,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Icons.Material.Outlined.Summarize", component, StringComparison.Ordinal);
         Assert.Contains("Text(\"Summary\"", component, StringComparison.Ordinal);
         Assert.Contains("ShellClass", component, StringComparison.Ordinal);
-        Assert.Contains("qe-agent-shell--rail-collapsed", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-shell--menu-open", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-shell--artifacts-open", component, StringComparison.Ordinal);
-        Assert.Contains("ToggleRail", component, StringComparison.Ordinal);
+        Assert.Contains("OpenNavigationDrawerAsync", component, StringComparison.Ordinal);
+        Assert.Contains("CloseNavigationDrawer", component, StringComparison.Ordinal);
         Assert.Contains("AriaExpanded", component, StringComparison.Ordinal);
         Assert.Contains("TogglePinnedProjects", component, StringComparison.Ordinal);
         Assert.Contains("ToggleProjects", component, StringComparison.Ordinal);
@@ -788,6 +790,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private string _projectName = string.Empty;", component, StringComparison.Ordinal);
         Assert.Contains("OpenSketchAsync", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-sketch.js", component, StringComparison.Ordinal);
+        Assert.Contains("js/quote-inline-viewer.js", index, StringComparison.Ordinal);
         Assert.Contains("initSketchCanvas", component, StringComparison.Ordinal);
         Assert.Contains("setSketchBrushColor", component, StringComparison.Ordinal);
         Assert.Contains("exportSketchCanvas", component, StringComparison.Ordinal);
@@ -833,7 +836,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ProjectNavItem.FromDto", component, StringComparison.Ordinal);
         Assert.Contains("private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);", component, StringComparison.Ordinal);
         Assert.Contains("@foreach (var project in RegularProjects)", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("class=\"qe-agent-project-row\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-project-row\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-management-row\"", component, StringComparison.Ordinal);
         Assert.Contains("href=\"@ProjectHref(project)\"", component, StringComparison.Ordinal);
         Assert.Contains("private static string ProjectHref(ProjectNavItem project)", component, StringComparison.Ordinal);
@@ -927,12 +930,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-tooltip-panel\" role=\"tooltip\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-tooltip-content\"", component, StringComparison.Ordinal);
         Assert.Contains("<kbd>Space</kbd>", component, StringComparison.Ordinal);
-        Assert.Contains("<kbd>Alt+Enter</kbd>", component, StringComparison.Ordinal);
+        Assert.Contains("<kbd>Enter</kbd>", component, StringComparison.Ordinal);
         Assert.DoesNotContain("title=\"@DictationButtonTitle\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-send-btn\" title=", component, StringComparison.Ordinal);
-        Assert.Contains("event.key !== \"Enter\" || !event.altKey", composerScript, StringComparison.Ordinal);
-        Assert.Contains("dictationButton.addEventListener(\"keydown\", dictationKeydown);", composerScript, StringComparison.Ordinal);
-        Assert.Contains("dictationButton.addEventListener(\"keyup\", dictationKeyup);", composerScript, StringComparison.Ordinal);
+        Assert.Contains("if (event.key !== \"Enter\" || event.isComposing)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("insertTextAtSelection(textarea, \"\\n\")", composerScript, StringComparison.Ordinal);
+        Assert.Contains("document.addEventListener(\"keydown\", documentKeydown, true)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("document.addEventListener(\"keyup\", documentKeyup, true)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("CloseQuickActionsMenuFromOutsideAsync", component, StringComparison.Ordinal);
+        Assert.Contains("dotNetRef.invokeMethodAsync(\"CloseQuickActionsMenuFromOutsideAsync\")", composerScript, StringComparison.Ordinal);
+        Assert.Contains("shouldHandleComposerShortcut(event, textarea)", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("dictationButton.addEventListener(\"keydown\", dictationKeydown);", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("dictationButton.addEventListener(\"keyup\", dictationKeyup);", composerScript, StringComparison.Ordinal);
         Assert.Contains("updateComposerTooltipPlacement", composerScript, StringComparison.Ordinal);
         Assert.Contains("wrapper.dataset.tooltipPlacement = spaceBelow >= panelHeight + margin ? \"bottom\" : \"top\";", composerScript, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-tooltip:hover .qe-agent-tooltip-panel", styles, StringComparison.Ordinal);
@@ -1089,7 +1098,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("max-height: min(34dvh, 280px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-y: auto;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("overflow-x: hidden;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("padding: 4px 8px 4px 10px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("padding: 0 0 10px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("contain: inline-size;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("scrollbar-gutter: stable;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("inline-size: 100%;", agentStyles, StringComparison.Ordinal);
@@ -1101,7 +1110,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("display: block;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border: 1px solid var(--qe-agent-line);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("display: -webkit-box;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-shell--rail-collapsed", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-shell--menu-open .qe-agent-rail", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-shell--artifacts-open", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message--user .qe-agent-bubble p", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-radius: 999px;", agentStyles, StringComparison.Ordinal);
@@ -1219,8 +1228,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("void startDictationMeter(session);", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("await startDictationMeter(session)", composerScript, StringComparison.Ordinal);
         Assert.Contains("session.meterUnavailable = error?.name || error?.message || \"audio-capture\"", composerScript, StringComparison.Ordinal);
-        Assert.Contains("ResizeObserver(() => updateComposerExpansionOffset(textarea))", composerScript, StringComparison.Ordinal);
-        Assert.Contains("new MutationObserver(() => updateComposerExpansionOffset(textarea))", composerScript, StringComparison.Ordinal);
+        Assert.Contains("new ResizeObserver(() =>", composerScript, StringComparison.Ordinal);
+        Assert.Contains("new MutationObserver(() =>", composerScript, StringComparison.Ordinal);
+        Assert.Contains("updateComposerExpansionOffset(textarea);", composerScript, StringComparison.Ordinal);
+        Assert.Contains("updateComposerTooltipPlacements(composer);", composerScript, StringComparison.Ordinal);
         Assert.Contains("handlers.resizeObserver?.disconnect?.();", composerScript, StringComparison.Ordinal);
         Assert.Contains("handlers.mutationObserver?.disconnect?.();", composerScript, StringComparison.Ordinal);
         Assert.Contains("scheduleDictationRestart(textarea, session)", composerScript, StringComparison.Ordinal);
@@ -1270,7 +1281,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("event.preventDefault();", uploadScript, StringComparison.Ordinal);
 
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-shell", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) 0;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-right: 1px solid var(--qe-agent-line);", ExtractSourceBlock(agentStyles, ".qe-agent-rail {", ".qe-agent-rail-head"), StringComparison.Ordinal);
@@ -1279,7 +1290,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-summary-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-grid", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-section", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("grid-template-columns: 260px minmax(0, 1fr) minmax(320px, 380px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(320px, 380px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("transition: grid-template-columns 260ms cubic-bezier(.2, .8, .2, 1);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("@keyframes qe-agent-artifact-drawer-enter", agentStyles, StringComparison.Ordinal);
         Assert.Contains("animation: qe-agent-artifact-drawer-enter 260ms cubic-bezier(.2, .8, .2, 1) both;", agentStyles, StringComparison.Ordinal);

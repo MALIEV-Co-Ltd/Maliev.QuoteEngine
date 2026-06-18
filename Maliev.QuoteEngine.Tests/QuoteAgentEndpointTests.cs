@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -310,6 +311,162 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Equal("https://upload.example.test/download/quotes%2Ftemp%2Fsession%2Fmanufacturing-sketch.png", attachment.Url);
         Assert.False(attachment.Url.StartsWith("data:", StringComparison.OrdinalIgnoreCase));
         Assert.True(attachment.Url.Length < 10_000);
+    }
+
+    [Fact]
+    public async Task Agent_message_stream_reattaches_recent_workbench_artifact_for_follow_up_turns()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(new RecordingUploadServiceClient());
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        var inlinePreview = $"data:image/png;base64,{new string('A', 1_200)}";
+
+        using (var firstRequest = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                SessionId = sessionId,
+                Message = "Please quote this hand sketch.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "manufacturing-sketch.png",
+                        ContentType = "image/png",
+                        FileSizeBytes = 120_000,
+                        Kind = "sketch",
+                        Url = inlinePreview,
+                        StoragePath = "agent/sketches/abc/manufacturing-sketch.png"
+                    }
+                ]
+            }, options: JsonOptions)
+        })
+        {
+            using var firstResponse = await client.SendAsync(firstRequest, HttpCompletionOption.ResponseHeadersRead);
+            _ = await firstResponse.Content.ReadAsStringAsync();
+            Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+        }
+
+        using var followUpRequest = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                SessionId = sessionId,
+                Message = "Please re-check the sketch in the workbench before answering.",
+                Language = "en"
+            }, options: JsonOptions)
+        };
+
+        using var followUpResponse = await client.SendAsync(followUpRequest, HttpCompletionOption.ResponseHeadersRead);
+        _ = await followUpResponse.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, followUpResponse.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
+        Assert.Equal("image", attachment.Type);
+        Assert.Equal("image/png", attachment.MimeType);
+        Assert.Equal("manufacturing-sketch.png", attachment.Filename);
+        Assert.Equal(
+            "https://upload.example.test/download/agent%2Fsketches%2Fabc%2Fmanufacturing-sketch.png",
+            attachment.Url);
+    }
+
+    [Fact]
+    public async Task Agent_message_stream_handles_ui_language_change_without_chatbot_or_preview_tools()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "change the UI language to English for me.",
+                Language = "th"
+            }, options: JsonOptions)
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var body = await response.Content.ReadAsStringAsync();
+        var events = body
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonSerializer.Deserialize<QuoteAgentStreamEvent>(line, JsonOptions))
+            .Where(streamEvent => streamEvent is not null)
+            .Select(streamEvent => streamEvent!)
+            .ToList();
+        var final = Assert.Single(events, streamEvent => streamEvent.Type == "final").Response;
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(final);
+        Assert.Equal("en-US", final.UiCulture);
+        Assert.Equal("en", final.Language);
+        Assert.Contains("English", final.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(chatbot.LastStreamRequest);
+        Assert.Null(chatbot.LastSendRequest);
+        Assert.DoesNotContain(final.Artifacts, artifact => artifact.ArtifactType == "viewer");
+    }
+
+    [Fact]
+    public async Task Agent_sketch_upload_returns_signed_url_and_download_redirect_is_session_scoped()
+    {
+        var uploadClient = new RecordingUploadServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(uploadClient);
+            });
+        });
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+        var sessionId = Guid.NewGuid();
+        using var form = new MultipartFormDataContent();
+        using var pngContent = new ByteArrayContent([1, 2, 3, 4]);
+        pngContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
+        form.Add(pngContent, "file", "Manufacturing-sketch.png");
+
+        var uploadResponse = await client.PostAsync($"/quote/v1/agent/sessions/{sessionId:D}/sketches", form);
+        var upload = await uploadResponse.Content.ReadFromJsonAsync<UploadSketchResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, uploadResponse.StatusCode);
+        Assert.NotNull(upload);
+        Assert.Equal($"agent/sketches/{sessionId:N}/Manufacturing-sketch.png", upload.StoragePath);
+        Assert.Equal(upload.StoragePath, uploadClient.LastInitiatedStoragePath);
+        Assert.Equal(upload.StoragePath, uploadClient.LastStreamedStoragePath);
+        Assert.Equal(
+            $"https://upload.example.test/download/{Uri.EscapeDataString(upload.StoragePath)}",
+            upload.Url);
+
+        var redirectResponse = await client.GetAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(upload.StoragePath)}");
+        Assert.Equal(HttpStatusCode.Redirect, redirectResponse.StatusCode);
+        Assert.Equal(upload.Url, redirectResponse.Headers.Location?.ToString());
+
+        var otherSessionPath = $"agent/sketches/{Guid.NewGuid():N}/Manufacturing-sketch.png";
+        var blockedResponse = await client.GetAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(otherSessionPath)}");
+        Assert.Equal(HttpStatusCode.BadRequest, blockedResponse.StatusCode);
     }
 
     [Fact]
@@ -2711,6 +2868,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains("Project naming:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("quote_set_project_name", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("quote_ask_customer", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Unlabeled sketches need dimension confirmation", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("must not trigger a 3D preview", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -3301,6 +3460,35 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     private sealed class RecordingUploadServiceClient()
         : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
     {
+        public string? LastInitiatedStoragePath { get; private set; }
+
+        public string? LastStreamedStoragePath { get; private set; }
+
+        public override Task<string> InitiateResumableUploadAsync(
+            string fileName,
+            string contentType,
+            long totalSize,
+            string storagePath,
+            IReadOnlyDictionary<string, string>? metadataTags,
+            CancellationToken ct)
+        {
+            LastInitiatedStoragePath = storagePath;
+            return Task.FromResult($"upload-{Guid.NewGuid():N}");
+        }
+
+        public override Task StreamUploadAsync(
+            Stream body,
+            string contentType,
+            long contentLength,
+            string contentRange,
+            string downstreamUploadId,
+            string storagePath,
+            CancellationToken ct)
+        {
+            LastStreamedStoragePath = storagePath;
+            return Task.CompletedTask;
+        }
+
         public override Task<string> GetDownloadUrlByPathAsync(
             string storagePath,
             int expirationMinutes = 60,

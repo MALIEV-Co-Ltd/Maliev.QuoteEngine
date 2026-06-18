@@ -690,6 +690,9 @@ public sealed class UploadSketchResponse
 
     /// <summary>Gets or sets the storage path for the uploaded sketch.</summary>
     public string StoragePath { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets a browser-safe signed URL for previewing the uploaded sketch.</summary>
+    public string? Url { get; set; }
 }
 
 /// <summary>
