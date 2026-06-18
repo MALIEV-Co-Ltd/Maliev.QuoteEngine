@@ -539,6 +539,7 @@
         }
         else
         {
+        <div class="qe-agent-chat-stack">
         <div class="qe-agent-thread-wrap">
         <div class="qe-agent-thread"
              @ref="_threadElement"
@@ -590,7 +591,11 @@
                             {
                                 @if (message.IsProcessing && string.IsNullOrEmpty(message.Content))
                                 {
-                                    <div class="qe-agent-response-loader" aria-label="@Text("Agent is thinking…", "เอเจนต์กำลังคิด…")" aria-live="polite"></div>
+                                    <div class="qe-agent-response-loader" aria-label="@Text("Agent is thinking…", "เอเจนต์กำลังคิด…")" aria-live="polite">
+                                        <span></span>
+                                        <span></span>
+                                        <span></span>
+                                    </div>
                                 }
                                 else if (!string.IsNullOrEmpty(message.Content))
                                 {
@@ -1218,6 +1223,7 @@
                 </section>
             }
         </section>
+        </div>
         }
 
         @if (_sketchOpen)
@@ -1786,6 +1792,7 @@
     private bool _scrollToLatestMessageRequested;
     private bool _scrollUpdatePending;
     private bool _showScrollToBottomButton;
+    private bool _suppressScrollToBottomButtonUntilBottom;
     private bool _disposed;
     private DotNetObjectReference<QuoteAgentLaunchShell>? _composerDotNetRef;
     private IJSObjectReference? _composerModule;
@@ -3328,6 +3335,7 @@
     {
         _scrollToLatestMessageRequested = true;
         _showScrollToBottomButton = false;
+        _suppressScrollToBottomButtonUntilBottom = true;
     }
 
     private async Task OnThreadScrollAsync(EventArgs _)
@@ -3342,10 +3350,16 @@
         {
             await Task.Delay(80);
             var scrollInfo = await Js.InvokeAsync<ChatScrollInfo>("malievChatbot.getScrollInfo", _threadElement);
-            _showScrollToBottomButton = !QuoteAgentUiHelpers.IsAtScrollBottom(
+            var isAtBottom = QuoteAgentUiHelpers.IsAtScrollBottom(
                 scrollInfo.scrollTop,
                 scrollInfo.scrollHeight,
                 scrollInfo.clientHeight);
+            if (isAtBottom)
+            {
+                _suppressScrollToBottomButtonUntilBottom = false;
+            }
+
+            _showScrollToBottomButton = !_suppressScrollToBottomButtonUntilBottom && !isAtBottom;
             await InvokeAsync(StateHasChanged);
         }
         finally
@@ -3364,8 +3378,10 @@
 
     private async Task ScrollToLatestMessageAsync()
     {
-        await Js.InvokeVoidAsync("malievChatbot.scrollToElementBottom", _threadElement, true);
+        _suppressScrollToBottomButtonUntilBottom = true;
         _showScrollToBottomButton = false;
+        await InvokeAsync(StateHasChanged);
+        await Js.InvokeVoidAsync("malievChatbot.scrollToElementBottom", _threadElement, true);
         await InvokeAsync(StateHasChanged);
     }
 

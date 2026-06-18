@@ -1584,6 +1584,56 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_stacks_thread_and_composer_without_overlap_padding()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css").ReplaceLineEndings("\n");
+        var chatStackBlock = ExtractSourceBlock(component, "<div class=\"qe-agent-chat-stack\">", "<section class=\"@ComposerWrapClass\"");
+        var stackStyleBlock = ExtractSourceBlock(styles, ".qe-agent-chat-stack {", ".qe-agent-main--empty .qe-agent-thread");
+        var threadStyleBlock = ExtractSourceBlock(styles, ".qe-agent-main--chat .qe-agent-thread {", ".qe-agent-thread-wrap {");
+        var composerWrapStyleBlock = ExtractSourceBlock(styles, ".qe-agent-main--chat .qe-agent-composer-wrap {", ".qe-agent-composer {");
+
+        Assert.Contains("<div class=\"qe-agent-thread-wrap\">", chatStackBlock, StringComparison.Ordinal);
+        Assert.Contains("display: flex;", stackStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("flex-direction: column;", stackStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("gap: 16px;", stackStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("flex: 1 1 0;", threadStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("padding: 34px max(20px, calc((100% - 880px) / 2)) 24px;", threadStyleBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("160px", threadStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("flex: 0 0 auto;", composerWrapStyleBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_scroll_button_stays_hidden_during_programmatic_scroll()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var onScrollBlock = ExtractSourceBlock(component, "private async Task OnThreadScrollAsync", "private Task OnProjectNameInputAsync");
+        var scrollButtonBlock = ExtractSourceBlock(component, "private async Task ScrollToLatestMessageAsync", "private async Task<bool> ApplyLocalGeometryRuntimeResultAsync");
+
+        Assert.Contains("_suppressScrollToBottomButtonUntilBottom", component, StringComparison.Ordinal);
+        Assert.Contains("var isAtBottom = QuoteAgentUiHelpers.IsAtScrollBottom", onScrollBlock, StringComparison.Ordinal);
+        Assert.Contains("if (isAtBottom)", onScrollBlock, StringComparison.Ordinal);
+        Assert.Contains("_suppressScrollToBottomButtonUntilBottom = false;", onScrollBlock, StringComparison.Ordinal);
+        Assert.Contains("_showScrollToBottomButton = !_suppressScrollToBottomButtonUntilBottom && !isAtBottom;", onScrollBlock, StringComparison.Ordinal);
+        Assert.Contains("_suppressScrollToBottomButtonUntilBottom = true;", scrollButtonBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_response_loader_uses_animated_dot_elements()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css").ReplaceLineEndings("\n");
+        var loaderBlock = ExtractSourceBlock(component, "<div class=\"qe-agent-response-loader\"", "</div>");
+        var loaderStyleBlock = ExtractSourceBlock(styles, ".qe-agent-response-loader {", "@keyframes qe-response-loader-dot");
+
+        Assert.Contains("<span></span>", loaderBlock, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-response-loader span", styles, StringComparison.Ordinal);
+        Assert.Contains("animation: qe-response-loader-dot 900ms ease-in-out infinite;", loaderStyleBlock, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-response-loader span:nth-child(2)", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-response-loader span:nth-child(3)", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentPrompt_routes_choice_questions_and_requirements_to_structured_ui()
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");

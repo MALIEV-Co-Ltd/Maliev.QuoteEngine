@@ -1506,7 +1506,22 @@
 }
 
 .qe-agent-main--chat {
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
+}
+
+.qe-agent-chat-stack {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.qe-agent-main--empty .qe-agent-chat-stack {
+    width: 100%;
+    overflow: visible;
 }
 
 .qe-agent-topline {
@@ -1678,7 +1693,7 @@
 }
 
 .qe-agent-main--chat .qe-agent-thread {
-    flex: 1;
+    flex: 1 1 0;
     min-height: 0;
     align-content: start;
     display: grid;
@@ -1686,7 +1701,7 @@
     width: 100%;
     max-width: none;
     margin: 0;
-    padding: 34px max(20px, calc((100% - 880px) / 2)) 160px;
+    padding: 34px max(20px, calc((100% - 880px) / 2)) 24px;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
@@ -2259,23 +2274,43 @@
 }
 
 .qe-agent-response-loader {
-    width: 20px;
-    aspect-ratio: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 14px;
     margin: 4px 0;
-    --_g: no-repeat radial-gradient(circle closest-side, var(--qe-agent-muted) 90%, transparent);
-    background:
-        var(--_g) 0%   50%,
-        var(--_g) 50%  50%,
-        var(--_g) 100% 50%;
-    background-size: calc(100% / 3) 50%;
-    animation: qe-response-loader 1s infinite linear;
 }
 
-@keyframes qe-response-loader {
-    20% { background-position: 0%   0%, 50%  50%, 100%  50%; }
-    40% { background-position: 0% 100%, 50%   0%, 100%  50%; }
-    60% { background-position: 0%  50%, 50% 100%, 100%   0%; }
-    80% { background-position: 0%  50%, 50%  50%, 100% 100%; }
+.qe-agent-response-loader span {
+    display: block;
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--qe-agent-muted);
+    opacity: .38;
+    animation: qe-response-loader-dot 900ms ease-in-out infinite;
+}
+
+.qe-agent-response-loader span:nth-child(2) {
+    animation-delay: 120ms;
+}
+
+.qe-agent-response-loader span:nth-child(3) {
+    animation-delay: 240ms;
+}
+
+@keyframes qe-response-loader-dot {
+    0%,
+    80%,
+    100% {
+        opacity: .38;
+        transform: translateY(0);
+    }
+
+    40% {
+        opacity: 1;
+        transform: translateY(-3px);
+    }
 }
 
 .qe-agent-markdown {
@@ -3107,7 +3142,7 @@
 }
 
 .qe-agent-main--chat .qe-agent-composer-wrap {
-    align-self: end;
+    flex: 0 0 auto;
 }
 
 .qe-agent-composer {
@@ -5260,7 +5295,7 @@
     }
 
     .qe-agent-thread {
-        padding: 24px 16px 160px;
+        padding: 24px 16px;
     }
 
     .qe-agent-chat-actions > header,
