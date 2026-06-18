@@ -68,6 +68,16 @@ Before any file edit, record an active goal using the first available mechanism:
 
 When using a tool-based goal recorder, keep the tool objective concise and still make the required MALIEV goal details visible in chat before editing. When using the chat fallback, the `Active goal` block is the active goal record.
 
+Do not record a vague or underdefined tool objective. Before calling `/goal`, `create_goal`, or any other goal recorder, the objective must name a concrete target and observable result from the user's request. It must include:
+
+- An action: fix, add, verify, refactor, restore, compare, remove, or another specific verb.
+- A target: the affected user flow, component, endpoint, service, DTO, document, test, or file set.
+- An observable result: the behavior, contract, UI state, validation evidence, or documentation state that should be true when complete.
+
+Never use objectives such as "fix issue", "work on QuoteEngine", "improve goal", "handle request", "update code", or "investigate problem" unless the target and expected result are also named. If the request does not yet provide enough information to identify the target and result, inspect the relevant local context first. If the target is still unclear after that inspection, ask one concise clarification question before recording the goal or editing files.
+
+The visible `Active goal` block must be specific enough that another agent could continue the same slice without guessing. It must name the affected area, the boundary being checked, the validation lane, and the commit boundary. If later investigation shows the first goal targeted the wrong area or omitted a necessary boundary, record a `Revised active goal` before continuing.
+
 The goal record must include:
 
 - Outcome: the observable state that should be true when complete.
