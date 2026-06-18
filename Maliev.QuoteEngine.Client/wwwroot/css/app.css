@@ -2616,8 +2616,8 @@
     grid-template-columns: minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 6px;
-    min-height: 28px;
-    padding: 6px 8px;
+    min-height: 22px;
+    padding: 4px 6px;
     cursor: pointer;
     list-style: none;
     user-select: none;
@@ -2671,7 +2671,7 @@
 
 .qe-agent-thinking-title {
     color: color-mix(in srgb, var(--qe-agent-ink) 88%, transparent);
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 600;
     line-height: 1.2;
 }
@@ -2681,15 +2681,17 @@
     justify-self: start;
     color: color-mix(in srgb, var(--qe-agent-muted) 86%, transparent);
     font-size: 9px;
+    justify-self: end;
 }
 
 .qe-agent-thinking-count {
-    padding: 1px 5px;
+    padding: 1px 3px;
     border: 1px solid color-mix(in srgb, var(--qe-agent-line) 72%, transparent);
     border-radius: 10px;
     background: color-mix(in srgb, var(--qe-agent-raised) 82%, transparent);
     color: color-mix(in srgb, var(--qe-agent-muted) 90%, transparent);
     white-space: nowrap;
+    font-size: 9px;
 }
 
 .qe-agent-thinking-total {
@@ -2699,8 +2701,8 @@
 
 .qe-agent-thinking-steps {
     display: grid;
-    gap: 4px;
-    padding: 6px 8px 5px;
+    gap: 2px;
+    padding: 3px 5px;
 }
 
 .qe-agent-thinking-step-row {
@@ -2738,16 +2740,16 @@
 
 .qe-agent-thinking-step-card {
     display: grid;
-    gap: 3px;
+    gap: 2px;
     min-width: 0;
-    padding: 4px 6px;
+    padding: 1px 4px 2px;
     border: 0;
 }
 
 .qe-agent-thinking-step-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
 }
 
@@ -2760,7 +2762,7 @@
 .qe-agent-thinking-step-title {
     min-width: 0;
     color: color-mix(in srgb, var(--qe-agent-ink) 86%, transparent);
-    font-size: 11px;
+    font-size: 9px;
     font-weight: 600;
     line-height: 1.2;
 }
@@ -2782,7 +2784,7 @@
     flex: 0 0 auto;
     text-align: right;
     color: color-mix(in srgb, var(--qe-agent-muted) 92%, transparent);
-    font-size: 9px;
+    font-size: 7px;
     line-height: 1.2;
     white-space: nowrap;
     margin-left: auto;
@@ -2795,9 +2797,9 @@
 .qe-agent-thinking-step-compact {
     margin: 0;
     color: color-mix(in srgb, var(--qe-agent-muted) 82%, transparent);
-    font-size: 10px;
-    line-height: 1.3;
-    max-height: 3.6em;
+    font-size: 8px;
+    line-height: 1.22;
+    max-height: 3.4em;
     overflow: hidden;
     text-overflow: ellipsis;
 }

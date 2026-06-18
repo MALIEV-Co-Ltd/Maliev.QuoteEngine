@@ -24,6 +24,12 @@ internal static class ThinkingStepSummarizer
         if (string.IsNullOrWhiteSpace(tool))
             return null;
 
+        if (IsGeneratePreviewTool(tool))
+        {
+            if (TryBuild3dPreviewSummary(args) is { } generatedPreviewSummary)
+                return generatedPreviewSummary;
+        }
+
         if (args is not null)
         {
             args.TryGetValue("quantity", out var qty);
@@ -84,6 +90,91 @@ internal static class ThinkingStepSummarizer
             _ when tool.Contains("language") => "Switched interface language",
             _ => null
         };
+    }
+
+    private static bool IsGeneratePreviewTool(string tool)
+    {
+        return (tool.Contains("generate") && tool.Contains("3d") && tool.Contains("preview")) ||
+               tool.Contains("generate_3d");
+    }
+
+    private static string? TryBuild3dPreviewSummary(Dictionary<string, string>? args)
+    {
+        if (args is null || args.Count == 0)
+            return null;
+
+        var description = GetArgValue(args, "description");
+        var commandCountText = GetArgValue(args, "command_count", "commands_count", "commandCount");
+        var commandCount = int.TryParse(commandCountText, out var parsedCount) ? parsedCount : (int?)null;
+        var commandCountLabel = commandCount is { } c ? $"{c} command(s)" : null;
+
+        if (GetArgValue(args, "success", "result", "status") is { } successValue &&
+            bool.TryParse(successValue, out var success))
+        {
+            if (!success)
+            {
+                return Build3dPreviewFailureSummary(GetArgValue(args, "error"), description);
+            }
+
+            return Build3dPreviewResultSummary(description, commandCountLabel, GetArgValue(args, "message"));
+        }
+
+        if (args.ContainsKey("message") &&
+            GetArgValue(args, "message") is { Length: > 0 } message &&
+            message.Contains("Generated 3D preview", StringComparison.OrdinalIgnoreCase))
+        {
+            return Build3dPreviewResultSummary(description, commandCountLabel, message);
+        }
+
+        return Build3dPreviewRequestSummary(description, commandCountLabel);
+    }
+
+    private static string? Build3dPreviewRequestSummary(string? description, string? commandCountLabel)
+    {
+        if (string.IsNullOrWhiteSpace(description) && string.IsNullOrWhiteSpace(commandCountLabel))
+            return null;
+
+        if (string.IsNullOrWhiteSpace(description))
+            return $"Generate 3D preview{(commandCountLabel is null ? string.Empty : $" ({commandCountLabel})")}";
+
+        return $"Generate 3D preview · {description}{(commandCountLabel is null ? string.Empty : $" ({commandCountLabel})")}";
+    }
+
+    private static string Build3dPreviewResultSummary(string? description, string? commandCountLabel, string? message)
+    {
+        if (!string.IsNullOrWhiteSpace(message) && !message.Contains("Generated 3D preview", StringComparison.OrdinalIgnoreCase))
+            return message;
+
+        var suffix = commandCountLabel is null
+            ? string.Empty
+            : $" ({commandCountLabel})";
+
+        if (!string.IsNullOrWhiteSpace(description))
+            return $"3D preview generated{suffix}: {description}";
+
+        return $"3D preview generated{suffix}";
+    }
+
+    private static string Build3dPreviewFailureSummary(string? error, string? description)
+    {
+        if (!string.IsNullOrWhiteSpace(error))
+            return $"3D preview failed: {error}";
+
+        if (!string.IsNullOrWhiteSpace(description))
+            return $"3D preview failed: {description}";
+
+        return "3D preview generation failed";
+    }
+
+    private static string? GetArgValue(Dictionary<string, string> args, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (args.TryGetValue(key, out var value))
+                return value;
+        }
+
+        return null;
     }
 
     private static string NormalizeTool(string? raw) =>

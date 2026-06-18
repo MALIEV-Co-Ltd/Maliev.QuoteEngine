@@ -87,4 +87,32 @@ public sealed class ThinkingStepSummarizerTests
         Assert.NotNull(step.Summary);
         Assert.Contains("file", step.Summary, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void Summarize_quote_generate_3d_preview_request_is_readable_without_ids()
+    {
+        var step = new QuoteAgentThinkingStepDto
+        {
+            Type = "quote_generate_3d_preview",
+            Detail = """Arguments: {"description":"Rectangular mounting plate 100x50x3mm with 4 holes","process_hint":"fdm","command_count":13}"""
+        };
+        ThinkingStepSummarizer.Summarize(step);
+        Assert.Equal("Generate 3D preview · Rectangular mounting plate 100x50x3mm with 4 holes (13 command(s))", step.Summary);
+    }
+
+    [Fact]
+    public void Summarize_quote_generate_3d_preview_result_includes_command_count_and_omits_artifact_ids()
+    {
+        var step = new QuoteAgentThinkingStepDto
+        {
+            Type = "quote_generate_3d_preview",
+            Detail = @"Arguments: {""success"":true,""artifact_id"":""ebe20307-b475-40f9-ab95-8da14c6f928c"",""part_id"":""564e818e-0480-48ef-bef1-60d49561beb9"",""description"":""Rectangular mounting plate 100x50x3mm with 4 holes"",""command_count"":13,""message"":""Generated 3D preview with 13 command(s): Rectangular mounting plate 100x50x3mm with 4 holes""}"
+        };
+        ThinkingStepSummarizer.Summarize(step);
+        Assert.Contains("3D preview generated", step.Summary);
+        Assert.Contains("13 command(s)", step.Summary);
+        Assert.Contains("Rectangular mounting plate 100x50x3mm with 4 holes", step.Summary);
+        Assert.DoesNotContain("ebe20307-b475-40f9-ab95-8da14c6f928c", step.Summary);
+        Assert.DoesNotContain("564e818e-0480-48ef-bef1-60d49561beb9", step.Summary);
+    }
 }
