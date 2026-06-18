@@ -62,7 +62,6 @@ internal sealed class QuoteAgentService(
     QuoteAgentContextToken contextToken,
     CustomerSessionResolver sessionResolver,
     IGoogleDriveConnectorStore googleDriveConnectorStore,
-    IHttpContextAccessor httpContextAccessor,
     IHubContext<QuoteNotificationsHub> hubContext,
     IConfiguration configuration,
     ILogger<QuoteAgentService> logger,
@@ -3570,13 +3569,15 @@ Customer message:
             return null;
         }
 
-        var context = httpContextAccessor.HttpContext;
-        if (context is null)
+        var callbackBaseUrl = configuration["QuoteAgent:ThinkingCallbackBaseUrl"]?.Trim();
+        if (string.IsNullOrWhiteSpace(callbackBaseUrl) ||
+            !Uri.TryCreate(callbackBaseUrl.TrimEnd('/'), UriKind.Absolute, out var baseUri) ||
+            (baseUri.Scheme != Uri.UriSchemeHttps && baseUri.Scheme != Uri.UriSchemeHttp))
         {
             return null;
         }
 
-        return $"{context.Request.Scheme}://{context.Request.Host}/quote/v1/agent/sessions/{sessionId:D}/thinking";
+        return new Uri(baseUri, $"/quote/v1/agent/sessions/{sessionId:D}/thinking").ToString();
     }
 
     private static string? ReadString(

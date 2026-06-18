@@ -127,6 +127,58 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_stream_with_attachment_does_not_emit_callback_without_explicit_callback_base_url()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["QuoteAgent:EnableThinkingCallbacks"] = "true"
+                });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Please quote this hand sketch.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "manufacturing-sketch.png",
+                        ContentType = "image/png",
+                        FileSizeBytes = 120_000,
+                        Kind = "sketch",
+                        Url = "https://files.example.test/manufacturing-sketch.png"
+                    }
+                ]
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        Assert.Null(chatbot.LastStreamRequest.CallbackUrl);
+        var attachment = Assert.Single(chatbot.LastStreamRequest.Attachments!);
+        Assert.Equal("image", attachment.Type);
+        Assert.Equal("https://files.example.test/manufacturing-sketch.png", attachment.Url);
+        Assert.Equal("image/png", attachment.MimeType);
+    }
+
+    [Fact]
     public async Task Agent_message_stream_returns_fallback_final_state_when_chatbot_stream_fails()
     {
         var chatbot = new RecordingChatbotServiceClient
