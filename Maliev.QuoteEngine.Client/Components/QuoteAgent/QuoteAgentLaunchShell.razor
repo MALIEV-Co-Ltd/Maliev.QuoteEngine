@@ -195,33 +195,32 @@
             }
             else
             {
-                <button type="button" class="qe-agent-signin-icon-btn" @onclick='@(() => OpenAuthDialog("sign-in"))'>
-                    <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
-                    <span>@Text("Sign in", "เข้าสู่ระบบ")</span>
-                </button>
                 <div class="qe-agent-signin-card">
-                    <strong>@Text("Sign in to start pricing", "เข้าสู่ระบบเพื่อดูราคา")</strong>
-                    <p>@Text("Unlock the full power of MALIEV.", "ปลดล็อกพลังเต็มของ MALIEV")</p>
-                    <ul>
-                        <li>
-                            <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
-                            <span>@Text("Save projects", "บันทึกโปรเจกต์")</span>
-                        </li>
-                        <li>
-                            <MudIcon Icon="@Icons.Material.Outlined.RequestQuote" Size="Size.Small" />
-                            <span>@Text("Instant pricing", "ราคาทันที")</span>
-                        </li>
-                        <li>
-                            <MudIcon Icon="@Icons.Material.Outlined.BarChart" Size="Size.Small" />
-                            <span>@Text("Track quotes", "ติดตามใบเสนอราคา")</span>
-                        </li>
-                    </ul>
-                    <button type="button" class="qe-agent-signin-btn" @onclick='@(() => OpenAuthDialog("sign-in"))'>
-                        @Text("Get started", "เริ่มต้นใช้งาน")
-                    </button>
+                    <div class="qe-agent-signin-panel">
+                        <strong>@Text("Your workspace. Always free.", "พื้นที่ทำงานของคุณ ฟรีเสมอ")</strong>
+                        <p>@Text("Save projects, get instant pricing, and track quotes in one place. No credit card required.", "บันทึกโปรเจกต์ ดูราคาทันที และติดตามใบเสนอราคาได้ในที่เดียว ไม่ต้องใช้บัตรเครดิต")</p>
+                        <ul>
+                            <li>
+                                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
+                                <span>@Text("Save projects & stay organized", "บันทึกโปรเจกต์และจัดระเบียบงาน")</span>
+                            </li>
+                            <li>
+                                <MudIcon Icon="@Icons.Material.Outlined.RequestQuote" Size="Size.Small" />
+                                <span>@Text("Instant pricing & accurate quotes", "ราคาทันทีและใบเสนอราคาที่แม่นยำ")</span>
+                            </li>
+                            <li>
+                                <MudIcon Icon="@Icons.Material.Outlined.BarChart" Size="Size.Small" />
+                                <span>@Text("Track quotes & close more jobs", "ติดตามใบเสนอราคาและปิดงานได้มากขึ้น")</span>
+                            </li>
+                        </ul>
+                        <button type="button" class="qe-agent-signin-btn" @onclick='@(() => OpenAuthDialog("sign-in"))'>
+                            <span>@Text("Continue", "ดำเนินการต่อ")</span>
+                            <MudIcon Icon="@Icons.Material.Outlined.ArrowForward" Size="Size.Small" />
+                        </button>
+                    </div>
                     <p class="qe-agent-signin-secure">
-                        <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Small" />
-                        <span>@Text("Secure and private", "ปลอดภัยและเป็นส่วนตัว")</span>
+                        <MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" />
+                        <span>@Text("Secure, private, and built for business", "ปลอดภัย เป็นส่วนตัว และสร้างมาเพื่อธุรกิจ")</span>
                     </p>
                 </div>
             }

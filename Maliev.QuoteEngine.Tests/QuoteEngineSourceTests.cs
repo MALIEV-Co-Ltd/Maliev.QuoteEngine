@@ -812,8 +812,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("MainClass => _messages.Count == 0 ? \"qe-agent-main qe-agent-main--empty\" : \"qe-agent-main qe-agent-main--chat\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-signin-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-signin-panel\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-signin-btn\"", component, StringComparison.Ordinal);
-        Assert.Contains("@Text(\"Sign in to start pricing\", \"เข้าสู่ระบบเพื่อดูราคา\")", component, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Your workspace. Always free.\", \"พื้นที่ทำงานของคุณ ฟรีเสมอ\")", component, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Continue\", \"ดำเนินการต่อ\")", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-signin-icon-btn\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Sign in / Sign up", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-signup-btn\"", component, StringComparison.Ordinal);
         Assert.Contains("OpenAuthDialog(\"sign-in\")", component, StringComparison.Ordinal);
@@ -1457,6 +1461,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-pin-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains("opacity: 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-empty-projects", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-signin-panel", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-width: 320px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-rail-foot .qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-auth-modal", agentStyles, StringComparison.Ordinal);

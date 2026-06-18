@@ -1307,10 +1307,11 @@
 }
 
 .qe-agent-rail-foot {
+    display: block;
     width: 100%;
     min-height: 44px;
     margin: 0;
-    padding: 8px 0 6px;
+    padding: 10px 0 8px;
 }
 
 .qe-agent-rail-foot a {
@@ -1361,105 +1362,123 @@
 }
 
 .qe-agent-signin-card {
-    display: flex;
-    flex-direction: column;
-    gap: 7px;
+    display: grid;
+    gap: 18px;
     width: 100%;
-    padding: 12px;
-    border: 1px solid var(--qe-agent-line);
-    border-radius: 16px;
-    background: var(--qe-agent-surface);
+    max-width: 320px;
+    margin: 0 auto;
+}
+
+.qe-agent-signin-panel {
+    display: grid;
+    gap: 13px;
+    width: 100%;
+    padding: clamp(18px, 2.8vw, 24px);
+    border: 1px solid rgba(255, 255, 255, .1);
+    border-radius: 8px;
+    background:
+        linear-gradient(180deg, rgba(39, 40, 45, .96), rgba(19, 20, 24, .98)),
+        #15161a;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, .06),
+        0 18px 46px rgba(0, 0, 0, .18);
+    color: #f6f7f8;
 }
 
 .qe-agent-signin-card strong {
     display: block;
-    font-size: 13px;
-    font-weight: 700;
-    color: var(--qe-agent-ink);
-    line-height: 1.3;
+    max-width: 12ch;
+    font-size: clamp(21px, 2.4vw, 26px);
+    font-weight: 750;
+    color: #f7f7f8;
+    line-height: 1.18;
+    letter-spacing: 0;
 }
 
-.qe-agent-signin-card > p {
+.qe-agent-signin-panel > p {
     margin: 0;
-    font-size: 12px;
-    color: var(--qe-agent-muted);
-    line-height: 1.4;
+    font-size: 14px;
+    color: rgba(255, 255, 255, .68);
+    line-height: 1.55;
 }
 
-.qe-agent-signin-card ul {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin: 0 0 2px;
+.qe-agent-signin-panel ul {
+    display: grid;
+    gap: 7px;
+    margin: 3px 0 4px;
     padding: 0;
     list-style: none;
 }
 
-.qe-agent-signin-card li {
+.qe-agent-signin-panel li {
     display: grid;
-    grid-template-columns: 16px minmax(0, 1fr);
+    grid-template-columns: 22px minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--qe-agent-muted);
+    gap: 10px;
+    min-height: 46px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, .09);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, .035);
+    color: rgba(255, 255, 255, .76);
+    font-size: 13px;
+    line-height: 1.3;
+}
+
+.qe-agent-signin-panel li .mud-icon-size-small {
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    color: rgba(255, 255, 255, .58);
 }
 
 .qe-agent-signin-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 8px;
     width: 100%;
-    min-height: 36px;
-    padding: 8px 13px;
-    border: 1px solid var(--qe-agent-inverse);
-    border-radius: 12px;
+    min-height: 54px;
+    padding: 13px 18px;
+    border: 1px solid rgba(255, 255, 255, .92);
+    border-radius: 8px;
     white-space: nowrap;
     line-height: 1.2;
-    background: var(--qe-agent-inverse);
-    color: var(--qe-agent-inverse-text) !important;
-    font-size: 13px;
-    font-weight: 600;
+    background: #ffffff;
+    color: #101114 !important;
+    font-size: 16px;
+    font-weight: 750;
     text-decoration: none;
     cursor: pointer;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, .28);
 }
 
 .qe-agent-signin-btn:hover {
-    border-color: color-mix(in srgb, var(--qe-agent-inverse) 82%, transparent);
-    background: color-mix(in srgb, var(--qe-agent-inverse) 82%, transparent);
-    color: var(--qe-agent-inverse-text) !important;
+    border-color: #ffffff;
+    background: #f2f3f5;
+    color: #101114 !important;
 }
 
 .qe-agent-rail-foot .qe-agent-signin-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid var(--qe-agent-inverse);
-    background: var(--qe-agent-inverse);
-    color: var(--qe-agent-inverse-text) !important;
     text-align: center;
 }
-
-.qe-agent-rail-foot .qe-agent-signin-btn:hover {
-    border-color: color-mix(in srgb, var(--qe-agent-inverse) 82%, transparent);
-    background: color-mix(in srgb, var(--qe-agent-inverse) 82%, transparent);
-    color: var(--qe-agent-inverse-text) !important;
-}
-
 
 .qe-agent-signin-secure {
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     gap: 8px;
     margin: 0;
-    font-size: 11px;
-    color: var(--qe-agent-muted);
+    padding: 0 4px;
+    font-size: 13px;
+    color: color-mix(in srgb, var(--qe-agent-muted) 86%, transparent);
+    line-height: 1.35;
 }
 
 .qe-agent-signin-secure .mud-icon-size-small {
-    width: 14px;
-    height: 14px;
-    min-width: 14px;
+    width: 16px;
+    height: 16px;
+    min-width: 16px;
 }
 
 
@@ -5167,7 +5186,8 @@
     }
 
     .qe-agent-signin-card {
-        display: flex;
+        display: grid;
+        max-width: min(320px, 100%);
     }
 
     .qe-agent-signin-icon-btn {
