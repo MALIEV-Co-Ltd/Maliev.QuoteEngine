@@ -1569,7 +1569,9 @@
     private const int SearchMinimumCharacters = 3;
     private const int SearchPromptVisibleCharacters = 28;
     private const int DictationMeterBarCount = 320;
+    private const int AgentStreamRevealCharacters = 18;
     private static readonly TimeSpan AgentHealthRefreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan AgentStreamRevealInterval = TimeSpan.FromMilliseconds(28);
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -1634,6 +1636,7 @@
     private bool _scrollToLatestMessageRequested;
     private bool _scrollUpdatePending;
     private bool _showScrollToBottomButton;
+    private bool _disposed;
     private DotNetObjectReference<QuoteAgentLaunchShell>? _composerDotNetRef;
     private IJSObjectReference? _composerModule;
     private IJSObjectReference? _sketchModule;
@@ -2271,8 +2274,7 @@
 
                 if (streamEvent.Type.Equals("delta", StringComparison.OrdinalIgnoreCase))
                 {
-                    assistantMessage.Content += streamEvent.Delta;
-                    await InvokeAsync(StateHasChanged);
+                    QueueAssistantStreamDelta(assistantMessage, streamEvent.Delta);
                 }
                 else if (streamEvent.Type.Equals("thought", StringComparison.OrdinalIgnoreCase) &&
                          !string.IsNullOrWhiteSpace(streamEvent.Thought))
@@ -2284,6 +2286,7 @@
                 else if (streamEvent.Type.Equals("final", StringComparison.OrdinalIgnoreCase) &&
                          streamEvent.Response is not null)
                 {
+                    await FlushAssistantStreamAsync(assistantMessage);
                     assistantMessage.IsThinking = false;
                     assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps ?? [];
                     _gates = streamEvent.Response.Gates;
@@ -2346,6 +2349,58 @@
             .ToList();
     }
 
+    private void QueueAssistantStreamDelta(AgentMessageRow assistantMessage, string? delta)
+    {
+        if (string.IsNullOrEmpty(delta))
+        {
+            return;
+        }
+
+        assistantMessage.PendingStreamContent += delta;
+        _ = RevealAssistantStreamAsync(assistantMessage);
+    }
+
+    private async Task RevealAssistantStreamAsync(AgentMessageRow assistantMessage)
+    {
+        if (assistantMessage.StreamRevealRunning)
+        {
+            return;
+        }
+
+        assistantMessage.StreamRevealRunning = true;
+        try
+        {
+            while (!_disposed && !string.IsNullOrEmpty(assistantMessage.PendingStreamContent))
+            {
+                RevealNextAssistantStreamChunk(assistantMessage);
+                RequestScrollToLatestMessage();
+                await InvokeAsync(StateHasChanged);
+                await Task.Delay(AgentStreamRevealInterval);
+            }
+        }
+        finally
+        {
+            assistantMessage.StreamRevealRunning = false;
+        }
+    }
+
+    private async Task FlushAssistantStreamAsync(AgentMessageRow assistantMessage)
+    {
+        if (!string.IsNullOrEmpty(assistantMessage.PendingStreamContent))
+        {
+            assistantMessage.Content += assistantMessage.PendingStreamContent;
+            assistantMessage.PendingStreamContent = string.Empty;
+            RequestScrollToLatestMessage();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static void RevealNextAssistantStreamChunk(AgentMessageRow assistantMessage)
+    {
+        var revealLength = Math.Min(AgentStreamRevealCharacters, assistantMessage.PendingStreamContent.Length);
+        assistantMessage.Content += assistantMessage.PendingStreamContent[..revealLength];
+        assistantMessage.PendingStreamContent = assistantMessage.PendingStreamContent[revealLength..];
+    }
     private string BuildAttachmentOnlyMessage(IReadOnlyList<ComposerAttachmentPreview> attachments)
     {
         var hasSketch = attachments.Any(attachment => attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase));
@@ -4720,6 +4775,11 @@
 
         public string Content { get; set; } = content;
 
+        public string PendingStreamContent { get; set; } = string.Empty;
+
+        public bool StreamRevealRunning { get; set; }
+
+
         public bool IsProcessing { get; set; }
 
         public bool IsThinking { get; set; }
@@ -4893,6 +4953,8 @@
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
+
         if (_agentHealthCts is not null)
         {
             await _agentHealthCts.CancelAsync();
