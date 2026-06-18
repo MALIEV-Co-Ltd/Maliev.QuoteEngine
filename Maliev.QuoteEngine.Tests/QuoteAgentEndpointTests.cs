@@ -2006,7 +2006,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task Agent_connector_registry_lists_safe_customer_connectors()
+    public async Task Agent_connector_registry_requires_signed_in_customer()
     {
         using var client = factory.CreateClient();
         var sessionId = Guid.NewGuid();
@@ -2016,31 +2016,15 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var connectors = document.RootElement.GetProperty("connectors").EnumerateArray().ToArray();
 
         Assert.Equal(sessionId, document.RootElement.GetProperty("sessionId").GetGuid());
-        Assert.False(document.RootElement.GetProperty("requiresAuthenticationToList").GetBoolean());
-
-        var googleDrive = Assert.Single(connectors, connector =>
-            connector.GetProperty("connectorId").GetString() == "google-drive");
-        Assert.Equal("Google Drive", googleDrive.GetProperty("displayName").GetString());
-        Assert.Equal("available", googleDrive.GetProperty("status").GetString());
-        Assert.Equal("file_import", googleDrive.GetProperty("category").GetString());
-        Assert.True(googleDrive.GetProperty("requiresAuthenticationToConnect").GetBoolean());
-        Assert.False(googleDrive.GetProperty("isConnected").GetBoolean());
-        Assert.Contains("STEP", googleDrive.GetProperty("supportedFileTypes").EnumerateArray().Select(item => item.GetString()));
-
-        Assert.Contains(connectors, connector =>
-            connector.GetProperty("connectorId").GetString() == "blender" &&
-            connector.GetProperty("category").GetString() == "cad_sender" &&
-            connector.GetProperty("status").GetString() == "future");
-        Assert.Contains(connectors, connector =>
-            connector.GetProperty("connectorId").GetString() == "freecad" &&
-            connector.GetProperty("category").GetString() == "cad_sender" &&
-            connector.GetProperty("status").GetString() == "future");
+        Assert.True(document.RootElement.GetProperty("requiresAuthenticationToList").GetBoolean());
+        Assert.Empty(connectors);
     }
 
     [Fact]
-    public async Task Agent_connector_registry_endpoint_lists_plugins_without_tool_context()
+    public async Task Agent_connector_registry_endpoint_lists_google_drive_only_for_signed_in_customer()
     {
-        using var client = factory.CreateClient();
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-connectors@example.com");
         var sessionId = Guid.NewGuid();
 
         var response = await client.GetAsync($"/quote/v1/agent/sessions/{sessionId:D}/connectors");
@@ -2050,15 +2034,15 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.NotNull(registry);
         Assert.Equal(sessionId, registry.SessionId);
         Assert.False(registry.RequiresAuthenticationToList);
-        Assert.Contains(registry.Connectors, connector =>
-            connector.ConnectorId == "google-drive" &&
-            connector.DisplayName == "Google Drive" &&
-            connector.Status == "available" &&
-            connector.Category == "file_import" &&
-            connector.RequiresAuthenticationToConnect &&
-            connector.SupportedFileTypes.Contains("STEP"));
-        Assert.Contains(registry.Connectors, connector => connector.ConnectorId == "blender" && connector.Status == "future");
-        Assert.Contains(registry.Connectors, connector => connector.ConnectorId == "freecad" && connector.Status == "future");
+        var connector = Assert.Single(registry.Connectors);
+        Assert.Equal("google-drive", connector.ConnectorId);
+        Assert.Equal("Google Drive", connector.DisplayName);
+        Assert.Equal("available", connector.Status);
+        Assert.Equal("file_import", connector.Category);
+        Assert.True(connector.RequiresAuthenticationToConnect);
+        Assert.Contains("STEP", connector.SupportedFileTypes);
+        Assert.DoesNotContain(registry.Connectors, item => item.ConnectorId == "blender");
+        Assert.DoesNotContain(registry.Connectors, item => item.ConnectorId == "freecad");
     }
 
     [Fact]

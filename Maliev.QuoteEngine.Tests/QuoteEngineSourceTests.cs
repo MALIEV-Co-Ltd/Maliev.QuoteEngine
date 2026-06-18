@@ -1015,7 +1015,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-quick-actions-menu\"", component, StringComparison.Ordinal);
         Assert.Contains("Hand sketch", component, StringComparison.Ordinal);
         Assert.Contains("ApplyConnectorFromPluginsAsync", component, StringComparison.Ordinal);
-        Assert.Contains("Google Drive is available first; CAD tools follow after MVP.", component, StringComparison.Ordinal);
+        Assert.Contains("Google Drive is available for signed-in customers.", component, StringComparison.Ordinal);
+        Assert.Contains("Sign in to connect Google Drive.", component, StringComparison.Ordinal);
         Assert.Contains("connector.Status.Equals(\"available\"", component, StringComparison.Ordinal);
         Assert.Contains("Text(\"Connect\", \"เชื่อมต่อ\")", component, StringComparison.Ordinal);
         Assert.Contains("Paste an image from the clipboard", component, StringComparison.Ordinal);

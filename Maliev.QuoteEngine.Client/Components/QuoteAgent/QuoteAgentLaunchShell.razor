@@ -215,11 +215,15 @@
                     <section class="qe-agent-management-section">
                         <header>
                             <strong>@Text("Available connectors", "ตัวเชื่อมต่อที่มี")</strong>
-                            <small>@Text("Google Drive is available first; CAD tools follow after MVP.", "Google Drive พร้อมใช้งานก่อน จากนั้นเป็นเครื่องมือ CAD หลัง MVP")</small>
+                            <small>@Text("Google Drive is available for signed-in customers.", "Google Drive พร้อมใช้งานสำหรับลูกค้าที่ลงชื่อเข้าใช้")</small>
                         </header>
                         @if (_connectors.Count == 0)
                         {
-                            <p class="qe-agent-management-empty">@Text("Connectors will appear here when the registry is available.", "ตัวเชื่อมต่อจะแสดงที่นี่เมื่อทะเบียนพร้อมใช้งาน")</p>
+                            <p class="qe-agent-management-empty">
+                                @(_connectorRegistryRequiresAuthentication
+                                    ? Text("Sign in to connect Google Drive.", "ลงชื่อเข้าใช้เพื่อเชื่อมต่อ Google Drive")
+                                    : Text("Connectors will appear here when the registry is available.", "ตัวเชื่อมต่อจะแสดงที่นี่เมื่อทะเบียนพร้อมใช้งาน"))
+                            </p>
                         }
                         else
                         {
@@ -1598,6 +1602,7 @@
     private bool _focusSearchPending;
     private bool _projectNavigationLoaded;
     private bool _connectorRegistryLoaded;
+    private bool _connectorRegistryRequiresAuthentication;
     private bool _searchLoading;
     private bool _customerSearchUnavailable;
     private bool _dictating;
@@ -4457,17 +4462,20 @@
         {
             var registry = await Api.GetConnectorRegistryAsync(SessionId);
             _connectors = registry.Connectors;
+            _connectorRegistryRequiresAuthentication = registry.RequiresAuthenticationToList;
             _connectorRegistryLoaded = true;
         }
         catch (QuoteEngineApiException ex)
         {
             _connectors = [];
+            _connectorRegistryRequiresAuthentication = false;
             _connectorRegistryLoaded = false;
             _error = ex.UserMessage;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
             _connectors = [];
+            _connectorRegistryRequiresAuthentication = false;
             _connectorRegistryLoaded = false;
             _error = Text("Connector registry is temporarily unavailable.", "ทะเบียนตัวเชื่อมต่อยังไม่พร้อมใช้งานชั่วคราว");
         }

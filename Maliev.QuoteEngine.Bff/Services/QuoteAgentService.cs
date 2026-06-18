@@ -1515,50 +1515,42 @@ internal sealed class QuoteAgentService(
     private QuoteAgentConnectorRegistryResponse BuildConnectorRegistry(QuoteAgentSessionState state)
     {
         var customerId = ResolveCustomerId();
-        var isGoogleDriveConnected = customerId.HasValue && googleDriveConnectorStore.IsConnected(customerId.Value);
+        if (!customerId.HasValue)
+        {
+            return new QuoteAgentConnectorRegistryResponse
+            {
+                SessionId = state.SessionId,
+                RequiresAuthenticationToList = true,
+                Connectors = []
+            };
+        }
+
+        state.CustomerId = customerId;
+        var isGoogleDriveConnected = googleDriveConnectorStore.IsConnected(customerId.Value);
         return new QuoteAgentConnectorRegistryResponse
         {
             SessionId = state.SessionId,
             RequiresAuthenticationToList = false,
             Connectors =
             [
-                new QuoteAgentConnectorDto
-                {
-                    ConnectorId = "google-drive",
-                    DisplayName = "Google Drive",
-                    Category = "file_import",
-                    Status = isGoogleDriveConnected ? "connected" : "available",
-                    Description = "Connect Google Drive to choose customer CAD, drawings, photos, and sketches from a trusted Make Studio handoff.",
-                    RequiresAuthenticationToConnect = true,
-                    IsConnected = isGoogleDriveConnected,
-                    SupportedFileTypes = ["STEP", "STL", "3MF", "OBJ", "GLB", "PDF", "JPG", "PNG"],
-                    ActionHint = isGoogleDriveConnected ? "browse_google_drive" : "connect_google_drive"
-                },
-                new QuoteAgentConnectorDto
-                {
-                    ConnectorId = "blender",
-                    DisplayName = "Blender",
-                    Category = "cad_sender",
-                    Status = "future",
-                    Description = "Send meshes or generated manufacturing previews from Blender to Make Studio in a future connector.",
-                    RequiresAuthenticationToConnect = true,
-                    IsConnected = false,
-                    SupportedFileTypes = ["STL", "OBJ", "GLB"],
-                    ActionHint = "explain_future_connector"
-                },
-                new QuoteAgentConnectorDto
-                {
-                    ConnectorId = "freecad",
-                    DisplayName = "FreeCAD",
-                    Category = "cad_sender",
-                    Status = "future",
-                    Description = "Send parametric CAD and exported STEP files from FreeCAD to Make Studio in a future connector.",
-                    RequiresAuthenticationToConnect = true,
-                    IsConnected = false,
-                    SupportedFileTypes = ["FCStd", "STEP", "STP"],
-                    ActionHint = "explain_future_connector"
-                }
+                BuildGoogleDriveConnector(isGoogleDriveConnected)
             ]
+        };
+    }
+
+    private static QuoteAgentConnectorDto BuildGoogleDriveConnector(bool isConnected)
+    {
+        return new QuoteAgentConnectorDto
+        {
+            ConnectorId = "google-drive",
+            DisplayName = "Google Drive",
+            Category = "file_import",
+            Status = isConnected ? "connected" : "available",
+            Description = "Connect Google Drive to choose customer CAD, drawings, photos, and sketches from a trusted Make Studio handoff.",
+            RequiresAuthenticationToConnect = true,
+            IsConnected = isConnected,
+            SupportedFileTypes = ["STEP", "STL", "3MF", "OBJ", "GLB", "PDF", "JPG", "PNG"],
+            ActionHint = isConnected ? "browse_google_drive" : "connect_google_drive"
         };
     }
 
@@ -1567,8 +1559,10 @@ internal sealed class QuoteAgentService(
         IReadOnlyDictionary<string, JsonElement> arguments)
     {
         var connectorId = NormalizeConnectorId(ReadString(arguments, "connector_id") ?? ReadString(arguments, "connectorId"));
-        var connector = BuildConnectorRegistry(state).Connectors
-            .FirstOrDefault(item => item.ConnectorId.Equals(connectorId, StringComparison.OrdinalIgnoreCase));
+        var customerId = ResolveCustomerId();
+        var connector = connectorId.Equals("google-drive", StringComparison.OrdinalIgnoreCase)
+            ? BuildGoogleDriveConnector(customerId.HasValue && googleDriveConnectorStore.IsConnected(customerId.Value))
+            : null;
         if (connector is null)
         {
             return new QuoteAgentConnectorHandoffResponse
