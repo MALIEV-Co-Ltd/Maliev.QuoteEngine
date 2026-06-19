@@ -4145,6 +4145,74 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains("rounded edges", customerClient.LastObservedMemory.Value, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Agent_message_after_preview_feedback_includes_observed_feedback_memory()
+    {
+        var customerEmail = $"preview.feedback.{Guid.NewGuid():N}@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
+        var chatbot = new RecordingChatbotServiceClient();
+        var customerClient = new MemoryCustomerServiceClient(customerId);
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<ICustomerServiceClient>();
+                services.AddSingleton<ICustomerServiceClient>(customerClient);
+            });
+        });
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(customerEmail)}");
+        Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+
+        var sessionId = Guid.NewGuid();
+        var commands = new[]
+        {
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            }
+        };
+        await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Mounting plate preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            },
+            customerId);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var artifact = Assert.Single(state.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var feedbackResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{artifact.ArtifactId:D}/feedback",
+            new QuoteAgentPreviewFeedbackRequest
+            {
+                Rating = 1,
+                Comment = "Make the next draft thinner with rounded corners."
+            },
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Please revise the generated design draft.",
+            Language = "en"
+        }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains("Customer memory:", chatbot.LastSendRequest!.Content, StringComparison.Ordinal);
+        Assert.Contains("Make the next draft thinner with rounded corners.", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class RecordingChatbotServiceClient : IChatbotServiceClient
     {
         public ChatbotInitiateSessionRequest? LastInitiateRequest { get; private set; }
@@ -4364,6 +4432,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
     private sealed class MemoryCustomerServiceClient(Guid expectedCustomerId) : ICustomerServiceClient
     {
+        private readonly List<CustomerMemoryResponse> _observedMemories = [];
+
         public Guid? LastMemoryCustomerId { get; private set; }
         public Guid? LastObservedMemoryCustomerId { get; private set; }
         public CustomerMemoryObserveRequest? LastObservedMemory { get; private set; }
@@ -4438,21 +4508,24 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
                 Query = query ?? string.Empty,
                 Limit = limit,
                 Items = customerId == expectedCustomerId
-                    ?
-                    [
-                        new CustomerMemoryResponse
+                    ? new[]
                         {
-                            Id = Guid.Parse("2e9be30f-6f39-44ed-9a5d-190272c94f45"),
-                            CustomerId = customerId,
-                            MemoryType = "make_studio_preference",
-                            Key = "preferred_material",
-                            Value = "Customer prefers PA12 nylon for functional prototypes.",
-                            Confidence = 0.88m,
-                            Source = "quote_agent",
-                            HitCount = 3,
-                            LastObservedAt = DateTime.UtcNow
+                            new CustomerMemoryResponse
+                            {
+                                Id = Guid.Parse("2e9be30f-6f39-44ed-9a5d-190272c94f45"),
+                                CustomerId = customerId,
+                                MemoryType = "make_studio_preference",
+                                Key = "preferred_material",
+                                Value = "Customer prefers PA12 nylon for functional prototypes.",
+                                Confidence = 0.88m,
+                                Source = "quote_agent",
+                                HitCount = 3,
+                                LastObservedAt = DateTime.UtcNow
+                            }
                         }
-                    ]
+                        .Concat(_observedMemories)
+                        .Take(limit)
+                        .ToList()
                     : []
             });
         }
@@ -4464,7 +4537,25 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         {
             LastObservedMemoryCustomerId = customerId;
             LastObservedMemory = request;
-            return Task.FromResult<CustomerMemoryResponse?>(null);
+            var response = new CustomerMemoryResponse
+            {
+                Id = Guid.NewGuid(),
+                CustomerId = customerId,
+                MemoryType = request.MemoryType,
+                Key = request.Key,
+                Value = request.Value,
+                Confidence = request.Confidence,
+                Source = request.Source,
+                HitCount = 1,
+                LastObservedAt = DateTime.UtcNow,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            _observedMemories.RemoveAll(memory =>
+                memory.MemoryType.Equals(request.MemoryType, StringComparison.OrdinalIgnoreCase) &&
+                memory.Key.Equals(request.Key, StringComparison.OrdinalIgnoreCase));
+            _observedMemories.Insert(0, response);
+            return Task.FromResult<CustomerMemoryResponse?>(response);
         }
 
         private static CustomerProfileResponse BuildProfile(
