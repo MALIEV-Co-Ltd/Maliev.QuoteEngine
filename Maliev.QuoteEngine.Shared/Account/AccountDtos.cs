@@ -140,6 +140,12 @@ public sealed record CustomerOrderFileDto(
     long FileSizeBytes,
     DateTimeOffset UploadedAt);
 
+public sealed record CustomerOrderFileDownloadResponse(
+    long FileId,
+    string FileName,
+    string DownloadUrl,
+    DateTimeOffset ExpiresAt);
+
 public sealed record CustomerNdaDto(
     Guid NdaId,
     string Title,

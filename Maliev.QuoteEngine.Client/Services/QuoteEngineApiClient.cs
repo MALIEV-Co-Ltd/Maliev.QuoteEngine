@@ -236,6 +236,17 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public async Task<CustomerOrderFileDownloadResponse> GetOrderFileDownloadAsync(
+        string orderNumber,
+        long fileId,
+        CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<CustomerOrderFileDownloadResponse>(
+            $"quote/v1/account/orders/{Uri.EscapeDataString(orderNumber)}/files/{fileId}/download",
+            cancellationToken)
+            ?? throw new InvalidOperationException("The QuoteEngine API returned an empty order file download response.");
+    }
+
     public async Task<IReadOnlyList<CustomerNdaDto>> GetNdasAsync(CancellationToken cancellationToken = default)
     {
         return await httpClient.GetFromJsonAsync<IReadOnlyList<CustomerNdaDto>>("quote/v1/account/ndas", cancellationToken) ?? [];

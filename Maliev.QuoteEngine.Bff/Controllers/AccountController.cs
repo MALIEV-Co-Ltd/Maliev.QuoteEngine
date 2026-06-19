@@ -133,6 +133,38 @@ public sealed class AccountController(
         return detail is null ? NotFound() : Ok(detail);
     }
 
+    [HttpGet("orders/{orderNumber}/files/{fileId:long}/download")]
+    public async Task<IActionResult> DownloadOrderFile(
+        string orderNumber,
+        long fileId,
+        CancellationToken cancellationToken)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId)) return Unauthorized();
+
+        var customerOrders = await orderClient.GetByCustomerAsync(customerId.ToString("D"), cancellationToken);
+        if (!customerOrders.Any(order => string.Equals(order.OrderNumber, orderNumber, StringComparison.OrdinalIgnoreCase)))
+        {
+            return NotFound();
+        }
+
+        var detail = await orderClient.GetDetailAsync(orderNumber, cancellationToken);
+        var file = detail?.OrderFiles.FirstOrDefault(candidate => candidate.FileId == fileId);
+        if (file is null || !IsSafeOrderFileStoragePath(file.ObjectPath))
+        {
+            return NotFound();
+        }
+
+        var downloadUrl = await uploadClient.GetDownloadUrlByPathAsync(
+            file.ObjectPath,
+            expirationMinutes: 15,
+            ct: cancellationToken);
+        return Ok(new CustomerOrderFileDownloadResponse(
+            file.FileId,
+            file.FileName,
+            downloadUrl,
+            DateTimeOffset.UtcNow.AddMinutes(15)));
+    }
+
     [HttpGet("ndas")]
     public IActionResult GetNdas()
     {
@@ -317,6 +349,24 @@ public sealed class AccountController(
 
         return normalized.StartsWith("customer-documents/", StringComparison.OrdinalIgnoreCase)
             || normalized.StartsWith("customers/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSafeOrderFileStoragePath(string storagePath)
+    {
+        if (string.IsNullOrWhiteSpace(storagePath))
+        {
+            return false;
+        }
+
+        var normalized = storagePath.Trim().Replace('\\', '/');
+        if (normalized.StartsWith("/", StringComparison.Ordinal)
+            || normalized.Contains("://", StringComparison.Ordinal)
+            || normalized.Split(['/'], StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or ".."))
+        {
+            return false;
+        }
+
+        return normalized.StartsWith("orders/", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizeDocumentFileName(string fileName)

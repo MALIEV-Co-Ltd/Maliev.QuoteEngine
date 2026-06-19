@@ -3085,6 +3085,12 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("Document", orderFile.FileCategory);
         Assert.Equal($"orders/{order.OrderNumber}/files/make-studio-manufacturing-packet.pdf", orderFile.ObjectPath);
         Assert.Equal("application/pdf", orderFile.ContentType);
+        var download = await client.GetFromJsonAsync<CustomerOrderFileDownloadResponse>(
+            $"/quote/v1/account/orders/{Uri.EscapeDataString(order.OrderNumber)}/files/{orderFile.FileId}/download");
+        Assert.NotNull(download);
+        Assert.Equal(orderFile.FileId, download.FileId);
+        Assert.Equal(orderFile.FileName, download.FileName);
+        Assert.Contains(Uri.EscapeDataString(orderFile.ObjectPath), download.DownloadUrl);
         Assert.NotEmpty(detailResp.ManufacturingMilestones);
         Assert.Contains(detailResp.ManufacturingMilestones, milestone =>
             milestone.Key == "order-received" &&
@@ -3121,6 +3127,9 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         using var customerB = await CreateSignedInClientAsync("order-detail-other@example.com");
         var crossCustomerDetail = await customerB.GetAsync($"/quote/v1/account/orders/{Uri.EscapeDataString(order.OrderNumber)}");
         Assert.Equal(HttpStatusCode.NotFound, crossCustomerDetail.StatusCode);
+        var crossCustomerFile = await customerB.GetAsync(
+            $"/quote/v1/account/orders/{Uri.EscapeDataString(order.OrderNumber)}/files/1001/download");
+        Assert.Equal(HttpStatusCode.NotFound, crossCustomerFile.StatusCode);
     }
 
     [Fact]

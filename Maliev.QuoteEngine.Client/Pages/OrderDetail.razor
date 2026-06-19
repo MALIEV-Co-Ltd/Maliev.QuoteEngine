@@ -220,6 +220,12 @@ else
                             <span>@file.FileName</span>
                             <strong>@OrderFileKind(file)</strong>
                             <small>@OrderFileMeta(file)</small>
+                            <button type="button"
+                                    class="qe-secondary-btn"
+                                    disabled="@_openingOrderFileIds.Contains(file.FileId)"
+                                    @onclick="@(() => OpenOrderFileAsync(file))">
+                                @(_openingOrderFileIds.Contains(file.FileId) ? Text("Opening...", "กำลังเปิด...") : Text("Open", "เปิด"))
+                            </button>
                         </div>
                     }
                     @foreach (var document in OrderDocuments)
@@ -291,6 +297,7 @@ else
     private IReadOnlyList<ShippingCourierDto> _couriers = [];
     private List<ShippingRateOptionDto> _shippingRates = [];
     private readonly HashSet<Guid> _openingDocumentIds = [];
+    private readonly HashSet<long> _openingOrderFileIds = [];
     private HubConnection? _notificationConnection;
     private string? _joinedOrderNumber;
     private string? _selectedCourierCode;
@@ -624,6 +631,25 @@ else
         finally
         {
             _openingDocumentIds.Remove(document.DocumentId);
+        }
+    }
+
+    private async Task OpenOrderFileAsync(CustomerOrderFileDto file)
+    {
+        if (_order is null)
+        {
+            return;
+        }
+
+        _openingOrderFileIds.Add(file.FileId);
+        try
+        {
+            var download = await Api.GetOrderFileDownloadAsync(_order.OrderNumber, file.FileId);
+            Navigation.NavigateTo(download.DownloadUrl, forceLoad: true);
+        }
+        finally
+        {
+            _openingOrderFileIds.Remove(file.FileId);
         }
     }
 
