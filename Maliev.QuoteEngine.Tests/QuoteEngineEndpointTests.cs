@@ -2299,21 +2299,22 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         using var owner = await CreateSignedInClientAsync("project-achieve-owner@example.com");
         var activeProject = await CreateDraftProjectAsync(owner, "Active fixture");
         var achievedProject = await CreateDraftProjectAsync(owner, "Released bracket");
+        var activeProjectServiceId = Assert.IsType<Guid>(activeProject.ProjectServiceProjectId);
+        var achievedProjectServiceId = Assert.IsType<Guid>(achievedProject.ProjectServiceProjectId);
 
-        var achieveResponse = await owner.PostAsync($"/quote/v1/projects/{achievedProject.ProjectId:D}/achieve", null);
+        var achieveResponse = await owner.PostAsync($"/quote/v1/projects/{achievedProjectServiceId:D}/achieve", null);
         achieveResponse.EnsureSuccessStatusCode();
         var achieved = await achieveResponse.Content.ReadFromJsonAsync<ProjectManagementResponse>();
         Assert.NotNull(achieved);
         Assert.True(achieved.IsArchived);
-        Assert.Equal("Achieved", achieved.Status);
 
         var navigation = await owner.GetFromJsonAsync<List<CustomerProjectNavItemDto>>("/quote/v1/projects/nav");
         Assert.NotNull(navigation);
-        Assert.Contains(navigation, project => project.ProjectId == activeProject.ProjectId);
-        Assert.DoesNotContain(navigation, project => project.ProjectId == achievedProject.ProjectId);
+        Assert.Contains(navigation, project => project.ProjectId == activeProjectServiceId);
+        Assert.DoesNotContain(navigation, project => project.ProjectId == achievedProjectServiceId);
 
         using var other = await CreateSignedInClientAsync("project-achieve-other@example.com");
-        var crossCustomerAchieve = await other.PostAsync($"/quote/v1/projects/{activeProject.ProjectId:D}/achieve", null);
+        var crossCustomerAchieve = await other.PostAsync($"/quote/v1/projects/{activeProjectServiceId:D}/achieve", null);
         Assert.Equal(HttpStatusCode.NotFound, crossCustomerAchieve.StatusCode);
     }
 

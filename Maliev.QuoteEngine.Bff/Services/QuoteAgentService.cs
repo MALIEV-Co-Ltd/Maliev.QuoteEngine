@@ -588,7 +588,7 @@ internal sealed class QuoteAgentService(
             "pin_project" => await ExecutePinProjectAsync(state, customerId!.Value, action, cancellationToken),
             "unpin_project" => await ExecuteUnpinProjectAsync(state, customerId!.Value, action, cancellationToken),
             "archive_project" => await ExecuteArchiveProjectAsync(state, customerId!.Value, action, cancellationToken),
-            "achieve_project" => ExecuteAchieveProject(state, customerId!.Value, action),
+            "achieve_project" => await ExecuteAchieveProjectAsync(state, customerId!.Value, action, cancellationToken),
             "account_profile_update" => ExecuteAccountProfileUpdate(state, customerId!.Value, action),
             "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
             "quote_approval" => ExecuteQuoteApproval(state),
@@ -2478,14 +2478,19 @@ internal sealed class QuoteAgentService(
         return $"Project {response.ProjectNumber} was archived.";
     }
 
-    private string ExecuteAchieveProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    private async Task<string> ExecuteAchieveProjectAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
         if (!TryResolveProjectId(state, action.Arguments, out var projectId))
         {
             throw new InvalidOperationException("A project is required before marking it achieved.");
         }
 
-        var response = prototypeStore.SetProjectAchieved(customerId, projectId)
+        var response = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
+            ?? prototypeStore.SetProjectAchieved(customerId, projectId)
             ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
         UpsertArtifact(state, "project_achieve", response.Title, "achieved", null, null);
         SetArtifactMetadata(state, "project_achieve", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

@@ -627,7 +627,7 @@ public sealed class QuoteController(
     }
 
     [HttpPost("projects/{projectId:guid}/achieve")]
-    public ActionResult<ProjectManagementResponse> AchieveProject(Guid projectId)
+    public async Task<ActionResult<ProjectManagementResponse>> AchieveProject(Guid projectId, CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -638,7 +638,8 @@ public sealed class QuoteController(
             });
         }
 
-        var achieved = store.SetProjectAchieved(customerId, projectId);
+        var achieved = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
+            ?? store.SetProjectAchieved(customerId, projectId);
         return achieved is null ? NotFound() : Ok(achieved);
     }
 
