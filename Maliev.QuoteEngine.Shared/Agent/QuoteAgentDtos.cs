@@ -62,6 +62,13 @@ public sealed class QuoteAgentMessageRequest
 
     /// <summary>Gets or sets supplemental attachments already available to the browser.</summary>
     public List<QuoteAgentAttachmentDto> Attachments { get; set; } = [];
+
+    /// <summary>Gets or sets the ID of a prior message the customer is quoting/replying to.</summary>
+    public Guid? ReplyToMessageId { get; set; }
+
+    /// <summary>Gets or sets a short snippet of the replied-to message, used for agent context and the reply chip.</summary>
+    [StringLength(400)]
+    public string? ReplyToPreview { get; set; }
 }
 
 /// <summary>

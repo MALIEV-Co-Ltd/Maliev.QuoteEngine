@@ -147,7 +147,7 @@ internal sealed class QuoteAgentService(
         var chatbotResponse = await chatbotClient.SendMessageAsync(new ChatbotSendMessageRequest
         {
             SessionId = chatbotSessionId,
-            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state, customerMemoryContext),
+            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state, customerMemoryContext, request.ReplyToPreview),
             Language = language,
             ModelName = request.ModelName,
             Attachments = chatbotAttachments,
@@ -233,7 +233,7 @@ internal sealed class QuoteAgentService(
         var chatbotStream = chatbotClient.SendMessageStreamAsync(new ChatbotSendMessageRequest
         {
             SessionId = chatbotSessionId,
-            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state, customerMemoryContext),
+            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state, customerMemoryContext, request.ReplyToPreview),
             Language = language,
             ModelName = request.ModelName,
             Attachments = chatbotAttachments,
@@ -4195,7 +4195,8 @@ internal sealed class QuoteAgentService(
         string message,
         string? customerContext,
         QuoteAgentSessionState state,
-        string? customerMemoryContext)
+        string? customerMemoryContext,
+        string? replyToPreview = null)
     {
         var gates = QuoteAgentSessionStore.BuildGates(state, state.CustomerId.HasValue)
             .Select(gate => $"{gate.Code}: {gate.Status}")
@@ -4233,6 +4234,13 @@ internal sealed class QuoteAgentService(
         if (!string.IsNullOrWhiteSpace(customerContext))
         {
             contextLines.Add($"Browser context: {customerContext.Trim()}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(replyToPreview))
+        {
+            contextLines.Add(
+                $"Replying-to: the customer is quoting/replying to an earlier message: \"{replyToPreview.Trim()}\". " +
+                "Treat their message as a direct response to that referenced content.");
         }
 
         contextLines.Add(

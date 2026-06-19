@@ -2299,8 +2299,8 @@
 }
 
 /* Reserve the footer's height always; reveal time + actions only on hover/focus. */
-.qe-agent-message-stack:hover .qe-agent-message-footer,
-.qe-agent-message-stack:focus-within .qe-agent-message-footer {
+.qe-agent-bubble:hover .qe-agent-message-footer,
+.qe-agent-bubble:focus-within .qe-agent-message-footer {
     opacity: 1;
     visibility: visible;
 }
@@ -2325,6 +2325,67 @@
 .qe-agent-message-footer button:hover,
 .qe-agent-message-footer button:focus-visible {
     background: var(--qe-agent-hover);
+    color: var(--qe-agent-ink);
+    outline: none;
+}
+
+/* Quote/reply chip shown on a sent bubble and in the composer. */
+.qe-agent-reply-quote {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    max-width: 100%;
+    margin-bottom: 6px;
+    padding: 4px 10px;
+    border-left: 2px solid var(--qe-agent-accent, #0a72ef);
+    border-radius: 6px;
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    line-height: 1.3;
+}
+
+.qe-agent-reply-quote span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-composer-reply {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+}
+
+.qe-agent-composer-reply-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-composer-reply-cancel {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: currentColor;
+    cursor: pointer;
+}
+
+.qe-agent-composer-reply-cancel:hover,
+.qe-agent-composer-reply-cancel:focus-visible {
+    background: var(--qe-agent-raised);
     color: var(--qe-agent-ink);
     outline: none;
 }

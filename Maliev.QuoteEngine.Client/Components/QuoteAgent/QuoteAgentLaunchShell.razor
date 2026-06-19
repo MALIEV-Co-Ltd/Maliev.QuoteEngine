@@ -588,9 +588,22 @@
                                         }
                                     </div>
                                 }
+                                @if (!string.IsNullOrWhiteSpace(message.ReplyToPreview))
+                                {
+                                    <div class="qe-agent-reply-quote" aria-label="@Text("Replying to", "ตอบกลับ")">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Reply" Size="Size.Small" />
+                                        <span>@message.ReplyToPreview</span>
+                                    </div>
+                                }
                                 <p>@message.Content</p>
                                 <div class="qe-agent-message-footer" aria-label="@Text("Message actions", "ตัวเลือกข้อความ")">
                                     <time datetime="@FormatMessageTimestamp(message.CreatedAt)">@FormatMessageTime(message.CreatedAt)</time>
+                                    <button type="button"
+                                            title="@Text("Reply to message", "ตอบกลับข้อความ")"
+                                            aria-label="@Text("Reply to message", "ตอบกลับข้อความ")"
+                                            @onclick="@(() => BeginReplyAsync(message))">
+                                        <MudIcon Icon="@Icons.Material.Outlined.Reply" Size="Size.Small" />
+                                    </button>
                                     <button type="button"
                                             title="@Text("Copy message", "คัดลอกข้อความ")"
                                             aria-label="@Text("Copy message", "คัดลอกข้อความ")"
@@ -622,6 +635,20 @@
                                 {
                                     <div class="qe-agent-markdown">
                                         @QuoteAgentMarkdownRenderer.Render(message.Content)
+                                    </div>
+                                    <div class="qe-agent-message-footer" aria-label="@Text("Message actions", "ตัวเลือกข้อความ")">
+                                        <button type="button"
+                                                title="@Text("Reply to message", "ตอบกลับข้อความ")"
+                                                aria-label="@Text("Reply to message", "ตอบกลับข้อความ")"
+                                                @onclick="@(() => BeginReplyAsync(message))">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Reply" Size="Size.Small" />
+                                        </button>
+                                        <button type="button"
+                                                title="@Text("Copy message", "คัดลอกข้อความ")"
+                                                aria-label="@Text("Copy message", "คัดลอกข้อความ")"
+                                                @onclick="@(() => CopyMessageTextAsync(message))">
+                                            <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                                        </button>
                                     </div>
                                 }
                                 @if (message.InlineViewer is not null)
@@ -1058,6 +1085,20 @@
 
         <section class="@ComposerWrapClass" aria-label="@Text("Message composer", "กล่องข้อความ")">
             <form class="@ComposerClass" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
+                @if (_replyTo is not null)
+                {
+                    <div class="qe-agent-composer-reply" role="status" aria-label="@Text("Replying to a message", "กำลังตอบกลับข้อความ")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Reply" Size="Size.Small" />
+                        <span class="qe-agent-composer-reply-text">@ReplyChipLabel(_replyTo)</span>
+                        <button type="button"
+                                class="qe-agent-composer-reply-cancel"
+                                title="@Text("Cancel reply", "ยกเลิกการตอบกลับ")"
+                                aria-label="@Text("Cancel reply", "ยกเลิกการตอบกลับ")"
+                                @onclick="CancelReply">
+                            <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                        </button>
+                    </div>
+                }
                 @if (_pendingComposerAttachments.Count > 0)
                 {
                     <div class="qe-agent-composer-attachments"
@@ -1847,6 +1888,7 @@
     private List<QuoteAgentConnectorDto> _connectors = [];
     private Guid _loadedSessionId;
     private string _draftMessage = string.Empty;
+    private AgentMessageRow? _replyTo;
     private string? _error;
     private bool _sending;
     private bool _exportingPdf;
@@ -2578,6 +2620,8 @@
             return;
         }
 
+        var replyTo = _replyTo;
+        _replyTo = null;
         _sending = true;
         _error = null;
         _composerMenuOpen = false;
@@ -2585,7 +2629,10 @@
         _customerQuestion = null;
         _pendingComposerAttachments.Clear();
         EnsureLocalProjectFromMessage(message);
-        _messages.Add(new AgentMessageRow("user", message, attachments: pendingAttachments));
+        _messages.Add(new AgentMessageRow("user", message, attachments: pendingAttachments)
+        {
+            ReplyToPreview = replyTo is null ? null : ReplyChipLabel(replyTo),
+        });
         var assistantMessage = new AgentMessageRow("assistant", string.Empty);
         _messages.Add(assistantMessage);
         var generatedViewerArtifactIdsBeforeTurn = GeneratedViewerArtifactIds(_artifacts);
@@ -2598,7 +2645,9 @@
                 SessionId = SessionId,
                 Message = message,
                 Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en",
-                Attachments = pendingAttachments.Select(attachment => attachment.ToAgentAttachment()).ToList()
+                Attachments = pendingAttachments.Select(attachment => attachment.ToAgentAttachment()).ToList(),
+                ReplyToMessageId = replyTo?.Id,
+                ReplyToPreview = replyTo is null ? null : BuildReplyPreview(replyTo)
             }))
             {
                 if (!assistantMessage.IsProcessing)
@@ -2780,6 +2829,52 @@
                 "ไม่สามารถคัดลอกข้อความได้ โปรดเลือกข้อความแล้วคัดลอกด้วยตนเอง");
             await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private async Task CopyMessageTextAsync(AgentMessageRow message)
+    {
+        if (string.IsNullOrWhiteSpace(message.Content))
+        {
+            return;
+        }
+
+        try
+        {
+            await Js.InvokeVoidAsync("navigator.clipboard.writeText", message.Content);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+            _error = Text(
+                "Message could not be copied. Select the text and copy it manually.",
+                "ไม่สามารถคัดลอกข้อความได้ โปรดเลือกข้อความแล้วคัดลอกด้วยตนเอง");
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task BeginReplyAsync(AgentMessageRow message)
+    {
+        _replyTo = message;
+        await InvokeAsync(StateHasChanged);
+        await FocusComposerAsync();
+    }
+
+    private void CancelReply()
+    {
+        _replyTo = null;
+    }
+
+    private string BuildReplyPreview(AgentMessageRow message)
+    {
+        var text = (message.Content ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
+        return text.Length > 120 ? text[..117] + "…" : text;
+    }
+
+    private string ReplyChipLabel(AgentMessageRow message)
+    {
+        var who = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
+            ? Text("You", "คุณ")
+            : Text("Assistant", "ผู้ช่วย");
+        return $"{who}: {BuildReplyPreview(message)}";
     }
 
     private async Task EditUserMessageAsync(AgentMessageRow message)
@@ -5894,9 +5989,13 @@
         string? sketchPreviewDataUrl = null,
         DateTimeOffset? createdAt = null)
     {
+        public Guid Id { get; } = Guid.NewGuid();
+
         public string Role { get; } = role;
 
         public string Content { get; set; } = content;
+
+        public string? ReplyToPreview { get; set; }
 
         public string PendingStreamContent { get; set; } = string.Empty;
 
