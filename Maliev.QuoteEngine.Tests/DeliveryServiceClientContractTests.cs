@@ -22,7 +22,8 @@ public sealed class DeliveryServiceClientContractTests
                     price = 82.25m,
                     currency = "THB",
                     serviceLevel = "standard",
-                    estimatedDelivery = "2026-06-22"
+                    estimatedDelivery = "2026-06-22",
+                    provider = "GoShip"
                 }
             })
         };
@@ -77,6 +78,7 @@ public sealed class DeliveryServiceClientContractTests
         Assert.Equal("flash", rate.CourierCode);
         Assert.Equal("Flash Express", rate.ProductName);
         Assert.Equal(82.25m, rate.TotalPrice);
+        Assert.Equal("GoShip", rate.Provider);
     }
 
     [Fact]
@@ -90,7 +92,8 @@ public sealed class DeliveryServiceClientContractTests
                 {
                     courierCode = "thaipost",
                     courierName = "Thailand Post",
-                    scope = "domestic"
+                    scope = "domestic",
+                    provider = "Shippop"
                 }
             })
         };
@@ -108,6 +111,7 @@ public sealed class DeliveryServiceClientContractTests
         var courier = Assert.Single(couriers);
         Assert.Equal("thaipost", courier.CourierCode);
         Assert.Equal("Thailand Post", courier.CourierName);
+        Assert.Equal("Shippop", courier.Provider);
     }
 
     private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler

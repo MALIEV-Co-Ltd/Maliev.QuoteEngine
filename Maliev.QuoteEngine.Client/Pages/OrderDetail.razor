@@ -189,6 +189,10 @@ else
                                         class="order-shipping-rate @(ReferenceEquals(rate, _selectedShippingRate) ? "is-selected" : "")"
                                         @onclick="@(() => SelectShippingRate(rate))">
                                     <span>@rate.ProductName</span>
+                                    @if (!string.IsNullOrWhiteSpace(rate.Provider))
+                                    {
+                                        <small>@Text("Via", "ผ่าน") @rate.Provider</small>
+                                    }
                                     <strong>@FormatMoney(rate.TotalPrice, rate.CurrencyCode)</strong>
                                     @if (!string.IsNullOrWhiteSpace(rate.EstimatedDeliveryDate))
                                     {
@@ -898,7 +902,8 @@ else
     private string CourierLabel(ShippingCourierDto courier)
     {
         var name = string.IsNullOrWhiteSpace(courier.CourierName) ? courier.CourierCode : courier.CourierName;
-        return string.IsNullOrWhiteSpace(courier.Note) ? name : $"{name} - {courier.Note}";
+        var label = string.IsNullOrWhiteSpace(courier.Note) ? name : $"{name} - {courier.Note}";
+        return string.IsNullOrWhiteSpace(courier.Provider) ? label : $"{label} via {courier.Provider.Trim()}";
     }
 
     private static string FirstNonEmpty(params string?[] values) =>

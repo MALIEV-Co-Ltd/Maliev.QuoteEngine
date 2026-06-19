@@ -110,6 +110,9 @@ public sealed class ShippingRateOptionDto
 
     /// <summary>Raw service level returned by the gateway.</summary>
     public string? ServiceLevel { get; set; }
+
+    /// <summary>Shipping gateway that served this rate option.</summary>
+    public string Provider { get; set; } = string.Empty;
 }
 
 /// <summary>Courier option exposed by DeliveryService.</summary>
@@ -126,6 +129,9 @@ public sealed class ShippingCourierDto
 
     /// <summary>Shipping scope.</summary>
     public string Scope { get; set; } = "domestic";
+
+    /// <summary>Shipping gateway that served this courier option.</summary>
+    public string Provider { get; set; } = string.Empty;
 }
 
 /// <summary>Current shipment tracking status.</summary>
@@ -145,4 +151,7 @@ public sealed class ShippingTrackingDto
 
     /// <summary>Latest status description.</summary>
     public string? Description { get; set; }
+
+    /// <summary>Shipping gateway that served this tracking status.</summary>
+    public string Provider { get; set; } = string.Empty;
 }

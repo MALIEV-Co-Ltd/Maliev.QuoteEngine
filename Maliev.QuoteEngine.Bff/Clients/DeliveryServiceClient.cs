@@ -50,7 +50,8 @@ internal sealed class DeliveryServiceClient(HttpClient http) : IDeliveryServiceC
                 TotalPrice = rate.Price,
                 CurrencyCode = FirstNonEmpty(rate.Currency, "THB"),
                 EstimatedDeliveryDate = rate.EstimatedDelivery,
-                ServiceLevel = rate.ServiceLevel
+                ServiceLevel = rate.ServiceLevel,
+                Provider = rate.Provider
             }).ToList()
         };
     }
@@ -82,5 +83,7 @@ internal sealed class DeliveryServiceClient(HttpClient http) : IDeliveryServiceC
         public string? ServiceLevel { get; set; }
 
         public string? EstimatedDelivery { get; set; }
+
+        public string Provider { get; set; } = string.Empty;
     }
 }
