@@ -243,6 +243,60 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_history_uses_persisted_mapping_when_session_store_is_cold()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var downstreamChatbotSessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f");
+        var conversationMap = new RecordingQuoteAgentConversationMap();
+        await conversationMap.StoreChatbotSessionIdAsync(quoteSessionId, downstreamChatbotSessionId, CancellationToken.None);
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ConversationMessages = new ChatbotConversationMessagesResponse
+            {
+                SessionId = downstreamChatbotSessionId,
+                Language = "en",
+                Messages =
+                [
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "user",
+                        Content = "Continue my Make Studio project.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:00Z")
+                    },
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "assistant",
+                        Content = "Your DFM review and quote workflow are restored.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:01Z")
+                    }
+                ]
+            }
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<IQuoteAgentConversationMap>();
+                services.AddSingleton<IQuoteAgentConversationMap>(conversationMap);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var history = await client.GetFromJsonAsync<QuoteAgentMessageHistoryResponse>(
+            $"/quote/v1/agent/sessions/{quoteSessionId:D}/messages",
+            JsonOptions);
+
+        Assert.NotNull(history);
+        Assert.Equal(quoteSessionId, history.SessionId);
+        Assert.Equal(downstreamChatbotSessionId, chatbot.LastConversationMessagesSessionId);
+        Assert.Equal(2, history.Messages.Count);
+        Assert.Equal("Continue my Make Studio project.", history.Messages[0].Content);
+        Assert.Equal("Your DFM review and quote workflow are restored.", history.Messages[1].Content);
+    }
+
+    [Fact]
     public async Task Agent_message_forwards_optional_model_override_to_chatbot_service()
     {
         var chatbot = new RecordingChatbotServiceClient();
@@ -3925,6 +3979,26 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         public Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken)
         {
             return Task.FromResult<string?>(speech);
+        }
+    }
+
+    private sealed class RecordingQuoteAgentConversationMap : IQuoteAgentConversationMap
+    {
+        private readonly Dictionary<Guid, Guid> _mappings = [];
+
+        public Task<Guid?> GetChatbotSessionIdAsync(Guid quoteSessionId, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(_mappings.TryGetValue(quoteSessionId, out var chatbotSessionId)
+                ? chatbotSessionId
+                : (Guid?)null);
+        }
+
+        public Task StoreChatbotSessionIdAsync(Guid quoteSessionId, Guid chatbotSessionId, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            _mappings[quoteSessionId] = chatbotSessionId;
+            return Task.CompletedTask;
         }
     }
 

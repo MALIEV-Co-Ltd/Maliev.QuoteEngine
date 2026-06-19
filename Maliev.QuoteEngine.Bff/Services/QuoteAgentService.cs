@@ -62,7 +62,7 @@ public interface IQuoteAgentService
     Task RelayThinkingStepAsync(Guid sessionId, QuoteAgentThinkingStepDto step, CancellationToken cancellationToken);
 
     /// <summary>Resolves the downstream chatbot session used for transcript/history operations.</summary>
-    Guid ResolveConversationSessionId(Guid sessionId);
+    Task<Guid> ResolveConversationSessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
     /// <summary>Uploads a sketch image attached to an agent message.</summary>
     Task<UploadSketchResponse> UploadSketchAsync(
@@ -74,6 +74,7 @@ internal sealed class QuoteAgentService(
     ICustomerServiceClient customerClient,
     QuoteEnginePrototypeStore prototypeStore,
     QuoteAgentSessionStore sessionStore,
+    IQuoteAgentConversationMap conversationMap,
     QuoteAgentContextToken contextToken,
     CustomerSessionResolver sessionResolver,
     IGoogleDriveConnectorStore googleDriveConnectorStore,
@@ -356,13 +357,21 @@ internal sealed class QuoteAgentService(
         return ToStateResponse(sessionStore.GetOrCreate(sessionId));
     }
 
-    public Guid ResolveConversationSessionId(Guid sessionId)
+    public async Task<Guid> ResolveConversationSessionIdAsync(Guid sessionId, CancellationToken cancellationToken)
     {
-        if (sessionStore.TryGet(sessionId, out var state) &&
-            state.ChatbotSessionId is { } chatbotSessionId &&
+        if (sessionStore.TryGet(sessionId, out var existingState) &&
+            existingState.ChatbotSessionId is { } chatbotSessionId &&
             chatbotSessionId != Guid.Empty)
         {
             return chatbotSessionId;
+        }
+
+        var mappedChatbotSessionId = await conversationMap.GetChatbotSessionIdAsync(sessionId, cancellationToken);
+        if (mappedChatbotSessionId is { } mapped && mapped != Guid.Empty)
+        {
+            var restoredState = sessionStore.GetOrCreate(sessionId);
+            restoredState.ChatbotSessionId = mapped;
+            return mapped;
         }
 
         return sessionId;
@@ -462,6 +471,10 @@ internal sealed class QuoteAgentService(
         var state = sessionStore.GetOrCreate(context.QuoteSessionId);
         state.ChatbotSessionId = context.ChatbotSessionId;
         state.CustomerId = context.CustomerId ?? state.CustomerId;
+        await conversationMap.StoreChatbotSessionIdAsync(
+            context.QuoteSessionId,
+            context.ChatbotSessionId,
+            cancellationToken);
 
         var result = toolName switch
         {
@@ -706,6 +719,7 @@ internal sealed class QuoteAgentService(
         }, cancellationToken);
         var sessionId = session?.SessionId is { } id && id != Guid.Empty ? id : Guid.NewGuid();
         state.ChatbotSessionId = sessionId;
+        await conversationMap.StoreChatbotSessionIdAsync(state.SessionId, sessionId, cancellationToken);
         return sessionId;
     }
 

@@ -108,6 +108,15 @@ builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
 builder.Services.AddScoped<QuoteUploadHandoffToken>();
 builder.Services.AddScoped<QuoteAgentContextToken>();
 builder.Services.AddSingleton<QuoteAgentSessionStore>();
+builder.Services.AddSingleton<IQuoteAgentConversationMap>(sp =>
+{
+    var redis = sp.GetService<IConnectionMultiplexer>();
+    return redis is null
+        ? new InMemoryQuoteAgentConversationMap()
+        : new RedisQuoteAgentConversationMap(
+            redis,
+            sp.GetRequiredService<ILogger<RedisQuoteAgentConversationMap>>());
+});
 builder.Services.AddSingleton<IGoogleDriveConnectorStore>(sp =>
 {
     var redis = sp.GetService<IConnectionMultiplexer>();

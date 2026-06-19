@@ -145,7 +145,7 @@ public sealed class AgentController(
         Guid sessionId,
         CancellationToken cancellationToken)
     {
-        var conversationSessionId = agentService.ResolveConversationSessionId(sessionId);
+        var conversationSessionId = await agentService.ResolveConversationSessionIdAsync(sessionId, cancellationToken);
         var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId, cancellationToken);
         return Ok(new QuoteAgentMessageHistoryResponse
         {
@@ -385,7 +385,7 @@ public sealed class AgentController(
             return ValidationProblem(ModelState);
         }
 
-        var conversationSessionId = agentService.ResolveConversationSessionId(request.SessionId);
+        var conversationSessionId = await agentService.ResolveConversationSessionIdAsync(request.SessionId, cancellationToken);
         var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId, cancellationToken);
         if (conversation is null || conversation.Messages.Count == 0)
         {
