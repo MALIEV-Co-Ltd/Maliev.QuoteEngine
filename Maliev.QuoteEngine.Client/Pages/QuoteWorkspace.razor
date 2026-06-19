@@ -70,6 +70,7 @@
     private const string QuoteDefaultToleranceKey = "maliev.quote.default.tolerance";
     private const string QuoteDefaultInspectionKey = "maliev.quote.default.inspection";
     private const string QuoteDefaultLeadTimeKey = "maliev.quote.default.leadTime";
+    private const string MakeStudioSessionStorageKey = "maliev.quote.makeStudio.session.v1";
     private string _quoteSessionId = Guid.NewGuid().ToString("N");
     private readonly List<QuotePartViewModel> _parts = [];
     private QuoteReferenceDataResponse? _reference;
@@ -169,9 +170,11 @@
 
         await PreferenceState.InitializeAsync();
         await LoadQuoteDefaultsAsync();
+        await RestoreAgentSessionAsync();
 
         await SynchronizeRouteStateAsync(force: true);
         _routeStateInitialized = true;
+        await PersistAgentSessionAsync();
     }
 
     private async Task LoadAuthenticatedAccountAsync()
@@ -401,6 +404,7 @@
     private async Task ResetWorkspaceStateAsync()
     {
         _quoteSessionId = Guid.NewGuid().ToString("N");
+        await PersistAgentSessionAsync();
         await ClearRetainedBrowserUploadFilesAsync("workspace-reset");
         _parts.Clear();
         _estimate = null;
@@ -699,6 +703,7 @@
             var request = new QuoteUploadHandoffRequest { HandoffToken = encodedHandoff };
             var response = await Api.ImportHandoffAsync(request);
             _quoteSessionId = string.IsNullOrWhiteSpace(response.QuoteSessionId) ? _quoteSessionId : response.QuoteSessionId;
+            await PersistAgentSessionAsync();
             await ClearRetainedBrowserUploadFilesAsync("handoff-import");
             _parts.Clear();
             foreach (var part in response.Parts)
@@ -952,6 +957,7 @@
         _draftProjectId = project.ProjectId;
         _title = project.Title;
         _quoteSessionId = Guid.NewGuid().ToString("N");
+        await PersistAgentSessionAsync();
         await ClearRetainedBrowserUploadFilesAsync("duplicate-project");
         _parts.Clear();
         foreach (var part in project.Parts)
@@ -1551,6 +1557,48 @@
         _defaultInspectionCode = NormalizeQuoteDefaultInspection(await PreferenceState.GetPreferenceAsync(QuoteDefaultInspectionKey));
         _defaultLeadTimeCode = NormalizeQuoteDefaultLeadTime(await PreferenceState.GetPreferenceAsync(QuoteDefaultLeadTimeKey));
         _leadTimeCode = _defaultLeadTimeCode;
+    }
+
+    private async Task RestoreAgentSessionAsync()
+    {
+        if (IsDemoMode)
+        {
+            return;
+        }
+
+        try
+        {
+            var storedSessionId = await Js.InvokeAsync<string?>("malievChatbot.readSharedSessionId", MakeStudioSessionStorageKey);
+            if (Guid.TryParse(storedSessionId, out var parsed) && parsed != Guid.Empty)
+            {
+                _quoteSessionId = parsed.ToString("N");
+            }
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+        }
+    }
+
+    private async Task PersistAgentSessionAsync()
+    {
+        if (IsDemoMode || !Guid.TryParse(_quoteSessionId, out var sessionId) || sessionId == Guid.Empty)
+        {
+            return;
+        }
+
+        try
+        {
+            await Js.InvokeVoidAsync(
+                "malievChatbot.writeSharedSession",
+                MakeStudioSessionStorageKey,
+                sessionId.ToString("D"),
+                _authStatus.CustomerId?.ToString("D"),
+                SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en",
+                IsSignedIn);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+        }
     }
 
     private void ApplyCustomerQuoteDefaults(QuotePartViewModel part)

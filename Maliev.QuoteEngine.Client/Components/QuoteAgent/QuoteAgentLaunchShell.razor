@@ -2294,6 +2294,13 @@
             return;
         }
 
+        if (_loadedSessionId != Guid.Empty)
+        {
+            _messages.Clear();
+            _pendingComposerAttachments.Clear();
+            _customerQuestion = null;
+        }
+
         _loadedSessionId = SessionId;
         await LoadStateAsync();
     }
@@ -2437,11 +2444,42 @@
         {
             var state = await Api.GetAgentStateAsync(SessionId);
             ApplyState(state);
+            await LoadMessageHistoryAsync();
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
             _error = Text("The agent workspace is temporarily unavailable. You can keep typing or attach files while it reconnects.", "พื้นที่ทำงานเอเจนต์ยังไม่พร้อมใช้งานชั่วคราว คุณยังพิมพ์หรือแนบไฟล์ต่อได้ระหว่างเชื่อมต่อใหม่");
         }
+    }
+
+    private async Task LoadMessageHistoryAsync()
+    {
+        if (_messages.Count > 0 || SessionId == Guid.Empty)
+        {
+            return;
+        }
+
+        QuoteAgentMessageHistoryResponse history;
+        try
+        {
+            history = await Api.GetAgentMessageHistoryAsync(SessionId);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or QuoteEngineApiException)
+        {
+            return;
+        }
+
+        if (history.Messages.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var message in history.Messages)
+        {
+            _messages.Add(new AgentMessageRow(message.Role, message.Content, createdAt: message.CreatedAt));
+        }
+
+        RequestScrollToLatestMessage();
     }
 
     private async Task LoadProjectNavigationAsync()

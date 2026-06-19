@@ -254,6 +254,40 @@ public sealed class QuoteAgentStateResponse
 }
 
 /// <summary>
+/// Ordered customer-safe chat messages for a QuoteEngine agent session.
+/// </summary>
+public sealed class QuoteAgentMessageHistoryResponse
+{
+    /// <summary>Gets or sets the QuoteEngine agent session ID.</summary>
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets the conversation language.</summary>
+    public string Language { get; set; } = "en";
+
+    /// <summary>Gets or sets the ordered chat messages.</summary>
+    public List<QuoteAgentMessageHistoryItemDto> Messages { get; set; } = [];
+}
+
+/// <summary>
+/// One customer-safe chat message restored from ChatbotService.
+/// </summary>
+public sealed class QuoteAgentMessageHistoryItemDto
+{
+    /// <summary>Gets or sets the message role.</summary>
+    [Required]
+    [StringLength(40)]
+    public string Role { get; set; } = "assistant";
+
+    /// <summary>Gets or sets the message content.</summary>
+    [Required]
+    [StringLength(QuoteAgentTextLimits.MaxMessageCharacters)]
+    public string Content { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the message creation timestamp.</summary>
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>
 /// Customer-safe instruction for the Make Studio UI to open a panel and highlight a referenced item.
 /// </summary>
 public sealed class QuoteAgentUiDirectiveDto

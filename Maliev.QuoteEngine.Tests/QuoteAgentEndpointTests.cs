@@ -178,6 +178,71 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_history_uses_mapped_chatbot_session_after_auth_return()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var downstreamChatbotSessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f");
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ConversationMessages = new ChatbotConversationMessagesResponse
+            {
+                SessionId = downstreamChatbotSessionId,
+                Language = "en",
+                Messages =
+                [
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "user",
+                        Content = "I need a 3D printed bracket.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:00Z")
+                    },
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "tool",
+                        Content = "internal tool trace",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:00Z")
+                    },
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "assistant",
+                        Content = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:01Z")
+                    }
+                ]
+            }
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var turn = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = quoteSessionId,
+            Message = "I need a 3D printed bracket.",
+            Language = "en"
+        });
+        Assert.Equal(HttpStatusCode.OK, turn.StatusCode);
+
+        var history = await client.GetFromJsonAsync<QuoteAgentMessageHistoryResponse>(
+            $"/quote/v1/agent/sessions/{quoteSessionId:D}/messages",
+            JsonOptions);
+
+        Assert.NotNull(history);
+        Assert.Equal(quoteSessionId, history.SessionId);
+        Assert.Equal(downstreamChatbotSessionId, chatbot.LastConversationMessagesSessionId);
+        Assert.Equal(2, history.Messages.Count);
+        Assert.Equal("user", history.Messages[0].Role);
+        Assert.Equal("assistant", history.Messages[1].Role);
+        Assert.DoesNotContain(history.Messages, message => message.Role.Equals("tool", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Agent_message_forwards_optional_model_override_to_chatbot_service()
     {
         var chatbot = new RecordingChatbotServiceClient();

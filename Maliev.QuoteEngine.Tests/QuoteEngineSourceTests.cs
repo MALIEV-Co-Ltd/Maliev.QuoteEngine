@@ -1196,6 +1196,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-flow-card qe-agent-order-card", component, StringComparison.Ordinal);
         Assert.Contains("TryBuildLocalDemoTurn", component, StringComparison.Ordinal);
         Assert.Contains("BuildSketchDemoTurn", component, StringComparison.Ordinal);
+        Assert.Contains("LoadMessageHistoryAsync", component, StringComparison.Ordinal);
+        Assert.Contains("new AgentMessageRow(message.Role, message.Content, createdAt: message.CreatedAt)", component, StringComparison.Ordinal);
         Assert.Contains("Hole too close to bend", component, StringComparison.Ordinal);
         Assert.Contains("6061-T6 aluminum", component, StringComparison.Ordinal);
         Assert.Contains("$470.00", component, StringComparison.Ordinal);
@@ -1204,7 +1206,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("IAsyncEnumerable<QuoteAgentStreamEvent> SendAgentMessageStreamAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("HttpCompletionOption.ResponseHeadersRead", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/messages/stream", apiClient, StringComparison.Ordinal);
+        Assert.Contains("Task<QuoteAgentMessageHistoryResponse> GetAgentMessageHistoryAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/messages", apiClient, StringComparison.Ordinal);
         Assert.Contains("Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("MakeStudioSessionStorageKey", workspace, StringComparison.Ordinal);
+        Assert.Contains("RestoreAgentSessionAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("PersistAgentSessionAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("malievChatbot.readSharedSessionId", workspace, StringComparison.Ordinal);
+        Assert.Contains("malievChatbot.writeSharedSession", workspace, StringComparison.Ordinal);
         Assert.Contains("event.key !== \"Enter\"", composerScript, StringComparison.Ordinal);
         Assert.Contains("event.shiftKey", composerScript, StringComparison.Ordinal);
         Assert.Contains("event.preventDefault();", composerScript, StringComparison.Ordinal);

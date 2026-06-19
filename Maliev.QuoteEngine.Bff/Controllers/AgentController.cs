@@ -135,6 +135,33 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Gets restored chat messages for a QuoteEngine agent session.
+    /// </summary>
+    [HttpGet("sessions/{sessionId:guid}/messages")]
+    [ProducesResponseType(typeof(QuoteAgentMessageHistoryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<QuoteAgentMessageHistoryResponse>> GetMessages(
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        var conversationSessionId = agentService.ResolveConversationSessionId(sessionId);
+        var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId, cancellationToken);
+        return Ok(new QuoteAgentMessageHistoryResponse
+        {
+            SessionId = sessionId,
+            Language = conversation?.Language ?? "en",
+            Messages = conversation?.Messages
+                .Where(message => IsCustomerSafeHistoryRole(message.Role) && !string.IsNullOrWhiteSpace(message.Content))
+                .Select(message => new QuoteAgentMessageHistoryItemDto
+                {
+                    Role = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ? "user" : "assistant",
+                    Content = message.Content,
+                    CreatedAt = message.CreatedAt
+                })
+                .ToList() ?? []
+        });
+    }
+
+    /// <summary>
     /// Gets customer-safe connector definitions for the QuoteEngine agent workspace.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}/connectors")]
@@ -378,4 +405,10 @@ public sealed class AgentController(
         });
     }
 
+    private static bool IsCustomerSafeHistoryRole(string? role)
+    {
+        return role is not null &&
+            (role.Equals("user", StringComparison.OrdinalIgnoreCase) ||
+             role.Equals("assistant", StringComparison.OrdinalIgnoreCase));
+    }
 }
