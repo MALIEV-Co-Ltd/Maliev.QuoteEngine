@@ -23,6 +23,14 @@ public interface ICustomerServiceClient
         string phone = "",
         CancellationToken ct = default);
 
+    /// <summary>Ensures the customer has a company billing identity for invoice creation.</summary>
+    Task<CustomerProfileResponse?> EnsureCompanyBillingIdentityAsync(
+        Guid customerId,
+        string companyName,
+        string? vatNumber,
+        string? phone,
+        CancellationToken ct = default);
+
     /// <summary>Gets customer-owned addresses.</summary>
     Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken);
 
@@ -69,6 +77,8 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         public string Tier { get; set; } = "Customer";
         public string NdaStatus { get; set; } = "Active";
         public DateTimeOffset? NdaExpiresAt { get; set; }
+        public Guid? CompanyId { get; set; }
+        public uint Xmin { get; set; }
     }
 
     private sealed class CsPagedCustomerResponse
@@ -86,6 +96,11 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         public string PreferredLanguage { get; set; } = "en";
         public string Timezone { get; set; } = "Asia/Bangkok";
         public string Password { get; set; } = "PrototypeOnly123!";
+    }
+
+    private sealed class CsCompanyResponse
+    {
+        public Guid Id { get; set; }
     }
 
     public async Task<CustomerProfileResponse?> GetByIdAsync(Guid customerId, CancellationToken ct = default)
@@ -178,6 +193,66 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
             logger.LogWarning(ex, "CustomerService EnsureCustomer failed for {Email}.", normalizedEmail);
             return null;
         }
+    }
+
+    public async Task<CustomerProfileResponse?> EnsureCompanyBillingIdentityAsync(
+        Guid customerId,
+        string companyName,
+        string? vatNumber,
+        string? phone,
+        CancellationToken ct = default)
+    {
+        var customer = await GetRawCustomerByIdAsync(customerId, ct);
+        if (customer?.CompanyId is not null)
+        {
+            return MapCustomer(customer);
+        }
+
+        if (customer is null)
+        {
+            return null;
+        }
+
+        var company = await CreateCompanyAsync(
+            string.IsNullOrWhiteSpace(companyName) ? customer.Name : companyName.Trim(),
+            vatNumber,
+            string.IsNullOrWhiteSpace(phone) ? customer.Mobile : phone,
+            customer.Email,
+            ct);
+        if (company is null)
+        {
+            return null;
+        }
+
+        using var response = await http.PatchAsJsonAsync($"/customer/v1/customers/{customerId:D}", new
+        {
+            firstName = string.IsNullOrWhiteSpace(customer.FirstName) ? "Make" : customer.FirstName,
+            lastName = string.IsNullOrWhiteSpace(customer.LastName) ? "Studio" : customer.LastName,
+            email = customer.Email,
+            mobile = string.IsNullOrWhiteSpace(phone) ? customer.Mobile : phone,
+            segment = string.IsNullOrWhiteSpace(customer.Segment) ? "Enterprise" : customer.Segment,
+            tier = string.IsNullOrWhiteSpace(customer.Tier) ? "Gold" : customer.Tier,
+            preferredLanguage = string.IsNullOrWhiteSpace(customer.PreferredLanguage) ? "en" : customer.PreferredLanguage,
+            timezone = string.IsNullOrWhiteSpace(customer.Timezone) ? "Asia/Bangkok" : customer.Timezone,
+            paymentTerms = "Due on receipt",
+            status = "Active",
+            companyId = company.Id,
+            xmin = customer.Xmin
+        }, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            logger.LogWarning(
+                "CustomerService returned {Status} while linking company billing identity for customer {CustomerId}: {Body}",
+                response.StatusCode,
+                customerId,
+                body);
+            return null;
+        }
+
+        var updated = await response.Content.ReadFromJsonAsync<CsCustomerResponse>(cancellationToken: ct);
+        return updated is null ? null : MapCustomer(updated);
     }
 
     public Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken) =>
@@ -279,6 +354,64 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
             string.IsNullOrWhiteSpace(result.NdaStatus) ? "Active" : result.NdaStatus,
             result.NdaExpiresAt ?? DateTimeOffset.UtcNow.AddDays(90),
             result.VatNumber ?? string.Empty);
+    }
+
+    private async Task<CsCustomerResponse?> GetRawCustomerByIdAsync(Guid customerId, CancellationToken ct)
+    {
+        try
+        {
+            return await http.GetFromJsonAsync<CsCustomerResponse>(
+                $"/customer/v1/customers/{customerId:D}", ct);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "CustomerService GetById failed for {CustomerId}.", customerId);
+            return null;
+        }
+    }
+
+    private async Task<CsCompanyResponse?> CreateCompanyAsync(
+        string companyName,
+        string? vatNumber,
+        string? phone,
+        string? email,
+        CancellationToken ct)
+    {
+        using var response = await http.PostAsJsonAsync("/customer/v1/companies", new
+        {
+            name = companyName,
+            vatNumber = NormalizeCompanyVatNumber(vatNumber),
+            registrationNumber = $"QE-{Guid.NewGuid():N}"[..13],
+            contactEmail = email,
+            contactPhone = phone,
+            segment = "Enterprise",
+            tier = "Gold"
+        }, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            logger.LogWarning(
+                "CustomerService returned {Status} while creating company billing identity for {CompanyName}: {Body}",
+                response.StatusCode,
+                companyName,
+                body);
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<CsCompanyResponse>(cancellationToken: ct);
+    }
+
+    private static string? NormalizeCompanyVatNumber(string? vatNumber)
+    {
+        if (string.IsNullOrWhiteSpace(vatNumber))
+        {
+            return null;
+        }
+
+        var digits = new string(vatNumber.Where(char.IsDigit).ToArray());
+        return digits.Length is >= 10 and <= 15 ? digits : vatNumber.Trim();
     }
 
     private static string NormalizeEmail(string email)

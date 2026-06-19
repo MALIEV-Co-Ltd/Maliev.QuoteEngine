@@ -39,6 +39,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     private readonly FakeQuotationServiceClient _fakeQuotationServiceClient = new();
     private readonly FakeOrderServiceClient _fakeOrderServiceClient = new();
     private readonly FakeProjectServiceClient _fakeProjectServiceClient = new();
+    private readonly FakeInvoiceServiceClient _fakeInvoiceServiceClient = new();
 
     public IReadOnlyList<string> PaymentIdempotencyKeys => FakePaymentServiceClient.IdempotencyKeys.ToArray();
 
@@ -51,6 +52,10 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     public IReadOnlyList<CapturedOrderStatusUpdate> OrderStatusUpdates => _fakeOrderServiceClient.StatusUpdates.ToArray();
 
     public QuotationCreateRequest? LastQuotationCreateRequest => _fakeQuotationServiceClient.LastCreateRequest;
+
+    public InvoiceCreateForOrderRequest? LastInvoiceCreateRequest => _fakeInvoiceServiceClient.LastCreateRequest;
+
+    public InvoicePreparedResult? LastInvoicePreparedResult => _fakeInvoiceServiceClient.LastPreparedResult;
 
     public CapturedProjectDraftCreate? LastProjectDraftCreate => _fakeProjectServiceClient.LastCreate;
 
@@ -108,6 +113,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
             services.RemoveAll<IRegistryServiceClient>();
             services.AddSingleton<IRegistryServiceClient>(new FakeRegistryServiceClient());
+
+            services.RemoveAll<IInvoiceServiceClient>();
+            services.AddSingleton<IInvoiceServiceClient>(_fakeInvoiceServiceClient);
 
             // Returns a fixed hosted payment URL
             services.RemoveAll<IPaymentServiceClient>();
@@ -884,6 +892,25 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             CancellationToken ct = default) =>
             Task.FromResult<CustomerProfileResponse?>(StoreProfile(CreateProfile(email, displayName, phone)));
 
+        public Task<CustomerProfileResponse?> EnsureCompanyBillingIdentityAsync(
+            Guid customerId,
+            string companyName,
+            string? vatNumber,
+            string? phone,
+            CancellationToken ct = default)
+        {
+            var existing = _profilesById.TryGetValue(customerId, out var profile)
+                ? profile
+                : CreateProfile($"customer-{customerId:N}@example.com", companyName, phone ?? string.Empty);
+            var updated = existing with
+            {
+                CompanyName = string.IsNullOrWhiteSpace(companyName) ? "MALIEV Buyer Co." : companyName,
+                VatNumber = string.IsNullOrWhiteSpace(vatNumber) ? "1234567890123" : vatNumber
+            };
+            _profilesById[customerId] = updated;
+            return Task.FromResult<CustomerProfileResponse?>(updated);
+        }
+
         public Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken)
         {
             var list = _addressesByCustomer.GetOrAdd(customerId, _ => CreateDefaultAddresses());
@@ -1231,6 +1258,29 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 PaymentUrl = $"https://pay.test.example.com/hosted/{Guid.NewGuid():N}",
                 Status = "1"
             });
+        }
+    }
+
+    private sealed class FakeInvoiceServiceClient : IInvoiceServiceClient
+    {
+        public InvoiceCreateForOrderRequest? LastCreateRequest { get; private set; }
+
+        public InvoicePreparedResult? LastPreparedResult { get; private set; }
+
+        public Task<InvoicePreparedResult?> CreateAndFinalizeForOrderAsync(
+            InvoiceCreateForOrderRequest request,
+            CancellationToken ct = default)
+        {
+            LastCreateRequest = request;
+            LastPreparedResult = new InvoicePreparedResult
+            {
+                InvoiceId = Guid.NewGuid(),
+                InvoiceNumber = $"INV-{DateTime.UtcNow:yyyyMMdd}-000001",
+                Status = "Finalized",
+                GrandTotal = request.Lines.Sum(line => line.Quantity * line.UnitPrice),
+                Currency = request.Currency
+            };
+            return Task.FromResult<InvoicePreparedResult?>(LastPreparedResult);
         }
     }
 

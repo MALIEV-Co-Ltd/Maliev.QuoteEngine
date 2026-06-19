@@ -2084,7 +2084,19 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
         await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
         var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
-        await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+        var orderResult = await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+        Assert.NotNull(orderResult.State);
+        var orderNumber = orderResult.State.Artifacts.Single(artifact => artifact.ArtifactType == "order").Metadata["orderNumber"];
+        Assert.NotNull(factory.LastInvoiceCreateRequest);
+        Assert.Equal(orderNumber, factory.LastInvoiceCreateRequest.OrderNumber);
+        Assert.Equal("THB", factory.LastInvoiceCreateRequest.Currency);
+        Assert.NotEmpty(factory.LastInvoiceCreateRequest.Lines);
+        Assert.NotNull(factory.LastInvoicePreparedResult);
+        Assert.Contains(orderResult.State.Artifacts, artifact =>
+            artifact.ArtifactType == "order" &&
+            artifact.Metadata["invoiceId"] == factory.LastInvoicePreparedResult.InvoiceId.ToString("D") &&
+            artifact.Metadata["invoiceNumber"] == factory.LastInvoicePreparedResult.InvoiceNumber &&
+            artifact.Metadata["invoiceStatus"] == factory.LastInvoicePreparedResult.Status);
 
         var json = await ExecuteToolAsync(client, sessionId, "quote_start_payment");
         using var document = JsonDocument.Parse(json);
@@ -3213,7 +3225,9 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
         await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
         var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
-        await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+        var orderResult = await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+        Assert.NotNull(orderResult.State);
+        var orderNumber = orderResult.State.Artifacts.Single(artifact => artifact.ArtifactType == "order").Metadata["orderNumber"];
         var checkoutState = await ExecuteToolForStateAsync(
             client,
             sessionId,
@@ -3231,7 +3245,20 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(checkoutState.Gates, gate => gate.Code == "checkout_ready" && gate.Status == "passed");
 
         var paymentState = await ExecuteToolForStateAsync(client, sessionId, "quote_start_payment");
-        await ConfirmActionAsync(client, Assert.Single(paymentState.ProposedActions).ActionId);
+        var paymentResult = await ConfirmActionAsync(client, Assert.Single(paymentState.ProposedActions).ActionId);
+        Assert.NotNull(paymentResult.State);
+        Assert.NotNull(factory.LastInvoiceCreateRequest);
+        Assert.Equal(orderNumber, factory.LastInvoiceCreateRequest.OrderNumber);
+        Assert.Equal("MALIEV Buyer Co.", factory.LastInvoiceCreateRequest.CustomerName);
+        Assert.Equal("TH1234567890", factory.LastInvoiceCreateRequest.CustomerTaxId);
+        Assert.Equal("THB", factory.LastInvoiceCreateRequest.Currency);
+        Assert.NotEmpty(factory.LastInvoiceCreateRequest.Lines);
+        Assert.NotNull(factory.LastInvoicePreparedResult);
+        Assert.Contains(paymentResult.State.Artifacts, artifact =>
+            artifact.ArtifactType == "order" &&
+            artifact.Metadata["invoiceId"] == factory.LastInvoicePreparedResult.InvoiceId.ToString("D") &&
+            artifact.Metadata["invoiceNumber"] == factory.LastInvoicePreparedResult.InvoiceNumber &&
+            artifact.Metadata["invoiceStatus"] == factory.LastInvoicePreparedResult.Status);
 
         var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
         {
@@ -3248,6 +3275,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains("paymentUrl=", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("paymentStatus=pending", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("orderNumber=", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("invoiceNumber=", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("invoiceStatus=Finalized", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("amount=", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("currency=THB", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
     }
@@ -4253,6 +4282,21 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             CancellationToken ct = default)
         {
             return Task.FromResult<CustomerProfileResponse?>(BuildProfile(expectedCustomerId, email, displayName));
+        }
+
+        public Task<CustomerProfileResponse?> EnsureCompanyBillingIdentityAsync(
+            Guid customerId,
+            string companyName,
+            string? vatNumber,
+            string? phone,
+            CancellationToken ct = default)
+        {
+            var profile = BuildProfile(customerId);
+            return Task.FromResult<CustomerProfileResponse?>(profile with
+            {
+                CompanyName = string.IsNullOrWhiteSpace(companyName) ? "MALIEV Buyer Co." : companyName,
+                VatNumber = string.IsNullOrWhiteSpace(vatNumber) ? "1234567890123" : vatNumber
+            });
         }
 
         public Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken)

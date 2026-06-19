@@ -86,6 +86,7 @@ internal sealed class QuoteAgentService(
     IMaterialCatalogClient materialCatalog,
     IOrderServiceClient orderClient,
     IPaymentServiceClient paymentClient,
+    IInvoiceServiceClient invoiceClient,
     IProjectServiceClient projectClient) : IQuoteAgentService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -93,6 +94,9 @@ internal sealed class QuoteAgentService(
     [
         "orderId",
         "orderNumber",
+        "invoiceId",
+        "invoiceNumber",
+        "invoiceStatus",
         "quoteNumber",
         "transactionId",
         "paymentUrl",
@@ -2840,6 +2844,146 @@ internal sealed class QuoteAgentService(
         return $"Manufacturing order {state.Order.OrderNumber} is created.";
     }
 
+    private async Task<InvoicePreparedResult?> PrepareOrderInvoiceAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        string orderNumber,
+        CancellationToken cancellationToken)
+    {
+        var amount = state.Estimate?.Total ?? CalculateOrderQuotedTotal(state.Parts);
+        if (amount <= 0)
+        {
+            logger.LogWarning(
+                "Skipping Make Studio invoice preparation for order {OrderNumber} because amount is {Amount}.",
+                orderNumber,
+                amount);
+            return null;
+        }
+
+        var now = DateTime.UtcNow.Date;
+        var billingCustomer = await customerClient.EnsureCompanyBillingIdentityAsync(
+            customerId,
+            ResolveInvoiceCustomerName(state),
+            state.CheckoutVatNumber,
+            state.CheckoutPhone,
+            cancellationToken);
+        if (billingCustomer is null)
+        {
+            throw new InvalidOperationException("CustomerService did not prepare a company billing identity for the manufacturing order invoice.");
+        }
+
+        var invoice = await invoiceClient.CreateAndFinalizeForOrderAsync(new InvoiceCreateForOrderRequest
+        {
+            CustomerId = customerId,
+            CustomerName = string.IsNullOrWhiteSpace(billingCustomer.CompanyName)
+                ? ResolveInvoiceCustomerName(state)
+                : billingCustomer.CompanyName,
+            CustomerTaxId = string.IsNullOrWhiteSpace(billingCustomer.VatNumber)
+                ? ResolveInvoiceTaxId(state)
+                : billingCustomer.VatNumber,
+            BillingAddress = ResolveInvoiceBillingAddress(state),
+            ShippingAddress = ResolveInvoiceShippingAddress(state),
+            OrderNumber = orderNumber,
+            QuoteNumber = state.FormalQuote?.QuoteNumber,
+            Currency = state.Estimate?.Currency ?? "THB",
+            IssueDate = now,
+            DueDate = now.AddDays(7),
+            PaymentTermsDays = 7,
+            Lines = BuildInvoiceLines(state, amount)
+        }, cancellationToken);
+
+        if (invoice is null)
+        {
+            throw new InvalidOperationException("InvoiceService did not prepare a finalized invoice for the manufacturing order.");
+        }
+
+        logger.LogInformation(
+            "Prepared Make Studio invoice {InvoiceNumber} for order {OrderNumber}.",
+            invoice.InvoiceNumber,
+            orderNumber);
+        return invoice;
+    }
+
+    private static string ResolveInvoiceCustomerName(QuoteAgentSessionState state)
+    {
+        if (!string.IsNullOrWhiteSpace(state.CheckoutCompany))
+        {
+            return state.CheckoutCompany.Trim();
+        }
+
+        return "Make Studio customer";
+    }
+
+    private static string ResolveInvoiceTaxId(QuoteAgentSessionState state)
+    {
+        if (!string.IsNullOrWhiteSpace(state.CheckoutVatNumber))
+        {
+            return state.CheckoutVatNumber.Trim();
+        }
+
+        return "0000000000000";
+    }
+
+    private static string ResolveInvoiceBillingAddress(QuoteAgentSessionState state)
+    {
+        if (state.CheckoutBillingAddressId.HasValue)
+        {
+            return $"Billing address {state.CheckoutBillingAddressId.Value:D}";
+        }
+
+        return "Make Studio checkout billing address";
+    }
+
+    private static string? ResolveInvoiceShippingAddress(QuoteAgentSessionState state)
+    {
+        return state.CheckoutShippingAddressId.HasValue
+            ? $"Shipping address {state.CheckoutShippingAddressId.Value:D}"
+            : null;
+    }
+
+    private static IReadOnlyList<InvoiceCreateLineRequest> BuildInvoiceLines(
+        QuoteAgentSessionState state,
+        decimal totalAmount)
+    {
+        if (state.Parts.Count == 0)
+        {
+            return
+            [
+                new InvoiceCreateLineRequest
+                {
+                    LineNumber = 1,
+                    Description = "Make Studio manufacturing order",
+                    Quantity = 1m,
+                    UnitPrice = totalAmount,
+                    TaxCategory = "Exempt",
+                    TaxRate = 0m
+                }
+            ];
+        }
+
+        var perPartTotal = Math.Round(totalAmount / state.Parts.Count, 2);
+        var lines = new List<InvoiceCreateLineRequest>(state.Parts.Count);
+        for (var index = 0; index < state.Parts.Count; index++)
+        {
+            var part = state.Parts[index];
+            var quantity = Math.Max(1, part.Quantity);
+            var lineTotal = index == state.Parts.Count - 1
+                ? totalAmount - lines.Sum(line => line.Quantity * line.UnitPrice)
+                : perPartTotal;
+            lines.Add(new InvoiceCreateLineRequest
+            {
+                LineNumber = index + 1,
+                Description = BuildConfiguredPartSummary(part).TrimStart('-', ' '),
+                Quantity = quantity,
+                UnitPrice = Math.Round(lineTotal / quantity, 2),
+                TaxCategory = "Exempt",
+                TaxRate = 0m
+            });
+        }
+
+        return lines;
+    }
+
     private async Task<OrderCreateRequest> BuildOrderCreateRequestAsync(
         QuoteAgentSessionState state,
         Guid customerId,
@@ -3090,6 +3234,18 @@ internal sealed class QuoteAgentService(
             throw new InvalidOperationException("A manufacturing order is required before payment.");
         }
 
+        var invoice = await PrepareOrderInvoiceAsync(state, customerId, state.Order.OrderNumber, cancellationToken);
+        if (invoice is null)
+        {
+            throw new InvalidOperationException("InvoiceService did not prepare an invoice for payment.");
+        }
+
+        var orderMetadata = BuildOrderSummaryMetadata(state);
+        orderMetadata["invoiceId"] = invoice.InvoiceId.ToString("D");
+        orderMetadata["invoiceNumber"] = invoice.InvoiceNumber;
+        orderMetadata["invoiceStatus"] = invoice.Status;
+        SetArtifactMetadata(state, "order", orderMetadata);
+
         var amount = state.Estimate?.Total ?? (TryReadDecimal(action.Arguments, "amount", out var requestedAmount) ? requestedAmount : 0m);
         var currency = state.Estimate?.Currency ?? ReadString(action.Arguments, "currency") ?? "THB";
         var checkoutAttemptId = TryReadGuid(action.Arguments, "checkout_attempt_id", out var checkoutAttemptIdValue) ||
@@ -3177,8 +3333,14 @@ internal sealed class QuoteAgentService(
             return null;
         }
 
+        var previousOrderMetadata = state.Artifacts
+            .LastOrDefault(item => item.ArtifactType.Equals("order", StringComparison.OrdinalIgnoreCase))
+            ?.Metadata;
         UpsertArtifact(state, "order", detail.OrderNumber, detail.CurrentStatus, null, null);
         var orderMetadata = BuildOrderSummaryMetadata(state);
+        CopyMetadataIfPresent(previousOrderMetadata, orderMetadata, "invoiceId");
+        CopyMetadataIfPresent(previousOrderMetadata, orderMetadata, "invoiceNumber");
+        CopyMetadataIfPresent(previousOrderMetadata, orderMetadata, "invoiceStatus");
         orderMetadata["currentStatus"] = detail.CurrentStatus;
         orderMetadata["paymentStatus"] = detail.PaymentStatus;
         orderMetadata["orderUpdatedAt"] = detail.UpdatedAt.ToString("O", CultureInfo.InvariantCulture);
@@ -3206,6 +3368,19 @@ internal sealed class QuoteAgentService(
         paymentMetadata["orderUpdatedAt"] = detail.UpdatedAt.ToString("O", CultureInfo.InvariantCulture);
         SetArtifactMetadata(state, "payment", paymentMetadata);
         return detail;
+    }
+
+    private static void CopyMetadataIfPresent(
+        IReadOnlyDictionary<string, string>? source,
+        IDictionary<string, string> destination,
+        string key)
+    {
+        if (source is not null &&
+            source.TryGetValue(key, out var value) &&
+            !string.IsNullOrWhiteSpace(value))
+        {
+            destination[key] = value;
+        }
     }
 
     private static CustomerManufacturingMilestoneDto? SelectActiveOrderMilestone(CustomerOrderDetailDto? detail)
