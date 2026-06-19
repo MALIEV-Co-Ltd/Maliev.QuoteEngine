@@ -20,7 +20,9 @@ public sealed class AgentController(
     QuoteAgentContextToken contextToken,
     IChatbotServiceClient chatbotServiceClient,
     IPdfServiceClient pdfServiceClient,
-    QuoteUploadServiceClient uploadClient) : ControllerBase
+    QuoteUploadServiceClient uploadClient,
+    IWebHostEnvironment environment,
+    ILogger<AgentController> logger) : ControllerBase
 {
     private const string AgentContextHeader = "X-Maliev-Agent-Context";
     private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web);
@@ -275,6 +277,25 @@ public sealed class AgentController(
             {
                 Title = "Sign-in required.",
                 Detail = ex.Message
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Agent action could not be completed.",
+                Detail = ex.Message
+            });
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Agent action {ActionId} failed.", actionId);
+            return StatusCode(StatusCodes.Status500InternalServerError, new ProblemDetails
+            {
+                Title = "Agent action failed.",
+                Detail = environment.IsDevelopment() || environment.IsEnvironment("Testing")
+                    ? ex.Message
+                    : "The agent action could not be completed."
             });
         }
     }

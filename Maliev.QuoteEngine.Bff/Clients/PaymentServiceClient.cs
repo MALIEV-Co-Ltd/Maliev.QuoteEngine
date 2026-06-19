@@ -1,5 +1,6 @@
 // Maliev.QuoteEngine.Bff/Clients/PaymentServiceClient.cs
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace Maliev.QuoteEngine.Bff.Clients;
 
@@ -40,7 +41,7 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
     {
         public Guid TransactionId { get; set; }
         public string? PaymentUrl { get; set; }
-        public int Status { get; set; }   // PaymentStatus enum value
+        public JsonElement Status { get; set; }
     }
 
     // ── Interface implementation ──────────────────────────────────────────────
@@ -98,7 +99,7 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
             {
                 var body = await response.Content.ReadAsStringAsync(ct);
                 logger.LogWarning("PaymentService returned {Status} on initiate: {Body}", response.StatusCode, body);
-                return null;
+                throw new InvalidOperationException($"PaymentService returned {(int)response.StatusCode} on initiate: {body}");
             }
 
             var result = await response.Content.ReadFromJsonAsync<PsPaymentResponse>(cancellationToken: ct);
@@ -108,15 +109,25 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
             {
                 TransactionId = result.TransactionId,
                 PaymentUrl = result.PaymentUrl ?? string.Empty,
-                Status = result.Status.ToString()
+                Status = ReadStatus(result.Status)
             };
         }
         catch (OperationCanceledException) { throw; }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
             logger.LogWarning(ex, "PaymentService initiate failed for order {OrderId}.", orderId);
             return null;
         }
+    }
+
+    private static string ReadStatus(JsonElement status)
+    {
+        return status.ValueKind switch
+        {
+            JsonValueKind.String => status.GetString() ?? string.Empty,
+            JsonValueKind.Number when status.TryGetInt32(out var value) => value.ToString(),
+            _ => string.Empty
+        };
     }
 }
 

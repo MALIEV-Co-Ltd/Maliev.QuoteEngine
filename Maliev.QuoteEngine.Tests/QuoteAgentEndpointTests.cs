@@ -1871,7 +1871,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Equal("TH1234567890", initiation.BillingVatNumber);
         Assert.Null(initiation.DeliveryContactName);
         Assert.Equal("+66 2 555 0100", initiation.DeliveryContactPhone);
-        Assert.Contains(orderArtifact.Metadata["orderId"], initiation.IdempotencyKey, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("qe:", initiation.IdempotencyKey, StringComparison.Ordinal);
+        Assert.True(initiation.IdempotencyKey.Length <= 100);
+        Assert.StartsWith("https://", initiation.ReturnUrl, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("https://", initiation.CancelUrl, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("/payment/success", initiation.ReturnUrl, StringComparison.Ordinal);
         Assert.Contains("/payment/cancel", initiation.CancelUrl, StringComparison.Ordinal);
     }

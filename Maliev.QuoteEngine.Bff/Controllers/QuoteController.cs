@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Asp.Versioning;
 using Maliev.QuoteEngine.Bff.Clients;
@@ -902,7 +904,7 @@ public sealed class QuoteController(
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
         var returnUrl = $"{baseUrl}/payment/success?orderNumber={Uri.EscapeDataString(request.OrderNumber)}";
         var cancelUrl = $"{baseUrl}/payment/cancel?orderNumber={Uri.EscapeDataString(request.OrderNumber)}";
-        var idempotencyKey = $"{customerId:D}:{request.OrderId:D}:{request.CheckoutAttemptId:D}";
+        var idempotencyKey = BuildPaymentIdempotencyKey(customerId, request.OrderId, request.CheckoutAttemptId);
 
         // Advance order to Accepted (customer accepted the quoted price) so that when
         // PaymentService fires PaymentCompletedEvent, OrderService can apply Accepted → Paid.
@@ -1380,6 +1382,13 @@ public sealed class QuoteController(
 
     private static bool IsPrototypeUpload(UploadState upload) =>
         upload.DownstreamUploadId?.StartsWith(PrototypeUploadPrefix, StringComparison.Ordinal) == true;
+
+    private static string BuildPaymentIdempotencyKey(Guid customerId, Guid orderId, Guid checkoutAttemptId)
+    {
+        var input = $"{customerId:D}:{orderId:D}:{checkoutAttemptId:D}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
+        return $"qe:{hash}";
+    }
 
     private static IReadOnlyDictionary<string, string>? BuildBrowserPrimaryUploadMetadata(string fileName)
     {

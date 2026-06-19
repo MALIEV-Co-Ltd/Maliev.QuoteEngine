@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -3004,7 +3005,7 @@ internal sealed class QuoteAgentService(
             TryReadGuid(action.Arguments, "checkoutAttemptId", out checkoutAttemptIdValue)
             ? checkoutAttemptIdValue
             : Guid.NewGuid();
-        var idempotencyKey = $"{customerId:D}:{state.Order.OrderId:D}:{checkoutAttemptId:D}";
+        var idempotencyKey = BuildPaymentIdempotencyKey(customerId, state.Order.OrderId, checkoutAttemptId);
         var result = await paymentClient.InitiateAsync(
             customerId.ToString("D"),
             state.Order.OrderId.ToString("D"),
@@ -3047,6 +3048,13 @@ internal sealed class QuoteAgentService(
         }
 
         return $"{configuredBaseUrl.TrimEnd('/')}{path}";
+    }
+
+    private static string BuildPaymentIdempotencyKey(Guid customerId, Guid orderId, Guid checkoutAttemptId)
+    {
+        var input = $"{customerId:D}:{orderId:D}:{checkoutAttemptId:D}";
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
+        return $"qe:{hash}";
     }
 
     private static Dictionary<string, string> BuildPaymentSummaryMetadata(QuoteAgentSessionState state)

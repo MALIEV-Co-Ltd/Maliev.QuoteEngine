@@ -22,7 +22,7 @@ public sealed class PaymentServiceClientContractTests
                 transactionId,
                 amount = 1500.00m,
                 currency = "THB",
-                status = 1,
+                status = "pending",
                 customerId = "customer-1",
                 orderId = "order-1",
                 description = "Manufacturing order ORD-2026-0001",
@@ -58,7 +58,7 @@ public sealed class PaymentServiceClientContractTests
         Assert.NotNull(result);
         Assert.Equal(transactionId, result.TransactionId);
         Assert.Equal("https://pay.omise.co/payments/paym_test_123", result.PaymentUrl);
-        Assert.Equal("1", result.Status);
+        Assert.Equal("pending", result.Status);
 
         Assert.Equal(HttpMethod.Post, handler.Request?.Method);
         Assert.Equal("/payment/v1/payments", handler.Request?.RequestUri?.AbsolutePath);

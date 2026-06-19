@@ -3202,8 +3202,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var keys = factory.PaymentIdempotencyKeys;
         Assert.Equal(2, keys.Count);
-        Assert.Contains(keys, key => key.EndsWith(firstAttemptId.ToString("D"), StringComparison.Ordinal));
-        Assert.Contains(keys, key => key.EndsWith(secondAttemptId.ToString("D"), StringComparison.Ordinal));
+        Assert.All(keys, key =>
+        {
+            Assert.StartsWith("qe:", key, StringComparison.Ordinal);
+            Assert.True(key.Length <= 100);
+        });
         Assert.NotEqual(keys[0], keys[1]);
     }
 
