@@ -4179,6 +4179,21 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void ReplicadWorker_converts_mesh_arrays_to_transferable_buffers_before_posting_result()
+    {
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("const rawMesh = shape.mesh({ tolerance: 0.05, angularTolerance: 0.1 });", worker, StringComparison.Ordinal);
+        Assert.Contains("vertices: Float32Array.from(rawMesh.vertices)", worker, StringComparison.Ordinal);
+        Assert.Contains("triangles: Uint32Array.from(rawMesh.triangles)", worker, StringComparison.Ordinal);
+        Assert.Contains("normals: Float32Array.from(rawMesh.normals)", worker, StringComparison.Ordinal);
+        Assert.Contains("vertices: mesh.vertices.buffer", worker, StringComparison.Ordinal);
+        Assert.Contains("packedMeshData(mesh)", worker, StringComparison.Ordinal);
+        Assert.DoesNotContain("const mesh = shape.mesh({ tolerance: 0.05, angularTolerance: 0.1 });", worker, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");

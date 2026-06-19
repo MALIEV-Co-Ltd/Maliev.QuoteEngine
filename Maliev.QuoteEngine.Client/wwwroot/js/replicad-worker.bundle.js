@@ -23896,7 +23896,12 @@
         case "build":
           await ensureInit();
           const shape = processCommands(msg.commands);
-          const mesh = shape.mesh({ tolerance: 0.05, angularTolerance: 0.1 });
+          const rawMesh = shape.mesh({ tolerance: 0.05, angularTolerance: 0.1 });
+          const mesh = {
+            vertices: Float32Array.from(rawMesh.vertices),
+            triangles: Uint32Array.from(rawMesh.triangles),
+            normals: Float32Array.from(rawMesh.normals)
+          };
           self.postMessage(
             {
               type: "result",
