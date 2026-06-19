@@ -2186,6 +2186,56 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_formal_quote_artifact_download_is_scoped_to_session_customer()
+    {
+        var uploadClient = new RecordingUploadServiceClient();
+        await using var scopedFactory = CreateAgentFactory().WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(uploadClient);
+            });
+        });
+        using var ownerClient = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+        var ownerSignIn = await ownerClient.GetAsync("/test/sign-in?email=agent-quote-owner@example.com");
+        ownerSignIn.EnsureSuccessStatusCode();
+        var sessionId = await StartPricedCadSessionAsync(ownerClient);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(ownerClient, sessionId, "quote_prepare_formal_quote");
+        var formalQuoteResult = await ConfirmActionAsync(ownerClient, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+
+        Assert.NotNull(formalQuoteResult.State);
+        var formalQuoteArtifact = Assert.Single(
+            formalQuoteResult.State.Artifacts,
+            artifact => artifact.ArtifactType == "formal_quote");
+        Assert.True(
+            formalQuoteArtifact.Metadata.TryGetValue("storagePath", out var storagePath),
+            "Formal quote artifact should carry the QuotationService PDF storage path.");
+
+        var ownerRedirectResponse = await ownerClient.GetAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(storagePath)}");
+        Assert.Equal(HttpStatusCode.Redirect, ownerRedirectResponse.StatusCode);
+
+        using var otherClient = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+        var otherSignIn = await otherClient.GetAsync("/test/sign-in?email=agent-quote-other@example.com");
+        otherSignIn.EnsureSuccessStatusCode();
+
+        var otherResponse = await otherClient.GetAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(storagePath)}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, otherResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Agent_payment_confirmation_after_order_sets_payment_gate_and_artifact()
     {
         await using var scopedFactory = CreateAgentFactory();

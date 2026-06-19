@@ -444,19 +444,23 @@ internal sealed class QuoteAgentService(
             return null;
         }
 
-        if (IsLegacySessionScopedArtifactPath(sessionId, normalized))
-        {
-            return normalized;
-        }
-
         if (!sessionStore.TryGet(sessionId, out var state))
         {
-            return null;
+            return IsLegacySessionScopedArtifactPath(sessionId, normalized) ? normalized : null;
         }
 
         lock (state.SyncRoot)
         {
-            return IsRegisteredArtifactPath(state, normalized) ? normalized : null;
+            var currentCustomerId = ResolveCustomerId();
+            if (state.CustomerId.HasValue && currentCustomerId != state.CustomerId)
+            {
+                return null;
+            }
+
+            return IsLegacySessionScopedArtifactPath(sessionId, normalized) ||
+                   IsRegisteredArtifactPath(state, normalized, currentCustomerId)
+                ? normalized
+                : null;
         }
     }
 
@@ -2768,16 +2772,19 @@ internal sealed class QuoteAgentService(
             result.PdfArtifactUrl ?? string.Empty,
             result.Status);
         UpsertArtifact(state, "formal_quote", state.FormalQuote.QuoteNumber, state.FormalQuote.Status, null, state.FormalQuote.PdfUrl);
-        SetArtifactMetadata(state, "formal_quote", BuildFormalQuoteMetadata(result));
+        SetArtifactMetadata(state, "formal_quote", BuildFormalQuoteMetadata(result, customerId));
         return $"Formal quote {state.FormalQuote.QuoteNumber} is ready.";
     }
 
-    private static IReadOnlyDictionary<string, string> BuildFormalQuoteMetadata(QuotationCreatedResult result)
+    private static IReadOnlyDictionary<string, string> BuildFormalQuoteMetadata(
+        QuotationCreatedResult result,
+        Guid customerId)
     {
         var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["quoteId"] = result.Id.ToString("D"),
-            ["quoteNumber"] = result.QuotationNumber
+            ["quoteNumber"] = result.QuotationNumber,
+            ["customerId"] = customerId.ToString("D")
         };
 
         if (!string.IsNullOrWhiteSpace(result.PdfArtifactStoragePath))
@@ -4924,19 +4931,34 @@ Customer message:
             path.StartsWith($"quotes/temp/{dashedSessionId}/", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsRegisteredArtifactPath(QuoteAgentSessionState state, string storagePath)
+    private static bool IsRegisteredArtifactPath(
+        QuoteAgentSessionState state,
+        string storagePath,
+        Guid? currentCustomerId)
     {
         return state.Attachments.Any(attachment =>
                 StoragePathMatches(attachment.StoragePath, storagePath) ||
                 StoragePathMatches(attachment.Url, storagePath)) ||
             state.Artifacts.Any(artifact =>
-                StoragePathMatches(artifact.Url, storagePath) ||
-                (artifact.Metadata.TryGetValue("storagePath", out var artifactStoragePath) &&
-                    StoragePathMatches(artifactStoragePath, storagePath))) ||
+                ArtifactCustomerMatches(artifact, currentCustomerId) &&
+                (StoragePathMatches(artifact.Url, storagePath) ||
+                 (artifact.Metadata.TryGetValue("storagePath", out var artifactStoragePath) &&
+                     StoragePathMatches(artifactStoragePath, storagePath)))) ||
             state.Parts.Any(part =>
                 StoragePathMatches(part.StoragePath, storagePath) ||
                 StoragePathMatches(part.ViewerStoragePath, storagePath) ||
                 part.DrawingFiles.Any(file => StoragePathMatches(file.StoragePath, storagePath)));
+    }
+
+    private static bool ArtifactCustomerMatches(QuoteAgentArtifactDto artifact, Guid? currentCustomerId)
+    {
+        if (!artifact.Metadata.TryGetValue("customerId", out var rawCustomerId) ||
+            !Guid.TryParse(rawCustomerId, out var artifactCustomerId))
+        {
+            return true;
+        }
+
+        return currentCustomerId == artifactCustomerId;
     }
 
     private static bool StoragePathMatches(string? candidate, string storagePath)
