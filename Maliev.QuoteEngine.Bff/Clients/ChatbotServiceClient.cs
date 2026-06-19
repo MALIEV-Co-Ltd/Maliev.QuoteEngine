@@ -363,6 +363,9 @@ public sealed class ChatbotMessageResponse
 
     /// <summary>Gets or sets agent thinking steps returned by ChatbotService.</summary>
     public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
+
+    /// <summary>Gets or sets the current daily token usage snapshot.</summary>
+    public QuoteAgentUsageSnapshotDto? UsageSnapshot { get; set; }
 }
 
 /// <summary>ChatbotService streamed message event.</summary>

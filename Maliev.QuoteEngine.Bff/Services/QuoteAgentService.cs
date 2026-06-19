@@ -181,7 +181,8 @@ internal sealed class QuoteAgentService(
             UiDirectives = currentState.UiDirectives,
             UiCulture = pendingUiCulture,
             ProjectName = state.ProjectName,
-            CustomerQuestion = state.PendingCustomerQuestion
+            CustomerQuestion = state.PendingCustomerQuestion,
+            UsageSnapshot = chatbotResponse?.UsageSnapshot
         };
     }
 
@@ -355,7 +356,8 @@ internal sealed class QuoteAgentService(
             UiDirectives = currentState.UiDirectives,
             UiCulture = pendingUiCulture,
             ProjectName = state.ProjectName,
-            CustomerQuestion = state.PendingCustomerQuestion
+            CustomerQuestion = state.PendingCustomerQuestion,
+            UsageSnapshot = finalMessage?.UsageSnapshot
         };
 
         if (!receivedDelta)

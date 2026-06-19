@@ -3333,6 +3333,40 @@
     background: var(--qe-agent-line);
 }
 
+.qe-agent-usage {
+    --qe-agent-usage-color: #2f7d5b;
+    --qe-agent-usage-track: color-mix(in srgb, var(--qe-agent-line) 68%, transparent);
+}
+
+.qe-agent-usage.is-warning {
+    --qe-agent-usage-color: #b7791f;
+}
+
+.qe-agent-usage.is-critical,
+.qe-agent-usage.is-exceeded {
+    --qe-agent-usage-color: #c2410c;
+}
+
+.qe-agent-usage-ring {
+    width: 18px;
+    height: 18px;
+    flex: 0 0 18px;
+    border-radius: 50%;
+    background: conic-gradient(
+        var(--qe-agent-usage-color) var(--qe-agent-usage-deg, 0deg),
+        var(--qe-agent-usage-track) 0
+    );
+    position: relative;
+}
+
+.qe-agent-usage-ring::after {
+    content: "";
+    position: absolute;
+    inset: 4px;
+    border-radius: 50%;
+    background: var(--qe-agent-raised);
+}
+
 .qe-agent-add-menu {
     position: absolute;
     left: 8px;

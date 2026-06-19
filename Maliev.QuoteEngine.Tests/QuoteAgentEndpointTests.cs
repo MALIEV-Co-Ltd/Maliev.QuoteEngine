@@ -103,6 +103,9 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             gate.Code == "geometry_required" && gate.Status == "blocked");
         Assert.Contains(body.Gates, gate =>
             gate.Code == "customer_authenticated" && gate.Status == "blocked");
+        Assert.NotNull(body.UsageSnapshot);
+        Assert.Equal(850_000, body.UsageSnapshot!.UsedTokens);
+        Assert.Equal(2_000_000, body.UsageSnapshot.DailyTokenBudget);
         Assert.Equal("quote-engine", chatbot.LastInitiateRequest?.Channel);
         Assert.False(string.IsNullOrWhiteSpace(chatbot.LastSendRequest?.QuoteAgentContextToken));
     }
@@ -465,6 +468,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var final = Assert.Single(events, streamEvent => streamEvent.Type == "final");
         Assert.NotNull(final.Response);
         Assert.Contains("bracket", final.Response.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(final.Response.UsageSnapshot);
+        Assert.Equal(850_000, final.Response.UsageSnapshot!.UsedTokens);
         Assert.Contains(final.Response.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
         Assert.False(string.IsNullOrWhiteSpace(chatbot.LastStreamRequest?.QuoteAgentContextToken));
     }
@@ -4012,6 +4017,16 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         public bool TruncateLastTurnResult { get; init; } = true;
 
+        public QuoteAgentUsageSnapshotDto UsageSnapshot { get; init; } = new()
+        {
+            IsEnabled = true,
+            UsedTokens = 850_000,
+            DailyTokenBudget = 2_000_000,
+            RemainingTokens = 1_150_000,
+            UsedRatio = 0.425,
+            IsExceeded = false
+        };
+
         public Task<bool> CheckReadinessAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult(HealthAvailable);
@@ -4044,7 +4059,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
                 Content = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.",
                 Role = "assistant",
                 Language = "en",
-                CreatedAt = DateTimeOffset.UtcNow
+                CreatedAt = DateTimeOffset.UtcNow,
+                UsageSnapshot = UsageSnapshot
             });
         }
 
@@ -4080,7 +4096,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
                     Content = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.",
                     Role = "assistant",
                     Language = "en",
-                    CreatedAt = DateTimeOffset.UtcNow
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    UsageSnapshot = UsageSnapshot
                 }
             };
         }

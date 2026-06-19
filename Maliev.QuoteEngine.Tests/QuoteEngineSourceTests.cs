@@ -1207,6 +1207,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("HttpCompletionOption.ResponseHeadersRead", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/messages/stream", apiClient, StringComparison.Ordinal);
         Assert.Contains("public bool EditLastTurn { get; set; }", ReadRepoFile("Maliev.QuoteEngine.Shared", "Agent", "QuoteAgentDtos.cs"), StringComparison.Ordinal);
+        Assert.Contains("public QuoteAgentUsageSnapshotDto? UsageSnapshot { get; set; }", ReadRepoFile("Maliev.QuoteEngine.Shared", "Agent", "QuoteAgentDtos.cs"), StringComparison.Ordinal);
         Assert.Contains("TruncateLastTurnAsync(chatbotSessionId, cancellationToken)", ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs"), StringComparison.Ordinal);
         Assert.Contains("Task<QuoteAgentMessageHistoryResponse> GetAgentMessageHistoryAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/messages", apiClient, StringComparison.Ordinal);
@@ -1793,6 +1794,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("RestoreEditedLastTurnOnFailure(editLastTurn", component, StringComparison.Ordinal);
         Assert.Contains("EditLastTurn = editLastTurn", component, StringComparison.Ordinal);
         Assert.Contains("_editingLastUserMessage = message;", component, StringComparison.Ordinal);
+        Assert.Contains("private QuoteAgentUsageSnapshotDto? _usageSnapshot;", component, StringComparison.Ordinal);
+        Assert.Contains("ShowUsageRing", component, StringComparison.Ordinal);
+        Assert.Contains("streamEvent.Response.UsageSnapshot", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-usage-ring\"", component, StringComparison.Ordinal);
         Assert.Contains("public DateTimeOffset CreatedAt", component, StringComparison.Ordinal);
 
         Assert.Contains("background: var(--qe-agent-soft);", userBubbleStyleBlock, StringComparison.Ordinal);
@@ -1802,6 +1807,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-main--chat .qe-agent-thread-wrap {\n    flex: 1 1 0;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message-attachment--image", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message-footer", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-usage-ring", styles, StringComparison.Ordinal);
+        Assert.Contains("conic-gradient", styles, StringComparison.Ordinal);
     }
 
     [Fact]

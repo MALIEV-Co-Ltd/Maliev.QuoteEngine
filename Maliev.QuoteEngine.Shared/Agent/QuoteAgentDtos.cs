@@ -183,6 +183,33 @@ public sealed class QuoteAgentTurnResponse
 
     /// <summary>Gets or sets a focused question with answer options presented to the customer by the agent.</summary>
     public QuoteAgentCustomerQuestionDto? CustomerQuestion { get; set; }
+
+    /// <summary>Gets or sets the current chatbot usage snapshot.</summary>
+    public QuoteAgentUsageSnapshotDto? UsageSnapshot { get; set; }
+}
+
+/// <summary>
+/// Customer-safe daily chatbot usage snapshot.
+/// </summary>
+public sealed class QuoteAgentUsageSnapshotDto
+{
+    /// <summary>Gets or sets whether daily token budgeting is enabled.</summary>
+    public bool IsEnabled { get; set; }
+
+    /// <summary>Gets or sets tokens used in the rolling daily window.</summary>
+    public long UsedTokens { get; set; }
+
+    /// <summary>Gets or sets the configured daily token budget.</summary>
+    public long DailyTokenBudget { get; set; }
+
+    /// <summary>Gets or sets tokens remaining in the rolling daily window.</summary>
+    public long RemainingTokens { get; set; }
+
+    /// <summary>Gets or sets the usage ratio from 0 to 1.</summary>
+    public double UsedRatio { get; set; }
+
+    /// <summary>Gets or sets whether the budget has been reached.</summary>
+    public bool IsExceeded { get; set; }
 }
 
 /// <summary>
