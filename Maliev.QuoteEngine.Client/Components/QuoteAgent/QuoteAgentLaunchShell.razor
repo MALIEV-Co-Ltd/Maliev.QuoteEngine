@@ -1816,6 +1816,7 @@
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
     private QuoteAgentArtifactDto? _selectedArtifact;
+    private AgentWorkbenchSnapshot? _stateWorkbench;
     private List<QuoteAgentUiDirectiveDto> _uiFocusDirectives = [];
     private QuoteAgentAuthHandoffResponse? _authHandoff;
     private List<QuoteAgentConnectorDto> _connectors = [];
@@ -2101,7 +2102,7 @@
     private PreviewItem? SelectedArtifactPreviewItem => _selectedArtifact is null
         ? null
         : BuildArtifactPreviewItem(_selectedArtifact);
-    private AgentWorkbenchSnapshot? LatestWorkbench => _messages.LastOrDefault(message => message.Workbench is not null)?.Workbench;
+    private AgentWorkbenchSnapshot? LatestWorkbench => _messages.LastOrDefault(message => message.Workbench is not null)?.Workbench ?? _stateWorkbench;
     private string ProjectSummaryTitle => string.IsNullOrWhiteSpace(_projectName)
         ? Text("Untitled project", "โปรเจกต์ยังไม่มีชื่อ")
         : _projectName;
@@ -3037,6 +3038,7 @@
         _gates = state.Gates;
         _artifacts = state.Artifacts;
         _proposedActions = state.ProposedActions;
+        _stateWorkbench = BuildRestoredWorkbench(state);
         ApplyAgentProjectName(state.ProjectName);
         await ApplyUiDirectivesAsync(state.UiDirectives, suppressPanelAutoOpen);
         if (!suppressPanelAutoOpen && HasVisiblePaymentArtifact())
@@ -3051,6 +3053,135 @@
         return _artifacts.Any(artifact =>
             QuoteAgentUiHelpers.IsVisibleArtifact(artifact) &&
             artifact.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private AgentWorkbenchSnapshot? BuildRestoredWorkbench(QuoteAgentStateResponse state)
+    {
+        if (state.Parts.Count == 0 && state.Estimate is null && state.Artifacts.Count == 0)
+        {
+            return null;
+        }
+
+        var primaryPart = state.Parts.FirstOrDefault();
+        var dfmIssues = state.Parts
+            .SelectMany(part => part.Findings.Select(finding => new AgentDfmIssue(
+                NormalizeDfmSeverity(finding.Severity),
+                string.IsNullOrWhiteSpace(finding.Code) ? "DFM review item" : finding.Code,
+                string.IsNullOrWhiteSpace(finding.Severity) ? "REVIEW" : finding.Severity.ToUpperInvariant(),
+                finding.Message,
+                part.DfmAcknowledged ? Text("Acknowledged", "รับทราบแล้ว") : null)))
+            .ToList();
+
+        var requirements = new List<AgentRequirement>();
+        if (primaryPart is not null)
+        {
+            requirements.Add(new AgentRequirement(Text("Part", "ชิ้นงาน"), primaryPart.FileName, "state", "state"));
+            requirements.Add(new AgentRequirement(Text("Process", "กระบวนการ"), primaryPart.ProcessId, "state", "state"));
+            requirements.Add(new AgentRequirement(Text("Material", "วัสดุ"), primaryPart.MaterialId, "state", "state"));
+            requirements.Add(new AgentRequirement(Text("Quantity", "จำนวน"), primaryPart.Quantity.ToString(CultureInfo.InvariantCulture), "state", "state"));
+        }
+
+        var priceLines = state.Estimate?.Lines
+            .Select(line => new AgentPriceLine(line.FileName, FormatMoney(line.LineTotal, line.Currency)))
+            .ToList() ?? [];
+
+        var totalPrice = state.Estimate is null
+            ? Text("Not priced", "ยังไม่มีราคา")
+            : FormatMoney(state.Estimate.Total, state.Estimate.Currency);
+
+        var unitPrice = state.Estimate?.Lines.Count > 0
+            ? FormatMoney(state.Estimate.Lines[0].UnitPrice, state.Estimate.Lines[0].Currency)
+            : Text("Unit price pending", "รอราคาต่อหน่วย");
+
+        var orderLines = new List<AgentOrderLine>();
+        if (primaryPart is not null)
+        {
+            orderLines.Add(new AgentOrderLine(Text("Part", "ชิ้นงาน"), primaryPart.FileName));
+            orderLines.Add(new AgentOrderLine(Text("Quantity", "จำนวน"), primaryPart.Quantity.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        if (state.Estimate is not null)
+        {
+            orderLines.Add(new AgentOrderLine(Text("Estimate", "ราคา"), totalPrice));
+        }
+
+        return new AgentWorkbenchSnapshot(
+            BuildRestoredAnalysisSummary(state),
+            BuildRestoredAnalysisProgress(state),
+            primaryPart?.ProcessId ?? Text("Not selected", "ยังไม่ได้เลือก"),
+            primaryPart?.FileName ?? Text("No uploaded part", "ยังไม่มีชิ้นงาน"),
+            primaryPart?.MaterialId ?? Text("Not selected", "ยังไม่ได้เลือก"),
+            primaryPart?.Quantity.ToString(CultureInfo.InvariantCulture) ?? Text("Not selected", "ยังไม่ได้เลือก"),
+            BuildRestoredAnalysisSteps(state),
+            requirements,
+            dfmIssues,
+            state.Parts.Any(part => !string.IsNullOrWhiteSpace(part.ViewerGlbUrl) || !string.IsNullOrWhiteSpace(part.ViewerStoragePath)),
+            [],
+            totalPrice,
+            unitPrice,
+            state.Estimate is null ? Text("Estimate pending", "รอการคำนวณราคา") : state.Estimate.Currency,
+            [],
+            priceLines,
+            orderLines);
+    }
+
+    private IReadOnlyList<AgentAnalysisStep> BuildRestoredAnalysisSteps(QuoteAgentStateResponse state)
+    {
+        var steps = new List<AgentAnalysisStep>();
+        if (state.Parts.Count > 0)
+        {
+            steps.Add(new AgentAnalysisStep("complete", Text("Files restored", "กู้คืนไฟล์แล้ว"), Text("กู้คืนไฟล์แล้ว", "กู้คืนไฟล์แล้ว"), Text($"{state.Parts.Count} part(s)", $"{state.Parts.Count} ชิ้นงาน")));
+        }
+
+        if (state.Parts.Any(part => part.Findings.Count > 0))
+        {
+            steps.Add(new AgentAnalysisStep("complete", Text("DFM review restored", "กู้คืนผล DFM แล้ว"), Text("กู้คืนผล DFM แล้ว", "กู้คืนผล DFM แล้ว"), Text($"{state.Parts.Sum(part => part.Findings.Count)} issue(s)", $"{state.Parts.Sum(part => part.Findings.Count)} รายการ")));
+        }
+
+        if (state.Estimate is not null)
+        {
+            steps.Add(new AgentAnalysisStep("complete", Text("Estimate restored", "กู้คืนราคาแล้ว"), Text("กู้คืนราคาแล้ว", "กู้คืนราคาแล้ว"), FormatMoney(state.Estimate.Total, state.Estimate.Currency)));
+        }
+
+        return steps;
+    }
+
+    private string BuildRestoredAnalysisSummary(QuoteAgentStateResponse state)
+    {
+        var parts = state.Parts.Count.ToString(CultureInfo.InvariantCulture);
+        var artifacts = state.Artifacts.Count.ToString(CultureInfo.InvariantCulture);
+        return Text($"{parts} part(s) · {artifacts} artifact(s) restored", $"กู้คืน {parts} ชิ้นงาน · {artifacts} ไฟล์งาน");
+    }
+
+    private string BuildRestoredAnalysisProgress(QuoteAgentStateResponse state)
+    {
+        if (state.Estimate is not null)
+        {
+            return "100%";
+        }
+
+        if (state.Parts.Count > 0)
+        {
+            return state.Parts.Any(part => part.Findings.Count > 0) ? "75%" : "50%";
+        }
+
+        return state.Artifacts.Count > 0 ? "50%" : "0%";
+    }
+
+    private static string NormalizeDfmSeverity(string? severity)
+    {
+        return severity?.Trim().ToLowerInvariant() switch
+        {
+            "blocker" or "error" or "critical" => "blocker",
+            "warning" or "confirm" => "confirm",
+            "pass" or "ok" => "pass",
+            _ => "confirm"
+        };
+    }
+
+    private static string FormatMoney(decimal amount, string currency)
+    {
+        return $"{amount.ToString("0.##", CultureInfo.InvariantCulture)} {currency}";
     }
 
     private async Task EnsureAgentNotificationConnectionAsync()
