@@ -4194,6 +4194,44 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteInlineViewer_creates_babylon_engine_before_scene()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        var createSceneStart = viewer.IndexOf("function createScene(container, meshData)", StringComparison.Ordinal);
+        Assert.True(createSceneStart >= 0, "createScene must exist.");
+
+        var createSceneEnd = viewer.IndexOf("\n  function disposePreview", createSceneStart, StringComparison.Ordinal);
+        Assert.True(createSceneEnd > createSceneStart, "createScene must end before disposePreview.");
+
+        var createScene = viewer[createSceneStart..createSceneEnd];
+        var engineIndex = createScene.IndexOf("var engine = new BABYLON.Engine(canvas, true", StringComparison.Ordinal);
+        var sceneIndex = createScene.IndexOf("var scene = new BABYLON.Scene(engine);", StringComparison.Ordinal);
+        var vertexDataIndex = createScene.IndexOf("var vertexData = new BABYLON.VertexData();", StringComparison.Ordinal);
+        var meshIndex = createScene.IndexOf("var mesh = new BABYLON.Mesh('preview', scene);", StringComparison.Ordinal);
+        var materialIndex = createScene.IndexOf("mesh.material = buildMaterial(scene);", StringComparison.Ordinal);
+        var activeCameraIndex = createScene.IndexOf("scene.activeCamera = camera;", StringComparison.Ordinal);
+        var initialRenderIndex = createScene.IndexOf("var renderInitialFrame = function ()", StringComparison.Ordinal);
+        var renderLoopIndex = createScene.IndexOf("engine.runRenderLoop(function ()", StringComparison.Ordinal);
+        var firstRenderCallIndex = createScene.IndexOf("renderInitialFrame();", renderLoopIndex, StringComparison.Ordinal);
+        var animationFrameRenderIndex = createScene.IndexOf("requestAnimationFrame(renderInitialFrame);", StringComparison.Ordinal);
+        var readyRenderIndex = createScene.IndexOf("scene.executeWhenReady(renderInitialFrame);", StringComparison.Ordinal);
+
+        Assert.True(engineIndex >= 0, "inline viewer must construct a Babylon engine for the canvas.");
+        Assert.True(sceneIndex > engineIndex, "Babylon Scene must be constructed with the canvas engine.");
+        Assert.True(vertexDataIndex > sceneIndex, "Vertex data must be applied only after the scene exists.");
+        Assert.True(meshIndex > sceneIndex, "Preview mesh must be constructed only after the scene exists.");
+        Assert.True(materialIndex > sceneIndex, "Preview material must be constructed only after the scene exists.");
+        Assert.True(activeCameraIndex > meshIndex, "Inline preview must set the generated camera as the active scene camera.");
+        Assert.True(initialRenderIndex > activeCameraIndex, "Inline preview must define a deterministic first-frame render helper.");
+        Assert.True(firstRenderCallIndex > renderLoopIndex, "Inline preview must render once after the render loop starts.");
+        Assert.True(animationFrameRenderIndex > firstRenderCallIndex, "Inline preview must schedule a next-frame render for browser paint timing.");
+        Assert.True(readyRenderIndex > firstRenderCallIndex, "Inline preview must render again when Babylon reports the scene ready.");
+        Assert.DoesNotContain("new BABYLON.Scene();", createScene, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");

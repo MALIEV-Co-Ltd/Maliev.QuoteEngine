@@ -54,11 +54,6 @@
   }
 
   function createScene(container, meshData) {
-    var scene = new BABYLON.Scene();
-    scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
-
-    buildDefaultLighting(scene);
-
     var vertices = new Float32Array(meshData.vertices);
     var tris = new Uint32Array(meshData.triangles);
     var normals = new Float32Array(meshData.normals);
@@ -66,16 +61,6 @@
     for (var i = 0; i < tris.length; i++) {
       indexArray.push(tris[i]);
     }
-
-    var vertexData = new BABYLON.VertexData();
-    vertexData.positions = vertices;
-    vertexData.indices = indexArray;
-    vertexData.normals = normals;
-
-    var mesh = new BABYLON.Mesh('preview', scene);
-    vertexData.applyToMesh(mesh);
-    mesh.material = buildMaterial(scene);
-    mesh.isPickable = false;
 
     // Compute bounding box from vertices
     var minX = Infinity, minY = Infinity, minZ = Infinity;
@@ -108,6 +93,27 @@
     container.innerHTML = '';
     container.appendChild(canvas);
 
+    var engine = new BABYLON.Engine(canvas, true, {
+      premultipliedAlpha: false,
+      alpha: true,
+      disableUniformBuffers: true,
+    });
+
+    var scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
+
+    buildDefaultLighting(scene);
+
+    var vertexData = new BABYLON.VertexData();
+    vertexData.positions = vertices;
+    vertexData.indices = indexArray;
+    vertexData.normals = normals;
+
+    var mesh = new BABYLON.Mesh('preview', scene);
+    vertexData.applyToMesh(mesh);
+    mesh.material = buildMaterial(scene);
+    mesh.isPickable = false;
+
     var camera = new BABYLON.ArcRotateCamera(
       'cam',
       -Math.PI / 4,
@@ -121,18 +127,23 @@
     camera.panningSensibility = 50;
     camera.wheelPrecision = 50;
     camera.attachControl(canvas, false);
+    scene.activeCamera = camera;
 
-    var engine = new BABYLON.Engine(canvas, true, {
-      premultipliedAlpha: false,
-      alpha: true,
-      disableUniformBuffers: true,
-    });
+    var renderInitialFrame = function () {
+      engine.resize(true);
+      if (scene.activeCamera) {
+        scene.render(false, false);
+      }
+    };
 
     engine.runRenderLoop(function () {
       if (scene.activeCamera) {
         scene.render();
       }
     });
+    renderInitialFrame();
+    requestAnimationFrame(renderInitialFrame);
+    scene.executeWhenReady(renderInitialFrame);
 
     var ro = new ResizeObserver(function () {
       engine.resize();
