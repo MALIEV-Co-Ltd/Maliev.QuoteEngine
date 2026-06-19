@@ -597,12 +597,15 @@
                                             @onclick="@(() => CopyUserMessageAsync(message))">
                                         <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
                                     </button>
-                                    <button type="button"
-                                            title="@Text("Edit message", "แก้ไขข้อความ")"
-                                            aria-label="@Text("Edit message", "แก้ไขข้อความ")"
-                                            @onclick="@(() => EditUserMessageAsync(message))">
-                                        <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
-                                    </button>
+                                    @if (ReferenceEquals(message, LastUserMessage))
+                                    {
+                                        <button type="button"
+                                                title="@Text("Edit message", "แก้ไขข้อความ")"
+                                                aria-label="@Text("Edit message", "แก้ไขข้อความ")"
+                                                @onclick="@(() => EditUserMessageAsync(message))">
+                                            <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
+                                        </button>
+                                    }
                                 </div>
                             }
                             else
@@ -2157,6 +2160,7 @@
         : Text("No current DFM items", "ยังไม่มีรายการ DFM");
     private bool ShowSummaryStrip => UploadedParts.Count > 0 || LatestWorkbench is not null;
     private string SummaryStripTotal => LatestWorkbench?.TotalPrice ?? Text("Not priced", "ยังไม่มีราคา");
+    private AgentMessageRow? LastUserMessage => _messages.LastOrDefault(message => message.Role.Equals("user", StringComparison.OrdinalIgnoreCase));
     private IReadOnlyList<UseCaseOption> VisibleUseCases => BuildVisibleUseCases();
     private string UseCaseListClass => "qe-agent-use-cases";
     private string ActiveWorkspaceTitle => _activeWorkspacePage switch
@@ -2780,7 +2784,10 @@
 
     private async Task EditUserMessageAsync(AgentMessageRow message)
     {
-        if (!message.Role.Equals("user", StringComparison.OrdinalIgnoreCase))
+        // Editing is restricted to the most recent customer message so edits act as a
+        // correction/rollback of the last turn, never an arbitrary earlier message.
+        if (!message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ||
+            !ReferenceEquals(message, LastUserMessage))
         {
             return;
         }

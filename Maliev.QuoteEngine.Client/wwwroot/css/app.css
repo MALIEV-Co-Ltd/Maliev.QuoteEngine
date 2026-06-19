@@ -2288,10 +2288,21 @@
     justify-content: flex-end;
     gap: 8px;
     width: 100%;
+    min-height: 24px;
     padding-right: 4px;
     color: var(--qe-agent-muted);
     font-size: 12px;
     line-height: 1;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 120ms ease;
+}
+
+/* Reserve the footer's height always; reveal time + actions only on hover/focus. */
+.qe-agent-message-stack:hover .qe-agent-message-footer,
+.qe-agent-message-stack:focus-within .qe-agent-message-footer {
+    opacity: 1;
+    visibility: visible;
 }
 
 .qe-agent-message-footer time {
