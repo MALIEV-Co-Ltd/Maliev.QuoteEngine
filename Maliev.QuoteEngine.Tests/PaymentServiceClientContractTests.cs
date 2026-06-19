@@ -43,8 +43,8 @@ public sealed class PaymentServiceClientContractTests
             "ORD-2026-0001",
             1500.00m,
             "THB",
-            "https://quote.example.com/payment/success?orderId=ORD-2026-0001",
-            "https://quote.example.com/payment/cancel?orderId=ORD-2026-0001",
+            "https://quote.example.com/payment/success?orderNumber=ORD-2026-0001",
+            "https://quote.example.com/payment/cancel?orderNumber=ORD-2026-0001",
             "customer-1:order-1",
             BillingAddressId,
             ShippingAddressId,
@@ -76,8 +76,8 @@ public sealed class PaymentServiceClientContractTests
         Assert.Equal("customer-1", body.GetProperty("customerId").GetString());
         Assert.Equal("order-1", body.GetProperty("orderId").GetString());
         Assert.Equal("Manufacturing order ORD-2026-0001", body.GetProperty("description").GetString());
-        Assert.Equal("https://quote.example.com/payment/success?orderId=ORD-2026-0001", body.GetProperty("returnUrl").GetString());
-        Assert.Equal("https://quote.example.com/payment/cancel?orderId=ORD-2026-0001", body.GetProperty("cancelUrl").GetString());
+        Assert.Equal("https://quote.example.com/payment/success?orderNumber=ORD-2026-0001", body.GetProperty("returnUrl").GetString());
+        Assert.Equal("https://quote.example.com/payment/cancel?orderNumber=ORD-2026-0001", body.GetProperty("cancelUrl").GetString());
         Assert.False(body.TryGetProperty("preferredProvider", out _));
         Assert.False(body.TryGetProperty("selectedProvider", out _));
         Assert.Equal("ORD-2026-0001", body.GetProperty("metadata").GetProperty("orderNumber").GetString());
