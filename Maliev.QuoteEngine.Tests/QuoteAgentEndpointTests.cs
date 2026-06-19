@@ -1964,7 +1964,9 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         var draftResult = await ConfirmActionAsync(client, Assert.Single(draftState.ProposedActions).ActionId);
         Assert.NotNull(draftResult.State);
         var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
-        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var projectId));
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var prototypeProjectId));
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectServiceProjectId"], out var projectServiceProjectId));
+        var projectId = toolName == "quote_achieve_project" ? prototypeProjectId : projectServiceProjectId;
 
         var pendingState = await ExecuteToolForStateAsync(
             client,

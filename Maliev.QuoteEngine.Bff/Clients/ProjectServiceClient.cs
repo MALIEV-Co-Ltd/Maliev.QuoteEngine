@@ -34,6 +34,12 @@ public interface IProjectServiceClient
     /// <summary>Returns a customer-scoped project detail from ProjectService.</summary>
     Task<CustomerProjectDetailResponse?> GetProjectDetailAsync(Guid customerId, Guid projectId, CancellationToken ct = default);
 
+    /// <summary>Sets whether a customer-scoped ProjectService project is pinned.</summary>
+    Task<ProjectManagementResponse?> SetProjectPinnedAsync(Guid customerId, Guid projectId, bool isPinned, CancellationToken ct = default);
+
+    /// <summary>Archives a customer-scoped ProjectService project.</summary>
+    Task<ProjectManagementResponse?> ArchiveProjectAsync(Guid customerId, Guid projectId, CancellationToken ct = default);
+
     /// <summary>Searches customer-scoped projects from ProjectService for QuoteAgent recall.</summary>
     Task<IReadOnlyList<QuoteAgentSearchResultDto>> SearchProjectResultsAsync(
         Guid customerId,
@@ -196,6 +202,7 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
                 $"/project/v1/projects?customerId={customerId:D}&pageSize=100",
                 ct);
             return paged?.Data?
+                .Where(project => !IsArchivedStatus(project))
                 .Select(ToNavigationItem)
                 .OrderByDescending(project => project.UpdatedAt)
                 .ToArray() ?? [];
@@ -229,6 +236,57 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
         catch (Exception ex)
         {
             logger.LogWarning(ex, "ProjectService detail lookup failed for project {ProjectId}.", projectId);
+            return null;
+        }
+    }
+
+    public async Task<ProjectManagementResponse?> SetProjectPinnedAsync(
+        Guid customerId,
+        Guid projectId,
+        bool isPinned,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = isPinned
+                ? await http.PostAsync($"/project/v1/projects/{projectId:D}/pin", null, ct)
+                : await http.DeleteAsync($"/project/v1/projects/{projectId:D}/pin", ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var project = await response.Content.ReadFromJsonAsync<ProjectServiceProjectResponse>(cancellationToken: ct);
+            return project is null || project.CustomerId != customerId ? null : ToManagementResponse(project);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ProjectService pin update failed for project {ProjectId}.", projectId);
+            return null;
+        }
+    }
+
+    public async Task<ProjectManagementResponse?> ArchiveProjectAsync(
+        Guid customerId,
+        Guid projectId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await http.PostAsync($"/project/v1/projects/{projectId:D}/archive", null, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var project = await response.Content.ReadFromJsonAsync<ProjectServiceProjectResponse>(cancellationToken: ct);
+            return project is null || project.CustomerId != customerId ? null : ToManagementResponse(project);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ProjectService archive failed for project {ProjectId}.", projectId);
             return null;
         }
     }
@@ -394,8 +452,8 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             project.ProjectNumber,
             project.Title,
             project.Status,
-            IsPinned: false,
-            IsArchived: IsArchivedStatus(project.Status),
+            project.IsPinned,
+            IsArchivedStatus(project),
             new DateTimeOffset(updatedAt, TimeSpan.Zero));
     }
 
@@ -407,11 +465,20 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             project.ProjectNumber,
             project.Status,
             project.Title,
-            IsPinned: false,
-            IsArchived: IsArchivedStatus(project.Status),
+            project.IsPinned,
+            IsArchivedStatus(project),
             new DateTimeOffset(updatedAt, TimeSpan.Zero),
             project.Parts.Select(ToQuotePartDraft).ToArray());
     }
+
+    private static ProjectManagementResponse ToManagementResponse(ProjectServiceProjectResponse project) =>
+        new(
+            project.Id,
+            project.ProjectNumber,
+            project.Status,
+            project.Title,
+            project.IsPinned,
+            IsArchivedStatus(project));
 
     private static QuoteAgentSearchResultDto ToSearchResult(ProjectServiceProjectResponse project)
     {
@@ -427,8 +494,8 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             {
                 ["projectNumber"] = project.ProjectNumber,
                 ["status"] = project.Status,
-                ["isPinned"] = "false",
-                ["isArchived"] = IsArchivedStatus(project.Status).ToString().ToLowerInvariant(),
+                ["isPinned"] = project.IsPinned.ToString().ToLowerInvariant(),
+                ["isArchived"] = IsArchivedStatus(project).ToString().ToLowerInvariant(),
                 ["source"] = "project_service"
             }
         };
@@ -479,10 +546,10 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             attachment.SizeBytes ?? 0,
             "Drawing");
 
-    private static bool IsArchivedStatus(string? status) =>
-        status is not null &&
-        (status.Equals("Completed", StringComparison.OrdinalIgnoreCase) ||
-         status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase));
+    private static bool IsArchivedStatus(ProjectServiceProjectResponse project) =>
+        project.IsArchived ||
+        project.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase) ||
+        project.Status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase);
 
     private sealed class ProjectServiceProjectResponse
     {
@@ -491,6 +558,8 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
         public Guid CustomerId { get; set; }
         public string Title { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
+        public bool IsPinned { get; set; }
+        public bool IsArchived { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
         public List<ProjectServicePartResponse> Parts { get; set; } = [];

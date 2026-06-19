@@ -491,30 +491,34 @@ internal sealed class QuoteAgentService(
                 ReadString(request.Arguments, "title") ?? "Create a customer draft project from this quote session.",
                 requiresAuthentication: true,
                 request.Arguments),
-            "quote_pin_project" => PrepareProjectManagementActionOrGateError(
+            "quote_pin_project" => await PrepareProjectManagementActionOrGateErrorAsync(
                 state,
                 request.Arguments,
                 "pin_project",
                 "Pin project",
-                "Pin this Make Studio project for quick access."),
-            "quote_unpin_project" => PrepareProjectManagementActionOrGateError(
+                "Pin this Make Studio project for quick access.",
+                cancellationToken),
+            "quote_unpin_project" => await PrepareProjectManagementActionOrGateErrorAsync(
                 state,
                 request.Arguments,
                 "unpin_project",
                 "Unpin project",
-                "Remove this Make Studio project from pinned quick access."),
-            "quote_archive_project" => PrepareProjectManagementActionOrGateError(
+                "Remove this Make Studio project from pinned quick access.",
+                cancellationToken),
+            "quote_archive_project" => await PrepareProjectManagementActionOrGateErrorAsync(
                 state,
                 request.Arguments,
                 "archive_project",
                 "Archive project",
-                "Archive this Make Studio project from the active project list."),
-            "quote_achieve_project" => PrepareProjectManagementActionOrGateError(
+                "Archive this Make Studio project from the active project list.",
+                cancellationToken),
+            "quote_achieve_project" => await PrepareProjectManagementActionOrGateErrorAsync(
                 state,
                 request.Arguments,
                 "achieve_project",
                 "Mark project achieved",
-                "Mark this Make Studio project as achieved and remove it from active work."),
+                "Mark this Make Studio project as achieved and remove it from active work.",
+                cancellationToken),
             "quote_duplicate_project" => PrepareActionOrGateError(
                 state,
                 "duplicate_project",
@@ -581,9 +585,9 @@ internal sealed class QuoteAgentService(
         {
             "draft_project" => await ExecuteDraftProjectAsync(state, customerId!.Value, action, cancellationToken),
             "duplicate_project" => await ExecuteDuplicateProjectAsync(state, customerId!.Value, action, cancellationToken),
-            "pin_project" => ExecutePinProject(state, customerId!.Value, action),
-            "unpin_project" => ExecuteUnpinProject(state, customerId!.Value, action),
-            "archive_project" => ExecuteArchiveProject(state, customerId!.Value, action),
+            "pin_project" => await ExecutePinProjectAsync(state, customerId!.Value, action, cancellationToken),
+            "unpin_project" => await ExecuteUnpinProjectAsync(state, customerId!.Value, action, cancellationToken),
+            "archive_project" => await ExecuteArchiveProjectAsync(state, customerId!.Value, action, cancellationToken),
             "achieve_project" => ExecuteAchieveProject(state, customerId!.Value, action),
             "account_profile_update" => ExecuteAccountProfileUpdate(state, customerId!.Value, action),
             "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
@@ -1946,12 +1950,13 @@ internal sealed class QuoteAgentService(
         };
     }
 
-    private object PrepareProjectManagementActionOrGateError(
+    private async Task<object> PrepareProjectManagementActionOrGateErrorAsync(
         QuoteAgentSessionState state,
         Dictionary<string, JsonElement> arguments,
         string actionType,
         string title,
-        string summary)
+        string summary,
+        CancellationToken cancellationToken)
     {
         var customerId = ResolveCustomerId() ?? state.CustomerId;
         if (!customerId.HasValue)
@@ -1976,8 +1981,9 @@ internal sealed class QuoteAgentService(
             };
         }
 
-        var project = prototypeStore.GetProject(customerId.Value, projectId);
-        if (project is null)
+        var durableProject = await projectClient.GetProjectDetailAsync(customerId.Value, projectId, cancellationToken);
+        var prototypeProject = durableProject is null ? prototypeStore.GetProject(customerId.Value, projectId) : null;
+        if (durableProject is null && prototypeProject is null)
         {
             return new
             {
@@ -2400,14 +2406,19 @@ internal sealed class QuoteAgentService(
         return $"Project {response.ProjectNumber} was duplicated from the current draft.";
     }
 
-    private string ExecutePinProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    private async Task<string> ExecutePinProjectAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
         if (!TryResolveProjectId(state, action.Arguments, out var projectId))
         {
             throw new InvalidOperationException("A project is required before pinning it.");
         }
 
-        var response = prototypeStore.SetProjectPinned(customerId, projectId, isPinned: true)
+        var response = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: true, cancellationToken)
+            ?? prototypeStore.SetProjectPinned(customerId, projectId, isPinned: true)
             ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
         UpsertArtifact(state, "project_pin", response.Title, "pinned", null, null);
         SetArtifactMetadata(state, "project_pin", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -2419,14 +2430,19 @@ internal sealed class QuoteAgentService(
         return $"Project {response.ProjectNumber} was pinned.";
     }
 
-    private string ExecuteUnpinProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    private async Task<string> ExecuteUnpinProjectAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
         if (!TryResolveProjectId(state, action.Arguments, out var projectId))
         {
             throw new InvalidOperationException("A project is required before unpinning it.");
         }
 
-        var response = prototypeStore.SetProjectPinned(customerId, projectId, isPinned: false)
+        var response = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: false, cancellationToken)
+            ?? prototypeStore.SetProjectPinned(customerId, projectId, isPinned: false)
             ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
         UpsertArtifact(state, "project_unpin", response.Title, "unpinned", null, null);
         SetArtifactMetadata(state, "project_unpin", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -2438,14 +2454,19 @@ internal sealed class QuoteAgentService(
         return $"Project {response.ProjectNumber} was unpinned.";
     }
 
-    private string ExecuteArchiveProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    private async Task<string> ExecuteArchiveProjectAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
         if (!TryResolveProjectId(state, action.Arguments, out var projectId))
         {
             throw new InvalidOperationException("A project is required before archiving it.");
         }
 
-        var response = prototypeStore.SetProjectArchived(customerId, projectId, isArchived: true)
+        var response = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
+            ?? prototypeStore.SetProjectArchived(customerId, projectId, isArchived: true)
             ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
         UpsertArtifact(state, "project_archive", response.Title, "archived", null, null);
         SetArtifactMetadata(state, "project_archive", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

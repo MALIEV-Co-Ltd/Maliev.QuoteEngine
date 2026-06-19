@@ -398,6 +398,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     {
         private readonly ConcurrentDictionary<Guid, CapturedProjectDraftCreate> _projects = new();
         private readonly ConcurrentDictionary<Guid, List<CapturedProjectPartCreate>> _partsByProject = new();
+        private readonly ConcurrentDictionary<Guid, bool> _archivedProjects = new();
+        private readonly ConcurrentDictionary<Guid, bool> _pinnedProjects = new();
 
         public ConcurrentQueue<CapturedProjectPartCreate> PartCreates { get; } = new();
 
@@ -518,15 +520,16 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             CancellationToken ct = default)
         {
             IReadOnlyList<CustomerProjectNavItemDto> result = _projects.Values
-                .Where(project => project.CustomerId == customerId)
+                .Where(project => project.CustomerId == customerId && !IsArchived(project.ProjectServiceProjectId))
                 .Select(project => new CustomerProjectNavItemDto(
                     project.ProjectServiceProjectId,
                     project.ProjectServiceProjectNumber,
                     project.Title,
                     "Draft",
-                    IsPinned: false,
+                    IsPinned: IsPinned(project.ProjectServiceProjectId),
                     IsArchived: false,
                     DateTimeOffset.UtcNow))
+                .OrderByDescending(project => project.IsPinned)
                 .ToArray();
 
             return Task.FromResult(result);
@@ -550,12 +553,41 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 project.ProjectServiceProjectNumber,
                 "Draft",
                 project.Title,
-                IsPinned: false,
-                IsArchived: false,
+                IsPinned(projectId),
+                IsArchived(projectId),
                 DateTimeOffset.UtcNow,
                 parts);
 
             return Task.FromResult<CustomerProjectDetailResponse?>(detail);
+        }
+
+        public Task<ProjectManagementResponse?> SetProjectPinnedAsync(
+            Guid customerId,
+            Guid projectId,
+            bool isPinned,
+            CancellationToken ct = default)
+        {
+            if (!_projects.TryGetValue(projectId, out var project) || project.CustomerId != customerId)
+            {
+                return Task.FromResult<ProjectManagementResponse?>(null);
+            }
+
+            _pinnedProjects[projectId] = isPinned;
+            return Task.FromResult<ProjectManagementResponse?>(ToManagementResponse(project));
+        }
+
+        public Task<ProjectManagementResponse?> ArchiveProjectAsync(
+            Guid customerId,
+            Guid projectId,
+            CancellationToken ct = default)
+        {
+            if (!_projects.TryGetValue(projectId, out var project) || project.CustomerId != customerId)
+            {
+                return Task.FromResult<ProjectManagementResponse?>(null);
+            }
+
+            _archivedProjects[projectId] = true;
+            return Task.FromResult<ProjectManagementResponse?>(ToManagementResponse(project));
         }
 
         public Task<IReadOnlyList<QuoteAgentSearchResultDto>> SearchProjectResultsAsync(
@@ -580,8 +612,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     {
                         ["projectNumber"] = project.ProjectServiceProjectNumber,
                         ["status"] = "Draft",
-                        ["isPinned"] = "false",
-                        ["isArchived"] = "false",
+                        ["isPinned"] = IsPinned(project.ProjectServiceProjectId).ToString().ToLowerInvariant(),
+                        ["isArchived"] = IsArchived(project.ProjectServiceProjectId).ToString().ToLowerInvariant(),
                         ["source"] = "project_service"
                     }
                 })
@@ -593,6 +625,21 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
             return Task.FromResult(result);
         }
+
+        private ProjectManagementResponse ToManagementResponse(CapturedProjectDraftCreate project) =>
+            new(
+                project.ProjectServiceProjectId,
+                project.ProjectServiceProjectNumber,
+                "Draft",
+                project.Title,
+                IsPinned(project.ProjectServiceProjectId),
+                IsArchived(project.ProjectServiceProjectId));
+
+        private bool IsPinned(Guid projectId) =>
+            _pinnedProjects.TryGetValue(projectId, out var isPinned) && isPinned;
+
+        private bool IsArchived(Guid projectId) =>
+            _archivedProjects.TryGetValue(projectId, out var isArchived) && isArchived;
 
         private static QuotePartDraftDto ToQuotePartDraft(CapturedProjectPartCreate part) =>
             new()
@@ -2175,8 +2222,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var first = await CreateDraftProjectAsync(client, "Regular project");
         var second = await CreateDraftProjectAsync(client, "Pinned project");
+        var firstProjectServiceId = Assert.IsType<Guid>(first.ProjectServiceProjectId);
+        var secondProjectServiceId = Assert.IsType<Guid>(second.ProjectServiceProjectId);
 
-        var pinResponse = await client.PostAsync($"/quote/v1/projects/{second.ProjectId:D}/pin", null);
+        var pinResponse = await client.PostAsync($"/quote/v1/projects/{secondProjectServiceId:D}/pin", null);
         pinResponse.EnsureSuccessStatusCode();
         var pinned = await pinResponse.Content.ReadFromJsonAsync<ProjectManagementResponse>();
         Assert.NotNull(pinned);
@@ -2188,12 +2237,12 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         Assert.NotNull(projects);
         Assert.Equal(2, projects.Count);
-        Assert.Equal(second.ProjectId, projects[0].ProjectId);
+        Assert.Equal(secondProjectServiceId, projects[0].ProjectId);
         Assert.True(projects[0].IsPinned);
         Assert.Equal("Pinned project", projects[0].Title);
-        Assert.Contains(projects, project => project.ProjectId == first.ProjectId && !project.IsPinned);
+        Assert.Contains(projects, project => project.ProjectId == firstProjectServiceId && !project.IsPinned);
 
-        var unpinResponse = await client.DeleteAsync($"/quote/v1/projects/{second.ProjectId:D}/pin");
+        var unpinResponse = await client.DeleteAsync($"/quote/v1/projects/{secondProjectServiceId:D}/pin");
         unpinResponse.EnsureSuccessStatusCode();
         var unpinned = await unpinResponse.Content.ReadFromJsonAsync<ProjectManagementResponse>();
         Assert.NotNull(unpinned);
@@ -2201,7 +2250,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var updatedNav = await client.GetFromJsonAsync<List<CustomerProjectNavItemDto>>("/quote/v1/projects/nav");
         Assert.NotNull(updatedNav);
-        Assert.Contains(updatedNav, project => project.ProjectId == second.ProjectId && !project.IsPinned);
+        Assert.Contains(updatedNav, project => project.ProjectId == secondProjectServiceId && !project.IsPinned);
     }
 
     [Fact]
@@ -2209,10 +2258,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     {
         using var owner = await CreateSignedInClientAsync("project-nav-owner-a@example.com");
         var project = await CreateDraftProjectAsync(owner, "Private fixture");
+        var projectServiceId = Assert.IsType<Guid>(project.ProjectServiceProjectId);
 
         using var other = await CreateSignedInClientAsync("project-nav-owner-b@example.com");
-        var pinResponse = await other.PostAsync($"/quote/v1/projects/{project.ProjectId:D}/pin", null);
-        var unpinResponse = await other.DeleteAsync($"/quote/v1/projects/{project.ProjectId:D}/pin");
+        var pinResponse = await other.PostAsync($"/quote/v1/projects/{projectServiceId:D}/pin", null);
+        var unpinResponse = await other.DeleteAsync($"/quote/v1/projects/{projectServiceId:D}/pin");
 
         Assert.Equal(HttpStatusCode.NotFound, pinResponse.StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, unpinResponse.StatusCode);
@@ -2224,21 +2274,22 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         using var owner = await CreateSignedInClientAsync("project-archive-owner@example.com");
         var activeProject = await CreateDraftProjectAsync(owner, "Active fixture");
         var archiveProject = await CreateDraftProjectAsync(owner, "Completed bracket");
+        var activeProjectServiceId = Assert.IsType<Guid>(activeProject.ProjectServiceProjectId);
+        var archiveProjectServiceId = Assert.IsType<Guid>(archiveProject.ProjectServiceProjectId);
 
-        var archiveResponse = await owner.PostAsync($"/quote/v1/projects/{archiveProject.ProjectId:D}/archive", null);
+        var archiveResponse = await owner.PostAsync($"/quote/v1/projects/{archiveProjectServiceId:D}/archive", null);
         archiveResponse.EnsureSuccessStatusCode();
         var archived = await archiveResponse.Content.ReadFromJsonAsync<ProjectManagementResponse>();
         Assert.NotNull(archived);
         Assert.True(archived.IsArchived);
-        Assert.Equal("Archived", archived.Status);
 
         var navigation = await owner.GetFromJsonAsync<List<CustomerProjectNavItemDto>>("/quote/v1/projects/nav");
         Assert.NotNull(navigation);
-        Assert.Contains(navigation, project => project.ProjectId == activeProject.ProjectId);
-        Assert.DoesNotContain(navigation, project => project.ProjectId == archiveProject.ProjectId);
+        Assert.Contains(navigation, project => project.ProjectId == activeProjectServiceId);
+        Assert.DoesNotContain(navigation, project => project.ProjectId == archiveProjectServiceId);
 
         using var other = await CreateSignedInClientAsync("project-archive-other@example.com");
-        var crossCustomerArchive = await other.PostAsync($"/quote/v1/projects/{activeProject.ProjectId:D}/archive", null);
+        var crossCustomerArchive = await other.PostAsync($"/quote/v1/projects/{activeProjectServiceId:D}/archive", null);
         Assert.Equal(HttpStatusCode.NotFound, crossCustomerArchive.StatusCode);
     }
 

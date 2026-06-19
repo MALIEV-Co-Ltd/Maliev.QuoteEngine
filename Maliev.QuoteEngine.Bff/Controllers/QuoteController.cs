@@ -576,7 +576,7 @@ public sealed class QuoteController(
     }
 
     [HttpPost("projects/{projectId:guid}/pin")]
-    public ActionResult<ProjectManagementResponse> PinProject(Guid projectId)
+    public async Task<ActionResult<ProjectManagementResponse>> PinProject(Guid projectId, CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -587,12 +587,13 @@ public sealed class QuoteController(
             });
         }
 
-        var pinned = store.SetProjectPinned(customerId, projectId, isPinned: true);
+        var pinned = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: true, cancellationToken)
+            ?? store.SetProjectPinned(customerId, projectId, isPinned: true);
         return pinned is null ? NotFound() : Ok(pinned);
     }
 
     [HttpDelete("projects/{projectId:guid}/pin")]
-    public ActionResult<ProjectManagementResponse> UnpinProject(Guid projectId)
+    public async Task<ActionResult<ProjectManagementResponse>> UnpinProject(Guid projectId, CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -603,12 +604,13 @@ public sealed class QuoteController(
             });
         }
 
-        var unpinned = store.SetProjectPinned(customerId, projectId, isPinned: false);
+        var unpinned = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: false, cancellationToken)
+            ?? store.SetProjectPinned(customerId, projectId, isPinned: false);
         return unpinned is null ? NotFound() : Ok(unpinned);
     }
 
     [HttpPost("projects/{projectId:guid}/archive")]
-    public ActionResult<ProjectManagementResponse> ArchiveProject(Guid projectId)
+    public async Task<ActionResult<ProjectManagementResponse>> ArchiveProject(Guid projectId, CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -619,7 +621,8 @@ public sealed class QuoteController(
             });
         }
 
-        var archived = store.SetProjectArchived(customerId, projectId, isArchived: true);
+        var archived = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
+            ?? store.SetProjectArchived(customerId, projectId, isArchived: true);
         return archived is null ? NotFound() : Ok(archived);
     }
 
