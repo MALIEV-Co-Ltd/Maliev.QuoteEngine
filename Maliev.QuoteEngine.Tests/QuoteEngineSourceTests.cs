@@ -1212,6 +1212,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("MakeStudioSessionStorageKey", workspace, StringComparison.Ordinal);
         Assert.Contains("RestoreAgentSessionAsync", workspace, StringComparison.Ordinal);
         Assert.Contains("PersistAgentSessionAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("AuthReturnUrl=\"@WorkspaceAuthReturnUrl\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("BuildWorkspaceAuthReturnUrl(Navigation.Uri)", workspace, StringComparison.Ordinal);
+        Assert.Contains("StripAuthQueryParameter(uri.Query)", workspace, StringComparison.Ordinal);
+        Assert.Contains("!part.StartsWith(\"auth=\", StringComparison.OrdinalIgnoreCase)", workspace, StringComparison.Ordinal);
         Assert.Contains("malievChatbot.readSharedSessionId", workspace, StringComparison.Ordinal);
         Assert.Contains("malievChatbot.writeSharedSession", workspace, StringComparison.Ordinal);
         Assert.Contains("event.key !== \"Enter\"", composerScript, StringComparison.Ordinal);
@@ -2040,8 +2044,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("fill=\"#4285F4\"", shell, StringComparison.Ordinal);
         Assert.Contains("ContinueWithGoogle", shell, StringComparison.Ordinal);
         Assert.Contains("private void NavigateToMalievAccount()", shell, StringComparison.Ordinal);
+        Assert.Contains("public string AuthReturnUrl { get; set; } = \"/quote/new\";", shell, StringComparison.Ordinal);
         Assert.Contains("\"/auth/sign-in\"", shell, StringComparison.Ordinal);
         Assert.Contains("\"/auth/sign-up\"", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("private string AuthReturnUrl => \"/quotes\"", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("type=\"password\"", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("SubmitEmailAuth", shell, StringComparison.Ordinal);
     }

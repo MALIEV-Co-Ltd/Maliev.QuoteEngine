@@ -2062,6 +2062,9 @@
     public string? InitialAuthMode { get; set; }
 
     [Parameter]
+    public string AuthReturnUrl { get; set; } = "/quote/new";
+
+    [Parameter]
     public IReadOnlyList<QuotePartViewModel> UploadedParts { get; set; } = [];
 
     [Parameter]
@@ -2230,7 +2233,6 @@
         AgentBackendStatus.Offline => Text("offline", "ออฟไลน์"),
         _ => Text("connected", "เชื่อมต่อแล้ว")
     };
-    private string AuthReturnUrl => "/quotes";
     private string AuthDialogTitle => _authDialogMode.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
         ? Text("Create your MALIEV account", "สร้างบัญชี MALIEV")
         : Text("Sign in to continue", "เข้าสู่ระบบเพื่อดำเนินการต่อ");

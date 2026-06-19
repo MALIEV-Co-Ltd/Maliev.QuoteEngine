@@ -3976,6 +3976,11 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             return Task.FromResult(ConversationMessages);
         }
 
+        public Task<bool> TruncateLastTurnAsync(Guid sessionId, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(true);
+        }
+
         public Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken)
         {
             return Task.FromResult<string?>(speech);

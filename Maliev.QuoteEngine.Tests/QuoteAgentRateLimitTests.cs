@@ -152,6 +152,9 @@ public sealed class QuoteAgentRateLimitTests(QuoteEngineWebApplicationFactory fa
             CancellationToken cancellationToken) =>
             Task.FromResult<ChatbotConversationMessagesResponse?>(null);
 
+        public Task<bool> TruncateLastTurnAsync(Guid sessionId, CancellationToken cancellationToken) =>
+            Task.FromResult(true);
+
         public Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken) =>
             Task.FromResult<string?>(speech);
     }

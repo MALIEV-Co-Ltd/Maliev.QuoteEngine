@@ -52,6 +52,7 @@
                                    IsDemoMode="@IsDemoMode"
                                    ShowLaunchAccountCard="@ShowLaunchAccountCard"
                                    InitialAuthMode="@AuthMode"
+                                   AuthReturnUrl="@WorkspaceAuthReturnUrl"
                                    Culture="@Culture"
                                    UploadedParts="@_parts"
                                    SelectedPartIndex="@_selectedPartIndex"
@@ -138,6 +139,7 @@
         ShippingAddressId.HasValue;
     private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;
     private Guid AgentSessionId => Guid.TryParse(_quoteSessionId, out var parsed) ? parsed : Guid.Empty;
+    private string WorkspaceAuthReturnUrl => BuildWorkspaceAuthReturnUrl(Navigation.Uri);
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
@@ -189,6 +191,36 @@
             _profile = null;
             _addresses = [];
         }
+    }
+
+    private static string BuildWorkspaceAuthReturnUrl(string currentUri)
+    {
+        if (!Uri.TryCreate(currentUri, UriKind.Absolute, out var uri))
+        {
+            return "/quote/new";
+        }
+
+        var path = string.IsNullOrWhiteSpace(uri.AbsolutePath) || uri.AbsolutePath == "/"
+            ? "/quote/new"
+            : uri.AbsolutePath;
+        var query = StripAuthQueryParameter(uri.Query);
+
+        return $"{path}{query}{uri.Fragment}";
+    }
+
+    private static string StripAuthQueryParameter(string query)
+    {
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return string.Empty;
+        }
+
+        var retained = query.TrimStart('?')
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Where(part => !part.StartsWith("auth=", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        return retained.Length == 0 ? string.Empty : $"?{string.Join("&", retained)}";
     }
 
     protected override async Task OnParametersSetAsync()
