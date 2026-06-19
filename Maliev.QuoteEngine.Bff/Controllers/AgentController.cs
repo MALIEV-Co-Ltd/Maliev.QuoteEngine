@@ -156,7 +156,9 @@ public sealed class AgentController(
                 .Select(message => new QuoteAgentMessageHistoryItemDto
                 {
                     Role = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ? "user" : "assistant",
-                    Content = message.Content,
+                    Content = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
+                        ? QuoteAgentService.ExtractCustomerFacingText(message.Content)
+                        : message.Content,
                     CreatedAt = message.CreatedAt
                 })
                 .ToList() ?? []
@@ -435,7 +437,9 @@ public sealed class AgentController(
             messages = conversation.Messages.Select(m => new
             {
                 role = m.Role,
-                content = m.Content,
+                content = m.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
+                    ? QuoteAgentService.ExtractCustomerFacingText(m.Content)
+                    : m.Content,
                 timestamp = m.CreatedAt
             }).ToList()
         };

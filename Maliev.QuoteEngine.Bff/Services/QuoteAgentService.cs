@@ -99,20 +99,20 @@ internal sealed class QuoteAgentService(
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] ArtifactContextMetadataKeys =
     [
+        "paymentStatus",
+        "transactionId",
+        "paymentUrl",
+        "quantity",
+        "amount",
+        "currency",
+        "quoteNumber",
         "orderId",
         "orderNumber",
+        "currentStatus",
+        "total",
         "invoiceId",
         "invoiceNumber",
         "invoiceStatus",
-        "quoteNumber",
-        "transactionId",
-        "paymentUrl",
-        "paymentStatus",
-        "currentStatus",
-        "amount",
-        "total",
-        "currency",
-        "quantity",
         "leadTimeCode",
         "parts",
         "projectId",
@@ -4551,6 +4551,11 @@ internal sealed class QuoteAgentService(
             contextLines.Add($"Current parts: {BuildPartContext(state.Parts)}");
         }
 
+        if (!string.IsNullOrWhiteSpace(customerMemoryContext))
+        {
+            contextLines.Add(customerMemoryContext);
+        }
+
         if (state.Artifacts.Count > 0)
         {
             contextLines.Add($"Current artifacts: {BuildArtifactContext(state.Artifacts)}");
@@ -4561,23 +4566,6 @@ internal sealed class QuoteAgentService(
             contextLines.Add($"Current estimate: {state.Estimate.Total.ToString("0.##", CultureInfo.InvariantCulture)} {state.Estimate.Currency}, {state.Estimate.Lines.Count} line(s)");
         }
 
-        if (!string.IsNullOrWhiteSpace(customerMemoryContext))
-        {
-            contextLines.Add(customerMemoryContext);
-        }
-
-        if (!string.IsNullOrWhiteSpace(customerContext))
-        {
-            contextLines.Add($"Browser context: {customerContext.Trim()}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(replyToPreview))
-        {
-            contextLines.Add(
-                $"Replying-to: the customer is quoting/replying to an earlier message: \"{replyToPreview.Trim()}\". " +
-                "Treat their message as a direct response to that referenced content.");
-        }
-
         contextLines.Add(
             "Guidance: Infer useful manufacturing parameters from the customer message, file names, and context before asking. " +
             "Process hints: PLA/ABS/PETG/TPU/filament → FDM, resin/photopolymer/SLA → SLA, nylon/PA/PP/SLS → SLS, aluminum/steel/titanium/brass/CNC → CNC. " +
@@ -4586,24 +4574,14 @@ internal sealed class QuoteAgentService(
             "For UI language changes, call quote_set_ui_language only. " +
             "For customer follow-up questions, call quote_ask_customer with 2-4 discrete options. " +
             "Project naming: call quote_set_project_name with a short part/process/material title, not the customer's literal question. " +
-            "For photos/sketches, describe visible shape/features; numeric dimensions are facts only when written or readable. " +
             "Unlabeled sketches need dimension confirmation and must not trigger a 3D preview by themselves. " +
-            "For PDF/technical drawings, inspect the attached document as drawing context; list readable dimensions, tolerances, material, finish, notes, and quote blockers visible in the document. " +
-            "Do not claim you cannot read the PDF or ask for CAD/manual dimensions before summarizing what the PDF provides. " +
-            "NEVER respond by asking the customer to upload or send a 3D/CAD file as your first or only message. Never reject the customer. " +
-            "Call quote_generate_3d_preview only when dimensions are explicit/readable, CAD-derived, or customer-confirmed. " +
-            "The tool accepts a cad_commands array. Each command has an op, id, and op-specific params. " +
-            "Primitives: {op:'box',id:'base',params:[50,30,5]} (w,d,h); {op:'cylinder',id:'hole',params:[3,5]} (radius,height); " +
-            "{op:'sphere',id:'ball',params:[10]} (radius); {op:'cone',id:'tip',params:[5,0,20]} (radiusBottom,radiusTop,height). " +
-            "Boolean ops: {op:'cut',targetId:'base',toolId:'hole',resultId:'bracket'} — subtract tool from target. " +
-            "{op:'fuse',targetId:'a',toolId:'b',resultId:'combined'} — union. " +
-            "Edge ops: {op:'fillet',targetId:'bracket',radius:2,resultId:'finished'} — rounds edges. " +
-            "Extrude: {op:'extrude',id:'part',params:[10],profile:{plane:'XY',segments:[{type:'line',params:[0,0,30,0]},{type:'line',params:[30,0,30,20]},{type:'line',params:[30,20,0,20]}]}} — sketch + extrude. " +
-            "Revolve: {op:'revolve',id:'vase',profile:{...},axis:[0,0,1],angle:6.2832} — revolve sketch around axis (angle in radians, 2π = full). " +
-            "Translation: {op:'translate',targetId:'part',offset:[10,0,0],resultId:'moved'} — offset in mm. " +
-            "Plan the command sequence logically: build primitives, position with translate, combine with bool ops, apply edge ops last. " +
-            "Describe what you created, list your assumptions, and ask the customer to verify the shape and dimensions. " +
-            "Only mention CAD file uploads as an optional refinement step, never as a gate.");
+            "For PDF/technical drawings, inspect the attached document as drawing context; summarize visible/readable shape, dimensions, tolerances, material, finish, and blockers before asking for missing facts. " +
+            "Do not claim you cannot read the PDF before summarizing what the PDF provides. " +
+            "Never ask for a CAD file as your first or only response, and never make CAD upload a gate. " +
+            "Generate 3D previews only from explicit, readable, CAD-derived, or confirmed dimensions. " +
+            "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, fillet, extrude, revolve, translate. " +
+            "Build primitives first, position them, combine/cut, then apply edge operations. " +
+            "After a preview, describe the assumptions and ask the customer to verify shape and dimensions.");
         contextLines.Add(
             "Structured presentation: Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables " +
             "instead of bullet-only prose when there are 3 or more comparable fields. Prefer columns like Feature | Value | Source, " +
@@ -4617,6 +4595,18 @@ internal sealed class QuoteAgentService(
             "When multiple quote details are missing, ask one focused question with quote_ask_customer, wait for the customer response, then ask the next missing detail in the following turn. " +
             "Do not put a checklist of multiple missing details in assistant text when quote_ask_customer can ask the first question. " +
             "Use normal text only for details you can confidently infer. At most once per turn.");
+
+        if (!string.IsNullOrWhiteSpace(customerContext))
+        {
+            contextLines.Add($"Browser context: {customerContext.Trim()}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(replyToPreview))
+        {
+            contextLines.Add(
+                $"Replying-to: the customer is quoting/replying to an earlier message: \"{replyToPreview.Trim()}\". " +
+                "Treat their message as a direct response to that referenced content.");
+        }
 
         var content = $"""
 {string.Join("\n", contextLines)}
@@ -4668,6 +4658,27 @@ Customer message:
 """;
     }
 
+    private const string CustomerMessageMarker = "Customer message:\n";
+
+    /// <summary>
+    /// Extracts the customer's literal message text from a BFF-composed agent turn (see
+    /// <see cref="ComposeAgentMessage"/>/<see cref="TrimChatbotContent"/>), stripping the injected
+    /// session context (gates, settings, guidance) that ChatbotService persists alongside it.
+    /// Falls back to the original content when no marker is present (e.g. pre-existing history).
+    /// </summary>
+    internal static string ExtractCustomerFacingText(string content)
+    {
+        if (string.IsNullOrEmpty(content))
+        {
+            return content;
+        }
+
+        var markerIndex = content.LastIndexOf(CustomerMessageMarker, StringComparison.Ordinal);
+        return markerIndex < 0
+            ? content
+            : content[(markerIndex + CustomerMessageMarker.Length)..].Trim();
+    }
+
     private async Task<string?> BuildCustomerMemoryContextAsync(Guid? customerId, CancellationToken cancellationToken)
     {
         if (!customerId.HasValue)
@@ -4716,7 +4727,7 @@ Customer message:
 
     private static string BuildArtifactContext(IReadOnlyCollection<QuoteAgentArtifactDto> artifacts)
     {
-        return string.Join("; ", artifacts.TakeLast(8).Select(artifact =>
+        return string.Join("; ", artifacts.TakeLast(8).Reverse().Select(artifact =>
         {
             var metadata = BuildArtifactMetadataContext(artifact.Metadata);
             return string.IsNullOrWhiteSpace(metadata)
@@ -4730,8 +4741,7 @@ Customer message:
         return string.Join(", ", ArtifactContextMetadataKeys
             .Where(metadata.ContainsKey)
             .Select(key => $"{key}={metadata[key]}")
-            .Where(item => !item.EndsWith("=", StringComparison.Ordinal))
-            .Take(8));
+            .Where(item => !item.EndsWith("=", StringComparison.Ordinal)));
     }
 
     private async Task<List<ChatbotMessageAttachmentRequest>?> BuildChatbotAttachmentsAsync(
