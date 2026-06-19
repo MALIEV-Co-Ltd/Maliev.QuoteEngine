@@ -76,8 +76,8 @@ ordering, retries) — exactly what the E2E proves.
 | 6 | Customer order-status tracking | **Wired** | `QuoteOrderStatusChangedConsumer.cs` → SignalR per-order group |
 | 7 | Login redirect restore stricter gate | **Base committed; stricter E2E pending** | QE `7e78489 fix: restore make studio chat after auth` |
 | 8 | Real browser upload→DFM→reupload proof | **Real path exists (w/ fallback); browser E2E pending** | `QuoteController.cs:96-122`; DFM consumers + SignalR |
-| 9 | ChatbotService tool/prompt schema full audit | **`quote_create_order` fixed; full re-audit outstanding** | `QuoteEngineToolHandler` + `ToolRegistry` |
-| 10 | Payment non-happy paths gating | **5 consumers committed; tests/decision outstanding** | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs` |
+| 9 | ChatbotService tool/prompt schema full audit | **VERIFIED clean**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken` | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244` |
+| 10 | Payment non-happy paths gating | **5 consumers committed; unit tests now added; idempotency lives in OrderService** | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs`; `PaymentNotificationConsumerTests.cs` |
 
 Net: 4 of 10 are simply **already done** (2,3,4,6); 4 are **code-complete, proof-pending** (1,5,7,8);
 2 are **genuine outstanding work** (9 audit, 10 test/decision).
@@ -98,10 +98,19 @@ Two independent slices in one dirty tree (preserve & commit separately):
   approval → order creation → payment completion → Intranet order/project visibility → **project-part
   ↔ order ↔ production-job linkage** → restored chat/workbench. This is the single proof that closes
   gaps 1,5,7,8.
-- **P0 — Lock production "backing" config**: confirm the mutating QuoteController endpoints resolve to
-  **real** Quotation/Order/Payment/Pricing/Customer clients (not the prototype-store fallback or
-  DemoMode) in the production profile; fail-closed rather than silently falling back for money/order
-  paths.
+- **P0 — Backing config (VERIFIED this session)**: the mutating money/order/quote endpoints resolve to
+  **real** clients and fail-closed in production:
+  - `quotes/formal` → `quotationClient.CreateAsync` (QuoteController.cs:709); `quotes/{id}/approve` →
+    `quotationClient.GetByIdAsync` (1106); `payments` → `paymentClient.InitiateAsync` + `orderClient.*`
+    (925, 911); `orders` → `orderClient.CreateAsync` + `AddStatusAsync` (1159, 1171).
+  - The prototype-store `GenerateQuote`/`CreateOrder`/`StartPayment` methods are **not called by the
+    controller** (dead code). Upload→prototype fallback is gated to dev/test only (1378-1379), so prod
+    fails-closed (502).
+  - Residual (product decision, not a blocker): `estimate` falls back unconditionally to `store.Estimate`
+    when PricingService returns null (`pricingEstimate ?? store.Estimate`, line 310). Estimates are
+    non-binding, so this is graceful degradation; decide whether prod should instead surface a "pricing
+    unavailable" state. Draft projects are in-memory only (no `ProjectServiceClient`); the durable
+    project record is created Intranet-side on quotation acceptance.
 - **P1 — ChatbotService Make Studio tool-schema audit (gap 9)**: re-verify every tool the customer
   channel exposes against its QuoteEngine handler — upload registration, DFM acknowledgement, checkout
   details, payment start, project resume, project summary, order creation — for schema match and
