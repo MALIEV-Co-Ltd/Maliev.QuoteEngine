@@ -381,7 +381,9 @@ public sealed record CreateDraftProjectResponse(
     string ProjectNumber,
     string Status,
     string Title = "Untitled quote",
-    IReadOnlyList<QuotePartDraftDto>? Parts = null);
+    IReadOnlyList<QuotePartDraftDto>? Parts = null,
+    Guid? ProjectServiceProjectId = null,
+    string? ProjectServiceProjectNumber = null);
 
 public sealed record CustomerProjectDetailResponse(
     Guid ProjectId,

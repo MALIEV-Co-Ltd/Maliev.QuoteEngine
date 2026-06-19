@@ -28,6 +28,7 @@ public sealed class QuoteController(
     IQuotationServiceClient quotationClient,
     IOrderServiceClient orderClient,
     ICustomerServiceClient customerClient,
+    IProjectServiceClient projectClient,
     IPaymentServiceClient paymentClient,
     IQePricingServiceClient pricingClient,
     QuoteUploadHandoffToken handoffToken,
@@ -461,7 +462,9 @@ public sealed class QuoteController(
     }
 
     [HttpPost("projects/draft")]
-    public ActionResult<CreateDraftProjectResponse> CreateDraftProject([FromBody] CreateDraftProjectRequest request)
+    public async Task<ActionResult<CreateDraftProjectResponse>> CreateDraftProject(
+        [FromBody] CreateDraftProjectRequest request,
+        CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -472,8 +475,36 @@ public sealed class QuoteController(
             });
         }
 
-        return Ok(store.CreateDraftProject(customerId, request));
+        var profile = store.GetProfile(customerId);
+        var project = await projectClient.CreateDraftProjectAsync(
+            customerId,
+            profile.DisplayName,
+            request,
+            ResolveProjectPartMaterialIdAsync,
+            cancellationToken);
+        if (project is null)
+        {
+            logger.LogError("ProjectService did not create a draft project for customer {CustomerId}.", customerId);
+            return StatusCode(StatusCodes.Status502BadGateway, new ProblemDetails
+            {
+                Title = "Project service unavailable.",
+                Detail = "The draft project could not be persisted for employee handoff.",
+                Status = StatusCodes.Status502BadGateway
+            });
+        }
+
+        var local = store.CreateDraftProject(customerId, request);
+        return Ok(local with
+        {
+            ProjectServiceProjectId = project.ProjectId,
+            ProjectServiceProjectNumber = project.ProjectNumber
+        });
     }
+
+    private async Task<Guid?> ResolveProjectPartMaterialIdAsync(
+        QuotePartDraftDto part,
+        CancellationToken cancellationToken) =>
+        await materialCatalog.ResolveMaterialIdAsync(part.ProcessId, part.MaterialId, cancellationToken);
 
     [HttpGet("projects/nav")]
     public ActionResult<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigation()

@@ -1886,6 +1886,13 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.NotNull(draftResult.State);
         var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
         Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var sourceProjectId));
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectServiceProjectId"], out var projectServiceProjectId));
+        Assert.False(string.IsNullOrWhiteSpace(draftArtifact.Metadata["projectServiceProjectNumber"]));
+        Assert.Equal(projectServiceProjectId, factory.LastProjectDraftCreate?.ProjectServiceProjectId);
+        var projectPart = Assert.Single(factory.LastProjectPartCreates);
+        Assert.Equal("fixture.step", projectPart.FileName);
+        Assert.Equal(25, projectPart.Quantity);
+        Assert.NotEqual(Guid.Empty, projectPart.MaterialId);
 
         var duplicateState = await ExecuteToolForStateAsync(
             client,

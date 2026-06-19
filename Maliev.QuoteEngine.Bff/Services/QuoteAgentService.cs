@@ -79,7 +79,8 @@ internal sealed class QuoteAgentService(
     IQuotationServiceClient quotationClient,
     IMaterialCatalogClient materialCatalog,
     IOrderServiceClient orderClient,
-    IPaymentServiceClient paymentClient) : IQuoteAgentService
+    IPaymentServiceClient paymentClient,
+    IProjectServiceClient projectClient) : IQuoteAgentService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] ArtifactContextMetadataKeys =
@@ -570,7 +571,7 @@ internal sealed class QuoteAgentService(
         state.CustomerId = customerId ?? state.CustomerId;
         var message = action.ActionType switch
         {
-            "draft_project" => ExecuteDraftProject(state, customerId!.Value, action),
+            "draft_project" => await ExecuteDraftProjectAsync(state, customerId!.Value, action, cancellationToken),
             "duplicate_project" => ExecuteDuplicateProject(state, customerId!.Value, action),
             "pin_project" => ExecutePinProject(state, customerId!.Value, action),
             "unpin_project" => ExecuteUnpinProject(state, customerId!.Value, action),
@@ -2270,21 +2271,49 @@ internal sealed class QuoteAgentService(
         };
     }
 
-    private string ExecuteDraftProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    private async Task<string> ExecuteDraftProjectAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
-        var response = prototypeStore.CreateDraftProject(customerId, new CreateDraftProjectRequest(
+        var request = new CreateDraftProjectRequest(
             state.SessionId.ToString("N"),
             state.Parts,
             ReadString(action.Arguments, "requirements") ?? ReadString(action.Arguments, "notes") ?? string.Empty,
-            ReadString(action.Arguments, "title") ?? "Chat-created quote"));
+            ReadString(action.Arguments, "title") ?? "Chat-created quote");
+        var profile = prototypeStore.GetProfile(customerId);
+        var project = await projectClient.CreateDraftProjectAsync(
+            customerId,
+            profile.DisplayName,
+            request,
+            ResolveProjectPartMaterialIdAsync,
+            cancellationToken);
+        if (project is null)
+        {
+            throw new InvalidOperationException("ProjectService did not create the draft project.");
+        }
+
+        var response = prototypeStore.CreateDraftProject(customerId, request) with
+        {
+            ProjectServiceProjectId = project.ProjectId,
+            ProjectServiceProjectNumber = project.ProjectNumber
+        };
         UpsertArtifact(state, "draft_project", response.Title, response.Status, null, null);
         SetArtifactMetadata(state, "draft_project", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             ["projectId"] = response.ProjectId.ToString("D"),
-            ["projectNumber"] = response.ProjectNumber
+            ["projectNumber"] = response.ProjectNumber,
+            ["projectServiceProjectId"] = project.ProjectId.ToString("D"),
+            ["projectServiceProjectNumber"] = project.ProjectNumber
         });
         return $"Draft project {response.ProjectNumber} is ready.";
     }
+
+    private async Task<Guid?> ResolveProjectPartMaterialIdAsync(
+        QuotePartDraftDto part,
+        CancellationToken cancellationToken) =>
+        await materialCatalog.ResolveMaterialIdAsync(part.ProcessId, part.MaterialId, cancellationToken);
 
     private string ExecuteDuplicateProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
     {

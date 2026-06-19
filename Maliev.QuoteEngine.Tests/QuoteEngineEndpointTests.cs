@@ -37,6 +37,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 {
     private readonly FakeQuotationServiceClient _fakeQuotationServiceClient = new();
     private readonly FakeOrderServiceClient _fakeOrderServiceClient = new();
+    private readonly FakeProjectServiceClient _fakeProjectServiceClient = new();
 
     public IReadOnlyList<string> PaymentIdempotencyKeys => FakePaymentServiceClient.IdempotencyKeys.ToArray();
 
@@ -47,6 +48,10 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     public OrderCreateRequest? LastOrderCreateRequest => _fakeOrderServiceClient.LastCreateRequest;
 
     public QuotationCreateRequest? LastQuotationCreateRequest => _fakeQuotationServiceClient.LastCreateRequest;
+
+    public CapturedProjectDraftCreate? LastProjectDraftCreate => _fakeProjectServiceClient.LastCreate;
+
+    public IReadOnlyList<CapturedProjectPartCreate> LastProjectPartCreates => _fakeProjectServiceClient.PartCreates.ToArray();
 
     public void FailNextOrderStatus(string status) => _fakeOrderServiceClient.FailNextStatus(status);
 
@@ -89,6 +94,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             // Returns null → AccountController falls back to PrototypeStore for profile
             services.RemoveAll<ICustomerServiceClient>();
             services.AddSingleton<ICustomerServiceClient>(new FakeCustomerServiceClient());
+
+            services.RemoveAll<IProjectServiceClient>();
+            services.AddSingleton<IProjectServiceClient>(_fakeProjectServiceClient);
 
             services.RemoveAll<ICountryServiceClient>();
             services.AddSingleton<ICountryServiceClient>(new FakeCountryServiceClient());
@@ -154,6 +162,25 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         string? DeliveryContactName,
         string? DeliveryContactPhone,
         string? DeliveryContactEmail);
+
+    public sealed record CapturedProjectDraftCreate(
+        Guid CustomerId,
+        string CustomerName,
+        string QuoteSessionId,
+        string Title,
+        string Notes,
+        Guid ProjectServiceProjectId,
+        string ProjectServiceProjectNumber);
+
+    public sealed record CapturedProjectPartCreate(
+        Guid ProjectServiceProjectId,
+        string FileName,
+        Guid? MaterialId,
+        int Quantity,
+        string ProcessId,
+        bool DfmAcknowledged,
+        bool HasDfmWarnings,
+        string? StoragePath);
 
     // ── Upload no-op ──────────────────────────────────────────────────────────
 
@@ -361,6 +388,55 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     new DateTimeOffset(q.UpdatedAt, TimeSpan.Zero), string.Empty))
                 .ToArray();
             return Task.FromResult(result);
+        }
+    }
+
+    private sealed class FakeProjectServiceClient : IProjectServiceClient
+    {
+        public ConcurrentQueue<CapturedProjectPartCreate> PartCreates { get; } = new();
+
+        public CapturedProjectDraftCreate? LastCreate { get; private set; }
+
+        public async Task<ProjectServiceDraftProjectResult?> CreateDraftProjectAsync(
+            Guid customerId,
+            string customerName,
+            CreateDraftProjectRequest request,
+            Func<QuotePartDraftDto, CancellationToken, Task<Guid?>> resolveMaterialIdAsync,
+            CancellationToken ct = default)
+        {
+            var projectId = Guid.NewGuid();
+            var projectNumber = $"PRJ-TEST-{projectId:N}"[..17];
+            while (PartCreates.TryDequeue(out _))
+            {
+            }
+
+            LastCreate = new CapturedProjectDraftCreate(
+                customerId,
+                customerName,
+                request.QuoteSessionId,
+                request.Title,
+                request.Notes,
+                projectId,
+                projectNumber);
+
+            foreach (var part in request.Parts)
+            {
+                PartCreates.Enqueue(new CapturedProjectPartCreate(
+                    projectId,
+                    part.FileName,
+                    await resolveMaterialIdAsync(part, ct),
+                    part.Quantity,
+                    part.ProcessId,
+                    part.DfmAcknowledged,
+                    part.Findings.Count > 0 ||
+                    part.FdmReport?.Issues.Count > 0 ||
+                    part.SlaReport?.Issues.Count > 0 ||
+                    part.CncReport?.Issues.Count > 0 ||
+                    (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason)),
+                    part.StoragePath ?? part.ViewerStoragePath ?? part.UploadId));
+            }
+
+            return new ProjectServiceDraftProjectResult(projectId, projectNumber, "Draft");
         }
     }
 
@@ -1820,6 +1896,21 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         createResponse.EnsureSuccessStatusCode();
         var created = await createResponse.Content.ReadFromJsonAsync<CreateDraftProjectResponse>();
         Assert.NotNull(created);
+        Assert.NotNull(created.ProjectServiceProjectId);
+        Assert.False(string.IsNullOrWhiteSpace(created.ProjectServiceProjectNumber));
+        var projectCreate = factory.LastProjectDraftCreate;
+        Assert.NotNull(projectCreate);
+        Assert.Equal("duplicate-session", projectCreate.QuoteSessionId);
+        Assert.Equal("Untitled quote", projectCreate.Title);
+        Assert.Equal("Original draft notes.", projectCreate.Notes);
+        Assert.Equal(created.ProjectServiceProjectId, projectCreate.ProjectServiceProjectId);
+        var projectPart = Assert.Single(factory.LastProjectPartCreates);
+        Assert.Equal(projectCreate.ProjectServiceProjectId, projectPart.ProjectServiceProjectId);
+        Assert.Equal("duplicate-fixture.step", projectPart.FileName);
+        Assert.Equal(4, projectPart.Quantity);
+        Assert.Equal("cnc", projectPart.ProcessId);
+        Assert.True(projectPart.DfmAcknowledged);
+        Assert.NotEqual(Guid.Empty, projectPart.MaterialId);
 
         var duplicateResponse = await client.PostAsJsonAsync(
             $"/quote/v1/projects/{created.ProjectId:D}/duplicate",

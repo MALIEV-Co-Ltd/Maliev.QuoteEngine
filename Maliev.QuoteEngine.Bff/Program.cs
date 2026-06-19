@@ -129,6 +129,7 @@ builder.AddAuthenticatedServiceClient<IMaterialCatalogClient, MaterialCatalogCli
 builder.AddAuthenticatedServiceClient<IQuotationServiceClient, QuotationServiceClient>("QuotationService");
 builder.AddAuthenticatedServiceClient<IOrderServiceClient, OrderServiceClient>("OrderService");
 builder.AddAuthenticatedServiceClient<ICustomerServiceClient, CustomerServiceClient>("CustomerService");
+builder.AddAuthenticatedServiceClient<IProjectServiceClient, ProjectServiceClient>("ProjectService");
 builder.AddAuthenticatedServiceClient<ICountryServiceClient, CountryServiceClient>("CountryService");
 builder.AddAuthenticatedServiceClient<ICurrencyServiceClient, CurrencyServiceClient>("CurrencyService");
 builder.AddAuthenticatedServiceClient<IRegistryServiceClient, RegistryServiceClient>("RegistryService");
