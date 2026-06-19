@@ -126,7 +126,19 @@ public sealed partial record CustomerOrderDetailDto(
 public sealed partial record CustomerOrderDetailDto
 {
     public IReadOnlyList<CustomerManufacturingMilestoneDto> ManufacturingMilestones { get; init; } = [];
+    public IReadOnlyList<CustomerOrderFileDto> OrderFiles { get; init; } = [];
 }
+
+/// <summary>A customer-visible file attached to the manufacturing order record.</summary>
+public sealed record CustomerOrderFileDto(
+    long FileId,
+    string FileName,
+    string FileRole,
+    string FileCategory,
+    string ObjectPath,
+    string ContentType,
+    long FileSizeBytes,
+    DateTimeOffset UploadedAt);
 
 public sealed record CustomerNdaDto(
     Guid NdaId,

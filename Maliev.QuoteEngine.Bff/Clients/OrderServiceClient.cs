@@ -69,6 +69,18 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
         public DateTime Timestamp { get; set; }
     }
 
+    private sealed class OsOrderFileResponse
+    {
+        public long FileId { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        public string FileRole { get; set; } = string.Empty;
+        public string FileCategory { get; set; } = string.Empty;
+        public long FileSize { get; set; }
+        public string FileType { get; set; } = "application/octet-stream";
+        public string ObjectPath { get; set; } = string.Empty;
+        public DateTime UploadedAt { get; set; }
+    }
+
     private static CustomerOrderSummaryDto MapSummary(OsOrderResponse r) => new(
         DeterministicGuid(r.OrderId),
         r.OrderId,
@@ -148,14 +160,16 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
     {
         try
         {
-            // Fetch order detail and status history in parallel
+            // Fetch order detail, status history, and order files in parallel.
             var detailTask = http.GetAsync($"/order/v1/orders/{Uri.EscapeDataString(orderNumber)}", ct);
             var statusTask = http.GetAsync($"/order/v1/orders/{Uri.EscapeDataString(orderNumber)}/statuses", ct);
+            var filesTask = http.GetAsync($"/order/v1/orders/{Uri.EscapeDataString(orderNumber)}/files", ct);
 
-            await Task.WhenAll(detailTask, statusTask);
+            await Task.WhenAll(detailTask, statusTask, filesTask);
 
             using var detailResponse = detailTask.Result;
             using var statusResponse = statusTask.Result;
+            using var filesResponse = filesTask.Result;
 
             if (detailResponse.StatusCode == HttpStatusCode.NotFound) return null;
             if (!detailResponse.IsSuccessStatusCode)
@@ -180,6 +194,19 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                     s.CustomerNotes,
                     new DateTimeOffset(s.Timestamp, TimeSpan.Zero)))
                 .ToArray();
+            var orderFiles = Array.Empty<CustomerOrderFileDto>();
+            if (filesResponse.IsSuccessStatusCode)
+            {
+                var files = await filesResponse.Content.ReadFromJsonAsync<List<OsOrderFileResponse>>(cancellationToken: ct);
+                orderFiles = files?
+                    .Where(file => string.IsNullOrWhiteSpace(file.ObjectPath) || file.ObjectPath.Contains("://", StringComparison.Ordinal) is false)
+                    .Select(MapOrderFile)
+                    .ToArray() ?? [];
+            }
+            else if (filesResponse.StatusCode != HttpStatusCode.NotFound)
+            {
+                logger.LogWarning("OrderService GetFiles returned {Status} for {OrderNumber}.", filesResponse.StatusCode, orderNumber);
+            }
 
             return new CustomerOrderDetailDto(
                 OrderId: DeterministicGuid(detail.OrderId),
@@ -200,6 +227,7 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 UpdatedAt: new DateTimeOffset(detail.UpdatedAt, TimeSpan.Zero),
                 StatusHistory: customerStatusEntries)
             {
+                OrderFiles = orderFiles,
                 ManufacturingMilestones = BuildCustomerManufacturingMilestones(
                     detail.CurrentStatus ?? "Pending",
                     detail.PaymentStatus,
@@ -219,6 +247,16 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
             return null;
         }
     }
+
+    private static CustomerOrderFileDto MapOrderFile(OsOrderFileResponse file) => new(
+        file.FileId,
+        file.FileName,
+        file.FileRole,
+        file.FileCategory,
+        file.ObjectPath,
+        file.FileType,
+        file.FileSize,
+        new DateTimeOffset(file.UploadedAt, TimeSpan.Zero));
 
     public async Task<bool> AddStatusAsync(string orderId, string status, CancellationToken ct = default)
     {

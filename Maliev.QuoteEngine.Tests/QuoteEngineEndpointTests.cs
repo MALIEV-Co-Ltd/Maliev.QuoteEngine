@@ -771,6 +771,18 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 UpdatedAt: receivedAt,
                 StatusHistory: [new OrderStatusEntryDto("Pending", "Your order has been received.", receivedAt)])
             {
+                OrderFiles =
+                [
+                    new CustomerOrderFileDto(
+                        1001,
+                        "make-studio-manufacturing-packet.pdf",
+                        "Supporting",
+                        "Document",
+                        $"orders/{orderNumber}/files/make-studio-manufacturing-packet.pdf",
+                        "application/pdf",
+                        18_432,
+                        receivedAt)
+                ],
                 ManufacturingMilestones =
                 [
                     new CustomerManufacturingMilestoneDto(
@@ -3064,9 +3076,15 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         Assert.NotNull(detailResp);
         Assert.Equal(order.OrderNumber, detailResp.OrderNumber);
-        Assert.Equal("Pending", detailResp.CurrentStatus);
+        Assert.Equal("Quoted", detailResp.CurrentStatus);
         Assert.NotEmpty(detailResp.StatusHistory);
         Assert.Contains(detailResp.StatusHistory, s => s.Status == "Pending");
+        var orderFile = Assert.Single(detailResp.OrderFiles);
+        Assert.Equal("make-studio-manufacturing-packet.pdf", orderFile.FileName);
+        Assert.Equal("Supporting", orderFile.FileRole);
+        Assert.Equal("Document", orderFile.FileCategory);
+        Assert.Equal($"orders/{order.OrderNumber}/files/make-studio-manufacturing-packet.pdf", orderFile.ObjectPath);
+        Assert.Equal("application/pdf", orderFile.ContentType);
         Assert.NotEmpty(detailResp.ManufacturingMilestones);
         Assert.Contains(detailResp.ManufacturingMilestones, milestone =>
             milestone.Key == "order-received" &&

@@ -209,11 +209,19 @@ else
         <section class="order-detail-card" data-order-section="documents">
             <div class="order-panel-head">
                 <span>@Text("Order documents", "เอกสารคำสั่งซื้อ")</span>
-                <strong>@OrderDocuments.Count</strong>
+                <strong>@OrderArtifactCount</strong>
             </div>
-            @if (OrderDocuments.Count > 0)
+            @if (OrderArtifactCount > 0)
             {
                 <div class="order-documents-list">
+                    @foreach (var file in OrderFiles)
+                    {
+                        <div class="order-document-row">
+                            <span>@file.FileName</span>
+                            <strong>@OrderFileKind(file)</strong>
+                            <small>@OrderFileMeta(file)</small>
+                        </div>
+                    }
                     @foreach (var document in OrderDocuments)
                     {
                         <div class="order-document-row">
@@ -371,6 +379,12 @@ else
             .Where(document => string.Equals(document.OrderNumber, _order.OrderNumber, StringComparison.OrdinalIgnoreCase))
             .OrderByDescending(document => document.UploadedAt)
             .ToArray();
+
+    private IReadOnlyList<CustomerOrderFileDto> OrderFiles => _order?.OrderFiles
+        .OrderByDescending(file => file.UploadedAt)
+        .ToArray() ?? [];
+
+    private int OrderArtifactCount => OrderFiles.Count + OrderDocuments.Count;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -573,6 +587,18 @@ else
     private string DocumentMeta(CustomerDocumentDto document)
     {
         return $"{FormatDate(document.UploadedAt)} · {FormatFileSize(document.FileSizeBytes)}";
+    }
+
+    private static string OrderFileKind(CustomerOrderFileDto file)
+    {
+        return string.IsNullOrWhiteSpace(file.FileCategory)
+            ? file.FileRole
+            : $"{file.FileRole} · {file.FileCategory}";
+    }
+
+    private string OrderFileMeta(CustomerOrderFileDto file)
+    {
+        return $"{FormatDate(file.UploadedAt)} · {FormatFileSize(file.FileSizeBytes)}";
     }
 
     private string MilestoneTimestamp(CustomerManufacturingMilestoneDto milestone)
