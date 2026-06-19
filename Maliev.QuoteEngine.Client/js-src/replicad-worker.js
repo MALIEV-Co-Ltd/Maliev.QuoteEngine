@@ -97,6 +97,24 @@ function buildProfile(profile) {
   return sketch;
 }
 
+function buildFaceFromProfile(profile, params) {
+  const plane = profile.plane || 'XY';
+  const profileType = typeof profile.type === 'string' ? profile.type.toLowerCase() : '';
+  if (profileType === 'circle' || Number(profile.radius) > 0) {
+    return drawCircle(profile.radius || params[1] || 10).sketchOnPlane(plane);
+  }
+
+  if (
+    profileType === 'rect' ||
+    profileType === 'rectangle' ||
+    (Number(profile.width) > 0 && Number(profile.height) > 0)
+  ) {
+    return drawRectangle(profile.width || params[1], profile.height || params[2]).sketchOnPlane(plane);
+  }
+
+  return buildProfile(profile);
+}
+
 function makeCone(radiusBottom, radiusTop, height) {
   const sketch = new Sketcher('XZ')
     .movePointerTo([0, 0])
@@ -143,27 +161,13 @@ function processCommands(commands) {
       }
       case 'extrude': {
         const profile = cmd.profile;
-        let face;
-        if (profile.type === 'circle') {
-          face = drawCircle(profile.radius || p[1] || 10).sketchOnPlane('XY');
-        } else if (profile.type === 'rect') {
-          face = drawRectangle(profile.width || p[1], profile.height || p[2]).sketchOnPlane('XY');
-        } else {
-          face = buildProfile(profile);
-        }
+        const face = buildFaceFromProfile(profile, p);
         shape = face.extrude(p[0]);
         break;
       }
       case 'revolve': {
         const profile = cmd.profile;
-        let face;
-        if (profile.type === 'circle') {
-          face = drawCircle(profile.radius || p[1] || 10).sketchOnPlane('XY');
-        } else if (profile.type === 'rect') {
-          face = drawRectangle(profile.width || p[1], profile.height || p[2]).sketchOnPlane('XY');
-        } else {
-          face = buildProfile(profile);
-        }
+        const face = buildFaceFromProfile(profile, p);
         shape = face.revolve(cmd.axis || [0, 0, 1], cmd.angle);
         break;
       }

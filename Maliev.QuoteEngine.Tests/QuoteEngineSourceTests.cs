@@ -4194,6 +4194,20 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void ReplicadWorker_renders_bff_profile_shorthands_without_type_field()
+    {
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function buildFaceFromProfile(profile, params)", worker, StringComparison.Ordinal);
+        Assert.Contains("profileType === 'circle' || Number(profile.radius) > 0", worker, StringComparison.Ordinal);
+        Assert.Contains("Number(profile.width) > 0 && Number(profile.height) > 0", worker, StringComparison.Ordinal);
+        Assert.Contains("const face = buildFaceFromProfile(profile, p);", worker, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (profile.type === 'circle')", worker, StringComparison.Ordinal);
+        Assert.DoesNotContain("drawCircle(profile.radius || p[1] || 10).sketchOnPlane('XY')", worker, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteInlineViewer_creates_babylon_engine_before_scene()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
