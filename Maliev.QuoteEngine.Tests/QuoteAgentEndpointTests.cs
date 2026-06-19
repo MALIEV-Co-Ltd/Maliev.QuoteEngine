@@ -2265,7 +2265,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             {
                 ["title"] = JsonSerializer.SerializeToElement("Endpoint fixture search project", JsonOptions)
             });
-        await ConfirmActionAsync(ownerClient, Assert.Single(draftState.ProposedActions).ActionId);
+        var draftResult = await ConfirmActionAsync(ownerClient, Assert.Single(draftState.ProposedActions).ActionId);
+        Assert.NotNull(draftResult.State);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectServiceProjectId"], out var projectServiceProjectId));
 
         using var otherClient = await CreateSignedInClientAsync(scopedFactory, "agent-search-endpoint-other@example.com");
         var otherSessionId = await StartPricedCadSessionAsync(otherClient);
@@ -2290,6 +2293,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(body.Results, result =>
             result.ResourceType == "project" &&
             result.Title == "Endpoint fixture search project" &&
+            result.ResourceId == projectServiceProjectId.ToString("D") &&
+            result.Metadata["source"] == "project_service" &&
             result.ActionHint == "resume_project");
         Assert.Contains(body.Results, result =>
             result.ResourceType == "file" &&
@@ -2314,16 +2319,10 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             {
                 ["title"] = JsonSerializer.SerializeToElement("Fixture search project", JsonOptions)
             });
-        await ConfirmActionAsync(ownerClient, Assert.Single(draftState.ProposedActions).ActionId);
-
-        var quoteState = await ExecuteToolForStateAsync(ownerClient, ownerSessionId, "quote_prepare_formal_quote");
-        await ConfirmActionAsync(ownerClient, Assert.Single(quoteState.ProposedActions).ActionId);
-
-        var approvalState = await ExecuteToolForStateAsync(ownerClient, ownerSessionId, "quote_approve_quote");
-        await ConfirmActionAsync(ownerClient, Assert.Single(approvalState.ProposedActions).ActionId);
-
-        var orderState = await ExecuteToolForStateAsync(ownerClient, ownerSessionId, "quote_create_order");
-        await ConfirmActionAsync(ownerClient, Assert.Single(orderState.ProposedActions).ActionId);
+        var draftResult = await ConfirmActionAsync(ownerClient, Assert.Single(draftState.ProposedActions).ActionId);
+        Assert.NotNull(draftResult.State);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectServiceProjectId"], out var projectServiceProjectId));
 
         using var otherClient = await CreateSignedInClientAsync(scopedFactory, "agent-search-other@example.com");
         var otherSessionId = await StartPricedCadSessionAsync(otherClient);
@@ -2352,9 +2351,9 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Equal(ownerSessionId, document.RootElement.GetProperty("sessionId").GetGuid());
         Assert.Contains(results, result =>
             result.GetProperty("resourceType").GetString() == "project" &&
-            result.GetProperty("title").GetString() == "Fixture search project");
-        Assert.Contains(results, result => result.GetProperty("resourceType").GetString() == "quote");
-        Assert.Contains(results, result => result.GetProperty("resourceType").GetString() == "order");
+            result.GetProperty("title").GetString() == "Fixture search project" &&
+            result.GetProperty("resourceId").GetString() == projectServiceProjectId.ToString("D") &&
+            result.GetProperty("metadata").GetProperty("source").GetString() == "project_service");
         Assert.Contains(results, result =>
             result.GetProperty("resourceType").GetString() == "document" &&
             result.GetProperty("title").GetString() == "manufacturing-requirements.pdf");

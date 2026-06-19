@@ -1,6 +1,7 @@
 // Maliev.QuoteEngine.Bff/Clients/ProjectServiceClient.cs
 using System.Net.Http.Json;
 using System.Text.Json;
+using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
 
 namespace Maliev.QuoteEngine.Bff.Clients;
@@ -23,6 +24,13 @@ public interface IProjectServiceClient
 
     /// <summary>Returns a customer-scoped project detail from ProjectService.</summary>
     Task<CustomerProjectDetailResponse?> GetProjectDetailAsync(Guid customerId, Guid projectId, CancellationToken ct = default);
+
+    /// <summary>Searches customer-scoped projects from ProjectService for QuoteAgent recall.</summary>
+    Task<IReadOnlyList<QuoteAgentSearchResultDto>> SearchProjectResultsAsync(
+        Guid customerId,
+        string? query,
+        int limit,
+        CancellationToken ct = default);
 }
 
 internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServiceClient> logger) : IProjectServiceClient
@@ -134,6 +142,34 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
         {
             logger.LogWarning(ex, "ProjectService detail lookup failed for project {ProjectId}.", projectId);
             return null;
+        }
+    }
+
+    public async Task<IReadOnlyList<QuoteAgentSearchResultDto>> SearchProjectResultsAsync(
+        Guid customerId,
+        string? query,
+        int limit,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var normalizedLimit = Math.Clamp(limit, 1, 50);
+            var path = $"/project/v1/projects?customerId={customerId:D}&pageSize={normalizedLimit}";
+            if (!string.IsNullOrWhiteSpace(query))
+            {
+                path += $"&query={Uri.EscapeDataString(query.Trim())}";
+            }
+
+            var paged = await http.GetFromJsonAsync<ProjectServicePagedProjectsResponse>(path, ct);
+            return paged?.Data?
+                .Select(ToSearchResult)
+                .ToArray() ?? [];
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ProjectService search lookup failed for customer {CustomerId}.", customerId);
+            return [];
         }
     }
 
@@ -287,6 +323,27 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             IsArchived: IsArchivedStatus(project.Status),
             new DateTimeOffset(updatedAt, TimeSpan.Zero),
             project.Parts.Select(ToQuotePartDraft).ToArray());
+    }
+
+    private static QuoteAgentSearchResultDto ToSearchResult(ProjectServiceProjectResponse project)
+    {
+        return new QuoteAgentSearchResultDto
+        {
+            ResourceType = "project",
+            ResourceId = project.Id.ToString("D"),
+            Title = project.Title,
+            Detail = $"{project.ProjectNumber} · {project.Status} · {project.Parts.Count} part(s)",
+            ActionHint = "resume_project",
+            Url = $"/quotes?projectId={project.Id:D}",
+            Metadata = new(StringComparer.OrdinalIgnoreCase)
+            {
+                ["projectNumber"] = project.ProjectNumber,
+                ["status"] = project.Status,
+                ["isPinned"] = "false",
+                ["isArchived"] = IsArchivedStatus(project.Status).ToString().ToLowerInvariant(),
+                ["source"] = "project_service"
+            }
+        };
     }
 
     private static QuotePartDraftDto ToQuotePartDraft(ProjectServicePartResponse part)

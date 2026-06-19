@@ -42,7 +42,11 @@ public interface IQuoteAgentService
     QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request);
 
     /// <summary>Searches customer-scoped quote data for the quote agent workspace.</summary>
-    QuoteAgentSearchResponse SearchCustomerData(Guid sessionId, string? query, int limit);
+    Task<QuoteAgentSearchResponse> SearchCustomerDataAsync(
+        Guid sessionId,
+        string? query,
+        int limit,
+        CancellationToken cancellationToken);
 
     /// <summary>Executes an allowlisted internal tool call.</summary>
     Task<object> ExecuteToolAsync(string toolName, QuoteAgentToolRequest request, QuoteAgentContext context, CancellationToken cancellationToken);
@@ -428,7 +432,11 @@ internal sealed class QuoteAgentService(
         return ToStateResponse(state);
     }
 
-    public QuoteAgentSearchResponse SearchCustomerData(Guid sessionId, string? query, int limit)
+    public async Task<QuoteAgentSearchResponse> SearchCustomerDataAsync(
+        Guid sessionId,
+        string? query,
+        int limit,
+        CancellationToken cancellationToken)
     {
         var state = sessionStore.GetOrCreate(sessionId);
         var customerId = ResolveCustomerId() ?? state.CustomerId;
@@ -438,7 +446,7 @@ internal sealed class QuoteAgentService(
         }
 
         state.CustomerId = customerId;
-        return BuildCustomerSearchResponse(state, customerId.Value, query, limit);
+        return await BuildCustomerSearchResponseAsync(state, customerId.Value, query, limit, cancellationToken);
     }
 
     public async Task<object> ExecuteToolAsync(
@@ -470,7 +478,7 @@ internal sealed class QuoteAgentService(
                 request.Arguments),
             "quote_get_connectors" => BuildConnectorRegistry(state),
             "quote_get_connector_handoff" => BuildConnectorHandoff(state, request.Arguments),
-            "quote_search_customer_data" => SearchCustomerDataOrGateError(state, request.Arguments),
+            "quote_search_customer_data" => await SearchCustomerDataOrGateErrorAsync(state, request.Arguments, cancellationToken),
             "quote_register_uploads" => RegisterUploadsOrGateError(state, request.Arguments),
             "quote_resume_project" => await ResumeProjectOrGateErrorAsync(state, request.Arguments, cancellationToken),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
@@ -1880,9 +1888,10 @@ internal sealed class QuoteAgentService(
         }
     }
 
-    private object SearchCustomerDataOrGateError(
+    private async Task<object> SearchCustomerDataOrGateErrorAsync(
         QuoteAgentSessionState state,
-        Dictionary<string, JsonElement> arguments)
+        Dictionary<string, JsonElement> arguments,
+        CancellationToken cancellationToken)
     {
         var customerId = ResolveCustomerId() ?? state.CustomerId;
         if (!customerId.HasValue)
@@ -1898,22 +1907,33 @@ internal sealed class QuoteAgentService(
 
         var query = ReadString(arguments, "query") ?? string.Empty;
         var limit = ReadInt(arguments, "limit", 20);
-        return BuildCustomerSearchResponse(state, customerId.Value, query, limit);
+        return await BuildCustomerSearchResponseAsync(state, customerId.Value, query, limit, cancellationToken);
     }
 
-    private QuoteAgentSearchResponse BuildCustomerSearchResponse(
+    private async Task<QuoteAgentSearchResponse> BuildCustomerSearchResponseAsync(
         QuoteAgentSessionState state,
         Guid customerId,
         string? query,
-        int limit)
+        int limit,
+        CancellationToken cancellationToken)
     {
         var normalizedQuery = query?.Trim() ?? string.Empty;
         var normalizedLimit = Math.Clamp(limit, 1, 50);
-        var results = prototypeStore
+        var results = (await projectClient.SearchProjectResultsAsync(
+                customerId,
+                normalizedQuery,
+                normalizedLimit,
+                cancellationToken))
+            .ToList();
+        var prototypeResults = prototypeStore
             .SearchCustomerData(customerId, normalizedQuery, normalizedLimit)
             .ToList();
+        results.AddRange(prototypeResults.Where(result =>
+            !result.ResourceType.Equals("project", StringComparison.OrdinalIgnoreCase)));
         AddSessionSearchResults(state, normalizedQuery, normalizedLimit, results);
         AddArtifactSearchResults(state, normalizedQuery, normalizedLimit, results);
+        results.AddRange(prototypeResults.Where(result =>
+            result.ResourceType.Equals("project", StringComparison.OrdinalIgnoreCase)));
 
         return new QuoteAgentSearchResponse
         {

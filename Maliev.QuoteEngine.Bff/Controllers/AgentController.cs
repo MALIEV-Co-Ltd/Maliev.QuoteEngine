@@ -181,14 +181,15 @@ public sealed class AgentController(
     [HttpGet("sessions/{sessionId:guid}/search")]
     [ProducesResponseType(typeof(QuoteAgentSearchResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public ActionResult<QuoteAgentSearchResponse> SearchCustomerData(
+    public async Task<ActionResult<QuoteAgentSearchResponse>> SearchCustomerData(
         Guid sessionId,
         [FromQuery] string? query,
-        [FromQuery] int limit = 20)
+        [FromQuery] int limit = 20,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            return Ok(agentService.SearchCustomerData(sessionId, query, limit));
+            return Ok(await agentService.SearchCustomerDataAsync(sessionId, query, limit, cancellationToken));
         }
         catch (UnauthorizedAccessException ex)
         {

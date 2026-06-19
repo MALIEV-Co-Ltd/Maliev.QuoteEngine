@@ -7,6 +7,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Account;
@@ -490,6 +491,42 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 parts);
 
             return Task.FromResult<CustomerProjectDetailResponse?>(detail);
+        }
+
+        public Task<IReadOnlyList<QuoteAgentSearchResultDto>> SearchProjectResultsAsync(
+            Guid customerId,
+            string? query,
+            int limit,
+            CancellationToken ct = default)
+        {
+            var normalizedQuery = query?.Trim() ?? string.Empty;
+            var normalizedLimit = Math.Clamp(limit, 1, 50);
+            IReadOnlyList<QuoteAgentSearchResultDto> result = _projects.Values
+                .Where(project => project.CustomerId == customerId)
+                .Select(project => new QuoteAgentSearchResultDto
+                {
+                    ResourceType = "project",
+                    ResourceId = project.ProjectServiceProjectId.ToString("D"),
+                    Title = project.Title,
+                    Detail = $"{project.ProjectServiceProjectNumber} · Draft · {_partsByProject.GetValueOrDefault(project.ProjectServiceProjectId)?.Count ?? 0} part(s)",
+                    ActionHint = "resume_project",
+                    Url = $"/quotes?projectId={project.ProjectServiceProjectId:D}",
+                    Metadata = new(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["projectNumber"] = project.ProjectServiceProjectNumber,
+                        ["status"] = "Draft",
+                        ["isPinned"] = "false",
+                        ["isArchived"] = "false",
+                        ["source"] = "project_service"
+                    }
+                })
+                .Where(result => string.IsNullOrWhiteSpace(normalizedQuery) ||
+                    result.Title.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase) ||
+                    result.Detail.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
+                .Take(normalizedLimit)
+                .ToArray();
+
+            return Task.FromResult(result);
         }
 
         private static QuotePartDraftDto ToQuotePartDraft(CapturedProjectPartCreate part) =>
