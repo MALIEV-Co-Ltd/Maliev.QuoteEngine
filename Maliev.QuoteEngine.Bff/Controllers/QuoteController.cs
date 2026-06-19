@@ -545,9 +545,10 @@ public sealed class QuoteController(
     }
 
     [HttpPost("projects/{projectId:guid}/duplicate")]
-    public ActionResult<DuplicateDraftProjectResponse> DuplicateDraftProject(
+    public async Task<ActionResult<DuplicateDraftProjectResponse>> DuplicateDraftProject(
         Guid projectId,
-        [FromBody] DuplicateDraftProjectRequest request)
+        [FromBody] DuplicateDraftProjectRequest request,
+        CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -556,6 +557,18 @@ public sealed class QuoteController(
                 Title = "Sign-in required.",
                 Detail = "Project duplication is available only for signed-in customers."
             });
+        }
+
+        var durableDuplicate = await projectClient.DuplicateDraftProjectAsync(
+            customerId,
+            store.GetProfile(customerId).DisplayName,
+            projectId,
+            request,
+            ResolveProjectPartMaterialIdAsync,
+            cancellationToken);
+        if (durableDuplicate is not null)
+        {
+            return Ok(durableDuplicate);
         }
 
         var duplicated = store.DuplicateDraftProject(customerId, projectId, request);

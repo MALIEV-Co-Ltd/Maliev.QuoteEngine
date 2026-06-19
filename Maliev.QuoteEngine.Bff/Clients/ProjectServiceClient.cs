@@ -19,6 +19,15 @@ public interface IProjectServiceClient
         Func<QuotePartDraftDto, CancellationToken, Task<Guid?>> resolveMaterialIdAsync,
         CancellationToken ct = default);
 
+    /// <summary>Duplicates a customer-scoped ProjectService project into a new draft project.</summary>
+    Task<DuplicateDraftProjectResponse?> DuplicateDraftProjectAsync(
+        Guid customerId,
+        string customerName,
+        Guid projectId,
+        DuplicateDraftProjectRequest request,
+        Func<QuotePartDraftDto, CancellationToken, Task<Guid?>> resolveMaterialIdAsync,
+        CancellationToken ct = default);
+
     /// <summary>Returns customer-scoped project navigation items from ProjectService.</summary>
     Task<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigationAsync(Guid customerId, CancellationToken ct = default);
 
@@ -94,6 +103,85 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
         catch (Exception ex)
         {
             logger.LogWarning(ex, "ProjectService draft project create failed for customer {CustomerId}.", customerId);
+            return null;
+        }
+    }
+
+    public async Task<DuplicateDraftProjectResponse?> DuplicateDraftProjectAsync(
+        Guid customerId,
+        string customerName,
+        Guid projectId,
+        DuplicateDraftProjectRequest request,
+        Func<QuotePartDraftDto, CancellationToken, Task<Guid?>> resolveMaterialIdAsync,
+        CancellationToken ct = default)
+    {
+        var source = await GetProjectDetailAsync(customerId, projectId, ct);
+        if (source is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var title = string.IsNullOrWhiteSpace(request.Title)
+                ? $"Copy of {source.Title}".Trim()
+                : request.Title.Trim();
+            var createResponse = await http.PostAsJsonAsync("/project/v1/projects", new
+            {
+                customerId,
+                customerName,
+                title,
+                description = $"Duplicated from {source.ProjectNumber}.",
+                currency = "THB",
+                sourceProjectId = source.ProjectId,
+                sourceProjectNumber = source.ProjectNumber
+            }, ct);
+
+            if (!createResponse.IsSuccessStatusCode)
+            {
+                var body = await createResponse.Content.ReadAsStringAsync(ct);
+                logger.LogWarning("ProjectService returned {Status} on duplicate create: {Body}", createResponse.StatusCode, body);
+                return null;
+            }
+
+            var duplicated = await createResponse.Content.ReadFromJsonAsync<ProjectServiceProjectResponse>(cancellationToken: ct);
+            if (duplicated is null || duplicated.Id == Guid.Empty)
+            {
+                logger.LogWarning("ProjectService returned an empty duplicate response for project {ProjectId}.", projectId);
+                return null;
+            }
+
+            foreach (var part in source.Parts)
+            {
+                var materialId = await resolveMaterialIdAsync(part, ct);
+                using var partResponse = await http.PostAsJsonAsync(
+                    $"/project/v1/projects/{duplicated.Id:D}/parts",
+                    BuildPartRequest(part, materialId),
+                    ct);
+                if (!partResponse.IsSuccessStatusCode)
+                {
+                    var body = await partResponse.Content.ReadAsStringAsync(ct);
+                    logger.LogWarning(
+                        "ProjectService returned {Status} on duplicate add part for project {ProjectId}: {Body}",
+                        partResponse.StatusCode,
+                        duplicated.Id,
+                        body);
+                    return null;
+                }
+            }
+
+            var detail = await GetProjectDetailAsync(customerId, duplicated.Id, ct);
+            return new DuplicateDraftProjectResponse(
+                duplicated.Id,
+                duplicated.ProjectNumber,
+                duplicated.Status,
+                duplicated.Title,
+                detail?.Parts ?? source.Parts);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ProjectService duplicate failed for project {ProjectId}.", projectId);
             return null;
         }
     }

@@ -1910,10 +1910,12 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.NotNull(duplicateResult.State);
         Assert.Contains("duplicated", duplicateResult.Message, StringComparison.OrdinalIgnoreCase);
         var duplicateArtifact = Assert.Single(duplicateResult.State.Artifacts, artifact => artifact.ArtifactType == "duplicate_project");
-        Assert.Equal(sourceProjectId.ToString("D"), duplicateArtifact.Metadata["sourceProjectId"]);
+        Assert.Equal(projectServiceProjectId.ToString("D"), duplicateArtifact.Metadata["sourceProjectId"]);
+        Assert.Equal(sourceProjectId.ToString("D"), duplicateArtifact.Metadata["sourcePrototypeProjectId"]);
         Assert.True(Guid.TryParse(duplicateArtifact.Metadata["projectId"], out var duplicateProjectId));
-        Assert.NotEqual(sourceProjectId, duplicateProjectId);
+        Assert.NotEqual(projectServiceProjectId, duplicateProjectId);
         Assert.Equal("Duplicate from agent", duplicateArtifact.Title);
+        Assert.Equal(projectServiceProjectId, factory.LastProjectDraftCreate?.SourceProjectId);
     }
 
     [Fact]

@@ -171,7 +171,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         string Title,
         string Notes,
         Guid ProjectServiceProjectId,
-        string ProjectServiceProjectNumber);
+        string ProjectServiceProjectNumber,
+        Guid? SourceProjectId = null,
+        string? SourceProjectNumber = null);
 
     public sealed record CapturedProjectPartCreate(
         Guid ProjectServiceProjectId,
@@ -446,6 +448,69 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
             _partsByProject[projectId] = projectParts;
             return new ProjectServiceDraftProjectResult(projectId, projectNumber, "Draft");
+        }
+
+        public async Task<DuplicateDraftProjectResponse?> DuplicateDraftProjectAsync(
+            Guid customerId,
+            string customerName,
+            Guid projectId,
+            DuplicateDraftProjectRequest request,
+            Func<QuotePartDraftDto, CancellationToken, Task<Guid?>> resolveMaterialIdAsync,
+            CancellationToken ct = default)
+        {
+            if (!_projects.TryGetValue(projectId, out var source) || source.CustomerId != customerId)
+            {
+                return null;
+            }
+
+            var duplicateId = Guid.NewGuid();
+            var duplicateNumber = $"PRJ-TEST-{duplicateId:N}"[..17];
+            var title = string.IsNullOrWhiteSpace(request.Title)
+                ? $"Copy of {source.Title}"
+                : request.Title.Trim();
+            LastCreate = new CapturedProjectDraftCreate(
+                customerId,
+                customerName,
+                source.QuoteSessionId,
+                title,
+                source.Notes,
+                duplicateId,
+                duplicateNumber,
+                projectId,
+                source.ProjectServiceProjectNumber);
+            _projects[duplicateId] = LastCreate;
+
+            var sourceParts = _partsByProject.TryGetValue(projectId, out var parts)
+                ? parts
+                : [];
+            var duplicateParts = new List<CapturedProjectPartCreate>();
+            while (PartCreates.TryDequeue(out _))
+            {
+            }
+
+            foreach (var part in sourceParts)
+            {
+                var draft = ToQuotePartDraft(part);
+                var captured = new CapturedProjectPartCreate(
+                    duplicateId,
+                    part.FileName,
+                    await resolveMaterialIdAsync(draft, ct),
+                    part.Quantity,
+                    part.ProcessId,
+                    part.DfmAcknowledged,
+                    part.HasDfmWarnings,
+                    part.StoragePath);
+                duplicateParts.Add(captured);
+                PartCreates.Enqueue(captured);
+            }
+
+            _partsByProject[duplicateId] = duplicateParts;
+            return new DuplicateDraftProjectResponse(
+                duplicateId,
+                duplicateNumber,
+                "Draft",
+                title,
+                duplicateParts.Select(ToQuotePartDraft).ToArray());
         }
 
         public Task<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigationAsync(
@@ -2005,6 +2070,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var created = await createResponse.Content.ReadFromJsonAsync<CreateDraftProjectResponse>();
         Assert.NotNull(created);
         Assert.NotNull(created.ProjectServiceProjectId);
+        var projectServiceProjectId = created.ProjectServiceProjectId.Value;
         Assert.False(string.IsNullOrWhiteSpace(created.ProjectServiceProjectNumber));
         var projectCreate = factory.LastProjectDraftCreate;
         Assert.NotNull(projectCreate);
@@ -2036,6 +2102,21 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("cnc", durablePart.ProcessId);
         Assert.Equal(4, durablePart.Quantity);
         Assert.True(durablePart.DfmAcknowledged);
+
+        var durableDuplicateResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/projects/{projectServiceProjectId:D}/duplicate",
+            new DuplicateDraftProjectRequest("Durable duplicate fixture copy"));
+        durableDuplicateResponse.EnsureSuccessStatusCode();
+        var durableDuplicate = await durableDuplicateResponse.Content.ReadFromJsonAsync<DuplicateDraftProjectResponse>();
+        Assert.NotNull(durableDuplicate);
+        Assert.NotEqual(projectServiceProjectId, durableDuplicate.ProjectId);
+        Assert.Equal("Durable duplicate fixture copy", durableDuplicate.Title);
+        Assert.Equal(projectServiceProjectId, factory.LastProjectDraftCreate?.SourceProjectId);
+        Assert.Equal(created.ProjectServiceProjectNumber, factory.LastProjectDraftCreate?.SourceProjectNumber);
+        var durableDuplicatePart = Assert.Single(durableDuplicate.Parts);
+        Assert.Equal("duplicate-fixture.step", durableDuplicatePart.FileName);
+        Assert.Equal("cnc", durableDuplicatePart.ProcessId);
+        Assert.Equal(4, durableDuplicatePart.Quantity);
 
         var duplicateResponse = await client.PostAsJsonAsync(
             $"/quote/v1/projects/{created.ProjectId:D}/duplicate",

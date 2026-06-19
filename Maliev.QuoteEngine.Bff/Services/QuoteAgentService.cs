@@ -580,7 +580,7 @@ internal sealed class QuoteAgentService(
         var message = action.ActionType switch
         {
             "draft_project" => await ExecuteDraftProjectAsync(state, customerId!.Value, action, cancellationToken),
-            "duplicate_project" => ExecuteDuplicateProject(state, customerId!.Value, action),
+            "duplicate_project" => await ExecuteDuplicateProjectAsync(state, customerId!.Value, action, cancellationToken),
             "pin_project" => ExecutePinProject(state, customerId!.Value, action),
             "unpin_project" => ExecuteUnpinProject(state, customerId!.Value, action),
             "archive_project" => ExecuteArchiveProject(state, customerId!.Value, action),
@@ -2347,11 +2347,38 @@ internal sealed class QuoteAgentService(
         CancellationToken cancellationToken) =>
         await materialCatalog.ResolveMaterialIdAsync(part.ProcessId, part.MaterialId, cancellationToken);
 
-    private string ExecuteDuplicateProject(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    private async Task<string> ExecuteDuplicateProjectAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
         if (!TryGetCurrentDraftProjectId(state, out var sourceProjectId))
         {
             throw new InvalidOperationException("A draft project is required before duplicating it.");
+        }
+
+        if (TryGetCurrentDraftProjectServiceId(state, out var sourceProjectServiceId))
+        {
+            var durableResponse = await projectClient.DuplicateDraftProjectAsync(
+                customerId,
+                prototypeStore.GetProfile(customerId).DisplayName,
+                sourceProjectServiceId,
+                new DuplicateDraftProjectRequest(ReadString(action.Arguments, "title")),
+                ResolveProjectPartMaterialIdAsync,
+                cancellationToken);
+            if (durableResponse is not null)
+            {
+                UpsertArtifact(state, "duplicate_project", durableResponse.Title, durableResponse.Status, null, null);
+                SetArtifactMetadata(state, "duplicate_project", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["projectId"] = durableResponse.ProjectId.ToString("D"),
+                    ["projectNumber"] = durableResponse.ProjectNumber,
+                    ["sourceProjectId"] = sourceProjectServiceId.ToString("D"),
+                    ["sourcePrototypeProjectId"] = sourceProjectId.ToString("D")
+                });
+                return $"Project {durableResponse.ProjectNumber} was duplicated from the current draft.";
+            }
         }
 
         var response = prototypeStore.DuplicateDraftProject(
@@ -3036,6 +3063,16 @@ internal sealed class QuoteAgentService(
             .LastOrDefault(item => item.ArtifactType.Equals("draft_project", StringComparison.OrdinalIgnoreCase));
         return artifact is not null &&
             artifact.Metadata.TryGetValue("projectId", out var rawProjectId) &&
+            Guid.TryParse(rawProjectId, out projectId);
+    }
+
+    private static bool TryGetCurrentDraftProjectServiceId(QuoteAgentSessionState state, out Guid projectId)
+    {
+        projectId = Guid.Empty;
+        var artifact = state.Artifacts
+            .LastOrDefault(item => item.ArtifactType.Equals("draft_project", StringComparison.OrdinalIgnoreCase));
+        return artifact is not null &&
+            artifact.Metadata.TryGetValue("projectServiceProjectId", out var rawProjectId) &&
             Guid.TryParse(rawProjectId, out projectId);
     }
 
