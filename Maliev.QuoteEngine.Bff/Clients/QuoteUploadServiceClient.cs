@@ -84,12 +84,25 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
     public virtual async Task<string> GetDownloadUrlByPathAsync(string storagePath,
         int expirationMinutes = 60, CancellationToken ct = default)
     {
-        var response = await http.GetAsync(
-            $"upload/v1/signed-url?path={Uri.EscapeDataString(storagePath)}&expirationMinutes={expirationMinutes}",
-            ct);
-        response.EnsureSuccessStatusCode();
+        using var response = await http.PostAsJsonAsync("/upload/v1/files/by-path/signed-url", new
+        {
+            storagePath,
+            expirationMinutes
+        }, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            logger.LogError(
+                "UploadService signed URL failed {Status} for {StoragePath}: {Body}",
+                response.StatusCode,
+                storagePath,
+                responseBody);
+            response.EnsureSuccessStatusCode();
+        }
+
         var result = await response.Content.ReadFromJsonAsync<SignedUrlResponse>(ct);
-        return result?.Url ?? throw new InvalidOperationException("UploadService returned null URL");
+        return result?.SignedUrl ?? throw new InvalidOperationException("UploadService returned null URL");
     }
 
     /// <summary>
@@ -102,7 +115,7 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
         response.EnsureSuccessStatusCode();
     }
 
-    private sealed record SignedUrlResponse(string Url);
+    private sealed record SignedUrlResponse(string SignedUrl);
 
     private sealed record InitiateResumableUploadResponse(string UploadId, string SessionUri, DateTime ExpiresAt, long TotalSize);
 }
