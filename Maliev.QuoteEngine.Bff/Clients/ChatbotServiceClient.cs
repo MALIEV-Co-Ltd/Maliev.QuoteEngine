@@ -28,6 +28,9 @@ public interface IChatbotServiceClient
     /// <summary>Gets internal session messages for BFF-owned handoff hydration.</summary>
     Task<ChatbotConversationMessagesResponse?> GetConversationMessagesAsync(Guid sessionId, CancellationToken cancellationToken);
 
+    /// <summary>Deletes the last turn of a conversation session so an edited message can be resubmitted.</summary>
+    Task<bool> TruncateLastTurnAsync(Guid sessionId, CancellationToken cancellationToken);
+
     /// <summary>Cleans up raw dictated speech text using Gemini directly.</summary>
     Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken);
 }
@@ -173,6 +176,35 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
         {
             logger.LogWarning(ex, "ChatbotService history hydration failed for session {SessionId}", sessionId);
             return null;
+        }
+    }
+
+    public async Task<bool> TruncateLastTurnAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await httpClient.DeleteAsync(
+                $"/chatbot/v1/internal/sessions/{sessionId:D}/messages/last-turn",
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "ChatbotService last-turn truncation failed with {StatusCode} for session {SessionId}",
+                    response.StatusCode,
+                    sessionId);
+                return false;
+            }
+
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ChatbotService last-turn truncation failed for session {SessionId}", sessionId);
+            return false;
         }
     }
 
