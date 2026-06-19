@@ -1220,6 +1220,68 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_register_uploads_tool_supersedes_previous_dfm_blocked_geometry()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var blockedState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement("Quote this STEP as 10 aluminum pieces. Local DFM found a thin wall risk.", JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "bracket-rev-a.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "rev-a-upload",
+                        storage_path = "quotes/temp/session/rev-a-upload/bracket-rev-a.step"
+                    }
+                }, JsonOptions)
+            });
+
+        var blockedPart = Assert.Single(blockedState.Parts);
+        Assert.NotEmpty(blockedPart.Findings);
+        Assert.Contains(blockedState.Gates, gate => gate.Code == "dfm_reviewed" && gate.Status == "blocked");
+
+        var fixedState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement("Reuploaded corrected revision B with thicker walls. Quote 10 aluminum pieces.", JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "bracket-rev-b.step",
+                        content_type = "model/step",
+                        file_size_bytes = 260_000,
+                        kind = "cad",
+                        upload_id = "rev-b-upload",
+                        storage_path = "quotes/temp/session/rev-b-upload/bracket-rev-b.step",
+                        supersedes_upload_id = "rev-a-upload"
+                    }
+                }, JsonOptions)
+            });
+
+        var fixedPart = Assert.Single(fixedState.Parts);
+        Assert.Equal("bracket-rev-b.step", fixedPart.FileName);
+        Assert.Equal("rev-b-upload", fixedPart.UploadId);
+        Assert.Empty(fixedPart.Findings);
+        Assert.DoesNotContain(fixedState.Parts, part => part.UploadId == "rev-a-upload");
+        Assert.Contains(fixedState.Gates, gate => gate.Code == "dfm_reviewed" && gate.Status == "passed");
+        Assert.Null(fixedState.Estimate);
+    }
+
+    [Fact]
     public async Task Agent_register_uploads_tool_accepts_supplemental_files_without_satisfying_geometry()
     {
         using var client = factory.CreateClient();

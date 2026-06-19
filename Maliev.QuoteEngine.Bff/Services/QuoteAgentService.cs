@@ -1644,7 +1644,8 @@ internal sealed class QuoteAgentService(
         QuoteAgentSessionState state,
         Dictionary<string, JsonElement> arguments)
     {
-        var attachments = ReadUploadAttachments(arguments).ToList();
+        var registrations = ReadUploadRegistrations(arguments).ToList();
+        var attachments = registrations.Select(registration => registration.Attachment).ToList();
         if (attachments.Count == 0)
         {
             return new
@@ -1689,6 +1690,7 @@ internal sealed class QuoteAgentService(
         };
 
         sessionStore.AddAttachments(state, attachments);
+        SupersedeGeometryRevisions(state, registrations);
         MaterializeSupplementalAnalysis(state, request);
         MaterializePrototypeParts(state, request);
         return ToStateResponse(state);
@@ -3156,6 +3158,62 @@ internal sealed class QuoteAgentService(
         }
     }
 
+    private static void SupersedeGeometryRevisions(
+        QuoteAgentSessionState state,
+        IReadOnlyCollection<UploadRegistration> registrations)
+    {
+        var replacementRegistrations = registrations
+            .Where(registration => registration.Attachment.SatisfiesGeometryGate)
+            .Where(registration =>
+                registration.SupersedesPartId.HasValue ||
+                !string.IsNullOrWhiteSpace(registration.SupersedesUploadId) ||
+                !string.IsNullOrWhiteSpace(registration.SupersedesFileName))
+            .ToList();
+        if (replacementRegistrations.Count == 0)
+        {
+            return;
+        }
+
+        lock (state.SyncRoot)
+        {
+            var removedPartIds = new HashSet<Guid>();
+            state.Parts.RemoveAll(part =>
+            {
+                var shouldRemove = replacementRegistrations.Any(registration =>
+                    (registration.SupersedesPartId.HasValue && registration.SupersedesPartId.Value == part.PartId) ||
+                    MatchesOptionalValue(registration.SupersedesUploadId, part.UploadId) ||
+                    MatchesOptionalValue(registration.SupersedesFileName, part.FileName));
+                if (shouldRemove)
+                {
+                    removedPartIds.Add(part.PartId);
+                }
+
+                return shouldRemove;
+            });
+
+            if (removedPartIds.Count == 0)
+            {
+                return;
+            }
+
+            state.Artifacts.RemoveAll(artifact => artifact.PartId.HasValue && removedPartIds.Contains(artifact.PartId.Value));
+            state.ProposedActions.Clear();
+            state.Estimate = null;
+            state.FormalQuote = null;
+            state.QuoteApproved = false;
+            state.Order = null;
+            state.Payment = null;
+            state.ConfigurationConfirmed = false;
+        }
+    }
+
+    private static bool MatchesOptionalValue(string? left, string? right)
+    {
+        return !string.IsNullOrWhiteSpace(left) &&
+            !string.IsNullOrWhiteSpace(right) &&
+            left.Equals(right, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void MaterializeSupplementalAnalysis(
         QuoteAgentSessionState state,
         QuoteAgentMessageRequest request)
@@ -4558,19 +4616,55 @@ Customer message:
         return [];
     }
 
-    private static IReadOnlyList<QuoteAgentAttachmentDto> ReadUploadAttachments(
+    private static IReadOnlyList<UploadRegistration> ReadUploadRegistrations(
         IReadOnlyDictionary<string, JsonElement> arguments)
     {
         if (arguments.TryGetValue("files", out var files) && files.ValueKind == JsonValueKind.Array)
         {
             return files.EnumerateArray()
-                .Select(ReadUploadAttachment)
-                .Where(attachment => !string.IsNullOrWhiteSpace(attachment.FileName))
+                .Select(element => ReadUploadRegistration(element, arguments))
+                .Where(registration => !string.IsNullOrWhiteSpace(registration.Attachment.FileName))
                 .ToArray();
         }
 
-        var single = ReadUploadAttachment(arguments);
-        return string.IsNullOrWhiteSpace(single.FileName) ? [] : [single];
+        var single = ReadUploadRegistration(arguments);
+        return string.IsNullOrWhiteSpace(single.Attachment.FileName) ? [] : [single];
+    }
+
+    private static UploadRegistration ReadUploadRegistration(IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var attachment = ReadUploadAttachment(arguments);
+        var supersedesPartId = TryReadGuid(arguments, "supersedes_part_id", out var snakePartId) ||
+            TryReadGuid(arguments, "supersedesPartId", out snakePartId)
+                ? snakePartId
+                : (Guid?)null;
+        return new UploadRegistration(
+            attachment,
+            supersedesPartId,
+            ReadString(arguments, "supersedes_upload_id") ?? ReadString(arguments, "supersedesUploadId"),
+            ReadString(arguments, "supersedes_file_name") ?? ReadString(arguments, "supersedesFileName"));
+    }
+
+    private static UploadRegistration ReadUploadRegistration(
+        JsonElement element,
+        IReadOnlyDictionary<string, JsonElement> parentArguments)
+    {
+        var attachment = ReadUploadAttachment(element);
+        var supersedesPartId = TryReadElementGuid(element, "supersedes_part_id", "supersedesPartId", out var elementPartId)
+            ? elementPartId
+            : TryReadGuid(parentArguments, "supersedes_part_id", out var parentPartId) ||
+                TryReadGuid(parentArguments, "supersedesPartId", out parentPartId)
+                    ? parentPartId
+                    : (Guid?)null;
+        return new UploadRegistration(
+            attachment,
+            supersedesPartId,
+            ReadElementString(element, "supersedes_upload_id", "supersedesUploadId") ??
+                ReadString(parentArguments, "supersedes_upload_id") ??
+                ReadString(parentArguments, "supersedesUploadId"),
+            ReadElementString(element, "supersedes_file_name", "supersedesFileName") ??
+                ReadString(parentArguments, "supersedes_file_name") ??
+                ReadString(parentArguments, "supersedesFileName"));
     }
 
     private static QuoteAgentAttachmentDto ReadUploadAttachment(IReadOnlyDictionary<string, JsonElement> arguments)
@@ -4634,6 +4728,13 @@ Customer message:
         }
 
         return null;
+    }
+
+    private static bool TryReadElementGuid(JsonElement element, string key, string fallbackKey, out Guid value)
+    {
+        value = Guid.Empty;
+        var raw = ReadElementString(element, key, fallbackKey);
+        return Guid.TryParse(raw, out value);
     }
 
     private static long ReadElementLong(JsonElement element, params string[] keys)
@@ -5013,4 +5114,10 @@ Customer message:
             ? "Tell me the material, finish, tolerance, quantity, or lead time you want, or describe the part for a 3D preview."
             : "Describe the part you need — shape, size, material, and quantity — and I can create a 3D preview and estimate for you.";
     }
+
+    private sealed record UploadRegistration(
+        QuoteAgentAttachmentDto Attachment,
+        Guid? SupersedesPartId,
+        string? SupersedesUploadId,
+        string? SupersedesFileName);
 }
