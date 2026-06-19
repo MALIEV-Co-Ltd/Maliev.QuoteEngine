@@ -2765,10 +2765,32 @@ internal sealed class QuoteAgentService(
         state.FormalQuote = new GenerateFormalQuoteResponse(
             result.Id,
             result.QuotationNumber,
-            string.Empty,
+            result.PdfArtifactUrl ?? string.Empty,
             result.Status);
         UpsertArtifact(state, "formal_quote", state.FormalQuote.QuoteNumber, state.FormalQuote.Status, null, state.FormalQuote.PdfUrl);
+        SetArtifactMetadata(state, "formal_quote", BuildFormalQuoteMetadata(result));
         return $"Formal quote {state.FormalQuote.QuoteNumber} is ready.";
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildFormalQuoteMetadata(QuotationCreatedResult result)
+    {
+        var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["quoteId"] = result.Id.ToString("D"),
+            ["quoteNumber"] = result.QuotationNumber
+        };
+
+        if (!string.IsNullOrWhiteSpace(result.PdfArtifactStoragePath))
+        {
+            metadata["storagePath"] = result.PdfArtifactStoragePath.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.PdfArtifactUrl))
+        {
+            metadata["pdfUrl"] = result.PdfArtifactUrl.Trim();
+        }
+
+        return metadata;
     }
 
     private async Task<QuotationCreateRequest> BuildFormalQuoteRequestAsync(

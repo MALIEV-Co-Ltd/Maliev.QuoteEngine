@@ -2135,6 +2135,57 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_formal_quote_artifact_download_is_scoped_to_registered_pdf_storage_path()
+    {
+        var uploadClient = new RecordingUploadServiceClient();
+        await using var scopedFactory = CreateAgentFactory().WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(uploadClient);
+            });
+        });
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+        var signIn = await client.GetAsync("/test/sign-in?email=agent-quote-artifact@example.com");
+        signIn.EnsureSuccessStatusCode();
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        var formalQuoteResult = await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+
+        Assert.NotNull(formalQuoteResult.State);
+        var formalQuoteArtifact = Assert.Single(
+            formalQuoteResult.State.Artifacts,
+            artifact => artifact.ArtifactType == "formal_quote");
+        Assert.True(
+            formalQuoteArtifact.Metadata.TryGetValue("storagePath", out var storagePath),
+            "Formal quote artifact should carry the QuotationService PDF storage path.");
+        Assert.StartsWith("quotations/", storagePath, StringComparison.OrdinalIgnoreCase);
+
+        var redirectResponse = await client.GetAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(storagePath)}");
+
+        Assert.Equal(HttpStatusCode.Redirect, redirectResponse.StatusCode);
+        var redirectLocation = redirectResponse.Headers.Location?.ToString();
+        Assert.NotNull(redirectLocation);
+        Assert.StartsWith("https://upload.example.test/download/", redirectLocation, StringComparison.Ordinal);
+        Assert.Equal(
+            storagePath,
+            Uri.UnescapeDataString(redirectLocation["https://upload.example.test/download/".Length..]));
+
+        var blockedPath = storagePath.Replace(".pdf", "-other.pdf", StringComparison.OrdinalIgnoreCase);
+        var blockedResponse = await client.GetAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(blockedPath)}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, blockedResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Agent_payment_confirmation_after_order_sets_payment_gate_and_artifact()
     {
         await using var scopedFactory = CreateAgentFactory();

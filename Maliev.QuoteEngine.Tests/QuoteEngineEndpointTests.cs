@@ -388,7 +388,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 Status = "Draft",
                 Total = request.LineItems.Sum(x => x.UnitPrice * x.Quantity),
                 CurrencyCode = "THB",
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
+                PdfArtifactUrl = $"https://files.example.test/quotations/{request.CustomerId:N}/formal-quote.pdf",
+                PdfArtifactStoragePath = $"quotations/{request.CustomerId:N}/{Guid.NewGuid():N}/formal-quote.pdf"
             };
             _quotes[result.Id] = result;
             return Task.FromResult<QuotationCreatedResult?>(result);

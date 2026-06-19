@@ -41,6 +41,7 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
     private sealed class QsVersionSummary
     {
         public string? PdfArtifactUrl { get; set; }
+        public string? PdfArtifactStoragePath { get; set; }
     }
 
     private sealed class QsPagedResponse
@@ -56,7 +57,9 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
         Status = ReadStatus(r.Status),
         Total = r.Total,
         CurrencyCode = r.CurrencyCode,
-        UpdatedAt = r.UpdatedAt
+        UpdatedAt = r.UpdatedAt,
+        PdfArtifactUrl = r.Versions.FirstOrDefault()?.PdfArtifactUrl,
+        PdfArtifactStoragePath = r.Versions.FirstOrDefault()?.PdfArtifactStoragePath
     };
 
     // ── Interface implementation ──────────────────────────────────────────────
@@ -159,6 +162,8 @@ public sealed class QuotationCreatedResult
     public decimal Total { get; init; }
     public string CurrencyCode { get; init; } = "THB";
     public DateTime UpdatedAt { get; init; }
+    public string? PdfArtifactUrl { get; init; }
+    public string? PdfArtifactStoragePath { get; init; }
 }
 
 /// <summary>Request body for creating a new quotation.</summary>
