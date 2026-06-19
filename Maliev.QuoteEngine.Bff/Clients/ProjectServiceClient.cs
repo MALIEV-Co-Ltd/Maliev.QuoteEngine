@@ -40,6 +40,9 @@ public interface IProjectServiceClient
     /// <summary>Archives a customer-scoped ProjectService project.</summary>
     Task<ProjectManagementResponse?> ArchiveProjectAsync(Guid customerId, Guid projectId, CancellationToken ct = default);
 
+    /// <summary>Routes a customer-scoped ProjectService project to employee review.</summary>
+    Task<ProjectManagementResponse?> RequestProjectReviewAsync(Guid customerId, Guid projectId, string note, CancellationToken ct = default);
+
     /// <summary>Searches customer-scoped projects from ProjectService for QuoteAgent recall.</summary>
     Task<IReadOnlyList<QuoteAgentSearchResultDto>> SearchProjectResultsAsync(
         Guid customerId,
@@ -293,6 +296,34 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
         catch (Exception ex)
         {
             logger.LogWarning(ex, "ProjectService archive failed for project {ProjectId}.", projectId);
+            return null;
+        }
+    }
+
+    public async Task<ProjectManagementResponse?> RequestProjectReviewAsync(
+        Guid customerId,
+        Guid projectId,
+        string note,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await http.PostAsJsonAsync(
+                $"/project/v1/projects/{projectId:D}/request-review",
+                new { note },
+                ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            var project = await response.Content.ReadFromJsonAsync<ProjectServiceProjectResponse>(cancellationToken: ct);
+            return project is null || project.CustomerId != customerId ? null : ToManagementResponse(project);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ProjectService review request failed for project {ProjectId}.", projectId);
             return null;
         }
     }

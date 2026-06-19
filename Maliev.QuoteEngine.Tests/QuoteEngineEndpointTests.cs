@@ -61,6 +61,10 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     public IReadOnlyList<CapturedProjectPartCreate> LastProjectPartCreates => _fakeProjectServiceClient.PartCreates.ToArray();
 
+    public string? GetProjectStatus(Guid projectId) => _fakeProjectServiceClient.GetProjectStatus(projectId);
+
+    public string? GetProjectReviewNote(Guid projectId) => _fakeProjectServiceClient.GetReviewNote(projectId);
+
     public void FailNextOrderStatus(string status) => _fakeOrderServiceClient.FailNextStatus(status);
 
     public void MarkOrderPaid(string orderNumber) => _fakeOrderServiceClient.MarkPaid(orderNumber);
@@ -440,6 +444,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         private readonly ConcurrentDictionary<Guid, List<CapturedProjectPartCreate>> _partsByProject = new();
         private readonly ConcurrentDictionary<Guid, bool> _archivedProjects = new();
         private readonly ConcurrentDictionary<Guid, bool> _pinnedProjects = new();
+        private readonly ConcurrentDictionary<Guid, string> _projectStatuses = new();
+        private readonly ConcurrentDictionary<Guid, string> _reviewNotes = new();
 
         public ConcurrentQueue<CapturedProjectPartCreate> PartCreates { get; } = new();
 
@@ -468,6 +474,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 projectNumber);
 
             _projects[projectId] = LastCreate;
+            _projectStatuses[projectId] = "Draft";
             var projectParts = new List<CapturedProjectPartCreate>();
             foreach (var part in request.Parts)
             {
@@ -524,6 +531,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 projectId,
                 source.ProjectServiceProjectNumber);
             _projects[duplicateId] = LastCreate;
+            _projectStatuses[duplicateId] = "Draft";
 
             var sourceParts = _partsByProject.TryGetValue(projectId, out var parts)
                 ? parts
@@ -571,7 +579,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     project.ProjectServiceProjectId,
                     project.ProjectServiceProjectNumber,
                     project.Title,
-                    "Draft",
+                    GetStatus(project.ProjectServiceProjectId),
                     IsPinned: IsPinned(project.ProjectServiceProjectId),
                     IsArchived: false,
                     DateTimeOffset.UtcNow))
@@ -597,7 +605,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             var detail = new CustomerProjectDetailResponse(
                 project.ProjectServiceProjectId,
                 project.ProjectServiceProjectNumber,
-                "Draft",
+                GetStatus(projectId),
                 project.Title,
                 IsPinned(projectId),
                 IsArchived(projectId),
@@ -636,6 +644,22 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             return Task.FromResult<ProjectManagementResponse?>(ToManagementResponse(project));
         }
 
+        public Task<ProjectManagementResponse?> RequestProjectReviewAsync(
+            Guid customerId,
+            Guid projectId,
+            string note,
+            CancellationToken ct = default)
+        {
+            if (!_projects.TryGetValue(projectId, out var project) || project.CustomerId != customerId)
+            {
+                return Task.FromResult<ProjectManagementResponse?>(null);
+            }
+
+            _projectStatuses[projectId] = "CustomerReview";
+            _reviewNotes[projectId] = note;
+            return Task.FromResult<ProjectManagementResponse?>(ToManagementResponse(project));
+        }
+
         public Task<IReadOnlyList<QuoteAgentSearchResultDto>> SearchProjectResultsAsync(
             Guid customerId,
             string? query,
@@ -651,13 +675,13 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     ResourceType = "project",
                     ResourceId = project.ProjectServiceProjectId.ToString("D"),
                     Title = project.Title,
-                    Detail = $"{project.ProjectServiceProjectNumber} · Draft · {_partsByProject.GetValueOrDefault(project.ProjectServiceProjectId)?.Count ?? 0} part(s)",
+                    Detail = $"{project.ProjectServiceProjectNumber} · {GetStatus(project.ProjectServiceProjectId)} · {_partsByProject.GetValueOrDefault(project.ProjectServiceProjectId)?.Count ?? 0} part(s)",
                     ActionHint = "resume_project",
                     Url = $"/quotes?projectId={project.ProjectServiceProjectId:D}",
                     Metadata = new(StringComparer.OrdinalIgnoreCase)
                     {
                         ["projectNumber"] = project.ProjectServiceProjectNumber,
-                        ["status"] = "Draft",
+                        ["status"] = GetStatus(project.ProjectServiceProjectId),
                         ["isPinned"] = IsPinned(project.ProjectServiceProjectId).ToString().ToLowerInvariant(),
                         ["isArchived"] = IsArchived(project.ProjectServiceProjectId).ToString().ToLowerInvariant(),
                         ["source"] = "project_service"
@@ -676,10 +700,19 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             new(
                 project.ProjectServiceProjectId,
                 project.ProjectServiceProjectNumber,
-                "Draft",
+                IsArchived(project.ProjectServiceProjectId) ? "Archived" : GetStatus(project.ProjectServiceProjectId),
                 project.Title,
                 IsPinned(project.ProjectServiceProjectId),
                 IsArchived(project.ProjectServiceProjectId));
+
+        private string GetStatus(Guid projectId) =>
+            _projectStatuses.GetValueOrDefault(projectId, "Draft");
+
+        public string? GetProjectStatus(Guid projectId) =>
+            _projectStatuses.GetValueOrDefault(projectId);
+
+        public string? GetReviewNote(Guid projectId) =>
+            _reviewNotes.GetValueOrDefault(projectId);
 
         private bool IsPinned(Guid projectId) =>
             _pinnedProjects.TryGetValue(projectId, out var isPinned) && isPinned;

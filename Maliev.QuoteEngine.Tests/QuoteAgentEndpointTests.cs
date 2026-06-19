@@ -2523,6 +2523,7 @@ Customer message:
     [InlineData("quote_pin_project", "pin_project", "project_pin", "pinned", "isPinned", "true")]
     [InlineData("quote_unpin_project", "unpin_project", "project_unpin", "unpinned", "isPinned", "false")]
     [InlineData("quote_archive_project", "archive_project", "project_archive", "archived", "isArchived", "true")]
+    [InlineData("quote_request_employee_review", "request_employee_review", "project_review_request", "customer_review", "status", "CustomerReview")]
     [InlineData("quote_achieve_project", "achieve_project", "project_achieve", "achieved", "isArchived", "true")]
     public async Task Agent_project_management_tool_requires_confirmation_and_updates_customer_project(
         string toolName,

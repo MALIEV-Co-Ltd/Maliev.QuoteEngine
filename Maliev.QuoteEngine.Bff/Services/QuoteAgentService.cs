@@ -642,6 +642,13 @@ internal sealed class QuoteAgentService(
                 "Archive project",
                 "Archive this Make Studio project from the active project list.",
                 cancellationToken),
+            "quote_request_employee_review" => await PrepareProjectManagementActionOrGateErrorAsync(
+                state,
+                request.Arguments,
+                "request_employee_review",
+                "Request employee review",
+                ReadString(request.Arguments, "note") ?? "Ask a MALIEV employee to review this Make Studio project before the quote continues.",
+                cancellationToken),
             "quote_achieve_project" => await PrepareProjectManagementActionOrGateErrorAsync(
                 state,
                 request.Arguments,
@@ -718,6 +725,7 @@ internal sealed class QuoteAgentService(
             "pin_project" => await ExecutePinProjectAsync(state, customerId!.Value, action, cancellationToken),
             "unpin_project" => await ExecuteUnpinProjectAsync(state, customerId!.Value, action, cancellationToken),
             "archive_project" => await ExecuteArchiveProjectAsync(state, customerId!.Value, action, cancellationToken),
+            "request_employee_review" => await ExecuteRequestEmployeeReviewAsync(state, customerId!.Value, action, cancellationToken),
             "achieve_project" => await ExecuteAchieveProjectAsync(state, customerId!.Value, action, cancellationToken),
             "account_profile_update" => ExecuteAccountProfileUpdate(state, customerId!.Value, action),
             "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
@@ -2681,6 +2689,33 @@ internal sealed class QuoteAgentService(
             ["isArchived"] = response.IsArchived.ToString().ToLowerInvariant()
         });
         return $"Project {response.ProjectNumber} was archived.";
+    }
+
+    private async Task<string> ExecuteRequestEmployeeReviewAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (!TryResolveProjectId(state, action.Arguments, out var projectId))
+        {
+            throw new InvalidOperationException("A project is required before requesting employee review.");
+        }
+
+        var note = ReadString(action.Arguments, "note") ??
+            ReadString(action.Arguments, "requirements") ??
+            "Customer requested employee review from Make Studio.";
+        var response = await projectClient.RequestProjectReviewAsync(customerId, projectId, note, cancellationToken)
+            ?? throw new InvalidOperationException("ProjectService did not route the project to employee review.");
+        UpsertArtifact(state, "project_review_request", response.Title, "customer_review", null, null);
+        SetArtifactMetadata(state, "project_review_request", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["projectId"] = response.ProjectId.ToString("D"),
+            ["projectNumber"] = response.ProjectNumber,
+            ["status"] = response.Status,
+            ["note"] = note
+        });
+        return $"Project {response.ProjectNumber} was sent to MALIEV employee review.";
     }
 
     private async Task<string> ExecuteAchieveProjectAsync(
