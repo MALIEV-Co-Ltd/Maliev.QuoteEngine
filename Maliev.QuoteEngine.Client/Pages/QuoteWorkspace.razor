@@ -174,7 +174,6 @@
 
         await SynchronizeRouteStateAsync(force: true);
         _routeStateInitialized = true;
-        await PersistAgentSessionAsync();
     }
 
     private async Task LoadAuthenticatedAccountAsync()
@@ -206,6 +205,15 @@
         {
             _dotNetRef = DotNetObjectReference.Create(this);
             await Js.InvokeVoidAsync("quoteEngineUploads.registerPasteTarget", PageDropzoneId, _dotNetRef);
+            var previousSessionId = _quoteSessionId;
+            if (await RestoreAgentSessionAsync())
+            {
+                await PersistAgentSessionAsync();
+                if (!string.Equals(previousSessionId, _quoteSessionId, StringComparison.Ordinal))
+                {
+                    StateHasChanged();
+                }
+            }
         }
 
         await RegisterActiveDropzoneAsync();
@@ -340,7 +348,7 @@
         }
         else
         {
-            if (force || wasDemoPath || HasDemoWorkspace || projectChanged)
+            if (wasDemoPath || HasDemoWorkspace || projectChanged)
             {
                 await ResetWorkspaceStateAsync();
             }
@@ -1559,11 +1567,11 @@
         _leadTimeCode = _defaultLeadTimeCode;
     }
 
-    private async Task RestoreAgentSessionAsync()
+    private async Task<bool> RestoreAgentSessionAsync()
     {
         if (IsDemoMode)
         {
-            return;
+            return true;
         }
 
         try
@@ -1573,9 +1581,12 @@
             {
                 _quoteSessionId = parsed.ToString("N");
             }
+
+            return true;
         }
         catch (Exception ex) when (ex is JSException or InvalidOperationException)
         {
+            return false;
         }
     }
 
