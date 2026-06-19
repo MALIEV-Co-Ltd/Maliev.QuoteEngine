@@ -77,7 +77,9 @@ internal sealed class QuoteAgentService(
     ILogger<QuoteAgentService> logger,
     QuoteUploadServiceClient uploadClient,
     IQuotationServiceClient quotationClient,
-    IMaterialCatalogClient materialCatalog) : IQuoteAgentService
+    IMaterialCatalogClient materialCatalog,
+    IOrderServiceClient orderClient,
+    IPaymentServiceClient paymentClient) : IQuoteAgentService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] ArtifactContextMetadataKeys =
@@ -578,8 +580,8 @@ internal sealed class QuoteAgentService(
             "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
             "quote_approval" => ExecuteQuoteApproval(state),
             "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
-            "create_order" => ExecuteCreateOrder(state, customerId!.Value, action),
-            "start_payment" => ExecuteStartPayment(state, customerId!.Value),
+            "create_order" => await ExecuteCreateOrderAsync(state, customerId!.Value, action, cancellationToken),
+            "start_payment" => await ExecuteStartPaymentAsync(state, customerId!.Value, action, cancellationToken),
             _ => $"Action {action.ActionType} completed."
         };
 
@@ -2559,17 +2561,255 @@ internal sealed class QuoteAgentService(
         return "DFM risks were acknowledged for the current quote session.";
     }
 
-    private string ExecuteCreateOrder(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    private async Task<string> ExecuteCreateOrderAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
         if (state.FormalQuote is null)
         {
             throw new InvalidOperationException("A formal quote is required before creating an order.");
         }
 
-        state.Order = prototypeStore.CreateOrder(customerId, state.FormalQuote.QuoteId);
+        var request = await BuildOrderCreateRequestAsync(state, customerId, action, cancellationToken);
+        var result = await orderClient.CreateAsync(request, cancellationToken);
+        if (result is null)
+        {
+            throw new InvalidOperationException("OrderService did not create the manufacturing order.");
+        }
+
+        foreach (var status in new[] { "Reviewing", "Reviewed", "Quoted" })
+        {
+            var advanced = await orderClient.AddStatusAsync(result.OrderNumber, status, cancellationToken);
+            if (!advanced)
+            {
+                logger.LogWarning(
+                    "Self-service fast-track: could not advance agent order {OrderNumber} to {Status}. Payment initiation may fail.",
+                    result.OrderNumber,
+                    status);
+            }
+        }
+
+        state.Order = new CreateManufacturingOrderResponse(result.OrderId, result.OrderNumber, result.Status);
         UpsertArtifact(state, "order", state.Order.OrderNumber, state.Order.Status, null, null);
         SetArtifactMetadata(state, "order", BuildOrderSummaryMetadata(state));
         return $"Manufacturing order {state.Order.OrderNumber} is created.";
+    }
+
+    private async Task<OrderCreateRequest> BuildOrderCreateRequestAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
+    {
+        var productionItems = new List<OrderProductionItemRequest>(state.Parts.Count);
+        foreach (var part in state.Parts)
+        {
+            var materialGuid = await materialCatalog.ResolveMaterialIdAsync(
+                part.ProcessId,
+                part.MaterialId,
+                cancellationToken);
+            productionItems.Add(BuildProductionItem(state.FormalQuote!.QuoteId, part, materialGuid));
+        }
+
+        var request = new OrderCreateRequest
+        {
+            CustomerId = customerId.ToString("D"),
+            OrderedQuantity = state.Parts.Count == 0 ? 1 : state.Parts.Sum(part => Math.Max(1, part.Quantity)),
+            CustomerPoNumber = ReadString(action.Arguments, "customer_po_number") ?? ReadString(action.Arguments, "customerPoNumber"),
+            Requirements = BuildOrderRequirements(state, action),
+            QuotedAmount = state.Estimate?.Total ?? CalculateOrderQuotedTotal(state.Parts),
+            QuoteCurrency = state.Estimate?.Currency ?? "THB",
+            ProductionItems = productionItems
+        };
+        request.SetProcessFromCode(NormalizeOrderProcessCode(state.Parts.FirstOrDefault()?.ProcessId));
+        return request;
+    }
+
+    private static string NormalizeOrderProcessCode(string? processCode)
+    {
+        if (string.IsNullOrWhiteSpace(processCode))
+        {
+            return "fdm";
+        }
+
+        if (processCode.Contains("cnc", StringComparison.OrdinalIgnoreCase))
+        {
+            return "cnc";
+        }
+
+        if (processCode.Contains("sla", StringComparison.OrdinalIgnoreCase))
+        {
+            return "sla";
+        }
+
+        return "fdm";
+    }
+
+    private static OrderProductionItemRequest BuildProductionItem(Guid quoteId, QuotePartDraftDto part, Guid materialGuid)
+    {
+        return new OrderProductionItemRequest
+        {
+            SourceProjectId = quoteId,
+            SourceProjectPartId = part.PartId,
+            MaterialId = materialGuid,
+            MaterialSnapshotJson = JsonSerializer.Serialize(new
+            {
+                sourceMaterialId = part.MaterialId,
+                resolvedMaterialId = materialGuid,
+                finishId = part.FinishId,
+                finishCode = part.FinishCode,
+                color = part.Color
+            }, JsonOptions),
+            ConfigurationSnapshotJson = JsonSerializer.Serialize(new
+            {
+                part.PartId,
+                part.FileId,
+                part.UploadId,
+                part.FileName,
+                part.ProcessId,
+                part.MaterialId,
+                part.FinishId,
+                part.FinishCode,
+                part.Color,
+                part.Quantity,
+                part.VolumeCc,
+                part.SurfaceAreaCm2,
+                part.ToleranceId,
+                part.ToleranceCode,
+                part.InspectionLevel,
+                part.RoughnessCode,
+                part.ProcessOptionValues,
+                part.HasThreadedHoles,
+                part.ThreadSpecification,
+                part.ThreadedHoleCount,
+                part.InsertType,
+                part.InsertCount,
+                part.BodyCount,
+                part.SelectedBodyIndex,
+                part.DfmAcknowledged,
+                part.PartNotes,
+                part.DrawingFiles,
+                part.StoragePath,
+                part.ViewerStoragePath,
+                part.ViewerFileExtension
+            }, JsonOptions),
+            Technology = part.ProcessId.ToUpperInvariant(),
+            VolumeCm3 = part.VolumeCc,
+            Quantity = Math.Max(1, part.Quantity),
+            EstimatedPrintTimeMinutes = 0
+        };
+    }
+
+    private static string BuildOrderRequirements(QuoteAgentSessionState state, QuoteAgentPendingAction action)
+    {
+        var requirements = new List<string>();
+        var notes = ReadString(action.Arguments, "notes") ?? ReadString(action.Arguments, "requirements");
+        if (!string.IsNullOrWhiteSpace(notes))
+        {
+            requirements.Add(notes.Trim());
+        }
+
+        if (state.Parts.Count > 0)
+        {
+            requirements.Add("Configured quote parts:");
+            requirements.AddRange(state.Parts.Select(BuildConfiguredPartSummary));
+        }
+
+        return string.Join(Environment.NewLine, requirements);
+    }
+
+    private static decimal CalculateOrderQuotedTotal(IReadOnlyList<QuotePartDraftDto> parts)
+    {
+        if (parts.Count == 0)
+        {
+            return 0m;
+        }
+
+        var subtotal = parts.Sum(part => EstimatePrototypeUnitPrice(part) * Math.Max(1, part.Quantity));
+        var discount = subtotal >= 25_000m ? Math.Round(subtotal * 0.05m, 2) : 0m;
+        return Math.Round(subtotal - discount, 2);
+    }
+
+    private static decimal EstimatePrototypeUnitPrice(QuotePartDraftDto part)
+    {
+        var baseRate = part.ProcessId.ToLowerInvariant() switch
+        {
+            "sla" => 180m,
+            "cnc" => 520m,
+            _ => 95m
+        };
+        var setup = part.ProcessId.Equals("cnc", StringComparison.OrdinalIgnoreCase) ? 850m : 120m;
+        return Math.Round(setup + Math.Max(part.VolumeCc, 1m) * baseRate, 2);
+    }
+
+    private static string BuildConfiguredPartSummary(QuotePartDraftDto part)
+    {
+        var summary = new List<string>
+        {
+            part.FileName,
+            $"process {part.ProcessId.ToUpperInvariant()}",
+            $"material {part.MaterialId}",
+            $"qty {part.Quantity}"
+        };
+
+        AddQuoteNoteIfPresent(summary, "finish", part.FinishCode ?? part.FinishId);
+        AddQuoteNoteIfPresent(summary, "tolerance", part.ToleranceCode ?? part.ToleranceId);
+        AddQuoteNoteIfPresent(summary, "inspection", part.InspectionLevel);
+        AddQuoteNoteIfPresent(summary, "roughness", part.RoughnessCode);
+        AddQuoteNoteIfPresent(summary, "color", part.Color);
+
+        if (part.ProcessOptionValues.Count > 0)
+        {
+            summary.Add("process options " + string.Join(", ", part.ProcessOptionValues
+                .OrderBy(option => option.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(option => $"{option.Key}={option.Value}")));
+        }
+
+        if (part.HasThreadedHoles || part.ThreadedHoleCount > 0)
+        {
+            var threadSummary = $"threaded holes {Math.Max(part.ThreadedHoleCount, 1)}";
+            if (!string.IsNullOrWhiteSpace(part.ThreadSpecification))
+            {
+                threadSummary += $" {part.ThreadSpecification.Trim()}";
+            }
+
+            summary.Add(threadSummary);
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.InsertType) && !part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            summary.Add($"inserts {Math.Max(part.InsertCount, 1)} {part.InsertType.Trim()}");
+        }
+
+        foreach (var drawing in part.DrawingFiles)
+        {
+            summary.Add($"drawing {drawing.FileName}");
+        }
+
+        if (part.BodyCount.HasValue)
+        {
+            summary.Add($"body count {part.BodyCount.Value}");
+        }
+
+        if (part.SelectedBodyIndex.HasValue)
+        {
+            summary.Add($"selected body {part.SelectedBodyIndex.Value}");
+        }
+
+        if (part.DfmAcknowledged)
+        {
+            summary.Add("DFM acknowledged");
+        }
+
+        if (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason))
+        {
+            summary.Add($"DFM issue {part.NonManifoldReason.Trim()}");
+        }
+
+        AddQuoteNoteIfPresent(summary, "notes", part.PartNotes);
+        return "- " + string.Join("; ", summary);
     }
 
     private static Dictionary<string, string> BuildOrderSummaryMetadata(QuoteAgentSessionState state)
@@ -2591,17 +2831,63 @@ internal sealed class QuoteAgentService(
         };
     }
 
-    private string ExecuteStartPayment(QuoteAgentSessionState state, Guid customerId)
+    private async Task<string> ExecuteStartPaymentAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
         if (state.Order is null)
         {
             throw new InvalidOperationException("A manufacturing order is required before payment.");
         }
 
-        state.Payment = prototypeStore.StartPayment(customerId, state.Order.OrderId);
+        var amount = state.Estimate?.Total ?? (TryReadDecimal(action.Arguments, "amount", out var requestedAmount) ? requestedAmount : 0m);
+        var currency = state.Estimate?.Currency ?? ReadString(action.Arguments, "currency") ?? "THB";
+        var checkoutAttemptId = TryReadGuid(action.Arguments, "checkout_attempt_id", out var checkoutAttemptIdValue) ||
+            TryReadGuid(action.Arguments, "checkoutAttemptId", out checkoutAttemptIdValue)
+            ? checkoutAttemptIdValue
+            : Guid.NewGuid();
+        var idempotencyKey = $"{customerId:D}:{state.Order.OrderId:D}:{checkoutAttemptId:D}";
+        var result = await paymentClient.InitiateAsync(
+            customerId.ToString("D"),
+            state.Order.OrderId.ToString("D"),
+            state.Order.OrderNumber,
+            amount,
+            currency,
+            BuildPaymentCallbackUrl("success", state.Order.OrderNumber),
+            BuildPaymentCallbackUrl("cancel", state.Order.OrderNumber),
+            idempotencyKey,
+            state.CheckoutBillingAddressId,
+            state.CheckoutShippingAddressId,
+            state.CheckoutCompany,
+            state.CheckoutVatNumber,
+            null,
+            state.CheckoutPhone,
+            null,
+            state.CheckoutAcceptedTerms,
+            cancellationToken);
+        if (result is null)
+        {
+            throw new InvalidOperationException("PaymentService did not initiate checkout.");
+        }
+
+        state.Payment = new InitiatePaymentResponse(result.TransactionId, result.PaymentUrl, result.Status);
         UpsertArtifact(state, "payment", "Payment handoff", state.Payment.Status, null, state.Payment.PaymentUrl);
         SetArtifactMetadata(state, "payment", BuildPaymentSummaryMetadata(state));
         return $"Payment handoff is ready for {state.Order.OrderNumber}.";
+    }
+
+    private string BuildPaymentCallbackUrl(string outcome, string orderNumber)
+    {
+        var configuredBaseUrl = configuration["Web:BaseUrl"]?.Trim();
+        var path = $"/payment/{outcome}?orderId={Uri.EscapeDataString(orderNumber)}";
+        if (string.IsNullOrWhiteSpace(configuredBaseUrl))
+        {
+            return path;
+        }
+
+        return $"{configuredBaseUrl.TrimEnd('/')}{path}";
     }
 
     private static Dictionary<string, string> BuildPaymentSummaryMetadata(QuoteAgentSessionState state)

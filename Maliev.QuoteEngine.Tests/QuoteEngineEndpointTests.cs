@@ -139,10 +139,16 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         string? DeliveryContactEmail);
 
     public sealed record CapturedPaymentInitiation(
+        string CustomerId,
+        string OrderId,
         string OrderNumber,
+        decimal Amount,
+        string Currency,
         string ReturnUrl,
         string CancelUrl,
         string IdempotencyKey,
+        Guid? BillingAddressId,
+        Guid? ShippingAddressId,
         string? BillingCompanyName,
         string? BillingVatNumber,
         string? DeliveryContactName,
@@ -826,10 +832,16 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         {
             IdempotencyKeys.Enqueue(idempotencyKey);
             Initiations.Enqueue(new CapturedPaymentInitiation(
+                customerId,
+                orderId,
                 orderNumber,
+                amount,
+                currency,
                 returnUrl,
                 cancelUrl,
                 idempotencyKey,
+                billingAddressId,
+                shippingAddressId,
                 billingCompanyName,
                 billingVatNumber,
                 deliveryContactName,

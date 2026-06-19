@@ -1661,6 +1661,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     public async Task Agent_payment_confirmation_after_order_sets_payment_gate_and_artifact()
     {
         await using var scopedFactory = CreateAgentFactory();
+        factory.ClearPaymentIdempotencyKeys();
         using var client = await CreateSignedInClientAsync(scopedFactory, "agent-payment@example.com");
         var sessionId = await StartPricedCadSessionAsync(client);
 
@@ -1687,6 +1688,22 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Metadata["quoteNumber"]));
         Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Metadata["orderId"]));
         Assert.Contains("fixture.step", orderArtifact.Metadata["parts"], StringComparison.Ordinal);
+        if (factory.LastOrderCreateRequest is not { } orderCreateRequest)
+        {
+            throw new InvalidOperationException("Expected agent order confirmation to call OrderService.");
+        }
+
+        Assert.False(string.IsNullOrWhiteSpace(orderCreateRequest.CustomerId));
+        Assert.Equal(1, orderCreateRequest.ServiceCategoryId);
+        Assert.Equal(1, orderCreateRequest.ProcessTypeId);
+        Assert.Equal(25, orderCreateRequest.OrderedQuantity);
+        Assert.True(orderCreateRequest.QuotedAmount > 0);
+        Assert.Equal("THB", orderCreateRequest.QuoteCurrency);
+        var productionItem = Assert.Single(orderCreateRequest.ProductionItems);
+        Assert.NotEqual(Guid.Empty, productionItem.MaterialId);
+        Assert.Contains("FDM", productionItem.Technology, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(25, productionItem.Quantity);
+        Assert.Contains("fixture.step", productionItem.ConfigurationSnapshotJson, StringComparison.OrdinalIgnoreCase);
 
         var checkoutState = await ExecuteToolForStateAsync(
             client,
@@ -1713,10 +1730,23 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.NotNull(paymentResult.State);
         Assert.Contains("Payment handoff", paymentResult.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(paymentResult.State.Gates, gate => gate.Code == "payment_started_or_completed" && gate.Status == "passed");
-        Assert.Contains(paymentResult.State.Artifacts, artifact =>
-            artifact.ArtifactType == "payment" &&
-            artifact.Status == "pending" &&
-            !string.IsNullOrWhiteSpace(artifact.Url));
+        var paymentArtifact = Assert.Single(paymentResult.State.Artifacts, artifact => artifact.ArtifactType == "payment");
+        Assert.False(string.IsNullOrWhiteSpace(paymentArtifact.Status));
+        Assert.False(string.IsNullOrWhiteSpace(paymentArtifact.Url));
+        var initiation = Assert.Single(factory.PaymentInitiations);
+        Assert.Equal(orderArtifact.Metadata["orderId"], initiation.OrderId);
+        Assert.Equal(orderArtifact.Metadata["orderNumber"], initiation.OrderNumber);
+        Assert.Equal(orderCreateRequest.QuotedAmount, initiation.Amount);
+        Assert.Equal(orderCreateRequest.QuoteCurrency, initiation.Currency);
+        Assert.Equal(CheckoutBillingAddressId, initiation.BillingAddressId);
+        Assert.Equal(CheckoutShippingAddressId, initiation.ShippingAddressId);
+        Assert.Equal("MALIEV Buyer Co.", initiation.BillingCompanyName);
+        Assert.Equal("TH1234567890", initiation.BillingVatNumber);
+        Assert.Null(initiation.DeliveryContactName);
+        Assert.Equal("+66 2 555 0100", initiation.DeliveryContactPhone);
+        Assert.Contains(orderArtifact.Metadata["orderId"], initiation.IdempotencyKey, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("/payment/success", initiation.ReturnUrl, StringComparison.Ordinal);
+        Assert.Contains("/payment/cancel", initiation.CancelUrl, StringComparison.Ordinal);
     }
 
     [Fact]
