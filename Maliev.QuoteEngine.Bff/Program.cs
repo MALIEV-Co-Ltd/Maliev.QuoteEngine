@@ -137,6 +137,7 @@ builder.AddAuthenticatedServiceClient<IPdfServiceClient, PdfServiceClient>("PdfS
 builder.AddAuthenticatedServiceClient<IMaterialCatalogClient, MaterialCatalogClient>("MaterialService");
 builder.AddAuthenticatedServiceClient<IQuotationServiceClient, QuotationServiceClient>("QuotationService");
 builder.AddAuthenticatedServiceClient<IOrderServiceClient, OrderServiceClient>("OrderService");
+builder.AddAuthenticatedServiceClient<IDeliveryServiceClient, DeliveryServiceClient>("DeliveryService");
 builder.AddAuthenticatedServiceClient<ICustomerServiceClient, CustomerServiceClient>("CustomerService");
 builder.AddAuthenticatedServiceClient<IProjectServiceClient, ProjectServiceClient>("ProjectService");
 builder.AddAuthenticatedServiceClient<ICountryServiceClient, CountryServiceClient>("CountryService");

@@ -2,6 +2,7 @@
 @using System.Globalization
 @using System.Net
 @using Maliev.QuoteEngine.Shared.Account
+@using Maliev.QuoteEngine.Shared.Quotes
 @using Microsoft.AspNetCore.SignalR.Client
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
@@ -143,6 +144,61 @@ else
                         <strong>@DeliveryTrackingText</strong>
                     </div>
                 </div>
+                <div class="order-shipping-quote">
+                    <div class="order-shipping-form">
+                        <label>
+                            <span>@Text("Courier", "ขนส่ง")</span>
+                            <select @bind="_selectedCourierCode">
+                                <option value="">@Text("Any available courier", "ขนส่งที่พร้อมให้บริการ")</option>
+                                @foreach (var courier in _couriers)
+                                {
+                                    <option value="@courier.CourierCode">@CourierLabel(courier)</option>
+                                }
+                            </select>
+                        </label>
+                        <label>
+                            <span>@Text("Weight (g)", "น้ำหนัก (กรัม)")</span>
+                            <input type="number" min="1" step="1" @bind="_shippingWeightGrams" @bind:event="oninput" />
+                        </label>
+                        <label>
+                            <span>@Text("Length (cm)", "ยาว (ซม.)")</span>
+                            <input type="number" min="0.1" step="0.1" @bind="_shippingLengthCm" @bind:event="oninput" />
+                        </label>
+                        <label>
+                            <span>@Text("Width (cm)", "กว้าง (ซม.)")</span>
+                            <input type="number" min="0.1" step="0.1" @bind="_shippingWidthCm" @bind:event="oninput" />
+                        </label>
+                        <label>
+                            <span>@Text("Height (cm)", "สูง (ซม.)")</span>
+                            <input type="number" min="0.1" step="0.1" @bind="_shippingHeightCm" @bind:event="oninput" />
+                        </label>
+                    </div>
+                    <button type="button" class="qe-secondary-btn" disabled="@(_shippingBusy || ShippingAddress is null)" @onclick="FetchShippingRatesAsync">
+                        @(_shippingBusy ? Text("Checking rates...", "กำลังตรวจสอบราคา...") : Text("Get courier rates", "ดูราคาขนส่ง"))
+                    </button>
+                    @if (!string.IsNullOrWhiteSpace(_shippingError))
+                    {
+                        <p class="order-payment-error">@_shippingError</p>
+                    }
+                    @if (_shippingRates.Count > 0)
+                    {
+                        <div class="order-shipping-rates">
+                            @foreach (var rate in _shippingRates)
+                            {
+                                <button type="button"
+                                        class="order-shipping-rate @(ReferenceEquals(rate, _selectedShippingRate) ? "is-selected" : "")"
+                                        @onclick="@(() => SelectShippingRate(rate))">
+                                    <span>@rate.ProductName</span>
+                                    <strong>@FormatMoney(rate.TotalPrice, rate.CurrencyCode)</strong>
+                                    @if (!string.IsNullOrWhiteSpace(rate.EstimatedDeliveryDate))
+                                    {
+                                        <small>@Text("ETA", "ถึงประมาณ") @rate.EstimatedDeliveryDate</small>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
             </article>
         </section>
 
@@ -220,9 +276,19 @@ else
     private CustomerProfileResponse? _profile;
     private IReadOnlyList<CustomerAddressDto> _addresses = [];
     private IReadOnlyList<CustomerDocumentDto> _documents = [];
+    private IReadOnlyList<ShippingCourierDto> _couriers = [];
+    private List<ShippingRateOptionDto> _shippingRates = [];
     private readonly HashSet<Guid> _openingDocumentIds = [];
     private HubConnection? _notificationConnection;
     private string? _joinedOrderNumber;
+    private string? _selectedCourierCode;
+    private ShippingRateOptionDto? _selectedShippingRate;
+    private bool _shippingBusy;
+    private string? _shippingError;
+    private decimal _shippingWeightGrams = 1000m;
+    private decimal _shippingLengthCm = 20m;
+    private decimal _shippingWidthCm = 15m;
+    private decimal _shippingHeightCm = 10m;
 
     private int ManufacturingProgressPercent
     {
@@ -285,6 +351,7 @@ else
 
     private Guid? BillingAddressId => SelectAddressId("Billing");
     private Guid? ShippingAddressId => SelectAddressId("Shipping");
+    private CustomerAddressDto? ShippingAddress => SelectAddress("Shipping");
     private string? BillingCompanyName => string.IsNullOrWhiteSpace(_profile?.CompanyName) ? null : _profile.CompanyName;
     private string? BillingVatNumber => string.IsNullOrWhiteSpace(_profile?.VatNumber) ? null : _profile.VatNumber;
 
@@ -315,6 +382,7 @@ else
             _profile = await Api.GetProfileAsync();
             _addresses = await Api.GetAddressesAsync();
             _documents = await Api.GetDocumentsAsync();
+            _couriers = await Api.GetShippingCouriersAsync();
             await EnsureOrderNotificationConnectionAsync(_order.OrderNumber);
         }
         else
@@ -322,7 +390,112 @@ else
             _profile = null;
             _addresses = [];
             _documents = [];
+            _couriers = [];
+            _shippingRates = [];
         }
+    }
+
+    private async Task FetchShippingRatesAsync()
+    {
+        _shippingError = ValidateShippingRateInputs();
+        _shippingRates = [];
+        _selectedShippingRate = null;
+        if (_shippingError is not null)
+        {
+            return;
+        }
+
+        _shippingBusy = true;
+        try
+        {
+            var result = await Api.GetShippingRatesAsync(BuildShippingRateRequest());
+            _shippingRates = result.Rates;
+            if (_shippingRates.Count == 0)
+            {
+                _shippingError = Text("No courier rates are available for this destination yet.", "ยังไม่มีราคาขนส่งสำหรับปลายทางนี้");
+            }
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _shippingError = ex.UserMessage;
+        }
+        catch (HttpRequestException)
+        {
+            _shippingError = Text("Shipping rates are temporarily unavailable.", "ยังไม่สามารถตรวจสอบราคาขนส่งได้ชั่วคราว");
+        }
+        finally
+        {
+            _shippingBusy = false;
+        }
+    }
+
+    private ShippingRateRequestDto BuildShippingRateRequest()
+    {
+        var address = ShippingAddress ?? throw new InvalidOperationException("Shipping address is required.");
+        return new ShippingRateRequestDto
+        {
+            From = new ShippingAddressDto
+            {
+                Name = "MALIEV",
+                Address = "MALIEV",
+                District = "Pathum Wan",
+                State = "Pathum Wan",
+                Province = "Bangkok",
+                Postcode = "10400",
+                Tel = "020000000"
+            },
+            To = new ShippingAddressDto
+            {
+                Name = FirstNonEmpty(address.RecipientName, _profile?.DisplayName, "Customer"),
+                Address = FirstNonEmpty(address.AddressLine1),
+                District = FirstNonEmpty(address.District, address.City),
+                State = FirstNonEmpty(address.City, address.StateProvince),
+                Province = FirstNonEmpty(address.StateProvince),
+                Postcode = FirstNonEmpty(address.PostalCode),
+                Tel = FirstNonEmpty(address.RecipientPhone, _profile?.Phone),
+                Email = _profile?.Email
+            },
+            Parcel = new ShippingParcelDto
+            {
+                Name = _order is null ? "MALIEV shipment" : $"MALIEV order {_order.OrderNumber}",
+                Weight = _shippingWeightGrams,
+                Length = _shippingLengthCm,
+                Width = _shippingWidthCm,
+                Height = _shippingHeightCm
+            },
+            CourierCodes = string.IsNullOrWhiteSpace(_selectedCourierCode) ? [] : [_selectedCourierCode]
+        };
+    }
+
+    private string? ValidateShippingRateInputs()
+    {
+        var address = ShippingAddress;
+        if (address is null)
+        {
+            return Text("Select a shipping address before checking courier rates.", "เลือกที่อยู่จัดส่งก่อนตรวจสอบราคาขนส่ง");
+        }
+
+        if (string.IsNullOrWhiteSpace(address.AddressLine1) ||
+            string.IsNullOrWhiteSpace(FirstNonEmpty(address.District, address.City)) ||
+            string.IsNullOrWhiteSpace(address.StateProvince) ||
+            string.IsNullOrWhiteSpace(address.PostalCode) ||
+            string.IsNullOrWhiteSpace(FirstNonEmpty(address.RecipientPhone, _profile?.Phone)))
+        {
+            return Text("Complete the shipping address and phone number before checking courier rates.", "กรอกที่อยู่จัดส่งและเบอร์โทรให้ครบก่อนตรวจสอบราคาขนส่ง");
+        }
+
+        if (_shippingWeightGrams <= 0 || _shippingLengthCm <= 0 || _shippingWidthCm <= 0 || _shippingHeightCm <= 0)
+        {
+            return Text("Enter positive parcel weight and dimensions before checking courier rates.", "กรอกน้ำหนักและขนาดพัสดุให้มากกว่าศูนย์ก่อนตรวจสอบราคา");
+        }
+
+        return null;
+    }
+
+    private void SelectShippingRate(ShippingRateOptionDto rate)
+    {
+        _selectedShippingRate = rate;
+        _shippingError = null;
     }
 
     private async Task InitiatePaymentAsync()
@@ -710,12 +883,26 @@ else
 
     private Guid? SelectAddressId(string addressType)
     {
+        return SelectAddress(addressType)?.Id;
+    }
+
+    private CustomerAddressDto? SelectAddress(string addressType)
+    {
         return _addresses.FirstOrDefault(address =>
                    address.IsDefault &&
-                   string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase))?.Id
+                   string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase))
                ?? _addresses.FirstOrDefault(address =>
-                   string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase))?.Id;
+                   string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase));
     }
+
+    private string CourierLabel(ShippingCourierDto courier)
+    {
+        var name = string.IsNullOrWhiteSpace(courier.CourierName) ? courier.CourierCode : courier.CourierName;
+        return string.IsNullOrWhiteSpace(courier.Note) ? name : $"{name} - {courier.Note}";
+    }
+
+    private static string FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
 
     private string Text(string en, string th)
     {

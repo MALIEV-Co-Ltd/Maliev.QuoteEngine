@@ -192,6 +192,23 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return PostAsync<InitiatePaymentRequest, InitiatePaymentResponse>("quote/v1/payments", request, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<ShippingCourierDto>> GetShippingCouriersAsync(CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<IReadOnlyList<ShippingCourierDto>>("quote/v1/shipping/couriers", cancellationToken) ?? [];
+    }
+
+    public Task<ShippingRateResponseDto> GetShippingRatesAsync(ShippingRateRequestDto request, CancellationToken cancellationToken = default)
+    {
+        return PostAsync<ShippingRateRequestDto, ShippingRateResponseDto>("quote/v1/shipping/rates", request, cancellationToken);
+    }
+
+    public async Task<ShippingTrackingDto?> GetShippingTrackingAsync(string trackingCode, CancellationToken cancellationToken = default)
+    {
+        return await httpClient.GetFromJsonAsync<ShippingTrackingDto>(
+            $"quote/v1/shipping/tracking/{Uri.EscapeDataString(trackingCode)}",
+            cancellationToken);
+    }
+
     public async Task<CustomerProfileResponse?> GetProfileAsync(CancellationToken cancellationToken = default)
     {
         return await httpClient.GetFromJsonAsync<CustomerProfileResponse>("quote/v1/account/profile", cancellationToken);
