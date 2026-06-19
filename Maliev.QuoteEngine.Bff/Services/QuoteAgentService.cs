@@ -2796,7 +2796,9 @@ internal sealed class QuoteAgentService(
         {
             CustomerId = customerId.ToString("D"),
             OrderedQuantity = state.Parts.Count == 0 ? 1 : state.Parts.Sum(part => Math.Max(1, part.Quantity)),
-            CustomerPoNumber = ReadString(action.Arguments, "customer_po_number") ?? ReadString(action.Arguments, "customerPoNumber"),
+            CustomerPoNumber = ReadString(action.Arguments, "customer_po_number")
+                ?? ReadString(action.Arguments, "customerPoNumber")
+                ?? ReadString(action.Arguments, "purchase_order"),
             Requirements = BuildOrderRequirements(state, action),
             QuotedAmount = state.Estimate?.Total ?? CalculateOrderQuotedTotal(state.Parts),
             QuoteCurrency = state.Estimate?.Currency ?? "THB",

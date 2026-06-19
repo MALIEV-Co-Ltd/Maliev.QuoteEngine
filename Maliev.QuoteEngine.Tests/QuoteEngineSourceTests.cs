@@ -1691,6 +1691,17 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentCreateOrder_accepts_legacy_purchase_order_argument_alias()
+    {
+        var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
+        var orderBlock = ExtractSourceBlock(service, "private async Task<OrderCreateRequest> BuildOrderCreateRequestAsync", "private static string NormalizeOrderProcessCode");
+
+        Assert.Contains("ReadString(action.Arguments, \"customer_po_number\")", orderBlock, StringComparison.Ordinal);
+        Assert.Contains("ReadString(action.Arguments, \"customerPoNumber\")", orderBlock, StringComparison.Ordinal);
+        Assert.Contains("ReadString(action.Arguments, \"purchase_order\")", orderBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_previews_attachments_until_customer_sends_message()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
