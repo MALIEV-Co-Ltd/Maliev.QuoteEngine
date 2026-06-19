@@ -410,12 +410,22 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     [
                         new CustomerQuoteVersionSummaryDto(
                             Guid.NewGuid(),
-                            1,
+                            2,
                             q.Total,
                             q.CurrencyCode,
-                            "Initial test quote",
+                            "Updated test quote",
                             q.PdfArtifactUrl,
                             q.PdfArtifactStoragePath,
+                            "Make Studio",
+                            new DateTimeOffset(q.UpdatedAt.AddMinutes(5), TimeSpan.Zero)),
+                        new CustomerQuoteVersionSummaryDto(
+                            Guid.NewGuid(),
+                            1,
+                            q.Total - 250m,
+                            q.CurrencyCode,
+                            "Initial test quote",
+                            null,
+                            null,
                             "Make Studio",
                             new DateTimeOffset(q.UpdatedAt, TimeSpan.Zero))
                     ]))
@@ -2791,8 +2801,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(customerAQuotes);
         Assert.NotNull(customerAOrders);
         var customerQuote = Assert.Single(customerAQuotes, item => item.QuoteId == quote.QuoteId);
-        var customerQuoteVersion = Assert.Single(customerQuote.Versions ?? []);
-        Assert.Equal(1, customerQuoteVersion.VersionNumber);
+        Assert.NotNull(customerQuote.Versions);
+        Assert.Equal(2, customerQuote.Versions.Count);
+        var customerQuoteVersion = Assert.Single(customerQuote.Versions, version => version.VersionNumber == 2);
+        Assert.Contains(customerQuote.Versions, version => version.VersionNumber == 1);
         Assert.Equal(customerQuote.Total, customerQuoteVersion.Total);
         Assert.False(string.IsNullOrWhiteSpace(customerQuoteVersion.PdfUrl));
         Assert.Single(customerAOrders);
