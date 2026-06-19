@@ -140,6 +140,11 @@ internal sealed class QuoteAgentService(
         }
 
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
+        if (request.EditLastTurn && !await chatbotClient.TruncateLastTurnAsync(chatbotSessionId, cancellationToken))
+        {
+            return BuildEditRollbackFailureTurn(state, request.Message, language);
+        }
+
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         await RefreshOrderStatusAsync(state, cancellationToken);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts);
@@ -226,6 +231,28 @@ internal sealed class QuoteAgentService(
         var receivedError = false;
         var accumulatedThought = new StringBuilder();
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
+        if (request.EditLastTurn && !await chatbotClient.TruncateLastTurnAsync(chatbotSessionId, cancellationToken))
+        {
+            var rollbackFailure = BuildEditRollbackFailureTurn(state, request.Message, language);
+            foreach (var delta in ChunkAssistantText(rollbackFailure.AssistantText))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return new QuoteAgentStreamEvent
+                {
+                    Type = "delta",
+                    Delta = delta
+                };
+                await Task.Delay(12, cancellationToken);
+            }
+
+            yield return new QuoteAgentStreamEvent
+            {
+                Type = "final",
+                Response = rollbackFailure
+            };
+            yield break;
+        }
+
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         await RefreshOrderStatusAsync(state, cancellationToken);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts);
@@ -712,6 +739,13 @@ internal sealed class QuoteAgentService(
             return existing;
         }
 
+        var mappedChatbotSessionId = await conversationMap.GetChatbotSessionIdAsync(state.SessionId, cancellationToken);
+        if (mappedChatbotSessionId is { } mapped && mapped != Guid.Empty)
+        {
+            state.ChatbotSessionId = mapped;
+            return mapped;
+        }
+
         var session = await chatbotClient.InitiateSessionAsync(new ChatbotInitiateSessionRequest
         {
             Channel = "quote-engine",
@@ -729,6 +763,29 @@ internal sealed class QuoteAgentService(
         var response = sessionStore.ToResponse(state, customerId.HasValue, customerId);
         response.UiDirectives = BuildUiDirectives(response);
         return response;
+    }
+
+    private QuoteAgentTurnResponse BuildEditRollbackFailureTurn(
+        QuoteAgentSessionState state,
+        string customerMessage,
+        string language)
+    {
+        var currentState = ToStateResponse(state);
+        return new QuoteAgentTurnResponse
+        {
+            SessionId = state.SessionId,
+            AssistantText = "I couldn't safely roll back the last reply. Please try editing the last message again.",
+            Role = "assistant",
+            Language = NormalizeLanguage(language, customerMessage),
+            CreatedAt = DateTimeOffset.UtcNow,
+            Artifacts = currentState.Artifacts,
+            Gates = currentState.Gates,
+            ProposedActions = currentState.ProposedActions,
+            AuthHandoff = BuildTurnAuthHandoff(state, currentState),
+            UiDirectives = currentState.UiDirectives,
+            ProjectName = state.ProjectName,
+            CustomerQuestion = state.PendingCustomerQuestion
+        };
     }
 
     private bool TryBuildUiLanguageTurnResponse(

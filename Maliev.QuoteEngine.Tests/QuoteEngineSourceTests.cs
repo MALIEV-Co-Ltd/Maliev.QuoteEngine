@@ -1206,6 +1206,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("IAsyncEnumerable<QuoteAgentStreamEvent> SendAgentMessageStreamAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("HttpCompletionOption.ResponseHeadersRead", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/messages/stream", apiClient, StringComparison.Ordinal);
+        Assert.Contains("public bool EditLastTurn { get; set; }", ReadRepoFile("Maliev.QuoteEngine.Shared", "Agent", "QuoteAgentDtos.cs"), StringComparison.Ordinal);
+        Assert.Contains("TruncateLastTurnAsync(chatbotSessionId, cancellationToken)", ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs"), StringComparison.Ordinal);
         Assert.Contains("Task<QuoteAgentMessageHistoryResponse> GetAgentMessageHistoryAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/agent/sessions/{sessionId:D}/messages", apiClient, StringComparison.Ordinal);
         Assert.Contains("Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync", apiClient, StringComparison.Ordinal);
@@ -1785,6 +1787,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("EditUserMessageAsync(message)", threadBlock, StringComparison.Ordinal);
         Assert.Contains("private async Task CopyUserMessageAsync(AgentMessageRow message)", component, StringComparison.Ordinal);
         Assert.Contains("private async Task EditUserMessageAsync(AgentMessageRow message)", component, StringComparison.Ordinal);
+        Assert.Contains("private AgentMessageRow? _editingLastUserMessage;", component, StringComparison.Ordinal);
+        Assert.Contains("ReferenceEquals(_editingLastUserMessage, LastUserMessage)", component, StringComparison.Ordinal);
+        Assert.Contains("RemoveLocalLastTurn(_editingLastUserMessage!)", component, StringComparison.Ordinal);
+        Assert.Contains("RestoreEditedLastTurnOnFailure(editLastTurn", component, StringComparison.Ordinal);
+        Assert.Contains("EditLastTurn = editLastTurn", component, StringComparison.Ordinal);
+        Assert.Contains("_editingLastUserMessage = message;", component, StringComparison.Ordinal);
         Assert.Contains("public DateTimeOffset CreatedAt", component, StringComparison.Ordinal);
 
         Assert.Contains("background: var(--qe-agent-soft);", userBubbleStyleBlock, StringComparison.Ordinal);
@@ -1837,7 +1845,7 @@ public sealed class QuoteEngineSourceTests
     public void QuoteAgentLaunchShell_status_dot_uses_backend_health_not_composer_errors()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
-        var statusBlock = ExtractSourceBlock(component, "private string AgentStatusClass", "private string AuthReturnUrl");
+        var statusBlock = ExtractSourceBlock(component, "private string AgentStatusClass", "private string AuthDialogTitle");
 
         Assert.Contains("AgentBackendStatus.Checking", statusBlock, StringComparison.Ordinal);
         Assert.Contains("AgentBackendStatus.Offline", statusBlock, StringComparison.Ordinal);

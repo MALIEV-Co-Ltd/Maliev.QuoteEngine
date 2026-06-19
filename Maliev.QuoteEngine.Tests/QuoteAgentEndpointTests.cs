@@ -322,6 +322,47 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_WhenEditingLastTurn_TruncatesCurrentChatbotSessionBeforeResubmitting()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var initialResponse = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = quoteSessionId,
+            Message = "Quote this as an FDM plastic part.",
+            Language = "en"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
+        var chatbotSessionId = chatbot.LastSendRequest?.SessionId;
+        Assert.NotNull(chatbotSessionId);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = quoteSessionId,
+            Message = "Corrected quote request after editing the last message.",
+            Language = "en",
+            EditLastTurn = true
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(chatbotSessionId, chatbot.LastTruncatedSessionId);
+        Assert.Equal(chatbotSessionId, chatbot.LastSendRequest?.SessionId);
+        Assert.Contains("Corrected quote request after editing the last message.", chatbot.LastSendRequest?.Content, StringComparison.Ordinal);
+        Assert.Equal(new[] { "initiate", "send", "truncate", "send" }, chatbot.Operations);
+    }
+
+    [Fact]
     public async Task Agent_message_instructs_chatbot_to_reply_only_in_requested_language()
     {
         var chatbot = new RecordingChatbotServiceClient();
@@ -426,6 +467,73 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains("bracket", final.Response.AssistantText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains(final.Response.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
         Assert.False(string.IsNullOrWhiteSpace(chatbot.LastStreamRequest?.QuoteAgentContextToken));
+    }
+
+    [Fact]
+    public async Task Agent_message_stream_with_edit_last_turn_truncates_chatbot_turn_before_resubmitting()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                SessionId = Guid.NewGuid(),
+                Message = "Actually quote this as CNC aluminum, not FDM plastic.",
+                Language = "en",
+                EditLastTurn = true
+            }, options: JsonOptions)
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f"), chatbot.LastTruncatedSessionId);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        Assert.Contains("CNC aluminum", chatbot.LastStreamRequest!.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(new[] { "initiate", "truncate", "stream" }, chatbot.Operations);
+    }
+
+    [Fact]
+    public async Task Agent_message_with_edit_last_turn_does_not_resubmit_when_truncate_fails()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            TruncateLastTurnResult = false
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = Guid.NewGuid(),
+            Message = "Correct the previous manufacturing plan.",
+            Language = "en",
+            EditLastTurn = true
+        }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var turn = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+        Assert.NotNull(turn);
+        Assert.Contains("couldn't safely roll back", turn!.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(chatbot.LastSendRequest);
+        Assert.Equal(new[] { "initiate", "truncate" }, chatbot.Operations);
     }
 
     [Fact]
@@ -3892,11 +4000,17 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         public Guid? LastConversationMessagesSessionId { get; private set; }
 
+        public Guid? LastTruncatedSessionId { get; private set; }
+
+        public List<string> Operations { get; } = [];
+
         public ChatbotConversationMessagesResponse? ConversationMessages { get; init; }
 
         public bool ThrowStreamException { get; init; }
 
         public bool HealthAvailable { get; init; } = true;
+
+        public bool TruncateLastTurnResult { get; init; } = true;
 
         public Task<bool> CheckReadinessAsync(CancellationToken cancellationToken)
         {
@@ -3908,6 +4022,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             CancellationToken cancellationToken)
         {
             LastInitiateRequest = request;
+            Operations.Add("initiate");
             return Task.FromResult<ChatbotSessionResponse?>(new ChatbotSessionResponse
             {
                 SessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f"),
@@ -3922,6 +4037,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             CancellationToken cancellationToken)
         {
             LastSendRequest = request;
+            Operations.Add("send");
             return Task.FromResult<ChatbotMessageResponse?>(new ChatbotMessageResponse
             {
                 MessageId = Guid.Parse("d127db4e-1106-4106-8f6b-32c6b467e8ad"),
@@ -3937,6 +4053,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             [EnumeratorCancellation] CancellationToken cancellationToken)
         {
             LastStreamRequest = request;
+            Operations.Add("stream");
             await Task.CompletedTask;
             if (ThrowStreamException)
             {
@@ -3978,7 +4095,9 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         public Task<bool> TruncateLastTurnAsync(Guid sessionId, CancellationToken cancellationToken)
         {
-            return Task.FromResult(true);
+            LastTruncatedSessionId = sessionId;
+            Operations.Add("truncate");
+            return Task.FromResult(TruncateLastTurnResult);
         }
 
         public Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken)

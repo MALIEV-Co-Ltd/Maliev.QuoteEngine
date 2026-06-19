@@ -1889,6 +1889,7 @@
     private Guid _loadedSessionId;
     private string _draftMessage = string.Empty;
     private AgentMessageRow? _replyTo;
+    private AgentMessageRow? _editingLastUserMessage;
     private string? _error;
     private bool _sending;
     private bool _exportingPdf;
@@ -2622,8 +2623,13 @@
             return;
         }
 
-        var replyTo = _replyTo;
+        var editLastTurn = _editingLastUserMessage is not null &&
+            ReferenceEquals(_editingLastUserMessage, LastUserMessage);
+        var removedEditedTurn = editLastTurn ? RemoveLocalLastTurn(_editingLastUserMessage!) : null;
+
+        var replyTo = editLastTurn ? null : _replyTo;
         _replyTo = null;
+        _editingLastUserMessage = null;
         _sending = true;
         _error = null;
         _composerMenuOpen = false;
@@ -2631,10 +2637,11 @@
         _customerQuestion = null;
         _pendingComposerAttachments.Clear();
         EnsureLocalProjectFromMessage(message);
-        _messages.Add(new AgentMessageRow("user", message, attachments: pendingAttachments)
+        var userMessage = new AgentMessageRow("user", message, attachments: pendingAttachments)
         {
             ReplyToPreview = replyTo is null ? null : ReplyChipLabel(replyTo),
-        });
+        };
+        _messages.Add(userMessage);
         var assistantMessage = new AgentMessageRow("assistant", string.Empty);
         _messages.Add(assistantMessage);
         var generatedViewerArtifactIdsBeforeTurn = GeneratedViewerArtifactIds(_artifacts);
@@ -2649,7 +2656,8 @@
                 Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en",
                 Attachments = pendingAttachments.Select(attachment => attachment.ToAgentAttachment()).ToList(),
                 ReplyToMessageId = replyTo?.Id,
-                ReplyToPreview = replyTo is null ? null : BuildReplyPreview(replyTo)
+                ReplyToPreview = replyTo is null ? null : BuildReplyPreview(replyTo),
+                EditLastTurn = editLastTurn
             }))
             {
                 if (!assistantMessage.IsProcessing)
@@ -2697,19 +2705,23 @@
                     _error = string.IsNullOrWhiteSpace(streamEvent.Error)
                         ? Text("The agent could not complete this response.", "ผู้ช่วยไม่สามารถตอบกลับได้สำเร็จ")
                         : streamEvent.Error;
-                    _messages.Remove(assistantMessage);
+                    RestoreEditedLastTurnOnFailure(editLastTurn, userMessage, assistantMessage, removedEditedTurn);
                 }
             }
         }
         catch (QuoteEngineApiException ex)
         {
             _error = ex.UserMessage;
-            _messages.Remove(assistantMessage);
+            RestoreEditedLastTurnOnFailure(editLastTurn, userMessage, assistantMessage, removedEditedTurn);
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
-            _messages.Remove(assistantMessage);
-            if (TryBuildLocalDemoTurn(message, out var demoTurn))
+            RestoreEditedLastTurnOnFailure(editLastTurn, userMessage, assistantMessage, removedEditedTurn);
+            if (editLastTurn)
+            {
+                RequestScrollToLatestMessage();
+            }
+            else if (TryBuildLocalDemoTurn(message, out var demoTurn))
             {
                 AddLocalDemoTurn(demoTurn);
             }
@@ -2725,6 +2737,35 @@
             await InvokeAsync(StateHasChanged);
             await FocusComposerAsync();
         }
+    }
+
+    private List<AgentMessageRow> RemoveLocalLastTurn(AgentMessageRow lastUserMessage)
+    {
+        var index = _messages.IndexOf(lastUserMessage);
+        if (index < 0)
+        {
+            return [];
+        }
+
+        var removedMessages = _messages.Skip(index).ToList();
+        _messages.RemoveRange(index, _messages.Count - index);
+        return removedMessages;
+    }
+
+    private void RestoreEditedLastTurnOnFailure(
+        bool editLastTurn,
+        AgentMessageRow userMessage,
+        AgentMessageRow assistantMessage,
+        IReadOnlyList<AgentMessageRow>? removedEditedTurn)
+    {
+        _messages.Remove(assistantMessage);
+        if (!editLastTurn || removedEditedTurn is null || removedEditedTurn.Count == 0)
+        {
+            return;
+        }
+
+        _messages.Remove(userMessage);
+        _messages.AddRange(removedEditedTurn);
     }
 
     private IReadOnlyList<ComposerAttachmentPreview> BuildPendingMessageAttachments()
@@ -2890,6 +2931,8 @@
         }
 
         _draftMessage = message.Content;
+        _replyTo = null;
+        _editingLastUserMessage = message;
         _pendingComposerAttachments.Clear();
         _pendingComposerAttachments.AddRange(message.Attachments.Select(attachment => attachment with { }));
 

@@ -69,6 +69,9 @@ public sealed class QuoteAgentMessageRequest
     /// <summary>Gets or sets a short snippet of the replied-to message, used for agent context and the reply chip.</summary>
     [StringLength(400)]
     public string? ReplyToPreview { get; set; }
+
+    /// <summary>Gets or sets whether the previous customer turn should be removed before this message is submitted.</summary>
+    public bool EditLastTurn { get; set; }
 }
 
 /// <summary>
