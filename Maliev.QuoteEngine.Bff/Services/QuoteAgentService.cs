@@ -75,7 +75,9 @@ internal sealed class QuoteAgentService(
     IHubContext<QuoteNotificationsHub> hubContext,
     IConfiguration configuration,
     ILogger<QuoteAgentService> logger,
-    QuoteUploadServiceClient uploadClient) : IQuoteAgentService
+    QuoteUploadServiceClient uploadClient,
+    IQuotationServiceClient quotationClient,
+    IMaterialCatalogClient materialCatalog) : IQuoteAgentService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] ArtifactContextMetadataKeys =
@@ -541,7 +543,7 @@ internal sealed class QuoteAgentService(
         return Task.FromResult<object>(result);
     }
 
-    public Task<QuoteAgentActionResultResponse?> ConfirmActionAsync(
+    public async Task<QuoteAgentActionResultResponse?> ConfirmActionAsync(
         Guid actionId,
         QuoteAgentConfirmActionRequest request,
         CancellationToken cancellationToken)
@@ -550,10 +552,10 @@ internal sealed class QuoteAgentService(
         {
             if (sessionStore.TryGetCompletedAction(actionId, out var completed))
             {
-                return Task.FromResult<QuoteAgentActionResultResponse?>(completed);
+                return completed;
             }
 
-            return Task.FromResult<QuoteAgentActionResultResponse?>(null);
+            return null;
         }
 
         var customerId = ResolveCustomerId();
@@ -573,7 +575,7 @@ internal sealed class QuoteAgentService(
             "archive_project" => ExecuteArchiveProject(state, customerId!.Value, action),
             "achieve_project" => ExecuteAchieveProject(state, customerId!.Value, action),
             "account_profile_update" => ExecuteAccountProfileUpdate(state, customerId!.Value, action),
-            "formal_quote" => ExecuteFormalQuote(state, customerId!.Value, action),
+            "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
             "quote_approval" => ExecuteQuoteApproval(state),
             "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
             "create_order" => ExecuteCreateOrder(state, customerId!.Value, action),
@@ -589,7 +591,7 @@ internal sealed class QuoteAgentService(
             State = ToStateResponse(state)
         };
         sessionStore.CompleteAction(state, actionId, result);
-        return Task.FromResult<QuoteAgentActionResultResponse?>(result);
+        return result;
     }
 
     public Task RelayThinkingStepAsync(
@@ -2430,11 +2432,109 @@ internal sealed class QuoteAgentService(
         return $"Account profile updated for {updated.DisplayName}.";
     }
 
-    private string ExecuteFormalQuote(QuoteAgentSessionState state, Guid customerId, QuoteAgentPendingAction action)
+    private async Task<string> ExecuteFormalQuoteAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
-        state.FormalQuote = prototypeStore.GenerateQuote(customerId);
+        var request = await BuildFormalQuoteRequestAsync(state, customerId, action, cancellationToken);
+        var result = await quotationClient.CreateAsync(request, cancellationToken);
+        if (result is null)
+        {
+            throw new InvalidOperationException("QuotationService did not create the formal quote.");
+        }
+
+        state.FormalQuote = new GenerateFormalQuoteResponse(
+            result.Id,
+            result.QuotationNumber,
+            string.Empty,
+            result.Status);
         UpsertArtifact(state, "formal_quote", state.FormalQuote.QuoteNumber, state.FormalQuote.Status, null, state.FormalQuote.PdfUrl);
         return $"Formal quote {state.FormalQuote.QuoteNumber} is ready.";
+    }
+
+    private async Task<QuotationCreateRequest> BuildFormalQuoteRequestAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
+    {
+        var estimateLinesByPartId = state.Estimate?.Lines.ToDictionary(line => line.PartId) ?? [];
+        var lineItems = new List<QuotationLineItemCreate>();
+        foreach (var part in state.Parts)
+        {
+            var materialId = await materialCatalog.ResolveMaterialIdAsync(
+                part.ProcessId,
+                part.MaterialId,
+                cancellationToken);
+            var unitPrice = estimateLinesByPartId.TryGetValue(part.PartId, out var estimateLine)
+                ? estimateLine.UnitPrice
+                : 0m;
+
+            lineItems.Add(new QuotationLineItemCreate
+            {
+                MaterialServiceId = materialId,
+                Quantity = Math.Max(1, part.Quantity),
+                UnitPrice = unitPrice,
+                ManufacturingProcess = part.ProcessId,
+                Notes = BuildFormalQuoteLineNotes(part, action)
+            });
+        }
+
+        if (lineItems.Count == 0)
+        {
+            lineItems.Add(new QuotationLineItemCreate
+            {
+                MaterialServiceId = await materialCatalog.ResolveMaterialIdAsync("fdm", "pla", cancellationToken),
+                Quantity = 1,
+                UnitPrice = state.Estimate?.Total ?? 0m,
+                ManufacturingProcess = "fdm",
+                Notes = ReadString(action.Arguments, "requirements") ?? "Make Studio quote request"
+            });
+        }
+
+        var today = DateTime.UtcNow.Date;
+        return new QuotationCreateRequest
+        {
+            CustomerId = customerId,
+            BillingIdentityType = 1,
+            ValidityPeriodStart = today,
+            ValidityPeriodEnd = today.AddDays(14),
+            GeneratedByDisplayName = "Make Studio",
+            LineItems = lineItems
+        };
+    }
+
+    private static string BuildFormalQuoteLineNotes(QuotePartDraftDto part, QuoteAgentPendingAction action)
+    {
+        var notes = new List<string>
+        {
+            part.FileName,
+            $"process {part.ProcessId}",
+            $"material {part.MaterialId}"
+        };
+
+        AddQuoteNoteIfPresent(notes, "requirements", ReadString(action.Arguments, "requirements"));
+        AddQuoteNoteIfPresent(notes, "finish", part.FinishCode ?? part.FinishId);
+        AddQuoteNoteIfPresent(notes, "tolerance", part.ToleranceCode ?? part.ToleranceId);
+        AddQuoteNoteIfPresent(notes, "inspection", part.InspectionLevel);
+        AddQuoteNoteIfPresent(notes, "roughness", part.RoughnessCode);
+        AddQuoteNoteIfPresent(notes, "notes", part.PartNotes);
+        if (part.DfmAcknowledged)
+        {
+            notes.Add("DFM acknowledged");
+        }
+
+        return string.Join("; ", notes);
+    }
+
+    private static void AddQuoteNoteIfPresent(List<string> notes, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            notes.Add($"{label} {value.Trim()}");
+        }
     }
 
     private static string ExecuteQuoteApproval(QuoteAgentSessionState state)

@@ -1635,6 +1635,14 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(formalQuoteResult.State.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
         Assert.Contains(formalQuoteResult.State.Gates, gate => gate.Code == "quote_artifact_ready" && gate.Status == "passed");
         Assert.Contains(formalQuoteResult.State.Gates, gate => gate.Code == "quote_approved" && gate.Status == "pending");
+        var createRequest = factory.LastQuotationCreateRequest;
+        Assert.NotNull(createRequest);
+        Assert.NotEqual(Guid.Empty, createRequest.CustomerId);
+        var quotedLine = Assert.Single(createRequest.LineItems);
+        Assert.Equal(25, quotedLine.Quantity);
+        Assert.True(quotedLine.UnitPrice > 0);
+        Assert.NotEqual(Guid.Empty, quotedLine.MaterialServiceId);
+        Assert.Contains("fixture.step", quotedLine.Notes, StringComparison.OrdinalIgnoreCase);
 
         var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
         var approvalAction = Assert.Single(approvalState.ProposedActions);

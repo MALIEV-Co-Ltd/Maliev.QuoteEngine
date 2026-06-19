@@ -35,6 +35,7 @@ namespace Maliev.QuoteEngine.Tests;
 /// </summary>
 public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Program>
 {
+    private readonly FakeQuotationServiceClient _fakeQuotationServiceClient = new();
     private readonly FakeOrderServiceClient _fakeOrderServiceClient = new();
 
     public IReadOnlyList<string> PaymentIdempotencyKeys => FakePaymentServiceClient.IdempotencyKeys.ToArray();
@@ -44,6 +45,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     public CapturedOrderDeliverySnapshot? LastOrderDeliverySnapshot => _fakeOrderServiceClient.LastDeliverySnapshot;
 
     public OrderCreateRequest? LastOrderCreateRequest => _fakeOrderServiceClient.LastCreateRequest;
+
+    public QuotationCreateRequest? LastQuotationCreateRequest => _fakeQuotationServiceClient.LastCreateRequest;
 
     public void FailNextOrderStatus(string status) => _fakeOrderServiceClient.FailNextStatus(status);
 
@@ -78,7 +81,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             services.AddSingleton<IMaterialCatalogClient>(new FakeMaterialCatalogClient());
 
             services.RemoveAll<IQuotationServiceClient>();
-            services.AddSingleton<IQuotationServiceClient>(new FakeQuotationServiceClient());
+            services.AddSingleton<IQuotationServiceClient>(_fakeQuotationServiceClient);
 
             services.RemoveAll<IOrderServiceClient>();
             services.AddSingleton<IOrderServiceClient>(_fakeOrderServiceClient);
@@ -321,8 +324,11 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     {
         private readonly ConcurrentDictionary<Guid, QuotationCreatedResult> _quotes = new();
 
+        public QuotationCreateRequest? LastCreateRequest { get; private set; }
+
         public Task<QuotationCreatedResult?> CreateAsync(QuotationCreateRequest request, CancellationToken ct = default)
         {
+            LastCreateRequest = request;
             var result = new QuotationCreatedResult
             {
                 Id = Guid.NewGuid(),
