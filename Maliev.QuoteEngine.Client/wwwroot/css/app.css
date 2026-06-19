@@ -8298,6 +8298,16 @@ p {
     box-shadow: var(--maliev-shadow-ring);
 }
 
+.quote-history-row--version {
+    grid-template-columns: minmax(0, 1fr) minmax(160px, auto) auto;
+}
+
+.quote-history-row--version > div {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
 .quote-history-row > a:first-child {
     display: grid;
     gap: 3px;
@@ -9425,6 +9435,15 @@ textarea::placeholder {
     .order-shipping-form,
     .order-shipping-rate {
         grid-template-columns: 1fr;
+    }
+
+    .quote-history-row--version {
+        grid-template-columns: 1fr;
+    }
+
+    .quote-history-row--version .qe-secondary-btn {
+        justify-content: center;
+        width: 100%;
     }
 
     .quote-topbar-inner {

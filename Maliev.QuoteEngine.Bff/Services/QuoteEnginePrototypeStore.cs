@@ -789,14 +789,29 @@ public sealed class QuoteEnginePrototypeStore
 
     public GenerateFormalQuoteResponse GenerateQuote(Guid customerId)
     {
+        var versionId = Guid.NewGuid();
+        var pdfUrl = "/quote/v1/account/quotes/sample.pdf";
+        var now = DateTimeOffset.UtcNow;
         var quote = new CustomerQuoteSummaryDto(
             Guid.NewGuid(),
             $"MQ-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
             "Ready for approval",
             12_500m,
             "THB",
-            DateTimeOffset.UtcNow,
-            "/quote/v1/account/quotes/sample.pdf");
+            now,
+            pdfUrl,
+            [
+                new CustomerQuoteVersionSummaryDto(
+                    versionId,
+                    1,
+                    12_500m,
+                    "THB",
+                    "Initial customer quote",
+                    pdfUrl,
+                    null,
+                    "Make Studio",
+                    now)
+            ]);
         _quotes[quote.QuoteId] = new CustomerQuoteRecord(customerId, quote);
         return new GenerateFormalQuoteResponse(quote.QuoteId, quote.QuoteNumber, quote.PdfUrl, quote.Status);
     }

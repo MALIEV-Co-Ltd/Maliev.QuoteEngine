@@ -405,7 +405,20 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 .Where(q => q.CustomerId == customerId)
                 .Select(q => new CustomerQuoteSummaryDto(
                     q.Id, q.QuotationNumber, q.Status, q.Total, q.CurrencyCode,
-                    new DateTimeOffset(q.UpdatedAt, TimeSpan.Zero), string.Empty))
+                    new DateTimeOffset(q.UpdatedAt, TimeSpan.Zero),
+                    q.PdfArtifactUrl ?? string.Empty,
+                    [
+                        new CustomerQuoteVersionSummaryDto(
+                            Guid.NewGuid(),
+                            1,
+                            q.Total,
+                            q.CurrencyCode,
+                            "Initial test quote",
+                            q.PdfArtifactUrl,
+                            q.PdfArtifactStoragePath,
+                            "Make Studio",
+                            new DateTimeOffset(q.UpdatedAt, TimeSpan.Zero))
+                    ]))
                 .ToArray();
             return Task.FromResult(result);
         }
@@ -2777,7 +2790,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var customerAOrders = await customerA.GetFromJsonAsync<CustomerOrderSummaryDto[]>("/quote/v1/account/orders");
         Assert.NotNull(customerAQuotes);
         Assert.NotNull(customerAOrders);
-        Assert.Contains(customerAQuotes, item => item.QuoteId == quote.QuoteId);
+        var customerQuote = Assert.Single(customerAQuotes, item => item.QuoteId == quote.QuoteId);
+        var customerQuoteVersion = Assert.Single(customerQuote.Versions ?? []);
+        Assert.Equal(1, customerQuoteVersion.VersionNumber);
+        Assert.Equal(customerQuote.Total, customerQuoteVersion.Total);
+        Assert.False(string.IsNullOrWhiteSpace(customerQuoteVersion.PdfUrl));
         Assert.Single(customerAOrders);
 
         // Customer B sees no quotes or orders

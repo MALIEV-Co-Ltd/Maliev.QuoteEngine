@@ -76,6 +76,17 @@ public sealed class CustomerMemoryQueryResponse
     public List<CustomerMemoryResponse> Items { get; set; } = [];
 }
 
+public sealed record CustomerQuoteVersionSummaryDto(
+    Guid VersionId,
+    int VersionNumber,
+    decimal Total,
+    string Currency,
+    string? ChangeSummary,
+    string? PdfUrl,
+    string? PdfStoragePath,
+    string? GeneratedByDisplayName,
+    DateTimeOffset CreatedAt);
+
 public sealed record CustomerQuoteSummaryDto(
     Guid QuoteId,
     string QuoteNumber,
@@ -83,7 +94,8 @@ public sealed record CustomerQuoteSummaryDto(
     decimal Total,
     string Currency,
     DateTimeOffset UpdatedAt,
-    string PdfUrl);
+    string PdfUrl,
+    IReadOnlyList<CustomerQuoteVersionSummaryDto>? Versions = null);
 
 public sealed record CustomerOrderSummaryDto(
     Guid OrderId,

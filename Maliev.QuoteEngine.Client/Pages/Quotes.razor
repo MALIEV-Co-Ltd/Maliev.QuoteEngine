@@ -53,6 +53,40 @@ else
             </dl>
         </section>
 
+        @if ((_quote.Versions?.Count ?? 0) > 0)
+        {
+            <section class="quote-detail-card" data-quote-section="versions">
+                <div class="order-panel-head">
+                    <span>@Text("Quote revision history", "ประวัติการแก้ไขใบเสนอราคา")</span>
+                    <strong>@_quote.Versions!.Count</strong>
+                </div>
+                <div class="quote-history-list">
+                    @foreach (var version in _quote.Versions.OrderByDescending(version => version.VersionNumber))
+                    {
+                        <div class="quote-history-row quote-history-row--version">
+                            <div>
+                                <strong>@FormatVersionLabel(version)</strong>
+                                <small>@FormatDate(version.CreatedAt)</small>
+                            </div>
+                            <div>
+                                <span>@FormatMoney(version.Total, version.Currency)</span>
+                                @if (!string.IsNullOrWhiteSpace(version.ChangeSummary))
+                                {
+                                    <small>@version.ChangeSummary</small>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(version.PdfUrl))
+                            {
+                                <a class="qe-secondary-btn" href="@version.PdfUrl" target="_blank" rel="noopener">
+                                    @Text("Open PDF", "เปิด PDF")
+                                </a>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+
         <section class="quote-detail-card" data-quote-section="actions">
             <div class="order-panel-head">
                 <span>@Text("Quote actions", "การดำเนินการกับใบเสนอราคา")</span>
@@ -180,6 +214,14 @@ else
     private string FormatDate(DateTimeOffset value)
     {
         return value.ToLocalTime().ToString("d MMM yyyy", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)));
+    }
+
+    private string FormatVersionLabel(CustomerQuoteVersionSummaryDto version)
+    {
+        var label = $"{Text("Version", "เวอร์ชัน")} {version.VersionNumber}";
+        return string.IsNullOrWhiteSpace(version.GeneratedByDisplayName)
+            ? label
+            : $"{label} - {version.GeneratedByDisplayName}";
     }
 
     private static bool IsApprovedQuote(string status)

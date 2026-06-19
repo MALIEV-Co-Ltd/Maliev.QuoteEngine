@@ -40,8 +40,15 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
 
     private sealed class QsVersionSummary
     {
+        public Guid Id { get; set; }
+        public int VersionNumber { get; set; }
+        public decimal TotalPrice { get; set; }
+        public string CurrencyCode { get; set; } = "THB";
+        public string? ChangeSummary { get; set; }
         public string? PdfArtifactUrl { get; set; }
         public string? PdfArtifactStoragePath { get; set; }
+        public string? GeneratedByDisplayName { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 
     private sealed class QsPagedResponse
@@ -118,7 +125,18 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
                 q.Total,
                 q.CurrencyCode,
                 new DateTimeOffset(q.UpdatedAt, TimeSpan.Zero),
-                q.Versions.FirstOrDefault()?.PdfArtifactUrl ?? string.Empty))
+                q.Versions.FirstOrDefault()?.PdfArtifactUrl ?? string.Empty,
+                q.Versions.Select(version => new CustomerQuoteVersionSummaryDto(
+                    version.Id,
+                    version.VersionNumber,
+                    version.TotalPrice,
+                    version.CurrencyCode,
+                    version.ChangeSummary,
+                    version.PdfArtifactUrl,
+                    version.PdfArtifactStoragePath,
+                    version.GeneratedByDisplayName,
+                    new DateTimeOffset(version.CreatedAt, TimeSpan.Zero)))
+                .ToArray()))
             .ToArray();
         }
         catch (OperationCanceledException) { throw; }
