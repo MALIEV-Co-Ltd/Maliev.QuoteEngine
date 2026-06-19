@@ -48,6 +48,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     public OrderCreateRequest? LastOrderCreateRequest => _fakeOrderServiceClient.LastCreateRequest;
 
+    public IReadOnlyList<CapturedOrderStatusUpdate> OrderStatusUpdates => _fakeOrderServiceClient.StatusUpdates.ToArray();
+
     public QuotationCreateRequest? LastQuotationCreateRequest => _fakeQuotationServiceClient.LastCreateRequest;
 
     public CapturedProjectDraftCreate? LastProjectDraftCreate => _fakeProjectServiceClient.LastCreate;
@@ -148,6 +150,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         string? DeliveryContactName,
         string? DeliveryContactPhone,
         string? DeliveryContactEmail);
+
+    public sealed record CapturedOrderStatusUpdate(string OrderNumber, string Status);
 
     public sealed record CapturedPaymentInitiation(
         string CustomerId,
@@ -675,6 +679,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         private readonly ConcurrentDictionary<string, CustomerOrderDetailDto> _ordersByNumber = new();
         private string? _statusToFailOnce;
 
+        public ConcurrentQueue<CapturedOrderStatusUpdate> StatusUpdates { get; } = new();
+
         public CapturedOrderDeliverySnapshot? LastDeliverySnapshot { get; private set; }
 
         public OrderCreateRequest? LastCreateRequest { get; private set; }
@@ -782,6 +788,28 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             {
                 _statusToFailOnce = null;
                 return Task.FromResult(false);
+            }
+
+            StatusUpdates.Enqueue(new CapturedOrderStatusUpdate(orderId, status));
+            if (_ordersByNumber.TryGetValue(orderId, out var detail))
+            {
+                var updatedAt = DateTimeOffset.UtcNow;
+                var paymentStatus = string.Equals(status, "Paid", StringComparison.OrdinalIgnoreCase)
+                    ? "Paid"
+                    : string.Equals(status, "Accepted", StringComparison.OrdinalIgnoreCase)
+                        ? "Unpaid"
+                        : detail.PaymentStatus;
+                _ordersByNumber[orderId] = detail with
+                {
+                    CurrentStatus = status,
+                    PaymentStatus = paymentStatus,
+                    UpdatedAt = updatedAt,
+                    StatusHistory =
+                    [
+                        .. detail.StatusHistory,
+                        new OrderStatusEntryDto(status, $"Order advanced to {status}.", updatedAt)
+                    ]
+                };
             }
 
             return Task.FromResult(true);

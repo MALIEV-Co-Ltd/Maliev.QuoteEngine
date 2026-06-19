@@ -1422,9 +1422,15 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             action.Contains("order", StringComparison.OrdinalIgnoreCase));
 
         var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        var statusCountBeforeOrderConfirmation = factory.OrderStatusUpdates.Count;
         await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
 
         var checkoutSummary = await GetProjectSummaryAsync(client, sessionId);
+        Assert.Equal("Accepted", checkoutSummary.CurrentOrderStatus);
+        var newStatusUpdates = factory.OrderStatusUpdates.Skip(statusCountBeforeOrderConfirmation).ToArray();
+        Assert.Equal(
+            ["Reviewing", "Reviewed", "Quoted", "Accepted"],
+            newStatusUpdates.Select(update => update.Status).ToArray());
         Assert.Contains(checkoutSummary.NextActions, action =>
             action.Contains("checkout", StringComparison.OrdinalIgnoreCase) ||
             action.Contains("billing", StringComparison.OrdinalIgnoreCase));

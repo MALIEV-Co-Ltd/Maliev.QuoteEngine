@@ -2733,7 +2733,8 @@ internal sealed class QuoteAgentService(
             throw new InvalidOperationException("OrderService did not create the manufacturing order.");
         }
 
-        foreach (var status in new[] { "Reviewing", "Reviewed", "Quoted" })
+        var accepted = false;
+        foreach (var status in new[] { "Reviewing", "Reviewed", "Quoted", "Accepted" })
         {
             var advanced = await orderClient.AddStatusAsync(result.OrderNumber, status, cancellationToken);
             if (!advanced)
@@ -2743,9 +2744,16 @@ internal sealed class QuoteAgentService(
                     result.OrderNumber,
                     status);
             }
+            else if (status.Equals("Accepted", StringComparison.OrdinalIgnoreCase))
+            {
+                accepted = true;
+            }
         }
 
-        state.Order = new CreateManufacturingOrderResponse(result.OrderId, result.OrderNumber, result.Status);
+        state.Order = new CreateManufacturingOrderResponse(
+            result.OrderId,
+            result.OrderNumber,
+            accepted ? "Accepted" : result.Status);
         UpsertArtifact(state, "order", state.Order.OrderNumber, state.Order.Status, null, null);
         SetArtifactMetadata(state, "order", BuildOrderSummaryMetadata(state));
         return $"Manufacturing order {state.Order.OrderNumber} is created.";
