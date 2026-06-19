@@ -900,8 +900,8 @@ public sealed class QuoteController(
 
         // Build return/cancel URLs from the current request so the redirect lands back in the SPA.
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
-        var returnUrl = $"{baseUrl}/payment/success?orderId={Uri.EscapeDataString(request.OrderNumber)}";
-        var cancelUrl = $"{baseUrl}/payment/cancel?orderId={Uri.EscapeDataString(request.OrderNumber)}";
+        var returnUrl = $"{baseUrl}/payment/success?orderNumber={Uri.EscapeDataString(request.OrderNumber)}";
+        var cancelUrl = $"{baseUrl}/payment/cancel?orderNumber={Uri.EscapeDataString(request.OrderNumber)}";
         var idempotencyKey = $"{customerId:D}:{request.OrderId:D}:{request.CheckoutAttemptId:D}";
 
         // Advance order to Accepted (customer accepted the quoted price) so that when

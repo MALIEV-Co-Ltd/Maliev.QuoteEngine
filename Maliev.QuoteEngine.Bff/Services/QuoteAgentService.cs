@@ -3000,7 +3000,7 @@ internal sealed class QuoteAgentService(
     private string BuildPaymentCallbackUrl(string outcome, string orderNumber)
     {
         var configuredBaseUrl = configuration["Web:BaseUrl"]?.Trim();
-        var path = $"/payment/{outcome}?orderId={Uri.EscapeDataString(orderNumber)}";
+        var path = $"/payment/{outcome}?orderNumber={Uri.EscapeDataString(orderNumber)}";
         if (string.IsNullOrWhiteSpace(configuredBaseUrl))
         {
             return path;

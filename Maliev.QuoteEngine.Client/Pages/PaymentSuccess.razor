@@ -26,16 +26,27 @@
     private string GetOrderNumberFromQuery()
     {
         var query = new Uri(Navigation.Uri).Query.TrimStart('?');
+        var legacyOrderId = string.Empty;
         foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
         {
             var parts = pair.Split('=', 2);
-            if (parts.Length == 2 && string.Equals(parts[0], "orderId", StringComparison.OrdinalIgnoreCase))
+            if (parts.Length != 2)
+            {
+                continue;
+            }
+
+            if (string.Equals(parts[0], "orderNumber", StringComparison.OrdinalIgnoreCase))
             {
                 return Uri.UnescapeDataString(parts[1].Replace('+', ' '));
             }
+
+            if (string.Equals(parts[0], "orderId", StringComparison.OrdinalIgnoreCase))
+            {
+                legacyOrderId = Uri.UnescapeDataString(parts[1].Replace('+', ' '));
+            }
         }
 
-        return string.Empty;
+        return legacyOrderId;
     }
 
     private string Text(string en, string th)
