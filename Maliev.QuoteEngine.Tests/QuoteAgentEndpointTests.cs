@@ -3057,6 +3057,68 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_project_summary_and_prompt_refresh_paid_order_status_from_order_service()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-paid-context@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        var orderResult = await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+        Assert.NotNull(orderResult.State);
+        var orderNumber = orderResult.State.Artifacts.Single(artifact => artifact.ArtifactType == "order").Metadata["orderNumber"];
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_checkout_details",
+            new Dictionary<string, JsonElement>
+            {
+                ["billing_address_id"] = JsonSerializer.SerializeToElement(CheckoutBillingAddressId.ToString("D"), JsonOptions),
+                ["shipping_address_id"] = JsonSerializer.SerializeToElement(CheckoutShippingAddressId.ToString("D"), JsonOptions),
+                ["phone"] = JsonSerializer.SerializeToElement("+66 2 555 0100", JsonOptions),
+                ["company"] = JsonSerializer.SerializeToElement("MALIEV Buyer Co.", JsonOptions),
+                ["vat_number"] = JsonSerializer.SerializeToElement("TH1234567890", JsonOptions),
+                ["accepted_terms"] = JsonSerializer.SerializeToElement(true, JsonOptions),
+                ["consent"] = JsonSerializer.SerializeToElement(true, JsonOptions)
+            });
+        var paymentState = await ExecuteToolForStateAsync(client, sessionId, "quote_start_payment");
+        await ConfirmActionAsync(client, Assert.Single(paymentState.ProposedActions).ActionId);
+
+        factory.MarkOrderPaid(orderNumber);
+
+        var summary = await GetProjectSummaryAsync(client, sessionId);
+        Assert.Equal(orderNumber, summary.CurrentOrderNumber);
+        Assert.Equal("Paid", summary.CurrentOrderStatus);
+        Assert.Equal("Paid", summary.CurrentPaymentStatus);
+        Assert.Contains(summary.NextActions, action =>
+            action.Contains("Payment is confirmed", StringComparison.OrdinalIgnoreCase));
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Is my payment complete?",
+            Language = "en"
+        }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains("paymentStatus=Paid", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("currentStatus=Paid", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Agent_auth_handoff_lists_google_passkey_and_email_fallback_for_anonymous_customer()
     {
         using var client = factory.CreateClient();

@@ -502,6 +502,15 @@ public sealed class QuoteAgentProjectSummaryResponse
     /// <summary>Gets or sets the current estimate currency, when pricing exists.</summary>
     public string? EstimateCurrency { get; set; }
 
+    /// <summary>Gets or sets the current manufacturing order number, when an order exists.</summary>
+    public string? CurrentOrderNumber { get; set; }
+
+    /// <summary>Gets or sets the latest customer-visible order status, when available.</summary>
+    public string? CurrentOrderStatus { get; set; }
+
+    /// <summary>Gets or sets the latest customer-visible payment status, when available.</summary>
+    public string? CurrentPaymentStatus { get; set; }
+
     /// <summary>Gets or sets passed gate codes for agent reasoning.</summary>
     public List<string> PassedGateCodes { get; set; } = [];
 

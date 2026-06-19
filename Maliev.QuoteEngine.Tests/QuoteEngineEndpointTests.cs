@@ -56,6 +56,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     public void FailNextOrderStatus(string status) => _fakeOrderServiceClient.FailNextStatus(status);
 
+    public void MarkOrderPaid(string orderNumber) => _fakeOrderServiceClient.MarkPaid(orderNumber);
+
     public void ClearPaymentIdempotencyKeys()
     {
         while (FakePaymentServiceClient.IdempotencyKeys.TryDequeue(out _))
@@ -678,6 +680,27 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         public OrderCreateRequest? LastCreateRequest { get; private set; }
 
         public void FailNextStatus(string status) => _statusToFailOnce = status;
+
+        public void MarkPaid(string orderNumber)
+        {
+            if (!_ordersByNumber.TryGetValue(orderNumber, out var detail))
+            {
+                return;
+            }
+
+            var paidAt = DateTimeOffset.UtcNow;
+            _ordersByNumber[orderNumber] = detail with
+            {
+                CurrentStatus = "Paid",
+                PaymentStatus = "Paid",
+                UpdatedAt = paidAt,
+                StatusHistory =
+                [
+                    .. detail.StatusHistory,
+                    new OrderStatusEntryDto("Paid", "Payment confirmed.", paidAt)
+                ]
+            };
+        }
 
         public Task<OrderCreatedResult?> CreateAsync(OrderCreateRequest request, CancellationToken ct = default)
         {

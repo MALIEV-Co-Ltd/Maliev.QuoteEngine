@@ -95,6 +95,7 @@ internal sealed class QuoteAgentService(
         "transactionId",
         "paymentUrl",
         "paymentStatus",
+        "currentStatus",
         "amount",
         "total",
         "currency",
@@ -138,6 +139,7 @@ internal sealed class QuoteAgentService(
 
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
+        await RefreshOrderStatusAsync(state, cancellationToken);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts);
         var customerMemoryContext = await BuildCustomerMemoryContextAsync(customerId, cancellationToken);
         var chatbotResponse = await chatbotClient.SendMessageAsync(new ChatbotSendMessageRequest
@@ -223,6 +225,7 @@ internal sealed class QuoteAgentService(
         var accumulatedThought = new StringBuilder();
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
+        await RefreshOrderStatusAsync(state, cancellationToken);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts);
         var customerMemoryContext = await BuildCustomerMemoryContextAsync(customerId, cancellationToken);
         var chatbotStream = chatbotClient.SendMessageStreamAsync(new ChatbotSendMessageRequest
@@ -462,7 +465,7 @@ internal sealed class QuoteAgentService(
         var result = toolName switch
         {
             "quote_get_state" => ToStateResponse(state),
-            "quote_get_project_summary" => BuildProjectSummary(state),
+            "quote_get_project_summary" => await BuildProjectSummaryAsync(state, cancellationToken),
             "quote_get_reference_data" => prototypeStore.ReferenceData,
             "quote_get_account_context" => BuildAccountContext(state),
             "quote_get_auth_handoff" => BuildAuthHandoff(state, request.Arguments),
@@ -957,8 +960,11 @@ internal sealed class QuoteAgentService(
         }
     }
 
-    private QuoteAgentProjectSummaryResponse BuildProjectSummary(QuoteAgentSessionState state)
+    private async Task<QuoteAgentProjectSummaryResponse> BuildProjectSummaryAsync(
+        QuoteAgentSessionState state,
+        CancellationToken cancellationToken)
     {
+        await RefreshOrderStatusAsync(state, cancellationToken);
         var currentState = ToStateResponse(state);
         var blockingGates = currentState.Gates
             .Where(gate => gate.Status.Equals("blocked", StringComparison.OrdinalIgnoreCase))
@@ -975,6 +981,11 @@ internal sealed class QuoteAgentService(
             ArtifactCount = currentState.Artifacts.Count,
             EstimateTotal = currentState.Estimate?.Total,
             EstimateCurrency = currentState.Estimate?.Currency,
+            CurrentOrderNumber = state.Order?.OrderNumber,
+            CurrentOrderStatus = GetArtifactMetadataValue(currentState.Artifacts, "order", "currentStatus")
+                ?? state.Order?.Status,
+            CurrentPaymentStatus = GetArtifactMetadataValue(currentState.Artifacts, "payment", "paymentStatus")
+                ?? state.Payment?.Status,
             PassedGateCodes = currentState.Gates
                 .Where(gate => gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase))
                 .Select(gate => gate.Code)
@@ -1046,6 +1057,13 @@ internal sealed class QuoteAgentService(
         }
 
         if (state.Artifacts.Any(artifact =>
+                artifact.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(GetMetadataValue(artifact, "paymentStatus"), "Paid", StringComparison.OrdinalIgnoreCase)))
+        {
+            return ["Payment is confirmed. Show the customer the order status and explain that production tracking continues on the order page."];
+        }
+
+        if (state.Artifacts.Any(artifact =>
                 artifact.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase)))
         {
             return ["Show the customer the payment handoff and track completion through payment events."];
@@ -1059,6 +1077,25 @@ internal sealed class QuoteAgentService(
         return state.Gates.Any(gate =>
             gate.Code.Equals(code, StringComparison.OrdinalIgnoreCase) &&
             gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string? GetArtifactMetadataValue(
+        IEnumerable<QuoteAgentArtifactDto> artifacts,
+        string artifactType,
+        string key)
+    {
+        return artifacts.FirstOrDefault(artifact =>
+                artifact.ArtifactType.Equals(artifactType, StringComparison.OrdinalIgnoreCase))
+            is { } artifact
+            ? GetMetadataValue(artifact, key)
+            : null;
+    }
+
+    private static string? GetMetadataValue(QuoteAgentArtifactDto artifact, string key)
+    {
+        return artifact.Metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
+            ? value
+            : null;
     }
 
     private Guid? ResolveCustomerId()
@@ -2991,7 +3028,10 @@ internal sealed class QuoteAgentService(
             throw new InvalidOperationException("PaymentService did not initiate checkout.");
         }
 
-        state.Payment = new InitiatePaymentResponse(result.TransactionId, result.PaymentUrl, result.Status);
+        state.Payment = new InitiatePaymentResponse(
+            result.TransactionId,
+            result.PaymentUrl,
+            NormalizeInitiatedPaymentStatus(result.Status));
         UpsertArtifact(state, "payment", "Payment handoff", state.Payment.Status, null, state.Payment.PaymentUrl);
         SetArtifactMetadata(state, "payment", BuildPaymentSummaryMetadata(state));
         return $"Payment handoff is ready for {state.Order.OrderNumber}.";
@@ -3020,6 +3060,77 @@ internal sealed class QuoteAgentService(
             ["orderNumber"] = state.Order?.OrderNumber ?? string.Empty,
             ["amount"] = state.Estimate?.Total.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
             ["currency"] = state.Estimate?.Currency ?? string.Empty
+        };
+    }
+
+    private async Task RefreshOrderStatusAsync(
+        QuoteAgentSessionState state,
+        CancellationToken cancellationToken)
+    {
+        if (state.Order is null || string.IsNullOrWhiteSpace(state.Order.OrderNumber))
+        {
+            return;
+        }
+
+        var detail = await orderClient.GetDetailAsync(state.Order.OrderNumber, cancellationToken);
+        if (detail is null)
+        {
+            return;
+        }
+
+        UpsertArtifact(state, "order", detail.OrderNumber, detail.CurrentStatus, null, null);
+        var orderMetadata = BuildOrderSummaryMetadata(state);
+        orderMetadata["currentStatus"] = detail.CurrentStatus;
+        orderMetadata["paymentStatus"] = detail.PaymentStatus;
+        orderMetadata["orderUpdatedAt"] = detail.UpdatedAt.ToString("O", CultureInfo.InvariantCulture);
+        SetArtifactMetadata(state, "order", orderMetadata);
+
+        if (state.Payment is null)
+        {
+            return;
+        }
+
+        var refreshedPaymentStatus = ResolveRefreshedPaymentStatus(state.Payment.Status, detail.PaymentStatus);
+        state.Payment = state.Payment with { Status = refreshedPaymentStatus };
+        UpsertArtifact(
+            state,
+            "payment",
+            string.Equals(refreshedPaymentStatus, "Paid", StringComparison.OrdinalIgnoreCase)
+                ? "Payment confirmed"
+                : "Payment handoff",
+            refreshedPaymentStatus,
+            null,
+            state.Payment.PaymentUrl);
+        var paymentMetadata = BuildPaymentSummaryMetadata(state);
+        paymentMetadata["paymentStatus"] = refreshedPaymentStatus;
+        paymentMetadata["currentStatus"] = detail.CurrentStatus;
+        paymentMetadata["orderUpdatedAt"] = detail.UpdatedAt.ToString("O", CultureInfo.InvariantCulture);
+        SetArtifactMetadata(state, "payment", paymentMetadata);
+    }
+
+    private static string ResolveRefreshedPaymentStatus(string currentPaymentStatus, string orderPaymentStatus)
+    {
+        if (string.IsNullOrWhiteSpace(orderPaymentStatus) ||
+            string.Equals(orderPaymentStatus, "Unpaid", StringComparison.OrdinalIgnoreCase))
+        {
+            return currentPaymentStatus;
+        }
+
+        return orderPaymentStatus;
+    }
+
+    private static string NormalizeInitiatedPaymentStatus(string? status)
+    {
+        return status?.Trim().ToLowerInvariant() switch
+        {
+            "0" or "1" or "pending" or "processing" => "pending",
+            "2" or "completed" or "complete" or "paid" => "Paid",
+            "3" or "failed" => "Failed",
+            "4" or "refunded" => "Refunded",
+            "5" or "partiallyrefunded" or "partially_refunded" => "PartiallyRefunded",
+            "6" or "cancelled" or "canceled" => "Cancelled",
+            "7" or "expired" => "Expired",
+            _ => string.IsNullOrWhiteSpace(status) ? "pending" : status.Trim()
         };
     }
 
