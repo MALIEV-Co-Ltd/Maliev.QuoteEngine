@@ -2324,6 +2324,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("StatusHistory", detail, StringComparison.Ordinal);
         Assert.Contains("ManufacturingMilestones", detail, StringComparison.Ordinal);
         Assert.Contains("CustomerManufacturingMilestoneDto", accountDtos, StringComparison.Ordinal);
+        Assert.Contains("MD5.HashData(Encoding.UTF8.GetBytes(value))", orderServiceClient, StringComparison.Ordinal);
+        Assert.DoesNotContain("MD5.HashData(Encoding.UTF8.GetBytes($\"order:{value}\"))", orderServiceClient, StringComparison.Ordinal);
         Assert.Contains("BuildCustomerManufacturingMilestones", orderServiceClient, StringComparison.Ordinal);
         Assert.Contains("PromisedDeliveryDate", detail, StringComparison.Ordinal);
         Assert.Contains("ActualDeliveryDate", detail, StringComparison.Ordinal);

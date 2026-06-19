@@ -78,7 +78,7 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
 
     private static Guid DeterministicGuid(string value)
     {
-        var hash = MD5.HashData(Encoding.UTF8.GetBytes($"order:{value}"));
+        var hash = MD5.HashData(Encoding.UTF8.GetBytes(value));
         return new Guid(hash);
     }
 
