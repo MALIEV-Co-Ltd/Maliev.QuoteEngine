@@ -393,6 +393,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     private sealed class FakeProjectServiceClient : IProjectServiceClient
     {
+        private readonly ConcurrentDictionary<Guid, CapturedProjectDraftCreate> _projects = new();
+        private readonly ConcurrentDictionary<Guid, List<CapturedProjectPartCreate>> _partsByProject = new();
+
         public ConcurrentQueue<CapturedProjectPartCreate> PartCreates { get; } = new();
 
         public CapturedProjectDraftCreate? LastCreate { get; private set; }
@@ -419,9 +422,11 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 projectId,
                 projectNumber);
 
+            _projects[projectId] = LastCreate;
+            var projectParts = new List<CapturedProjectPartCreate>();
             foreach (var part in request.Parts)
             {
-                PartCreates.Enqueue(new CapturedProjectPartCreate(
+                var capturedPart = new CapturedProjectPartCreate(
                     projectId,
                     part.FileName,
                     await resolveMaterialIdAsync(part, ct),
@@ -433,11 +438,77 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     part.SlaReport?.Issues.Count > 0 ||
                     part.CncReport?.Issues.Count > 0 ||
                     (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason)),
-                    part.StoragePath ?? part.ViewerStoragePath ?? part.UploadId));
+                    part.StoragePath ?? part.ViewerStoragePath ?? part.UploadId);
+                projectParts.Add(capturedPart);
+                PartCreates.Enqueue(capturedPart);
             }
 
+            _partsByProject[projectId] = projectParts;
             return new ProjectServiceDraftProjectResult(projectId, projectNumber, "Draft");
         }
+
+        public Task<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigationAsync(
+            Guid customerId,
+            CancellationToken ct = default)
+        {
+            IReadOnlyList<CustomerProjectNavItemDto> result = _projects.Values
+                .Where(project => project.CustomerId == customerId)
+                .Select(project => new CustomerProjectNavItemDto(
+                    project.ProjectServiceProjectId,
+                    project.ProjectServiceProjectNumber,
+                    project.Title,
+                    "Draft",
+                    IsPinned: false,
+                    IsArchived: false,
+                    DateTimeOffset.UtcNow))
+                .ToArray();
+
+            return Task.FromResult(result);
+        }
+
+        public Task<CustomerProjectDetailResponse?> GetProjectDetailAsync(
+            Guid customerId,
+            Guid projectId,
+            CancellationToken ct = default)
+        {
+            if (!_projects.TryGetValue(projectId, out var project) || project.CustomerId != customerId)
+            {
+                return Task.FromResult<CustomerProjectDetailResponse?>(null);
+            }
+
+            var parts = _partsByProject.TryGetValue(projectId, out var projectParts)
+                ? projectParts.Select(ToQuotePartDraft).ToArray()
+                : [];
+            var detail = new CustomerProjectDetailResponse(
+                project.ProjectServiceProjectId,
+                project.ProjectServiceProjectNumber,
+                "Draft",
+                project.Title,
+                IsPinned: false,
+                IsArchived: false,
+                DateTimeOffset.UtcNow,
+                parts);
+
+            return Task.FromResult<CustomerProjectDetailResponse?>(detail);
+        }
+
+        private static QuotePartDraftDto ToQuotePartDraft(CapturedProjectPartCreate part) =>
+            new()
+            {
+                PartId = Guid.NewGuid(),
+                FileId = Guid.Empty,
+                UploadId = part.StoragePath ?? part.FileName,
+                FileName = part.FileName,
+                ProcessId = part.ProcessId,
+                MaterialId = part.MaterialId?.ToString("D") ?? string.Empty,
+                Quantity = part.Quantity,
+                VolumeCc = 1m,
+                SurfaceAreaCm2 = 1m,
+                StoragePath = part.StoragePath,
+                Status = "Draft",
+                IsManifold = true,
+                DfmAcknowledged = part.DfmAcknowledged
+            };
     }
 
     private sealed class FakeOrderServiceClient : IOrderServiceClient
@@ -1911,6 +1982,23 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("cnc", projectPart.ProcessId);
         Assert.True(projectPart.DfmAcknowledged);
         Assert.NotEqual(Guid.Empty, projectPart.MaterialId);
+
+        var navigation = await client.GetFromJsonAsync<List<CustomerProjectNavItemDto>>("/quote/v1/projects/nav");
+        Assert.NotNull(navigation);
+        Assert.Contains(navigation, project =>
+            project.ProjectId == created.ProjectServiceProjectId &&
+            project.ProjectNumber == created.ProjectServiceProjectNumber);
+
+        var durableDetail = await client.GetFromJsonAsync<CustomerProjectDetailResponse>(
+            $"/quote/v1/projects/{created.ProjectServiceProjectId:D}");
+        Assert.NotNull(durableDetail);
+        Assert.Equal(created.ProjectServiceProjectId, durableDetail.ProjectId);
+        Assert.Equal(created.ProjectServiceProjectNumber, durableDetail.ProjectNumber);
+        var durablePart = Assert.Single(durableDetail.Parts);
+        Assert.Equal("duplicate-fixture.step", durablePart.FileName);
+        Assert.Equal("cnc", durablePart.ProcessId);
+        Assert.Equal(4, durablePart.Quantity);
+        Assert.True(durablePart.DfmAcknowledged);
 
         var duplicateResponse = await client.PostAsJsonAsync(
             $"/quote/v1/projects/{created.ProjectId:D}/duplicate",

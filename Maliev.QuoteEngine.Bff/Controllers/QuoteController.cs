@@ -507,7 +507,7 @@ public sealed class QuoteController(
         await materialCatalog.ResolveMaterialIdAsync(part.ProcessId, part.MaterialId, cancellationToken);
 
     [HttpGet("projects/nav")]
-    public ActionResult<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigation()
+    public async Task<ActionResult<IReadOnlyList<CustomerProjectNavItemDto>>> GetProjectNavigation(CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -518,11 +518,12 @@ public sealed class QuoteController(
             });
         }
 
-        return Ok(store.GetProjectNavigation(customerId));
+        var projects = await projectClient.GetProjectNavigationAsync(customerId, cancellationToken);
+        return projects.Count > 0 ? Ok(projects) : Ok(store.GetProjectNavigation(customerId));
     }
 
     [HttpGet("projects/{projectId:guid}")]
-    public ActionResult<CustomerProjectDetailResponse> GetProjectDetail(Guid projectId)
+    public async Task<ActionResult<CustomerProjectDetailResponse>> GetProjectDetail(Guid projectId, CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -533,7 +534,13 @@ public sealed class QuoteController(
             });
         }
 
-        var project = store.GetProjectDetail(customerId, projectId);
+        var project = await projectClient.GetProjectDetailAsync(customerId, projectId, cancellationToken);
+        if (project is not null)
+        {
+            return Ok(project);
+        }
+
+        project = store.GetProjectDetail(customerId, projectId);
         return project is null ? NotFound() : Ok(project);
     }
 

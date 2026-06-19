@@ -17,6 +17,12 @@ public interface IProjectServiceClient
         CreateDraftProjectRequest request,
         Func<QuotePartDraftDto, CancellationToken, Task<Guid?>> resolveMaterialIdAsync,
         CancellationToken ct = default);
+
+    /// <summary>Returns customer-scoped project navigation items from ProjectService.</summary>
+    Task<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigationAsync(Guid customerId, CancellationToken ct = default);
+
+    /// <summary>Returns a customer-scoped project detail from ProjectService.</summary>
+    Task<CustomerProjectDetailResponse?> GetProjectDetailAsync(Guid customerId, Guid projectId, CancellationToken ct = default);
 }
 
 internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServiceClient> logger) : IProjectServiceClient
@@ -80,6 +86,53 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
         catch (Exception ex)
         {
             logger.LogWarning(ex, "ProjectService draft project create failed for customer {CustomerId}.", customerId);
+            return null;
+        }
+    }
+
+    public async Task<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigationAsync(
+        Guid customerId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var paged = await http.GetFromJsonAsync<ProjectServicePagedProjectsResponse>(
+                $"/project/v1/projects?customerId={customerId:D}&pageSize=100",
+                ct);
+            return paged?.Data?
+                .Select(ToNavigationItem)
+                .OrderByDescending(project => project.UpdatedAt)
+                .ToArray() ?? [];
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ProjectService navigation lookup failed for customer {CustomerId}.", customerId);
+            return [];
+        }
+    }
+
+    public async Task<CustomerProjectDetailResponse?> GetProjectDetailAsync(
+        Guid customerId,
+        Guid projectId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var project = await http.GetFromJsonAsync<ProjectServiceProjectResponse>(
+                $"/project/v1/projects/{projectId:D}",
+                ct);
+            if (project is null || project.CustomerId != customerId)
+            {
+                return null;
+            }
+
+            return ToCustomerProjectDetail(project);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ProjectService detail lookup failed for project {ProjectId}.", projectId);
             return null;
         }
     }
@@ -209,11 +262,141 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
     private static string? FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
 
+    private static CustomerProjectNavItemDto ToNavigationItem(ProjectServiceProjectResponse project)
+    {
+        var updatedAt = project.UpdatedAt == default ? project.CreatedAt : project.UpdatedAt;
+        return new CustomerProjectNavItemDto(
+            project.Id,
+            project.ProjectNumber,
+            project.Title,
+            project.Status,
+            IsPinned: false,
+            IsArchived: IsArchivedStatus(project.Status),
+            new DateTimeOffset(updatedAt, TimeSpan.Zero));
+    }
+
+    private static CustomerProjectDetailResponse ToCustomerProjectDetail(ProjectServiceProjectResponse project)
+    {
+        var updatedAt = project.UpdatedAt == default ? project.CreatedAt : project.UpdatedAt;
+        return new CustomerProjectDetailResponse(
+            project.Id,
+            project.ProjectNumber,
+            project.Status,
+            project.Title,
+            IsPinned: false,
+            IsArchived: IsArchivedStatus(project.Status),
+            new DateTimeOffset(updatedAt, TimeSpan.Zero),
+            project.Parts.Select(ToQuotePartDraft).ToArray());
+    }
+
+    private static QuotePartDraftDto ToQuotePartDraft(ProjectServicePartResponse part)
+    {
+        return new QuotePartDraftDto
+        {
+            PartId = part.Id == Guid.Empty ? Guid.NewGuid() : part.Id,
+            FileId = part.FileId ?? Guid.Empty,
+            UploadId = part.FileReference ?? part.FileName,
+            FileName = part.FileName,
+            ProcessId = part.ProcessType,
+            MaterialId = part.MaterialCode ?? part.MaterialName ?? part.MaterialId?.ToString("D") ?? string.Empty,
+            FinishCode = part.FinishType,
+            ToleranceCode = part.Tolerance,
+            InspectionLevel = part.InspectionLevel,
+            RoughnessCode = part.RoughnessCode,
+            Color = part.Color,
+            ProcessOptionValues = new Dictionary<string, string>(part.ProcessConfig, StringComparer.OrdinalIgnoreCase),
+            HasThreadedHoles = part.HasThreadedHoles,
+            ThreadSpecification = part.ThreadedHoleSpec,
+            ThreadedHoleCount = part.ThreadedHoleCount,
+            InsertType = part.InsertType,
+            InsertCount = part.InsertCount,
+            Quantity = Math.Max(1, part.Quantity),
+            VolumeCc = Math.Max(0.01m, part.VolumeCm3 ?? 0.01m),
+            SurfaceAreaCm2 = Math.Max(0m, part.SurfaceAreaCm2 ?? 0m),
+            StoragePath = part.FileReference,
+            Status = part.Status,
+            ViewerStoragePath = part.GlbStoragePath,
+            ThumbnailUrl = part.ThumbnailUrl,
+            IsManifold = part.IsManifold ?? true,
+            DfmAcknowledged = part.DfmAcknowledged,
+            PartNotes = part.CustomNotes,
+            BodyCount = part.BodyCount,
+            SelectedBodyIndex = part.SelectedBodyIndex,
+            DrawingFiles = part.DrawingFiles.Select(ToQuoteAttachment).ToList()
+        };
+    }
+
+    private static QuotePartAttachmentDto ToQuoteAttachment(ProjectServiceAttachmentResponse attachment) =>
+        new(
+            attachment.FileName,
+            attachment.StoragePath ?? string.Empty,
+            attachment.ContentType ?? "application/octet-stream",
+            attachment.SizeBytes ?? 0,
+            "Drawing");
+
+    private static bool IsArchivedStatus(string? status) =>
+        status is not null &&
+        (status.Equals("Completed", StringComparison.OrdinalIgnoreCase) ||
+         status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase));
+
     private sealed class ProjectServiceProjectResponse
     {
         public Guid Id { get; set; }
         public string ProjectNumber { get; set; } = string.Empty;
+        public Guid CustomerId { get; set; }
+        public string Title { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public DateTime UpdatedAt { get; set; }
+        public List<ProjectServicePartResponse> Parts { get; set; } = [];
+    }
+
+    private sealed class ProjectServicePagedProjectsResponse
+    {
+        public List<ProjectServiceProjectResponse> Data { get; set; } = [];
+    }
+
+    private sealed class ProjectServicePartResponse
+    {
+        public Guid Id { get; set; }
+        public string FileName { get; set; } = string.Empty;
+        public Guid? FileId { get; set; }
+        public string? FileReference { get; set; }
+        public string? ThumbnailUrl { get; set; }
+        public string? GlbStoragePath { get; set; }
+        public string ProcessType { get; set; } = string.Empty;
+        public Guid? MaterialId { get; set; }
+        public string? MaterialName { get; set; }
+        public string? MaterialCode { get; set; }
+        public int Quantity { get; set; } = 1;
+        public string? FinishType { get; set; }
+        public string? Color { get; set; }
+        public string? Tolerance { get; set; }
+        public string? RoughnessCode { get; set; }
+        public bool DfmAcknowledged { get; set; }
+        public bool HasThreadedHoles { get; set; }
+        public string? ThreadedHoleSpec { get; set; }
+        public int ThreadedHoleCount { get; set; }
+        public string? InsertType { get; set; }
+        public int InsertCount { get; set; }
+        public string? InspectionLevel { get; set; }
+        public Dictionary<string, string> ProcessConfig { get; set; } = [];
+        public int? BodyCount { get; set; }
+        public int? SelectedBodyIndex { get; set; }
+        public string? CustomNotes { get; set; }
+        public decimal? VolumeCm3 { get; set; }
+        public decimal? SurfaceAreaCm2 { get; set; }
+        public bool? IsManifold { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public List<ProjectServiceAttachmentResponse> DrawingFiles { get; set; } = [];
+    }
+
+    private sealed class ProjectServiceAttachmentResponse
+    {
+        public string FileName { get; set; } = string.Empty;
+        public string? StoragePath { get; set; }
+        public long? SizeBytes { get; set; }
+        public string? ContentType { get; set; }
     }
 }
 

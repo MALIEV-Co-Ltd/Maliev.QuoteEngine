@@ -2176,6 +2176,38 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_resume_project_hydrates_state_from_project_service_project()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-resume-project-service@example.com");
+        var sourceSessionId = await StartPricedCadSessionAsync(client);
+
+        var draftState = await ExecuteToolForStateAsync(client, sourceSessionId, "quote_prepare_draft_project");
+        var draftAction = Assert.Single(draftState.ProposedActions);
+        var draftResult = await ConfirmActionAsync(client, draftAction.ActionId);
+        Assert.NotNull(draftResult.State);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectServiceProjectId"], out var projectServiceProjectId));
+
+        var resumed = await ExecuteToolForStateAsync(
+            client,
+            Guid.NewGuid(),
+            "quote_resume_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["project_id"] = JsonSerializer.SerializeToElement(projectServiceProjectId.ToString("D"), JsonOptions)
+            });
+
+        var resumedPart = Assert.Single(resumed.Parts);
+        Assert.Equal("fixture.step", resumedPart.FileName);
+        Assert.Equal(25, resumedPart.Quantity);
+        Assert.Contains(resumed.Artifacts, artifact =>
+            artifact.ArtifactType == "resumed_project" &&
+            artifact.Metadata["projectId"] == projectServiceProjectId.ToString("D"));
+        Assert.Contains(resumed.Gates, gate => gate.Code == "geometry_required" && gate.Status == "passed");
+    }
+
+    [Fact]
     public async Task Agent_resume_project_rejects_project_owned_by_another_customer()
     {
         await using var scopedFactory = CreateAgentFactory();

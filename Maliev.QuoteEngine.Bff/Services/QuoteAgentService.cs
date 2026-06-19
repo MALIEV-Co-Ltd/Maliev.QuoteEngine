@@ -441,7 +441,7 @@ internal sealed class QuoteAgentService(
         return BuildCustomerSearchResponse(state, customerId.Value, query, limit);
     }
 
-    public Task<object> ExecuteToolAsync(
+    public async Task<object> ExecuteToolAsync(
         string toolName,
         QuoteAgentToolRequest request,
         QuoteAgentContext context,
@@ -472,7 +472,7 @@ internal sealed class QuoteAgentService(
             "quote_get_connector_handoff" => BuildConnectorHandoff(state, request.Arguments),
             "quote_search_customer_data" => SearchCustomerDataOrGateError(state, request.Arguments),
             "quote_register_uploads" => RegisterUploadsOrGateError(state, request.Arguments),
-            "quote_resume_project" => ResumeProjectOrGateError(state, request.Arguments),
+            "quote_resume_project" => await ResumeProjectOrGateErrorAsync(state, request.Arguments, cancellationToken),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
             "quote_calculate_estimate" => CalculateEstimateOrGateError(state),
             "quote_update_checkout_details" => UpdateCheckoutDetailsOrGateError(state, request.Arguments),
@@ -543,7 +543,7 @@ internal sealed class QuoteAgentService(
             "quote_generate_3d_preview" => Generate3DPreview(state, request.Arguments),
             _ => new { error = $"Unknown QuoteEngine tool: {toolName}" }
         };
-        return Task.FromResult<object>(result);
+        return result;
     }
 
     public async Task<QuoteAgentActionResultResponse?> ConfirmActionAsync(
@@ -2133,9 +2133,10 @@ internal sealed class QuoteAgentService(
         return $"{fileSizeBytes} bytes";
     }
 
-    private object ResumeProjectOrGateError(
+    private async Task<object> ResumeProjectOrGateErrorAsync(
         QuoteAgentSessionState state,
-        Dictionary<string, JsonElement> arguments)
+        Dictionary<string, JsonElement> arguments,
+        CancellationToken cancellationToken)
     {
         var customerId = ResolveCustomerId() ?? state.CustomerId;
         if (!customerId.HasValue)
@@ -2161,8 +2162,15 @@ internal sealed class QuoteAgentService(
             };
         }
 
-        var project = prototypeStore.GetProject(customerId.Value, projectId);
-        if (project is null)
+        var project = await projectClient.GetProjectDetailAsync(customerId.Value, projectId, cancellationToken);
+        if (project is not null)
+        {
+            ResumeProjectState(state, project);
+            return ToStateResponse(state);
+        }
+
+        var prototypeProject = prototypeStore.GetProjectDetail(customerId.Value, projectId);
+        if (prototypeProject is null)
         {
             return new
             {
@@ -2173,6 +2181,12 @@ internal sealed class QuoteAgentService(
             };
         }
 
+        ResumeProjectState(state, prototypeProject);
+        return ToStateResponse(state);
+    }
+
+    private void ResumeProjectState(QuoteAgentSessionState state, CustomerProjectDetailResponse project)
+    {
         lock (state.SyncRoot)
         {
             state.Parts.Clear();
@@ -2193,7 +2207,7 @@ internal sealed class QuoteAgentService(
             }
 
             UpsertArtifact(state, "requirements_summary", "Project summary", "ready", null, null);
-            RestoreSupplementalAttachmentsFromParts(state, project.Notes);
+            RestoreSupplementalAttachmentsFromParts(state, string.Empty);
             UpsertArtifact(state, "resumed_project", project.Title, project.Status, null, null);
             state.ConfigurationConfirmed = true;
             SetArtifactMetadata(state, "resumed_project", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -2213,8 +2227,6 @@ internal sealed class QuoteAgentService(
                 UpsertArtifact(state, "pricing", "Pricing estimate", "ready", null, null);
             }
         }
-
-        return ToStateResponse(state);
     }
 
     private static void RestoreSupplementalAttachmentsFromParts(QuoteAgentSessionState state, string projectNotes)
