@@ -548,6 +548,21 @@ public sealed class QuoteAgentProjectSummaryResponse
     /// <summary>Gets or sets the latest customer-visible payment status, when available.</summary>
     public string? CurrentPaymentStatus { get; set; }
 
+    /// <summary>Gets or sets the customer-facing order detail URL, when an order exists.</summary>
+    public string? CurrentOrderUrl { get; set; }
+
+    /// <summary>Gets or sets the current or next customer-visible manufacturing milestone label.</summary>
+    public string? CurrentOrderMilestoneLabel { get; set; }
+
+    /// <summary>Gets or sets the current or next customer-visible manufacturing milestone description.</summary>
+    public string? CurrentOrderMilestoneDescription { get; set; }
+
+    /// <summary>Gets or sets the current or next customer-visible manufacturing milestone state.</summary>
+    public string? CurrentOrderMilestoneState { get; set; }
+
+    /// <summary>Gets or sets the current or next customer-visible manufacturing milestone percent.</summary>
+    public int? CurrentOrderMilestonePercent { get; set; }
+
     /// <summary>Gets or sets passed gate codes for agent reasoning.</summary>
     public List<string> PassedGateCodes { get; set; } = [];
 

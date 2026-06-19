@@ -704,6 +704,30 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 [
                     .. detail.StatusHistory,
                     new OrderStatusEntryDto("Paid", "Payment confirmed.", paidAt)
+                ],
+                ManufacturingMilestones =
+                [
+                    new CustomerManufacturingMilestoneDto(
+                        "order-received",
+                        "Order received",
+                        "We have received the order and attached customer requirements.",
+                        "complete",
+                        15,
+                        detail.CreatedAt),
+                    new CustomerManufacturingMilestoneDto(
+                        "quote-payment",
+                        "Quote and payment",
+                        "Formal quote and payment confirmation are tracked before production starts.",
+                        "complete",
+                        35,
+                        paidAt),
+                    new CustomerManufacturingMilestoneDto(
+                        "manufacturing",
+                        "Manufacturing",
+                        "The parts are queued or active on the selected manufacturing process.",
+                        "current",
+                        55,
+                        null)
                 ]
             };
         }

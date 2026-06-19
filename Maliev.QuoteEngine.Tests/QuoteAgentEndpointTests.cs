@@ -1594,6 +1594,12 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
 
         var checkoutSummary = await GetProjectSummaryAsync(client, sessionId);
         Assert.Equal("Accepted", checkoutSummary.CurrentOrderStatus);
+        Assert.False(string.IsNullOrWhiteSpace(checkoutSummary.CurrentOrderNumber));
+        Assert.Equal($"/orders/{Uri.EscapeDataString(checkoutSummary.CurrentOrderNumber!)}", checkoutSummary.CurrentOrderUrl);
+        Assert.Equal("Quote and payment", checkoutSummary.CurrentOrderMilestoneLabel);
+        Assert.Equal("current", checkoutSummary.CurrentOrderMilestoneState);
+        Assert.Equal(35, checkoutSummary.CurrentOrderMilestonePercent);
+        Assert.Contains("payment confirmation", checkoutSummary.CurrentOrderMilestoneDescription, StringComparison.OrdinalIgnoreCase);
         var newStatusUpdates = factory.OrderStatusUpdates.Skip(statusCountBeforeOrderConfirmation).ToArray();
         Assert.Equal(
             ["Reviewing", "Reviewed", "Quoted", "Accepted"],
@@ -1628,6 +1634,20 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.Contains(completeSummary.NextActions, action =>
             action.Contains("payment", StringComparison.OrdinalIgnoreCase) &&
             action.Contains("handoff", StringComparison.OrdinalIgnoreCase));
+
+        factory.MarkOrderPaid(checkoutSummary.CurrentOrderNumber!);
+
+        var paidSummary = await GetProjectSummaryAsync(client, sessionId);
+        Assert.Equal("Paid", paidSummary.CurrentOrderStatus);
+        Assert.Equal("Paid", paidSummary.CurrentPaymentStatus);
+        Assert.Equal($"/orders/{Uri.EscapeDataString(checkoutSummary.CurrentOrderNumber!)}", paidSummary.CurrentOrderUrl);
+        Assert.Equal("Manufacturing", paidSummary.CurrentOrderMilestoneLabel);
+        Assert.Equal("current", paidSummary.CurrentOrderMilestoneState);
+        Assert.Equal(55, paidSummary.CurrentOrderMilestonePercent);
+        Assert.Contains("queued", paidSummary.CurrentOrderMilestoneDescription, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(paidSummary.NextActions, action =>
+            action.Contains("order status", StringComparison.OrdinalIgnoreCase) &&
+            action.Contains("production tracking", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

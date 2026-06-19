@@ -1038,12 +1038,13 @@ internal sealed class QuoteAgentService(
         QuoteAgentSessionState state,
         CancellationToken cancellationToken)
     {
-        await RefreshOrderStatusAsync(state, cancellationToken);
+        var orderDetail = await RefreshOrderStatusAsync(state, cancellationToken);
         var currentState = ToStateResponse(state);
         var blockingGates = currentState.Gates
             .Where(gate => gate.Status.Equals("blocked", StringComparison.OrdinalIgnoreCase))
             .Select(gate => gate.Code)
             .ToList();
+        var activeMilestone = SelectActiveOrderMilestone(orderDetail);
 
         return new QuoteAgentProjectSummaryResponse
         {
@@ -1060,6 +1061,13 @@ internal sealed class QuoteAgentService(
                 ?? state.Order?.Status,
             CurrentPaymentStatus = GetArtifactMetadataValue(currentState.Artifacts, "payment", "paymentStatus")
                 ?? state.Payment?.Status,
+            CurrentOrderUrl = string.IsNullOrWhiteSpace(state.Order?.OrderNumber)
+                ? null
+                : $"/orders/{Uri.EscapeDataString(state.Order.OrderNumber)}",
+            CurrentOrderMilestoneLabel = activeMilestone?.Label,
+            CurrentOrderMilestoneDescription = activeMilestone?.Description,
+            CurrentOrderMilestoneState = activeMilestone?.State,
+            CurrentOrderMilestonePercent = activeMilestone?.Percent,
             PassedGateCodes = currentState.Gates
                 .Where(gate => gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase))
                 .Select(gate => gate.Code)
@@ -3154,19 +3162,19 @@ internal sealed class QuoteAgentService(
         };
     }
 
-    private async Task RefreshOrderStatusAsync(
+    private async Task<CustomerOrderDetailDto?> RefreshOrderStatusAsync(
         QuoteAgentSessionState state,
         CancellationToken cancellationToken)
     {
         if (state.Order is null || string.IsNullOrWhiteSpace(state.Order.OrderNumber))
         {
-            return;
+            return null;
         }
 
         var detail = await orderClient.GetDetailAsync(state.Order.OrderNumber, cancellationToken);
         if (detail is null)
         {
-            return;
+            return null;
         }
 
         UpsertArtifact(state, "order", detail.OrderNumber, detail.CurrentStatus, null, null);
@@ -3178,7 +3186,7 @@ internal sealed class QuoteAgentService(
 
         if (state.Payment is null)
         {
-            return;
+            return detail;
         }
 
         var refreshedPaymentStatus = ResolveRefreshedPaymentStatus(state.Payment.Status, detail.PaymentStatus);
@@ -3197,6 +3205,23 @@ internal sealed class QuoteAgentService(
         paymentMetadata["currentStatus"] = detail.CurrentStatus;
         paymentMetadata["orderUpdatedAt"] = detail.UpdatedAt.ToString("O", CultureInfo.InvariantCulture);
         SetArtifactMetadata(state, "payment", paymentMetadata);
+        return detail;
+    }
+
+    private static CustomerManufacturingMilestoneDto? SelectActiveOrderMilestone(CustomerOrderDetailDto? detail)
+    {
+        if (detail is null || detail.ManufacturingMilestones.Count == 0)
+        {
+            return null;
+        }
+
+        return detail.ManufacturingMilestones.FirstOrDefault(milestone =>
+                milestone.State.Equals("current", StringComparison.OrdinalIgnoreCase)) ??
+            detail.ManufacturingMilestones.FirstOrDefault(milestone =>
+                milestone.State.Equals("pending", StringComparison.OrdinalIgnoreCase)) ??
+            detail.ManufacturingMilestones.LastOrDefault(milestone =>
+                milestone.State.Equals("complete", StringComparison.OrdinalIgnoreCase)) ??
+            detail.ManufacturingMilestones[^1];
     }
 
     private static string ResolveRefreshedPaymentStatus(string currentPaymentStatus, string orderPaymentStatus)
