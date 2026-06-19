@@ -293,7 +293,24 @@
             _parts.Select(x => x.ToDraft()).ToArray(),
             "Saved automatically before the customer started a new project.",
             string.IsNullOrWhiteSpace(_title) ? "New project" : _title));
-        _draftProjectId = draft.ProjectId;
+        ApplyDraftProjectIdentity(draft);
+    }
+
+    private void ApplyDraftProjectIdentity(CreateDraftProjectResponse draft)
+    {
+        _draftProjectId = draft.ProjectServiceProjectId ?? draft.ProjectId;
+        if (draft.Parts is null)
+        {
+            return;
+        }
+
+        foreach (var (part, persistedPart) in _parts.Zip(draft.Parts))
+        {
+            if (persistedPart.PartId != Guid.Empty)
+            {
+                part.PartId = persistedPart.PartId;
+            }
+        }
     }
 
     private async Task SynchronizeRouteStateAsync(bool force)
@@ -891,8 +908,8 @@
             _parts.Select(x => x.ToDraft()).ToArray(),
             "Customer quote engine prototype",
             _title));
-        _draftProjectId = draft.ProjectId;
-        _formalQuote = await Api.GenerateFormalQuoteAsync(new GenerateFormalQuoteRequest(draft.ProjectId, _quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Formal quote requested by customer."));
+        ApplyDraftProjectIdentity(draft);
+        _formalQuote = await Api.GenerateFormalQuoteAsync(new GenerateFormalQuoteRequest(_draftProjectId.GetValueOrDefault(draft.ProjectId), _quoteSessionId, _parts.Select(x => x.ToDraft()).ToArray(), "Formal quote requested by customer."));
         _order = null;
         _payment = null;
     }
@@ -917,7 +934,12 @@
                 _parts.Select(x => x.ToDraft()).ToArray(),
                 "Customer quote engine duplicate source.",
                 _title));
-            _draftProjectId = draft.ProjectId;
+            ApplyDraftProjectIdentity(draft);
+        }
+
+        if (!_draftProjectId.HasValue)
+        {
+            return;
         }
 
         var duplicate = await Api.DuplicateProjectAsync(_draftProjectId.Value, new DuplicateDraftProjectRequest($"{_title} copy"));
@@ -978,7 +1000,7 @@
             return;
         }
 
-        _order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_formalQuote.QuoteId, string.Empty, "Customer accepted quote.")
+        _order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_formalQuote.QuoteId, string.Empty, "Customer accepted quote.", _draftProjectId)
         {
             Parts = _parts.Select(x => x.ToDraft()).ToArray()
         });

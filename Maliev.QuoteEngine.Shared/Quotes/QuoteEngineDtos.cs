@@ -427,7 +427,7 @@ public sealed record GenerateFormalQuoteResponse(Guid QuoteId, string QuoteNumbe
 
 public sealed record ApproveQuoteRequest(Guid QuoteId);
 
-public sealed record CreateManufacturingOrderRequest(Guid QuoteId, string CustomerPoNumber, string Notes)
+public sealed record CreateManufacturingOrderRequest(Guid QuoteId, string CustomerPoNumber, string Notes, Guid? ProjectServiceProjectId = null)
 {
     public IReadOnlyList<QuotePartDraftDto> Parts { get; init; } = [];
 }

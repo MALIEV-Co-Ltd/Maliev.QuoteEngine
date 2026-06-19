@@ -497,7 +497,8 @@ public sealed class QuoteController(
         return Ok(local with
         {
             ProjectServiceProjectId = project.ProjectId,
-            ProjectServiceProjectNumber = project.ProjectNumber
+            ProjectServiceProjectNumber = project.ProjectNumber,
+            Parts = request.Parts
         });
     }
 
@@ -1138,7 +1139,7 @@ public sealed class QuoteController(
                 part.ProcessId,
                 part.MaterialId,
                 cancellationToken);
-            productionItems.Add(BuildProductionItem(request.QuoteId, part, materialGuid));
+            productionItems.Add(BuildProductionItem(request.ProjectServiceProjectId ?? request.QuoteId, part, materialGuid));
         }
 
         var orderRequest = new OrderCreateRequest
@@ -1241,11 +1242,11 @@ public sealed class QuoteController(
         return Math.Round(subtotal - discount, 2);
     }
 
-    private static OrderProductionItemRequest BuildProductionItem(Guid quoteId, QuotePartDraftDto part, Guid materialGuid)
+    private static OrderProductionItemRequest BuildProductionItem(Guid sourceProjectId, QuotePartDraftDto part, Guid materialGuid)
     {
         return new OrderProductionItemRequest
         {
-            SourceProjectId = quoteId,
+            SourceProjectId = sourceProjectId,
             SourceProjectPartId = part.PartId,
             MaterialId = materialGuid,
             MaterialSnapshotJson = JsonSerializer.Serialize(new

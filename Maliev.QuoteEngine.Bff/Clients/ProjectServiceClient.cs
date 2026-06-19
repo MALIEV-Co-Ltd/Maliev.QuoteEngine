@@ -101,6 +101,12 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
                         body);
                     return null;
                 }
+
+                var createdPart = await partResponse.Content.ReadFromJsonAsync<ProjectServicePartResponse>(cancellationToken: ct);
+                if (createdPart is not null && createdPart.Id != Guid.Empty)
+                {
+                    part.PartId = createdPart.Id;
+                }
             }
 
             return new ProjectServiceDraftProjectResult(project.Id, project.ProjectNumber, project.Status);

@@ -2724,7 +2724,10 @@ internal sealed class QuoteAgentService(
                 part.ProcessId,
                 part.MaterialId,
                 cancellationToken);
-            productionItems.Add(BuildProductionItem(state.FormalQuote!.QuoteId, part, materialGuid));
+            var sourceProjectId = TryGetCurrentDraftProjectServiceId(state, out var projectServiceProjectId)
+                ? projectServiceProjectId
+                : state.FormalQuote!.QuoteId;
+            productionItems.Add(BuildProductionItem(sourceProjectId, part, materialGuid));
         }
 
         var request = new OrderCreateRequest
@@ -2761,11 +2764,11 @@ internal sealed class QuoteAgentService(
         return "fdm";
     }
 
-    private static OrderProductionItemRequest BuildProductionItem(Guid quoteId, QuotePartDraftDto part, Guid materialGuid)
+    private static OrderProductionItemRequest BuildProductionItem(Guid sourceProjectId, QuotePartDraftDto part, Guid materialGuid)
     {
         return new OrderProductionItemRequest
         {
-            SourceProjectId = quoteId,
+            SourceProjectId = sourceProjectId,
             SourceProjectPartId = part.PartId,
             MaterialId = materialGuid,
             MaterialSnapshotJson = JsonSerializer.Serialize(new

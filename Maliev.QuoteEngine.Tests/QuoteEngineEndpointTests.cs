@@ -177,6 +177,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     public sealed record CapturedProjectPartCreate(
         Guid ProjectServiceProjectId,
+        Guid ProjectServicePartId,
         string FileName,
         Guid? MaterialId,
         int Quantity,
@@ -431,8 +432,11 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             var projectParts = new List<CapturedProjectPartCreate>();
             foreach (var part in request.Parts)
             {
+                var partId = Guid.NewGuid();
+                part.PartId = partId;
                 var capturedPart = new CapturedProjectPartCreate(
                     projectId,
+                    partId,
                     part.FileName,
                     await resolveMaterialIdAsync(part, ct),
                     part.Quantity,
@@ -493,8 +497,11 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             foreach (var part in sourceParts)
             {
                 var draft = ToQuotePartDraft(part);
+                var partId = Guid.NewGuid();
+                draft.PartId = partId;
                 var captured = new CapturedProjectPartCreate(
                     duplicateId,
+                    partId,
                     part.FileName,
                     await resolveMaterialIdAsync(draft, ct),
                     part.Quantity,
@@ -644,7 +651,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         private static QuotePartDraftDto ToQuotePartDraft(CapturedProjectPartCreate part) =>
             new()
             {
-                PartId = Guid.NewGuid(),
+                PartId = part.ProjectServicePartId,
                 FileId = Guid.Empty,
                 UploadId = part.StoragePath ?? part.FileName,
                 FileName = part.FileName,
@@ -2127,6 +2134,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(created.ProjectServiceProjectId, projectCreate.ProjectServiceProjectId);
         var projectPart = Assert.Single(factory.LastProjectPartCreates);
         Assert.Equal(projectCreate.ProjectServiceProjectId, projectPart.ProjectServiceProjectId);
+        Assert.NotEqual(Guid.Empty, projectPart.ProjectServicePartId);
         Assert.Equal("duplicate-fixture.step", projectPart.FileName);
         Assert.Equal(4, projectPart.Quantity);
         Assert.Equal("cnc", projectPart.ProcessId);
@@ -2145,6 +2153,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(created.ProjectServiceProjectId, durableDetail.ProjectId);
         Assert.Equal(created.ProjectServiceProjectNumber, durableDetail.ProjectNumber);
         var durablePart = Assert.Single(durableDetail.Parts);
+        Assert.Equal(projectPart.ProjectServicePartId, durablePart.PartId);
         Assert.Equal("duplicate-fixture.step", durablePart.FileName);
         Assert.Equal("cnc", durablePart.ProcessId);
         Assert.Equal(4, durablePart.Quantity);
@@ -2685,9 +2694,20 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             42_000,
             "Drawing"));
 
+        var draftResponse = await client.PostAsJsonAsync(
+            "/quote/v1/projects/draft",
+            new CreateDraftProjectRequest("session-configured-order", [part], "Persist configured order project.", "Configured order project"));
+        draftResponse.EnsureSuccessStatusCode();
+        var draft = await draftResponse.Content.ReadFromJsonAsync<CreateDraftProjectResponse>();
+        Assert.NotNull(draft);
+        var projectServiceProjectId = Assert.IsType<Guid>(draft.ProjectServiceProjectId);
+        var persistedPart = Assert.Single(draft.Parts ?? []);
+        Assert.NotEqual(Guid.Empty, persistedPart.PartId);
+        part.PartId = persistedPart.PartId;
+
         var quoteResponse = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-configured-order", [part], "Configured order quote."));
+            new GenerateFormalQuoteRequest(projectServiceProjectId, "session-configured-order", [part], "Configured order quote."));
         quoteResponse.EnsureSuccessStatusCode();
         var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -2697,7 +2717,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             new CreateManufacturingOrderRequest(
                 quote.QuoteId,
                 "PO-CONFIGURED",
-                "Customer accepted configured quote.")
+                "Customer accepted configured quote.",
+                projectServiceProjectId)
             {
                 Parts = [part]
             });
@@ -2730,6 +2751,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var createRequest = factory.LastOrderCreateRequest;
         Assert.NotNull(createRequest);
         var productionItem = Assert.Single(createRequest.ProductionItems);
+        Assert.Equal(projectServiceProjectId, productionItem.SourceProjectId);
         Assert.Equal(part.PartId, productionItem.SourceProjectPartId);
         Assert.NotEqual(Guid.Empty, productionItem.MaterialId);
         Assert.Equal("CNC", productionItem.Technology);

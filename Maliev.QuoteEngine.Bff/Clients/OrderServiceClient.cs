@@ -454,7 +454,7 @@ public sealed class OrderCreateRequest
 /// <summary>Structured production item snapshot sent to OrderService for downstream job creation.</summary>
 public sealed class OrderProductionItemRequest
 {
-    /// <summary>Gets or sets the source project or quote identifier.</summary>
+    /// <summary>Gets or sets the source ProjectService project identifier, falling back to quote id for legacy standalone orders.</summary>
     public Guid? SourceProjectId { get; set; }
 
     /// <summary>Gets or sets the source part identifier.</summary>
