@@ -42,6 +42,13 @@ public interface IQuoteAgentService
     /// <summary>Registers uploaded browser files with the current agent session.</summary>
     QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request);
 
+    /// <summary>Records customer feedback for a generated 3D preview artifact.</summary>
+    Task<QuoteAgentPreviewFeedbackResponse> RecordPreviewFeedbackAsync(
+        Guid sessionId,
+        Guid artifactId,
+        QuoteAgentPreviewFeedbackRequest request,
+        CancellationToken cancellationToken);
+
     /// <summary>Searches customer-scoped quote data for the quote agent workspace.</summary>
     Task<QuoteAgentSearchResponse> SearchCustomerDataAsync(
         Guid sessionId,
@@ -476,6 +483,75 @@ internal sealed class QuoteAgentService(
         MaterializeSupplementalAnalysis(state, messageRequest);
         MaterializePrototypeParts(state, messageRequest);
         return ToStateResponse(state);
+    }
+
+    public async Task<QuoteAgentPreviewFeedbackResponse> RecordPreviewFeedbackAsync(
+        Guid sessionId,
+        Guid artifactId,
+        QuoteAgentPreviewFeedbackRequest request,
+        CancellationToken cancellationToken)
+    {
+        var state = sessionStore.GetOrCreate(sessionId);
+        var customerId = ResolveCustomerId() ?? state.CustomerId;
+        var comment = request.Comment.Trim();
+        string artifactTitle;
+        string artifactDescription;
+
+        lock (state.SyncRoot)
+        {
+            var artifact = state.Artifacts.FirstOrDefault(item => item.ArtifactId == artifactId);
+            if (artifact is null)
+            {
+                throw new InvalidOperationException("Preview artifact was not found in this quote session.");
+            }
+
+            if (!IsGeneratedViewerArtifact(artifact))
+            {
+                throw new InvalidOperationException("Feedback can only be recorded for generated 3D preview artifacts.");
+            }
+
+            artifactTitle = artifact.Title;
+            artifactDescription = artifact.Metadata.TryGetValue("description", out var description)
+                ? description
+                : artifact.Title;
+            artifact.Metadata["customerRating"] = request.Rating.ToString(CultureInfo.InvariantCulture);
+            artifact.Metadata["customerComment"] = comment;
+            artifact.Metadata["feedbackObservedAt"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+            artifact.Status = "feedback_recorded";
+            state.CustomerId = customerId ?? state.CustomerId;
+            state.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+
+        var memoryObserved = false;
+        if (customerId.HasValue)
+        {
+            var observed = await customerClient.ObserveCustomerMemoryAsync(
+                customerId.Value,
+                new CustomerMemoryObserveRequest
+                {
+                    MemoryType = "make_studio_feedback",
+                    Key = "generated_3d_preview_feedback",
+                    Value = $"3D preview feedback for {artifactDescription}: rating {request.Rating}/5; comment: {comment}",
+                    Confidence = Math.Clamp(request.Rating / 5m, 0.2m, 0.95m),
+                    Source = "quote_agent"
+                },
+                cancellationToken);
+            memoryObserved = observed is not null;
+        }
+
+        logger.LogInformation(
+            "Recorded generated 3D preview feedback for artifact {ArtifactId} ({ArtifactTitle}) in quote agent session {SessionId}.",
+            artifactId,
+            artifactTitle,
+            sessionId);
+
+        return new QuoteAgentPreviewFeedbackResponse
+        {
+            ArtifactId = artifactId,
+            Status = "recorded",
+            MemoryObserved = memoryObserved,
+            State = ToStateResponse(state)
+        };
     }
 
     public async Task<QuoteAgentSearchResponse> SearchCustomerDataAsync(
@@ -5402,6 +5478,12 @@ Customer message:
             return new { error = "At least one CAD command is required." };
         }
 
+        var validationError = ValidateCadCommands(commands);
+        if (!string.IsNullOrWhiteSpace(validationError))
+        {
+            return new { error = validationError };
+        }
+
         var process = !string.IsNullOrWhiteSpace(processHint) ? processHint : "fdm";
         var commandsJson = JsonSerializer.Serialize(commands, JsonOptions);
         var partId = Guid.NewGuid();
@@ -5488,6 +5570,179 @@ Customer message:
         }
 
         return [];
+    }
+
+    private static string? ValidateCadCommands(IReadOnlyList<CadCommandDto> commands)
+    {
+        if (commands.Count > 80)
+        {
+            return "3D preview is too complex. Use 80 CAD commands or fewer.";
+        }
+
+        var knownShapes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var hasCurrentShape = false;
+
+        for (var index = 0; index < commands.Count; index++)
+        {
+            var command = commands[index];
+            var op = command.Op?.Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(op))
+            {
+                return $"CAD command {index + 1} is missing an operation.";
+            }
+
+            string? error = op switch
+            {
+                "box" => RequireParams(command, index, 3, "positive width, depth, and height"),
+                "cylinder" => RequireParams(command, index, 2, "positive radius and height"),
+                "sphere" => RequireParams(command, index, 1, "positive radius"),
+                "cone" => RequireParams(command, index, 3, "positive bottom radius, top radius, and height", allowZeroAfterFirst: true),
+                "extrude" => ValidateProfileCommand(command, index, requireHeight: true),
+                "revolve" => ValidateProfileCommand(command, index, requireHeight: false),
+                "fuse" or "cut" or "intersect" or "loft" => ValidateBinaryCommand(command, index, knownShapes, hasCurrentShape),
+                "fillet" or "chamfer" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
+                    RequirePositiveRadius(command, index),
+                "translate" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
+                    ValidateVector(command.Offset ?? command.Params, index, "translation offset"),
+                "rotate" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
+                    ValidateFinite(command.Angle ?? command.Params?.FirstOrDefault(), index, "rotation angle"),
+                _ => $"Unsupported CAD operation '{command.Op}' in command {index + 1}."
+            };
+
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                return error;
+            }
+
+            if (!string.IsNullOrWhiteSpace(command.Id))
+            {
+                knownShapes.Add(command.Id.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(command.ResultId))
+            {
+                knownShapes.Add(command.ResultId.Trim());
+            }
+
+            hasCurrentShape = true;
+        }
+
+        return null;
+    }
+
+    private static bool IsGeneratedViewerArtifact(QuoteAgentArtifactDto artifact)
+    {
+        return artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? ValidateBinaryCommand(
+        CadCommandDto command,
+        int index,
+        HashSet<string> knownShapes,
+        bool hasCurrentShape)
+    {
+        return ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
+            ValidateReference(command.ToolId, knownShapes, index, "toolId");
+    }
+
+    private static string? ValidateTargetedCommand(
+        CadCommandDto command,
+        int index,
+        HashSet<string> knownShapes,
+        bool hasCurrentShape)
+    {
+        if (!string.IsNullOrWhiteSpace(command.TargetId))
+        {
+            return ValidateReference(command.TargetId, knownShapes, index, "targetId");
+        }
+
+        return hasCurrentShape
+            ? null
+            : $"CAD command {index + 1} requires targetId or a previous shape.";
+    }
+
+    private static string? ValidateReference(
+        string? shapeId,
+        HashSet<string> knownShapes,
+        int index,
+        string fieldName)
+    {
+        return !string.IsNullOrWhiteSpace(shapeId) && knownShapes.Contains(shapeId.Trim())
+            ? null
+            : $"CAD command {index + 1} references an unknown {fieldName}.";
+    }
+
+    private static string? ValidateProfileCommand(CadCommandDto command, int index, bool requireHeight)
+    {
+        if (requireHeight && RequireParams(command, index, 1, "positive extrusion height") is { } paramError)
+        {
+            return paramError;
+        }
+
+        if (command.Profile is null)
+        {
+            return $"CAD command {index + 1} requires a profile.";
+        }
+
+        if (command.Profile.Radius is > 0 ||
+            command.Profile is { Width: > 0, Height: > 0 } ||
+            command.Profile.Segments.Count > 0)
+        {
+            return null;
+        }
+
+        return $"CAD command {index + 1} profile requires a radius, rectangle size, or sketch segments.";
+    }
+
+    private static string? RequireParams(
+        CadCommandDto command,
+        int index,
+        int minimumLength,
+        string detail,
+        bool allowZeroAfterFirst = false)
+    {
+        if (command.Params is null || command.Params.Length < minimumLength)
+        {
+            return $"CAD command {index + 1} requires {detail}.";
+        }
+
+        for (var i = 0; i < minimumLength; i++)
+        {
+            var value = command.Params[i];
+            if (!double.IsFinite(value) || value < 0 || (!allowZeroAfterFirst || i == 0) && value <= 0)
+            {
+                return $"CAD command {index + 1} requires {detail}.";
+            }
+        }
+
+        return null;
+    }
+
+    private static string? RequirePositiveRadius(CadCommandDto command, int index)
+    {
+        var radius = command.Radius ?? command.Params?.FirstOrDefault();
+        return radius is > 0 && double.IsFinite(radius.Value)
+            ? null
+            : $"CAD command {index + 1} requires a positive radius.";
+    }
+
+    private static string? ValidateVector(double[]? values, int index, string label)
+    {
+        if (values is null || values.Length < 3 || values.Take(3).Any(value => !double.IsFinite(value)))
+        {
+            return $"CAD command {index + 1} requires a finite {label}.";
+        }
+
+        return null;
+    }
+
+    private static string? ValidateFinite(double? value, int index, string label)
+    {
+        return value.HasValue && double.IsFinite(value.Value)
+            ? null
+            : $"CAD command {index + 1} requires a finite {label}.";
     }
 
     private static decimal EstimateCommandsVolume(IReadOnlyList<CadCommandDto> commands)

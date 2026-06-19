@@ -3767,7 +3767,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         HttpClient client,
         Guid sessionId,
         string toolName,
-        Dictionary<string, JsonElement>? arguments = null)
+        Dictionary<string, JsonElement>? arguments = null,
+        Guid? customerId = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/quote/v1/agent/tools/{toolName}")
         {
@@ -3778,7 +3779,7 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         };
         request.Headers.TryAddWithoutValidation(
             "X-Maliev-Agent-Context",
-            CreateSignedAgentContextToken(sessionId, Guid.NewGuid(), null));
+            CreateSignedAgentContextToken(sessionId, Guid.NewGuid(), customerId));
 
         using var response = await client.SendAsync(request);
         var json = await response.Content.ReadAsStringAsync();
@@ -4044,6 +4045,106 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             a.Metadata.TryGetValue("generated", out var gen) && gen == "true");
     }
 
+    [Fact]
+    public async Task Generate_3d_preview_tool_rejects_unsupported_commands_before_creating_ready_artifact()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new[]
+        {
+            new
+            {
+                op = "torus",
+                id = "unsupported",
+                Params = new[] { 20.0, 5.0 }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Unsupported generated preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("error", out var error));
+        Assert.Contains("Unsupported CAD operation", error.GetString(), StringComparison.OrdinalIgnoreCase);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.DoesNotContain(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(state.Parts, part => part.Status == "ModelGenerated");
+    }
+
+    [Fact]
+    public async Task Agent_preview_feedback_records_artifact_feedback_and_observes_customer_memory()
+    {
+        var customerId = Guid.NewGuid();
+        var customerClient = new MemoryCustomerServiceClient(customerId);
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<ICustomerServiceClient>();
+                services.AddSingleton<ICustomerServiceClient>(customerClient);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new[]
+        {
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            }
+        };
+        await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Mounting plate preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            },
+            customerId);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var artifact = Assert.Single(state.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var feedbackResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{artifact.ArtifactId:D}/feedback",
+            new QuoteAgentPreviewFeedbackRequest
+            {
+                Rating = 2,
+                Comment = "Holes should be closer to the corners and the plate needs rounded edges."
+            },
+            JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode);
+        var body = await feedbackResponse.Content.ReadFromJsonAsync<QuoteAgentPreviewFeedbackResponse>(JsonOptions);
+        Assert.NotNull(body);
+        Assert.Equal("recorded", body.Status);
+
+        var updatedState = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var updatedArtifact = Assert.Single(updatedState.Artifacts, item => item.ArtifactId == artifact.ArtifactId);
+        Assert.Equal("2", updatedArtifact.Metadata["customerRating"]);
+        Assert.Equal("Holes should be closer to the corners and the plate needs rounded edges.", updatedArtifact.Metadata["customerComment"]);
+
+        Assert.Equal(customerId, customerClient.LastObservedMemoryCustomerId);
+        Assert.NotNull(customerClient.LastObservedMemory);
+        Assert.Equal("make_studio_feedback", customerClient.LastObservedMemory!.MemoryType);
+        Assert.Equal("generated_3d_preview_feedback", customerClient.LastObservedMemory.Key);
+        Assert.Contains("rounded edges", customerClient.LastObservedMemory.Value, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class RecordingChatbotServiceClient : IChatbotServiceClient
     {
         public ChatbotInitiateSessionRequest? LastInitiateRequest { get; private set; }
@@ -4264,6 +4365,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     private sealed class MemoryCustomerServiceClient(Guid expectedCustomerId) : ICustomerServiceClient
     {
         public Guid? LastMemoryCustomerId { get; private set; }
+        public Guid? LastObservedMemoryCustomerId { get; private set; }
+        public CustomerMemoryObserveRequest? LastObservedMemory { get; private set; }
 
         public Task<CustomerProfileResponse?> GetByIdAsync(Guid customerId, CancellationToken ct = default)
         {
@@ -4359,6 +4462,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
             CustomerMemoryObserveRequest request,
             CancellationToken cancellationToken)
         {
+            LastObservedMemoryCustomerId = customerId;
+            LastObservedMemory = request;
             return Task.FromResult<CustomerMemoryResponse?>(null);
         }
 

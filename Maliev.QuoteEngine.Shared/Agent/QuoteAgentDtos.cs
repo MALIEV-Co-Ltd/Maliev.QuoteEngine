@@ -466,6 +466,39 @@ public sealed class QuoteAgentToolRequest
 }
 
 /// <summary>
+/// Customer feedback for a generated 3D preview artifact.
+/// </summary>
+public sealed class QuoteAgentPreviewFeedbackRequest
+{
+    /// <summary>Gets or sets the customer rating from 1 (poor) to 5 (excellent).</summary>
+    [Range(1, 5)]
+    public int Rating { get; set; }
+
+    /// <summary>Gets or sets customer comments that should improve future generated drafts.</summary>
+    [Required]
+    [StringLength(1200, MinimumLength = 1)]
+    public string Comment { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Result of recording customer feedback for a generated 3D preview artifact.
+/// </summary>
+public sealed class QuoteAgentPreviewFeedbackResponse
+{
+    /// <summary>Gets or sets the artifact ID that received feedback.</summary>
+    public Guid ArtifactId { get; set; }
+
+    /// <summary>Gets or sets the recording status.</summary>
+    public string Status { get; set; } = "recorded";
+
+    /// <summary>Gets or sets whether feedback was observed into durable customer memory.</summary>
+    public bool MemoryObserved { get; set; }
+
+    /// <summary>Gets or sets updated agent state.</summary>
+    public QuoteAgentStateResponse? State { get; set; }
+}
+
+/// <summary>
 /// Customer-scoped search response returned to the QuoteEngine agent.
 /// </summary>
 public sealed class QuoteAgentSearchResponse

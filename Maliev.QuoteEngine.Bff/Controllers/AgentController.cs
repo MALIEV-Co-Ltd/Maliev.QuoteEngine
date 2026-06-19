@@ -205,6 +205,37 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Records customer feedback for an inline generated 3D preview artifact.
+    /// </summary>
+    [HttpPost("sessions/{sessionId:guid}/artifacts/{artifactId:guid}/feedback")]
+    [ProducesResponseType(typeof(QuoteAgentPreviewFeedbackResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<QuoteAgentPreviewFeedbackResponse>> RecordPreviewFeedback(
+        Guid sessionId,
+        Guid artifactId,
+        [FromBody] QuoteAgentPreviewFeedbackRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        try
+        {
+            return Ok(await agentService.RecordPreviewFeedbackAsync(sessionId, artifactId, request, cancellationToken));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Preview feedback could not be recorded.",
+                Detail = ex.Message
+            });
+        }
+    }
+
+    /// <summary>
     /// Searches signed-in customer quote data for the QuoteEngine agent workspace.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}/search")]

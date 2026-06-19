@@ -655,6 +655,40 @@
                                 {
                                     <section class="qe-agent-inline-viewer">
                                         <QeInlinePartViewer CommandsJson="@message.InlineViewer.CommandsJson" />
+                                        <div class="qe-inline-viewer-feedback" aria-label="@Text("3D preview feedback", "ความคิดเห็นต่อพรีวิว 3D")">
+                                            <div class="qe-inline-viewer-rating" role="group" aria-label="@Text("Rate this 3D preview", "ให้คะแนนพรีวิว 3D นี้")">
+                                                @for (var rating = 1; rating <= 5; rating++)
+                                                {
+                                                    var currentRating = rating;
+                                                    <button type="button"
+                                                            class="@InlineViewerRatingClass(message.InlineViewer, currentRating)"
+                                                            title="@Text($"Rate {currentRating} out of 5", $"ให้ {currentRating} จาก 5")"
+                                                            aria-label="@Text($"Rate {currentRating} out of 5", $"ให้ {currentRating} จาก 5")"
+                                                            @onclick="@(() => SetInlineViewerRating(message.InlineViewer, currentRating))">
+                                                        <MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Small" />
+                                                    </button>
+                                                }
+                                            </div>
+                                            <textarea class="qe-inline-viewer-comment"
+                                                      rows="2"
+                                                      maxlength="1200"
+                                                      placeholder="@Text("Add design feedback for the next draft", "เพิ่มความคิดเห็นสำหรับแบบร่างถัดไป")"
+                                                      @bind="message.InlineViewer.FeedbackComment"
+                                                      @bind:event="oninput"></textarea>
+                                            <div class="qe-inline-viewer-feedback-actions">
+                                                <button type="button"
+                                                        class="qe-inline-viewer-submit"
+                                                        disabled="@(!CanSubmitInlineViewerFeedback(message.InlineViewer))"
+                                                        @onclick="@(() => SubmitInlineViewerFeedbackAsync(message))">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Send" Size="Size.Small" />
+                                                    <span>@Text("Send feedback", "ส่งความคิดเห็น")</span>
+                                                </button>
+                                                @if (!string.IsNullOrWhiteSpace(message.InlineViewer.FeedbackStatus))
+                                                {
+                                                    <span class="qe-inline-viewer-feedback-status">@message.InlineViewer.FeedbackStatus</span>
+                                                }
+                                            </div>
+                                        </div>
                                     </section>
                                 }
                                 @if (message.IsThinking && !string.IsNullOrWhiteSpace(message.ModelThoughtContent))
@@ -5078,7 +5112,86 @@
             return null;
         }
 
-        return new InlineViewerInfo { CommandsJson = commandsJson };
+        return new InlineViewerInfo
+        {
+            ArtifactId = generated.ArtifactId,
+            CommandsJson = commandsJson,
+            FeedbackRating = int.TryParse(ArtifactMetadata(generated, "customerRating"), CultureInfo.InvariantCulture, out var rating)
+                ? Math.Clamp(rating, 1, 5)
+                : 0,
+            FeedbackComment = ArtifactMetadata(generated, "customerComment") ?? string.Empty,
+            FeedbackStatus = generated.Status.Equals("feedback_recorded", StringComparison.OrdinalIgnoreCase)
+                ? "Feedback recorded"
+                : string.Empty
+        };
+    }
+
+    private static string InlineViewerRatingClass(InlineViewerInfo viewer, int rating)
+    {
+        return rating <= viewer.FeedbackRating
+            ? "qe-inline-viewer-rating-button is-selected"
+            : "qe-inline-viewer-rating-button";
+    }
+
+    private static void SetInlineViewerRating(InlineViewerInfo viewer, int rating)
+    {
+        viewer.FeedbackRating = Math.Clamp(rating, 1, 5);
+        viewer.FeedbackStatus = string.Empty;
+    }
+
+    private static bool CanSubmitInlineViewerFeedback(InlineViewerInfo viewer)
+    {
+        return !viewer.IsFeedbackSubmitting &&
+            viewer.ArtifactId != Guid.Empty &&
+            viewer.FeedbackRating is >= 1 and <= 5 &&
+            !string.IsNullOrWhiteSpace(viewer.FeedbackComment);
+    }
+
+    private async Task SubmitInlineViewerFeedbackAsync(AgentMessageRow message)
+    {
+        var viewer = message.InlineViewer;
+        if (viewer is null || !CanSubmitInlineViewerFeedback(viewer))
+        {
+            return;
+        }
+
+        viewer.IsFeedbackSubmitting = true;
+        viewer.FeedbackStatus = Text("Sending feedback…", "กำลังส่งความคิดเห็น...");
+        try
+        {
+            var response = await Http.PostAsJsonAsync(
+                $"/quote/v1/agent/sessions/{SessionId:D}/artifacts/{viewer.ArtifactId:D}/feedback",
+                new QuoteAgentPreviewFeedbackRequest
+                {
+                    Rating = viewer.FeedbackRating,
+                    Comment = viewer.FeedbackComment.Trim()
+                });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                viewer.FeedbackStatus = Text("Feedback could not be saved.", "ไม่สามารถบันทึกความคิดเห็นได้");
+                return;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<QuoteAgentPreviewFeedbackResponse>();
+            if (result?.State is not null)
+            {
+                _artifacts = result.State.Artifacts;
+                _gates = result.State.Gates;
+                _proposedActions = result.State.ProposedActions;
+            }
+
+            viewer.FeedbackComment = viewer.FeedbackComment.Trim();
+            viewer.FeedbackStatus = Text("Feedback recorded", "บันทึกความคิดเห็นแล้ว");
+        }
+        catch
+        {
+            viewer.FeedbackStatus = Text("Feedback could not be saved.", "ไม่สามารถบันทึกความคิดเห็นได้");
+        }
+        finally
+        {
+            viewer.IsFeedbackSubmitting = false;
+        }
     }
 
     private PreviewItem? BuildArtifactPreviewItem(QuoteAgentArtifactDto artifact)
@@ -6114,7 +6227,17 @@
 
     private sealed class InlineViewerInfo
     {
+        public Guid ArtifactId { get; set; }
+
         public string CommandsJson { get; set; } = string.Empty;
+
+        public int FeedbackRating { get; set; }
+
+        public string FeedbackComment { get; set; } = string.Empty;
+
+        public string FeedbackStatus { get; set; } = string.Empty;
+
+        public bool IsFeedbackSubmitting { get; set; }
     }
 
     private sealed record LocalDemoTurn(

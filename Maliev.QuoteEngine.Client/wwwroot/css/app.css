@@ -2394,6 +2394,11 @@
     margin-top: 8px;
 }
 
+.qe-agent-inline-viewer {
+    display: grid;
+    gap: 8px;
+}
+
 .qe-inline-viewer {
     position: relative;
     width: 100%;
@@ -2416,6 +2421,93 @@
     color: var(--qe-agent-dim, #888);
     font-size: 13px;
     text-align: center;
+}
+
+.qe-inline-viewer-feedback {
+    display: grid;
+    gap: 8px;
+}
+
+.qe-inline-viewer-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.qe-inline-viewer-rating-button {
+    display: inline-grid;
+    width: 28px;
+    height: 28px;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--qe-agent-muted, #868e96);
+    cursor: pointer;
+}
+
+.qe-inline-viewer-rating-button:hover,
+.qe-inline-viewer-rating-button:focus-visible,
+.qe-inline-viewer-rating-button.is-selected {
+    color: #b7791f;
+    background: rgba(183, 121, 31, .12);
+    outline: none;
+}
+
+.qe-inline-viewer-comment {
+    width: 100%;
+    min-height: 58px;
+    resize: vertical;
+    border: 1px solid var(--qe-agent-border, #e9ecef);
+    border-radius: 8px;
+    background: var(--qe-agent-surface, #fff);
+    color: var(--qe-agent-ink, #212529);
+    padding: 8px 10px;
+    font: inherit;
+    font-size: 13px;
+}
+
+.qe-inline-viewer-comment:focus {
+    border-color: var(--qe-agent-accent, #2563eb);
+    outline: 2px solid rgba(37, 99, 235, .16);
+}
+
+.qe-inline-viewer-feedback-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.qe-inline-viewer-submit {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    border: 1px solid var(--qe-agent-border, #e9ecef);
+    border-radius: 8px;
+    background: var(--qe-agent-raised, #fff);
+    color: var(--qe-agent-ink, #212529);
+    padding: 0 10px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.qe-inline-viewer-submit:disabled {
+    cursor: not-allowed;
+    opacity: .56;
+}
+
+.qe-inline-viewer-submit:not(:disabled):hover,
+.qe-inline-viewer-submit:not(:disabled):focus-visible {
+    border-color: var(--qe-agent-accent, #2563eb);
+    outline: none;
+}
+
+.qe-inline-viewer-feedback-status {
+    color: var(--qe-agent-dim, #6c757d);
+    font-size: 12px;
 }
 
 .qe-agent-message--assistant .qe-agent-bubble {
