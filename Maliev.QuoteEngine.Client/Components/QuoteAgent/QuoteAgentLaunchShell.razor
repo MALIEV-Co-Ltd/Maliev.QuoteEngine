@@ -1031,6 +1031,28 @@
             </section>
         }
 
+        @if (ShowSummaryStrip)
+        {
+            <div class="qe-agent-summary-strip" role="group" aria-label="@Text("Project quick summary", "สรุปโปรเจกต์อย่างย่อ")">
+                <span class="qe-agent-summary-strip-item">
+                    <MudIcon Icon="@Icons.Material.Outlined.Category" Size="Size.Small" />
+                    <span class="qe-agent-summary-strip-value">@UploadedParts.Count.ToString(CultureInfo.InvariantCulture)</span>
+                    <span class="qe-agent-summary-strip-label">@Text("parts", "ชิ้นงาน")</span>
+                </span>
+                <span class="qe-agent-summary-strip-divider" aria-hidden="true"></span>
+                <span class="qe-agent-summary-strip-item">
+                    <MudIcon Icon="@Icons.Material.Outlined.Payments" Size="Size.Small" />
+                    <span class="qe-agent-summary-strip-value">@SummaryStripTotal</span>
+                </span>
+                <span class="qe-agent-summary-strip-divider" aria-hidden="true"></span>
+                <span class="qe-agent-summary-strip-item">
+                    <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
+                    <span class="qe-agent-summary-strip-value">@SummaryLeadTime</span>
+                    <span class="qe-agent-summary-strip-label">@Text("lead time", "เวลานำส่ง")</span>
+                </span>
+            </div>
+        }
+
         <section class="@ComposerWrapClass" aria-label="@Text("Message composer", "กล่องข้อความ")">
             <form class="@ComposerClass" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
                 @if (_pendingComposerAttachments.Count > 0)
@@ -2133,6 +2155,8 @@
     private string SummaryDfmState => LatestWorkbench?.DfmIssues.Count > 0
         ? Text($"{LatestWorkbench.DfmIssues.Count} item(s) to review", $"ต้องตรวจสอบ {LatestWorkbench.DfmIssues.Count} รายการ")
         : Text("No current DFM items", "ยังไม่มีรายการ DFM");
+    private bool ShowSummaryStrip => UploadedParts.Count > 0 || LatestWorkbench is not null;
+    private string SummaryStripTotal => LatestWorkbench?.TotalPrice ?? Text("Not priced", "ยังไม่มีราคา");
     private IReadOnlyList<UseCaseOption> VisibleUseCases => BuildVisibleUseCases();
     private string UseCaseListClass => "qe-agent-use-cases";
     private string ActiveWorkspaceTitle => _activeWorkspacePage switch

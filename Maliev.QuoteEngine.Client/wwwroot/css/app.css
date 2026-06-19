@@ -3215,6 +3215,52 @@
     transition: transform 220ms ease, width 220ms ease, bottom 220ms ease, top 220ms ease;
 }
 
+/* Compact project quick-summary strip above the composer (parts / total / lead time). */
+.qe-agent-summary-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    width: min(780px, calc(100% - 32px));
+    margin: 0 auto 10px;
+    padding: 6px 16px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 999px;
+    background: var(--qe-agent-raised);
+    color: var(--qe-agent-ink);
+    font-size: 13px;
+    line-height: 1.2;
+}
+
+.qe-agent-summary-strip-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+}
+
+.qe-agent-summary-strip .mud-icon-root {
+    width: 16px;
+    height: 16px;
+    font-size: 16px;
+    opacity: .65;
+}
+
+.qe-agent-summary-strip-value {
+    font-weight: 600;
+}
+
+.qe-agent-summary-strip-label {
+    color: var(--qe-agent-muted, #6b7280);
+}
+
+.qe-agent-summary-strip-divider {
+    width: 1px;
+    align-self: stretch;
+    min-height: 14px;
+    background: var(--qe-agent-line);
+}
+
 .qe-agent-add-menu {
     position: absolute;
     left: 8px;
