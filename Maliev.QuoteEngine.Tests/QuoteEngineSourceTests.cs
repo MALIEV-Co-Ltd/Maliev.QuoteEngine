@@ -1791,8 +1791,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private QuoteAgentLaunchShell? _agentShell;", workspace, StringComparison.Ordinal);
         Assert.Contains("await _agentShell.ApplyAgentStateAsync(state);", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("agent registered the uploaded file", workspace, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("public Task ApplyAgentStateAsync(QuoteAgentStateResponse state)", shell, StringComparison.Ordinal);
-        Assert.Contains("ApplyState(state);", shell, StringComparison.Ordinal);
+        Assert.Contains("public async Task ApplyAgentStateAsync(QuoteAgentStateResponse state)", shell, StringComparison.Ordinal);
+        Assert.Contains("await ApplyStateAsync(state, suppressPanelAutoOpen: true);", shell, StringComparison.Ordinal);
+        Assert.Contains("private async Task ApplyStateAsync(QuoteAgentStateResponse state, bool suppressPanelAutoOpen = false)", shell, StringComparison.Ordinal);
+        Assert.Contains("if (!suppressPanelAutoOpen && HasVisiblePaymentArtifact())", shell, StringComparison.Ordinal);
+        Assert.Contains("private bool HasVisiblePaymentArtifact()", shell, StringComparison.Ordinal);
+        Assert.Contains("artifact.ArtifactType.Equals(\"payment\", StringComparison.OrdinalIgnoreCase)", shell, StringComparison.Ordinal);
     }
 
     [Fact]

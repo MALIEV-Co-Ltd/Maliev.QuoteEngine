@@ -1662,6 +1662,11 @@
     color: var(--qe-agent-ink);
 }
 
+.qe-agent-artifact-toggle > *,
+.qe-agent-summary-toggle > * {
+    pointer-events: none;
+}
+
 .qe-agent-artifact-toggle b {
     display: grid;
     place-items: center;

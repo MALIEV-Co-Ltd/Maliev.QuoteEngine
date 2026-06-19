@@ -2443,7 +2443,7 @@
         try
         {
             var state = await Api.GetAgentStateAsync(SessionId);
-            ApplyState(state);
+            await ApplyStateAsync(state);
             await LoadMessageHistoryAsync();
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
@@ -3009,12 +3009,8 @@
             _messages.Add(new AgentMessageRow("assistant", result.Message));
             if (result.State is not null)
             {
-                ApplyState(result.State);
-                if (result.State.UiDirectives.Count > 0)
-                {
-                    await ApplyUiDirectivesAsync(result.State.UiDirectives, suppressPanelAutoOpen: true);
-                }
-                else if (result.State.Artifacts.Count > previousArtifactCount)
+                await ApplyStateAsync(result.State);
+                if (result.State.UiDirectives.Count == 0 && result.State.Artifacts.Count > previousArtifactCount)
                 {
                     _artifactPanelOpen = true;
                     _summaryPanelOpen = false;
@@ -3027,23 +3023,34 @@
         }
     }
 
-    public Task ApplyAgentStateAsync(QuoteAgentStateResponse state)
+    public async Task ApplyAgentStateAsync(QuoteAgentStateResponse state)
     {
         // This entry point is driven by file upload/attach registration. We refresh
         // artifacts and highlights but do NOT auto-open the workbench panel — the
         // customer asked to keep the workbench closed until they choose to open it.
-        ApplyState(state, suppressPanelAutoOpen: true);
+        await ApplyStateAsync(state, suppressPanelAutoOpen: true);
         StateHasChanged();
-        return Task.CompletedTask;
     }
 
-    private void ApplyState(QuoteAgentStateResponse state, bool suppressPanelAutoOpen = false)
+    private async Task ApplyStateAsync(QuoteAgentStateResponse state, bool suppressPanelAutoOpen = false)
     {
         _gates = state.Gates;
         _artifacts = state.Artifacts;
         _proposedActions = state.ProposedActions;
         ApplyAgentProjectName(state.ProjectName);
-        _ = ApplyUiDirectivesAsync(state.UiDirectives, suppressPanelAutoOpen);
+        await ApplyUiDirectivesAsync(state.UiDirectives, suppressPanelAutoOpen);
+        if (!suppressPanelAutoOpen && HasVisiblePaymentArtifact())
+        {
+            _artifactPanelOpen = true;
+            _summaryPanelOpen = false;
+        }
+    }
+
+    private bool HasVisiblePaymentArtifact()
+    {
+        return _artifacts.Any(artifact =>
+            QuoteAgentUiHelpers.IsVisibleArtifact(artifact) &&
+            artifact.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task EnsureAgentNotificationConnectionAsync()
