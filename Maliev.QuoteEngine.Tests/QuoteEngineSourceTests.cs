@@ -4577,6 +4577,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeInlinePartViewer_does_not_mark_failed_commands_as_rendered()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")
+            .ReplaceLineEndings("\n");
+
+        var catchStart = component.IndexOf("\n        catch", StringComparison.Ordinal);
+        Assert.True(catchStart >= 0, "preview creation catch block must exist.");
+
+        var catchEnd = component.IndexOf("StateHasChanged();", catchStart, StringComparison.Ordinal);
+        Assert.True(catchEnd > catchStart, "preview creation catch block must call StateHasChanged.");
+
+        var catchBlock = component[catchStart..catchEnd];
+        Assert.Contains("_renderedCommandsJson = null;", catchBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("_renderedCommandsJson = CommandsJson;", catchBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_feedback_status_reflects_memory_observation()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
