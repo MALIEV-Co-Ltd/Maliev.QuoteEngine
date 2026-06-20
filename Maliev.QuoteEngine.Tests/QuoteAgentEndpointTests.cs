@@ -3426,10 +3426,14 @@ Customer message:
         Assert.NotEqual(Guid.Empty, document.RootElement.GetProperty("customerId").GetGuid());
         Assert.Equal("already_authenticated", document.RootElement.GetProperty("authHandoff").GetProperty("status").GetString());
         Assert.Equal("agent-account-context@example.com", document.RootElement.GetProperty("profile").GetProperty("email").GetString());
+        Assert.Equal("MALIEV Test Buyer Co., Ltd.", document.RootElement.GetProperty("profile").GetProperty("companyName").GetString());
+        Assert.Equal("TH-0123456789012", document.RootElement.GetProperty("profile").GetProperty("vatNumber").GetString());
         Assert.Equal("Billing", document.RootElement.GetProperty("defaultBillingAddress").GetProperty("type").GetString());
         Assert.True(document.RootElement.GetProperty("defaultBillingAddress").GetProperty("isDefault").GetBoolean());
+        Assert.Equal("12 Billing Road", document.RootElement.GetProperty("defaultBillingAddress").GetProperty("addressLine1").GetString());
         Assert.Equal("Shipping", document.RootElement.GetProperty("defaultShippingAddress").GetProperty("type").GetString());
         Assert.True(document.RootElement.GetProperty("defaultShippingAddress").GetProperty("isDefault").GetBoolean());
+        Assert.Equal("34 Shipping Road", document.RootElement.GetProperty("defaultShippingAddress").GetProperty("addressLine1").GetString());
         Assert.Equal("use_default_checkout_addresses", document.RootElement.GetProperty("nextActions")[0].GetString());
     }
 

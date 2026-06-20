@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -11,6 +12,7 @@ using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Hosting;
 
 namespace Maliev.QuoteEngine.Bff.Services;
 
@@ -94,7 +96,8 @@ internal sealed class QuoteAgentService(
     IOrderServiceClient orderClient,
     IPaymentServiceClient paymentClient,
     IInvoiceServiceClient invoiceClient,
-    IProjectServiceClient projectClient) : IQuoteAgentService
+    IProjectServiceClient projectClient,
+    IHostEnvironment environment) : IQuoteAgentService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] ArtifactContextMetadataKeys =
@@ -614,7 +617,7 @@ internal sealed class QuoteAgentService(
             "quote_get_state" => ToStateResponse(state),
             "quote_get_project_summary" => await BuildProjectSummaryAsync(state, cancellationToken),
             "quote_get_reference_data" => prototypeStore.ReferenceData,
-            "quote_get_account_context" => BuildAccountContext(state),
+            "quote_get_account_context" => await BuildAccountContextAsync(state, cancellationToken),
             "quote_get_auth_handoff" => BuildAuthHandoff(state, request.Arguments),
             "quote_focus_ui" => FocusUi(state, request.Arguments),
             "quote_get_settings" => BuildSettings(state),
@@ -1739,7 +1742,9 @@ internal sealed class QuoteAgentService(
         };
     }
 
-    private object BuildAccountContext(QuoteAgentSessionState state)
+    private async Task<object> BuildAccountContextAsync(
+        QuoteAgentSessionState state,
+        CancellationToken cancellationToken)
     {
         var customerId = ResolveCustomerId();
         var authHandoff = BuildAuthHandoff(state, []);
@@ -1762,8 +1767,28 @@ internal sealed class QuoteAgentService(
         }
 
         state.CustomerId = customerId;
-        var profile = prototypeStore.GetProfile(customerId.Value);
-        var addresses = prototypeStore.GetAddresses(customerId.Value);
+        var profile = await customerClient.GetByIdAsync(customerId.Value, cancellationToken);
+        var addresses = await GetCustomerAddressesForContextAsync(customerId.Value, cancellationToken);
+        if ((profile is null || addresses is null) && CanUsePrototypeAccountContextFallback())
+        {
+            profile ??= prototypeStore.GetProfile(customerId.Value);
+            addresses ??= prototypeStore.GetAddresses(customerId.Value);
+        }
+
+        if (profile is null || addresses is null)
+        {
+            return new
+            {
+                error = "Customer account context is temporarily unavailable.",
+                requiredGateCode = "account_context_available",
+                actionType = "get_account_context",
+                isAuthenticated = true,
+                customerId,
+                authHandoff,
+                state = ToStateResponse(state)
+            };
+        }
+
         var defaultBillingAddress = SelectDefaultAddress(addresses, "Billing");
         var defaultShippingAddress = SelectDefaultAddress(addresses, "Shipping");
 
@@ -1785,6 +1810,42 @@ internal sealed class QuoteAgentService(
                 "continue_quote"
             }
         };
+    }
+
+    private async Task<IReadOnlyList<CustomerAddressDto>?> GetCustomerAddressesForContextAsync(
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await customerClient.GetCustomerAddressesAsync(customerId, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "CustomerService returned {Status} while reading account context addresses for customer {CustomerId}.",
+                    response.StatusCode,
+                    customerId);
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<List<CustomerAddressDto>>(
+                JsonOptions,
+                cancellationToken) ?? [];
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "CustomerService account context addresses failed for customer {CustomerId}.", customerId);
+            return null;
+        }
+    }
+
+    private bool CanUsePrototypeAccountContextFallback()
+    {
+        return environment.IsDevelopment() || environment.IsEnvironment("Testing");
     }
 
     private static CustomerAddressDto? SelectDefaultAddress(
