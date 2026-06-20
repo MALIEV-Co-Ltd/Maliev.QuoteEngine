@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MassTransit;
 using Maliev.MessagingContracts.Contracts.Payments;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Consumers;
 using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Shared.Quotes;
@@ -52,6 +53,14 @@ public sealed class PaymentNotificationConsumerTests
         return (hub, clients, proxy);
     }
 
+    private static IOrderServiceClient CreateOrderClient(bool addStatusResult = true)
+    {
+        var orderClient = Substitute.For<IOrderServiceClient>();
+        orderClient.AddStatusAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(addStatusResult);
+        return orderClient;
+    }
+
     private static ConsumeContext<T> Context<T>(T message)
         where T : class
     {
@@ -76,7 +85,8 @@ public sealed class PaymentNotificationConsumerTests
     public async Task Completed_pushes_PaymentCompleted_to_order_group()
     {
         var (hub, clients, proxy) = CreateHub();
-        var consumer = new QuotePaymentCompletedConsumer(hub, Substitute.For<ILogger<QuotePaymentCompletedConsumer>>());
+        var orderClient = CreateOrderClient();
+        var consumer = new QuotePaymentCompletedConsumer(orderClient, hub, Substitute.For<ILogger<QuotePaymentCompletedConsumer>>());
         var paymentId = Guid.NewGuid();
         var evt = new PaymentCompletedEvent() with
         {
@@ -91,6 +101,7 @@ public sealed class PaymentNotificationConsumerTests
 
         await consumer.Consume(Context(evt));
 
+        await orderClient.Received(1).AddStatusAsync(OrderNumber, "Paid", Arg.Any<CancellationToken>());
         clients.Received(1).Group($"quote-order:{OrderNumber}");
         var p = SentPayload<QePaymentCompletedPayload>(proxy, "PaymentCompleted");
         Assert.Equal(OrderNumber, p.OrderNumber);
@@ -231,12 +242,41 @@ public sealed class PaymentNotificationConsumerTests
     public async Task Completed_with_null_payload_is_skipped()
     {
         var (hub, clients, proxy) = CreateHub();
-        var consumer = new QuotePaymentCompletedConsumer(hub, Substitute.For<ILogger<QuotePaymentCompletedConsumer>>());
+        var orderClient = CreateOrderClient();
+        var consumer = new QuotePaymentCompletedConsumer(orderClient, hub, Substitute.For<ILogger<QuotePaymentCompletedConsumer>>());
 
         await consumer.Consume(Context(new PaymentCompletedEvent()));
 
+        await orderClient.DidNotReceive().AddStatusAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
         clients.DidNotReceive().Group(Arg.Any<string>());
         await proxy.DidNotReceive().SendCoreAsync(Arg.Any<string>(), Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Completed_still_pushes_PaymentCompleted_when_order_status_update_fails()
+    {
+        var (hub, clients, proxy) = CreateHub();
+        var orderClient = CreateOrderClient(addStatusResult: false);
+        var consumer = new QuotePaymentCompletedConsumer(orderClient, hub, Substitute.For<ILogger<QuotePaymentCompletedConsumer>>());
+        var paymentId = Guid.NewGuid();
+        var evt = new PaymentCompletedEvent() with
+        {
+            Payload = new PaymentCompletedEventPayload(
+                OrderId: Guid.NewGuid(),
+                OrderNumber: OrderNumber,
+                CustomerId: "cust-1",
+                PaymentId: paymentId,
+                Amount: 12500d,
+                Currency: "THB"),
+        };
+
+        await consumer.Consume(Context(evt));
+
+        await orderClient.Received(1).AddStatusAsync(OrderNumber, "Paid", Arg.Any<CancellationToken>());
+        clients.Received(1).Group($"quote-order:{OrderNumber}");
+        var p = SentPayload<QePaymentCompletedPayload>(proxy, "PaymentCompleted");
+        Assert.Equal(OrderNumber, p.OrderNumber);
+        Assert.Equal(paymentId, p.PaymentId);
     }
 
     [Fact]
@@ -268,7 +308,7 @@ public sealed class PaymentNotificationConsumerTests
             groups.Add(captured!);
         }
 
-        await Run(h => new QuotePaymentCompletedConsumer(h, Substitute.For<ILogger<QuotePaymentCompletedConsumer>>())
+        await Run(h => new QuotePaymentCompletedConsumer(CreateOrderClient(), h, Substitute.For<ILogger<QuotePaymentCompletedConsumer>>())
             .Consume(Context(new PaymentCompletedEvent() with
             {
                 Payload = new PaymentCompletedEventPayload(Guid.NewGuid(), OrderNumber, "c", Guid.NewGuid(), 1d, "THB"),

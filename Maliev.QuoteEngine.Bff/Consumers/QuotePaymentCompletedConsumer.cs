@@ -1,6 +1,7 @@
 // Maliev.QuoteEngine.Bff/Consumers/QuotePaymentCompletedConsumer.cs
 using MassTransit;
 using Maliev.MessagingContracts.Contracts.Payments;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.SignalR;
@@ -13,6 +14,7 @@ namespace Maliev.QuoteEngine.Bff.Consumers;
 /// the order group, allowing the UI to update status without polling.
 /// </summary>
 public sealed class QuotePaymentCompletedConsumer(
+    IOrderServiceClient orderClient,
     IHubContext<QuoteNotificationsHub> hub,
     ILogger<QuotePaymentCompletedConsumer> logger) : IConsumer<PaymentCompletedEvent>
 {
@@ -30,6 +32,18 @@ public sealed class QuotePaymentCompletedConsumer(
             PaymentId: payload.PaymentId,
             Amount: (decimal)payload.Amount,
             Currency: payload.Currency);
+
+        var orderStatusUpdated = await orderClient.AddStatusAsync(
+            payload.OrderNumber,
+            "Paid",
+            context.CancellationToken);
+        if (!orderStatusUpdated)
+        {
+            logger.LogWarning(
+                "Could not advance order {OrderNumber} to Paid after payment {PaymentId}",
+                payload.OrderNumber,
+                payload.PaymentId);
+        }
 
         await hub.Clients
             .Group(QuoteNotificationsHub.OrderGroup(payload.OrderNumber))
