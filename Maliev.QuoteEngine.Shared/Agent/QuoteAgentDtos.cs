@@ -856,6 +856,12 @@ public sealed class CadCommandDto
     /// fuse, cut, intersect, fillet, chamfer, sweep, loft, translate, rotate.</summary>
     public string Op { get; set; } = string.Empty;
 
+    /// <summary>Operation alias often emitted by model tool calls; normalized into <see cref="Op"/>.</summary>
+    public string? Operation { get; set; }
+
+    /// <summary>Operation type alias often emitted by model tool calls; normalized into <see cref="Op"/>.</summary>
+    public string? Type { get; set; }
+
     /// <summary>Identifier for referencing this shape in subsequent commands.</summary>
     public string? Id { get; set; }
 

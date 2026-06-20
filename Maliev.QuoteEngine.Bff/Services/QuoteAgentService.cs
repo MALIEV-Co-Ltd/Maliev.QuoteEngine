@@ -6292,7 +6292,7 @@ Customer message:
     {
         foreach (var command in commands)
         {
-            command.Op = command.Op.Trim().ToLowerInvariant();
+            command.Op = NormalizeCadOperation(command);
             command.Id = NormalizeCadShapeReference(command.Id);
             command.TargetId = NormalizeCadShapeReference(command.TargetId);
             command.ToolId = NormalizeCadShapeReference(command.ToolId);
@@ -6311,6 +6311,12 @@ Customer message:
                 }
             }
         }
+    }
+
+    private static string NormalizeCadOperation(CadCommandDto command)
+    {
+        var operation = FirstNonWhiteSpace(command.Op, command.Operation, command.Type);
+        return operation?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 
     private static void NormalizeCadCommandParams(CadCommandDto command)
@@ -6394,6 +6400,11 @@ Customer message:
         return values.All(value => value.HasValue)
             ? values.Select(value => value!.Value).ToArray()
             : null;
+    }
+
+    private static string? FirstNonWhiteSpace(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value));
     }
 
     private static string? NormalizeCadShapeReference(string? value)
