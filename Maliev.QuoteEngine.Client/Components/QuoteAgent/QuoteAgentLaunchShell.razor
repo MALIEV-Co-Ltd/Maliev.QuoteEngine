@@ -198,22 +198,8 @@
             {
                 <div class="qe-agent-signin-card">
                     <div class="qe-agent-signin-panel">
-                        <strong>@Text("Your workspace. Always free.", "พื้นที่ทำงานของคุณ ฟรีเสมอ")</strong>
-                        <p>@Text("Save projects, get instant pricing, and track quotes in one place. No credit card required.", "บันทึกโปรเจกต์ ดูราคาทันที และติดตามใบเสนอราคาได้ในที่เดียว ไม่ต้องใช้บัตรเครดิต")</p>
-                        <ul>
-                            <li>
-                                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
-                                <span>@Text("Save projects & stay organized", "บันทึกโปรเจกต์และจัดระเบียบงาน")</span>
-                            </li>
-                            <li>
-                                <MudIcon Icon="@Icons.Material.Outlined.RequestQuote" Size="Size.Small" />
-                                <span>@Text("Instant pricing & accurate quotes", "ราคาทันทีและใบเสนอราคาที่แม่นยำ")</span>
-                            </li>
-                            <li>
-                                <MudIcon Icon="@Icons.Material.Outlined.BarChart" Size="Size.Small" />
-                                <span>@Text("Track quotes & close more jobs", "ติดตามใบเสนอราคาและปิดงานได้มากขึ้น")</span>
-                            </li>
-                        </ul>
+                        <strong>@Text("Sign in to save projects", "เข้าสู่ระบบเพื่อบันทึกโปรเจกต์")</strong>
+                        <p>@Text("Keep quotes, uploads, and order status in your workspace.", "เก็บใบเสนอราคา ไฟล์อัปโหลด และสถานะคำสั่งซื้อไว้ในพื้นที่ทำงานของคุณ")</p>
                         <button type="button" class="qe-agent-signin-btn" @onclick='@(() => OpenAuthDialog("sign-in"))'>
                             <span>@Text("Continue", "ดำเนินการต่อ")</span>
                             <MudIcon Icon="@Icons.Material.Outlined.ArrowForward" Size="Size.Small" />
