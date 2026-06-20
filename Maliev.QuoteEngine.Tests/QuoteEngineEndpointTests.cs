@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.FileProviders;
@@ -2340,6 +2341,42 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(status);
         Assert.Equal("Analyzed", status.Status);
         Assert.True(status.VolumeCc > 0);
+    }
+
+    [Fact]
+    public async Task Upload_does_not_use_local_prototype_fallback_when_upload_service_is_unavailable_in_production()
+    {
+        await using var productionFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AnonymousVisitor:SigningKey"] = "quote-upload-production-test-signing-key"
+                });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(new FailingQuoteUploadServiceClient());
+            });
+        });
+        using var client = productionFactory.CreateClient();
+
+        var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = "session-production-upload-fallback",
+            FileName = "production-upload.step",
+            ContentType = "application/step",
+            FileSizeBytes = 1024
+        });
+
+        Assert.Equal(HttpStatusCode.BadGateway, initiation.StatusCode);
+        using var body = JsonDocument.Parse(await initiation.Content.ReadAsStringAsync());
+        Assert.Equal("Upload service unavailable.", body.RootElement.GetProperty("title").GetString());
     }
 
     [Fact]
