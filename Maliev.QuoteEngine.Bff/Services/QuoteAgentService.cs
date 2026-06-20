@@ -5902,7 +5902,7 @@ Customer message:
                 "box" => RequireParams(command, index, 3, "positive width, depth, and height"),
                 "cylinder" => RequireParams(command, index, 2, "positive radius and height"),
                 "sphere" => RequireParams(command, index, 1, "positive radius"),
-                "cone" => RequireParams(command, index, 3, "positive bottom radius, top radius, and height", allowZeroAfterFirst: true),
+                "cone" => RequireConeParams(command, index),
                 "extrude" => ValidateProfileCommand(command, index, requireHeight: true),
                 "revolve" => ValidateProfileCommand(command, index, requireHeight: false) ??
                     ValidateOptionalNonZeroVector(command.Axis, index, "rotation axis"),
@@ -6109,6 +6109,29 @@ Customer message:
             {
                 return $"CAD command {index + 1} requires {detail}.";
             }
+        }
+
+        return null;
+    }
+
+    private static string? RequireConeParams(CadCommandDto command, int index)
+    {
+        if (command.Params is null || command.Params.Length < 3)
+        {
+            return $"CAD command {index + 1} requires a positive bottom radius, non-negative top radius, and positive cone height.";
+        }
+
+        var bottomRadius = command.Params[0];
+        var topRadius = command.Params[1];
+        var height = command.Params[2];
+        if (!double.IsFinite(bottomRadius) ||
+            !double.IsFinite(topRadius) ||
+            !double.IsFinite(height) ||
+            bottomRadius <= 0 ||
+            topRadius < 0 ||
+            height <= 0)
+        {
+            return $"CAD command {index + 1} requires a positive bottom radius, non-negative top radius, and positive cone height.";
         }
 
         return null;

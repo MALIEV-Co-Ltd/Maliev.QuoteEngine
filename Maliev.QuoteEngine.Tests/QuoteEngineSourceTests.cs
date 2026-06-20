@@ -4227,7 +4227,9 @@ public sealed class QuoteEngineSourceTests
             .ReplaceLineEndings("\n");
 
         Assert.Contains("function requireCommandParams(cmd, values, requiredLength, options = {})", worker, StringComparison.Ordinal);
+        Assert.Contains("function requireConeParams(cmd, values)", worker, StringComparison.Ordinal);
         Assert.Contains("throw new Error(`CAD operation ${cmd.op} requires ${requiredLength} valid parameter(s)`);", worker, StringComparison.Ordinal);
+        Assert.Contains("throw new Error(`CAD operation ${cmd.op} requires a positive bottom radius, non-negative top radius, and positive height`);", worker, StringComparison.Ordinal);
 
         var processStart = worker.IndexOf("function processCommands(commands)", StringComparison.Ordinal);
         Assert.True(processStart >= 0, "processCommands must exist.");
@@ -4239,8 +4241,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("requireCommandParams(cmd, p, 3);", processCommands, StringComparison.Ordinal);
         Assert.Contains("requireCommandParams(cmd, p, 2);", processCommands, StringComparison.Ordinal);
         Assert.Contains("requireCommandParams(cmd, p, 1);", processCommands, StringComparison.Ordinal);
-        Assert.Contains("requireCommandParams(cmd, p, 3, { allowZeroAfterFirst: true });", processCommands, StringComparison.Ordinal);
+        Assert.Contains("requireConeParams(cmd, p);", processCommands, StringComparison.Ordinal);
         Assert.Contains("shape = makeCone(p[0], p[1], p[2]);", processCommands, StringComparison.Ordinal);
+        Assert.DoesNotContain("requireCommandParams(cmd, p, 3, { allowZeroAfterFirst: true });", processCommands, StringComparison.Ordinal);
         Assert.DoesNotContain("shape = makeCone(p[0], p[1] || 0, p[2]);", processCommands, StringComparison.Ordinal);
     }
 

@@ -83,6 +83,26 @@ function requireCommandParams(cmd, values, requiredLength, options = {}) {
   }
 }
 
+function requireConeParams(cmd, values) {
+  if (!Array.isArray(values) || values.length < 3) {
+    throw new Error(`CAD operation ${cmd.op} requires a positive bottom radius, non-negative top radius, and positive height`);
+  }
+
+  const bottomRadius = Number(values[0]);
+  const topRadius = Number(values[1]);
+  const height = Number(values[2]);
+  if (
+    !Number.isFinite(bottomRadius) ||
+    !Number.isFinite(topRadius) ||
+    !Number.isFinite(height) ||
+    bottomRadius <= 0 ||
+    topRadius < 0 ||
+    height <= 0
+  ) {
+    throw new Error(`CAD operation ${cmd.op} requires a positive bottom radius, non-negative top radius, and positive height`);
+  }
+}
+
 function requireOptionalFiniteNumber(cmd, value, fieldName) {
   if (value == null) {
     return undefined;
@@ -259,7 +279,7 @@ function processCommands(commands) {
         break;
       }
       case 'cone': {
-        requireCommandParams(cmd, p, 3, { allowZeroAfterFirst: true });
+        requireConeParams(cmd, p);
         shape = makeCone(p[0], p[1], p[2]);
         break;
       }

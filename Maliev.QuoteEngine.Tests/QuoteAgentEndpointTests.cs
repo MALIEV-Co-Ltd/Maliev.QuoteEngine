@@ -4564,6 +4564,41 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_rejects_zero_height_cone_before_creating_ready_artifact()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new[]
+        {
+            new
+            {
+                op = "cone",
+                id = "empty_cone",
+                Params = new[] { 12.0, 0.0, 0.0 }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Zero height cone", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("error", out var error));
+        Assert.Contains("positive cone height", error.GetString(), StringComparison.OrdinalIgnoreCase);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.DoesNotContain(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(state.Parts, part => part.Status == "ModelGenerated");
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_stringified_cad_commands()
     {
         // Defense-in-depth: if an upstream path flattens cad_commands into a JSON string
