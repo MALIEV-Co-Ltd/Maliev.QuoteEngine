@@ -5701,7 +5701,8 @@ Customer message:
                 "extrude" => ValidateProfileCommand(command, index, requireHeight: true),
                 "revolve" => ValidateProfileCommand(command, index, requireHeight: false) ??
                     ValidateOptionalNonZeroVector(command.Axis, index, "rotation axis"),
-                "fuse" or "cut" or "intersect" or "loft" => ValidateBinaryCommand(command, index, knownShapes, hasCurrentShape),
+                "fuse" or "cut" or "intersect" => ValidateBinaryCommand(command, index, knownShapes, hasCurrentShape),
+                "loft" => ValidateLoftCommand(command, index, knownShapes),
                 "fillet" or "chamfer" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
                     RequirePositiveRadius(command, index),
                 "translate" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
@@ -5747,6 +5748,15 @@ Customer message:
         bool hasCurrentShape)
     {
         return ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
+            ValidateReference(command.ToolId, knownShapes, index, "toolId");
+    }
+
+    private static string? ValidateLoftCommand(
+        CadCommandDto command,
+        int index,
+        HashSet<string> knownShapes)
+    {
+        return ValidateReference(command.TargetId, knownShapes, index, "targetId") ??
             ValidateReference(command.ToolId, knownShapes, index, "toolId");
     }
 
