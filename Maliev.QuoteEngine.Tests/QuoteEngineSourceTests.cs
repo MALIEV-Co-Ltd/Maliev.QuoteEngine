@@ -4443,6 +4443,22 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentPrompt_advertises_the_generated_preview_parameter_contract()
+    {
+        var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs")
+            .ReplaceLineEndings("\n");
+
+        const string parameterContract =
+            "Prefer canonical params arrays for CAD commands; accepted named shorthands include width/depth/height, diameter/radius, x/y/z translate offsets, axisX/axisY/axisZ rotation axes, and sketch segment x/y/dx/dy.";
+
+        Assert.Contains(parameterContract, service, StringComparison.Ordinal);
+        Assert.Contains("\"extrude\" => BuildParams(command.Height)", service, StringComparison.Ordinal);
+        Assert.Contains("command.Offset = BuildParams(command.X, command.Y, command.Z);", service, StringComparison.Ordinal);
+        Assert.Contains("command.Axis = BuildParams(command.AxisX, command.AxisY, command.AxisZ);", service, StringComparison.Ordinal);
+        Assert.Contains("\"move\" or \"line\" => BuildParams(segment.X, segment.Y)", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generate3DPreview_returns_the_artifact_it_created()
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs")
