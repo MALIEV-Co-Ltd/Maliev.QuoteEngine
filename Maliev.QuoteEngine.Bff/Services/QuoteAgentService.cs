@@ -5727,9 +5727,6 @@ Customer message:
             artifact.Metadata["cad_commands"] = commandsJson;
             artifact.Metadata["commandCount"] = commands.Count.ToString(CultureInfo.InvariantCulture);
 
-            state.Artifacts.RemoveAll(item =>
-                item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
-                item.Metadata.TryGetValue("generated", out var gen) && gen == "true");
             state.Artifacts.Add(artifact);
             state.UpdatedAt = DateTimeOffset.UtcNow;
         }

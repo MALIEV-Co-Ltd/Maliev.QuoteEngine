@@ -4616,6 +4616,131 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_preview_feedback_rejects_whitespace_only_comment()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new[]
+        {
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            }
+        };
+        await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Mounting plate preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var artifact = Assert.Single(state.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var feedbackResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{artifact.ArtifactId:D}/feedback",
+            new QuoteAgentPreviewFeedbackRequest
+            {
+                Rating = 3,
+                Comment = "   "
+            },
+            JsonOptions);
+
+        Assert.Equal(HttpStatusCode.BadRequest, feedbackResponse.StatusCode);
+
+        var updatedState = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var updatedArtifact = Assert.Single(updatedState.Artifacts, item => item.ArtifactId == artifact.ArtifactId);
+        Assert.False(updatedArtifact.Metadata.ContainsKey("customerComment"));
+        Assert.False(updatedArtifact.Metadata.ContainsKey("customerRating"));
+    }
+
+    [Fact]
+    public async Task Agent_preview_feedback_can_record_feedback_for_earlier_generated_preview()
+    {
+        var customerId = Guid.NewGuid();
+        var customerClient = new MemoryCustomerServiceClient(customerId);
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<ICustomerServiceClient>();
+                services.AddSingleton<ICustomerServiceClient>(customerClient);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var firstCommands = new[]
+        {
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            }
+        };
+        await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("First generated plate", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(firstCommands, JsonOptions)
+            },
+            customerId);
+
+        var firstState = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var firstArtifact = Assert.Single(firstState.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("description", out var description) &&
+            description.Equals("First generated plate", StringComparison.OrdinalIgnoreCase));
+
+        var secondCommands = new[]
+        {
+            new
+            {
+                op = "cylinder",
+                id = "base",
+                Params = new[] { 12.0, 20.0 }
+            }
+        };
+        await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Second generated cylinder", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(secondCommands, JsonOptions)
+            },
+            customerId);
+
+        var feedbackResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{firstArtifact.ArtifactId:D}/feedback",
+            new QuoteAgentPreviewFeedbackRequest
+            {
+                Rating = 4,
+                Comment = "The first plate was closer; keep that flat rectangular profile."
+            },
+            JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode);
+
+        var updatedState = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.Contains(updatedState.Artifacts, item =>
+            item.ArtifactId == firstArtifact.ArtifactId &&
+            item.Metadata.TryGetValue("customerComment", out var comment) &&
+            comment.Contains("flat rectangular profile", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(updatedState.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("description", out var description) &&
+            description.Equals("Second generated cylinder", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(customerClient.LastObservedMemory);
+        Assert.Contains("First generated plate", customerClient.LastObservedMemory!.Value, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Agent_message_after_preview_feedback_includes_observed_feedback_memory()
     {
         var customerEmail = $"preview.feedback.{Guid.NewGuid():N}@example.com";
