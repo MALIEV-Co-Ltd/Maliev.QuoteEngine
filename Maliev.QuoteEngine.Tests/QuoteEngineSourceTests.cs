@@ -4518,6 +4518,17 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeInlinePartViewer_implements_async_disposal_for_preview_resources()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("@implements IAsyncDisposable", component, StringComparison.Ordinal);
+        Assert.Contains("public async ValueTask DisposeAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("await JS.InvokeVoidAsync(\"quoteInlineViewer.disposePreview\", _containerId);", component, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
