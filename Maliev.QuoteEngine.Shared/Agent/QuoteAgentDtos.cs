@@ -889,6 +889,13 @@ public sealed class CadCommandDto
     /// <summary>Target shape reference alias often emitted by model tool calls; normalized into <see cref="TargetId"/>.</summary>
     public string? Target { get; set; }
 
+    /// <summary>Target shape identifier alias often emitted by model tool calls; normalized into <see cref="TargetId"/>.</summary>
+    public string? TargetShapeId { get; set; }
+
+    /// <summary>Snake-case target shape identifier alias; normalized into <see cref="TargetId"/>.</summary>
+    [JsonPropertyName("target_shape_id")]
+    public string? TargetShapeIdSnake { get; set; }
+
     /// <summary>Tool shape reference (for boolean ops, sweep, loft).</summary>
     public string? ToolId { get; set; }
 
@@ -899,6 +906,13 @@ public sealed class CadCommandDto
     /// <summary>Tool shape reference alias often emitted by model tool calls; normalized into <see cref="ToolId"/>.</summary>
     public string? Tool { get; set; }
 
+    /// <summary>Tool shape identifier alias often emitted by model tool calls; normalized into <see cref="ToolId"/>.</summary>
+    public string? ToolShapeId { get; set; }
+
+    /// <summary>Snake-case tool shape identifier alias; normalized into <see cref="ToolId"/>.</summary>
+    [JsonPropertyName("tool_shape_id")]
+    public string? ToolShapeIdSnake { get; set; }
+
     /// <summary>Result identifier — alias for the output of this command.</summary>
     public string? ResultId { get; set; }
 
@@ -908,6 +922,13 @@ public sealed class CadCommandDto
 
     /// <summary>Result identifier alias often emitted by model tool calls; normalized into <see cref="ResultId"/>.</summary>
     public string? Result { get; set; }
+
+    /// <summary>Result shape identifier alias often emitted by model tool calls; normalized into <see cref="ResultId"/>.</summary>
+    public string? ResultShapeId { get; set; }
+
+    /// <summary>Snake-case result shape identifier alias; normalized into <see cref="ResultId"/>.</summary>
+    [JsonPropertyName("result_shape_id")]
+    public string? ResultShapeIdSnake { get; set; }
 
     /// <summary>Numeric parameters, op-dependent:
     /// box: [w, d, h]; cylinder: [radius, height]; sphere: [radius];
