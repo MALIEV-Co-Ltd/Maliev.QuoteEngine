@@ -8,31 +8,42 @@ namespace Maliev.QuoteEngine.Bff.Services;
 /// </summary>
 public interface IQuoteAgentConversationMap
 {
-    /// <summary>Gets the mapped ChatbotService session ID for a QuoteEngine session.</summary>
-    Task<Guid?> GetChatbotSessionIdAsync(Guid quoteSessionId, CancellationToken cancellationToken);
+    /// <summary>Gets the mapped ChatbotService session for a QuoteEngine session.</summary>
+    Task<QuoteAgentConversationMapping?> GetMappingAsync(Guid quoteSessionId, CancellationToken cancellationToken);
 
-    /// <summary>Stores the mapped ChatbotService session ID for a QuoteEngine session.</summary>
-    Task StoreChatbotSessionIdAsync(Guid quoteSessionId, Guid chatbotSessionId, CancellationToken cancellationToken);
+    /// <summary>Stores the mapped ChatbotService session for a QuoteEngine session.</summary>
+    Task StoreMappingAsync(
+        Guid quoteSessionId,
+        Guid chatbotSessionId,
+        Guid? customerId,
+        CancellationToken cancellationToken);
 }
+
+/// <summary>
+/// Durable link between a public QuoteEngine session and its downstream ChatbotService conversation.
+/// </summary>
+public sealed record QuoteAgentConversationMapping(Guid ChatbotSessionId, Guid? CustomerId);
 
 internal sealed class InMemoryQuoteAgentConversationMap : IQuoteAgentConversationMap
 {
-    private readonly ConcurrentDictionary<Guid, Guid> _mappings = new();
+    private readonly ConcurrentDictionary<Guid, QuoteAgentConversationMapping> _mappings = new();
 
-    public Task<Guid?> GetChatbotSessionIdAsync(Guid quoteSessionId, CancellationToken cancellationToken)
+    public Task<QuoteAgentConversationMapping?> GetMappingAsync(Guid quoteSessionId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        return Task.FromResult(_mappings.TryGetValue(quoteSessionId, out var chatbotSessionId)
-            ? chatbotSessionId
-            : (Guid?)null);
+        return Task.FromResult(_mappings.TryGetValue(quoteSessionId, out var mapping) ? mapping : null);
     }
 
-    public Task StoreChatbotSessionIdAsync(Guid quoteSessionId, Guid chatbotSessionId, CancellationToken cancellationToken)
+    public Task StoreMappingAsync(
+        Guid quoteSessionId,
+        Guid chatbotSessionId,
+        Guid? customerId,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (quoteSessionId != Guid.Empty && chatbotSessionId != Guid.Empty)
         {
-            _mappings[quoteSessionId] = chatbotSessionId;
+            _mappings[quoteSessionId] = new QuoteAgentConversationMapping(chatbotSessionId, customerId);
         }
 
         return Task.CompletedTask;
@@ -45,7 +56,7 @@ internal sealed class RedisQuoteAgentConversationMap(
 {
     private static readonly TimeSpan MappingTtl = TimeSpan.FromDays(2);
 
-    public async Task<Guid?> GetChatbotSessionIdAsync(Guid quoteSessionId, CancellationToken cancellationToken)
+    public async Task<QuoteAgentConversationMapping?> GetMappingAsync(Guid quoteSessionId, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (quoteSessionId == Guid.Empty)
@@ -54,12 +65,45 @@ internal sealed class RedisQuoteAgentConversationMap(
         }
 
         var value = await redis.GetDatabase().StringGetAsync(BuildKey(quoteSessionId));
-        return Guid.TryParse(value.ToString(), out var chatbotSessionId) && chatbotSessionId != Guid.Empty
-            ? chatbotSessionId
-            : null;
+        var raw = value.ToString();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        if (Guid.TryParse(raw, out var legacyChatbotSessionId) && legacyChatbotSessionId != Guid.Empty)
+        {
+            return new QuoteAgentConversationMapping(legacyChatbotSessionId, null);
+        }
+
+        try
+        {
+            var mapping = System.Text.Json.JsonSerializer.Deserialize<RedisConversationMapping>(raw);
+            return mapping is not null &&
+                   Guid.TryParse(mapping.ChatbotSessionId, out var chatbotSessionId) &&
+                   chatbotSessionId != Guid.Empty
+                ? new QuoteAgentConversationMapping(
+                    chatbotSessionId,
+                    Guid.TryParse(mapping.CustomerId, out var customerId) && customerId != Guid.Empty
+                        ? customerId
+                        : null)
+                : null;
+        }
+        catch (System.Text.Json.JsonException ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to parse QuoteEngine to ChatbotService session mapping for {QuoteSessionId}.",
+                quoteSessionId);
+            return null;
+        }
     }
 
-    public async Task StoreChatbotSessionIdAsync(Guid quoteSessionId, Guid chatbotSessionId, CancellationToken cancellationToken)
+    public async Task StoreMappingAsync(
+        Guid quoteSessionId,
+        Guid chatbotSessionId,
+        Guid? customerId,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         if (quoteSessionId == Guid.Empty || chatbotSessionId == Guid.Empty)
@@ -71,7 +115,9 @@ internal sealed class RedisQuoteAgentConversationMap(
         {
             await redis.GetDatabase().StringSetAsync(
                 BuildKey(quoteSessionId),
-                chatbotSessionId.ToString("D"),
+                System.Text.Json.JsonSerializer.Serialize(new RedisConversationMapping(
+                    chatbotSessionId.ToString("D"),
+                    customerId?.ToString("D"))),
                 MappingTtl);
         }
         catch (RedisException ex)
@@ -87,4 +133,6 @@ internal sealed class RedisQuoteAgentConversationMap(
     {
         return $"quote-agent:conversation-map:{quoteSessionId:D}";
     }
+
+    private sealed record RedisConversationMapping(string ChatbotSessionId, string? CustomerId);
 }

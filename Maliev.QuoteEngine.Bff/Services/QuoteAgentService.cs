@@ -71,7 +71,7 @@ public interface IQuoteAgentService
     Task RelayThinkingStepAsync(Guid sessionId, QuoteAgentThinkingStepDto step, CancellationToken cancellationToken);
 
     /// <summary>Resolves the downstream chatbot session used for transcript/history operations.</summary>
-    Task<Guid> ResolveConversationSessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
+    Task<Guid?> ResolveConversationSessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
     /// <summary>Uploads a sketch image attached to an agent message.</summary>
     Task<UploadSketchResponse> UploadSketchAsync(
@@ -429,24 +429,45 @@ internal sealed class QuoteAgentService(
         return ToStateResponse(sessionStore.GetOrCreate(sessionId));
     }
 
-    public async Task<Guid> ResolveConversationSessionIdAsync(Guid sessionId, CancellationToken cancellationToken)
+    public async Task<Guid?> ResolveConversationSessionIdAsync(Guid sessionId, CancellationToken cancellationToken)
     {
+        var currentCustomerId = ResolveCustomerId();
         if (sessionStore.TryGet(sessionId, out var existingState) &&
             existingState.ChatbotSessionId is { } chatbotSessionId &&
             chatbotSessionId != Guid.Empty)
         {
+            if (!CanAccessConversation(existingState.CustomerId, currentCustomerId))
+            {
+                return null;
+            }
+
+            if (existingState.CustomerId.HasValue)
+            {
+                await conversationMap.StoreMappingAsync(
+                    existingState.SessionId,
+                    chatbotSessionId,
+                    existingState.CustomerId,
+                    cancellationToken);
+            }
+
             return chatbotSessionId;
         }
 
-        var mappedChatbotSessionId = await conversationMap.GetChatbotSessionIdAsync(sessionId, cancellationToken);
-        if (mappedChatbotSessionId is { } mapped && mapped != Guid.Empty)
+        var mapping = await conversationMap.GetMappingAsync(sessionId, cancellationToken);
+        if (mapping is { ChatbotSessionId: { } mapped } && mapped != Guid.Empty)
         {
+            if (!CanAccessConversation(mapping.CustomerId, currentCustomerId))
+            {
+                return null;
+            }
+
             var restoredState = sessionStore.GetOrCreate(sessionId);
             restoredState.ChatbotSessionId = mapped;
+            restoredState.CustomerId = mapping.CustomerId ?? restoredState.CustomerId;
             return mapped;
         }
 
-        return sessionId;
+        return currentCustomerId.HasValue ? null : sessionId;
     }
 
     public QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId)
@@ -631,9 +652,10 @@ internal sealed class QuoteAgentService(
         var state = sessionStore.GetOrCreate(context.QuoteSessionId);
         state.ChatbotSessionId = context.ChatbotSessionId;
         state.CustomerId = context.CustomerId ?? state.CustomerId;
-        await conversationMap.StoreChatbotSessionIdAsync(
+        await conversationMap.StoreMappingAsync(
             context.QuoteSessionId,
             context.ChatbotSessionId,
+            context.CustomerId,
             cancellationToken);
 
         var result = toolName switch
@@ -882,10 +904,23 @@ internal sealed class QuoteAgentService(
             return existing;
         }
 
-        var mappedChatbotSessionId = await conversationMap.GetChatbotSessionIdAsync(state.SessionId, cancellationToken);
-        if (mappedChatbotSessionId is { } mapped && mapped != Guid.Empty)
+        var mapping = await conversationMap.GetMappingAsync(state.SessionId, cancellationToken);
+        if (mapping is { ChatbotSessionId: { } mapped } && mapped != Guid.Empty)
         {
+            var currentCustomerId = ResolveCustomerId();
+            var effectiveOwnerCustomerId = mapping.CustomerId ?? state.CustomerId;
+            if (!CanAccessConversation(effectiveOwnerCustomerId, currentCustomerId))
+            {
+                throw new UnauthorizedAccessException("The requested quote agent session belongs to another customer.");
+            }
+
             state.ChatbotSessionId = mapped;
+            state.CustomerId = effectiveOwnerCustomerId;
+            if (state.CustomerId.HasValue && mapping.CustomerId != state.CustomerId)
+            {
+                await conversationMap.StoreMappingAsync(state.SessionId, mapped, state.CustomerId, cancellationToken);
+            }
+
             return mapped;
         }
 
@@ -896,7 +931,7 @@ internal sealed class QuoteAgentService(
         }, cancellationToken);
         var sessionId = session?.SessionId is { } id && id != Guid.Empty ? id : Guid.NewGuid();
         state.ChatbotSessionId = sessionId;
-        await conversationMap.StoreChatbotSessionIdAsync(state.SessionId, sessionId, cancellationToken);
+        await conversationMap.StoreMappingAsync(state.SessionId, sessionId, state.CustomerId, cancellationToken);
         return sessionId;
     }
 
@@ -1324,6 +1359,16 @@ internal sealed class QuoteAgentService(
     private Guid? ResolveCustomerId()
     {
         return sessionResolver.TryResolveCustomerId(out var customerId) ? customerId : null;
+    }
+
+    private static bool CanAccessConversation(Guid? ownerCustomerId, Guid? currentCustomerId)
+    {
+        if (!ownerCustomerId.HasValue)
+        {
+            return !currentCustomerId.HasValue;
+        }
+
+        return currentCustomerId == ownerCustomerId;
     }
 
     private QuoteAgentStateResponse PrepareAction(

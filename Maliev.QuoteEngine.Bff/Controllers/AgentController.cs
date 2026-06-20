@@ -146,7 +146,16 @@ public sealed class AgentController(
         CancellationToken cancellationToken)
     {
         var conversationSessionId = await agentService.ResolveConversationSessionIdAsync(sessionId, cancellationToken);
-        var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId, cancellationToken);
+        if (!conversationSessionId.HasValue)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "No messages found.",
+                Detail = "The specified session has no messages available for this customer."
+            });
+        }
+
+        var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId.Value, cancellationToken);
         return Ok(new QuoteAgentMessageHistoryResponse
         {
             SessionId = sessionId,
@@ -419,7 +428,16 @@ public sealed class AgentController(
         }
 
         var conversationSessionId = await agentService.ResolveConversationSessionIdAsync(request.SessionId, cancellationToken);
-        var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId, cancellationToken);
+        if (!conversationSessionId.HasValue)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "No messages found.",
+                Detail = "The specified session has no messages available for this customer."
+            });
+        }
+
+        var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId.Value, cancellationToken);
         if (conversation is null || conversation.Messages.Count == 0)
         {
             return NotFound(new ProblemDetails

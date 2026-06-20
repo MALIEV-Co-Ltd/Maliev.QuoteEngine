@@ -309,7 +309,7 @@ Customer message:
         var quoteSessionId = Guid.NewGuid();
         var downstreamChatbotSessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f");
         var conversationMap = new RecordingQuoteAgentConversationMap();
-        await conversationMap.StoreChatbotSessionIdAsync(quoteSessionId, downstreamChatbotSessionId, CancellationToken.None);
+        await conversationMap.StoreMappingAsync(quoteSessionId, downstreamChatbotSessionId, null, CancellationToken.None);
         var chatbot = new RecordingChatbotServiceClient
         {
             ConversationMessages = new ChatbotConversationMessagesResponse
@@ -355,6 +355,118 @@ Customer message:
         Assert.Equal(2, history.Messages.Count);
         Assert.Equal("Continue my Make Studio project.", history.Messages[0].Content);
         Assert.Equal("Your DFM review and quote workflow are restored.", history.Messages[1].Content);
+    }
+
+    [Fact]
+    public async Task Agent_message_history_restores_signed_in_customer_mapping_after_auth_return()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var downstreamChatbotSessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f");
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            InitiateSession = new ChatbotSessionResponse
+            {
+                SessionId = downstreamChatbotSessionId
+            },
+            ConversationMessages = new ChatbotConversationMessagesResponse
+            {
+                SessionId = downstreamChatbotSessionId,
+                Language = "en",
+                Messages =
+                [
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "user",
+                        Content = "Please continue my Make Studio quote after login.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:00Z")
+                    },
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "assistant",
+                        Content = "Your active project chat has been restored.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:01Z")
+                    }
+                ]
+            }
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = await CreateSignedInClientAsync(scopedFactory, $"agent-history-owner-{Guid.NewGuid():N}@example.com");
+
+        var turn = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = quoteSessionId,
+            Message = "Please continue my Make Studio quote after login.",
+            Language = "en"
+        });
+        Assert.Equal(HttpStatusCode.OK, turn.StatusCode);
+
+        var history = await client.GetFromJsonAsync<QuoteAgentMessageHistoryResponse>(
+            $"/quote/v1/agent/sessions/{quoteSessionId:D}/messages",
+            JsonOptions);
+
+        Assert.NotNull(history);
+        Assert.Equal(quoteSessionId, history.SessionId);
+        Assert.Equal(downstreamChatbotSessionId, chatbot.LastConversationMessagesSessionId);
+        Assert.Equal(2, history.Messages.Count);
+        Assert.Equal("Please continue my Make Studio quote after login.", history.Messages[0].Content);
+        Assert.Equal("Your active project chat has been restored.", history.Messages[1].Content);
+    }
+
+    [Fact]
+    public async Task Agent_message_history_denies_signed_in_customer_for_another_customers_session()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var downstreamChatbotSessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f");
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            InitiateSession = new ChatbotSessionResponse
+            {
+                SessionId = downstreamChatbotSessionId
+            },
+            ConversationMessages = new ChatbotConversationMessagesResponse
+            {
+                SessionId = downstreamChatbotSessionId,
+                Language = "en",
+                Messages =
+                [
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "user",
+                        Content = "This is the owner's private Make Studio chat.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:00Z")
+                    }
+                ]
+            }
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var ownerClient = await CreateSignedInClientAsync(scopedFactory, $"agent-history-owner-{Guid.NewGuid():N}@example.com");
+        var turn = await ownerClient.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = quoteSessionId,
+            Message = "This is the owner's private Make Studio chat.",
+            Language = "en"
+        });
+        Assert.Equal(HttpStatusCode.OK, turn.StatusCode);
+
+        using var otherClient = await CreateSignedInClientAsync(scopedFactory, $"agent-history-other-{Guid.NewGuid():N}@example.com");
+        var history = await otherClient.GetAsync($"/quote/v1/agent/sessions/{quoteSessionId:D}/messages");
+
+        Assert.Equal(HttpStatusCode.NotFound, history.StatusCode);
+        Assert.Null(chatbot.LastConversationMessagesSessionId);
     }
 
     [Fact]
@@ -6637,6 +6749,8 @@ Customer message:
 
         public ChatbotConversationMessagesResponse? ConversationMessages { get; init; }
 
+        public ChatbotSessionResponse? InitiateSession { get; init; }
+
         public bool ThrowStreamException { get; init; }
 
         public bool ThrowSendException { get; init; }
@@ -6666,7 +6780,7 @@ Customer message:
         {
             LastInitiateRequest = request;
             Operations.Add("initiate");
-            return Task.FromResult<ChatbotSessionResponse?>(new ChatbotSessionResponse
+            return Task.FromResult<ChatbotSessionResponse?>(InitiateSession ?? new ChatbotSessionResponse
             {
                 SessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f"),
                 WelcomeMessage = "Mali is ready for manufacturing quotes.",
@@ -6758,20 +6872,22 @@ Customer message:
 
     private sealed class RecordingQuoteAgentConversationMap : IQuoteAgentConversationMap
     {
-        private readonly Dictionary<Guid, Guid> _mappings = [];
+        private readonly Dictionary<Guid, QuoteAgentConversationMapping> _mappings = [];
 
-        public Task<Guid?> GetChatbotSessionIdAsync(Guid quoteSessionId, CancellationToken cancellationToken)
+        public Task<QuoteAgentConversationMapping?> GetMappingAsync(Guid quoteSessionId, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            return Task.FromResult(_mappings.TryGetValue(quoteSessionId, out var chatbotSessionId)
-                ? chatbotSessionId
-                : (Guid?)null);
+            return Task.FromResult(_mappings.TryGetValue(quoteSessionId, out var mapping) ? mapping : null);
         }
 
-        public Task StoreChatbotSessionIdAsync(Guid quoteSessionId, Guid chatbotSessionId, CancellationToken cancellationToken)
+        public Task StoreMappingAsync(
+            Guid quoteSessionId,
+            Guid chatbotSessionId,
+            Guid? customerId,
+            CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            _mappings[quoteSessionId] = chatbotSessionId;
+            _mappings[quoteSessionId] = new QuoteAgentConversationMapping(chatbotSessionId, customerId);
             return Task.CompletedTask;
         }
     }
