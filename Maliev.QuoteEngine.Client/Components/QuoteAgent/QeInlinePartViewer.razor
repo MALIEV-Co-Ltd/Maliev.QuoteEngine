@@ -4,7 +4,10 @@
 <div id="@_containerId" class="qe-inline-viewer">
     @if (_loadFailed)
     {
-        <p class="qe-inline-viewer-error">3D preview could not be loaded.</p>
+        <div class="qe-inline-viewer-error">
+            <span>3D preview could not be loaded.</span>
+            <button type="button" class="qe-inline-viewer-retry" @onclick="RetryPreview">Retry preview</button>
+        </div>
     }
     else
     {
@@ -17,6 +20,7 @@
 
     private readonly string _containerId = $"qipv-{++_counter}";
     private string? _renderedCommandsJson;
+    private string? _failedCommandsJson;
     private bool _loadFailed;
 
     [Parameter]
@@ -30,9 +34,15 @@
             {
                 await JS.InvokeVoidAsync("quoteInlineViewer.disposePreview", _containerId);
                 _renderedCommandsJson = null;
+                _failedCommandsJson = null;
                 _loadFailed = false;
             }
 
+            return;
+        }
+
+        if (_loadFailed && CommandsJson == _failedCommandsJson)
+        {
             return;
         }
 
@@ -44,6 +54,7 @@
         try
         {
             await JS.InvokeVoidAsync("quoteInlineViewer.disposePreview", _containerId);
+            _failedCommandsJson = null;
             await JS.InvokeVoidAsync("quoteInlineViewer.createPreview", _containerId, CommandsJson);
             _renderedCommandsJson = CommandsJson;
             _loadFailed = false;
@@ -51,9 +62,17 @@
         catch
         {
             _renderedCommandsJson = null;
+            _failedCommandsJson = CommandsJson;
             _loadFailed = true;
             StateHasChanged();
         }
+    }
+
+    private void RetryPreview()
+    {
+        _failedCommandsJson = null;
+        _loadFailed = false;
+        StateHasChanged();
     }
 
     public async ValueTask DisposeAsync()

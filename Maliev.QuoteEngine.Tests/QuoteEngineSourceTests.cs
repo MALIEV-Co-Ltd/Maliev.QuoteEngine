@@ -4594,6 +4594,37 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeInlinePartViewer_waits_for_customer_retry_after_failed_commands()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("private string? _failedCommandsJson;", component, StringComparison.Ordinal);
+        Assert.Contains("if (_loadFailed && CommandsJson == _failedCommandsJson)", component, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"RetryPreview\"", component, StringComparison.Ordinal);
+        Assert.Contains("private void RetryPreview()", component, StringComparison.Ordinal);
+
+        var catchStart = component.IndexOf("\n        catch", StringComparison.Ordinal);
+        Assert.True(catchStart >= 0, "preview creation catch block must exist.");
+
+        var catchEnd = component.IndexOf("StateHasChanged();", catchStart, StringComparison.Ordinal);
+        Assert.True(catchEnd > catchStart, "preview creation catch block must call StateHasChanged.");
+
+        var catchBlock = component[catchStart..catchEnd];
+        Assert.Contains("_failedCommandsJson = CommandsJson;", catchBlock, StringComparison.Ordinal);
+
+        var retryStart = component.IndexOf("private void RetryPreview()", StringComparison.Ordinal);
+        Assert.True(retryStart >= 0, "RetryPreview must exist.");
+
+        var retryEnd = component.IndexOf("\n    public async ValueTask DisposeAsync()", retryStart, StringComparison.Ordinal);
+        Assert.True(retryEnd > retryStart, "RetryPreview must end before DisposeAsync.");
+
+        var retryBlock = component[retryStart..retryEnd];
+        Assert.Contains("_failedCommandsJson = null;", retryBlock, StringComparison.Ordinal);
+        Assert.Contains("_loadFailed = false;", retryBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_feedback_status_reflects_memory_observation()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")

@@ -2416,11 +2416,33 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-direction: column;
+    gap: 10px;
     margin: 0;
     padding: 1rem;
     color: var(--qe-agent-dim, #888);
     font-size: 13px;
     text-align: center;
+}
+
+.qe-inline-viewer-retry {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    border: 1px solid var(--qe-agent-border, #e9ecef);
+    border-radius: 8px;
+    background: var(--qe-agent-raised, #fff);
+    color: var(--qe-agent-ink, #212529);
+    padding: 0 10px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.qe-inline-viewer-retry:hover,
+.qe-inline-viewer-retry:focus-visible {
+    border-color: var(--qe-agent-accent, #2563eb);
+    outline: none;
 }
 
 .qe-inline-viewer-feedback {
