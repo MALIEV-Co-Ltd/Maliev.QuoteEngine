@@ -1004,6 +1004,9 @@ public sealed class CadDimensionsDto
     /// <summary>Primitive diameter shorthand.</summary>
     public double? Diameter { get; set; }
 
+    /// <summary>Short diameter alias commonly emitted by model payloads.</summary>
+    public double? D { get; set; }
+
     /// <summary>Cone bottom radius.</summary>
     public double? RadiusBottom { get; set; }
 

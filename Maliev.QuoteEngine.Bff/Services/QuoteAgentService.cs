@@ -6353,9 +6353,9 @@ Customer message:
                 command.Depth ?? command.Length ?? dimensions?.Depth ?? dimensions?.Length ?? dimensions?.Y,
                 command.Height ?? dimensions?.Height ?? dimensions?.Z),
             "cylinder" => BuildParams(
-                command.Radius ?? Half(command.Diameter) ?? dimensions?.Radius ?? Half(dimensions?.Diameter),
+                command.Radius ?? Half(command.Diameter) ?? dimensions?.Radius ?? Half(dimensions?.Diameter ?? dimensions?.D),
                 command.Height ?? dimensions?.Height),
-            "sphere" => BuildParams(command.Radius ?? Half(command.Diameter) ?? dimensions?.Radius ?? Half(dimensions?.Diameter)),
+            "sphere" => BuildParams(command.Radius ?? Half(command.Diameter) ?? dimensions?.Radius ?? Half(dimensions?.Diameter ?? dimensions?.D)),
             "cone" => BuildParams(
                 command.RadiusBottom ?? command.BottomRadius ?? dimensions?.RadiusBottom ?? dimensions?.BottomRadius,
                 command.RadiusTop ?? command.TopRadius ?? dimensions?.RadiusTop ?? dimensions?.TopRadius ?? 0,
