@@ -6670,12 +6670,16 @@ Customer message:
 
     private static string NormalizeCadProfileSegmentType(string? value)
     {
-        var normalized = value?.Trim().ToLowerInvariant();
+        var normalized = value is null
+            ? null
+            : Regex.Replace(value.Trim(), @"[\s_-]+", string.Empty, RegexOptions.CultureInvariant).ToLowerInvariant();
         return normalized switch
         {
-            "hline" => "hLine",
-            "vline" => "vLine",
-            "move" or "line" or "arc" or "bezier" => normalized,
+            "move" or "moveto" => "move",
+            "line" or "lineto" => "line",
+            "hline" or "horizontal" or "horizontalline" => "hLine",
+            "vline" or "vertical" or "verticalline" => "vLine",
+            "arc" or "bezier" => normalized,
             _ => value ?? string.Empty
         };
     }
