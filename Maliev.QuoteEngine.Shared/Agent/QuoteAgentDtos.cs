@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Maliev.QuoteEngine.Shared.Quotes;
 
 namespace Maliev.QuoteEngine.Shared.Agent;
@@ -868,17 +869,29 @@ public sealed class CadCommandDto
     /// <summary>Target shape reference (for boolean ops, fillet, translate, etc.).</summary>
     public string? TargetId { get; set; }
 
+    /// <summary>Snake-case target shape reference alias; normalized into <see cref="TargetId"/>.</summary>
+    [JsonPropertyName("target_id")]
+    public string? TargetIdSnake { get; set; }
+
     /// <summary>Target shape reference alias often emitted by model tool calls; normalized into <see cref="TargetId"/>.</summary>
     public string? Target { get; set; }
 
     /// <summary>Tool shape reference (for boolean ops, sweep, loft).</summary>
     public string? ToolId { get; set; }
 
+    /// <summary>Snake-case tool shape reference alias; normalized into <see cref="ToolId"/>.</summary>
+    [JsonPropertyName("tool_id")]
+    public string? ToolIdSnake { get; set; }
+
     /// <summary>Tool shape reference alias often emitted by model tool calls; normalized into <see cref="ToolId"/>.</summary>
     public string? Tool { get; set; }
 
     /// <summary>Result identifier — alias for the output of this command.</summary>
     public string? ResultId { get; set; }
+
+    /// <summary>Snake-case result identifier alias; normalized into <see cref="ResultId"/>.</summary>
+    [JsonPropertyName("result_id")]
+    public string? ResultIdSnake { get; set; }
 
     /// <summary>Result identifier alias often emitted by model tool calls; normalized into <see cref="ResultId"/>.</summary>
     public string? Result { get; set; }
