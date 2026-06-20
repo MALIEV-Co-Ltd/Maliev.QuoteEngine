@@ -3045,6 +3045,9 @@ internal sealed class QuoteAgentService(
             throw new InvalidOperationException("A formal quote is required before creating an order.");
         }
 
+        var quotation = await quotationClient.GetByIdAsync(state.FormalQuote.QuoteId, cancellationToken);
+        ValidateCurrentFormalQuoteVersion(state.FormalQuote, quotation, customerId);
+
         var request = await BuildOrderCreateRequestAsync(state, customerId, action, cancellationToken);
         var result = await orderClient.CreateAsync(request, cancellationToken);
         if (result is null)
@@ -3076,6 +3079,49 @@ internal sealed class QuoteAgentService(
         UpsertArtifact(state, "order", state.Order.OrderNumber, state.Order.Status, null, null);
         SetArtifactMetadata(state, "order", BuildOrderSummaryMetadata(state));
         return $"Manufacturing order {state.Order.OrderNumber} is created.";
+    }
+
+    private static void ValidateCurrentFormalQuoteVersion(
+        GenerateFormalQuoteResponse formalQuote,
+        QuotationCreatedResult? quotation,
+        Guid customerId)
+    {
+        if (quotation is null || quotation.CustomerId != customerId)
+        {
+            throw new InvalidOperationException("The formal quote is no longer available for this customer.");
+        }
+
+        if (quotation.Status.Equals("Expired", StringComparison.OrdinalIgnoreCase) ||
+            quotation.Status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Formal quote {formalQuote.QuoteNumber} is {quotation.Status}. Request a revised quote before creating an order.");
+        }
+
+        if (quotation.ValidityPeriodEnd is { } validityEnd &&
+            validityEnd.Date < DateTime.UtcNow.Date)
+        {
+            throw new InvalidOperationException($"Formal quote {formalQuote.QuoteNumber} expired on {validityEnd:yyyy-MM-dd}. Request a revised quote before creating an order.");
+        }
+
+        if (!formalQuote.QuoteVersionId.HasValue && !formalQuote.QuoteVersionNumber.HasValue)
+        {
+            return;
+        }
+
+        if (!quotation.QuoteVersionId.HasValue || !quotation.QuoteVersionNumber.HasValue)
+        {
+            throw new InvalidOperationException($"Formal quote {formalQuote.QuoteNumber} current version could not be verified. Refresh the quote before creating an order.");
+        }
+
+        var versionIdMismatch = formalQuote.QuoteVersionId.HasValue && formalQuote.QuoteVersionId.Value != quotation.QuoteVersionId.Value;
+        var versionNumberMismatch = formalQuote.QuoteVersionNumber.HasValue && formalQuote.QuoteVersionNumber.Value != quotation.QuoteVersionNumber.Value;
+        var currentNumberMismatch = formalQuote.QuoteVersionNumber.HasValue &&
+            quotation.CurrentVersionNumber.HasValue &&
+            formalQuote.QuoteVersionNumber.Value != quotation.CurrentVersionNumber.Value;
+        if (versionIdMismatch || versionNumberMismatch || currentNumberMismatch)
+        {
+            throw new InvalidOperationException($"Formal quote {formalQuote.QuoteNumber} has been superseded. Refresh the quote and accept the current version before creating an order.");
+        }
     }
 
     private async Task<InvoicePreparedResult?> PrepareOrderInvoiceAsync(
@@ -5795,6 +5841,10 @@ Customer message:
             command.TargetId = NormalizeCadShapeReference(command.TargetId);
             command.ToolId = NormalizeCadShapeReference(command.ToolId);
             command.ResultId = NormalizeCadShapeReference(command.ResultId);
+            if (command.Profile is not null)
+            {
+                command.Profile.Plane = NormalizeCadProfilePlane(command.Profile.Plane);
+            }
         }
     }
 
@@ -5803,6 +5853,13 @@ Customer message:
         return string.IsNullOrWhiteSpace(value)
             ? null
             : value.Trim().ToLowerInvariant();
+    }
+
+    private static string NormalizeCadProfilePlane(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "XY"
+            : value.Trim().ToUpperInvariant();
     }
 
     private static string? ValidateCadCommands(IReadOnlyList<CadCommandDto> commands)

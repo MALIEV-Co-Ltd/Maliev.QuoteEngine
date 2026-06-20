@@ -193,7 +193,12 @@ else
         _quoteActionError = null;
         try
         {
-            var order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_quote.QuoteId, string.Empty, "Customer accepted quote from quote history."));
+            var currentVersion = ResolveCurrentQuoteVersion();
+            var order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_quote.QuoteId, string.Empty, "Customer accepted quote from quote history.")
+            {
+                QuoteVersionId = currentVersion?.VersionId,
+                QuoteVersionNumber = currentVersion?.VersionNumber
+            });
             Navigation.NavigateTo($"/orders/{Uri.EscapeDataString(order.OrderNumber)}");
         }
         catch (Exception)
@@ -222,6 +227,13 @@ else
         return string.IsNullOrWhiteSpace(version.GeneratedByDisplayName)
             ? label
             : $"{label} - {version.GeneratedByDisplayName}";
+    }
+
+    private CustomerQuoteVersionSummaryDto? ResolveCurrentQuoteVersion()
+    {
+        return _quote?.Versions?
+            .OrderByDescending(version => version.VersionNumber)
+            .FirstOrDefault();
     }
 
     private static bool IsApprovedQuote(string status)

@@ -2543,6 +2543,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("CanApproveQuote", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("CanCreateOrder", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("new CreateManufacturingOrderRequest(_quote.QuoteId", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("QuoteVersionId = currentVersion?.VersionId", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("QuoteVersionNumber = currentVersion?.VersionNumber", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo($\"/orders/{Uri.EscapeDataString(order.OrderNumber)}\")", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("data-quote-section=\"conversion\"", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("Start another quote", quoteDetail, StringComparison.Ordinal);
@@ -2606,6 +2608,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_centerMode", workspace, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"@Text(\"Quantity\"", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartConfigSidebar.razor"), StringComparison.Ordinal);
         Assert.Contains("Parts = _parts.Select(x => x.ToDraft()).ToArray()", workspace, StringComparison.Ordinal);
+        Assert.Contains("QuoteVersionId = _formalQuote.QuoteVersionId", workspace, StringComparison.Ordinal);
+        Assert.Contains("QuoteVersionNumber = _formalQuote.QuoteVersionNumber", workspace, StringComparison.Ordinal);
         Assert.Contains("BuildOrderRequirements", quoteController, StringComparison.Ordinal);
         Assert.Contains("BuildConfiguredPartSummary", quoteController, StringComparison.Ordinal);
         Assert.Contains("AllDfmIssuesAcknowledged", workspace, StringComparison.Ordinal);

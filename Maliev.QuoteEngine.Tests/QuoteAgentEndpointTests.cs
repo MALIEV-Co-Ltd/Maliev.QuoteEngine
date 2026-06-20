@@ -2379,6 +2379,38 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_order_confirmation_rejects_superseded_formal_quote_before_order_service_call()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-superseded-quote@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        var formalQuoteResult = await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+        var formalQuoteArtifact = Assert.Single(formalQuoteResult.State!.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
+        var quoteId = Guid.Parse(formalQuoteArtifact.Metadata["quoteId"]);
+        factory.SupersedeQuoteVersion(quoteId);
+        var orderCreateCount = factory.OrderCreateRequests.Count;
+
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        var orderAction = Assert.Single(orderState.ProposedActions);
+        var orderResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{orderAction.ActionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest
+            {
+                ConfirmationNote = "Customer confirmed a stale quote version."
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, orderResponse.StatusCode);
+        var body = await orderResponse.Content.ReadAsStringAsync();
+        Assert.Contains("superseded", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(orderCreateCount, factory.OrderCreateRequests.Count);
+    }
+
+    [Fact]
     public async Task Agent_start_payment_blocks_until_checkout_details_are_collected()
     {
         await using var scopedFactory = CreateAgentFactory();
@@ -4412,6 +4444,51 @@ Customer message:
         Assert.Equal("bracket", normalizedCommands[2].GetProperty("resultId").GetString());
         Assert.Equal("bracket", normalizedCommands[3].GetProperty("targetId").GetString());
         Assert.Equal("finished", normalizedCommands[3].GetProperty("resultId").GetString());
+    }
+
+    [Fact]
+    public async Task Generate_3d_preview_tool_normalizes_profile_plane_for_browser_worker()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new object[]
+        {
+            new
+            {
+                op = "extrude",
+                id = "plate",
+                Params = new[] { 4.0 },
+                profile = new
+                {
+                    plane = "xy",
+                    width = 30.0,
+                    height = 12.0
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Lowercase profile plane preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var commandJson = viewerArtifact.Metadata["cad_commands"];
+        using var commandDoc = JsonDocument.Parse(commandJson);
+        var command = commandDoc.RootElement.EnumerateArray().Single();
+
+        Assert.Equal("XY", command.GetProperty("profile").GetProperty("plane").GetString());
     }
 
     [Fact]

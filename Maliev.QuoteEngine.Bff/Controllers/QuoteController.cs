@@ -1193,6 +1193,15 @@ public sealed class QuoteController(
             return NotFound();
         }
 
+        var acceptabilityError = ValidateQuotationVersionAcceptability(
+            quotation,
+            request.QuoteVersionId,
+            request.QuoteVersionNumber);
+        if (acceptabilityError is not null)
+        {
+            return acceptabilityError;
+        }
+
         var dfmReviewError = ValidateDfmReviewAcknowledgement(request.Parts);
         if (dfmReviewError is not null)
         {
@@ -1245,6 +1254,67 @@ public sealed class QuoteController(
         }
 
         return Ok(new CreateManufacturingOrderResponse(result.OrderId, result.OrderNumber, result.Status));
+    }
+
+    private static ActionResult? ValidateQuotationVersionAcceptability(
+        QuotationCreatedResult quotation,
+        Guid? requestedVersionId,
+        int? requestedVersionNumber)
+    {
+        if (quotation.Status.Equals("Expired", StringComparison.OrdinalIgnoreCase) ||
+            quotation.Status.Equals("Cancelled", StringComparison.OrdinalIgnoreCase))
+        {
+            return new BadRequestObjectResult(new ProblemDetails
+            {
+                Title = "Quote version cannot be accepted.",
+                Detail = $"Quotation {quotation.QuotationNumber} is {quotation.Status}. Request a revised quote before creating an order.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        if (quotation.ValidityPeriodEnd is { } validityEnd &&
+            validityEnd.Date < DateTime.UtcNow.Date)
+        {
+            return new BadRequestObjectResult(new ProblemDetails
+            {
+                Title = "Quote version cannot be accepted.",
+                Detail = $"Quotation {quotation.QuotationNumber} expired on {validityEnd:yyyy-MM-dd}. Request a revised quote before creating an order.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        var requestedSpecificVersion = requestedVersionId.HasValue || requestedVersionNumber.HasValue;
+        if (!requestedSpecificVersion)
+        {
+            return null;
+        }
+
+        if (!quotation.QuoteVersionId.HasValue || !quotation.QuoteVersionNumber.HasValue)
+        {
+            return new BadRequestObjectResult(new ProblemDetails
+            {
+                Title = "Quote version cannot be verified.",
+                Detail = $"Quotation {quotation.QuotationNumber} did not return current version metadata. Refresh the quote before creating an order.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        var versionIdMismatch = requestedVersionId.HasValue && requestedVersionId.Value != quotation.QuoteVersionId.Value;
+        var versionNumberMismatch = requestedVersionNumber.HasValue && requestedVersionNumber.Value != quotation.QuoteVersionNumber.Value;
+        var currentNumberMismatch = requestedVersionNumber.HasValue &&
+            quotation.CurrentVersionNumber.HasValue &&
+            requestedVersionNumber.Value != quotation.CurrentVersionNumber.Value;
+        if (versionIdMismatch || versionNumberMismatch || currentNumberMismatch)
+        {
+            return new BadRequestObjectResult(new ProblemDetails
+            {
+                Title = "Quote version has been superseded.",
+                Detail = $"Quotation {quotation.QuotationNumber} has a newer version. Refresh the quote and accept the current version before creating an order.",
+                Status = StatusCodes.Status400BadRequest
+            });
+        }
+
+        return null;
     }
 
     private static ActionResult? ValidateDfmReviewAcknowledgement(IReadOnlyList<QuotePartDraftDto> parts)

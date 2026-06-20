@@ -73,6 +73,10 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     public void DelayOrderCreateBy(TimeSpan delay) => _fakeOrderServiceClient.CreateDelay = delay;
 
+    public void SupersedeQuoteVersion(Guid quotationId) => _fakeQuotationServiceClient.SupersedeQuoteVersion(quotationId);
+
+    public void ExpireQuote(Guid quotationId) => _fakeQuotationServiceClient.ExpireQuote(quotationId);
+
     public void ClearPaymentIdempotencyKeys()
     {
         while (FakePaymentServiceClient.IdempotencyKeys.TryDequeue(out _))
@@ -396,6 +400,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 SourceProjectNumber = request.SourceProjectNumber,
                 QuotationNumber = $"MQ-TEST-{Guid.NewGuid():N}"[..16],
                 Status = "Draft",
+                CurrentVersionNumber = 1,
+                ValidityPeriodEnd = request.ValidityPeriodEnd,
                 Total = request.LineItems.Sum(x => x.UnitPrice * x.Quantity),
                 CurrencyCode = "THB",
                 UpdatedAt = DateTime.UtcNow,
@@ -432,6 +438,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 SourceProjectNumber = existing.SourceProjectNumber,
                 QuotationNumber = existing.QuotationNumber,
                 Status = existing.Status,
+                CurrentVersionNumber = existing.QuoteVersionNumber.GetValueOrDefault(1) + 1,
+                ValidityPeriodEnd = existing.ValidityPeriodEnd ?? DateTime.UtcNow.AddDays(14),
                 Total = request.LineItems.Sum(x => x.UnitPrice * x.Quantity),
                 CurrencyCode = existing.CurrencyCode,
                 UpdatedAt = DateTime.UtcNow,
@@ -446,6 +454,30 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
         public Task<QuotationCreatedResult?> GetByIdAsync(Guid quotationId, CancellationToken ct = default) =>
             Task.FromResult(_quotes.TryGetValue(quotationId, out var r) ? r : null);
+
+        public void SupersedeQuoteVersion(Guid quotationId)
+        {
+            if (!_quotes.TryGetValue(quotationId, out var existing))
+            {
+                return;
+            }
+
+            var nextVersionNumber = existing.QuoteVersionNumber.GetValueOrDefault(1) + 1;
+            _quotes[quotationId] = CopyQuote(existing, newVersionId: Guid.NewGuid(), newVersionNumber: nextVersionNumber);
+        }
+
+        public void ExpireQuote(Guid quotationId)
+        {
+            if (!_quotes.TryGetValue(quotationId, out var existing))
+            {
+                return;
+            }
+
+            _quotes[quotationId] = CopyQuote(
+                existing,
+                newStatus: "Expired",
+                newValidityPeriodEnd: DateTime.UtcNow.AddDays(-1));
+        }
 
         public Task<QuotationCreatedResult?> GetBySourceProjectAsync(Guid customerId, Guid sourceProjectId, CancellationToken ct = default)
         {
@@ -487,6 +519,33 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     ]))
                 .ToArray();
             return Task.FromResult(result);
+        }
+
+        private static QuotationCreatedResult CopyQuote(
+            QuotationCreatedResult existing,
+            string? newStatus = null,
+            Guid? newVersionId = null,
+            int? newVersionNumber = null,
+            DateTime? newValidityPeriodEnd = null)
+        {
+            return new QuotationCreatedResult
+            {
+                Id = existing.Id,
+                CustomerId = existing.CustomerId,
+                SourceProjectId = existing.SourceProjectId,
+                SourceProjectNumber = existing.SourceProjectNumber,
+                QuotationNumber = existing.QuotationNumber,
+                Status = newStatus ?? existing.Status,
+                CurrentVersionNumber = newVersionNumber ?? existing.CurrentVersionNumber,
+                ValidityPeriodEnd = newValidityPeriodEnd ?? existing.ValidityPeriodEnd,
+                Total = existing.Total,
+                CurrencyCode = existing.CurrencyCode,
+                UpdatedAt = DateTime.UtcNow,
+                QuoteVersionId = newVersionId ?? existing.QuoteVersionId,
+                QuoteVersionNumber = newVersionNumber ?? existing.QuoteVersionNumber,
+                PdfArtifactUrl = existing.PdfArtifactUrl,
+                PdfArtifactStoragePath = existing.PdfArtifactStoragePath
+            };
         }
     }
 
@@ -3135,6 +3194,101 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(secondCreateRequest);
         Assert.Equal(projectId, secondCreateRequest.SourceProjectId);
         Assert.Contains("Updated project quote.", secondCreateRequest.ChangeSummary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Order_creation_rejects_superseded_quote_version_before_order_service_call()
+    {
+        using var client = await CreateSignedInClientAsync("superseded-version-order@example.com");
+        var projectId = Guid.NewGuid();
+        var part = new QuotePartDraftDto
+        {
+            PartId = Guid.NewGuid(),
+            FileId = Guid.NewGuid(),
+            UploadId = "upload-superseded-version-order",
+            FileName = "superseded-version-bracket.stl",
+            ProcessId = "fdm",
+            MaterialId = "pla-black",
+            Quantity = 2,
+            VolumeCc = 10m,
+            SurfaceAreaCm2 = 40m,
+            DfmAcknowledged = true
+        };
+
+        var quoteResponse = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(projectId, "session-superseded-version-order", [part], "Initial quote version."));
+        quoteResponse.EnsureSuccessStatusCode();
+        var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+        Assert.NotNull(quote.QuoteVersionId);
+        Assert.Equal(1, quote.QuoteVersionNumber);
+
+        factory.SupersedeQuoteVersion(quote.QuoteId);
+        var orderCreateCount = factory.OrderCreateRequests.Count;
+
+        var orderResponse = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(
+                quote.QuoteId,
+                "PO-SUPERSEDED",
+                "Customer attempted to accept an older quote version.")
+            {
+                QuoteVersionId = quote.QuoteVersionId,
+                QuoteVersionNumber = quote.QuoteVersionNumber,
+                Parts = [part]
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, orderResponse.StatusCode);
+        var body = await orderResponse.Content.ReadAsStringAsync();
+        Assert.Contains("superseded", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(orderCreateCount, factory.OrderCreateRequests.Count);
+    }
+
+    [Fact]
+    public async Task Order_creation_rejects_expired_quote_before_order_service_call()
+    {
+        using var client = await CreateSignedInClientAsync("expired-version-order@example.com");
+        var part = new QuotePartDraftDto
+        {
+            PartId = Guid.NewGuid(),
+            FileId = Guid.NewGuid(),
+            UploadId = "upload-expired-version-order",
+            FileName = "expired-version-bracket.stl",
+            ProcessId = "fdm",
+            MaterialId = "pla-black",
+            Quantity = 1,
+            VolumeCc = 8m,
+            SurfaceAreaCm2 = 35m,
+            DfmAcknowledged = true
+        };
+
+        var quoteResponse = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-expired-version-order", [part], "Quote to expire."));
+        quoteResponse.EnsureSuccessStatusCode();
+        var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(quote);
+
+        factory.ExpireQuote(quote.QuoteId);
+        var orderCreateCount = factory.OrderCreateRequests.Count;
+
+        var orderResponse = await client.PostAsJsonAsync(
+            "/quote/v1/orders",
+            new CreateManufacturingOrderRequest(
+                quote.QuoteId,
+                "PO-EXPIRED",
+                "Customer attempted to accept an expired quote.")
+            {
+                QuoteVersionId = quote.QuoteVersionId,
+                QuoteVersionNumber = quote.QuoteVersionNumber,
+                Parts = [part]
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, orderResponse.StatusCode);
+        var body = await orderResponse.Content.ReadAsStringAsync();
+        Assert.Contains("expired", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(orderCreateCount, factory.OrderCreateRequests.Count);
     }
 
     [Fact]

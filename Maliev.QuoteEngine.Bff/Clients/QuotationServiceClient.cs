@@ -37,8 +37,10 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
         public Guid CustomerId { get; set; }
         public Guid? SourceProjectId { get; set; }
         public string? SourceProjectNumber { get; set; }
+        public int CurrentVersionNumber { get; set; }
         public string QuotationNumber { get; set; } = string.Empty;
         public JsonElement Status { get; set; }
+        public DateTime ValidityPeriodEnd { get; set; }
         public decimal Total { get; set; }
         public string CurrencyCode { get; set; } = "THB";
         public DateTime CreatedAt { get; set; }
@@ -78,6 +80,8 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
             SourceProjectNumber = r.SourceProjectNumber,
             QuotationNumber = r.QuotationNumber,
             Status = ReadStatus(r.Status),
+            CurrentVersionNumber = r.CurrentVersionNumber > 0 ? r.CurrentVersionNumber : currentVersion?.VersionNumber,
+            ValidityPeriodEnd = r.ValidityPeriodEnd == default ? null : r.ValidityPeriodEnd,
             Total = r.Total,
             CurrencyCode = r.CurrencyCode,
             UpdatedAt = r.UpdatedAt,
@@ -261,6 +265,8 @@ public sealed class QuotationCreatedResult
     public string? SourceProjectNumber { get; init; }
     public string QuotationNumber { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
+    public int? CurrentVersionNumber { get; init; }
+    public DateTime? ValidityPeriodEnd { get; init; }
     public decimal Total { get; init; }
     public string CurrencyCode { get; init; } = "THB";
     public DateTime UpdatedAt { get; init; }

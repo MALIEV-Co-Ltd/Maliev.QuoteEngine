@@ -439,6 +439,12 @@ public sealed record ApproveQuoteRequest(Guid QuoteId);
 
 public sealed record CreateManufacturingOrderRequest(Guid QuoteId, string CustomerPoNumber, string Notes, Guid? ProjectServiceProjectId = null)
 {
+    /// <summary>Gets the immutable quotation version identifier the customer is accepting.</summary>
+    public Guid? QuoteVersionId { get; init; }
+
+    /// <summary>Gets the immutable quotation version number the customer is accepting.</summary>
+    public int? QuoteVersionNumber { get; init; }
+
     public IReadOnlyList<QuotePartDraftDto> Parts { get; init; } = [];
 }
 

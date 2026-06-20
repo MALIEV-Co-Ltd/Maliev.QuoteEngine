@@ -1062,6 +1062,8 @@
 
         _order = await Api.CreateOrderAsync(new CreateManufacturingOrderRequest(_formalQuote.QuoteId, string.Empty, "Customer accepted quote.", _draftProjectId)
         {
+            QuoteVersionId = _formalQuote.QuoteVersionId,
+            QuoteVersionNumber = _formalQuote.QuoteVersionNumber,
             Parts = _parts.Select(x => x.ToDraft()).ToArray()
         });
         _payment = null;
