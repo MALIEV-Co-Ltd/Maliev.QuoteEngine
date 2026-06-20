@@ -166,29 +166,63 @@ public sealed class AccountController(
     }
 
     [HttpGet("ndas")]
-    public IActionResult GetNdas()
-    {
-        if (!sessionResolver.TryResolveCustomerId(out _))
-        {
-            return Unauthorized();
-        }
-
-        return Ok(store.Ndas);
-    }
-
-    [HttpGet("documents")]
-    public IActionResult GetDocuments()
+    public async Task<IActionResult> GetNdas(CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized();
         }
 
-        return Ok(store.GetDocuments(customerId));
+        var ndas = await customerClient.GetCustomerNdasAsync(customerId, cancellationToken);
+        if (ndas is not null)
+        {
+            return Ok(ndas);
+        }
+
+        if (CanUsePrototypeAccountFallback())
+        {
+            return Ok(store.Ndas);
+        }
+
+        return StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            AccountProblem(
+                "Account service unavailable",
+                "Customer NDAs are temporarily unavailable.",
+                StatusCodes.Status503ServiceUnavailable));
+    }
+
+    [HttpGet("documents")]
+    public async Task<IActionResult> GetDocuments(CancellationToken cancellationToken)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        var documents = await customerClient.GetCustomerDocumentsAsync(customerId, cancellationToken);
+        if (documents is not null)
+        {
+            return Ok(documents);
+        }
+
+        if (CanUsePrototypeAccountFallback())
+        {
+            return Ok(store.GetDocuments(customerId));
+        }
+
+        return StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            AccountProblem(
+                "Account service unavailable",
+                "Customer documents are temporarily unavailable.",
+                StatusCodes.Status503ServiceUnavailable));
     }
 
     [HttpPost("documents")]
-    public IActionResult UploadDocument([FromBody] CustomerDocumentUploadRequest request)
+    public async Task<IActionResult> UploadDocument(
+        [FromBody] CustomerDocumentUploadRequest request,
+        CancellationToken cancellationToken)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -206,7 +240,23 @@ public sealed class AccountController(
             return validationProblem;
         }
 
-        return Ok(store.UploadDocument(customerId, request));
+        var document = await customerClient.CreateCustomerDocumentAsync(customerId, request, cancellationToken);
+        if (document is not null)
+        {
+            return Ok(document);
+        }
+
+        if (CanUsePrototypeAccountFallback())
+        {
+            return Ok(store.UploadDocument(customerId, request));
+        }
+
+        return StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            AccountProblem(
+                "Account service unavailable",
+                "Customer document metadata could not be saved.",
+                StatusCodes.Status503ServiceUnavailable));
     }
 
     [HttpPost("documents/upload")]
@@ -275,7 +325,23 @@ public sealed class AccountController(
             uploadRequest.StoragePath,
             cancellationToken);
 
-        return Ok(store.UploadDocument(customerId, uploadRequest));
+        var document = await customerClient.CreateCustomerDocumentAsync(customerId, uploadRequest, cancellationToken);
+        if (document is not null)
+        {
+            return Ok(document);
+        }
+
+        if (CanUsePrototypeAccountFallback())
+        {
+            return Ok(store.UploadDocument(customerId, uploadRequest));
+        }
+
+        return StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            AccountProblem(
+                "Account service unavailable",
+                "Customer document metadata could not be saved after upload.",
+                StatusCodes.Status503ServiceUnavailable));
     }
 
     [HttpGet("documents/{documentId:guid}/download")]
@@ -286,7 +352,23 @@ public sealed class AccountController(
             return Unauthorized();
         }
 
-        var document = store.GetDocuments(customerId).FirstOrDefault(candidate => candidate.DocumentId == documentId);
+        var documents = await customerClient.GetCustomerDocumentsAsync(customerId, cancellationToken);
+        if (documents is null && CanUsePrototypeAccountFallback())
+        {
+            documents = store.GetDocuments(customerId);
+        }
+
+        if (documents is null)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                AccountProblem(
+                    "Account service unavailable",
+                    "Customer documents are temporarily unavailable.",
+                    StatusCodes.Status503ServiceUnavailable));
+        }
+
+        var document = documents.FirstOrDefault(candidate => candidate.DocumentId == documentId);
         if (document is null || string.IsNullOrWhiteSpace(document.StoragePath))
         {
             return NotFound();
@@ -389,6 +471,11 @@ public sealed class AccountController(
     }
 
     private bool CanUsePrototypeAddressFallback()
+    {
+        return environment.IsDevelopment() || environment.IsEnvironment("Testing");
+    }
+
+    private bool CanUsePrototypeAccountFallback()
     {
         return environment.IsDevelopment() || environment.IsEnvironment("Testing");
     }

@@ -1072,6 +1072,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         private static readonly Guid DefaultShippingAddressId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
         private readonly ConcurrentDictionary<Guid, CustomerProfileResponse> _profilesById = new();
         private readonly ConcurrentDictionary<Guid, List<CustomerAddressDto>> _addressesByCustomer = new();
+        private readonly ConcurrentDictionary<Guid, List<CustomerDocumentDto>> _documentsByCustomer = new();
+        private readonly ConcurrentDictionary<Guid, List<CustomerNdaDto>> _ndasByCustomer = new();
         private uint _nextVersion = 1;
 
         public Task<CustomerProfileResponse?> GetByIdAsync(Guid customerId, CancellationToken ct = default) =>
@@ -1212,6 +1214,59 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+        }
+
+        public Task<IReadOnlyList<CustomerDocumentDto>?> GetCustomerDocumentsAsync(
+            Guid customerId,
+            CancellationToken cancellationToken)
+        {
+            var documents = _documentsByCustomer.GetOrAdd(customerId, _ => []);
+            lock (documents)
+            {
+                return Task.FromResult<IReadOnlyList<CustomerDocumentDto>?>(documents.ToList());
+            }
+        }
+
+        public Task<CustomerDocumentDto?> CreateCustomerDocumentAsync(
+            Guid customerId,
+            CustomerDocumentUploadRequest request,
+            CancellationToken cancellationToken)
+        {
+            var document = new CustomerDocumentDto(
+                Guid.NewGuid(),
+                request.FileName.Trim(),
+                request.Kind.Trim(),
+                DateTimeOffset.UtcNow,
+                request.StoragePath.Trim(),
+                request.ContentType.Trim(),
+                request.FileSizeBytes,
+                string.IsNullOrWhiteSpace(request.OrderNumber) ? null : request.OrderNumber.Trim());
+            var documents = _documentsByCustomer.GetOrAdd(customerId, _ => []);
+            lock (documents)
+            {
+                documents.Add(document);
+            }
+
+            return Task.FromResult<CustomerDocumentDto?>(document);
+        }
+
+        public Task<IReadOnlyList<CustomerNdaDto>?> GetCustomerNdasAsync(
+            Guid customerId,
+            CancellationToken cancellationToken)
+        {
+            var ndas = _ndasByCustomer.GetOrAdd(customerId, _ =>
+            [
+                new CustomerNdaDto(
+                    Guid.Parse("f3bfdbb3-7078-4dd8-b9d7-7b7068995821"),
+                    "Mutual NDA",
+                    "Active",
+                    DateTimeOffset.UtcNow.AddDays(-7),
+                    DateTimeOffset.UtcNow.AddDays(83))
+            ]);
+            lock (ndas)
+            {
+                return Task.FromResult<IReadOnlyList<CustomerNdaDto>?>(ndas.ToList());
+            }
         }
 
         public Task<CustomerMemoryQueryResponse> GetCustomerMemoriesAsync(
@@ -2771,6 +2826,20 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(ownerProfile);
         Assert.NotNull(otherProfile);
         Assert.NotEqual(ownerProfile.CustomerId, otherProfile.CustomerId);
+    }
+
+    [Fact]
+    public async Task Account_ndas_reads_customer_service_records()
+    {
+        using var owner = await CreateSignedInClientAsync("ndas-owner@example.com");
+
+        var ndas = await owner.GetFromJsonAsync<CustomerNdaDto[]>("/quote/v1/account/ndas");
+
+        Assert.NotNull(ndas);
+        var nda = Assert.Single(ndas);
+        Assert.Equal("Mutual NDA", nda.Title);
+        Assert.Equal("Active", nda.Status);
+        Assert.True(nda.ExpiresAt > DateTimeOffset.UtcNow);
     }
 
     [Fact]

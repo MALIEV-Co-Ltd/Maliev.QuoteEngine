@@ -2469,7 +2469,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("StreamUploadAsync", accountController, StringComparison.Ordinal);
         Assert.Contains("[HttpGet(\"documents/{documentId:guid}/download\")]", accountController, StringComparison.Ordinal);
         Assert.Contains("GetDownloadUrlByPathAsync", accountController, StringComparison.Ordinal);
-        Assert.Contains("UploadDocument(customerId", accountController, StringComparison.Ordinal);
+        Assert.Contains("CreateCustomerDocumentAsync(customerId", accountController, StringComparison.Ordinal);
         Assert.Contains("public sealed record CustomerDocumentDownloadResponse", accountDtos, StringComparison.Ordinal);
         Assert.Contains("public sealed class CustomerDocumentUploadRequest", accountDtos, StringComparison.Ordinal);
         Assert.Contains("public sealed record CustomerDocumentDto", accountDtos, StringComparison.Ordinal);

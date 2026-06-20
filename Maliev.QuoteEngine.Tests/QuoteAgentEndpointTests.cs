@@ -5907,6 +5907,36 @@ Customer message:
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
         }
 
+        public Task<IReadOnlyList<CustomerDocumentDto>?> GetCustomerDocumentsAsync(
+            Guid customerId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CustomerDocumentDto>?>([]);
+        }
+
+        public Task<CustomerDocumentDto?> CreateCustomerDocumentAsync(
+            Guid customerId,
+            CustomerDocumentUploadRequest request,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<CustomerDocumentDto?>(new CustomerDocumentDto(
+                Guid.NewGuid(),
+                request.FileName,
+                request.Kind,
+                DateTimeOffset.UtcNow,
+                request.StoragePath,
+                request.ContentType,
+                request.FileSizeBytes,
+                request.OrderNumber));
+        }
+
+        public Task<IReadOnlyList<CustomerNdaDto>?> GetCustomerNdasAsync(
+            Guid customerId,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult<IReadOnlyList<CustomerNdaDto>?>([]);
+        }
+
         public Task<CustomerMemoryQueryResponse> GetCustomerMemoriesAsync(
             Guid customerId,
             string? query,

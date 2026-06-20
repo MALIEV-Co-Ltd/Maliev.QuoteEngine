@@ -43,6 +43,22 @@ public interface ICustomerServiceClient
     /// <summary>Deletes a customer-owned address.</summary>
     Task<HttpResponseMessage> DeleteCustomerAddressAsync(Guid addressId, object request, CancellationToken cancellationToken);
 
+    /// <summary>Gets customer-owned account documents.</summary>
+    Task<IReadOnlyList<CustomerDocumentDto>?> GetCustomerDocumentsAsync(
+        Guid customerId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Creates a customer-owned account document record.</summary>
+    Task<CustomerDocumentDto?> CreateCustomerDocumentAsync(
+        Guid customerId,
+        CustomerDocumentUploadRequest request,
+        CancellationToken cancellationToken);
+
+    /// <summary>Gets customer-owned NDA records.</summary>
+    Task<IReadOnlyList<CustomerNdaDto>?> GetCustomerNdasAsync(
+        Guid customerId,
+        CancellationToken cancellationToken);
+
     /// <summary>Gets durable customer-scoped memories.</summary>
     Task<CustomerMemoryQueryResponse> GetCustomerMemoriesAsync(
         Guid customerId,
@@ -101,6 +117,45 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
     private sealed class CsCompanyResponse
     {
         public Guid Id { get; set; }
+    }
+
+    private sealed class CsDocumentResponse
+    {
+        public Guid Id { get; set; }
+        public string OwnerType { get; set; } = string.Empty;
+        public Guid OwnerId { get; set; }
+        public string DocumentType { get; set; } = string.Empty;
+        public string FileReference { get; set; } = string.Empty;
+        public string Filename { get; set; } = string.Empty;
+        public long FileSize { get; set; }
+        public string MimeType { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset UpdatedAt { get; set; }
+    }
+
+    private sealed class CsCreateDocumentRequest
+    {
+        public string OwnerType { get; set; } = "Customer";
+        public Guid OwnerId { get; set; }
+        public string DocumentType { get; set; } = string.Empty;
+        public string FileReference { get; set; } = string.Empty;
+        public string Filename { get; set; } = string.Empty;
+        public long FileSize { get; set; }
+        public string MimeType { get; set; } = string.Empty;
+    }
+
+    private sealed class CsNdaResponse
+    {
+        public Guid Id { get; set; }
+        public Guid CustomerId { get; set; }
+        public Guid? DocumentReferenceId { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public DateTimeOffset? SignedAt { get; set; }
+        public DateTimeOffset? RevokedAt { get; set; }
+        public DateTimeOffset? ExpiresAt { get; set; }
+        public DateTimeOffset CreatedAt { get; set; }
+        public DateTimeOffset UpdatedAt { get; set; }
     }
 
     public async Task<CustomerProfileResponse?> GetByIdAsync(Guid customerId, CancellationToken ct = default)
@@ -273,6 +328,118 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         return http.SendAsync(message, cancellationToken);
     }
 
+    public async Task<IReadOnlyList<CustomerDocumentDto>?> GetCustomerDocumentsAsync(
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await http.GetAsync(
+                $"/customer/v1/documents?ownerType=Customer&ownerId={customerId:D}",
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                logger.LogWarning(
+                    "CustomerService returned {Status} while listing documents for customer {CustomerId}: {Body}",
+                    response.StatusCode,
+                    customerId,
+                    body);
+                return null;
+            }
+
+            var documents = await response.Content.ReadFromJsonAsync<List<CsDocumentResponse>>(
+                cancellationToken: cancellationToken);
+            return documents?.Select(MapDocument).ToList() ?? [];
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "CustomerService document list failed for customer {CustomerId}.", customerId);
+            return null;
+        }
+    }
+
+    public async Task<CustomerDocumentDto?> CreateCustomerDocumentAsync(
+        Guid customerId,
+        CustomerDocumentUploadRequest request,
+        CancellationToken cancellationToken)
+    {
+        var document = new CsCreateDocumentRequest
+        {
+            OwnerId = customerId,
+            DocumentType = request.Kind.Trim(),
+            FileReference = request.StoragePath.Trim(),
+            Filename = request.FileName.Trim(),
+            FileSize = request.FileSizeBytes,
+            MimeType = request.ContentType.Trim()
+        };
+
+        try
+        {
+            using var response = await http.PostAsJsonAsync("/customer/v1/documents", document, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                logger.LogWarning(
+                    "CustomerService returned {Status} while creating document for customer {CustomerId}: {Body}",
+                    response.StatusCode,
+                    customerId,
+                    body);
+                return null;
+            }
+
+            var created = await response.Content.ReadFromJsonAsync<CsDocumentResponse>(
+                cancellationToken: cancellationToken);
+            return created is null ? null : MapDocument(created);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "CustomerService document create failed for customer {CustomerId}.", customerId);
+            return null;
+        }
+    }
+
+    public async Task<IReadOnlyList<CustomerNdaDto>?> GetCustomerNdasAsync(
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await http.GetAsync($"/customer/v1/ndas/customer/{customerId:D}", cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(cancellationToken);
+                logger.LogWarning(
+                    "CustomerService returned {Status} while listing NDAs for customer {CustomerId}: {Body}",
+                    response.StatusCode,
+                    customerId,
+                    body);
+                return null;
+            }
+
+            var ndas = await response.Content.ReadFromJsonAsync<List<CsNdaResponse>>(
+                cancellationToken: cancellationToken);
+            return ndas?.Select(MapNda).ToList() ?? [];
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "CustomerService NDA list failed for customer {CustomerId}.", customerId);
+            return null;
+        }
+    }
+
     public async Task<CustomerMemoryQueryResponse> GetCustomerMemoriesAsync(
         Guid customerId,
         string? query,
@@ -354,6 +521,34 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
             string.IsNullOrWhiteSpace(result.NdaStatus) ? "Active" : result.NdaStatus,
             result.NdaExpiresAt ?? DateTimeOffset.UtcNow.AddDays(90),
             result.VatNumber ?? string.Empty);
+    }
+
+    private static CustomerDocumentDto MapDocument(CsDocumentResponse result)
+    {
+        var uploadedAt = result.CreatedAt == default
+            ? result.UpdatedAt == default ? DateTimeOffset.UtcNow : result.UpdatedAt
+            : result.CreatedAt;
+        return new CustomerDocumentDto(
+            result.Id,
+            string.IsNullOrWhiteSpace(result.Filename) ? "customer-document" : result.Filename,
+            string.IsNullOrWhiteSpace(result.DocumentType) ? "Requirement" : result.DocumentType,
+            uploadedAt,
+            string.IsNullOrWhiteSpace(result.FileReference) ? null : result.FileReference,
+            string.IsNullOrWhiteSpace(result.MimeType) ? null : result.MimeType,
+            result.FileSize);
+    }
+
+    private static CustomerNdaDto MapNda(CsNdaResponse result)
+    {
+        var updatedAt = result.UpdatedAt == default
+            ? result.SignedAt ?? result.CreatedAt
+            : result.UpdatedAt;
+        return new CustomerNdaDto(
+            result.Id,
+            "Mutual NDA",
+            string.IsNullOrWhiteSpace(result.Status) ? "Unknown" : result.Status,
+            updatedAt == default ? DateTimeOffset.UtcNow : updatedAt,
+            result.ExpiresAt);
     }
 
     private async Task<CsCustomerResponse?> GetRawCustomerByIdAsync(Guid customerId, CancellationToken ct)
