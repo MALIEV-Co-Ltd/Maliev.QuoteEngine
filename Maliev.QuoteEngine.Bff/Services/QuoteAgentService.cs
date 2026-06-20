@@ -6278,7 +6278,8 @@ Customer message:
         return value.ValueKind == JsonValueKind.Object &&
             (value.TryGetProperty("op", out _) ||
                 value.TryGetProperty("operation", out _) ||
-                value.TryGetProperty("type", out _));
+                value.TryGetProperty("type", out _) ||
+                value.TryGetProperty("shape", out _));
     }
 
     private static IReadOnlyList<CadCommandDto> ReadStringifiedCommands(JsonElement value)
@@ -6336,7 +6337,7 @@ Customer message:
 
     private static string NormalizeCadOperation(CadCommandDto command)
     {
-        var operation = FirstNonWhiteSpace(command.Op, command.Operation, command.Type);
+        var operation = FirstNonWhiteSpace(command.Op, command.Operation, command.Type, command.Shape);
         return operation?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 
