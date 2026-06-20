@@ -942,6 +942,7 @@ public sealed class CadCommandDto
     public double[]? Parameters { get; set; }
 
     /// <summary>Nested primitive dimensions often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
+    [JsonConverter(typeof(CadDimensionsJsonConverter))]
     public CadDimensionsDto? Dimensions { get; set; }
 
     /// <summary>Size vector alias often emitted by model tool calls for box primitives; normalized into <see cref="Params"/>.</summary>
@@ -1276,6 +1277,58 @@ public sealed class CadDoubleArrayJsonConverter : JsonConverter<double[]?>
 
     /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, double[]? value, JsonSerializerOptions options)
+    {
+        JsonSerializer.Serialize(writer, value, options);
+    }
+}
+
+/// <summary>
+/// Reads nested CAD dimensions from either an object or a width/depth/height array.
+/// </summary>
+public sealed class CadDimensionsJsonConverter : JsonConverter<CadDimensionsDto?>
+{
+    /// <inheritdoc />
+    public override CadDimensionsDto? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return reader.TokenType switch
+        {
+            JsonTokenType.Null => null,
+            JsonTokenType.StartObject => JsonSerializer.Deserialize<CadDimensionsDto>(ref reader, options),
+            JsonTokenType.StartArray => ReadArray(ref reader),
+            _ => throw new JsonException("CAD dimensions must be an object or array.")
+        };
+    }
+
+    private static CadDimensionsDto ReadArray(ref Utf8JsonReader reader)
+    {
+        List<double> values = [];
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray)
+            {
+                return new CadDimensionsDto
+                {
+                    Width = values.Count > 0 ? values[0] : null,
+                    X = values.Count > 0 ? values[0] : null,
+                    Depth = values.Count > 1 ? values[1] : null,
+                    Y = values.Count > 1 ? values[1] : null,
+                    Height = values.Count > 2 ? values[2] : null,
+                    Z = values.Count > 2 ? values[2] : null
+                };
+            }
+
+            var value = CadJsonNumberReader.ReadNullableDouble(ref reader);
+            if (value.HasValue)
+            {
+                values.Add(value.Value);
+            }
+        }
+
+        throw new JsonException("CAD dimensions array ended unexpectedly.");
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, CadDimensionsDto? value, JsonSerializerOptions options)
     {
         JsonSerializer.Serialize(writer, value, options);
     }
