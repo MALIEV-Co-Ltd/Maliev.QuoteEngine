@@ -2302,6 +2302,30 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Analysis_status_rejects_upload_owned_by_another_customer()
+    {
+        using var owner = await CreateSignedInClientAsync("analysis-owner@example.com");
+        using var other = await CreateSignedInClientAsync("analysis-other@example.com");
+        var initiation = await owner.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = "analysis-owner-session",
+            FileName = "owner-private-analysis.step",
+            ContentType = "application/step",
+            FileSizeBytes = 512
+        });
+        initiation.EnsureSuccessStatusCode();
+        var upload = await initiation.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(upload);
+
+        var ownerStatus = await owner.GetAsync($"/quote/v1/uploads/{upload.UploadId}/analysis-status");
+        ownerStatus.EnsureSuccessStatusCode();
+
+        var otherStatus = await other.GetAsync($"/quote/v1/uploads/{upload.UploadId}/analysis-status");
+
+        Assert.Equal(HttpStatusCode.Forbidden, otherStatus.StatusCode);
+    }
+
+    [Fact]
     public async Task Upload_uses_local_prototype_fallback_when_upload_service_is_unavailable_in_testing()
     {
         await using var fallbackFactory = factory.WithWebHostBuilder(builder =>

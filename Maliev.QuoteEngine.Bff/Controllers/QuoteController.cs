@@ -264,6 +264,8 @@ public sealed class QuoteController(
         var upload = store.GetUpload(uploadId);
         if (upload is null)
             return NotFound();
+        if (!CanAccessUpload(upload))
+            return Forbid();
 
         var response = upload.ToAnalysisStatus();
         var liveStatus = await statusService.GetStatusAsync(upload.StoragePath, cancellationToken);
