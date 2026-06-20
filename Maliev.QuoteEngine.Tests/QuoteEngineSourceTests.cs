@@ -4708,6 +4708,36 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeInlinePartViewer_preserves_js_preview_error_for_customer_retry()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("private string _loadErrorMessage = DefaultLoadErrorMessage;", component, StringComparison.Ordinal);
+        Assert.Contains("<span>@_loadErrorMessage</span>", component, StringComparison.Ordinal);
+
+        var catchStart = component.IndexOf("\n        catch (JSException ex)", StringComparison.Ordinal);
+        Assert.True(catchStart >= 0, "preview creation must preserve JS exception details.");
+
+        var catchEnd = component.IndexOf("StateHasChanged();", catchStart, StringComparison.Ordinal);
+        Assert.True(catchEnd > catchStart, "preview creation catch block must call StateHasChanged.");
+
+        var catchBlock = component[catchStart..catchEnd];
+        Assert.Contains("_loadErrorMessage = FormatLoadErrorMessage(ex.Message);", catchBlock, StringComparison.Ordinal);
+        Assert.Contains("_failedCommandsJson = CommandsJson;", catchBlock, StringComparison.Ordinal);
+
+        var helperStart = component.IndexOf("private static string FormatLoadErrorMessage(string? message)", StringComparison.Ordinal);
+        Assert.True(helperStart >= 0, "QeInlinePartViewer must bound customer-facing preview error text.");
+
+        var helperEnd = component.IndexOf("\n    private void RetryPreview()", helperStart, StringComparison.Ordinal);
+        Assert.True(helperEnd > helperStart, "FormatLoadErrorMessage must end before RetryPreview.");
+
+        var helper = component[helperStart..helperEnd];
+        Assert.Contains("DefaultLoadErrorMessage", helper, StringComparison.Ordinal);
+        Assert.Contains("PreviewErrorMessageMaxLength", helper, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_feedback_status_reflects_memory_observation()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")

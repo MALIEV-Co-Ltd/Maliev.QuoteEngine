@@ -5,7 +5,7 @@
     @if (_loadFailed)
     {
         <div class="qe-inline-viewer-error">
-            <span>3D preview could not be loaded.</span>
+            <span>@_loadErrorMessage</span>
             <button type="button" class="qe-inline-viewer-retry" @onclick="RetryPreview">Retry preview</button>
         </div>
     }
@@ -16,11 +16,14 @@
 </div>
 
 @code {
+    private const string DefaultLoadErrorMessage = "3D preview could not be loaded.";
+    private const int PreviewErrorMessageMaxLength = 180;
     private static int _counter;
 
     private readonly string _containerId = $"qipv-{++_counter}";
     private string? _renderedCommandsJson;
     private string? _failedCommandsJson;
+    private string _loadErrorMessage = DefaultLoadErrorMessage;
     private bool _loadFailed;
 
     [Parameter]
@@ -35,6 +38,7 @@
                 await JS.InvokeVoidAsync("quoteInlineViewer.disposePreview", _containerId);
                 _renderedCommandsJson = null;
                 _failedCommandsJson = null;
+                _loadErrorMessage = DefaultLoadErrorMessage;
                 _loadFailed = false;
             }
 
@@ -57,20 +61,36 @@
             _failedCommandsJson = null;
             await JS.InvokeVoidAsync("quoteInlineViewer.createPreview", _containerId, CommandsJson);
             _renderedCommandsJson = CommandsJson;
+            _loadErrorMessage = DefaultLoadErrorMessage;
             _loadFailed = false;
         }
-        catch
+        catch (JSException ex)
         {
             _renderedCommandsJson = null;
             _failedCommandsJson = CommandsJson;
+            _loadErrorMessage = FormatLoadErrorMessage(ex.Message);
             _loadFailed = true;
             StateHasChanged();
         }
     }
 
+    private static string FormatLoadErrorMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return DefaultLoadErrorMessage;
+        }
+
+        var trimmed = message.Trim();
+        return trimmed.Length > PreviewErrorMessageMaxLength
+            ? $"{trimmed[..PreviewErrorMessageMaxLength]}..."
+            : trimmed;
+    }
+
     private void RetryPreview()
     {
         _failedCommandsJson = null;
+        _loadErrorMessage = DefaultLoadErrorMessage;
         _loadFailed = false;
         StateHasChanged();
     }
