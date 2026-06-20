@@ -3255,6 +3255,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     [Fact]
     public async Task Payment_initiation_persists_checkout_shipping_snapshot_on_order()
     {
+        // The fake payment client records initiations in process-static state shared by every
+        // test in this (non-parallel) collection; reset it first, like the sibling payment
+        // tests, so Assert.Single below only sees this test's initiation.
+        factory.ClearPaymentIdempotencyKeys();
         using var client = await CreateSignedInClientAsync("payer-snapshot@example.com");
 
         var quoteResp = await client.PostAsJsonAsync(

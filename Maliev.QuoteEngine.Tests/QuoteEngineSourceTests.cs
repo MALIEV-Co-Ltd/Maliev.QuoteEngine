@@ -560,6 +560,25 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspace_FilePickerOpenIsGuardedUntilRouteStateAndSinglePendingOpen()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
+
+        Assert.Contains("private bool _isOpeningFilePicker;", workspace, StringComparison.Ordinal);
+        Assert.Contains("if (!_routeStateInitialized || _isOpeningFilePicker)", workspace, StringComparison.Ordinal);
+        Assert.Contains("_isOpeningFilePicker = true;", workspace, StringComparison.Ordinal);
+        Assert.Contains("_isOpeningFilePicker = false;", workspace, StringComparison.Ordinal);
+        Assert.Contains("quoteEngineUploads.openFilePicker", workspace, StringComparison.Ordinal);
+
+        Assert.Contains("let openPickerPending = false;", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("if (openPickerPending)", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("if (!input || input.disabled)", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("openPickerPending = true;", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("openPickerPending = false;", uploadScript, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteWorkspace_RetainsBrowserViewerFilesUntilPartLifecycleEnds()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
@@ -4205,6 +4224,32 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("const face = buildFaceFromProfile(profile, p);", worker, StringComparison.Ordinal);
         Assert.DoesNotContain("if (profile.type === 'circle')", worker, StringComparison.Ordinal);
         Assert.DoesNotContain("drawCircle(profile.radius || p[1] || 10).sketchOnPlane('XY')", worker, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ReplicadWorker_validates_profile_shorthand_dimensions_before_face_creation()
+    {
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function requirePositiveProfileNumber(profile, fieldName)", worker, StringComparison.Ordinal);
+        Assert.Contains("throw new Error(`Profile ${fieldName} must be a positive finite number`);", worker, StringComparison.Ordinal);
+
+        var buildFaceStart = worker.IndexOf("function buildFaceFromProfile(profile, params)", StringComparison.Ordinal);
+        Assert.True(buildFaceStart >= 0, "buildFaceFromProfile must exist.");
+
+        var buildFaceEnd = worker.IndexOf("\nfunction makeCone", buildFaceStart, StringComparison.Ordinal);
+        Assert.True(buildFaceEnd > buildFaceStart, "buildFaceFromProfile must end before makeCone.");
+
+        var buildFace = worker[buildFaceStart..buildFaceEnd];
+        Assert.Contains("const radius = requirePositiveProfileNumber(profile, 'radius');", buildFace, StringComparison.Ordinal);
+        Assert.Contains("const width = requirePositiveProfileNumber(profile, 'width');", buildFace, StringComparison.Ordinal);
+        Assert.Contains("const height = requirePositiveProfileNumber(profile, 'height');", buildFace, StringComparison.Ordinal);
+        Assert.Contains("return drawCircle(radius).sketchOnPlane(plane);", buildFace, StringComparison.Ordinal);
+        Assert.Contains("return drawRectangle(width, height).sketchOnPlane(plane);", buildFace, StringComparison.Ordinal);
+        Assert.DoesNotContain("profile.radius || params[1] || 10", buildFace, StringComparison.Ordinal);
+        Assert.DoesNotContain("profile.width || params[1]", buildFace, StringComparison.Ordinal);
+        Assert.DoesNotContain("profile.height || params[2]", buildFace, StringComparison.Ordinal);
     }
 
     [Fact]

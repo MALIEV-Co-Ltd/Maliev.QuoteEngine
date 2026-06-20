@@ -70,6 +70,15 @@ function requireSegmentParams(seg, values, requiredLength) {
   }
 }
 
+function requirePositiveProfileNumber(profile, fieldName) {
+  const value = Number(profile[fieldName]);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Profile ${fieldName} must be a positive finite number`);
+  }
+
+  return value;
+}
+
 function buildProfile(profile) {
   const plane = profile.plane || 'XY';
   const sketch = new Sketcher(plane);
@@ -120,7 +129,8 @@ function buildFaceFromProfile(profile, params) {
   const plane = profile.plane || 'XY';
   const profileType = typeof profile.type === 'string' ? profile.type.toLowerCase() : '';
   if (profileType === 'circle' || Number(profile.radius) > 0) {
-    return drawCircle(profile.radius || params[1] || 10).sketchOnPlane(plane);
+    const radius = requirePositiveProfileNumber(profile, 'radius');
+    return drawCircle(radius).sketchOnPlane(plane);
   }
 
   if (
@@ -128,7 +138,9 @@ function buildFaceFromProfile(profile, params) {
     profileType === 'rectangle' ||
     (Number(profile.width) > 0 && Number(profile.height) > 0)
   ) {
-    return drawRectangle(profile.width || params[1], profile.height || params[2]).sketchOnPlane(plane);
+    const width = requirePositiveProfileNumber(profile, 'width');
+    const height = requirePositiveProfileNumber(profile, 'height');
+    return drawRectangle(width, height).sketchOnPlane(plane);
   }
 
   return buildProfile(profile);

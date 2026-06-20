@@ -111,6 +111,7 @@
     private string _centerMode = "model";
     private bool _isPartsDrawerOpen;
     private bool _routeStateInitialized;
+    private bool _isOpeningFilePicker;
     private string? _lastWorkspacePath;
     private string? _lastHandoff;
     private string? _error;
@@ -294,7 +295,20 @@
             return;
         }
 
-        await Js.InvokeVoidAsync("quoteEngineUploads.openFilePicker", UploadInputId);
+        if (!_routeStateInitialized || _isOpeningFilePicker)
+        {
+            return;
+        }
+
+        _isOpeningFilePicker = true;
+        try
+        {
+            await Js.InvokeVoidAsync("quoteEngineUploads.openFilePicker", UploadInputId);
+        }
+        finally
+        {
+            _isOpeningFilePicker = false;
+        }
     }
 
     private async Task StartNewProjectAsync()

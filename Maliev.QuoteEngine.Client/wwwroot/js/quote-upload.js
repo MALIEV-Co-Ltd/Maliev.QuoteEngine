@@ -9,6 +9,7 @@ window.quoteEngineUploads = (() => {
   const fileRetentionMs = 10 * 60 * 1000;
   let lastCaptureDiagnostics = null;
   let lastClearDiagnostics = null;
+  let openPickerPending = false;
 
   function normalizeFile(fileLike) {
     if (!fileLike) {
@@ -86,7 +87,20 @@ window.quoteEngineUploads = (() => {
   }
 
   function openFilePicker(inputId) {
-    document.getElementById(inputId)?.click();
+    if (openPickerPending) {
+      return;
+    }
+
+    const input = document.getElementById(inputId);
+    if (!input || input.disabled) {
+      return;
+    }
+
+    openPickerPending = true;
+    input.click();
+    setTimeout(() => {
+      openPickerPending = false;
+    }, 600);
   }
 
   function registerDropzone(dropzoneId, inputId, dotNetRef, options) {
