@@ -1017,6 +1017,14 @@ public sealed class CadCommandDto
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Angle { get; set; }
 
+    /// <summary>Rotation angle in degrees; normalized into <see cref="Angle"/>.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? AngleDegrees { get; set; }
+
+    /// <summary>Short degree angle alias; normalized into <see cref="Angle"/>.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? Degrees { get; set; }
+
     /// <summary>Fillet or chamfer radius.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Radius { get; set; }
