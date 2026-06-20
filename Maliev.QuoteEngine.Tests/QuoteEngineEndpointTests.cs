@@ -1108,6 +1108,32 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             return Task.FromResult<CustomerProfileResponse?>(updated);
         }
 
+        public Task<CustomerProfileResponse?> UpdateCustomerProfileAsync(
+            Guid customerId,
+            string displayName,
+            string? phone,
+            string? companyName,
+            string? vatNumber,
+            string preferredLanguage,
+            string timezone,
+            CancellationToken ct = default)
+        {
+            var existing = _profilesById.TryGetValue(customerId, out var profile)
+                ? profile
+                : CreateProfile($"customer-{customerId:N}@example.com", displayName, phone ?? string.Empty);
+            var updated = existing with
+            {
+                DisplayName = string.IsNullOrWhiteSpace(displayName) ? existing.DisplayName : displayName,
+                Phone = string.IsNullOrWhiteSpace(phone) ? existing.Phone : phone,
+                CompanyName = string.IsNullOrWhiteSpace(companyName) ? existing.CompanyName : companyName,
+                PreferredLanguage = string.IsNullOrWhiteSpace(preferredLanguage) ? existing.PreferredLanguage : preferredLanguage,
+                Timezone = string.IsNullOrWhiteSpace(timezone) ? existing.Timezone : timezone,
+                VatNumber = string.IsNullOrWhiteSpace(vatNumber) ? existing.VatNumber : vatNumber
+            };
+            _profilesById[customerId] = updated;
+            return Task.FromResult<CustomerProfileResponse?>(updated);
+        }
+
         public Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken)
         {
             var list = _addressesByCustomer.GetOrAdd(customerId, _ => CreateDefaultAddresses());

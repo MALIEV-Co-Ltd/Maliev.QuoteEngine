@@ -31,6 +31,17 @@ public interface ICustomerServiceClient
         string? phone,
         CancellationToken ct = default);
 
+    /// <summary>Updates CustomerService-owned profile fields used by Make Studio account context.</summary>
+    Task<CustomerProfileResponse?> UpdateCustomerProfileAsync(
+        Guid customerId,
+        string displayName,
+        string? phone,
+        string? companyName,
+        string? vatNumber,
+        string preferredLanguage,
+        string timezone,
+        CancellationToken ct = default);
+
     /// <summary>Gets customer-owned addresses.</summary>
     Task<HttpResponseMessage> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken);
 
@@ -300,6 +311,66 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
             var body = await response.Content.ReadAsStringAsync(ct);
             logger.LogWarning(
                 "CustomerService returned {Status} while linking company billing identity for customer {CustomerId}: {Body}",
+                response.StatusCode,
+                customerId,
+                body);
+            return null;
+        }
+
+        var updated = await response.Content.ReadFromJsonAsync<CsCustomerResponse>(cancellationToken: ct);
+        return updated is null ? null : MapCustomer(updated);
+    }
+
+    public async Task<CustomerProfileResponse?> UpdateCustomerProfileAsync(
+        Guid customerId,
+        string displayName,
+        string? phone,
+        string? companyName,
+        string? vatNumber,
+        string preferredLanguage,
+        string timezone,
+        CancellationToken ct = default)
+    {
+        var customer = await GetRawCustomerByIdAsync(customerId, ct);
+        if (customer is null)
+        {
+            return null;
+        }
+
+        var companyId = customer.CompanyId;
+        if (companyId is null && !string.IsNullOrWhiteSpace(companyName))
+        {
+            var company = await CreateCompanyAsync(
+                companyName.Trim(),
+                vatNumber,
+                string.IsNullOrWhiteSpace(phone) ? customer.Mobile : phone,
+                customer.Email,
+                ct);
+            companyId = company?.Id;
+        }
+
+        var (firstName, lastName) = SplitName(displayName, customer.Email);
+        using var response = await http.PatchAsJsonAsync($"/customer/v1/customers/{customerId:D}", new
+        {
+            firstName,
+            lastName,
+            email = customer.Email,
+            mobile = string.IsNullOrWhiteSpace(phone) ? customer.Mobile : phone,
+            segment = string.IsNullOrWhiteSpace(customer.Segment) ? "Self-service manufacturing" : customer.Segment,
+            tier = string.IsNullOrWhiteSpace(customer.Tier) ? "Customer" : customer.Tier,
+            preferredLanguage = string.IsNullOrWhiteSpace(preferredLanguage) ? customer.PreferredLanguage : preferredLanguage,
+            timezone = string.IsNullOrWhiteSpace(timezone) ? customer.Timezone : timezone,
+            paymentTerms = "Due on receipt",
+            status = "Active",
+            companyId,
+            xmin = customer.Xmin
+        }, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync(ct);
+            logger.LogWarning(
+                "CustomerService returned {Status} while updating profile for customer {CustomerId}: {Body}",
                 response.StatusCode,
                 customerId,
                 body);

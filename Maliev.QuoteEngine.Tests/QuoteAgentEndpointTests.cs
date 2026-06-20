@@ -3477,7 +3477,7 @@ Customer message:
         Assert.Equal("agent-profile-update@example.com", profile.GetProperty("email").GetString());
         Assert.Equal("+66 2 555 0200", profile.GetProperty("phone").GetString());
         Assert.Equal("Northbridge Robotics", profile.GetProperty("companyName").GetString());
-        Assert.Equal("USD", profile.GetProperty("preferredCurrency").GetString());
+        Assert.Equal("THB", profile.GetProperty("preferredCurrency").GetString());
         Assert.Equal("TH9876543210", profile.GetProperty("vatNumber").GetString());
     }
 
@@ -5909,6 +5909,28 @@ Customer message:
             {
                 CompanyName = string.IsNullOrWhiteSpace(companyName) ? "MALIEV Buyer Co." : companyName,
                 VatNumber = string.IsNullOrWhiteSpace(vatNumber) ? "1234567890123" : vatNumber
+            });
+        }
+
+        public Task<CustomerProfileResponse?> UpdateCustomerProfileAsync(
+            Guid customerId,
+            string displayName,
+            string? phone,
+            string? companyName,
+            string? vatNumber,
+            string preferredLanguage,
+            string timezone,
+            CancellationToken ct = default)
+        {
+            var profile = BuildProfile(customerId);
+            return Task.FromResult<CustomerProfileResponse?>(profile with
+            {
+                DisplayName = string.IsNullOrWhiteSpace(displayName) ? profile.DisplayName : displayName,
+                Phone = string.IsNullOrWhiteSpace(phone) ? profile.Phone : phone,
+                CompanyName = string.IsNullOrWhiteSpace(companyName) ? profile.CompanyName : companyName,
+                PreferredLanguage = string.IsNullOrWhiteSpace(preferredLanguage) ? profile.PreferredLanguage : preferredLanguage,
+                Timezone = string.IsNullOrWhiteSpace(timezone) ? profile.Timezone : timezone,
+                VatNumber = string.IsNullOrWhiteSpace(vatNumber) ? profile.VatNumber : vatNumber
             });
         }
 

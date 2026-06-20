@@ -754,7 +754,7 @@ internal sealed class QuoteAgentService(
                 "archive_project" => await ExecuteArchiveProjectAsync(state, customerId!.Value, action, cancellationToken),
                 "request_employee_review" => await ExecuteRequestEmployeeReviewAsync(state, customerId!.Value, action, cancellationToken),
                 "achieve_project" => await ExecuteAchieveProjectAsync(state, customerId!.Value, action, cancellationToken),
-                "account_profile_update" => ExecuteAccountProfileUpdate(state, customerId!.Value, action),
+                "account_profile_update" => await ExecuteAccountProfileUpdateAsync(state, customerId!.Value, action, cancellationToken),
                 "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
                 "quote_approval" => ExecuteQuoteApproval(state),
                 "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
@@ -2886,10 +2886,11 @@ internal sealed class QuoteAgentService(
         return $"Project {response.ProjectNumber} was marked achieved.";
     }
 
-    private string ExecuteAccountProfileUpdate(
+    private async Task<string> ExecuteAccountProfileUpdateAsync(
         QuoteAgentSessionState state,
         Guid customerId,
-        QuoteAgentPendingAction action)
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
     {
         var current = prototypeStore.GetProfile(customerId);
         var displayName = ReadString(action.Arguments, "display_name") ??
@@ -2911,6 +2912,26 @@ internal sealed class QuoteAgentService(
         var vatNumber = ReadString(action.Arguments, "vat_number") ??
             ReadString(action.Arguments, "vatNumber") ??
             current.VatNumber;
+
+        var durable = await customerClient.UpdateCustomerProfileAsync(
+            customerId,
+            displayName,
+            phone,
+            companyName,
+            vatNumber,
+            preferredLanguage,
+            timezone,
+            cancellationToken);
+        if (durable is not null)
+        {
+            state.CustomerId = customerId;
+            return $"Account profile updated for {durable.DisplayName}.";
+        }
+
+        if (!CanUsePrototypeAccountContextFallback())
+        {
+            throw new InvalidOperationException("CustomerService did not update the account profile.");
+        }
 
         var updated = prototypeStore.UpsertCustomer(
             customerId,
