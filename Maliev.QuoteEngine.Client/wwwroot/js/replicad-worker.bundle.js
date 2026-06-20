@@ -23774,6 +23774,19 @@
     }
     return vector;
   }
+  function requireOptionalFiniteVector(cmd, values, fieldName) {
+    if (values == null) {
+      return null;
+    }
+    if (!Array.isArray(values) || values.length < 3) {
+      throw new Error(`CAD operation ${cmd.op} ${fieldName} must be a finite vector`);
+    }
+    const vector = values.slice(0, 3).map((value) => Number(value));
+    if (vector.some((value) => !Number.isFinite(value))) {
+      throw new Error(`CAD operation ${cmd.op} ${fieldName} must be a finite vector`);
+    }
+    return vector;
+  }
   function requirePositiveProfileNumber(profile, fieldName) {
     const value = Number(profile[fieldName]);
     if (!Number.isFinite(value) || value <= 0) {
@@ -23934,13 +23947,15 @@
         }
         case "translate": {
           shape = resolveOperationTarget(cmd, result);
-          if (offset2) shape = shape.translate(offset2[0], offset2[1], offset2[2]);
-          else if (p.length >= 3) shape = shape.translate(p[0], p[1], p[2]);
+          const translation = offset2 == null ? p.length > 0 ? requireOptionalFiniteVector(cmd, p, "params") : null : requireOptionalFiniteVector(cmd, offset2, "offset");
+          if (translation) shape = shape.translate(translation[0], translation[1], translation[2]);
           break;
         }
         case "rotate": {
           const target = resolveOperationTarget(cmd, result);
-          shape = target.rotate(cmd.axis || [0, 0, 1], cmd.angle || p[0] || 0);
+          const axis = requireOptionalNonZeroVector(cmd, cmd.axis, "axis") || [0, 0, 1];
+          const angle = requireOptionalFiniteNumber(cmd, cmd.angle ?? (p.length > 0 ? p[0] : 0), "angle") ?? 0;
+          shape = target.rotate(axis, angle);
           break;
         }
         default:

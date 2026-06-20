@@ -4273,6 +4273,45 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void ReplicadWorker_validates_transform_params_before_cad_calls()
+    {
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function requireOptionalFiniteVector(cmd, values, fieldName)", worker, StringComparison.Ordinal);
+        Assert.Contains("function requireOptionalNonZeroVector(cmd, values, fieldName)", worker, StringComparison.Ordinal);
+
+        var processStart = worker.IndexOf("function processCommands(commands)", StringComparison.Ordinal);
+        Assert.True(processStart >= 0, "processCommands must exist.");
+
+        var processEnd = worker.IndexOf("\nself.onmessage", processStart, StringComparison.Ordinal);
+        Assert.True(processEnd > processStart, "processCommands must end before self.onmessage.");
+
+        var processCommands = worker[processStart..processEnd];
+        var translateStart = processCommands.IndexOf("case 'translate':", StringComparison.Ordinal);
+        Assert.True(translateStart >= 0, "translate case must exist.");
+
+        var rotateStart = processCommands.IndexOf("case 'rotate':", translateStart, StringComparison.Ordinal);
+        Assert.True(rotateStart > translateStart, "rotate case must follow translate case.");
+
+        var defaultStart = processCommands.IndexOf("default:", rotateStart, StringComparison.Ordinal);
+        Assert.True(defaultStart > rotateStart, "default branch must follow rotate case.");
+
+        var translateCase = processCommands[translateStart..rotateStart];
+        Assert.Contains("const translation = offset == null", translateCase, StringComparison.Ordinal);
+        Assert.Contains("requireOptionalFiniteVector(cmd, offset, 'offset')", translateCase, StringComparison.Ordinal);
+        Assert.Contains("requireOptionalFiniteVector(cmd, p, 'params')", translateCase, StringComparison.Ordinal);
+        Assert.Contains("shape = shape.translate(translation[0], translation[1], translation[2]);", translateCase, StringComparison.Ordinal);
+        Assert.DoesNotContain("shape.translate(offset[0], offset[1], offset[2])", translateCase, StringComparison.Ordinal);
+
+        var rotateCase = processCommands[rotateStart..defaultStart];
+        Assert.Contains("const axis = requireOptionalNonZeroVector(cmd, cmd.axis, 'axis') || [0, 0, 1];", rotateCase, StringComparison.Ordinal);
+        Assert.Contains("const angle = requireOptionalFiniteNumber(cmd, cmd.angle ?? (p.length > 0 ? p[0] : 0), 'angle') ?? 0;", rotateCase, StringComparison.Ordinal);
+        Assert.Contains("shape = target.rotate(axis, angle);", rotateCase, StringComparison.Ordinal);
+        Assert.DoesNotContain("target.rotate(cmd.axis || [0, 0, 1], cmd.angle || p[0] || 0)", rotateCase, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ReplicadWorker_renders_bff_profile_shorthands_without_type_field()
     {
         var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
