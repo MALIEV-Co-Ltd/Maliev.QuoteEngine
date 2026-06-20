@@ -4538,6 +4538,30 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteInlineViewer_rejects_create_preview_after_rendering_error_fallback()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function failPreview(container, message)", viewer, StringComparison.Ordinal);
+
+        var createPreviewStart = viewer.IndexOf("createPreview: async function (containerId, commandsJson)", StringComparison.Ordinal);
+        Assert.True(createPreviewStart >= 0, "createPreview must exist.");
+
+        var createPreviewEnd = viewer.IndexOf("\n    disposePreview: disposePreview", createPreviewStart, StringComparison.Ordinal);
+        Assert.True(createPreviewEnd > createPreviewStart, "createPreview must end before disposePreview export.");
+
+        var createPreview = viewer[createPreviewStart..createPreviewEnd];
+        Assert.Contains("failPreview(container, 'Could not parse 3D commands');", createPreview, StringComparison.Ordinal);
+        Assert.Contains("failPreview(container, 'No shapes to display');", createPreview, StringComparison.Ordinal);
+        Assert.Contains("failPreview(container, '3D engine not available');", createPreview, StringComparison.Ordinal);
+        Assert.Contains("throw e instanceof Error ? e : new Error(message);", createPreview, StringComparison.Ordinal);
+        Assert.DoesNotContain("showPreviewError(container, 'Could not parse 3D commands');\n        return;", createPreview, StringComparison.Ordinal);
+        Assert.DoesNotContain("showPreviewError(container, 'No shapes to display');\n        return;", createPreview, StringComparison.Ordinal);
+        Assert.DoesNotContain("showPreviewError(container, '3D engine not available');\n        return;", createPreview, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeInlinePartViewer_implements_async_disposal_for_preview_resources()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")

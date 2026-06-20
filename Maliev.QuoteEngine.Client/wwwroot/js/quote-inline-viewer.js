@@ -27,6 +27,11 @@
     container.innerHTML = '<p class="qe-inline-viewer-error">' + escapeHtml(message || '3D preview could not be loaded') + '</p>';
   }
 
+  function failPreview(container, message) {
+    showPreviewError(container, message);
+    throw new Error(message || '3D preview could not be loaded');
+  }
+
   function escapeHtml(value) {
     return String(value)
       .replace(/&/g, '&amp;')
@@ -221,21 +226,18 @@
       try {
         commands = JSON.parse(commandsJson);
       } catch (e) {
-        showPreviewError(container, 'Could not parse 3D commands');
-        return;
+        failPreview(container, 'Could not parse 3D commands');
       }
 
       if (!Array.isArray(commands) || commands.length === 0) {
-        showPreviewError(container, 'No shapes to display');
-        return;
+        failPreview(container, 'No shapes to display');
       }
 
       var worker;
       try {
         worker = await getWorker();
       } catch (e) {
-        showPreviewError(container, '3D engine not available');
-        return;
+        failPreview(container, '3D engine not available');
       }
 
       container.innerHTML = '<div class="qe-inline-viewer-loading">Building 3D model…</div>';
@@ -289,7 +291,9 @@
         scenes.set(containerId, entry);
       } catch (e) {
         disposePreview(containerId);
-        showPreviewError(container, e && e.message ? e.message : '3D preview could not be loaded');
+        var message = e && e.message ? e.message : '3D preview could not be loaded';
+        showPreviewError(container, message);
+        throw e instanceof Error ? e : new Error(message);
       }
     },
 
