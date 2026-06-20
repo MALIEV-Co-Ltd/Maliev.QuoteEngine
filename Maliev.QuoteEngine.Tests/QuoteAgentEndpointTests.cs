@@ -4492,6 +4492,61 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_normalizes_profile_segment_types_for_browser_worker()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new object[]
+        {
+            new
+            {
+                op = "extrude",
+                id = "sketched_plate",
+                Params = new[] { 4.0 },
+                profile = new
+                {
+                    plane = "XY",
+                    segments = new object[]
+                    {
+                        new { type = "Move", Params = new[] { 0.0, 0.0 } },
+                        new { type = "LINE", Params = new[] { 30.0, 0.0 } },
+                        new { type = "vline", Params = new[] { 12.0 } },
+                        new { type = "hline", Params = new[] { -30.0 } }
+                    }
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Mixed case sketch segment preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var commandJson = viewerArtifact.Metadata["cad_commands"];
+        using var commandDoc = JsonDocument.Parse(commandJson);
+        var command = commandDoc.RootElement.EnumerateArray().Single();
+        var segmentTypes = command.GetProperty("profile")
+            .GetProperty("segments")
+            .EnumerateArray()
+            .Select(segment => segment.GetProperty("type").GetString())
+            .ToArray();
+
+        Assert.Equal(new[] { "move", "line", "vLine", "hLine" }, segmentTypes);
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_requires_at_least_one_command()
     {
         using var client = factory.CreateClient();

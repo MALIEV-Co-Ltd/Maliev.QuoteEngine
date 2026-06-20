@@ -5741,13 +5741,13 @@ Customer message:
             return new { error = "At least one CAD command is required." };
         }
 
+        NormalizeCadCommandsForBrowserWorker(commands);
         var validationError = ValidateCadCommands(commands);
         if (!string.IsNullOrWhiteSpace(validationError))
         {
             return new { error = validationError };
         }
 
-        NormalizeCadCommandsForBrowserWorker(commands);
         var process = !string.IsNullOrWhiteSpace(processHint) ? processHint : "fdm";
         var commandsJson = JsonSerializer.Serialize(commands, JsonOptions);
         var partId = Guid.NewGuid();
@@ -5844,6 +5844,10 @@ Customer message:
             if (command.Profile is not null)
             {
                 command.Profile.Plane = NormalizeCadProfilePlane(command.Profile.Plane);
+                foreach (var segment in command.Profile.Segments)
+                {
+                    segment.Type = NormalizeCadProfileSegmentType(segment.Type);
+                }
             }
         }
     }
@@ -5860,6 +5864,18 @@ Customer message:
         return string.IsNullOrWhiteSpace(value)
             ? "XY"
             : value.Trim().ToUpperInvariant();
+    }
+
+    private static string NormalizeCadProfileSegmentType(string? value)
+    {
+        var normalized = value?.Trim().ToLowerInvariant();
+        return normalized switch
+        {
+            "hline" => "hLine",
+            "vline" => "vLine",
+            "move" or "line" or "arc" or "bezier" => normalized,
+            _ => value ?? string.Empty
+        };
     }
 
     private static string? ValidateCadCommands(IReadOnlyList<CadCommandDto> commands)
