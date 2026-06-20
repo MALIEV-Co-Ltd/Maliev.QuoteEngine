@@ -6602,6 +6602,7 @@ Customer message:
                 command.RadiusBottom ?? command.BottomRadius ?? dimensions?.RadiusBottom ?? dimensions?.BottomRadius,
                 command.RadiusTop ?? command.TopRadius ?? dimensions?.RadiusTop ?? dimensions?.TopRadius ?? 0,
                 command.Height ?? dimensions?.Height),
+            "fillet" or "chamfer" => BuildParams(command.Radius ?? command.CornerRadius ?? command.EdgeRadius),
             "extrude" => BuildParams(command.Height),
             _ => command.Params
         };

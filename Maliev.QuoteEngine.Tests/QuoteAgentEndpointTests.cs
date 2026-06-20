@@ -5027,6 +5027,59 @@ Customer message:
         Assert.Equal(new[] { "box", "cylinder", "cut" }, ops);
     }
 
+    [Fact]
+    public async Task Generate_3d_preview_tool_accepts_edge_radius_aliases()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            },
+            new
+            {
+                op = "fillet",
+                targetId = "base",
+                cornerRadius = 2.0,
+                resultId = "rounded"
+            },
+            new
+            {
+                op = "chamfer",
+                targetId = "rounded",
+                edgeRadius = 1.0,
+                resultId = "finished"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Edge radius alias preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommands = commandDoc.RootElement.EnumerateArray().ToArray();
+
+        Assert.Equal(new[] { 2.0 }, normalizedCommands[1].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal(new[] { 1.0 }, normalizedCommands[2].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+    }
+
     [Theory]
     [InlineData("subtract", "cut")]
     [InlineData("difference", "cut")]

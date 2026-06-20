@@ -1013,6 +1013,14 @@ public sealed class CadCommandDto
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Radius { get; set; }
 
+    /// <summary>Corner radius alias for fillet/chamfer operations.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? CornerRadius { get; set; }
+
+    /// <summary>Edge radius alias for fillet/chamfer operations.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? EdgeRadius { get; set; }
+
     /// <summary>Diameter shorthand for cylinder and sphere primitives.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Diameter { get; set; }
