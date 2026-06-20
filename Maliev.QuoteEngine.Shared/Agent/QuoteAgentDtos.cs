@@ -886,6 +886,15 @@ public sealed class CadCommandDto
     /// <summary>Named primitive height or Z dimension, normalized to params when present.</summary>
     public double? Height { get; set; }
 
+    /// <summary>Named X translation component, normalized to offset when present.</summary>
+    public double? X { get; set; }
+
+    /// <summary>Named Y translation component, normalized to offset when present.</summary>
+    public double? Y { get; set; }
+
+    /// <summary>Named Z translation component, normalized to offset when present.</summary>
+    public double? Z { get; set; }
+
     /// <summary>Translation offset [x, y, z] for the translate op.</summary>
     public double[]? Offset { get; set; }
 

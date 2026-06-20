@@ -5886,6 +5886,7 @@ Customer message:
             command.ToolId = NormalizeCadShapeReference(command.ToolId);
             command.ResultId = NormalizeCadShapeReference(command.ResultId);
             NormalizeCadCommandParams(command);
+            NormalizeCadTransformVectors(command);
             if (command.Profile is not null)
             {
                 command.Profile.Plane = NormalizeCadProfilePlane(command.Profile.Plane);
@@ -5916,6 +5917,15 @@ Customer message:
             "extrude" => BuildParams(command.Height),
             _ => command.Params
         };
+    }
+
+    private static void NormalizeCadTransformVectors(CadCommandDto command)
+    {
+        if (command.Offset is not { Length: > 0 } &&
+            command.Op.Equals("translate", StringComparison.OrdinalIgnoreCase))
+        {
+            command.Offset = BuildParams(command.X, command.Y, command.Z);
+        }
     }
 
     private static double? Half(double? value)

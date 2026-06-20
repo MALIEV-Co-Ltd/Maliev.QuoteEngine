@@ -4821,6 +4821,56 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_normalizes_named_translate_offset_for_browser_worker()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new object[]
+        {
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            },
+            new
+            {
+                op = "translate",
+                targetId = "base",
+                resultId = "shifted_base",
+                x = 4.0,
+                y = -2.0,
+                z = 8.0
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Named translate offset preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 2);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var translateCommand = commandDoc.RootElement.EnumerateArray().ElementAt(1);
+
+        Assert.Equal(new[] { 4.0, -2.0, 8.0 }, translateCommand.GetProperty("offset").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_rejects_unsupported_commands_before_creating_ready_artifact()
     {
         using var client = factory.CreateClient();
