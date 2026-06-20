@@ -6361,7 +6361,10 @@ Customer message:
     {
         if (!arguments.TryGetValue("cad_commands", out var value) &&
             !arguments.TryGetValue("commands", out value) &&
-            !arguments.TryGetValue("cadCommands", out value))
+            !arguments.TryGetValue("cadCommands", out value) &&
+            !arguments.TryGetValue("command", out value) &&
+            !arguments.TryGetValue("cadCommand", out value) &&
+            !arguments.TryGetValue("cad_command", out value))
         {
             return [];
         }

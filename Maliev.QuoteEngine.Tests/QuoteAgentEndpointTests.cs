@@ -5788,6 +5788,47 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_singular_command_argument_alias()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var command = new
+        {
+            op = "box",
+            id = "part",
+            width = 25.0,
+            depth = 20.0,
+            height = 8.0
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Singular command alias preview", JsonOptions),
+                ["command"] = JsonSerializer.SerializeToElement(command, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 1);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommand = commandDoc.RootElement.EnumerateArray().Single();
+
+        Assert.Equal("box", normalizedCommand.GetProperty("op").GetString());
+        Assert.Equal(new[] { 25.0, 20.0, 8.0 }, normalizedCommand.GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_normalizes_named_primitive_dimensions_for_browser_worker()
     {
         using var client = factory.CreateClient();
