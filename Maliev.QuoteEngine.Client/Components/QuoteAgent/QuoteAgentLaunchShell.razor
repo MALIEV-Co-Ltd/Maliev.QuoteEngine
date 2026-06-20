@@ -5182,7 +5182,9 @@
             }
 
             viewer.FeedbackComment = viewer.FeedbackComment.Trim();
-            viewer.FeedbackStatus = Text("Feedback recorded", "บันทึกความคิดเห็นแล้ว");
+            viewer.FeedbackStatus = result?.MemoryObserved == true
+                ? Text("Feedback recorded for future drafts", "บันทึกความคิดเห็นสำหรับแบบร่างถัดไปแล้ว")
+                : Text("Feedback recorded", "บันทึกความคิดเห็นแล้ว");
         }
         catch
         {

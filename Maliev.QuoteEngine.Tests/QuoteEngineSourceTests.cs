@@ -4549,6 +4549,24 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_feedback_status_reflects_memory_observation()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
+            .ReplaceLineEndings("\n");
+
+        var submitStart = shell.IndexOf("private async Task SubmitInlineViewerFeedbackAsync(AgentMessageRow message)", StringComparison.Ordinal);
+        Assert.True(submitStart >= 0, "SubmitInlineViewerFeedbackAsync must exist.");
+
+        var submitEnd = shell.IndexOf("\n    private PreviewItem? BuildArtifactPreviewItem", submitStart, StringComparison.Ordinal);
+        Assert.True(submitEnd > submitStart, "SubmitInlineViewerFeedbackAsync must end before BuildArtifactPreviewItem.");
+
+        var submit = shell[submitStart..submitEnd];
+        Assert.Contains("result?.MemoryObserved == true", submit, StringComparison.Ordinal);
+        Assert.Contains("Feedback recorded for future drafts", submit, StringComparison.Ordinal);
+        Assert.Contains("Feedback recorded", submit, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
