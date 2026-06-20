@@ -6284,9 +6284,10 @@ Customer message:
 
     private static object Generate3DPreview(QuoteAgentSessionState state, IReadOnlyDictionary<string, JsonElement> arguments)
     {
-        var description = ReadString(arguments, "description") ?? "Generated 3D preview";
-        var processHint = ReadString(arguments, "process_hint") ?? ReadString(arguments, "processHint");
-        var commands = ReadCommands(arguments);
+        var previewArguments = UnwrapToolArguments(arguments);
+        var description = ReadString(previewArguments, "description") ?? "Generated 3D preview";
+        var processHint = ReadString(previewArguments, "process_hint") ?? ReadString(previewArguments, "processHint");
+        var commands = ReadCommands(previewArguments);
 
         if (commands.Count == 0)
         {
@@ -6360,6 +6361,19 @@ Customer message:
         }
 
         return ReadCommands(value);
+    }
+
+    private static IReadOnlyDictionary<string, JsonElement> UnwrapToolArguments(IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        if ((arguments.TryGetValue("arguments", out var nested) ||
+                arguments.TryGetValue("args", out nested)) &&
+            nested.ValueKind == JsonValueKind.Object)
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(nested.GetRawText(), JsonOptions)
+                ?? arguments;
+        }
+
+        return arguments;
     }
 
     private static IReadOnlyList<CadCommandDto> ReadCommands(JsonElement value)
