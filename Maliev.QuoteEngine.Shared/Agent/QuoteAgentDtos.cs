@@ -933,6 +933,7 @@ public sealed class CadCommandDto
     public double? Z { get; set; }
 
     /// <summary>Translation offset [x, y, z] for the translate op.</summary>
+    [JsonConverter(typeof(CadVectorJsonConverter))]
     public double[]? Offset { get; set; }
 
     /// <summary>Named rotation axis X component, normalized to axis when present.</summary>
@@ -945,6 +946,7 @@ public sealed class CadCommandDto
     public double? AxisZ { get; set; }
 
     /// <summary>Rotation axis [x, y, z] for the rotate or revolve op.</summary>
+    [JsonConverter(typeof(CadVectorJsonConverter))]
     public double[]? Axis { get; set; }
 
     /// <summary>Rotation angle in radians.</summary>
@@ -1018,6 +1020,78 @@ public sealed class CadDimensionsDto
 
     /// <summary>Cone top radius alias.</summary>
     public double? TopRadius { get; set; }
+}
+
+/// <summary>
+/// Reads CAD vectors from either [x, y, z] arrays or { x, y, z } objects.
+/// </summary>
+public sealed class CadVectorJsonConverter : JsonConverter<double[]?>
+{
+    /// <inheritdoc />
+    public override double[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+
+        if (reader.TokenType == JsonTokenType.StartArray)
+        {
+            return JsonSerializer.Deserialize<double[]>(ref reader, options);
+        }
+
+        if (reader.TokenType != JsonTokenType.StartObject)
+        {
+            throw new JsonException("CAD vector must be an array or an object with x, y, and z values.");
+        }
+
+        double? x = null;
+        double? y = null;
+        double? z = null;
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndObject)
+            {
+                return x.HasValue && y.HasValue && z.HasValue
+                    ? [x.Value, y.Value, z.Value]
+                    : null;
+            }
+
+            if (reader.TokenType != JsonTokenType.PropertyName)
+            {
+                throw new JsonException("CAD vector object contains an invalid token.");
+            }
+
+            var propertyName = reader.GetString();
+            if (!reader.Read())
+            {
+                throw new JsonException("CAD vector object ended unexpectedly.");
+            }
+
+            var value = reader.TokenType == JsonTokenType.Number ? reader.GetDouble() : (double?)null;
+            switch (propertyName?.Trim().ToLowerInvariant())
+            {
+                case "x":
+                    x = value;
+                    break;
+                case "y":
+                    y = value;
+                    break;
+                case "z":
+                    z = value;
+                    break;
+            }
+        }
+
+        throw new JsonException("CAD vector object ended unexpectedly.");
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, double[]? value, JsonSerializerOptions options)
+    {
+        JsonSerializer.Serialize(writer, value, options);
+    }
 }
 
 /// <summary>
