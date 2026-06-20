@@ -4470,6 +4470,33 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteInlineViewer_validates_mesh_buffers_before_babylon_scene_creation()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function validateMeshData(meshData)", viewer, StringComparison.Ordinal);
+        Assert.Contains("throw new Error('3D preview mesh is empty');", viewer, StringComparison.Ordinal);
+        Assert.Contains("throw new Error('3D preview mesh contains invalid coordinates');", viewer, StringComparison.Ordinal);
+
+        var createSceneStart = viewer.IndexOf("function createScene(container, meshData)", StringComparison.Ordinal);
+        Assert.True(createSceneStart >= 0, "createScene must exist.");
+
+        var createSceneEnd = viewer.IndexOf("\n  function disposePreview", createSceneStart, StringComparison.Ordinal);
+        Assert.True(createSceneEnd > createSceneStart, "createScene must end before disposePreview.");
+
+        var createScene = viewer[createSceneStart..createSceneEnd];
+        var validationIndex = createScene.IndexOf("validateMeshData(meshData);", StringComparison.Ordinal);
+        var verticesIndex = createScene.IndexOf("var vertices = new Float32Array(meshData.vertices);", StringComparison.Ordinal);
+        var engineIndex = createScene.IndexOf("var engine = new BABYLON.Engine(canvas, true", StringComparison.Ordinal);
+
+        Assert.True(validationIndex >= 0, "createScene must validate mesh data first.");
+        Assert.True(verticesIndex > validationIndex, "createScene must not read typed arrays before validation.");
+        Assert.True(engineIndex > validationIndex, "createScene must not construct Babylon before validation.");
+        Assert.Contains("if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz))", createScene, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");

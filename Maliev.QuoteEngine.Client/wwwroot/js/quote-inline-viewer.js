@@ -53,10 +53,29 @@
     return mat;
   }
 
+  function validateMeshData(meshData) {
+    if (
+      !meshData ||
+      !meshData.vertices ||
+      !meshData.triangles ||
+      !meshData.normals ||
+      meshData.vertices.byteLength === 0 ||
+      meshData.triangles.byteLength === 0
+    ) {
+      throw new Error('3D preview mesh is empty');
+    }
+  }
+
   function createScene(container, meshData) {
+    validateMeshData(meshData);
+
     var vertices = new Float32Array(meshData.vertices);
     var tris = new Uint32Array(meshData.triangles);
     var normals = new Float32Array(meshData.normals);
+    if (vertices.length < 3 || tris.length < 3 || normals.length < 3) {
+      throw new Error('3D preview mesh is empty');
+    }
+
     var indexArray = [];
     for (var i = 0; i < tris.length; i++) {
       indexArray.push(tris[i]);
@@ -67,6 +86,10 @@
     var maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
     for (var j = 0; j < vertices.length; j += 3) {
       var vx = vertices[j], vy = vertices[j + 1], vz = vertices[j + 2];
+      if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz)) {
+        throw new Error('3D preview mesh contains invalid coordinates');
+      }
+
       if (vx < minX) minX = vx;
       if (vy < minY) minY = vy;
       if (vz < minZ) minZ = vz;
@@ -74,15 +97,24 @@
       if (vy > maxY) maxY = vy;
       if (vz > maxZ) maxZ = vz;
     }
+
     var centerX = (minX + maxX) / 2;
     var centerY = (minY + maxY) / 2;
     var centerZ = (minZ + maxZ) / 2;
+    if (!Number.isFinite(centerX) || !Number.isFinite(centerY) || !Number.isFinite(centerZ)) {
+      throw new Error('3D preview mesh contains invalid coordinates');
+    }
+
     var center = new BABYLON.Vector3(centerX, centerY, centerZ);
     var diag = Math.sqrt(
       (maxX - minX) * (maxX - minX) +
       (maxY - minY) * (maxY - minY) +
       (maxZ - minZ) * (maxZ - minZ)
     );
+    if (!Number.isFinite(diag)) {
+      throw new Error('3D preview mesh contains invalid coordinates');
+    }
+
     var radius = Math.max(diag * 1.5, 3);
 
     var canvas = document.createElement('canvas');
