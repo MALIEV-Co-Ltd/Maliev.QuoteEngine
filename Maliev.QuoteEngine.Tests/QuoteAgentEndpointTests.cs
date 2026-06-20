@@ -2283,11 +2283,18 @@ Customer message:
         var formalQuoteResult = await ConfirmActionAsync(client, formalQuoteAction.ActionId);
         Assert.NotNull(formalQuoteResult.State);
         Assert.Contains(formalQuoteResult.State.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
+        var draftProjectArtifact = Assert.Single(formalQuoteResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftProjectArtifact.Metadata["projectServiceProjectId"], out var projectServiceProjectId));
+        Assert.Equal(projectServiceProjectId.ToString("D"), draftProjectArtifact.Metadata["projectId"]);
+        Assert.Equal(projectServiceProjectId, factory.LastProjectDraftCreate?.ProjectServiceProjectId);
+        var projectServicePart = Assert.Single(factory.LastProjectPartCreates);
+        Assert.Equal(projectServiceProjectId, projectServicePart.ProjectServiceProjectId);
         Assert.Contains(formalQuoteResult.State.Gates, gate => gate.Code == "quote_artifact_ready" && gate.Status == "passed");
         Assert.Contains(formalQuoteResult.State.Gates, gate => gate.Code == "quote_approved" && gate.Status == "pending");
         var createRequest = factory.LastQuotationCreateRequest;
         Assert.NotNull(createRequest);
         Assert.NotEqual(Guid.Empty, createRequest.CustomerId);
+        Assert.Equal(projectServiceProjectId, createRequest.SourceProjectId);
         var quotedLine = Assert.Single(createRequest.LineItems);
         Assert.Equal(25, quotedLine.Quantity);
         Assert.True(quotedLine.UnitPrice > 0);
@@ -2418,7 +2425,17 @@ Customer message:
 
         var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
         var formalQuoteAction = Assert.Single(formalQuoteState.ProposedActions);
-        await ConfirmActionAsync(client, formalQuoteAction.ActionId);
+        var formalQuoteResult = await ConfirmActionAsync(client, formalQuoteAction.ActionId);
+        Assert.NotNull(formalQuoteResult.State);
+        var draftProjectArtifact = Assert.Single(formalQuoteResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.True(Guid.TryParse(draftProjectArtifact.Metadata["projectServiceProjectId"], out var projectServiceProjectId));
+        Assert.Equal(projectServiceProjectId.ToString("D"), draftProjectArtifact.Metadata["projectId"]);
+        Assert.Equal(projectServiceProjectId, factory.LastProjectDraftCreate?.ProjectServiceProjectId);
+        var projectServicePart = Assert.Single(factory.LastProjectPartCreates);
+        Assert.Equal(projectServiceProjectId, projectServicePart.ProjectServiceProjectId);
+        var formalQuoteCreateRequest = factory.LastQuotationCreateRequest;
+        Assert.NotNull(formalQuoteCreateRequest);
+        Assert.Equal(projectServiceProjectId, formalQuoteCreateRequest.SourceProjectId);
 
         var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
         var approvalAction = Assert.Single(approvalState.ProposedActions);
@@ -2457,6 +2474,8 @@ Customer message:
         Assert.NotNull(orderCreateRequest.QuoteVersionId);
         Assert.Equal(1, orderCreateRequest.QuoteVersionNumber);
         var productionItem = Assert.Single(orderCreateRequest.ProductionItems);
+        Assert.Equal(projectServiceProjectId, productionItem.SourceProjectId);
+        Assert.Equal(projectServicePart.ProjectServicePartId, productionItem.SourceProjectPartId);
         Assert.NotEqual(Guid.Empty, productionItem.MaterialId);
         Assert.Contains("FDM", productionItem.Technology, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(25, productionItem.Quantity);

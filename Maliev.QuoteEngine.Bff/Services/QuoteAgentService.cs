@@ -2925,11 +2925,47 @@ internal sealed class QuoteAgentService(
         QuoteAgentPendingAction action,
         CancellationToken cancellationToken)
     {
+        var project = await CreateDurableDraftProjectAsync(
+            state,
+            customerId,
+            action,
+            defaultTitle: "Chat-created quote",
+            cancellationToken);
+        return $"Draft project {project.ProjectNumber} is ready.";
+    }
+
+    private async Task EnsureDurableDraftProjectForFinalizationAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
+    {
+        if (TryGetCurrentDraftProjectServiceId(state, out _))
+        {
+            return;
+        }
+
+        await CreateDurableDraftProjectAsync(
+            state,
+            customerId,
+            action,
+            defaultTitle: state.ProjectName ?? "Make Studio quote",
+            cancellationToken);
+    }
+
+    private async Task<ProjectServiceDraftProjectResult> CreateDurableDraftProjectAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        string defaultTitle,
+        CancellationToken cancellationToken)
+    {
         var request = new CreateDraftProjectRequest(
             state.SessionId.ToString("N"),
             state.Parts,
             ReadString(action.Arguments, "requirements") ?? ReadString(action.Arguments, "notes") ?? string.Empty,
-            ReadString(action.Arguments, "title") ?? "Chat-created quote");
+            ReadString(action.Arguments, "title") ?? defaultTitle);
+        var originalPartIds = state.Parts.ToDictionary(part => part, part => part.PartId);
         var profile = prototypeStore.GetProfile(customerId);
         var project = await projectClient.CreateDraftProjectAsync(
             customerId,
@@ -2942,6 +2978,7 @@ internal sealed class QuoteAgentService(
             throw new InvalidOperationException("ProjectService did not create the draft project.");
         }
 
+        RemapSessionPartReferences(state, originalPartIds);
         var response = prototypeStore.CreateDraftProject(customerId, request) with
         {
             ProjectServiceProjectId = project.ProjectId,
@@ -2957,7 +2994,41 @@ internal sealed class QuoteAgentService(
             ["prototypeProjectId"] = response.ProjectId.ToString("D"),
             ["prototypeProjectNumber"] = response.ProjectNumber
         });
-        return $"Draft project {project.ProjectNumber} is ready.";
+
+        return project;
+    }
+
+    private static void RemapSessionPartReferences(
+        QuoteAgentSessionState state,
+        IReadOnlyDictionary<QuotePartDraftDto, Guid> originalPartIds)
+    {
+        var partIdMap = originalPartIds
+            .Where(item => item.Value != Guid.Empty && item.Key.PartId != Guid.Empty && item.Value != item.Key.PartId)
+            .ToDictionary(item => item.Value, item => item.Key.PartId);
+        if (partIdMap.Count == 0)
+        {
+            return;
+        }
+
+        if (state.Estimate is not null)
+        {
+            state.Estimate = state.Estimate with
+            {
+                Lines = state.Estimate.Lines
+                    .Select(line => partIdMap.TryGetValue(line.PartId, out var projectServicePartId)
+                        ? line with { PartId = projectServicePartId }
+                        : line)
+                    .ToArray()
+            };
+        }
+
+        foreach (var artifact in state.Artifacts)
+        {
+            if (artifact.PartId.HasValue && partIdMap.TryGetValue(artifact.PartId.Value, out var projectServicePartId))
+            {
+                artifact.PartId = projectServicePartId;
+            }
+        }
     }
 
     private async Task<Guid?> ResolveProjectPartMaterialIdAsync(
@@ -3220,6 +3291,7 @@ internal sealed class QuoteAgentService(
         QuoteAgentPendingAction action,
         CancellationToken cancellationToken)
     {
+        await EnsureDurableDraftProjectForFinalizationAsync(state, customerId, action, cancellationToken);
         var request = await BuildFormalQuoteRequestAsync(state, customerId, action, cancellationToken);
         var result = await quotationClient.CreateOrReviseProjectQuoteAsync(request, cancellationToken);
         if (result is null)
