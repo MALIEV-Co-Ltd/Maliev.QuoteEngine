@@ -550,7 +550,7 @@ internal sealed class QuoteAgentService(
     {
         var state = sessionStore.GetOrCreate(sessionId);
         var customerId = ResolveCustomerId() ?? state.CustomerId;
-        var comment = request.Comment?.Trim() ?? string.Empty;
+        var comment = SanitizePreviewFeedbackForAgentContext(request.Comment ?? string.Empty);
         string artifactTitle;
         string artifactDescription;
 
@@ -5501,7 +5501,7 @@ Customer message:
                         : artifact.Title;
                 var rating = artifact.Metadata["customerRating"].Trim();
                 var comment = artifact.Metadata.TryGetValue("customerComment", out var commentValue)
-                    ? commentValue.Trim()
+                    ? SanitizePreviewFeedbackForAgentContext(commentValue)
                     : string.Empty;
                 if (comment.Length > 220)
                 {
@@ -5524,6 +5524,28 @@ Customer message:
         return string.IsNullOrWhiteSpace(comment)
             ? $"3D preview feedback for {artifactDescription}: rating {rating.ToString(CultureInfo.InvariantCulture)}/5"
             : $"3D preview feedback for {artifactDescription}: rating {rating.ToString(CultureInfo.InvariantCulture)}/5; comment: {comment}";
+    }
+
+    private static string SanitizePreviewFeedbackForAgentContext(string comment)
+    {
+        if (string.IsNullOrWhiteSpace(comment))
+        {
+            return string.Empty;
+        }
+
+        var sanitized = Regex.Replace(
+            comment,
+            @"\b(ignore|disregard|forget|override)\s+(all\s+)?((previous|prior|above|system|developer)\s+)?(instructions?|messages?|prompts?)\.?",
+            string.Empty,
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        sanitized = Regex.Replace(
+            sanitized,
+            @"\b(system|developer)\s+(prompt|message|instructions?)\b",
+            "[redacted instruction reference]",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        sanitized = Regex.Replace(sanitized, @"\s+", " ", RegexOptions.CultureInvariant).Trim();
+
+        return sanitized;
     }
 
     private static string BuildArtifactMetadataContext(IReadOnlyDictionary<string, string> metadata)
