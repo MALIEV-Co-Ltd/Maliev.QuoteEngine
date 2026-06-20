@@ -5174,7 +5174,7 @@ internal sealed class QuoteAgentService(
             "Never ask for a CAD file as your first or only response, and never make CAD upload a gate. " +
             "Generate 3D previews only from explicit, readable, CAD-derived, or confirmed dimensions. " +
             "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, intersect, fillet, chamfer, extrude, revolve, translate, rotate, loft. " +
-            "Prefer canonical params arrays for CAD commands; accepted named shorthands include width/depth/height, diameter/radius, x/y/z translate offsets, axisX/axisY/axisZ rotation axes, and sketch segment x/y/dx/dy. " +
+            "Prefer canonical params arrays for CAD commands; accepted named shorthands include width/depth/height, diameter/radius, x/y/z or translation object offsets, axisX/axisY/axisZ or rotationAxis object axes, and sketch segment x/y/dx/dy. " +
             "Build primitives first, translate/rotate them, combine/cut/intersect or loft explicit targets, then apply edge operations. " +
             "After a preview, describe the assumptions and ask the customer to verify shape and dimensions.");
         contextLines.Add(

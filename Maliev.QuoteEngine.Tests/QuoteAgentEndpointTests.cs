@@ -2398,6 +2398,54 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_start_payment_uses_checkout_attempt_id_for_idempotency_key()
+    {
+        const string customerEmail = "agent-payment-attempt@example.com";
+        await using var scopedFactory = CreateAgentFactory();
+        factory.ClearPaymentIdempotencyKeys();
+        using var client = await CreateSignedInClientAsync(scopedFactory, customerEmail);
+        var sessionId = await StartPricedCadSessionAsync(client);
+        var checkoutAttemptId = Guid.Parse("cccccccc-cccc-cccc-cccc-cccccccccccc");
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_checkout_details",
+            new Dictionary<string, JsonElement>
+            {
+                ["billing_address_id"] = JsonSerializer.SerializeToElement(CheckoutBillingAddressId.ToString("D"), JsonOptions),
+                ["shipping_address_id"] = JsonSerializer.SerializeToElement(CheckoutShippingAddressId.ToString("D"), JsonOptions),
+                ["accepted_terms"] = JsonSerializer.SerializeToElement(true, JsonOptions),
+                ["consent"] = JsonSerializer.SerializeToElement(true, JsonOptions)
+            });
+
+        var paymentState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_start_payment",
+            new Dictionary<string, JsonElement>
+            {
+                ["checkout_attempt_id"] = JsonSerializer.SerializeToElement(checkoutAttemptId.ToString("D"), JsonOptions)
+            });
+        var paymentResult = await ConfirmActionAsync(client, Assert.Single(paymentState.ProposedActions).ActionId);
+
+        Assert.NotNull(paymentResult.State);
+        var initiation = Assert.Single(factory.PaymentInitiations);
+        var customerId = new Guid(MD5.HashData(Encoding.UTF8.GetBytes(customerEmail.Trim().ToLowerInvariant())));
+        var orderId = Guid.Parse(initiation.OrderId);
+        var expectedInput = $"{customerId:D}:{orderId:D}:{checkoutAttemptId:D}";
+        var expectedKey = $"qe:{Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(expectedInput))).ToLowerInvariant()}";
+        Assert.Equal(expectedKey, initiation.IdempotencyKey);
+    }
+
+    [Fact]
     public async Task Agent_order_confirmation_double_submit_returns_completed_result_without_duplicate_order()
     {
         await using var scopedFactory = CreateAgentFactory();
