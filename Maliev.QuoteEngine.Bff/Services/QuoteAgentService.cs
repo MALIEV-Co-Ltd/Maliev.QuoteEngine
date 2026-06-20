@@ -6536,6 +6536,7 @@ Customer message:
                 NormalizeCadProfileParams(command.Profile);
                 command.Profile.Plane = NormalizeCadProfilePlane(command.Profile.Plane);
                 command.Profile.Type = NormalizeCadProfileType(command.Profile.Type);
+                NormalizeCadProfileSegments(command.Profile);
                 foreach (var segment in command.Profile.Segments)
                 {
                     segment.Type = NormalizeCadProfileSegmentType(segment.Type);
@@ -6640,6 +6641,35 @@ Customer message:
             "vLine" => BuildParams(segment.Dy ?? segment.Length),
             _ => segment.Params
         };
+    }
+
+    private static void NormalizeCadProfileSegments(CadProfileDto profile)
+    {
+        if (profile.Segments.Count > 0)
+        {
+            return;
+        }
+
+        var points = profile.Points ?? profile.Polyline ?? profile.Vertices;
+        if (points is not { Length: >= 2 })
+        {
+            return;
+        }
+
+        for (var index = 0; index < points.Length; index++)
+        {
+            var point = points[index];
+            if (point is not { Length: >= 2 })
+            {
+                continue;
+            }
+
+            profile.Segments.Add(new CadSegmentDto
+            {
+                Type = index == 0 ? "move" : "line",
+                Params = [point[0], point[1]]
+            });
+        }
     }
 
     private static void NormalizeCadProfileParams(CadProfileDto profile)

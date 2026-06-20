@@ -5906,6 +5906,64 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_profile_point_list_aliases()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new object[]
+        {
+            new
+            {
+                op = "extrude",
+                id = "point_plate",
+                height = 4.0,
+                profile = new
+                {
+                    plane = "xy",
+                    points = new object[]
+                    {
+                        new[] { 0.0, 0.0 },
+                        new[] { 30.0, 0.0 },
+                        new[] { 30.0, 12.0 },
+                        new[] { 0.0, 12.0 }
+                    }
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Profile point list alias preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var profile = commandDoc.RootElement
+            .EnumerateArray()
+            .Single()
+            .GetProperty("profile");
+        var segments = profile.GetProperty("segments").EnumerateArray().ToArray();
+
+        Assert.Equal("XY", profile.GetProperty("plane").GetString());
+        Assert.Equal(new[] { "move", "line", "line", "line" }, segments.Select(segment => segment.GetProperty("type").GetString()).ToArray());
+        Assert.Equal(new[] { 0.0, 0.0 }, segments[0].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal(new[] { 30.0, 0.0 }, segments[1].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal(new[] { 30.0, 12.0 }, segments[2].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal(new[] { 0.0, 12.0 }, segments[3].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_nested_parameters_aliases()
     {
         using var client = factory.CreateClient();

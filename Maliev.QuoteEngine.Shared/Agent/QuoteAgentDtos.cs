@@ -1539,6 +1539,143 @@ public sealed class CadVectorJsonConverter : JsonConverter<double[]?>
 }
 
 /// <summary>
+/// Reads CAD point lists from [[x, y], ...], flat [x1, y1, x2, y2, ...], or [{ x, y }, ...] arrays.
+/// </summary>
+public sealed class CadPointListJsonConverter : JsonConverter<double[][]?>
+{
+    /// <inheritdoc />
+    public override double[][]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+
+        if (reader.TokenType != JsonTokenType.StartArray)
+        {
+            throw new JsonException("CAD point list must be an array.");
+        }
+
+        var points = new List<double[]>();
+        var flatValues = new List<double>();
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray)
+            {
+                if (points.Count > 0)
+                {
+                    return points.ToArray();
+                }
+
+                if (flatValues.Count % 2 != 0)
+                {
+                    throw new JsonException("CAD flat point list must contain pairs of x/y values.");
+                }
+
+                for (var i = 0; i < flatValues.Count; i += 2)
+                {
+                    points.Add([flatValues[i], flatValues[i + 1]]);
+                }
+
+                return points.ToArray();
+            }
+
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.StartArray:
+                    points.Add(ReadPointArray(ref reader));
+                    break;
+                case JsonTokenType.StartObject:
+                    points.Add(ReadPointObject(ref reader));
+                    break;
+                case JsonTokenType.Number:
+                case JsonTokenType.String:
+                    var value = CadJsonNumberReader.ReadNullableDouble(ref reader);
+                    if (value.HasValue)
+                    {
+                        flatValues.Add(value.Value);
+                    }
+                    break;
+                default:
+                    throw new JsonException("CAD point list contains an unsupported value.");
+            }
+        }
+
+        throw new JsonException("CAD point list ended unexpectedly.");
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, double[][]? value, JsonSerializerOptions options)
+    {
+        JsonSerializer.Serialize(writer, value, options);
+    }
+
+    private static double[] ReadPointArray(ref Utf8JsonReader reader)
+    {
+        var values = new List<double>();
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray)
+            {
+                if (values.Count < 2)
+                {
+                    throw new JsonException("CAD point array must contain x and y values.");
+                }
+
+                return [values[0], values[1]];
+            }
+
+            var value = CadJsonNumberReader.ReadNullableDouble(ref reader);
+            if (value.HasValue)
+            {
+                values.Add(value.Value);
+            }
+        }
+
+        throw new JsonException("CAD point array ended unexpectedly.");
+    }
+
+    private static double[] ReadPointObject(ref Utf8JsonReader reader)
+    {
+        double? x = null;
+        double? y = null;
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndObject)
+            {
+                return x.HasValue && y.HasValue
+                    ? [x.Value, y.Value]
+                    : throw new JsonException("CAD point object must contain x and y values.");
+            }
+
+            if (reader.TokenType != JsonTokenType.PropertyName)
+            {
+                throw new JsonException("CAD point object contains an invalid token.");
+            }
+
+            var propertyName = reader.GetString();
+            if (!reader.Read())
+            {
+                throw new JsonException("CAD point object ended unexpectedly.");
+            }
+
+            var value = CadJsonNumberReader.ReadNullableDouble(ref reader);
+            switch (propertyName?.Trim().ToLowerInvariant())
+            {
+                case "x":
+                    x = value;
+                    break;
+                case "y":
+                    y = value;
+                    break;
+            }
+        }
+
+        throw new JsonException("CAD point object ended unexpectedly.");
+    }
+}
+
+/// <summary>
 /// A 2D profile / sketch for extrude or revolve operations.
 /// </summary>
 public sealed class CadProfileDto
@@ -1551,6 +1688,18 @@ public sealed class CadProfileDto
 
     /// <summary>Sketch segments defining the 2D profile.</summary>
     public List<CadSegmentDto> Segments { get; set; } = [];
+
+    /// <summary>Point-list sketch alias; normalized into move/line segments.</summary>
+    [JsonConverter(typeof(CadPointListJsonConverter))]
+    public double[][]? Points { get; set; }
+
+    /// <summary>Polyline sketch alias; normalized into move/line segments.</summary>
+    [JsonConverter(typeof(CadPointListJsonConverter))]
+    public double[][]? Polyline { get; set; }
+
+    /// <summary>Vertex-list sketch alias; normalized into move/line segments.</summary>
+    [JsonConverter(typeof(CadPointListJsonConverter))]
+    public double[][]? Vertices { get; set; }
 
     /// <summary>Profile shorthand parameters: rectangle [width, height], circle [radius].</summary>
     [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
