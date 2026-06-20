@@ -2172,11 +2172,18 @@ internal sealed class QuoteAgentService(
                 normalizedLimit,
                 cancellationToken))
             .ToList();
+        var customerDocuments = await customerClient.GetCustomerDocumentsAsync(customerId, cancellationToken);
+        if (customerDocuments is not null)
+        {
+            AddCustomerDocumentSearchResults(customerDocuments, normalizedQuery, normalizedLimit, results);
+        }
+
         var prototypeResults = prototypeStore
             .SearchCustomerData(customerId, normalizedQuery, normalizedLimit)
             .ToList();
         results.AddRange(prototypeResults.Where(result =>
-            !result.ResourceType.Equals("project", StringComparison.OrdinalIgnoreCase)));
+            !result.ResourceType.Equals("project", StringComparison.OrdinalIgnoreCase) &&
+            !result.ResourceType.Equals("document", StringComparison.OrdinalIgnoreCase)));
         AddSessionSearchResults(state, normalizedQuery, normalizedLimit, results);
         AddArtifactSearchResults(state, normalizedQuery, normalizedLimit, results);
         results.AddRange(prototypeResults.Where(result =>
@@ -2242,6 +2249,43 @@ internal sealed class QuoteAgentService(
             ["project_id"] = JsonSerializer.SerializeToElement(projectId.ToString("D"), JsonOptions)
         };
         return PrepareAction(state, actionType, title, summary, requiresAuthentication: true, actionArguments);
+    }
+
+    private static void AddCustomerDocumentSearchResults(
+        IReadOnlyList<CustomerDocumentDto> documents,
+        string query,
+        int limit,
+        List<QuoteAgentSearchResultDto> results)
+    {
+        var normalizedLimit = Math.Clamp(limit, 1, 50);
+        foreach (var document in documents)
+        {
+            if (results.Count >= normalizedLimit)
+            {
+                return;
+            }
+
+            var result = new QuoteAgentSearchResultDto
+            {
+                ResourceType = "document",
+                ResourceId = document.DocumentId.ToString("D"),
+                Title = document.FileName,
+                Detail = $"{document.Kind} · {document.ContentType ?? "file"} · {FormatFileSize(document.FileSizeBytes)}",
+                ActionHint = "open_document",
+                Url = document.StoragePath,
+                Metadata = new(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["kind"] = document.Kind,
+                    ["fileSizeBytes"] = document.FileSizeBytes.ToString(CultureInfo.InvariantCulture),
+                    ["source"] = "customer_service"
+                }
+            };
+            AddOptionalMetadata(result.Metadata, "storagePath", document.StoragePath);
+            AddOptionalMetadata(result.Metadata, "contentType", document.ContentType);
+            AddOptionalMetadata(result.Metadata, "orderNumber", document.OrderNumber);
+
+            AddIfMatchesSearch(results, query, result);
+        }
     }
 
     private static void AddSessionSearchResults(

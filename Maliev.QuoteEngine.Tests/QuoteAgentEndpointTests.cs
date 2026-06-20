@@ -3004,6 +3004,19 @@ Customer message:
             });
         await ConfirmActionAsync(otherClient, Assert.Single(otherDraftState.ProposedActions).ActionId);
 
+        var documentResponse = await ownerClient.PostAsJsonAsync("/quote/v1/account/documents", new CustomerDocumentUploadRequest
+        {
+            FileName = "search-requirements.pdf",
+            Kind = "Requirement",
+            StoragePath = "customer-documents/search-owner/search-requirements.pdf",
+            ContentType = "application/pdf",
+            FileSizeBytes = 18_240,
+            OrderNumber = "ORD-SEARCH-1"
+        });
+        documentResponse.EnsureSuccessStatusCode();
+        var uploadedDocument = await documentResponse.Content.ReadFromJsonAsync<CustomerDocumentDto>();
+        Assert.NotNull(uploadedDocument);
+
         var json = await ExecuteToolAsync(
             ownerClient,
             ownerSessionId,
@@ -3022,7 +3035,13 @@ Customer message:
             result.GetProperty("title").GetString() == "Fixture search project" &&
             result.GetProperty("resourceId").GetString() == projectServiceProjectId.ToString("D") &&
             result.GetProperty("metadata").GetProperty("source").GetString() == "project_service");
-        Assert.Contains(results, result =>
+        var documentResult = Assert.Single(results, result =>
+            result.GetProperty("resourceType").GetString() == "document" &&
+            result.GetProperty("title").GetString() == "search-requirements.pdf");
+        Assert.Equal(uploadedDocument.DocumentId.ToString("D"), documentResult.GetProperty("resourceId").GetString());
+        Assert.Equal("customer_service", documentResult.GetProperty("metadata").GetProperty("source").GetString());
+        Assert.Equal("ORD-SEARCH-1", documentResult.GetProperty("metadata").GetProperty("orderNumber").GetString());
+        Assert.DoesNotContain(results, result =>
             result.GetProperty("resourceType").GetString() == "document" &&
             result.GetProperty("title").GetString() == "manufacturing-requirements.pdf");
         Assert.DoesNotContain(results, result =>
