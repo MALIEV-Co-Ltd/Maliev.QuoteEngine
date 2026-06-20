@@ -6348,6 +6348,12 @@ Customer message:
             return;
         }
 
+        if (command.Parameters is { Length: > 0 })
+        {
+            command.Params = command.Parameters;
+            return;
+        }
+
         command.Params = command.Op switch
         {
             "box" => BuildParams(command.Width, command.Depth ?? command.Length, command.Height),

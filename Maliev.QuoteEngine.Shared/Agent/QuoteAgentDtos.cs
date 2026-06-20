@@ -905,6 +905,9 @@ public sealed class CadCommandDto
     /// fillet/chamfer: [radius].</summary>
     public double[]? Params { get; set; }
 
+    /// <summary>Numeric parameter alias often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
+    public double[]? Parameters { get; set; }
+
     /// <summary>Named box/profile width or X dimension, normalized to params when present.</summary>
     public double? Width { get; set; }
 
