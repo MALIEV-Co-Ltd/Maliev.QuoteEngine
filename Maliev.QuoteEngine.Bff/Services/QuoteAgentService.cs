@@ -6294,9 +6294,9 @@ Customer message:
         {
             command.Op = NormalizeCadOperation(command);
             command.Id = NormalizeCadShapeReference(command.Id);
-            command.TargetId = NormalizeCadShapeReference(command.TargetId);
-            command.ToolId = NormalizeCadShapeReference(command.ToolId);
-            command.ResultId = NormalizeCadShapeReference(command.ResultId);
+            command.TargetId = NormalizeCadShapeReference(FirstNonWhiteSpace(command.TargetId, command.Target));
+            command.ToolId = NormalizeCadShapeReference(FirstNonWhiteSpace(command.ToolId, command.Tool));
+            command.ResultId = NormalizeCadShapeReference(FirstNonWhiteSpace(command.ResultId, command.Result));
             NormalizeCadCommandParams(command);
             NormalizeCadTransformVectors(command);
             if (command.Profile is not null)
