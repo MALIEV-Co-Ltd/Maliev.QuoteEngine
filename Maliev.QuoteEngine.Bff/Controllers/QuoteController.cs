@@ -522,7 +522,9 @@ public sealed class QuoteController(
         }
 
         var projects = await projectClient.GetProjectNavigationAsync(customerId, cancellationToken);
-        return projects.Count > 0 ? Ok(projects) : Ok(store.GetProjectNavigation(customerId));
+        return projects.Count > 0 || !CanUsePrototypeProjectFallback()
+            ? Ok(projects)
+            : Ok(store.GetProjectNavigation(customerId));
     }
 
     [HttpGet("projects/{projectId:guid}")]
@@ -543,7 +545,9 @@ public sealed class QuoteController(
             return Ok(project);
         }
 
-        project = store.GetProjectDetail(customerId, projectId);
+        project = CanUsePrototypeProjectFallback()
+            ? store.GetProjectDetail(customerId, projectId)
+            : null;
         return project is null ? NotFound() : Ok(project);
     }
 
@@ -574,7 +578,9 @@ public sealed class QuoteController(
             return Ok(durableDuplicate);
         }
 
-        var duplicated = store.DuplicateDraftProject(customerId, projectId, request);
+        var duplicated = CanUsePrototypeProjectFallback()
+            ? store.DuplicateDraftProject(customerId, projectId, request)
+            : null;
         return duplicated is null ? NotFound() : Ok(duplicated);
     }
 
@@ -591,7 +597,7 @@ public sealed class QuoteController(
         }
 
         var pinned = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: true, cancellationToken)
-            ?? store.SetProjectPinned(customerId, projectId, isPinned: true);
+            ?? (CanUsePrototypeProjectFallback() ? store.SetProjectPinned(customerId, projectId, isPinned: true) : null);
         return pinned is null ? NotFound() : Ok(pinned);
     }
 
@@ -608,7 +614,7 @@ public sealed class QuoteController(
         }
 
         var unpinned = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: false, cancellationToken)
-            ?? store.SetProjectPinned(customerId, projectId, isPinned: false);
+            ?? (CanUsePrototypeProjectFallback() ? store.SetProjectPinned(customerId, projectId, isPinned: false) : null);
         return unpinned is null ? NotFound() : Ok(unpinned);
     }
 
@@ -625,7 +631,7 @@ public sealed class QuoteController(
         }
 
         var archived = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
-            ?? store.SetProjectArchived(customerId, projectId, isArchived: true);
+            ?? (CanUsePrototypeProjectFallback() ? store.SetProjectArchived(customerId, projectId, isArchived: true) : null);
         return archived is null ? NotFound() : Ok(archived);
     }
 
@@ -642,8 +648,13 @@ public sealed class QuoteController(
         }
 
         var achieved = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
-            ?? store.SetProjectAchieved(customerId, projectId);
+            ?? (CanUsePrototypeProjectFallback() ? store.SetProjectAchieved(customerId, projectId) : null);
         return achieved is null ? NotFound() : Ok(achieved);
+    }
+
+    private bool CanUsePrototypeProjectFallback()
+    {
+        return environment.IsDevelopment() || environment.IsEnvironment("Testing");
     }
 
     [HttpPost("quotes/formal")]

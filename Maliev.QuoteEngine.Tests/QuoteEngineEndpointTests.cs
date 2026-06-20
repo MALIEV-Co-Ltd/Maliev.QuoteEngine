@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -848,6 +849,75 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 IsManifold = true,
                 DfmAcknowledged = part.DfmAcknowledged
             };
+    }
+
+    public sealed class EmptyProjectServiceClient : IProjectServiceClient
+    {
+        public Task<ProjectServiceDraftProjectResult?> CreateDraftProjectAsync(
+            Guid customerId,
+            string customerName,
+            CreateDraftProjectRequest request,
+            Func<QuotePartDraftDto, CancellationToken, Task<Guid?>> resolveMaterialIdAsync,
+            CancellationToken ct = default) =>
+            Task.FromResult<ProjectServiceDraftProjectResult?>(null);
+
+        public Task<DuplicateDraftProjectResponse?> DuplicateDraftProjectAsync(
+            Guid customerId,
+            string customerName,
+            Guid projectId,
+            DuplicateDraftProjectRequest request,
+            Func<QuotePartDraftDto, CancellationToken, Task<Guid?>> resolveMaterialIdAsync,
+            CancellationToken ct = default) =>
+            Task.FromResult<DuplicateDraftProjectResponse?>(null);
+
+        public Task<IReadOnlyList<CustomerProjectNavItemDto>> GetProjectNavigationAsync(
+            Guid customerId,
+            CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<CustomerProjectNavItemDto>>([]);
+
+        public Task<CustomerProjectDetailResponse?> GetProjectDetailAsync(
+            Guid customerId,
+            Guid projectId,
+            CancellationToken ct = default) =>
+            Task.FromResult<CustomerProjectDetailResponse?>(null);
+
+        public Task<ProjectManagementResponse?> SetProjectPinnedAsync(
+            Guid customerId,
+            Guid projectId,
+            bool isPinned,
+            CancellationToken ct = default) =>
+            Task.FromResult<ProjectManagementResponse?>(null);
+
+        public Task<ProjectManagementResponse?> ArchiveProjectAsync(
+            Guid customerId,
+            Guid projectId,
+            CancellationToken ct = default) =>
+            Task.FromResult<ProjectManagementResponse?>(null);
+
+        public Task<ProjectManagementResponse?> RequestProjectReviewAsync(
+            Guid customerId,
+            Guid projectId,
+            string note,
+            CancellationToken ct = default) =>
+            Task.FromResult<ProjectManagementResponse?>(null);
+
+        public Task<IReadOnlyList<QuoteAgentSearchResultDto>> SearchProjectResultsAsync(
+            Guid customerId,
+            string? query,
+            int limit,
+            CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<QuoteAgentSearchResultDto>>([]);
+    }
+
+    public sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
+    {
+        public string EnvironmentName { get; set; } = environmentName;
+
+        public string ApplicationName { get; set; } = "Maliev.QuoteEngine.Tests";
+
+        public string ContentRootPath { get; set; } = AppContext.BaseDirectory;
+
+        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
     }
 
     private sealed class FakeOrderServiceClient : IOrderServiceClient
@@ -2661,6 +2731,39 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var updatedNav = await client.GetFromJsonAsync<List<CustomerProjectNavItemDto>>("/quote/v1/projects/nav");
         Assert.NotNull(updatedNav);
         Assert.Contains(updatedNav, project => project.ProjectId == secondProjectServiceId && !project.IsPinned);
+    }
+
+    [Fact]
+    public async Task Project_detail_does_not_fall_back_to_prototype_store_in_production()
+    {
+        const string email = "project-production-fallback@example.com";
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var customerId = new Guid(MD5.HashData(Encoding.UTF8.GetBytes(normalizedEmail)));
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                services.RemoveAll<IProjectServiceClient>();
+                services.AddSingleton<IProjectServiceClient>(new QuoteEngineWebApplicationFactory.EmptyProjectServiceClient());
+            });
+        });
+        var store = scopedFactory.Services.GetRequiredService<QuoteEnginePrototypeStore>();
+        var prototypeProject = store.CreateDraftProject(
+            customerId,
+            new CreateDraftProjectRequest(
+                "prototype-only-production",
+                [],
+                "Prototype-only project should not be exposed in production.",
+                "Prototype-only production project"));
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(email)}");
+        signIn.EnsureSuccessStatusCode();
+
+        var response = await client.GetAsync($"/quote/v1/projects/{prototypeProject.ProjectId:D}");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
