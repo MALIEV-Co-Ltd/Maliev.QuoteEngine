@@ -4350,6 +4350,71 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_normalizes_shape_references_for_browser_worker()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "box",
+                id = "Base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            },
+            new
+            {
+                op = "cylinder",
+                id = "Hole",
+                Params = new[] { 3.0, 5.0 }
+            },
+            new
+            {
+                op = "cut",
+                targetId = "BASE",
+                toolId = "hole",
+                resultId = "Bracket"
+            },
+            new
+            {
+                op = "fillet",
+                targetId = "BRACKET",
+                radius = 2.0,
+                resultId = "Finished"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Mixed case reference preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var commandJson = viewerArtifact.Metadata["cad_commands"];
+        using var commandDoc = JsonDocument.Parse(commandJson);
+        var normalizedCommands = commandDoc.RootElement.EnumerateArray().ToArray();
+
+        Assert.Equal("base", normalizedCommands[0].GetProperty("id").GetString());
+        Assert.Equal("hole", normalizedCommands[1].GetProperty("id").GetString());
+        Assert.Equal("base", normalizedCommands[2].GetProperty("targetId").GetString());
+        Assert.Equal("hole", normalizedCommands[2].GetProperty("toolId").GetString());
+        Assert.Equal("bracket", normalizedCommands[2].GetProperty("resultId").GetString());
+        Assert.Equal("bracket", normalizedCommands[3].GetProperty("targetId").GetString());
+        Assert.Equal("finished", normalizedCommands[3].GetProperty("resultId").GetString());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_requires_at_least_one_command()
     {
         using var client = factory.CreateClient();

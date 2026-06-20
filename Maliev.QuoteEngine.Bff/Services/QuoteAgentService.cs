@@ -5701,7 +5701,7 @@ Customer message:
             return new { error = validationError };
         }
 
-        NormalizeCadCommandOperations(commands);
+        NormalizeCadCommandsForBrowserWorker(commands);
         var process = !string.IsNullOrWhiteSpace(processHint) ? processHint : "fdm";
         var commandsJson = JsonSerializer.Serialize(commands, JsonOptions);
         var partId = Guid.NewGuid();
@@ -5786,12 +5786,23 @@ Customer message:
         return [];
     }
 
-    private static void NormalizeCadCommandOperations(IEnumerable<CadCommandDto> commands)
+    private static void NormalizeCadCommandsForBrowserWorker(IEnumerable<CadCommandDto> commands)
     {
         foreach (var command in commands)
         {
             command.Op = command.Op.Trim().ToLowerInvariant();
+            command.Id = NormalizeCadShapeReference(command.Id);
+            command.TargetId = NormalizeCadShapeReference(command.TargetId);
+            command.ToolId = NormalizeCadShapeReference(command.ToolId);
+            command.ResultId = NormalizeCadShapeReference(command.ResultId);
         }
+    }
+
+    private static string? NormalizeCadShapeReference(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim().ToLowerInvariant();
     }
 
     private static string? ValidateCadCommands(IReadOnlyList<CadCommandDto> commands)
