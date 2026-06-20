@@ -5805,31 +5805,58 @@ Customer message:
             return [];
         }
 
-        // Normal path: a real JSON array.
-        if (value.ValueKind == JsonValueKind.Array)
-        {
-            return JsonSerializer.Deserialize<List<CadCommandDto>>(value.GetRawText(), JsonOptions) ?? [];
-        }
+        return ReadCommands(value);
+    }
 
-        // Defense-in-depth: some LLM / tool-forwarding paths flatten the array into a JSON
-        // string (e.g. "[{\"op\":\"box\",\"params\":[30,50,100]}]"). Recover it instead of
-        // rejecting the call with "At least one CAD command is required."
-        if (value.ValueKind == JsonValueKind.String)
+    private static IReadOnlyList<CadCommandDto> ReadCommands(JsonElement value)
+    {
+        return value.ValueKind switch
         {
-            var raw = value.GetString();
-            if (!string.IsNullOrWhiteSpace(raw) && raw.TrimStart().StartsWith('['))
-            {
-                try
-                {
-                    return JsonSerializer.Deserialize<List<CadCommandDto>>(raw, JsonOptions) ?? [];
-                }
-                catch (JsonException)
-                {
-                }
-            }
+            JsonValueKind.Array => JsonSerializer.Deserialize<List<CadCommandDto>>(value.GetRawText(), JsonOptions) ?? [],
+            JsonValueKind.Object => ReadWrappedCommands(value),
+            JsonValueKind.String => ReadStringifiedCommands(value),
+            _ => []
+        };
+    }
+
+    private static IReadOnlyList<CadCommandDto> ReadWrappedCommands(JsonElement value)
+    {
+        if (value.TryGetProperty("commands", out var commands) ||
+            value.TryGetProperty("cadCommands", out commands) ||
+            value.TryGetProperty("cad_commands", out commands))
+        {
+            return ReadCommands(commands);
         }
 
         return [];
+    }
+
+    private static IReadOnlyList<CadCommandDto> ReadStringifiedCommands(JsonElement value)
+    {
+        // Defense-in-depth: some LLM / tool-forwarding paths flatten the array into a JSON
+        // string (e.g. "[{\"op\":\"box\",\"params\":[30,50,100]}]"). Recover it instead of
+        // rejecting the call with "At least one CAD command is required."
+        var raw = value.GetString();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return [];
+        }
+
+        var trimmed = raw.TrimStart();
+        if (trimmed.Length == 0 || (trimmed[0] != '[' && trimmed[0] != '{'))
+        {
+            return [];
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            return ReadCommands(doc.RootElement);
+        }
+        catch (JsonException)
+        {
+            return [];
+        }
     }
 
     private static void NormalizeCadCommandsForBrowserWorker(IEnumerable<CadCommandDto> commands)

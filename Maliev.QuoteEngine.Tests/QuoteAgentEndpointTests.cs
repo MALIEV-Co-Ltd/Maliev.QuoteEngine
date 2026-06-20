@@ -4630,6 +4630,54 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_wrapped_cad_commands()
+    {
+        // Defense-in-depth: tolerate tool-forwarding paths that wrap the command array
+        // instead of passing it as the direct cad_commands value.
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new[]
+        {
+            new
+            {
+                op = "box",
+                id = "part",
+                Params = new[] { 30.0, 50.0, 10.0 }
+            }
+        };
+
+        var wrappedCommands = new
+        {
+            commands
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Wrapped command array", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(wrappedCommands, JsonOptions),
+                ["process_hint"] = JsonSerializer.SerializeToElement("fdm", JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 1);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var command = commandDoc.RootElement.EnumerateArray().Single();
+        Assert.Equal("box", command.GetProperty("op").GetString());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_rejects_unsupported_commands_before_creating_ready_artifact()
     {
         using var client = factory.CreateClient();
