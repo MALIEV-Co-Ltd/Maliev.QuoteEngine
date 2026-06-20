@@ -91,6 +91,45 @@ public sealed class PaymentServiceClientContractTests
         Assert.Equal("true", body.GetProperty("metadata").GetProperty("acceptedTerms").GetString());
     }
 
+    [Fact]
+    public async Task InitiateAsync_WhenPaymentServiceReturnsNonSuccess_ReturnsNull()
+    {
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        {
+            Content = JsonContent.Create(new
+            {
+                title = "Payment provider unavailable."
+            })
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://payment-service.test")
+        };
+        var client = new PaymentServiceClient(http, NullLogger<PaymentServiceClient>.Instance);
+
+        var result = await client.InitiateAsync(
+            "customer-1",
+            "order-1",
+            "ORD-2026-0001",
+            1500.00m,
+            "THB",
+            "https://quote.example.com/payment/success?orderNumber=ORD-2026-0001",
+            "https://quote.example.com/payment/cancel?orderNumber=ORD-2026-0001",
+            "customer-1:order-1",
+            BillingAddressId,
+            ShippingAddressId,
+            "MALIEV Test Buyer Co., Ltd.",
+            "TH-0123456789012",
+            "Receiving",
+            "+66810000002",
+            "receiving@example.com",
+            acceptedTerms: true);
+
+        Assert.Null(result);
+        Assert.Equal(HttpMethod.Post, handler.Request?.Method);
+        Assert.Equal("/payment/v1/payments", handler.Request?.RequestUri?.AbsolutePath);
+    }
+
     private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler
     {
         private string? _body;

@@ -99,7 +99,7 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
             {
                 var body = await response.Content.ReadAsStringAsync(ct);
                 logger.LogWarning("PaymentService returned {Status} on initiate: {Body}", response.StatusCode, body);
-                throw new InvalidOperationException($"PaymentService returned {(int)response.StatusCode} on initiate: {body}");
+                return null;
             }
 
             var result = await response.Content.ReadFromJsonAsync<PsPaymentResponse>(cancellationToken: ct);
