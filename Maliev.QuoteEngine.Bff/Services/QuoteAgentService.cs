@@ -696,13 +696,6 @@ internal sealed class QuoteAgentService(
                 "Request employee review",
                 ReadString(request.Arguments, "note") ?? "Ask a MALIEV employee to review this Make Studio project before the quote continues.",
                 cancellationToken),
-            "quote_achieve_project" => await PrepareProjectManagementActionOrGateErrorAsync(
-                state,
-                request.Arguments,
-                "achieve_project",
-                "Mark project achieved",
-                "Mark this Make Studio project as achieved and remove it from active work.",
-                cancellationToken),
             "quote_duplicate_project" => PrepareActionOrGateError(
                 state,
                 "duplicate_project",
@@ -777,7 +770,6 @@ internal sealed class QuoteAgentService(
                 "unpin_project" => await ExecuteUnpinProjectAsync(state, customerId!.Value, action, cancellationToken),
                 "archive_project" => await ExecuteArchiveProjectAsync(state, customerId!.Value, action, cancellationToken),
                 "request_employee_review" => await ExecuteRequestEmployeeReviewAsync(state, customerId!.Value, action, cancellationToken),
-                "achieve_project" => await ExecuteAchieveProjectAsync(state, customerId!.Value, action, cancellationToken),
                 "account_profile_update" => await ExecuteAccountProfileUpdateAsync(state, customerId!.Value, action, cancellationToken),
                 "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
                 "quote_approval" => ExecuteQuoteApproval(state),
@@ -3077,30 +3069,6 @@ internal sealed class QuoteAgentService(
             ["note"] = note
         });
         return $"Project {response.ProjectNumber} was sent to MALIEV employee review.";
-    }
-
-    private async Task<string> ExecuteAchieveProjectAsync(
-        QuoteAgentSessionState state,
-        Guid customerId,
-        QuoteAgentPendingAction action,
-        CancellationToken cancellationToken)
-    {
-        if (!TryResolveProjectId(state, action.Arguments, out var projectId))
-        {
-            throw new InvalidOperationException("A project is required before marking it achieved.");
-        }
-
-        var response = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
-            ?? prototypeStore.SetProjectAchieved(customerId, projectId)
-            ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
-        UpsertArtifact(state, "project_achieve", response.Title, "achieved", null, null);
-        SetArtifactMetadata(state, "project_achieve", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["projectId"] = response.ProjectId.ToString("D"),
-            ["projectNumber"] = response.ProjectNumber,
-            ["isArchived"] = response.IsArchived.ToString().ToLowerInvariant()
-        });
-        return $"Project {response.ProjectNumber} was marked achieved.";
     }
 
     private async Task<string> ExecuteAccountProfileUpdateAsync(

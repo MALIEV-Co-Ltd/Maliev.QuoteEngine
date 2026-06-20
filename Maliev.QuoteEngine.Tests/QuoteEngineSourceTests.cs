@@ -2012,6 +2012,16 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentService_DoesNotExposeUnsupportedAchieveProjectTool()
+    {
+        var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
+
+        Assert.DoesNotContain("quote_achieve_project", service, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"achieve_project\"", service, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExecuteAchieveProjectAsync", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Root_route_is_chat_workspace_and_auth_routes_redirect_to_web()
     {
         var program = ReadRepoFile("Maliev.QuoteEngine.Bff", "Program.cs");
