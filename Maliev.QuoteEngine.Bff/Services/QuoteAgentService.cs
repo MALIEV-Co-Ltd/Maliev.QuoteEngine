@@ -4633,8 +4633,8 @@ internal sealed class QuoteAgentService(
             "Do not claim you cannot read the PDF before summarizing what the PDF provides. " +
             "Never ask for a CAD file as your first or only response, and never make CAD upload a gate. " +
             "Generate 3D previews only from explicit, readable, CAD-derived, or confirmed dimensions. " +
-            "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, fillet, extrude, revolve, translate. " +
-            "Build primitives first, position them, combine/cut, then apply edge operations. " +
+            "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, intersect, fillet, chamfer, extrude, revolve, translate, rotate, loft. " +
+            "Build primitives first, translate/rotate them, combine/cut/intersect or loft explicit targets, then apply edge operations. " +
             "After a preview, describe the assumptions and ask the customer to verify shape and dimensions.");
         contextLines.Add(
             "Structured presentation: Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables " +

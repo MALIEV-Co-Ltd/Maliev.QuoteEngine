@@ -4416,6 +4416,22 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentPrompt_advertises_the_validated_3d_preview_operation_contract()
+    {
+        var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs")
+            .ReplaceLineEndings("\n");
+
+        const string supportedOps =
+            "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, intersect, fillet, chamfer, extrude, revolve, translate, rotate, loft.";
+
+        Assert.Contains(supportedOps, service, StringComparison.Ordinal);
+        Assert.Contains("\"fuse\" or \"cut\" or \"intersect\" => ValidateBinaryCommand", service, StringComparison.Ordinal);
+        Assert.Contains("\"loft\" => ValidateLoftCommand", service, StringComparison.Ordinal);
+        Assert.Contains("\"fillet\" or \"chamfer\" => ValidateTargetedCommand", service, StringComparison.Ordinal);
+        Assert.Contains("\"rotate\" => ValidateTargetedCommand", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteInlineViewer_creates_babylon_engine_before_scene()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
