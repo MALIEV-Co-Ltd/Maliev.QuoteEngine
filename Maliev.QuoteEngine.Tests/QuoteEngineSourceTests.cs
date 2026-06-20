@@ -4237,6 +4237,42 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void ReplicadWorker_validates_profile_operation_params_before_cad_calls()
+    {
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function requireOptionalFiniteNumber(cmd, value, fieldName)", worker, StringComparison.Ordinal);
+        Assert.Contains("function requireOptionalNonZeroVector(cmd, values, fieldName)", worker, StringComparison.Ordinal);
+
+        var processStart = worker.IndexOf("function processCommands(commands)", StringComparison.Ordinal);
+        Assert.True(processStart >= 0, "processCommands must exist.");
+
+        var processEnd = worker.IndexOf("\nself.onmessage", processStart, StringComparison.Ordinal);
+        Assert.True(processEnd > processStart, "processCommands must end before self.onmessage.");
+
+        var processCommands = worker[processStart..processEnd];
+        var extrudeStart = processCommands.IndexOf("case 'extrude':", StringComparison.Ordinal);
+        Assert.True(extrudeStart >= 0, "extrude case must exist.");
+
+        var revolveStart = processCommands.IndexOf("case 'revolve':", extrudeStart, StringComparison.Ordinal);
+        Assert.True(revolveStart > extrudeStart, "revolve case must follow extrude case.");
+
+        var fuseStart = processCommands.IndexOf("case 'fuse':", revolveStart, StringComparison.Ordinal);
+        Assert.True(fuseStart > revolveStart, "fuse case must follow revolve case.");
+
+        var extrudeCase = processCommands[extrudeStart..revolveStart];
+        Assert.Contains("requireCommandParams(cmd, p, 1);", extrudeCase, StringComparison.Ordinal);
+        Assert.Contains("shape = face.extrude(p[0]);", extrudeCase, StringComparison.Ordinal);
+
+        var revolveCase = processCommands[revolveStart..fuseStart];
+        Assert.Contains("const axis = requireOptionalNonZeroVector(cmd, cmd.axis, 'axis') || [0, 0, 1];", revolveCase, StringComparison.Ordinal);
+        Assert.Contains("const angle = requireOptionalFiniteNumber(cmd, cmd.angle, 'angle');", revolveCase, StringComparison.Ordinal);
+        Assert.Contains("shape = face.revolve(axis, angle);", revolveCase, StringComparison.Ordinal);
+        Assert.DoesNotContain("face.revolve(cmd.axis || [0, 0, 1], cmd.angle)", revolveCase, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ReplicadWorker_renders_bff_profile_shorthands_without_type_field()
     {
         var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")

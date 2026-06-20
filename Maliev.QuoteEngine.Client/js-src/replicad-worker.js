@@ -83,6 +83,36 @@ function requireCommandParams(cmd, values, requiredLength, options = {}) {
   }
 }
 
+function requireOptionalFiniteNumber(cmd, value, fieldName) {
+  if (value == null) {
+    return undefined;
+  }
+
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    throw new Error(`CAD operation ${cmd.op} ${fieldName} must be finite`);
+  }
+
+  return numeric;
+}
+
+function requireOptionalNonZeroVector(cmd, values, fieldName) {
+  if (values == null) {
+    return null;
+  }
+
+  if (!Array.isArray(values) || values.length < 3) {
+    throw new Error(`CAD operation ${cmd.op} ${fieldName} must be a non-zero finite vector`);
+  }
+
+  const vector = values.slice(0, 3).map((value) => Number(value));
+  if (vector.some((value) => !Number.isFinite(value)) || vector.every((value) => value === 0)) {
+    throw new Error(`CAD operation ${cmd.op} ${fieldName} must be a non-zero finite vector`);
+  }
+
+  return vector;
+}
+
 function requirePositiveProfileNumber(profile, fieldName) {
   const value = Number(profile[fieldName]);
   if (!Number.isFinite(value) || value <= 0) {
@@ -218,14 +248,17 @@ function processCommands(commands) {
       }
       case 'extrude': {
         const profile = cmd.profile;
+        requireCommandParams(cmd, p, 1);
         const face = buildFaceFromProfile(profile, p);
         shape = face.extrude(p[0]);
         break;
       }
       case 'revolve': {
         const profile = cmd.profile;
+        const axis = requireOptionalNonZeroVector(cmd, cmd.axis, 'axis') || [0, 0, 1];
+        const angle = requireOptionalFiniteNumber(cmd, cmd.angle, 'angle');
         const face = buildFaceFromProfile(profile, p);
-        shape = face.revolve(cmd.axis || [0, 0, 1], cmd.angle);
+        shape = face.revolve(axis, angle);
         break;
       }
       case 'fuse': {
