@@ -6349,9 +6349,9 @@ Customer message:
         command.Params = command.Op switch
         {
             "box" => BuildParams(
-                command.Width ?? dimensions?.Width,
-                command.Depth ?? command.Length ?? dimensions?.Depth ?? dimensions?.Length,
-                command.Height ?? dimensions?.Height),
+                command.Width ?? dimensions?.Width ?? dimensions?.X,
+                command.Depth ?? command.Length ?? dimensions?.Depth ?? dimensions?.Length ?? dimensions?.Y,
+                command.Height ?? dimensions?.Height ?? dimensions?.Z),
             "cylinder" => BuildParams(
                 command.Radius ?? Half(command.Diameter) ?? dimensions?.Radius ?? Half(dimensions?.Diameter),
                 command.Height ?? dimensions?.Height),

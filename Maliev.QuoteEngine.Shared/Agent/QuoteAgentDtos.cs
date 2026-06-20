@@ -980,14 +980,23 @@ public sealed class CadDimensionsDto
     /// <summary>Box/profile width or X dimension.</summary>
     public double? Width { get; set; }
 
+    /// <summary>X dimension alias for generated model payloads.</summary>
+    public double? X { get; set; }
+
     /// <summary>Box depth or Y dimension.</summary>
     public double? Depth { get; set; }
+
+    /// <summary>Y dimension alias for generated model payloads.</summary>
+    public double? Y { get; set; }
 
     /// <summary>Box depth/length fallback.</summary>
     public double? Length { get; set; }
 
     /// <summary>Primitive height or Z dimension.</summary>
     public double? Height { get; set; }
+
+    /// <summary>Z dimension alias for generated model payloads.</summary>
+    public double? Z { get; set; }
 
     /// <summary>Primitive radius.</summary>
     public double? Radius { get; set; }
