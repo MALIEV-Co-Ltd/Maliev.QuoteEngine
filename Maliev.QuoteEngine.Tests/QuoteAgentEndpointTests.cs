@@ -2806,6 +2806,69 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_project_management_confirmation_does_not_fall_back_to_prototype_store_in_production()
+    {
+        const string customerEmail = "agent-project-production-fallback@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
+
+        await using var productionFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AnonymousVisitor:SigningKey"] = "quote-agent-production-project-test-signing-key",
+                    ["QuoteAgent:ContextSigningKey"] = "maliev-local-development-quote-agent-context-key"
+                });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+
+                services.RemoveAll<IProjectServiceClient>();
+                services.AddSingleton<IProjectServiceClient>(new QuoteEngineWebApplicationFactory.EmptyProjectServiceClient());
+            });
+        });
+
+        var store = productionFactory.Services.GetRequiredService<QuoteEnginePrototypeStore>();
+        var prototypeProject = store.CreateDraftProject(
+            customerId,
+            new CreateDraftProjectRequest(
+                "prototype-agent-production-fallback",
+                [],
+                "This project exists only in the local prototype store.",
+                "Prototype-only production agent project"));
+
+        using var client = await CreateSignedInClientAsync(productionFactory, customerEmail);
+        var sessionId = Guid.NewGuid();
+        var pendingJson = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_pin_project",
+            new Dictionary<string, JsonElement>
+            {
+                ["project_id"] = JsonSerializer.SerializeToElement(prototypeProject.ProjectId.ToString("D"), JsonOptions)
+            },
+            customerId);
+        var pendingState = JsonSerializer.Deserialize<QuoteAgentStateResponse>(pendingJson, JsonOptions);
+        Assert.NotNull(pendingState);
+        var pendingAction = Assert.Single(pendingState.ProposedActions);
+
+        var response = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{pendingAction.ActionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest
+            {
+                ConfirmationNote = "Customer confirmed from a production fallback regression test."
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var failedProject = store.GetProject(customerId, prototypeProject.ProjectId);
+        Assert.NotNull(failedProject);
+        Assert.False(failedProject.IsPinned);
+    }
+
+    [Fact]
     public async Task Agent_confirm_action_retry_returns_completed_result_without_reexecuting()
     {
         await using var scopedFactory = CreateAgentFactory();

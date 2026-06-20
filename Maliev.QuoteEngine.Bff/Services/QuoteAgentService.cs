@@ -2946,6 +2946,11 @@ internal sealed class QuoteAgentService(
                 });
                 return $"Project {durableResponse.ProjectNumber} was duplicated from the current draft.";
             }
+
+            if (!CanUsePrototypeFallback())
+            {
+                throw new InvalidOperationException("ProjectService did not duplicate the project.");
+            }
         }
 
         if (TryGetCurrentDraftPrototypeProjectId(state, out var fallbackSourceProjectId))
@@ -2984,7 +2989,9 @@ internal sealed class QuoteAgentService(
         }
 
         var response = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: true, cancellationToken)
-            ?? prototypeStore.SetProjectPinned(customerId, projectId, isPinned: true)
+            ?? ResolvePrototypeProjectManagementFallback(
+                () => prototypeStore.SetProjectPinned(customerId, projectId, isPinned: true),
+                "ProjectService did not pin the project.")
             ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
         UpsertArtifact(state, "project_pin", response.Title, "pinned", null, null);
         SetArtifactMetadata(state, "project_pin", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -3008,7 +3015,9 @@ internal sealed class QuoteAgentService(
         }
 
         var response = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: false, cancellationToken)
-            ?? prototypeStore.SetProjectPinned(customerId, projectId, isPinned: false)
+            ?? ResolvePrototypeProjectManagementFallback(
+                () => prototypeStore.SetProjectPinned(customerId, projectId, isPinned: false),
+                "ProjectService did not unpin the project.")
             ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
         UpsertArtifact(state, "project_unpin", response.Title, "unpinned", null, null);
         SetArtifactMetadata(state, "project_unpin", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -3032,7 +3041,9 @@ internal sealed class QuoteAgentService(
         }
 
         var response = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
-            ?? prototypeStore.SetProjectArchived(customerId, projectId, isArchived: true)
+            ?? ResolvePrototypeProjectManagementFallback(
+                () => prototypeStore.SetProjectArchived(customerId, projectId, isArchived: true),
+                "ProjectService did not archive the project.")
             ?? throw new KeyNotFoundException("The project was not found for the signed-in customer.");
         UpsertArtifact(state, "project_archive", response.Title, "archived", null, null);
         SetArtifactMetadata(state, "project_archive", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -3042,6 +3053,18 @@ internal sealed class QuoteAgentService(
             ["isArchived"] = response.IsArchived.ToString().ToLowerInvariant()
         });
         return $"Project {response.ProjectNumber} was archived.";
+    }
+
+    private ProjectManagementResponse? ResolvePrototypeProjectManagementFallback(
+        Func<ProjectManagementResponse?> fallback,
+        string productionFailureMessage)
+    {
+        if (!CanUsePrototypeFallback())
+        {
+            throw new InvalidOperationException(productionFailureMessage);
+        }
+
+        return fallback();
     }
 
     private async Task<string> ExecuteRequestEmployeeReviewAsync(
