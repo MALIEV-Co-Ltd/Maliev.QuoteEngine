@@ -6277,6 +6277,76 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_shapes_and_operations_wrapper_commands()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var payload = new
+        {
+            description = "Shapes and operations wrapper preview",
+            model = new
+            {
+                shapes = new object[]
+                {
+                    new
+                    {
+                        type = "box",
+                        id = "base",
+                        size = new[] { 42.0, 28.0, 6.0 }
+                    },
+                    new
+                    {
+                        type = "cylinder",
+                        id = "mount_hole",
+                        diameter = 8.0,
+                        height = 8.0
+                    }
+                },
+                operations = new object[]
+                {
+                    new
+                    {
+                        type = "subtract",
+                        target = "base",
+                        tool = "mount_hole",
+                        result = "bracket"
+                    }
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["arguments"] = JsonSerializer.SerializeToElement(payload, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(toolDoc.RootElement.TryGetProperty("command_count", out var count) && count.GetInt32() == 3);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal("Shapes and operations wrapper preview", viewerArtifact.Metadata["description"]);
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var commands = commandDoc.RootElement.EnumerateArray().ToArray();
+
+        Assert.Equal(new[] { "box", "cylinder", "cut" }, commands.Select(command => command.GetProperty("op").GetString()).ToArray());
+        Assert.Equal("base", commands[0].GetProperty("id").GetString());
+        Assert.Equal(new[] { 42.0, 28.0, 6.0 }, commands[0].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal("mount_hole", commands[1].GetProperty("id").GetString());
+        Assert.Equal(new[] { 4.0, 8.0 }, commands[1].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal("base", commands[2].GetProperty("targetId").GetString());
+        Assert.Equal("mount_hole", commands[2].GetProperty("toolId").GetString());
+        Assert.Equal("bracket", commands[2].GetProperty("resultId").GetString());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_single_cad_command_object()
     {
         // Defense-in-depth: tolerate tool calls that send a single CAD command object

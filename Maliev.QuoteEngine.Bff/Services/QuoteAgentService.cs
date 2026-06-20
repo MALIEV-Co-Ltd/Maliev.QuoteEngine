@@ -6466,6 +6466,11 @@ Customer message:
             return ReadCommands(wrapper);
         }
 
+        if (TryReadCadCommandCollection(value, out var collectionCommands))
+        {
+            return collectionCommands;
+        }
+
         if (LooksLikeCadCommand(value))
         {
             try
@@ -6480,6 +6485,30 @@ Customer message:
         }
 
         return [];
+    }
+
+    private static bool TryReadCadCommandCollection(JsonElement value, out IReadOnlyList<CadCommandDto> commands)
+    {
+        var collected = new List<CadCommandDto>();
+        AppendCommands(value, collected, "shapes", "objects", "parts");
+        AppendCommands(value, collected, "operations", "actions", "steps");
+
+        commands = collected;
+        return collected.Count > 0;
+    }
+
+    private static void AppendCommands(JsonElement value, List<CadCommandDto> collected, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (!value.TryGetProperty(propertyName, out var propertyValue))
+            {
+                continue;
+            }
+
+            collected.AddRange(ReadCommands(propertyValue));
+            return;
+        }
     }
 
     private static bool LooksLikeCadCommand(JsonElement value)
