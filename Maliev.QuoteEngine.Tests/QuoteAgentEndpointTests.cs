@@ -4716,6 +4716,64 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_normalizes_named_primitive_dimensions_for_browser_worker()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new object[]
+        {
+            new
+            {
+                op = "box",
+                id = "base",
+                width = 50.0,
+                depth = 30.0,
+                height = 5.0
+            },
+            new
+            {
+                op = "cylinder",
+                id = "hole",
+                diameter = 6.0,
+                height = 5.0
+            },
+            new
+            {
+                op = "sphere",
+                id = "knob",
+                diameter = 10.0
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Named primitive dimensions preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 3);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommands = commandDoc.RootElement.EnumerateArray().ToArray();
+
+        Assert.Equal(new[] { 50.0, 30.0, 5.0 }, normalizedCommands[0].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal(new[] { 3.0, 5.0 }, normalizedCommands[1].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal(new[] { 5.0 }, normalizedCommands[2].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_rejects_unsupported_commands_before_creating_ready_artifact()
     {
         using var client = factory.CreateClient();
