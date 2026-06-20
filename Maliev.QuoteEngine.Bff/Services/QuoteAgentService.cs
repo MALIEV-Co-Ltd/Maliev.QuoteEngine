@@ -5776,13 +5776,72 @@ Customer message:
         }
 
         if (command.Profile.Radius is > 0 ||
-            command.Profile is { Width: > 0, Height: > 0 } ||
-            command.Profile.Segments.Count > 0)
+            command.Profile is { Width: > 0, Height: > 0 })
         {
             return null;
         }
 
+        if (command.Profile.Segments.Count > 0)
+        {
+            return ValidateProfileSegments(command.Profile.Segments, index);
+        }
+
         return $"CAD command {index + 1} profile requires a radius, rectangle size, or sketch segments.";
+    }
+
+    private static string? ValidateProfileSegments(IReadOnlyList<CadSegmentDto> segments, int commandIndex)
+    {
+        for (var segmentIndex = 0; segmentIndex < segments.Count; segmentIndex++)
+        {
+            var segment = segments[segmentIndex];
+            var segmentNumber = segmentIndex + 1;
+            var segmentType = segment.Type?.Trim();
+            if (string.IsNullOrWhiteSpace(segmentType))
+            {
+                return $"CAD command {commandIndex + 1} profile segment {segmentNumber} is missing a type.";
+            }
+
+            var values = segment.Params;
+            var error = segmentType switch
+            {
+                "move" => ValidateSegmentParams(values, 2),
+                "line" => ValidateLineSegmentParams(values),
+                "hLine" or "vLine" => ValidateSegmentParams(values, 1),
+                "arc" or "bezier" => ValidateSegmentParams(values, 4),
+                _ => "unsupported"
+            };
+
+            if (string.IsNullOrEmpty(error))
+            {
+                continue;
+            }
+
+            return error.Equals("unsupported", StringComparison.Ordinal)
+                ? $"CAD command {commandIndex + 1} has unsupported profile segment '{segment.Type}' in segment {segmentNumber}."
+                : $"CAD command {commandIndex + 1} profile segment {segmentNumber} requires {error}.";
+        }
+
+        return null;
+    }
+
+    private static string? ValidateLineSegmentParams(double[]? values)
+    {
+        if (values is { Length: >= 4 })
+        {
+            return ValidateSegmentParams(values, 4);
+        }
+
+        return ValidateSegmentParams(values, 2);
+    }
+
+    private static string? ValidateSegmentParams(double[]? values, int requiredLength)
+    {
+        if (values is null || values.Length < requiredLength || values.Take(requiredLength).Any(value => !double.IsFinite(value)))
+        {
+            return $"{requiredLength} finite parameter(s)";
+        }
+
+        return null;
     }
 
     private static string? RequireParams(
