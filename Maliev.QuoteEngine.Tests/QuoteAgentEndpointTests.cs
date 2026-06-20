@@ -4678,6 +4678,44 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_commands_argument_alias()
+    {
+        // Defense-in-depth: tolerate agents or tool-forwarding layers that name the
+        // top-level command argument "commands" instead of "cad_commands".
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new[]
+        {
+            new
+            {
+                op = "box",
+                id = "part",
+                Params = new[] { 25.0, 20.0, 8.0 }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Commands alias preview", JsonOptions),
+                ["commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 1);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.Contains(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_rejects_unsupported_commands_before_creating_ready_artifact()
     {
         using var client = factory.CreateClient();

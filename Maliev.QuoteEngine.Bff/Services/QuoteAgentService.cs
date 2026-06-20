@@ -5800,7 +5800,9 @@ Customer message:
 
     private static IReadOnlyList<CadCommandDto> ReadCommands(IReadOnlyDictionary<string, JsonElement> arguments)
     {
-        if (!arguments.TryGetValue("cad_commands", out var value))
+        if (!arguments.TryGetValue("cad_commands", out var value) &&
+            !arguments.TryGetValue("commands", out value) &&
+            !arguments.TryGetValue("cadCommands", out value))
         {
             return [];
         }
