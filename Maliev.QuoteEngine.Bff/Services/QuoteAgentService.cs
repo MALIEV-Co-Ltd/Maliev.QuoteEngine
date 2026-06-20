@@ -6539,6 +6539,7 @@ Customer message:
         var normalized = operation is null
             ? null
             : Regex.Replace(operation.Trim(), @"[\s-]+", "_", RegexOptions.CultureInvariant).ToLowerInvariant();
+        normalized = StripCadOperationActionPrefix(normalized);
         return normalized switch
         {
             "rectangular_prism" or "rectangularprism" or "cuboid" or "block" or "cube" => "box",
@@ -6549,6 +6550,26 @@ Customer message:
             "intersection" or "boolean_intersection" or "booleanintersection" => "intersect",
             _ => normalized ?? string.Empty
         };
+    }
+
+    private static string? StripCadOperationActionPrefix(string? normalized)
+    {
+        if (string.IsNullOrWhiteSpace(normalized))
+        {
+            return normalized;
+        }
+
+        string[] prefixes = ["create_", "make_", "add_", "new_", "boolean_"];
+        foreach (var prefix in prefixes)
+        {
+            if (normalized.StartsWith(prefix, StringComparison.Ordinal) &&
+                normalized.Length > prefix.Length)
+            {
+                return normalized[prefix.Length..];
+            }
+        }
+
+        return normalized;
     }
 
     private static void NormalizeCadCommandParams(CadCommandDto command)

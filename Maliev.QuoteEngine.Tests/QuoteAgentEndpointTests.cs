@@ -4970,6 +4970,63 @@ Customer message:
         Assert.Equal("box", normalizedCommand.GetProperty("op").GetString());
     }
 
+    [Fact]
+    public async Task Generate_3d_preview_tool_accepts_action_prefixed_operation_aliases()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "create_box",
+                id = "base",
+                width = 50.0,
+                depth = 30.0,
+                height = 5.0
+            },
+            new
+            {
+                op = "make cylinder",
+                id = "hole",
+                diameter = 6.0,
+                height = 5.0
+            },
+            new
+            {
+                op = "boolean subtract",
+                targetId = "base",
+                toolId = "hole",
+                resultId = "bracket"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Action-prefixed operation alias preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var ops = commandDoc.RootElement
+            .EnumerateArray()
+            .Select(command => command.GetProperty("op").GetString())
+            .ToArray();
+
+        Assert.Equal(new[] { "box", "cylinder", "cut" }, ops);
+    }
+
     [Theory]
     [InlineData("subtract", "cut")]
     [InlineData("difference", "cut")]
