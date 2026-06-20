@@ -79,8 +79,17 @@ function requirePositiveProfileNumber(profile, fieldName) {
   return value;
 }
 
-function buildProfile(profile) {
+function resolveProfilePlane(profile) {
   const plane = profile.plane || 'XY';
+  if (plane !== 'XY' && plane !== 'XZ' && plane !== 'YZ') {
+    throw new Error(`Profile plane must be XY, XZ, or YZ`);
+  }
+
+  return plane;
+}
+
+function buildProfile(profile) {
+  const plane = resolveProfilePlane(profile);
   const sketch = new Sketcher(plane);
   for (const seg of profile.segments || []) {
     const p = seg.params || [];
@@ -126,7 +135,7 @@ function buildProfile(profile) {
 }
 
 function buildFaceFromProfile(profile, params) {
-  const plane = profile.plane || 'XY';
+  const plane = resolveProfilePlane(profile);
   const profileType = typeof profile.type === 'string' ? profile.type.toLowerCase() : '';
   if (profileType === 'circle' || Number(profile.radius) > 0) {
     const radius = requirePositiveProfileNumber(profile, 'radius');

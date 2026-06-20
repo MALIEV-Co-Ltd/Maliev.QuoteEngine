@@ -4253,6 +4253,32 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void ReplicadWorker_validates_profile_plane_before_sketch_creation()
+    {
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function resolveProfilePlane(profile)", worker, StringComparison.Ordinal);
+        Assert.Contains("throw new Error(`Profile plane must be XY, XZ, or YZ`);", worker, StringComparison.Ordinal);
+        Assert.Contains("const plane = resolveProfilePlane(profile);", worker, StringComparison.Ordinal);
+
+        var buildProfileStart = worker.IndexOf("function buildProfile(profile)", StringComparison.Ordinal);
+        Assert.True(buildProfileStart >= 0, "buildProfile must exist.");
+
+        var buildProfileEnd = worker.IndexOf("\nfunction buildFaceFromProfile", buildProfileStart, StringComparison.Ordinal);
+        Assert.True(buildProfileEnd > buildProfileStart, "buildProfile must end before buildFaceFromProfile.");
+
+        var buildFaceStart = worker.IndexOf("function buildFaceFromProfile(profile, params)", StringComparison.Ordinal);
+        Assert.True(buildFaceStart >= 0, "buildFaceFromProfile must exist.");
+
+        var buildFaceEnd = worker.IndexOf("\nfunction makeCone", buildFaceStart, StringComparison.Ordinal);
+        Assert.True(buildFaceEnd > buildFaceStart, "buildFaceFromProfile must end before makeCone.");
+
+        Assert.DoesNotContain("const plane = profile.plane || 'XY';", worker[buildProfileStart..buildProfileEnd], StringComparison.Ordinal);
+        Assert.DoesNotContain("const plane = profile.plane || 'XY';", worker[buildFaceStart..buildFaceEnd], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ReplicadWorker_rejects_unsupported_profile_segments_instead_of_ignoring_them()
     {
         var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
