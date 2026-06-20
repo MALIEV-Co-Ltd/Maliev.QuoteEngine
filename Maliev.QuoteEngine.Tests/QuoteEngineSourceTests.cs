@@ -1059,6 +1059,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-dictation-meter", component, StringComparison.Ordinal);
         Assert.Contains("DictationMeterBarCount = 320", component, StringComparison.Ordinal);
         Assert.Contains("IsComposerSendDisabled => _sending || IsDictationActive || HasPendingComposerUpload", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("|| !IsAgentBackendConnected", component, StringComparison.Ordinal);
         Assert.Contains("ComposerWrapClass", component, StringComparison.Ordinal);
         Assert.Contains("lang=\"@SpeechRecognitionLanguage\"", component, StringComparison.Ordinal);
         Assert.Contains("data-speech-languages=\"@SpeechRecognitionLanguages\"", component, StringComparison.Ordinal);
@@ -1202,7 +1203,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("is-offline", component, StringComparison.Ordinal);
         Assert.Contains("ChatbotServiceAvailable", component, StringComparison.Ordinal);
         Assert.Contains("private bool IsAgentBackendConnected => _agentBackendStatus == AgentBackendStatus.Connected", component, StringComparison.Ordinal);
-        Assert.Contains("!IsAgentBackendConnected", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("!IsAgentBackendConnected", component, StringComparison.Ordinal);
         Assert.DoesNotContain("is-failed", component, StringComparison.Ordinal);
         Assert.Contains("Task HandleSubmitAsync()", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-workflow\"", component, StringComparison.Ordinal);

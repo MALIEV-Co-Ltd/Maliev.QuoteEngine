@@ -5787,6 +5787,48 @@ Customer message:
         Assert.Contains("Make the mounting ears wider and remove the center boss.", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Agent_message_when_chatbot_send_fails_for_preview_request_returns_generated_preview_artifact()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ThrowSendException = true
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Create a simple 3D preview of a 40 by 30 by 12 mm electronics enclosure with four mounting holes.",
+            Language = "en"
+        }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+        Assert.NotNull(body);
+        Assert.Contains("3D preview", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        var artifact = Assert.Single(body.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("ready", artifact.Status);
+        Assert.True(artifact.Metadata.TryGetValue("cad_commands", out var commandsJson));
+
+        var commands = JsonSerializer.Deserialize<List<CadCommandDto>>(commandsJson, JsonOptions);
+        Assert.NotNull(commands);
+        Assert.Contains(commands, command => command.Op.Equals("box", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(4, commands.Count(command => command.Op.Equals("cut", StringComparison.OrdinalIgnoreCase)));
+    }
+
     private sealed class RecordingChatbotServiceClient : IChatbotServiceClient
     {
         public ChatbotInitiateSessionRequest? LastInitiateRequest { get; private set; }
@@ -5804,6 +5846,8 @@ Customer message:
         public ChatbotConversationMessagesResponse? ConversationMessages { get; init; }
 
         public bool ThrowStreamException { get; init; }
+
+        public bool ThrowSendException { get; init; }
 
         public bool HealthAvailable { get; init; } = true;
 
@@ -5843,6 +5887,11 @@ Customer message:
             ChatbotSendMessageRequest request,
             CancellationToken cancellationToken)
         {
+            if (ThrowSendException)
+            {
+                throw new HttpRequestException("ChatbotService is unavailable.");
+            }
+
             LastSendRequest = request;
             Operations.Add("send");
             return Task.FromResult<ChatbotMessageResponse?>(new ChatbotMessageResponse

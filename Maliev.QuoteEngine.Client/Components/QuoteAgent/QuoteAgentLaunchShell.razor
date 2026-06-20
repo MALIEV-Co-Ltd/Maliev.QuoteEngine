@@ -2136,7 +2136,7 @@
     private bool IsDictationActive => _dictating || _dictationProcessing;
     private bool HasPendingComposerUpload => _pendingComposerAttachments.Any(IsComposerUploadPending);
     private bool IsAgentBackendConnected => _agentBackendStatus == AgentBackendStatus.Connected;
-    private bool IsComposerSendDisabled => _sending || IsDictationActive || HasPendingComposerUpload || !IsAgentBackendConnected;
+    private bool IsComposerSendDisabled => _sending || IsDictationActive || HasPendingComposerUpload;
     private string ComposerWrapClass => $"qe-agent-composer-wrap{(IsDictationActive ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
     private string ComposerClass
     {

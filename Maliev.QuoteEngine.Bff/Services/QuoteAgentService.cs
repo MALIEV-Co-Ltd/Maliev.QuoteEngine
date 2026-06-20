@@ -129,6 +129,10 @@ internal sealed class QuoteAgentService(
         "how ", "what ", "where ", "when ", "why ", "who ", "which ",
         "can ", "could ", "would ", "will ", "is ", "are ", "do ", "does "
     ];
+    private static readonly Regex PreviewDimensionRegex = new(
+        @"(?<w>\d+(?:\.\d+)?)\s*(?:mm|millimeters?)?\s*(?:x|by)\s*(?<d>\d+(?:\.\d+)?)\s*(?:mm|millimeters?)?\s*(?:x|by)\s*(?<h>\d+(?:\.\d+)?)\s*(?:mm|millimeters?)?",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     // Mirrors the downstream ChatbotService request limit: SendMessageRequest.Content
     // [StringLength] and MessagePipelinePolicy.MaxContentCharacters are both 8000. Keeping
     // this in lock-step lets a full turn (durable guidance + dynamic state + customer
@@ -169,16 +173,33 @@ internal sealed class QuoteAgentService(
         await RefreshOrderStatusAsync(state, cancellationToken);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts);
         var customerMemoryContext = await BuildCustomerMemoryContextAsync(customerId, cancellationToken);
-        var chatbotResponse = await chatbotClient.SendMessageAsync(new ChatbotSendMessageRequest
+        ChatbotMessageResponse? chatbotResponse = null;
+        var generatedFallbackPreview = false;
+        try
         {
-            SessionId = chatbotSessionId,
-            Content = ComposeAgentMessage(request.Message, request.CustomerContext, state, customerMemoryContext, request.ReplyToPreview),
-            Language = language,
-            ModelName = request.ModelName,
-            Attachments = chatbotAttachments,
-            CallbackUrl = BuildThinkingCallbackUrl(state.SessionId),
-            QuoteAgentContextToken = token
-        }, cancellationToken);
+            chatbotResponse = await chatbotClient.SendMessageAsync(new ChatbotSendMessageRequest
+            {
+                SessionId = chatbotSessionId,
+                Content = ComposeAgentMessage(request.Message, request.CustomerContext, state, customerMemoryContext, request.ReplyToPreview),
+                Language = language,
+                ModelName = request.ModelName,
+                Attachments = chatbotAttachments,
+                CallbackUrl = BuildThinkingCallbackUrl(state.SessionId),
+                QuoteAgentContextToken = token
+            }, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "ChatbotService send failed for QuoteEngine agent session {SessionId}; using fallback turn response.",
+                state.SessionId);
+            generatedFallbackPreview = TryGenerateFallbackPreview(state, request.Message);
+        }
 
         var pendingUiCulture = state.UiCulture;
         state.UiCulture = null;
@@ -188,7 +209,7 @@ internal sealed class QuoteAgentService(
             SessionId = state.SessionId,
             MessageId = chatbotResponse?.MessageId,
             AssistantText = string.IsNullOrWhiteSpace(chatbotResponse?.Content)
-                ? FallbackAgentAnswer(currentState)
+                ? FallbackAgentAnswer(currentState, generatedFallbackPreview)
                 : StripToolTraces(chatbotResponse.Content),
             Role = string.IsNullOrWhiteSpace(chatbotResponse?.Role) ? "assistant" : chatbotResponse.Role,
             Language = NormalizeLanguage(chatbotResponse?.Language, request.Message),
@@ -355,6 +376,8 @@ internal sealed class QuoteAgentService(
             yield break;
         }
 
+        var generatedFallbackPreview = string.IsNullOrWhiteSpace(finalMessage?.Content) &&
+            TryGenerateFallbackPreview(state, request.Message);
         var pendingUiCulture = state.UiCulture;
         state.UiCulture = null;
         var currentState = ToStateResponse(state);
@@ -363,7 +386,7 @@ internal sealed class QuoteAgentService(
             SessionId = state.SessionId,
             MessageId = finalMessage?.MessageId,
             AssistantText = string.IsNullOrWhiteSpace(finalMessage?.Content)
-                ? FallbackAgentAnswer(currentState)
+                ? FallbackAgentAnswer(currentState, generatedFallbackPreview)
                 : StripToolTraces(finalMessage.Content),
             Role = string.IsNullOrWhiteSpace(finalMessage?.Role) ? "assistant" : finalMessage.Role,
             Language = NormalizeLanguage(finalMessage?.Language, request.Message),
@@ -6703,8 +6726,139 @@ Customer message:
         return value.Length > 500 ? value[..500] : value;
     }
 
-    private static string FallbackAgentAnswer(QuoteAgentStateResponse state)
+    private static bool TryGenerateFallbackPreview(QuoteAgentSessionState state, string? message)
     {
+        if (!IsGeneratedPreviewRequest(message))
+        {
+            return false;
+        }
+
+        lock (state.SyncRoot)
+        {
+            if (state.Artifacts.Any(IsGeneratedViewerArtifact))
+            {
+                return false;
+            }
+        }
+
+        var (width, depth, height) = ExtractPreviewDimensions(message);
+        var holeRadius = Math.Clamp(Math.Min(width, depth) / 18d, 1.2d, 3d);
+        var margin = Math.Clamp(Math.Min(width, depth) / 6d, 4d, Math.Min(width, depth) / 3d);
+        var holeHeight = height + 4d;
+        var description = BuildFallbackPreviewDescription(message, width, depth, height);
+        var commands = new List<CadCommandDto>
+        {
+            new()
+            {
+                Op = "box",
+                Id = "base",
+                Params = [width, depth, height]
+            }
+        };
+
+        var currentTarget = "base";
+        var holeCenters = new[]
+        {
+            new[] { -(width / 2d - margin), -(depth / 2d - margin), -2d },
+            new[] { width / 2d - margin, -(depth / 2d - margin), -2d },
+            new[] { width / 2d - margin, depth / 2d - margin, -2d },
+            new[] { -(width / 2d - margin), depth / 2d - margin, -2d }
+        };
+
+        for (var index = 0; index < holeCenters.Length; index++)
+        {
+            var holeId = $"hole{index + 1}";
+            var translatedHoleId = $"{holeId}pos";
+            var cutId = $"basecut{index + 1}";
+            commands.Add(new CadCommandDto
+            {
+                Op = "cylinder",
+                Id = holeId,
+                Params = [holeRadius, holeHeight]
+            });
+            commands.Add(new CadCommandDto
+            {
+                Op = "translate",
+                TargetId = holeId,
+                ResultId = translatedHoleId,
+                Offset = holeCenters[index]
+            });
+            commands.Add(new CadCommandDto
+            {
+                Op = "cut",
+                TargetId = currentTarget,
+                ToolId = translatedHoleId,
+                ResultId = cutId
+            });
+            currentTarget = cutId;
+        }
+
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["description"] = JsonSerializer.SerializeToElement(description, JsonOptions),
+            ["process_hint"] = JsonSerializer.SerializeToElement("cnc", JsonOptions),
+            ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+        };
+        var result = Generate3DPreview(state, arguments);
+        return result.GetType().GetProperty("success")?.GetValue(result) is true;
+    }
+
+    private static bool IsGeneratedPreviewRequest(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        var normalized = message.ToLowerInvariant();
+        return (normalized.Contains("3d", StringComparison.Ordinal) ||
+                normalized.Contains("3-d", StringComparison.Ordinal) ||
+                normalized.Contains("cad", StringComparison.Ordinal)) &&
+            (normalized.Contains("preview", StringComparison.Ordinal) ||
+             normalized.Contains("draft", StringComparison.Ordinal) ||
+             normalized.Contains("model", StringComparison.Ordinal) ||
+             normalized.Contains("design", StringComparison.Ordinal) ||
+             normalized.Contains("generate", StringComparison.Ordinal) ||
+             normalized.Contains("create", StringComparison.Ordinal));
+    }
+
+    private static (double Width, double Depth, double Height) ExtractPreviewDimensions(string? message)
+    {
+        if (!string.IsNullOrWhiteSpace(message))
+        {
+            var match = PreviewDimensionRegex.Match(message);
+            if (match.Success &&
+                double.TryParse(match.Groups["w"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var width) &&
+                double.TryParse(match.Groups["d"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var depth) &&
+                double.TryParse(match.Groups["h"].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var height))
+            {
+                return (
+                    Math.Clamp(width, 5d, 500d),
+                    Math.Clamp(depth, 5d, 500d),
+                    Math.Clamp(height, 2d, 250d));
+            }
+        }
+
+        return (60d, 40d, 12d);
+    }
+
+    private static string BuildFallbackPreviewDescription(string? message, double width, double depth, double height)
+    {
+        var request = string.IsNullOrWhiteSpace(message)
+            ? "generated preview"
+            : message.Trim();
+        return request.Length > 90
+            ? $"{request[..90]} ({width:g0} x {depth:g0} x {height:g0} mm fallback draft)"
+            : $"{request} ({width:g0} x {depth:g0} x {height:g0} mm fallback draft)";
+    }
+
+    private static string FallbackAgentAnswer(QuoteAgentStateResponse state, bool generatedPreview = false)
+    {
+        if (generatedPreview)
+        {
+            return "I created a fallback 3D preview draft you can inspect, rate, and comment on while the assistant backend reconnects.";
+        }
+
         var hasParts = state.Parts.Count > 0;
         return hasParts
             ? "Tell me the material, finish, tolerance, quantity, or lead time you want, or describe the part for a 3D preview."
