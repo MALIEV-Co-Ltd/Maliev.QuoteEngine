@@ -4208,6 +4208,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void ReplicadWorker_rejects_unsupported_profile_segments_instead_of_ignoring_them()
+    {
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
+            .ReplaceLineEndings("\n");
+
+        var buildProfileStart = worker.IndexOf("function buildProfile(profile)", StringComparison.Ordinal);
+        Assert.True(buildProfileStart >= 0, "buildProfile must exist.");
+
+        var buildProfileEnd = worker.IndexOf("\nfunction buildFaceFromProfile", buildProfileStart, StringComparison.Ordinal);
+        Assert.True(buildProfileEnd > buildProfileStart, "buildProfile must end before buildFaceFromProfile.");
+
+        var buildProfile = worker[buildProfileStart..buildProfileEnd];
+        Assert.Contains("default:", buildProfile, StringComparison.Ordinal);
+        Assert.Contains("throw new Error(`Unsupported profile segment: ${seg.type}`);", buildProfile, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteInlineViewer_creates_babylon_engine_before_scene()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")

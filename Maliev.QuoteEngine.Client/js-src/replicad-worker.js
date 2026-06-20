@@ -89,6 +89,8 @@ function buildProfile(profile) {
       case 'bezier':
         sketch.quadraticBezierCurveTo([p[0], p[1]], [p[2], p[3]]);
         break;
+      default:
+        throw new Error(`Unsupported profile segment: ${seg.type}`);
     }
   }
   if (profile.close !== false) {
