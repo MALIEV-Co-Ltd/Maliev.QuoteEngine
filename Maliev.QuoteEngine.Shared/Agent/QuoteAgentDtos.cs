@@ -1178,7 +1178,7 @@ public sealed class CadDoubleArrayJsonConverter : JsonConverter<double[]?>
         AddFirst(ordered, used, valuesByName, "radiusBottom", "bottomRadius");
         AddFirst(ordered, used, valuesByName, "radiusTop", "topRadius");
         AddFirst(ordered, used, valuesByName, "radius", "r");
-        AddFirst(ordered, used, valuesByName, "diameter");
+        AddHalf(ordered, used, valuesByName, "diameter");
         AddFirst(ordered, used, valuesByName, "width", "w", "x");
         AddFirst(ordered, used, valuesByName, "depth", "length", "d", "y");
         AddFirst(ordered, used, valuesByName, "height", "h", "z");
@@ -1206,6 +1206,23 @@ public sealed class CadDoubleArrayJsonConverter : JsonConverter<double[]?>
             if (valuesByName.TryGetValue(name, out var value))
             {
                 ordered.Add(value);
+                used.Add(name);
+                return;
+            }
+        }
+    }
+
+    private static void AddHalf(
+        ICollection<double> ordered,
+        ISet<string> used,
+        IReadOnlyDictionary<string, double> valuesByName,
+        params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (valuesByName.TryGetValue(name, out var value))
+            {
+                ordered.Add(value / 2d);
                 used.Add(name);
                 return;
             }
