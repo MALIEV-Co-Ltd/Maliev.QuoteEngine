@@ -936,6 +936,10 @@ public sealed class CadCommandDto
     [JsonConverter(typeof(CadVectorJsonConverter))]
     public double[]? Offset { get; set; }
 
+    /// <summary>Translation offset alias [x, y, z] for the translate op.</summary>
+    [JsonConverter(typeof(CadVectorJsonConverter))]
+    public double[]? Translation { get; set; }
+
     /// <summary>Named rotation axis X component, normalized to axis when present.</summary>
     public double? AxisX { get; set; }
 

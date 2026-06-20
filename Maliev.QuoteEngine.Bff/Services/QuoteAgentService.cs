@@ -6414,6 +6414,12 @@ Customer message:
     private static void NormalizeCadTransformVectors(CadCommandDto command)
     {
         if (command.Offset is not { Length: > 0 } &&
+            command.Translation is { Length: > 0 })
+        {
+            command.Offset = command.Translation;
+        }
+
+        if (command.Offset is not { Length: > 0 } &&
             command.Op.Equals("translate", StringComparison.OrdinalIgnoreCase))
         {
             command.Offset = BuildParams(command.X, command.Y, command.Z);
