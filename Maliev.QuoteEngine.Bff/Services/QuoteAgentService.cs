@@ -5699,14 +5699,16 @@ Customer message:
                 "sphere" => RequireParams(command, index, 1, "positive radius"),
                 "cone" => RequireParams(command, index, 3, "positive bottom radius, top radius, and height", allowZeroAfterFirst: true),
                 "extrude" => ValidateProfileCommand(command, index, requireHeight: true),
-                "revolve" => ValidateProfileCommand(command, index, requireHeight: false),
+                "revolve" => ValidateProfileCommand(command, index, requireHeight: false) ??
+                    ValidateOptionalVector(command.Axis, index, "rotation axis"),
                 "fuse" or "cut" or "intersect" or "loft" => ValidateBinaryCommand(command, index, knownShapes, hasCurrentShape),
                 "fillet" or "chamfer" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
                     RequirePositiveRadius(command, index),
                 "translate" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
                     ValidateVector(command.Offset ?? command.Params, index, "translation offset"),
                 "rotate" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
-                    ValidateFinite(command.Angle ?? command.Params?.FirstOrDefault(), index, "rotation angle"),
+                    ValidateFinite(command.Angle ?? command.Params?.FirstOrDefault(), index, "rotation angle") ??
+                    ValidateOptionalVector(command.Axis, index, "rotation axis"),
                 _ => $"Unsupported CAD operation '{command.Op}' in command {index + 1}."
             };
 
@@ -5913,6 +5915,11 @@ Customer message:
         }
 
         return null;
+    }
+
+    private static string? ValidateOptionalVector(double[]? values, int index, string label)
+    {
+        return values is null ? null : ValidateVector(values, index, label);
     }
 
     private static string? ValidateFinite(double? value, int index, string label)
