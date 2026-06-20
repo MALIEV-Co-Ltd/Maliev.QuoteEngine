@@ -16,6 +16,7 @@ using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Maliev.QuoteEngine.Tests;
@@ -1888,6 +1889,64 @@ Customer message:
         Assert.Equal("THB", state.Estimate.Currency);
         Assert.Contains(state.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
         Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "pricing" && artifact.Status == "ready");
+    }
+
+    [Fact]
+    public async Task Agent_estimate_does_not_fall_back_to_prototype_pricing_in_production()
+    {
+        await using var productionFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AnonymousVisitor:SigningKey"] = "quote-agent-production-pricing-test-signing-key",
+                    ["QuoteAgent:ContextSigningKey"] = "maliev-local-development-quote-agent-context-key"
+                });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new QuoteEngineWebApplicationFactory.EmptyPricingServiceClient());
+            });
+        });
+        using var client = productionFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement(
+                    "Quote this STEP as 10 aluminum pieces with standard lead time.",
+                    JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "production-priced-housing.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "production-estimate-upload-cad",
+                        storage_path = "quotes/temp/session/production-estimate-upload-cad/production-priced-housing.step"
+                    }
+                }, JsonOptions)
+            });
+        await ConfigureFirstPartForEstimateAsync(client, sessionId);
+
+        var estimateJson = await ExecuteToolAsync(client, sessionId, "quote_calculate_estimate");
+
+        using var estimate = JsonDocument.Parse(estimateJson);
+        Assert.Equal("pricing_available", estimate.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("calculate_estimate", estimate.RootElement.GetProperty("actionType").GetString());
+        Assert.True(estimate.RootElement.GetProperty("state").TryGetProperty("estimate", out var estimateElement));
+        Assert.Equal(JsonValueKind.Null, estimateElement.ValueKind);
     }
 
     [Fact]

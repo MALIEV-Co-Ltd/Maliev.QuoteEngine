@@ -97,6 +97,7 @@ internal sealed class QuoteAgentService(
     IPaymentServiceClient paymentClient,
     IInvoiceServiceClient invoiceClient,
     IProjectServiceClient projectClient,
+    IQePricingServiceClient pricingClient,
     IHostEnvironment environment) : IQuoteAgentService
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
@@ -635,7 +636,7 @@ internal sealed class QuoteAgentService(
             "quote_register_uploads" => RegisterUploadsOrGateError(state, request.Arguments),
             "quote_resume_project" => await ResumeProjectOrGateErrorAsync(state, request.Arguments, cancellationToken),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
-            "quote_calculate_estimate" => CalculateEstimateOrGateError(state),
+            "quote_calculate_estimate" => await CalculateEstimateOrGateErrorAsync(state, cancellationToken),
             "quote_update_checkout_details" => UpdateCheckoutDetailsOrGateError(state, request.Arguments),
             "quote_prepare_draft_project" => PrepareActionOrGateError(
                 state,
@@ -1550,7 +1551,9 @@ internal sealed class QuoteAgentService(
         return ToStateResponse(state);
     }
 
-    private object CalculateEstimateOrGateError(QuoteAgentSessionState state)
+    private async Task<object> CalculateEstimateOrGateErrorAsync(
+        QuoteAgentSessionState state,
+        CancellationToken cancellationToken)
     {
         var gates = QuoteAgentSessionStore.BuildGates(state, ResolveCustomerId().HasValue || state.CustomerId.HasValue);
         var blocker = FirstBlockingGate(
@@ -1570,27 +1573,213 @@ internal sealed class QuoteAgentService(
             };
         }
 
-        return CalculateEstimate(state);
-    }
-
-    private QuoteAgentStateResponse CalculateEstimate(QuoteAgentSessionState state)
-    {
-        lock (state.SyncRoot)
+        var estimate = await CalculateEstimateAsync(state, cancellationToken);
+        if (estimate is null)
         {
-            if (state.Parts.Count > 0)
+            return new
             {
-                state.Estimate = prototypeStore.Estimate(new QuoteEstimateRequest
-                {
-                    QuoteSessionId = state.SessionId.ToString("N"),
-                    LeadTimeCode = state.LeadTimeCode,
-                    Parts = state.Parts
-                });
-                UpsertArtifact(state, "pricing", "Pricing estimate", "ready", null, null);
-            }
+                error = "PricingService did not return a price for the current quote configuration.",
+                requiredGateCode = "pricing_available",
+                actionType = "calculate_estimate",
+                state = ToStateResponse(state)
+            };
         }
 
         return ToStateResponse(state);
     }
+
+    private async Task<QuoteEstimateResponse?> CalculateEstimateAsync(
+        QuoteAgentSessionState state,
+        CancellationToken cancellationToken)
+    {
+        List<QuotePartDraftDto> parts;
+        string leadTimeCode;
+        Guid sessionId;
+        lock (state.SyncRoot)
+        {
+            if (state.Parts.Count == 0)
+            {
+                return null;
+            }
+
+            parts = state.Parts.ToList();
+            leadTimeCode = state.LeadTimeCode;
+            sessionId = state.SessionId;
+        }
+
+        var estimate = await TryCalculatePricingServiceEstimateAsync(
+            sessionId,
+            leadTimeCode,
+            parts,
+            cancellationToken);
+        if (estimate is null && CanUsePrototypeFallback())
+        {
+            estimate = prototypeStore.Estimate(new QuoteEstimateRequest
+            {
+                QuoteSessionId = sessionId.ToString("N"),
+                LeadTimeCode = leadTimeCode,
+                Parts = parts
+            });
+        }
+
+        lock (state.SyncRoot)
+        {
+            state.Estimate = estimate;
+            if (estimate is not null)
+            {
+                UpsertArtifact(state, "pricing", "Pricing estimate", "ready", null, null);
+            }
+        }
+
+        return estimate;
+    }
+
+    private async Task<QuoteEstimateResponse?> TryCalculatePricingServiceEstimateAsync(
+        Guid sessionId,
+        string leadTimeCode,
+        IReadOnlyCollection<QuotePartDraftDto> parts,
+        CancellationToken cancellationToken)
+    {
+        if (parts.Count == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var customerId = ResolveCustomerId() ?? Guid.Empty;
+            var lines = new List<QuoteLineEstimateDto>(parts.Count);
+
+            foreach (var part in parts)
+            {
+                var processId = await materialCatalog.ResolveProcessIdAsync(part.ProcessId, cancellationToken);
+                var materialId = await materialCatalog.ResolveMaterialIdAsync(
+                    part.ProcessId,
+                    part.MaterialId,
+                    cancellationToken);
+                var serviceResult = await pricingClient.CalculateAsync(
+                    part,
+                    customerId,
+                    materialId,
+                    processId,
+                    leadTimeCode,
+                    ResolveToleranceAdditionalCostPercent(part),
+                    cancellationToken);
+
+                if (serviceResult is null)
+                {
+                    return null;
+                }
+
+                var adjustment = BuildQuoteEngineConfigurationAdjustment(part);
+                var unitPrice = Math.Round(serviceResult.UnitPrice * adjustment.Multiplier + adjustment.Additive, 2);
+                var lineTotal = Math.Round(unitPrice * part.Quantity, 2);
+                lines.Add(new QuoteLineEstimateDto(
+                    part.PartId,
+                    part.FileName,
+                    unitPrice,
+                    lineTotal,
+                    "THB",
+                    adjustment.Notes));
+            }
+
+            var subtotal = lines.Sum(line => line.LineTotal);
+            var discount = subtotal >= 25_000m ? Math.Round(subtotal * 0.05m, 2) : 0m;
+            return new QuoteEstimateResponse(
+                sessionId.ToString("N"),
+                subtotal,
+                discount,
+                subtotal - discount,
+                "THB",
+                true,
+                lines);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "PricingService agent estimate failed for quote session {QuoteSessionId}.", sessionId);
+            return null;
+        }
+    }
+
+    private decimal? ResolveToleranceAdditionalCostPercent(QuotePartDraftDto part)
+    {
+        var tolerance = prototypeStore.ReferenceData.Tolerances.FirstOrDefault(option =>
+            MatchesReferenceValue(option.Id, part.ToleranceId) || MatchesReferenceValue(option.Code, part.ToleranceCode));
+        if (tolerance is null || tolerance.PriceMultiplier <= 1m)
+        {
+            return null;
+        }
+
+        return Math.Round((tolerance.PriceMultiplier - 1m) * 100m, 2);
+    }
+
+    private (decimal Multiplier, decimal Additive, string Notes) BuildQuoteEngineConfigurationAdjustment(
+        QuotePartDraftDto part)
+    {
+        var multiplier = 1m;
+        var additive = 0m;
+        var notes = new List<string> { "PricingService estimate" };
+
+        var finish = prototypeStore.ReferenceData.Finishes.FirstOrDefault(option =>
+            MatchesReferenceValue(option.Id, part.FinishId) || MatchesReferenceValue(option.Code, part.FinishCode));
+        if (finish is not null && finish.PriceMultiplier != 1m)
+        {
+            multiplier *= finish.PriceMultiplier;
+            notes.Add($"finish {finish.Name}");
+        }
+
+        var tolerance = prototypeStore.ReferenceData.Tolerances.FirstOrDefault(option =>
+            MatchesReferenceValue(option.Id, part.ToleranceId) || MatchesReferenceValue(option.Code, part.ToleranceCode));
+        if (tolerance is not null)
+        {
+            notes.Add($"tolerance {tolerance.Code}");
+        }
+
+        var inspection = prototypeStore.ReferenceData.InspectionLevels.FirstOrDefault(option =>
+            MatchesReferenceValue(option.Code, part.InspectionLevel));
+        if (inspection is not null)
+        {
+            notes.Add($"inspection {inspection.Name}");
+            if (inspection.PriceMultiplier != 1m)
+            {
+                multiplier *= inspection.PriceMultiplier;
+            }
+        }
+
+        var roughness = prototypeStore.ReferenceData.RoughnessOptions.FirstOrDefault(option =>
+            MatchesReferenceValue(option.Code, part.RoughnessCode));
+        if (roughness is not null && roughness.PriceMultiplier != 1m)
+        {
+            multiplier *= roughness.PriceMultiplier;
+            notes.Add($"roughness {roughness.Name}");
+        }
+
+        if (part.HasThreadedHoles || part.ThreadedHoleCount > 0)
+        {
+            var count = Math.Max(part.ThreadedHoleCount, 1);
+            additive += count * 85m;
+            notes.Add($"threaded holes {count}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(part.InsertType) &&
+            !part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase))
+        {
+            var count = Math.Max(part.InsertCount, 1);
+            additive += count * 120m;
+            notes.Add($"thread inserts {count}");
+        }
+
+        return (multiplier, additive, string.Join("; ", notes));
+    }
+
+    private static bool MatchesReferenceValue(string? left, string? right) =>
+        !string.IsNullOrWhiteSpace(left) &&
+        !string.IsNullOrWhiteSpace(right) &&
+        left.Trim().Equals(right.Trim(), StringComparison.OrdinalIgnoreCase);
 
     private object UpdateCheckoutDetailsOrGateError(
         QuoteAgentSessionState state,
@@ -1844,6 +2033,11 @@ internal sealed class QuoteAgentService(
     }
 
     private bool CanUsePrototypeAccountContextFallback()
+    {
+        return CanUsePrototypeFallback();
+    }
+
+    private bool CanUsePrototypeFallback()
     {
         return environment.IsDevelopment() || environment.IsEnvironment("Testing");
     }
@@ -2539,7 +2733,7 @@ internal sealed class QuoteAgentService(
         var project = await projectClient.GetProjectDetailAsync(customerId.Value, projectId, cancellationToken);
         if (project is not null)
         {
-            ResumeProjectState(state, project);
+            await ResumeProjectStateAsync(state, project, cancellationToken);
             return ToStateResponse(state);
         }
 
@@ -2555,12 +2749,16 @@ internal sealed class QuoteAgentService(
             };
         }
 
-        ResumeProjectState(state, prototypeProject);
+        await ResumeProjectStateAsync(state, prototypeProject, cancellationToken);
         return ToStateResponse(state);
     }
 
-    private void ResumeProjectState(QuoteAgentSessionState state, CustomerProjectDetailResponse project)
+    private async Task ResumeProjectStateAsync(
+        QuoteAgentSessionState state,
+        CustomerProjectDetailResponse project,
+        CancellationToken cancellationToken)
     {
+        var shouldCalculateEstimate = false;
         lock (state.SyncRoot)
         {
             state.Parts.Clear();
@@ -2590,16 +2788,12 @@ internal sealed class QuoteAgentService(
                 ["projectNumber"] = project.ProjectNumber
             });
 
-            if (HasPriceableConfiguration(state))
-            {
-                state.Estimate = prototypeStore.Estimate(new QuoteEstimateRequest
-                {
-                    QuoteSessionId = state.SessionId.ToString("N"),
-                    LeadTimeCode = state.LeadTimeCode,
-                    Parts = state.Parts
-                });
-                UpsertArtifact(state, "pricing", "Pricing estimate", "ready", null, null);
-            }
+            shouldCalculateEstimate = HasPriceableConfiguration(state);
+        }
+
+        if (shouldCalculateEstimate)
+        {
+            await CalculateEstimateAsync(state, cancellationToken);
         }
     }
 
