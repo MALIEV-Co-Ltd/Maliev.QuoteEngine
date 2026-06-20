@@ -6426,6 +6426,12 @@ Customer message:
         }
 
         if (command.Axis is not { Length: > 0 } &&
+            command.RotationAxis is { Length: > 0 })
+        {
+            command.Axis = command.RotationAxis;
+        }
+
+        if (command.Axis is not { Length: > 0 } &&
             (command.Op.Equals("rotate", StringComparison.OrdinalIgnoreCase) ||
                 command.Op.Equals("revolve", StringComparison.OrdinalIgnoreCase)))
         {

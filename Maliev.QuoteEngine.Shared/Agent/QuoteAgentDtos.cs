@@ -953,6 +953,10 @@ public sealed class CadCommandDto
     [JsonConverter(typeof(CadVectorJsonConverter))]
     public double[]? Axis { get; set; }
 
+    /// <summary>Rotation axis alias [x, y, z] for the rotate or revolve op.</summary>
+    [JsonConverter(typeof(CadVectorJsonConverter))]
+    public double[]? RotationAxis { get; set; }
+
     /// <summary>Rotation angle in radians.</summary>
     public double? Angle { get; set; }
 
