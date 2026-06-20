@@ -74,7 +74,7 @@ ordering, retries) — exactly what the E2E proves.
 | 6 | Customer order-status tracking | **Wired** | `QuoteOrderStatusChangedConsumer.cs` → SignalR per-order group |
 | 7 | Login redirect restore stricter gate | **Base committed; stricter E2E pending** | QE `7e78489 fix: restore make studio chat after auth` |
 | 8 | Real browser upload→DFM→reupload proof | **Real path exists (w/ fallback); browser E2E pending** | `QuoteController.cs:96-122`; DFM consumers + SignalR |
-| 9 | ChatbotService tool/prompt schema full audit | **Core registry/dispatch verified; compatibility hardening committed**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken`; QuoteEngine now accepts common model-emitted CAD numeric strings such as `"50 mm"`, object-shaped `params`, and the singular `command` argument alias in generated preview tool payloads | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244`; QE `47ca397`, `2ecf184`, `875cd28` |
+| 9 | ChatbotService tool/prompt schema full audit | **Core registry/dispatch verified; compatibility hardening committed**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken`; QuoteEngine now accepts common model-emitted CAD numeric strings such as `"50 mm"`, object-shaped `params`, correctly ordered object-shaped primitive params, and the singular `command` argument alias in generated preview tool payloads | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244`; QE `47ca397`, `2ecf184`, `875cd28`, `dbd07ae` |
 | 10 | Payment non-happy paths gating | **5 consumers committed; unit tests now added; idempotency lives in OrderService** | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs`; `PaymentNotificationConsumerTests.cs` |
 
 Net: 4 of 10 are simply **already done** (2,3,4,6); 4 are **code-complete, proof-pending** (1,5,7,8);
@@ -107,8 +107,8 @@ PaymentService, Intranet, or Aspire at this reconciliation point.
     project record is created Intranet-side on quotation acceptance.
 - **P1 — ChatbotService Make Studio tool-schema residual audit (gap 9)**: core registry/dispatch is
   verified, and `quote_generate_3d_preview` compatibility coverage is committed for numeric strings
-  (`47ca397`), the singular `command` argument alias (`2ecf184`), and object-shaped `params`
-  (`875cd28`).
+  (`47ca397`), the singular `command` argument alias (`2ecf184`), object-shaped `params`
+  (`875cd28`), and primitive ordering for object-shaped cylinder params (`dbd07ae`).
   Release evidence still needs focused coverage for the highest-risk customer tools — upload registration,
   DFM acknowledgement, checkout details, payment start, project resume, project summary, order creation —
   proving schema match and customer-vs-employee authorization scoping.
