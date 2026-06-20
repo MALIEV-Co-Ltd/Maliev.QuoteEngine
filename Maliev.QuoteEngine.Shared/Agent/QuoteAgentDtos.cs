@@ -944,6 +944,10 @@ public sealed class CadCommandDto
     /// <summary>Nested primitive dimensions often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
     public CadDimensionsDto? Dimensions { get; set; }
 
+    /// <summary>Size vector alias often emitted by model tool calls for box primitives; normalized into <see cref="Params"/>.</summary>
+    [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
+    public double[]? Size { get; set; }
+
     /// <summary>Named box/profile width or X dimension, normalized to params when present.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Width { get; set; }
