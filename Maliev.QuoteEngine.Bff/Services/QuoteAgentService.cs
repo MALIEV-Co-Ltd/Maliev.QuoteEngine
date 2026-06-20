@@ -5885,7 +5885,7 @@ Customer message:
             command.TargetId = NormalizeCadShapeReference(command.TargetId);
             command.ToolId = NormalizeCadShapeReference(command.ToolId);
             command.ResultId = NormalizeCadShapeReference(command.ResultId);
-            NormalizeCadPrimitiveParams(command);
+            NormalizeCadCommandParams(command);
             if (command.Profile is not null)
             {
                 command.Profile.Plane = NormalizeCadProfilePlane(command.Profile.Plane);
@@ -5897,7 +5897,7 @@ Customer message:
         }
     }
 
-    private static void NormalizeCadPrimitiveParams(CadCommandDto command)
+    private static void NormalizeCadCommandParams(CadCommandDto command)
     {
         if (command.Params is { Length: > 0 })
         {
@@ -5913,6 +5913,7 @@ Customer message:
                 command.RadiusBottom ?? command.BottomRadius,
                 command.RadiusTop ?? command.TopRadius ?? 0,
                 command.Height),
+            "extrude" => BuildParams(command.Height),
             _ => command.Params
         };
     }
