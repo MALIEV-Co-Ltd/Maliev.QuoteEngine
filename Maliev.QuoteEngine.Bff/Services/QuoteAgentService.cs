@@ -6511,6 +6511,9 @@ Customer message:
         var normalized = operation?.Trim().Replace('-', '_').ToLowerInvariant();
         return normalized switch
         {
+            "rectangular_prism" or "rectangularprism" or "cuboid" or "block" or "cube" => "box",
+            "tube" or "rod" or "pin" or "post" => "cylinder",
+            "ball" => "sphere",
             "subtract" or "difference" or "boolean_difference" or "booleandifference" => "cut",
             "union" or "join" or "add" or "boolean_union" or "booleanunion" => "fuse",
             "intersection" or "boolean_intersection" or "booleanintersection" => "intersect",
