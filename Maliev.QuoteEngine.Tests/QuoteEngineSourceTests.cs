@@ -1954,6 +1954,54 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspace_preserves_active_agent_session_across_auth_return()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+
+        Assert.Contains("private const string MakeStudioSessionStorageKey = \"maliev.quote.makeStudio.session.v1\";", workspace, StringComparison.Ordinal);
+        Assert.Contains("private Guid AgentSessionId => Guid.TryParse(_quoteSessionId, out var parsed) ? parsed : Guid.Empty;", workspace, StringComparison.Ordinal);
+        Assert.Contains("SessionId=\"@AgentSessionId\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("AuthReturnUrl=\"@WorkspaceAuthReturnUrl\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("BuildWorkspaceAuthReturnUrl(Navigation.Uri)", workspace, StringComparison.Ordinal);
+        Assert.Contains("StripAuthQueryParameter(uri.Query)", workspace, StringComparison.Ordinal);
+        Assert.Contains("!part.StartsWith(\"auth=\", StringComparison.OrdinalIgnoreCase)", workspace, StringComparison.Ordinal);
+        Assert.Contains("await RestoreAgentSessionAsync();", workspace, StringComparison.Ordinal);
+        Assert.Contains("malievChatbot.readSharedSessionId", workspace, StringComparison.Ordinal);
+        Assert.Contains("malievChatbot.writeSharedSession", workspace, StringComparison.Ordinal);
+        Assert.Contains("MakeStudioSessionStorageKey,", workspace, StringComparison.Ordinal);
+        Assert.Contains("_authStatus.CustomerId?.ToString(\"D\")", workspace, StringComparison.Ordinal);
+        Assert.Contains("IsSignedIn);", workspace, StringComparison.Ordinal);
+        Assert.Contains("var previousSessionId = _quoteSessionId;", workspace, StringComparison.Ordinal);
+        Assert.Contains("await PersistAgentSessionAsync();", workspace, StringComparison.Ordinal);
+        Assert.Contains("StateHasChanged();", workspace, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_auth_completion_reloads_active_session_and_hydrates_messages()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var chatbotJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "maliev-chatbot.js");
+        var composerJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-agent-composer.js");
+
+        Assert.Contains("var authPath = \"/auth/sign-in?returnUrl=%2Fauth%2Fchatbot-complete\";", shell, StringComparison.Ordinal);
+        Assert.Contains("malievChatbot.openSignInPopup", shell, StringComparison.Ordinal);
+        Assert.Contains("listenForAuthComplete", shell, StringComparison.Ordinal);
+        Assert.Contains("public void OnAuthPopupCompleted()", shell, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(Navigation.Uri, forceLoad: true);", shell, StringComparison.Ordinal);
+        Assert.Contains("if (SessionId == _loadedSessionId)", shell, StringComparison.Ordinal);
+        Assert.Contains("await LoadStateAsync();", shell, StringComparison.Ordinal);
+        Assert.Contains("await LoadMessageHistoryAsync();", shell, StringComparison.Ordinal);
+        Assert.Contains("if (_messages.Count > 0 || SessionId == Guid.Empty)", shell, StringComparison.Ordinal);
+        Assert.Contains("history = await Api.GetAgentMessageHistoryAsync(SessionId);", shell, StringComparison.Ordinal);
+        Assert.Contains("new AgentMessageRow(message.Role, message.Content, createdAt: message.CreatedAt)", shell, StringComparison.Ordinal);
+
+        Assert.Contains("window.opener.postMessage({ type: 'maliev.chatbot.authenticated' }, window.location.origin);", chatbotJs, StringComparison.Ordinal);
+        Assert.Contains("localStorage.setItem('maliev.chatbot.auth.completedAt'", chatbotJs, StringComparison.Ordinal);
+        Assert.Contains("if (event.origin !== location.origin || !event.data || event.data.type !== 'maliev.chatbot.authenticated')", composerJs, StringComparison.Ordinal);
+        Assert.Contains("dotNetRef.invokeMethodAsync('OnAuthPopupCompleted');", composerJs, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Web_and_quote_engine_boundaries_are_documented()
     {
         var readme = ReadRepoFile("README.md");
