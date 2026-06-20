@@ -916,6 +916,60 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_stream_skips_unsupported_chatbot_media_attachments()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Please quote these attachments.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "bracket.glb",
+                        ContentType = "model/gltf-binary",
+                        FileSizeBytes = 320_000,
+                        Kind = "cad",
+                        Url = "https://files.example.test/bracket.glb",
+                        SatisfiesGeometryGate = true
+                    },
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "manufacturing-sketch.png",
+                        ContentType = "image/png",
+                        FileSizeBytes = 120_000,
+                        Kind = "sketch",
+                        Url = "https://files.example.test/manufacturing-sketch.png"
+                    }
+                ]
+            }, options: JsonOptions)
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
+        Assert.Equal("image", attachment.Type);
+        Assert.Equal("image/png", attachment.MimeType);
+        Assert.Equal("manufacturing-sketch.png", attachment.Filename);
+        Assert.Equal("https://files.example.test/manufacturing-sketch.png", attachment.Url);
+    }
+
+    [Fact]
     public async Task Agent_message_stream_reattaches_recent_workbench_artifact_for_follow_up_turns()
     {
         var chatbot = new RecordingChatbotServiceClient();

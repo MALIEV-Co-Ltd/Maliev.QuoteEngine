@@ -5541,6 +5541,12 @@ Customer message:
         var supported = new List<ChatbotMessageAttachmentRequest>(attachments.Count + Math.Min(artifacts.Count, 6));
         foreach (var attachment in BuildWorkbenchAttachmentCandidates(attachments, artifacts))
         {
+            var attachmentType = InferAttachmentType(attachment.ContentType);
+            if (attachmentType is null)
+            {
+                continue;
+            }
+
             var url = attachment.Url;
             if (string.IsNullOrWhiteSpace(url) ||
                 url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
@@ -5563,7 +5569,7 @@ Customer message:
 
             supported.Add(new ChatbotMessageAttachmentRequest
             {
-                Type = InferAttachmentType(attachment.ContentType),
+                Type = attachmentType,
                 Url = url,
                 MimeType = attachment.ContentType,
                 Filename = attachment.FileName,
@@ -5754,11 +5760,11 @@ Customer message:
             : null;
     }
 
-    private static string InferAttachmentType(string contentType)
+    private static string? InferAttachmentType(string contentType)
     {
         if (string.IsNullOrWhiteSpace(contentType))
         {
-            return "image";
+            return null;
         }
 
         if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
@@ -5776,7 +5782,7 @@ Customer message:
             return "document";
         }
 
-        return "image";
+        return null;
     }
 
     private async Task<string?> ResolveSketchUrlAsync(string storagePath)
