@@ -1137,7 +1137,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         }
     }
 
-    private sealed class FakeCustomerServiceClient : ICustomerServiceClient
+    public sealed class FakeCustomerServiceClient(bool allowProfileLookup = true) : ICustomerServiceClient
     {
         private static readonly Guid DefaultBillingAddressId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         private static readonly Guid DefaultShippingAddressId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
@@ -1148,7 +1148,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         private uint _nextVersion = 1;
 
         public Task<CustomerProfileResponse?> GetByIdAsync(Guid customerId, CancellationToken ct = default) =>
-            Task.FromResult(_profilesById.TryGetValue(customerId, out var profile) ? profile : null);
+            Task.FromResult(allowProfileLookup && _profilesById.TryGetValue(customerId, out var profile) ? profile : null);
 
         public Task<CustomerProfileResponse?> GetByEmailAsync(string email, CancellationToken ct = default) =>
             Task.FromResult<CustomerProfileResponse?>(StoreProfile(CreateProfile(email)));
@@ -2639,6 +2639,33 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotEmpty(profile.Timezone);
         Assert.Equal("Active", profile.NdaStatus);
         Assert.NotNull(profile.NdaExpiresAt);
+    }
+
+    [Fact]
+    public async Task Account_profile_does_not_fall_back_to_prototype_store_in_production()
+    {
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+
+                services.RemoveAll<ICustomerServiceClient>();
+                services.AddSingleton<ICustomerServiceClient>(
+                    new QuoteEngineWebApplicationFactory.FakeCustomerServiceClient(allowProfileLookup: false));
+            });
+        });
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var signIn = await client.GetAsync("/test/sign-in?email=production-profile-missing@example.com");
+        signIn.EnsureSuccessStatusCode();
+
+        var response = await client.GetAsync("/quote/v1/account/profile");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Account service unavailable", body.RootElement.GetProperty("title").GetString());
+        Assert.Equal("Customer profile is temporarily unavailable.", body.RootElement.GetProperty("detail").GetString());
     }
 
     [Fact]

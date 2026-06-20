@@ -58,12 +58,19 @@ public sealed class AccountController(
             return Ok(profile);
         }
 
-        if (store.TryGetProfile(customerId, out var storedProfile) && storedProfile is not null)
+        if (CanUsePrototypeAccountFallback() &&
+            store.TryGetProfile(customerId, out var storedProfile) &&
+            storedProfile is not null)
         {
             return Ok(storedProfile);
         }
 
-        return Unauthorized();
+        return StatusCode(
+            StatusCodes.Status503ServiceUnavailable,
+            AccountProblem(
+                "Account service unavailable",
+                "Customer profile is temporarily unavailable.",
+                StatusCodes.Status503ServiceUnavailable));
     }
 
     [HttpGet("addresses")]
