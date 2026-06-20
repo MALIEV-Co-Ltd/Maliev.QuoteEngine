@@ -74,7 +74,7 @@ ordering, retries) — exactly what the E2E proves.
 | 6 | Customer order-status tracking | **Wired** | `QuoteOrderStatusChangedConsumer.cs` → SignalR per-order group |
 | 7 | Login redirect restore stricter gate | **Base committed; stricter E2E pending** | QE `7e78489 fix: restore make studio chat after auth` |
 | 8 | Real browser upload→DFM→reupload proof | **Real path exists (w/ fallback); browser E2E pending** | `QuoteController.cs:96-122`; DFM consumers + SignalR |
-| 9 | ChatbotService tool/prompt schema full audit | **Core registry/dispatch verified; compatibility hardening committed**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken`; QuoteEngine now accepts common model-emitted CAD numeric strings such as `"50 mm"`, object-shaped `params`, correctly ordered object-shaped primitive params, and the singular `command` argument alias in generated preview tool payloads; generated-preview feedback is sanitized before durable memory or next-turn prompt context | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244`; QE `47ca397`, `2ecf184`, `875cd28`, `dbd07ae`, `b5e49ae` |
+| 9 | ChatbotService tool/prompt schema full audit | **Core registry/dispatch verified; compatibility hardening committed**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken`; QuoteEngine now accepts common model-emitted CAD numeric strings such as `"50 mm"`, object-shaped `params`, correctly ordered object-shaped primitive params, diameter-to-radius object params, and the singular `command` argument alias in generated preview tool payloads; generated-preview feedback is sanitized before durable memory or next-turn prompt context | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244`; QE `47ca397`, `2ecf184`, `875cd28`, `dbd07ae`, `ca7fcf9`, `b5e49ae` |
 | 10 | Payment non-happy paths gating | **QuoteEngine relay coverage strengthened**: 5 consumers committed; unit tests cover completed, pending, failed, expired, cancelled mapping, shared order-group routing, completed order-status update failure, and null-payload skip behavior for all states. Duplicate-webhook/idempotency remains a PaymentService/OrderService cross-service proof item. | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs`; `PaymentNotificationConsumerTests.cs`; QE `402c468` |
 
 Net: 4 of 10 are simply **already done** (2,3,4,6); 4 are **code-complete, proof-pending** (1,5,7,8);
@@ -108,7 +108,8 @@ PaymentService, Intranet, or Aspire at this reconciliation point.
 - **P1 — ChatbotService Make Studio tool-schema residual audit (gap 9)**: core registry/dispatch is
   verified, and `quote_generate_3d_preview` compatibility coverage is committed for numeric strings
   (`47ca397`), the singular `command` argument alias (`2ecf184`), object-shaped `params`
-  (`875cd28`), and primitive ordering for object-shaped cylinder params (`dbd07ae`).
+  (`875cd28`), primitive ordering for object-shaped cylinder params (`dbd07ae`), and diameter-to-radius
+  object params (`ca7fcf9`).
   Preview feedback prompt-injection hygiene is also covered: prompt-override text is stripped before
   CustomerService memory observation or next-turn ChatbotService context (`b5e49ae`).
   Release evidence still needs focused coverage for the highest-risk customer tools — upload registration,
