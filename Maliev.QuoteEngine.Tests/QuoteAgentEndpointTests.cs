@@ -2550,6 +2550,9 @@ Customer message:
         var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
         Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var sourceProjectId));
         Assert.True(Guid.TryParse(draftArtifact.Metadata["projectServiceProjectId"], out var projectServiceProjectId));
+        Assert.Equal(projectServiceProjectId, sourceProjectId);
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["prototypeProjectId"], out var prototypeProjectId));
+        Assert.NotEqual(projectServiceProjectId, prototypeProjectId);
         Assert.False(string.IsNullOrWhiteSpace(draftArtifact.Metadata["projectServiceProjectNumber"]));
         Assert.Equal(projectServiceProjectId, factory.LastProjectDraftCreate?.ProjectServiceProjectId);
         var projectPart = Assert.Single(factory.LastProjectPartCreates);
@@ -2574,7 +2577,7 @@ Customer message:
         Assert.Contains("duplicated", duplicateResult.Message, StringComparison.OrdinalIgnoreCase);
         var duplicateArtifact = Assert.Single(duplicateResult.State.Artifacts, artifact => artifact.ArtifactType == "duplicate_project");
         Assert.Equal(projectServiceProjectId.ToString("D"), duplicateArtifact.Metadata["sourceProjectId"]);
-        Assert.Equal(sourceProjectId.ToString("D"), duplicateArtifact.Metadata["sourcePrototypeProjectId"]);
+        Assert.Equal(prototypeProjectId.ToString("D"), duplicateArtifact.Metadata["sourcePrototypeProjectId"]);
         Assert.True(Guid.TryParse(duplicateArtifact.Metadata["projectId"], out var duplicateProjectId));
         Assert.NotEqual(projectServiceProjectId, duplicateProjectId);
         Assert.Equal("Duplicate from agent", duplicateArtifact.Title);
@@ -2628,8 +2631,10 @@ Customer message:
         var draftResult = await ConfirmActionAsync(client, Assert.Single(draftState.ProposedActions).ActionId);
         Assert.NotNull(draftResult.State);
         var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
-        Assert.True(Guid.TryParse(draftArtifact.Metadata["projectId"], out var prototypeProjectId));
         Assert.True(Guid.TryParse(draftArtifact.Metadata["projectServiceProjectId"], out var projectServiceProjectId));
+        Assert.Equal(projectServiceProjectId.ToString("D"), draftArtifact.Metadata["projectId"]);
+        Assert.True(Guid.TryParse(draftArtifact.Metadata["prototypeProjectId"], out var prototypeProjectId));
+        Assert.NotEqual(projectServiceProjectId, prototypeProjectId);
         var projectId = projectServiceProjectId;
 
         var pendingState = await ExecuteToolForStateAsync(

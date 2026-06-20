@@ -2688,12 +2688,14 @@ internal sealed class QuoteAgentService(
         UpsertArtifact(state, "draft_project", response.Title, response.Status, null, null);
         SetArtifactMetadata(state, "draft_project", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["projectId"] = response.ProjectId.ToString("D"),
-            ["projectNumber"] = response.ProjectNumber,
+            ["projectId"] = project.ProjectId.ToString("D"),
+            ["projectNumber"] = project.ProjectNumber,
             ["projectServiceProjectId"] = project.ProjectId.ToString("D"),
-            ["projectServiceProjectNumber"] = project.ProjectNumber
+            ["projectServiceProjectNumber"] = project.ProjectNumber,
+            ["prototypeProjectId"] = response.ProjectId.ToString("D"),
+            ["prototypeProjectNumber"] = response.ProjectNumber
         });
-        return $"Draft project {response.ProjectNumber} is ready.";
+        return $"Draft project {project.ProjectNumber} is ready.";
     }
 
     private async Task<Guid?> ResolveProjectPartMaterialIdAsync(
@@ -2729,10 +2731,17 @@ internal sealed class QuoteAgentService(
                     ["projectId"] = durableResponse.ProjectId.ToString("D"),
                     ["projectNumber"] = durableResponse.ProjectNumber,
                     ["sourceProjectId"] = sourceProjectServiceId.ToString("D"),
-                    ["sourcePrototypeProjectId"] = sourceProjectId.ToString("D")
+                    ["sourcePrototypeProjectId"] = TryGetCurrentDraftPrototypeProjectId(state, out var prototypeProjectId)
+                        ? prototypeProjectId.ToString("D")
+                        : sourceProjectId.ToString("D")
                 });
                 return $"Project {durableResponse.ProjectNumber} was duplicated from the current draft.";
             }
+        }
+
+        if (TryGetCurrentDraftPrototypeProjectId(state, out var fallbackSourceProjectId))
+        {
+            sourceProjectId = fallbackSourceProjectId;
         }
 
         var response = prototypeStore.DuplicateDraftProject(
@@ -3914,6 +3923,16 @@ internal sealed class QuoteAgentService(
             .LastOrDefault(item => item.ArtifactType.Equals("draft_project", StringComparison.OrdinalIgnoreCase));
         return artifact is not null &&
             artifact.Metadata.TryGetValue("projectServiceProjectId", out var rawProjectId) &&
+            Guid.TryParse(rawProjectId, out projectId);
+    }
+
+    private static bool TryGetCurrentDraftPrototypeProjectId(QuoteAgentSessionState state, out Guid projectId)
+    {
+        projectId = Guid.Empty;
+        var artifact = state.Artifacts
+            .LastOrDefault(item => item.ArtifactType.Equals("draft_project", StringComparison.OrdinalIgnoreCase));
+        return artifact is not null &&
+            artifact.Metadata.TryGetValue("prototypeProjectId", out var rawProjectId) &&
             Guid.TryParse(rawProjectId, out projectId);
     }
 
