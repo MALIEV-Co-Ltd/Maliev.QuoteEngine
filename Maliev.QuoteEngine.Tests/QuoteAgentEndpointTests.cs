@@ -792,7 +792,9 @@ Customer message:
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(chatbot.LastStreamRequest);
-        Assert.True(chatbot.LastStreamRequest.Content.Length <= 4000);
+        // Content must stay within the downstream ChatbotService request limit (8000 chars)
+        // so the BFF never triggers a 400; large inline image previews are replaced by signed URLs.
+        Assert.True(chatbot.LastStreamRequest.Content.Length <= 8000);
         Assert.Contains("Please quote this hand sketch.", chatbot.LastStreamRequest.Content, StringComparison.Ordinal);
         var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
         Assert.Equal("https://upload.example.test/download/quotes%2Ftemp%2Fsession%2Fmanufacturing-sketch.png", attachment.Url);
@@ -4362,6 +4364,46 @@ Customer message:
         using var toolDoc = JsonDocument.Parse(toolJson);
         Assert.True(toolDoc.RootElement.TryGetProperty("error", out var error));
         Assert.Contains("unsupported profile segment", error.GetString(), StringComparison.OrdinalIgnoreCase);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.DoesNotContain(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(state.Parts, part => part.Status == "ModelGenerated");
+    }
+
+    [Fact]
+    public async Task Generate_3d_preview_tool_rejects_invalid_profile_plane_before_creating_ready_artifact()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new[]
+        {
+            new
+            {
+                op = "extrude",
+                id = "part",
+                Params = new[] { 10.0 },
+                profile = new
+                {
+                    plane = "AB",
+                    radius = 5.0
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Invalid sketch plane", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("error", out var error));
+        Assert.Contains("profile plane", error.GetString(), StringComparison.OrdinalIgnoreCase);
 
         var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
         Assert.DoesNotContain(state.Artifacts, artifact =>

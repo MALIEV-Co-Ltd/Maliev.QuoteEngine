@@ -125,7 +125,12 @@ internal sealed class QuoteAgentService(
         "how ", "what ", "where ", "when ", "why ", "who ", "which ",
         "can ", "could ", "would ", "will ", "is ", "are ", "do ", "does "
     ];
-    private const int ChatbotServiceMaxContentCharacters = 4000;
+    // Mirrors the downstream ChatbotService request limit: SendMessageRequest.Content
+    // [StringLength] and MessagePipelinePolicy.MaxContentCharacters are both 8000. Keeping
+    // this in lock-step lets a full turn (durable guidance + dynamic state + customer
+    // message) reach the model without TrimChatbotContent silently dropping the guidance,
+    // while still staying under the value ChatbotService will reject with a 400.
+    private const int ChatbotServiceMaxContentCharacters = 8000;
 
     public async Task<QuoteAgentTurnResponse> SendAsync(
         QuoteAgentMessageRequest request,
@@ -4610,26 +4615,11 @@ internal sealed class QuoteAgentService(
         };
         contextLines.Add(ResponseLanguageInstruction(state.Language));
 
-        if (state.Parts.Count > 0)
-        {
-            contextLines.Add($"Current parts: {BuildPartContext(state.Parts)}");
-        }
-
-        if (!string.IsNullOrWhiteSpace(customerMemoryContext))
-        {
-            contextLines.Add(customerMemoryContext);
-        }
-
-        if (state.Artifacts.Count > 0)
-        {
-            contextLines.Add($"Current artifacts: {BuildArtifactContext(state.Artifacts)}");
-        }
-
-        if (state.Estimate is not null)
-        {
-            contextLines.Add($"Current estimate: {state.Estimate.Total.ToString("0.##", CultureInfo.InvariantCulture)} {state.Estimate.Currency}, {state.Estimate.Lines.Count} line(s)");
-        }
-
+        // Order matters for TrimChatbotContent: it keeps the head of the composed content and
+        // drops the tail. Durable manufacturing guidance is added here, ahead of the dynamic
+        // (and potentially large) state dump below, so an oversized turn sheds recoverable
+        // state — re-fetchable via quote_get_state / quote_get_project_summary — instead of
+        // the behavioral instructions that make this a competent manufacturing agent.
         contextLines.Add(
             "Guidance: Infer useful manufacturing parameters from the customer message, file names, and context before asking. " +
             "Process hints: PLA/ABS/PETG/TPU/filament → FDM, resin/photopolymer/SLA → SLA, nylon/PA/PP/SLS → SLS, aluminum/steel/titanium/brass/CNC → CNC. " +
@@ -4660,16 +4650,38 @@ internal sealed class QuoteAgentService(
             "Do not put a checklist of multiple missing details in assistant text when quote_ask_customer can ask the first question. " +
             "Use normal text only for details you can confidently infer. At most once per turn.");
 
-        if (!string.IsNullOrWhiteSpace(customerContext))
-        {
-            contextLines.Add($"Browser context: {customerContext.Trim()}");
-        }
-
         if (!string.IsNullOrWhiteSpace(replyToPreview))
         {
             contextLines.Add(
                 $"Replying-to: the customer is quoting/replying to an earlier message: \"{replyToPreview.Trim()}\". " +
                 "Treat their message as a direct response to that referenced content.");
+        }
+
+        // Dynamic state follows the durable guidance so it is trimmed first when a turn
+        // exceeds the limit. Each block below is authoritative-by-tool, not by this snapshot.
+        if (state.Parts.Count > 0)
+        {
+            contextLines.Add($"Current parts: {BuildPartContext(state.Parts)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(customerMemoryContext))
+        {
+            contextLines.Add(customerMemoryContext);
+        }
+
+        if (state.Artifacts.Count > 0)
+        {
+            contextLines.Add($"Current artifacts: {BuildArtifactContext(state.Artifacts)}");
+        }
+
+        if (state.Estimate is not null)
+        {
+            contextLines.Add($"Current estimate: {state.Estimate.Total.ToString("0.##", CultureInfo.InvariantCulture)} {state.Estimate.Currency}, {state.Estimate.Lines.Count} line(s)");
+        }
+
+        if (!string.IsNullOrWhiteSpace(customerContext))
+        {
+            contextLines.Add($"Browser context: {customerContext.Trim()}");
         }
 
         var content = $"""
@@ -5775,6 +5787,11 @@ Customer message:
             return $"CAD command {index + 1} requires a profile.";
         }
 
+        if (!IsSupportedProfilePlane(command.Profile.Plane))
+        {
+            return $"CAD command {index + 1} profile plane must be XY, XZ, or YZ.";
+        }
+
         if (command.Profile.Radius is > 0 ||
             command.Profile is { Width: > 0, Height: > 0 })
         {
@@ -5787,6 +5804,18 @@ Customer message:
         }
 
         return $"CAD command {index + 1} profile requires a radius, rectangle size, or sketch segments.";
+    }
+
+    private static bool IsSupportedProfilePlane(string? plane)
+    {
+        if (string.IsNullOrWhiteSpace(plane))
+        {
+            return true;
+        }
+
+        return plane.Equals("XY", StringComparison.OrdinalIgnoreCase) ||
+            plane.Equals("XZ", StringComparison.OrdinalIgnoreCase) ||
+            plane.Equals("YZ", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string? ValidateProfileSegments(IReadOnlyList<CadSegmentDto> segments, int commandIndex)
