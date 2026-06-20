@@ -6343,6 +6343,12 @@ Customer message:
             return;
         }
 
+        if (segment.Parameters is { Length: > 0 })
+        {
+            segment.Params = segment.Parameters;
+            return;
+        }
+
         segment.Params = segment.Type switch
         {
             "move" or "line" => BuildParams(segment.X, segment.Y),
@@ -6354,6 +6360,12 @@ Customer message:
 
     private static void NormalizeCadProfileParams(CadProfileDto profile)
     {
+        if (profile.Params is not { Length: > 0 } &&
+            profile.Parameters is { Length: > 0 })
+        {
+            profile.Params = profile.Parameters;
+        }
+
         var profileType = profile.Type?.Trim().ToLowerInvariant();
         if ((profileType is "rect" or "rectangle") &&
             profile is not { Width: > 0, Height: > 0 } &&

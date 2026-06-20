@@ -986,6 +986,9 @@ public sealed class CadProfileDto
     /// <summary>Profile shorthand parameters: rectangle [width, height], circle [radius].</summary>
     public double[]? Params { get; set; }
 
+    /// <summary>Profile shorthand parameter alias often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
+    public double[]? Parameters { get; set; }
+
     /// <summary>Whether to auto-close the profile. Default true.</summary>
     public bool Close { get; set; } = true;
 
@@ -1009,6 +1012,9 @@ public sealed class CadSegmentDto
 
     /// <summary>Segment parameters, type-dependent.</summary>
     public double[]? Params { get; set; }
+
+    /// <summary>Segment parameter alias often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
+    public double[]? Parameters { get; set; }
 
     /// <summary>Named X coordinate for move/line sketch segments.</summary>
     public double? X { get; set; }
