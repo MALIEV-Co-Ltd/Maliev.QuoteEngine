@@ -2525,7 +2525,11 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("_quotes = [.. quotes]", quoteDetail, StringComparison.Ordinal);
         Assert.DoesNotContain("IsHistoryRoute", quoteDetail, StringComparison.Ordinal);
         Assert.DoesNotContain("data-quote-section=\"history\"", quoteDetail, StringComparison.Ordinal);
-        Assert.DoesNotContain("quote-history-list", quoteDetail, StringComparison.Ordinal);
+        // The detail page renders THIS quote's revision history (see "feat: expose quote version history").
+        // quote-history-list is that per-quote revision list, not a multi-quote list view - the
+        // assertions above already guard against the page becoming a quotes list.
+        Assert.Contains("data-quote-section=\"versions\"", quoteDetail, StringComparison.Ordinal);
+        Assert.Contains("quote-history-list", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("_quote.QuoteNumber", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("_quote = quotes.FirstOrDefault", quoteDetail, StringComparison.Ordinal);
         Assert.Contains("data-quote-section=\"summary\"", quoteDetail, StringComparison.Ordinal);

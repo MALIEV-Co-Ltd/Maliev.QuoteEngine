@@ -2339,6 +2339,46 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_order_confirmation_double_submit_returns_completed_result_without_duplicate_order()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        factory.DelayOrderCreateBy(TimeSpan.FromMilliseconds(100));
+        try
+        {
+            using var client = await CreateSignedInClientAsync(scopedFactory, "agent-order-double-submit@example.com");
+            var sessionId = await StartPricedCadSessionAsync(client);
+
+            var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+            await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+            var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+            await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+            var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+            var orderAction = Assert.Single(orderState.ProposedActions);
+
+            var firstTask = ConfirmActionAsync(client, orderAction.ActionId);
+            var secondTask = ConfirmActionAsync(client, orderAction.ActionId);
+            var results = await Task.WhenAll(firstTask, secondTask);
+
+            Assert.All(results, result =>
+            {
+                Assert.Equal(orderAction.ActionId, result.ActionId);
+                Assert.Equal("completed", result.Status);
+                Assert.NotNull(result.State);
+            });
+            var firstOrderArtifact = Assert.Single(results[0].State!.Artifacts, artifact => artifact.ArtifactType == "order");
+            var secondOrderArtifact = Assert.Single(results[1].State!.Artifacts, artifact => artifact.ArtifactType == "order");
+            Assert.Equal(
+                firstOrderArtifact.Metadata["orderNumber"],
+                secondOrderArtifact.Metadata["orderNumber"]);
+            Assert.Single(factory.OrderCreateRequests);
+        }
+        finally
+        {
+            factory.DelayOrderCreateBy(TimeSpan.Zero);
+        }
+    }
+
+    [Fact]
     public async Task Agent_start_payment_blocks_until_checkout_details_are_collected()
     {
         await using var scopedFactory = CreateAgentFactory();
@@ -4252,6 +4292,61 @@ Customer message:
         Assert.Contains(state.Parts, part =>
             part.FileName.StartsWith("[Preview]", StringComparison.OrdinalIgnoreCase) &&
             part.Status == "ModelGenerated");
+    }
+
+    [Fact]
+    public async Task Generate_3d_preview_tool_normalizes_operation_casing_for_browser_worker()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "Box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            },
+            new
+            {
+                op = "CYLINDER",
+                id = "hole",
+                Params = new[] { 3.0, 5.0 }
+            },
+            new
+            {
+                op = "Cut",
+                targetId = "base",
+                toolId = "hole",
+                resultId = "bracket"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Mixed case generated preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var commandJson = viewerArtifact.Metadata["cad_commands"];
+        using var commandDoc = JsonDocument.Parse(commandJson);
+        var ops = commandDoc.RootElement
+            .EnumerateArray()
+            .Select(command => command.GetProperty("op").GetString() ?? string.Empty)
+            .ToArray();
+
+        Assert.Equal(new[] { "box", "cylinder", "cut" }, ops);
     }
 
     [Fact]

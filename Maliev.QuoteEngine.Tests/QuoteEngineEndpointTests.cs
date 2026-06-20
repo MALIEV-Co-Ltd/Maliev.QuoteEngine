@@ -49,6 +49,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     public OrderCreateRequest? LastOrderCreateRequest => _fakeOrderServiceClient.LastCreateRequest;
 
+    public IReadOnlyList<OrderCreateRequest> OrderCreateRequests => _fakeOrderServiceClient.CreateRequests.ToArray();
+
     public IReadOnlyList<CapturedOrderStatusUpdate> OrderStatusUpdates => _fakeOrderServiceClient.StatusUpdates.ToArray();
 
     public QuotationCreateRequest? LastQuotationCreateRequest => _fakeQuotationServiceClient.LastCreateRequest;
@@ -68,6 +70,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     public void FailNextOrderStatus(string status) => _fakeOrderServiceClient.FailNextStatus(status);
 
     public void MarkOrderPaid(string orderNumber) => _fakeOrderServiceClient.MarkPaid(orderNumber);
+
+    public void DelayOrderCreateBy(TimeSpan delay) => _fakeOrderServiceClient.CreateDelay = delay;
 
     public void ClearPaymentIdempotencyKeys()
     {
@@ -795,9 +799,13 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
         public ConcurrentQueue<CapturedOrderStatusUpdate> StatusUpdates { get; } = new();
 
+        public ConcurrentQueue<OrderCreateRequest> CreateRequests { get; } = new();
+
         public CapturedOrderDeliverySnapshot? LastDeliverySnapshot { get; private set; }
 
         public OrderCreateRequest? LastCreateRequest { get; private set; }
+
+        public TimeSpan CreateDelay { get; set; }
 
         public void FailNextStatus(string status) => _statusToFailOnce = status;
 
@@ -846,9 +854,15 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             };
         }
 
-        public Task<OrderCreatedResult?> CreateAsync(OrderCreateRequest request, CancellationToken ct = default)
+        public async Task<OrderCreatedResult?> CreateAsync(OrderCreateRequest request, CancellationToken ct = default)
         {
+            if (CreateDelay > TimeSpan.Zero)
+            {
+                await Task.Delay(CreateDelay, ct);
+            }
+
             LastCreateRequest = request;
+            CreateRequests.Enqueue(request);
             var orderId = Guid.NewGuid();
             var orderNumber = $"ORD-TEST-{orderId:N}"[..16];
             var summary = new CustomerOrderSummaryDto(
@@ -918,12 +932,12 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             };
             _ordersByNumber[orderNumber] = detail;
 
-            return Task.FromResult<OrderCreatedResult?>(new OrderCreatedResult
+            return new OrderCreatedResult
             {
                 OrderId = orderId,
                 OrderNumber = orderNumber,
                 Status = "Pending"
-            });
+            };
         }
 
         public Task<IReadOnlyList<CustomerOrderSummaryDto>> GetByCustomerAsync(string customerId, CancellationToken ct = default)

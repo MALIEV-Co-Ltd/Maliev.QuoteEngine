@@ -10,6 +10,7 @@ internal sealed class QuoteAgentSessionStore
     private readonly ConcurrentDictionary<Guid, QuoteAgentSessionState> _sessions = new();
     private readonly ConcurrentDictionary<Guid, QuoteAgentPendingAction> _actions = new();
     private readonly ConcurrentDictionary<Guid, QuoteAgentActionResultResponse> _completedActions = new();
+    private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _actionLocks = new();
 
     public QuoteAgentSessionState GetOrCreate(Guid sessionId, string language = "en")
     {
@@ -110,6 +111,16 @@ internal sealed class QuoteAgentSessionStore
     public bool TryGetCompletedAction(Guid actionId, out QuoteAgentActionResultResponse result)
     {
         return _completedActions.TryGetValue(actionId, out result!);
+    }
+
+    public SemaphoreSlim GetActionLock(Guid actionId)
+    {
+        return _actionLocks.GetOrAdd(actionId, _ => new SemaphoreSlim(1, 1));
+    }
+
+    public void ReleaseActionLock(Guid actionId)
+    {
+        _actionLocks.TryRemove(actionId, out _);
     }
 
     public void CompleteAction(

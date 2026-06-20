@@ -705,51 +705,61 @@ internal sealed class QuoteAgentService(
         QuoteAgentConfirmActionRequest request,
         CancellationToken cancellationToken)
     {
-        if (!sessionStore.TryGetAction(actionId, out var action))
+        var actionLock = sessionStore.GetActionLock(actionId);
+        await actionLock.WaitAsync(cancellationToken);
+        try
         {
-            if (sessionStore.TryGetCompletedAction(actionId, out var completed))
+            if (!sessionStore.TryGetAction(actionId, out var action))
             {
-                return completed;
+                if (sessionStore.TryGetCompletedAction(actionId, out var completed))
+                {
+                    return completed;
+                }
+
+                return null;
             }
 
-            return null;
+            var customerId = ResolveCustomerId();
+            if (action.RequiresAuthentication && !customerId.HasValue)
+            {
+                throw new UnauthorizedAccessException("This action requires a signed-in customer session.");
+            }
+
+            var state = sessionStore.GetOrCreate(action.SessionId);
+            state.CustomerId = customerId ?? state.CustomerId;
+            var message = action.ActionType switch
+            {
+                "draft_project" => await ExecuteDraftProjectAsync(state, customerId!.Value, action, cancellationToken),
+                "duplicate_project" => await ExecuteDuplicateProjectAsync(state, customerId!.Value, action, cancellationToken),
+                "pin_project" => await ExecutePinProjectAsync(state, customerId!.Value, action, cancellationToken),
+                "unpin_project" => await ExecuteUnpinProjectAsync(state, customerId!.Value, action, cancellationToken),
+                "archive_project" => await ExecuteArchiveProjectAsync(state, customerId!.Value, action, cancellationToken),
+                "request_employee_review" => await ExecuteRequestEmployeeReviewAsync(state, customerId!.Value, action, cancellationToken),
+                "achieve_project" => await ExecuteAchieveProjectAsync(state, customerId!.Value, action, cancellationToken),
+                "account_profile_update" => ExecuteAccountProfileUpdate(state, customerId!.Value, action),
+                "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
+                "quote_approval" => ExecuteQuoteApproval(state),
+                "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
+                "create_order" => await ExecuteCreateOrderAsync(state, customerId!.Value, action, cancellationToken),
+                "start_payment" => await ExecuteStartPaymentAsync(state, customerId!.Value, action, cancellationToken),
+                _ => $"Action {action.ActionType} completed."
+            };
+
+            var result = new QuoteAgentActionResultResponse
+            {
+                ActionId = actionId,
+                Status = "completed",
+                Message = message,
+                State = ToStateResponse(state)
+            };
+            sessionStore.CompleteAction(state, actionId, result);
+            return result;
         }
-
-        var customerId = ResolveCustomerId();
-        if (action.RequiresAuthentication && !customerId.HasValue)
+        finally
         {
-            throw new UnauthorizedAccessException("This action requires a signed-in customer session.");
+            actionLock.Release();
+            sessionStore.ReleaseActionLock(actionId);
         }
-
-        var state = sessionStore.GetOrCreate(action.SessionId);
-        state.CustomerId = customerId ?? state.CustomerId;
-        var message = action.ActionType switch
-        {
-            "draft_project" => await ExecuteDraftProjectAsync(state, customerId!.Value, action, cancellationToken),
-            "duplicate_project" => await ExecuteDuplicateProjectAsync(state, customerId!.Value, action, cancellationToken),
-            "pin_project" => await ExecutePinProjectAsync(state, customerId!.Value, action, cancellationToken),
-            "unpin_project" => await ExecuteUnpinProjectAsync(state, customerId!.Value, action, cancellationToken),
-            "archive_project" => await ExecuteArchiveProjectAsync(state, customerId!.Value, action, cancellationToken),
-            "request_employee_review" => await ExecuteRequestEmployeeReviewAsync(state, customerId!.Value, action, cancellationToken),
-            "achieve_project" => await ExecuteAchieveProjectAsync(state, customerId!.Value, action, cancellationToken),
-            "account_profile_update" => ExecuteAccountProfileUpdate(state, customerId!.Value, action),
-            "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
-            "quote_approval" => ExecuteQuoteApproval(state),
-            "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
-            "create_order" => await ExecuteCreateOrderAsync(state, customerId!.Value, action, cancellationToken),
-            "start_payment" => await ExecuteStartPaymentAsync(state, customerId!.Value, action, cancellationToken),
-            _ => $"Action {action.ActionType} completed."
-        };
-
-        var result = new QuoteAgentActionResultResponse
-        {
-            ActionId = actionId,
-            Status = "completed",
-            Message = message,
-            State = ToStateResponse(state)
-        };
-        sessionStore.CompleteAction(state, actionId, result);
-        return result;
     }
 
     public Task RelayThinkingStepAsync(
@@ -5691,6 +5701,7 @@ Customer message:
             return new { error = validationError };
         }
 
+        NormalizeCadCommandOperations(commands);
         var process = !string.IsNullOrWhiteSpace(processHint) ? processHint : "fdm";
         var commandsJson = JsonSerializer.Serialize(commands, JsonOptions);
         var partId = Guid.NewGuid();
@@ -5773,6 +5784,14 @@ Customer message:
         }
 
         return [];
+    }
+
+    private static void NormalizeCadCommandOperations(IEnumerable<CadCommandDto> commands)
+    {
+        foreach (var command in commands)
+        {
+            command.Op = command.Op.Trim().ToLowerInvariant();
+        }
     }
 
     private static string? ValidateCadCommands(IReadOnlyList<CadCommandDto> commands)
