@@ -1175,13 +1175,13 @@ public sealed class CadDoubleArrayJsonConverter : JsonConverter<double[]?>
         List<double> ordered = [];
         HashSet<string> used = new(StringComparer.OrdinalIgnoreCase);
 
+        AddFirst(ordered, used, valuesByName, "radiusBottom", "bottomRadius");
+        AddFirst(ordered, used, valuesByName, "radiusTop", "topRadius");
+        AddFirst(ordered, used, valuesByName, "radius", "r");
+        AddFirst(ordered, used, valuesByName, "diameter");
         AddFirst(ordered, used, valuesByName, "width", "w", "x");
         AddFirst(ordered, used, valuesByName, "depth", "length", "d", "y");
         AddFirst(ordered, used, valuesByName, "height", "h", "z");
-        AddFirst(ordered, used, valuesByName, "radius", "r");
-        AddFirst(ordered, used, valuesByName, "diameter");
-        AddFirst(ordered, used, valuesByName, "radiusBottom", "bottomRadius");
-        AddFirst(ordered, used, valuesByName, "radiusTop", "topRadius");
         AddFirst(ordered, used, valuesByName, "angle");
 
         foreach (var (name, value) in valuesInOrder)
