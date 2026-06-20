@@ -423,7 +423,17 @@ public sealed record CustomerProjectNavItemDto(
 
 public sealed record GenerateFormalQuoteRequest(Guid ProjectId, string QuoteSessionId, IReadOnlyList<QuotePartDraftDto> Parts, string Notes);
 
-public sealed record GenerateFormalQuoteResponse(Guid QuoteId, string QuoteNumber, string PdfUrl, string Status);
+public sealed record GenerateFormalQuoteResponse(Guid QuoteId, string QuoteNumber, string PdfUrl, string Status)
+{
+    /// <summary>Gets the immutable quotation version identifier represented by the generated PDF.</summary>
+    public Guid? QuoteVersionId { get; init; }
+
+    /// <summary>Gets the immutable quotation version number represented by the generated PDF.</summary>
+    public int? QuoteVersionNumber { get; init; }
+
+    /// <summary>Gets the durable PDF artifact storage path for the generated quotation version.</summary>
+    public string? PdfArtifactStoragePath { get; init; }
+}
 
 public sealed record ApproveQuoteRequest(Guid QuoteId);
 

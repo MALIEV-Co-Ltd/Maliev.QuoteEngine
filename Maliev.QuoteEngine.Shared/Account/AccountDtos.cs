@@ -137,6 +137,18 @@ public sealed partial record CustomerOrderDetailDto(
 
 public sealed partial record CustomerOrderDetailDto
 {
+    /// <summary>Gets the formal quotation identifier accepted for this order.</summary>
+    public Guid? QuoteId { get; init; }
+
+    /// <summary>Gets the formal quotation number accepted for this order.</summary>
+    public string? QuoteNumber { get; init; }
+
+    /// <summary>Gets the immutable quotation version identifier accepted for this order.</summary>
+    public Guid? QuoteVersionId { get; init; }
+
+    /// <summary>Gets the immutable quotation version number accepted for this order.</summary>
+    public int? QuoteVersionNumber { get; init; }
+
     public IReadOnlyList<CustomerManufacturingMilestoneDto> ManufacturingMilestones { get; init; } = [];
     public IReadOnlyList<CustomerOrderFileDto> OrderFiles { get; init; } = [];
 }

@@ -2266,6 +2266,8 @@ Customer message:
         Assert.Equal("THB", orderArtifact.Metadata["currency"]);
         Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Metadata["total"]));
         Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Metadata["quoteNumber"]));
+        Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Metadata["quoteVersionId"]));
+        Assert.Equal("2", orderArtifact.Metadata["quoteVersionNumber"]);
         Assert.False(string.IsNullOrWhiteSpace(orderArtifact.Metadata["orderId"]));
         Assert.Contains("fixture.step", orderArtifact.Metadata["parts"], StringComparison.Ordinal);
         if (factory.LastOrderCreateRequest is not { } orderCreateRequest)
@@ -2279,6 +2281,10 @@ Customer message:
         Assert.Equal(25, orderCreateRequest.OrderedQuantity);
         Assert.True(orderCreateRequest.QuotedAmount > 0);
         Assert.Equal("THB", orderCreateRequest.QuoteCurrency);
+        Assert.NotNull(orderCreateRequest.QuoteId);
+        Assert.False(string.IsNullOrWhiteSpace(orderCreateRequest.QuoteNumber));
+        Assert.NotNull(orderCreateRequest.QuoteVersionId);
+        Assert.Equal(2, orderCreateRequest.QuoteVersionNumber);
         var productionItem = Assert.Single(orderCreateRequest.ProductionItems);
         Assert.NotEqual(Guid.Empty, productionItem.MaterialId);
         Assert.Contains("FDM", productionItem.Technology, StringComparison.OrdinalIgnoreCase);

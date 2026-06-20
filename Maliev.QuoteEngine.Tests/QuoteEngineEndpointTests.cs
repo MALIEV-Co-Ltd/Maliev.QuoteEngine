@@ -393,6 +393,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 Total = request.LineItems.Sum(x => x.UnitPrice * x.Quantity),
                 CurrencyCode = "THB",
                 UpdatedAt = DateTime.UtcNow,
+                QuoteVersionId = Guid.NewGuid(),
+                QuoteVersionNumber = 2,
                 PdfArtifactUrl = $"https://files.example.test/quotations/{request.CustomerId:N}/formal-quote.pdf",
                 PdfArtifactStoragePath = $"quotations/{request.CustomerId:N}/{Guid.NewGuid():N}/formal-quote.pdf"
             };
@@ -413,7 +415,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     q.PdfArtifactUrl ?? string.Empty,
                     [
                         new CustomerQuoteVersionSummaryDto(
-                            Guid.NewGuid(),
+                            q.QuoteVersionId ?? Guid.NewGuid(),
                             2,
                             q.Total,
                             q.CurrencyCode,
@@ -827,6 +829,10 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 UpdatedAt: receivedAt,
                 StatusHistory: [new OrderStatusEntryDto("Pending", "Your order has been received.", receivedAt)])
             {
+                QuoteId = request.QuoteId,
+                QuoteNumber = request.QuoteNumber,
+                QuoteVersionId = request.QuoteVersionId,
+                QuoteVersionNumber = request.QuoteVersionNumber,
                 OrderFiles =
                 [
                     new CustomerOrderFileDto(
@@ -2951,6 +2957,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var createRequest = factory.LastOrderCreateRequest;
         Assert.NotNull(createRequest);
+        Assert.Equal(quote.QuoteId, createRequest.QuoteId);
+        Assert.Equal(quote.QuoteNumber, createRequest.QuoteNumber);
+        Assert.Equal(quote.QuoteVersionId, createRequest.QuoteVersionId);
+        Assert.Equal(quote.QuoteVersionNumber, createRequest.QuoteVersionNumber);
         var productionItem = Assert.Single(createRequest.ProductionItems);
         Assert.Equal(projectServiceProjectId, productionItem.SourceProjectId);
         Assert.Equal(part.PartId, productionItem.SourceProjectPartId);
@@ -3053,6 +3063,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var createRequest = factory.LastOrderCreateRequest;
         Assert.NotNull(createRequest);
+        Assert.Equal(quote.QuoteId, createRequest.QuoteId);
+        Assert.Equal(quote.QuoteNumber, createRequest.QuoteNumber);
+        Assert.Equal(quote.QuoteVersionId, createRequest.QuoteVersionId);
+        Assert.Equal(quote.QuoteVersionNumber, createRequest.QuoteVersionNumber);
         Assert.Equal(2140.00m, createRequest.QuotedAmount);
         Assert.Equal("THB", createRequest.QuoteCurrency);
     }

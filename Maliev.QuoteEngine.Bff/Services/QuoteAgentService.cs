@@ -2810,7 +2810,12 @@ internal sealed class QuoteAgentService(
             result.Id,
             result.QuotationNumber,
             result.PdfArtifactUrl ?? string.Empty,
-            result.Status);
+            result.Status)
+        {
+            QuoteVersionId = result.QuoteVersionId,
+            QuoteVersionNumber = result.QuoteVersionNumber,
+            PdfArtifactStoragePath = result.PdfArtifactStoragePath
+        };
         UpsertArtifact(state, "formal_quote", state.FormalQuote.QuoteNumber, state.FormalQuote.Status, null, state.FormalQuote.PdfUrl);
         SetArtifactMetadata(state, "formal_quote", BuildFormalQuoteMetadata(result, customerId));
         return $"Formal quote {state.FormalQuote.QuoteNumber} is ready.";
@@ -2826,6 +2831,16 @@ internal sealed class QuoteAgentService(
             ["quoteNumber"] = result.QuotationNumber,
             ["customerId"] = customerId.ToString("D")
         };
+
+        if (result.QuoteVersionId.HasValue)
+        {
+            metadata["quoteVersionId"] = result.QuoteVersionId.Value.ToString("D");
+        }
+
+        if (result.QuoteVersionNumber.HasValue)
+        {
+            metadata["quoteVersionNumber"] = result.QuoteVersionNumber.Value.ToString(CultureInfo.InvariantCulture);
+        }
 
         if (!string.IsNullOrWhiteSpace(result.PdfArtifactStoragePath))
         {
@@ -3135,6 +3150,8 @@ internal sealed class QuoteAgentService(
         QuoteAgentPendingAction action,
         CancellationToken cancellationToken)
     {
+        var formalQuote = state.FormalQuote
+            ?? throw new InvalidOperationException("A formal quote is required before creating an order.");
         var productionItems = new List<OrderProductionItemRequest>(state.Parts.Count);
         foreach (var part in state.Parts)
         {
@@ -3144,7 +3161,7 @@ internal sealed class QuoteAgentService(
                 cancellationToken);
             var sourceProjectId = TryGetCurrentDraftProjectServiceId(state, out var projectServiceProjectId)
                 ? projectServiceProjectId
-                : state.FormalQuote!.QuoteId;
+                : formalQuote.QuoteId;
             productionItems.Add(BuildProductionItem(sourceProjectId, part, materialGuid));
         }
 
@@ -3158,6 +3175,10 @@ internal sealed class QuoteAgentService(
             Requirements = BuildOrderRequirements(state, action),
             QuotedAmount = state.Estimate?.Total ?? CalculateOrderQuotedTotal(state.Parts),
             QuoteCurrency = state.Estimate?.Currency ?? "THB",
+            QuoteId = formalQuote.QuoteId,
+            QuoteNumber = formalQuote.QuoteNumber,
+            QuoteVersionId = formalQuote.QuoteVersionId,
+            QuoteVersionNumber = formalQuote.QuoteVersionNumber,
             ProductionItems = productionItems
         };
         request.SetProcessFromCode(NormalizeOrderProcessCode(state.Parts.FirstOrDefault()?.ProcessId));
@@ -3358,6 +3379,8 @@ internal sealed class QuoteAgentService(
             ["orderNumber"] = state.Order?.OrderNumber ?? string.Empty,
             ["quoteId"] = state.FormalQuote?.QuoteId.ToString("D") ?? string.Empty,
             ["quoteNumber"] = state.FormalQuote?.QuoteNumber ?? string.Empty,
+            ["quoteVersionId"] = state.FormalQuote?.QuoteVersionId?.ToString("D") ?? string.Empty,
+            ["quoteVersionNumber"] = state.FormalQuote?.QuoteVersionNumber?.ToString(CultureInfo.InvariantCulture) ?? string.Empty,
             ["total"] = state.Estimate?.Total.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
             ["currency"] = state.Estimate?.Currency ?? string.Empty,
             ["quantity"] = quantity.ToString(CultureInfo.InvariantCulture),

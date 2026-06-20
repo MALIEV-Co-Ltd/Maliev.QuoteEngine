@@ -56,18 +56,27 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
         public IEnumerable<QsQuotationResponse>? Data { get; set; }
     }
 
-    private static QuotationCreatedResult MapResult(QsQuotationResponse r) => new()
+    private static QuotationCreatedResult MapResult(QsQuotationResponse r)
     {
-        Id = r.Id,
-        CustomerId = r.CustomerId,
-        QuotationNumber = r.QuotationNumber,
-        Status = ReadStatus(r.Status),
-        Total = r.Total,
-        CurrencyCode = r.CurrencyCode,
-        UpdatedAt = r.UpdatedAt,
-        PdfArtifactUrl = r.Versions.FirstOrDefault()?.PdfArtifactUrl,
-        PdfArtifactStoragePath = r.Versions.FirstOrDefault()?.PdfArtifactStoragePath
-    };
+        var currentVersion = r.Versions
+            .OrderByDescending(version => version.VersionNumber)
+            .FirstOrDefault();
+
+        return new QuotationCreatedResult
+        {
+            Id = r.Id,
+            CustomerId = r.CustomerId,
+            QuotationNumber = r.QuotationNumber,
+            Status = ReadStatus(r.Status),
+            Total = r.Total,
+            CurrencyCode = r.CurrencyCode,
+            UpdatedAt = r.UpdatedAt,
+            QuoteVersionId = currentVersion?.Id,
+            QuoteVersionNumber = currentVersion?.VersionNumber,
+            PdfArtifactUrl = currentVersion?.PdfArtifactUrl,
+            PdfArtifactStoragePath = currentVersion?.PdfArtifactStoragePath
+        };
+    }
 
     // ── Interface implementation ──────────────────────────────────────────────
 
@@ -180,6 +189,8 @@ public sealed class QuotationCreatedResult
     public decimal Total { get; init; }
     public string CurrencyCode { get; init; } = "THB";
     public DateTime UpdatedAt { get; init; }
+    public Guid? QuoteVersionId { get; init; }
+    public int? QuoteVersionNumber { get; init; }
     public string? PdfArtifactUrl { get; init; }
     public string? PdfArtifactStoragePath { get; init; }
 }

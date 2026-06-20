@@ -713,7 +713,12 @@ public sealed class QuoteController(
             return StatusCode(502, new ProblemDetails { Title = "Quotation service unavailable. Please try again." });
         }
 
-        return Ok(new GenerateFormalQuoteResponse(result.Id, result.QuotationNumber, string.Empty, result.Status));
+        return Ok(new GenerateFormalQuoteResponse(result.Id, result.QuotationNumber, result.PdfArtifactUrl ?? string.Empty, result.Status)
+        {
+            QuoteVersionId = result.QuoteVersionId,
+            QuoteVersionNumber = result.QuoteVersionNumber,
+            PdfArtifactStoragePath = result.PdfArtifactStoragePath
+        });
     }
 
     /// <summary>Returns an estimated unit price using the same rate table as the Estimate endpoint.</summary>
@@ -1109,7 +1114,12 @@ public sealed class QuoteController(
             return NotFound();
         }
 
-        return Ok(new GenerateFormalQuoteResponse(quotation.Id, quotation.QuotationNumber, string.Empty, "Approved"));
+        return Ok(new GenerateFormalQuoteResponse(quotation.Id, quotation.QuotationNumber, quotation.PdfArtifactUrl ?? string.Empty, "Approved")
+        {
+            QuoteVersionId = quotation.QuoteVersionId,
+            QuoteVersionNumber = quotation.QuoteVersionNumber,
+            PdfArtifactStoragePath = quotation.PdfArtifactStoragePath
+        });
     }
 
     [HttpPost("orders")]
@@ -1152,6 +1162,10 @@ public sealed class QuoteController(
             Requirements = BuildOrderRequirements(request),
             QuotedAmount = CalculateOrderQuotedTotal(request.Parts),
             QuoteCurrency = "THB",
+            QuoteId = quotation.Id,
+            QuoteNumber = quotation.QuotationNumber,
+            QuoteVersionId = quotation.QuoteVersionId,
+            QuoteVersionNumber = quotation.QuoteVersionNumber,
             ProductionItems = productionItems
         };
         orderRequest.SetProcessFromCode(request.Parts.FirstOrDefault()?.ProcessId ?? "fdm");

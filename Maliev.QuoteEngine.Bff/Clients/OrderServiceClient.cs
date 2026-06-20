@@ -53,6 +53,10 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
         public string PaymentStatus { get; set; } = "Unpaid";
         public decimal? QuotedAmount { get; set; }
         public string? QuoteCurrency { get; set; }
+        public Guid? QuoteId { get; set; }
+        public string? QuoteNumber { get; set; }
+        public Guid? QuoteVersionId { get; set; }
+        public int? QuoteVersionNumber { get; set; }
         public DateTime? PromisedDeliveryDate { get; set; }
         public DateTime? ActualDeliveryDate { get; set; }
         public string? CustomerPoNumber { get; set; }
@@ -111,6 +115,10 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 requirements = request.Requirements,
                 quotedAmount = request.QuotedAmount,
                 quoteCurrency = request.QuoteCurrency,
+                quoteId = request.QuoteId,
+                quoteNumber = request.QuoteNumber,
+                quoteVersionId = request.QuoteVersionId,
+                quoteVersionNumber = request.QuoteVersionNumber,
                 productionItems = request.ProductionItems
             }, ct);
 
@@ -227,6 +235,10 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 UpdatedAt: new DateTimeOffset(detail.UpdatedAt, TimeSpan.Zero),
                 StatusHistory: customerStatusEntries)
             {
+                QuoteId = detail.QuoteId,
+                QuoteNumber = detail.QuoteNumber,
+                QuoteVersionId = detail.QuoteVersionId,
+                QuoteVersionNumber = detail.QuoteVersionNumber,
                 OrderFiles = orderFiles,
                 ManufacturingMilestones = BuildCustomerManufacturingMilestones(
                     detail.CurrentStatus ?? "Pending",
@@ -463,6 +475,14 @@ public sealed class OrderCreateRequest
     public decimal? QuotedAmount { get; set; }
     /// <summary>Gets or sets the quote currency code.</summary>
     public string? QuoteCurrency { get; set; }
+    /// <summary>Gets or sets the formal quote identifier accepted for this order.</summary>
+    public Guid? QuoteId { get; set; }
+    /// <summary>Gets or sets the formal quote number accepted for this order.</summary>
+    public string? QuoteNumber { get; set; }
+    /// <summary>Gets or sets the immutable quote version identifier accepted for this order.</summary>
+    public Guid? QuoteVersionId { get; set; }
+    /// <summary>Gets or sets the immutable quote version number accepted for this order.</summary>
+    public int? QuoteVersionNumber { get; set; }
     /// <summary>Gets or sets structured production items used by JobService after payment.</summary>
     public IReadOnlyList<OrderProductionItemRequest> ProductionItems { get; set; } = [];
 
