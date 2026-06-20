@@ -6397,11 +6397,38 @@ Customer message:
     private static IReadOnlyDictionary<string, JsonElement> UnwrapToolArguments(IReadOnlyDictionary<string, JsonElement> arguments)
     {
         if ((arguments.TryGetValue("arguments", out var nested) ||
-                arguments.TryGetValue("args", out nested)) &&
-            nested.ValueKind == JsonValueKind.Object)
+                arguments.TryGetValue("args", out nested)))
         {
-            return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(nested.GetRawText(), JsonOptions)
-                ?? arguments;
+            if (nested.ValueKind == JsonValueKind.Object)
+            {
+                return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(nested.GetRawText(), JsonOptions)
+                    ?? arguments;
+            }
+
+            if (nested.ValueKind == JsonValueKind.String)
+            {
+                var raw = nested.GetString();
+                if (string.IsNullOrWhiteSpace(raw))
+                {
+                    return arguments;
+                }
+
+                try
+                {
+                    using var doc = JsonDocument.Parse(raw);
+                    if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                    {
+                        return arguments;
+                    }
+
+                    return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(doc.RootElement.GetRawText(), JsonOptions)
+                        ?? arguments;
+                }
+                catch (JsonException)
+                {
+                    return arguments;
+                }
+            }
         }
 
         return arguments;
