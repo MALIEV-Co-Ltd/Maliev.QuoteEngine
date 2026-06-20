@@ -4847,6 +4847,12 @@ internal sealed class QuoteAgentService(
             contextLines.Add(customerMemoryContext);
         }
 
+        var generatedPreviewFeedbackContext = BuildGeneratedPreviewFeedbackContext(state.Artifacts);
+        if (!string.IsNullOrWhiteSpace(generatedPreviewFeedbackContext))
+        {
+            contextLines.Add(generatedPreviewFeedbackContext);
+        }
+
         if (state.Artifacts.Count > 0)
         {
             contextLines.Add($"Current artifacts: {BuildArtifactContext(state.Artifacts)}");
@@ -4988,6 +4994,39 @@ Customer message:
                 ? $"{artifact.ArtifactType} {artifact.Status}: {artifact.Title}"
                 : $"{artifact.ArtifactType} {artifact.Status}: {artifact.Title} ({metadata})";
         }));
+    }
+
+    private static string? BuildGeneratedPreviewFeedbackContext(IReadOnlyCollection<QuoteAgentArtifactDto> artifacts)
+    {
+        var feedbackItems = artifacts
+            .Where(IsGeneratedViewerArtifact)
+            .Where(artifact =>
+                artifact.Metadata.TryGetValue("customerRating", out var rating) &&
+                !string.IsNullOrWhiteSpace(rating) &&
+                artifact.Metadata.TryGetValue("customerComment", out var comment) &&
+                !string.IsNullOrWhiteSpace(comment))
+            .TakeLast(3)
+            .Reverse()
+            .Select(artifact =>
+            {
+                var description = artifact.Metadata.TryGetValue("description", out var value) &&
+                    !string.IsNullOrWhiteSpace(value)
+                        ? value.Trim()
+                        : artifact.Title;
+                var rating = artifact.Metadata["customerRating"].Trim();
+                var comment = artifact.Metadata["customerComment"].Trim();
+                if (comment.Length > 220)
+                {
+                    comment = comment[..220] + "...";
+                }
+
+                return $"{description}: rating {rating}/5; customer comment: {comment}";
+            })
+            .ToArray();
+
+        return feedbackItems.Length == 0
+            ? null
+            : $"Generated preview feedback: {string.Join("; ", feedbackItems)}. Use this feedback when revising or generating the next 3D draft.";
     }
 
     private static string BuildArtifactMetadataContext(IReadOnlyDictionary<string, string> metadata)

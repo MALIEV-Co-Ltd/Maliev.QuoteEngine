@@ -5551,6 +5551,79 @@ Customer message:
         Assert.Contains("Make the next draft thinner with rounded corners.", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Agent_message_after_preview_feedback_includes_session_feedback_when_memory_observation_fails()
+    {
+        var customerEmail = $"preview.feedback.session.{Guid.NewGuid():N}@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
+        var chatbot = new RecordingChatbotServiceClient();
+        var customerClient = new MemoryCustomerServiceClient(customerId)
+        {
+            ThrowOnObserve = true
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<ICustomerServiceClient>();
+                services.AddSingleton<ICustomerServiceClient>(customerClient);
+            });
+        });
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(customerEmail)}");
+        Assert.Equal(HttpStatusCode.OK, signIn.StatusCode);
+
+        var sessionId = Guid.NewGuid();
+        var commands = new[]
+        {
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            }
+        };
+        await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Session feedback plate", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            },
+            customerId);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var artifact = Assert.Single(state.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var feedbackResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{artifact.ArtifactId:D}/feedback",
+            new QuoteAgentPreviewFeedbackRequest
+            {
+                Rating = 2,
+                Comment = "Make the mounting ears wider and remove the center boss."
+            },
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode);
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Revise the preview using my feedback.",
+            Language = "en"
+        }, JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains("Generated preview feedback:", chatbot.LastSendRequest!.Content, StringComparison.Ordinal);
+        Assert.Contains("Session feedback plate", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("rating 2/5", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Make the mounting ears wider and remove the center boss.", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class RecordingChatbotServiceClient : IChatbotServiceClient
     {
         public ChatbotInitiateSessionRequest? LastInitiateRequest { get; private set; }
