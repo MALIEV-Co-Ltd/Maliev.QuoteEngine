@@ -6345,15 +6345,21 @@ Customer message:
             return;
         }
 
+        var dimensions = command.Dimensions;
         command.Params = command.Op switch
         {
-            "box" => BuildParams(command.Width, command.Depth ?? command.Length, command.Height),
-            "cylinder" => BuildParams(command.Radius ?? Half(command.Diameter), command.Height),
-            "sphere" => BuildParams(command.Radius ?? Half(command.Diameter)),
+            "box" => BuildParams(
+                command.Width ?? dimensions?.Width,
+                command.Depth ?? command.Length ?? dimensions?.Depth ?? dimensions?.Length,
+                command.Height ?? dimensions?.Height),
+            "cylinder" => BuildParams(
+                command.Radius ?? Half(command.Diameter) ?? dimensions?.Radius ?? Half(dimensions?.Diameter),
+                command.Height ?? dimensions?.Height),
+            "sphere" => BuildParams(command.Radius ?? Half(command.Diameter) ?? dimensions?.Radius ?? Half(dimensions?.Diameter)),
             "cone" => BuildParams(
-                command.RadiusBottom ?? command.BottomRadius,
-                command.RadiusTop ?? command.TopRadius ?? 0,
-                command.Height),
+                command.RadiusBottom ?? command.BottomRadius ?? dimensions?.RadiusBottom ?? dimensions?.BottomRadius,
+                command.RadiusTop ?? command.TopRadius ?? dimensions?.RadiusTop ?? dimensions?.TopRadius ?? 0,
+                command.Height ?? dimensions?.Height),
             "extrude" => BuildParams(command.Height),
             _ => command.Params
         };

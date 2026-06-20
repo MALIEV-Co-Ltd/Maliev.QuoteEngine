@@ -908,6 +908,9 @@ public sealed class CadCommandDto
     /// <summary>Numeric parameter alias often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
     public double[]? Parameters { get; set; }
 
+    /// <summary>Nested primitive dimensions often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
+    public CadDimensionsDto? Dimensions { get; set; }
+
     /// <summary>Named box/profile width or X dimension, normalized to params when present.</summary>
     public double? Width { get; set; }
 
@@ -967,6 +970,42 @@ public sealed class CadCommandDto
 
     /// <summary>2D profile definition for extrude/revolve operations.</summary>
     public CadProfileDto? Profile { get; set; }
+}
+
+/// <summary>
+/// Nested primitive dimensions for generated CAD commands.
+/// </summary>
+public sealed class CadDimensionsDto
+{
+    /// <summary>Box/profile width or X dimension.</summary>
+    public double? Width { get; set; }
+
+    /// <summary>Box depth or Y dimension.</summary>
+    public double? Depth { get; set; }
+
+    /// <summary>Box depth/length fallback.</summary>
+    public double? Length { get; set; }
+
+    /// <summary>Primitive height or Z dimension.</summary>
+    public double? Height { get; set; }
+
+    /// <summary>Primitive radius.</summary>
+    public double? Radius { get; set; }
+
+    /// <summary>Primitive diameter shorthand.</summary>
+    public double? Diameter { get; set; }
+
+    /// <summary>Cone bottom radius.</summary>
+    public double? RadiusBottom { get; set; }
+
+    /// <summary>Cone top radius.</summary>
+    public double? RadiusTop { get; set; }
+
+    /// <summary>Cone bottom radius alias.</summary>
+    public double? BottomRadius { get; set; }
+
+    /// <summary>Cone top radius alias.</summary>
+    public double? TopRadius { get; set; }
 }
 
 /// <summary>
