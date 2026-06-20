@@ -75,7 +75,7 @@ ordering, retries) — exactly what the E2E proves.
 | 7 | Login redirect restore stricter gate | **Base committed; stricter E2E pending** | QE `7e78489 fix: restore make studio chat after auth` |
 | 8 | Real browser upload→DFM→reupload proof | **Real path exists (w/ fallback); browser E2E pending** | `QuoteController.cs:96-122`; DFM consumers + SignalR |
 | 9 | ChatbotService tool/prompt schema full audit | **Core registry/dispatch verified; compatibility hardening committed**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken`; QuoteEngine now accepts common model-emitted CAD numeric strings such as `"50 mm"`, object-shaped `params`, correctly ordered object-shaped primitive params, and the singular `command` argument alias in generated preview tool payloads | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244`; QE `47ca397`, `2ecf184`, `875cd28`, `dbd07ae` |
-| 10 | Payment non-happy paths gating | **5 consumers committed; unit tests now added; idempotency lives in OrderService** | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs`; `PaymentNotificationConsumerTests.cs` |
+| 10 | Payment non-happy paths gating | **QuoteEngine relay coverage strengthened**: 5 consumers committed; unit tests cover completed, pending, failed, expired, cancelled mapping, shared order-group routing, completed order-status update failure, and null-payload skip behavior for all states. Duplicate-webhook/idempotency remains a PaymentService/OrderService cross-service proof item. | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs`; `PaymentNotificationConsumerTests.cs`; QE `402c468` |
 
 Net: 4 of 10 are simply **already done** (2,3,4,6); 4 are **code-complete, proof-pending** (1,5,7,8);
 2 need **targeted release-gate evidence** (9 residual tool authorization/schema coverage, 10 payment
@@ -112,8 +112,11 @@ PaymentService, Intranet, or Aspire at this reconciliation point.
   Release evidence still needs focused coverage for the highest-risk customer tools — upload registration,
   DFM acknowledgement, checkout details, payment start, project resume, project summary, order creation —
   proving schema match and customer-vs-employee authorization scoping.
-- **P1 — Payment non-happy-path coverage (gap 10)**: tests (or explicit release sign-off) for cancelled,
-  failed, expired, duplicate-webhook, and pending states, including idempotency of the payment consumers.
+- **P1 — Payment duplicate/idempotency release evidence (gap 10 residual)**: QuoteEngine now has focused
+  relay tests for completed, pending, failed, expired, cancelled, status-update failure, group routing,
+  and null payloads (`402c468`). The remaining proof is cross-service duplicate-webhook/idempotency:
+  PaymentService should not emit duplicate terminal side effects, and OrderService must keep repeated
+  payment/status writes idempotent.
 
 ## Validation lanes (per AGENTS.md)
 
