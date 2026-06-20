@@ -307,7 +307,21 @@ public sealed class QuoteController(
         }
 
         var pricingEstimate = await TryEstimateWithPricingServiceAsync(request, cancellationToken);
-        return Ok(pricingEstimate ?? store.Estimate(request));
+        if (pricingEstimate is not null)
+        {
+            return Ok(pricingEstimate);
+        }
+
+        if (CanUsePrototypeFallback())
+        {
+            return Ok(store.Estimate(request));
+        }
+
+        return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+        {
+            Title = "Pricing is temporarily unavailable.",
+            Detail = "PricingService did not return a price for the requested quote configuration."
+        });
     }
 
     private async Task<QuoteEstimateResponse?> TryEstimateWithPricingServiceAsync(
@@ -522,7 +536,7 @@ public sealed class QuoteController(
         }
 
         var projects = await projectClient.GetProjectNavigationAsync(customerId, cancellationToken);
-        return projects.Count > 0 || !CanUsePrototypeProjectFallback()
+        return projects.Count > 0 || !CanUsePrototypeFallback()
             ? Ok(projects)
             : Ok(store.GetProjectNavigation(customerId));
     }
@@ -545,7 +559,7 @@ public sealed class QuoteController(
             return Ok(project);
         }
 
-        project = CanUsePrototypeProjectFallback()
+        project = CanUsePrototypeFallback()
             ? store.GetProjectDetail(customerId, projectId)
             : null;
         return project is null ? NotFound() : Ok(project);
@@ -578,7 +592,7 @@ public sealed class QuoteController(
             return Ok(durableDuplicate);
         }
 
-        var duplicated = CanUsePrototypeProjectFallback()
+        var duplicated = CanUsePrototypeFallback()
             ? store.DuplicateDraftProject(customerId, projectId, request)
             : null;
         return duplicated is null ? NotFound() : Ok(duplicated);
@@ -597,7 +611,7 @@ public sealed class QuoteController(
         }
 
         var pinned = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: true, cancellationToken)
-            ?? (CanUsePrototypeProjectFallback() ? store.SetProjectPinned(customerId, projectId, isPinned: true) : null);
+            ?? (CanUsePrototypeFallback() ? store.SetProjectPinned(customerId, projectId, isPinned: true) : null);
         return pinned is null ? NotFound() : Ok(pinned);
     }
 
@@ -614,7 +628,7 @@ public sealed class QuoteController(
         }
 
         var unpinned = await projectClient.SetProjectPinnedAsync(customerId, projectId, isPinned: false, cancellationToken)
-            ?? (CanUsePrototypeProjectFallback() ? store.SetProjectPinned(customerId, projectId, isPinned: false) : null);
+            ?? (CanUsePrototypeFallback() ? store.SetProjectPinned(customerId, projectId, isPinned: false) : null);
         return unpinned is null ? NotFound() : Ok(unpinned);
     }
 
@@ -631,7 +645,7 @@ public sealed class QuoteController(
         }
 
         var archived = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
-            ?? (CanUsePrototypeProjectFallback() ? store.SetProjectArchived(customerId, projectId, isArchived: true) : null);
+            ?? (CanUsePrototypeFallback() ? store.SetProjectArchived(customerId, projectId, isArchived: true) : null);
         return archived is null ? NotFound() : Ok(archived);
     }
 
@@ -648,11 +662,11 @@ public sealed class QuoteController(
         }
 
         var achieved = await projectClient.ArchiveProjectAsync(customerId, projectId, cancellationToken)
-            ?? (CanUsePrototypeProjectFallback() ? store.SetProjectAchieved(customerId, projectId) : null);
+            ?? (CanUsePrototypeFallback() ? store.SetProjectAchieved(customerId, projectId) : null);
         return achieved is null ? NotFound() : Ok(achieved);
     }
 
-    private bool CanUsePrototypeProjectFallback()
+    private bool CanUsePrototypeFallback()
     {
         return environment.IsDevelopment() || environment.IsEnvironment("Testing");
     }
@@ -1526,7 +1540,7 @@ public sealed class QuoteController(
     }
 
     private bool CanUsePrototypeUploadFallback =>
-        environment.IsDevelopment() || environment.IsEnvironment("Testing");
+        CanUsePrototypeFallback();
 
     private static string CreatePrototypeUploadId(string uploadId) => $"{PrototypeUploadPrefix}{uploadId}";
 

@@ -1630,6 +1630,19 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         }
     }
 
+    public sealed class EmptyPricingServiceClient : IQePricingServiceClient
+    {
+        public Task<PricingCalculationResult?> CalculateAsync(
+            QuotePartDraftDto part,
+            Guid customerId,
+            Guid materialId,
+            Guid manufacturingProcessId,
+            string leadTimeCode,
+            decimal? toleranceAdditionalCostPercent,
+            CancellationToken ct = default) =>
+            Task.FromResult<PricingCalculationResult?>(null);
+    }
+
     private sealed class FakePricingServiceClient : IQePricingServiceClient
     {
         public Task<PricingCalculationResult?> CalculateAsync(
@@ -2416,6 +2429,47 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.True(body.Total > 0);
         Assert.True(body.RequiresSignIn);
         Assert.Single(body.Lines);
+    }
+
+    [Fact]
+    public async Task Estimate_does_not_fall_back_to_prototype_pricing_in_production()
+    {
+        using var productionFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new QuoteEngineWebApplicationFactory.EmptyPricingServiceClient());
+            });
+        });
+        using var client = productionFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
+        {
+            QuoteSessionId = "production-pricing-unavailable",
+            LeadTimeCode = "STANDARD",
+            Parts =
+            [
+                new QuotePartDraftDto
+                {
+                    FileId = Guid.NewGuid(),
+                    UploadId = "upload-production-pricing",
+                    FileName = "production-bracket.step",
+                    ProcessId = "cnc",
+                    MaterialId = "al6061",
+                    Quantity = 2,
+                    VolumeCc = 8.5m,
+                    DfmAcknowledged = true
+                }
+            ]
+        });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("Pricing is temporarily unavailable.", body.RootElement.GetProperty("title").GetString());
     }
 
     [Fact]
