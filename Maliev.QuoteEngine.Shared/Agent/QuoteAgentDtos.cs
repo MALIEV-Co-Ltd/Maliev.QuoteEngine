@@ -898,6 +898,15 @@ public sealed class CadCommandDto
     /// <summary>Translation offset [x, y, z] for the translate op.</summary>
     public double[]? Offset { get; set; }
 
+    /// <summary>Named rotation axis X component, normalized to axis when present.</summary>
+    public double? AxisX { get; set; }
+
+    /// <summary>Named rotation axis Y component, normalized to axis when present.</summary>
+    public double? AxisY { get; set; }
+
+    /// <summary>Named rotation axis Z component, normalized to axis when present.</summary>
+    public double? AxisZ { get; set; }
+
     /// <summary>Rotation axis [x, y, z] for the rotate or revolve op.</summary>
     public double[]? Axis { get; set; }
 

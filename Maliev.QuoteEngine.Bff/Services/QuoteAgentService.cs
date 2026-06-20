@@ -5926,6 +5926,13 @@ Customer message:
         {
             command.Offset = BuildParams(command.X, command.Y, command.Z);
         }
+
+        if (command.Axis is not { Length: > 0 } &&
+            (command.Op.Equals("rotate", StringComparison.OrdinalIgnoreCase) ||
+                command.Op.Equals("revolve", StringComparison.OrdinalIgnoreCase)))
+        {
+            command.Axis = BuildParams(command.AxisX, command.AxisY, command.AxisZ);
+        }
     }
 
     private static double? Half(double? value)
