@@ -24,7 +24,19 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (string.IsNullOrWhiteSpace(CommandsJson) || CommandsJson == _renderedCommandsJson)
+        if (string.IsNullOrWhiteSpace(CommandsJson))
+        {
+            if (_renderedCommandsJson is not null)
+            {
+                await JS.InvokeVoidAsync("quoteInlineViewer.disposePreview", _containerId);
+                _renderedCommandsJson = null;
+                _loadFailed = false;
+            }
+
+            return;
+        }
+
+        if (CommandsJson == _renderedCommandsJson)
         {
             return;
         }
