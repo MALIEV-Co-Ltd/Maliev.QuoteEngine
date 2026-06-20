@@ -1,6 +1,6 @@
 # Make Studio — E2E Deployment Readiness
 
-_Status reconciliation as of 2026-06-19. Evidence-grounded review across QuoteEngine, ChatbotService,
+_Status reconciliation as of 2026-06-20. Evidence-grounded review across QuoteEngine, ChatbotService,
 OrderService, ProjectService, PaymentService, JobService, Intranet, and Aspire E2E._
 
 > A multi-agent audit was attempted but aborted on a hard account rate limit ("session limit · resets
@@ -11,10 +11,8 @@ OrderService, ProjectService, PaymentService, JobService, Intranet, and Aspire E
 
 The Make Studio quote→paid-order→production handoff is **wired and internally consistent in code, and
 already committed.** The working trees of QuoteEngine, ChatbotService, OrderService, ProjectService,
-PaymentService, and Intranet are **clean** — the items previously described as "open/uncommitted" have
-landed. The **only uncommitted work** is in `Maliev.Aspire` (an Aspire SDK version bump + a stricter
-E2E gate assertion). The remaining deployment gate is therefore **green E2E proof + a few audits**, not
-new feature code.
+PaymentService, Intranet, and Aspire are **clean** as of this reconciliation. The remaining deployment
+gate is therefore **green E2E proof + targeted audit coverage**, not known uncommitted feature code.
 
 ## Architecture (verified)
 
@@ -76,21 +74,17 @@ ordering, retries) — exactly what the E2E proves.
 | 6 | Customer order-status tracking | **Wired** | `QuoteOrderStatusChangedConsumer.cs` → SignalR per-order group |
 | 7 | Login redirect restore stricter gate | **Base committed; stricter E2E pending** | QE `7e78489 fix: restore make studio chat after auth` |
 | 8 | Real browser upload→DFM→reupload proof | **Real path exists (w/ fallback); browser E2E pending** | `QuoteController.cs:96-122`; DFM consumers + SignalR |
-| 9 | ChatbotService tool/prompt schema full audit | **VERIFIED clean**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken` | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244` |
+| 9 | ChatbotService tool/prompt schema full audit | **Core registry/dispatch verified; compatibility hardening committed**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken`; QuoteEngine now accepts common model-emitted CAD numeric strings such as `"50 mm"`, object-shaped `params`, and the singular `command` argument alias in generated preview tool payloads | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244`; QE `47ca397`, `2ecf184`, `875cd28` |
 | 10 | Payment non-happy paths gating | **5 consumers committed; unit tests now added; idempotency lives in OrderService** | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs`; `PaymentNotificationConsumerTests.cs` |
 
 Net: 4 of 10 are simply **already done** (2,3,4,6); 4 are **code-complete, proof-pending** (1,5,7,8);
-2 are **genuine outstanding work** (9 audit, 10 test/decision).
+2 need **targeted release-gate evidence** (9 residual tool authorization/schema coverage, 10 payment
+non-happy-path sign-off).
 
-## Only uncommitted work — `Maliev.Aspire`
+## Current uncommitted work
 
-Two independent slices in one dirty tree (preserve & commit separately):
-
-1. **`chore`: Aspire SDK/packages 13.4.4 → 13.4.5** — `AppHost.csproj`, `DatabaseSeeder.csproj`.
-   Routine dependency bump; unrelated to E2E logic. Safe once `dotnet restore` confirms availability.
-2. **`test`: tighten Make Studio E2E gate** — `BrowserJourneyGateTests.cs` now additionally asserts the
-   Intranet project part carries a non-empty production `jobId` (not just `orderId`/`orderItemId`).
-   This is the stricter deployment gate for gap #5.
+No uncommitted work was present in QuoteEngine, ChatbotService, OrderService, ProjectService,
+PaymentService, Intranet, or Aspire at this reconciliation point.
 
 ## True remaining gate (prioritized)
 
@@ -111,10 +105,13 @@ Two independent slices in one dirty tree (preserve & commit separately):
     non-binding, so this is graceful degradation; decide whether prod should instead surface a "pricing
     unavailable" state. Draft projects are in-memory only (no `ProjectServiceClient`); the durable
     project record is created Intranet-side on quotation acceptance.
-- **P1 — ChatbotService Make Studio tool-schema audit (gap 9)**: re-verify every tool the customer
-  channel exposes against its QuoteEngine handler — upload registration, DFM acknowledgement, checkout
-  details, payment start, project resume, project summary, order creation — for schema match and
-  customer-vs-employee authorization scoping.
+- **P1 — ChatbotService Make Studio tool-schema residual audit (gap 9)**: core registry/dispatch is
+  verified, and `quote_generate_3d_preview` compatibility coverage is committed for numeric strings
+  (`47ca397`), the singular `command` argument alias (`2ecf184`), and object-shaped `params`
+  (`875cd28`).
+  Release evidence still needs focused coverage for the highest-risk customer tools — upload registration,
+  DFM acknowledgement, checkout details, payment start, project resume, project summary, order creation —
+  proving schema match and customer-vs-employee authorization scoping.
 - **P1 — Payment non-happy-path coverage (gap 10)**: tests (or explicit release sign-off) for cancelled,
   failed, expired, duplicate-webhook, and pending states, including idempotency of the payment consumers.
 
