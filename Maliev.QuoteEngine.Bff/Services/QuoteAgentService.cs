@@ -6257,7 +6257,28 @@ Customer message:
             return ReadCommands(commands);
         }
 
+        if (LooksLikeCadCommand(value))
+        {
+            try
+            {
+                var command = JsonSerializer.Deserialize<CadCommandDto>(value.GetRawText(), JsonOptions);
+                return command is null ? [] : [command];
+            }
+            catch (JsonException)
+            {
+                return [];
+            }
+        }
+
         return [];
+    }
+
+    private static bool LooksLikeCadCommand(JsonElement value)
+    {
+        return value.ValueKind == JsonValueKind.Object &&
+            (value.TryGetProperty("op", out _) ||
+                value.TryGetProperty("operation", out _) ||
+                value.TryGetProperty("type", out _));
     }
 
     private static IReadOnlyList<CadCommandDto> ReadStringifiedCommands(JsonElement value)

@@ -5118,6 +5118,50 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_single_cad_command_object()
+    {
+        // Defense-in-depth: tolerate tool calls that send a single CAD command object
+        // instead of wrapping it in an array.
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var command = new
+        {
+            op = "box",
+            id = "part",
+            width = 30.0,
+            depth = 50.0,
+            height = 10.0
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Single command preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(command, JsonOptions),
+                ["process_hint"] = JsonSerializer.SerializeToElement("fdm", JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 1);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommand = commandDoc.RootElement.EnumerateArray().Single();
+
+        Assert.Equal("box", normalizedCommand.GetProperty("op").GetString());
+        Assert.Equal(new[] { 30.0, 50.0, 10.0 }, normalizedCommand.GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_commands_argument_alias()
     {
         // Defense-in-depth: tolerate agents or tool-forwarding layers that name the
