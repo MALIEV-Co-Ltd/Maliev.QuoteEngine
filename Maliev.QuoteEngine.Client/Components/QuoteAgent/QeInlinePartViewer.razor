@@ -16,6 +16,7 @@
     private static int _counter;
 
     private readonly string _containerId = $"qipv-{++_counter}";
+    private string? _renderedCommandsJson;
     private bool _loadFailed;
 
     [Parameter]
@@ -23,17 +24,23 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender && !string.IsNullOrEmpty(CommandsJson))
+        if (string.IsNullOrWhiteSpace(CommandsJson) || CommandsJson == _renderedCommandsJson)
         {
-            try
-            {
-                await JS.InvokeVoidAsync("quoteInlineViewer.createPreview", _containerId, CommandsJson);
-            }
-            catch
-            {
-                _loadFailed = true;
-                StateHasChanged();
-            }
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("quoteInlineViewer.disposePreview", _containerId);
+            await JS.InvokeVoidAsync("quoteInlineViewer.createPreview", _containerId, CommandsJson);
+            _renderedCommandsJson = CommandsJson;
+            _loadFailed = false;
+        }
+        catch
+        {
+            _renderedCommandsJson = CommandsJson;
+            _loadFailed = true;
+            StateHasChanged();
         }
     }
 

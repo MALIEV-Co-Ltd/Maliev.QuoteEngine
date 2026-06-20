@@ -4549,6 +4549,20 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QeInlinePartViewer_rebuilds_preview_when_commands_change()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("private string? _renderedCommandsJson;", component, StringComparison.Ordinal);
+        Assert.Contains("if (string.IsNullOrWhiteSpace(CommandsJson) || CommandsJson == _renderedCommandsJson)", component, StringComparison.Ordinal);
+        Assert.Contains("_renderedCommandsJson = CommandsJson;", component, StringComparison.Ordinal);
+        Assert.Contains("await JS.InvokeVoidAsync(\"quoteInlineViewer.disposePreview\", _containerId);", component, StringComparison.Ordinal);
+        Assert.Contains("await JS.InvokeVoidAsync(\"quoteInlineViewer.createPreview\", _containerId, CommandsJson);", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("if (firstRender && !string.IsNullOrEmpty(CommandsJson))", component, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_feedback_status_reflects_memory_observation()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
