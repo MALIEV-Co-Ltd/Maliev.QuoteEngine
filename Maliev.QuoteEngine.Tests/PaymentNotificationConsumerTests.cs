@@ -292,6 +292,42 @@ public sealed class PaymentNotificationConsumerTests
     }
 
     [Fact]
+    public async Task Failed_with_null_payload_is_skipped()
+    {
+        var (hub, clients, proxy) = CreateHub();
+        var consumer = new QuotePaymentFailedConsumer(hub, Substitute.For<ILogger<QuotePaymentFailedConsumer>>());
+
+        await consumer.Consume(Context(new PaymentFailedEvent()));
+
+        clients.DidNotReceive().Group(Arg.Any<string>());
+        await proxy.DidNotReceive().SendCoreAsync(Arg.Any<string>(), Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Expired_with_null_payload_is_skipped()
+    {
+        var (hub, clients, proxy) = CreateHub();
+        var consumer = new QuotePaymentExpiredConsumer(hub, Substitute.For<ILogger<QuotePaymentExpiredConsumer>>());
+
+        await consumer.Consume(Context(new PaymentExpiredEvent()));
+
+        clients.DidNotReceive().Group(Arg.Any<string>());
+        await proxy.DidNotReceive().SendCoreAsync(Arg.Any<string>(), Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task Pending_with_null_payload_is_skipped()
+    {
+        var (hub, clients, proxy) = CreateHub();
+        var consumer = new QuotePaymentPendingConsumer(hub, Substitute.For<ILogger<QuotePaymentPendingConsumer>>());
+
+        await consumer.Consume(Context(new PaymentPendingEvent()));
+
+        clients.DidNotReceive().Group(Arg.Any<string>());
+        await proxy.DidNotReceive().SendCoreAsync(Arg.Any<string>(), Arg.Any<object?[]>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task All_payment_states_target_the_same_order_group_the_client_joins()
     {
         // OrderDetail.razor joins one group per order via JoinOrderGroup(orderNumber). Every payment
