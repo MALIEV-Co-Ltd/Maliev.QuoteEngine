@@ -2560,6 +2560,82 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_register_uploads_clears_commercial_state_after_new_geometry()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-reupload-after-payment@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+        var currentState = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.NotNull(currentState.Estimate);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_checkout_details",
+            new Dictionary<string, JsonElement>
+            {
+                ["billing_address_id"] = JsonSerializer.SerializeToElement(CheckoutBillingAddressId.ToString("D"), JsonOptions),
+                ["shipping_address_id"] = JsonSerializer.SerializeToElement(CheckoutShippingAddressId.ToString("D"), JsonOptions),
+                ["accepted_terms"] = JsonSerializer.SerializeToElement(true, JsonOptions),
+                ["consent"] = JsonSerializer.SerializeToElement(true, JsonOptions)
+            });
+        var paymentState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_start_payment",
+            new Dictionary<string, JsonElement>
+            {
+                ["amount"] = JsonSerializer.SerializeToElement(currentState.Estimate.Total, JsonOptions),
+                ["currency"] = JsonSerializer.SerializeToElement(currentState.Estimate.Currency, JsonOptions)
+            });
+        var paymentResult = await ConfirmActionAsync(client, Assert.Single(paymentState.ProposedActions).ActionId);
+        Assert.NotNull(paymentResult.State);
+        Assert.Contains(paymentResult.State.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
+        Assert.Contains(paymentResult.State.Artifacts, artifact => artifact.ArtifactType == "order");
+        Assert.Contains(paymentResult.State.Artifacts, artifact => artifact.ArtifactType == "payment");
+
+        var reuploadedState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement("Added a revised cover plate after payment review. Recalculate before checkout.", JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "fixture-cover-rev-b.step",
+                        content_type = "model/step",
+                        file_size_bytes = 260_000,
+                        kind = "cad",
+                        upload_id = "fixture-cover-rev-b-upload",
+                        storage_path = "quotes/temp/session/fixture-cover-rev-b-upload/fixture-cover-rev-b.step"
+                    }
+                }, JsonOptions)
+            });
+
+        Assert.Null(reuploadedState.Estimate);
+        Assert.Empty(reuploadedState.ProposedActions);
+        Assert.Contains(reuploadedState.Parts, part => part.UploadId == "fixture-cover-rev-b-upload");
+        Assert.DoesNotContain(reuploadedState.Artifacts, artifact => artifact.ArtifactType == "pricing");
+        Assert.DoesNotContain(reuploadedState.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
+        Assert.DoesNotContain(reuploadedState.Artifacts, artifact => artifact.ArtifactType == "order");
+        Assert.DoesNotContain(reuploadedState.Artifacts, artifact => artifact.ArtifactType == "payment");
+        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "priced" && gate.Status == "pending");
+        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "quote_artifact_ready" && gate.Status == "pending");
+        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "quote_approved" && gate.Status == "pending");
+        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "order_created" && gate.Status == "pending");
+        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "payment_started_or_completed" && gate.Status == "pending");
+    }
+
+    [Fact]
     public async Task Agent_update_checkout_details_records_required_payment_context()
     {
         await using var scopedFactory = CreateAgentFactory();

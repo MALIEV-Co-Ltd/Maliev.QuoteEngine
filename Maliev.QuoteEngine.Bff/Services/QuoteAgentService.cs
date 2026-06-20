@@ -4215,9 +4215,7 @@ internal sealed class QuoteAgentService(
 
             ApplyMessageConfiguration(state, request.Message);
             state.ConfigurationConfirmed = false;
-            state.Estimate = null;
-            state.Artifacts.RemoveAll(artifact =>
-                artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase));
+            ResetCommercialStateAfterGeometryChange(state);
         }
     }
 
@@ -4260,15 +4258,27 @@ internal sealed class QuoteAgentService(
             }
 
             state.Artifacts.RemoveAll(artifact => artifact.PartId.HasValue && removedPartIds.Contains(artifact.PartId.Value));
-            state.ProposedActions.Clear();
-            state.Estimate = null;
-            state.FormalQuote = null;
-            state.QuoteApproved = false;
-            state.Order = null;
-            state.Payment = null;
+            ResetCommercialStateAfterGeometryChange(state);
             state.ConfigurationConfirmed = false;
         }
     }
+
+    private static void ResetCommercialStateAfterGeometryChange(QuoteAgentSessionState state)
+    {
+        state.ProposedActions.Clear();
+        state.Estimate = null;
+        state.FormalQuote = null;
+        state.QuoteApproved = false;
+        state.Order = null;
+        state.Payment = null;
+        state.Artifacts.RemoveAll(IsCommercialArtifact);
+    }
+
+    private static bool IsCommercialArtifact(QuoteAgentArtifactDto artifact) =>
+        artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase) ||
+        artifact.ArtifactType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase) ||
+        artifact.ArtifactType.Equals("order", StringComparison.OrdinalIgnoreCase) ||
+        artifact.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase);
 
     private static bool MatchesOptionalValue(string? left, string? right)
     {
