@@ -6463,7 +6463,14 @@ Customer message:
     private static string NormalizeCadOperation(CadCommandDto command)
     {
         var operation = FirstNonWhiteSpace(command.Op, command.Operation, command.Type, command.Shape);
-        return operation?.Trim().ToLowerInvariant() ?? string.Empty;
+        var normalized = operation?.Trim().Replace('-', '_').ToLowerInvariant();
+        return normalized switch
+        {
+            "subtract" or "difference" or "boolean_difference" or "booleandifference" => "cut",
+            "union" or "join" or "add" or "boolean_union" or "booleanunion" => "fuse",
+            "intersection" or "boolean_intersection" or "booleanintersection" => "intersect",
+            _ => normalized ?? string.Empty
+        };
     }
 
     private static void NormalizeCadCommandParams(CadCommandDto command)

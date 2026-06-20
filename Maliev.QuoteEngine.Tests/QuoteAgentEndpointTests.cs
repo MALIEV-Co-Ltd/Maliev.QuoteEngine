@@ -4841,6 +4841,65 @@ Customer message:
         Assert.Equal("cut", normalizedCommands[2].GetProperty("op").GetString());
     }
 
+    [Theory]
+    [InlineData("subtract", "cut")]
+    [InlineData("difference", "cut")]
+    [InlineData("boolean-difference", "cut")]
+    [InlineData("union", "fuse")]
+    [InlineData("add", "fuse")]
+    [InlineData("intersection", "intersect")]
+    public async Task Generate_3d_preview_tool_accepts_boolean_operation_aliases(
+        string operationAlias,
+        string expectedOperation)
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            },
+            new
+            {
+                op = "cylinder",
+                id = "hole",
+                Params = new[] { 3.0, 5.0 }
+            },
+            new
+            {
+                op = operationAlias,
+                targetId = "base",
+                toolId = "hole",
+                resultId = "bracket"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Subtract alias generated preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommands = commandDoc.RootElement.EnumerateArray().ToArray();
+
+        Assert.Equal(expectedOperation, normalizedCommands[2].GetProperty("op").GetString());
+    }
+
     [Fact]
     public async Task Generate_3d_preview_tool_accepts_shape_command_alias()
     {
