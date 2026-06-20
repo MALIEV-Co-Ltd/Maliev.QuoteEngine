@@ -5700,7 +5700,7 @@ Customer message:
                 "cone" => RequireParams(command, index, 3, "positive bottom radius, top radius, and height", allowZeroAfterFirst: true),
                 "extrude" => ValidateProfileCommand(command, index, requireHeight: true),
                 "revolve" => ValidateProfileCommand(command, index, requireHeight: false) ??
-                    ValidateOptionalVector(command.Axis, index, "rotation axis"),
+                    ValidateOptionalNonZeroVector(command.Axis, index, "rotation axis"),
                 "fuse" or "cut" or "intersect" or "loft" => ValidateBinaryCommand(command, index, knownShapes, hasCurrentShape),
                 "fillet" or "chamfer" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
                     RequirePositiveRadius(command, index),
@@ -5708,7 +5708,7 @@ Customer message:
                     ValidateVector(command.Offset ?? command.Params, index, "translation offset"),
                 "rotate" => ValidateTargetedCommand(command, index, knownShapes, hasCurrentShape) ??
                     ValidateFinite(command.Angle ?? command.Params?.FirstOrDefault(), index, "rotation angle") ??
-                    ValidateOptionalVector(command.Axis, index, "rotation axis"),
+                    ValidateOptionalNonZeroVector(command.Axis, index, "rotation axis"),
                 _ => $"Unsupported CAD operation '{command.Op}' in command {index + 1}."
             };
 
@@ -5917,9 +5917,17 @@ Customer message:
         return null;
     }
 
-    private static string? ValidateOptionalVector(double[]? values, int index, string label)
+    private static string? ValidateOptionalNonZeroVector(double[]? values, int index, string label)
     {
-        return values is null ? null : ValidateVector(values, index, label);
+        if (values is null)
+        {
+            return null;
+        }
+
+        return ValidateVector(values, index, label) ??
+            (values.Take(3).All(value => value == 0)
+                ? $"CAD command {index + 1} requires a non-zero {label}."
+                : null);
     }
 
     private static string? ValidateFinite(double? value, int index, string label)
