@@ -1101,12 +1101,22 @@ public sealed class CadDoubleArrayJsonConverter : JsonConverter<double[]?>
             return null;
         }
 
-        if (reader.TokenType != JsonTokenType.StartArray)
+        if (reader.TokenType == JsonTokenType.StartArray)
         {
-            throw new JsonException("CAD numeric parameters must be an array.");
+            return ReadArray(ref reader);
         }
 
-        var values = new List<double>();
+        if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            return ReadObject(ref reader);
+        }
+
+        throw new JsonException("CAD numeric parameters must be an array or object.");
+    }
+
+    private static double[] ReadArray(ref Utf8JsonReader reader)
+    {
+        List<double> values = [];
         while (reader.Read())
         {
             if (reader.TokenType == JsonTokenType.EndArray)
@@ -1122,6 +1132,84 @@ public sealed class CadDoubleArrayJsonConverter : JsonConverter<double[]?>
         }
 
         throw new JsonException("CAD numeric parameters ended unexpectedly.");
+    }
+
+    private static double[] ReadObject(ref Utf8JsonReader reader)
+    {
+        Dictionary<string, double> valuesByName = new(StringComparer.OrdinalIgnoreCase);
+        List<(string Name, double Value)> valuesInOrder = [];
+
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndObject)
+            {
+                return OrderObjectValues(valuesByName, valuesInOrder);
+            }
+
+            if (reader.TokenType != JsonTokenType.PropertyName)
+            {
+                throw new JsonException("CAD numeric parameter object contains an invalid token.");
+            }
+
+            var propertyName = reader.GetString();
+            if (!reader.Read())
+            {
+                throw new JsonException("CAD numeric parameter object ended unexpectedly.");
+            }
+
+            var value = CadJsonNumberReader.ReadNullableDouble(ref reader);
+            if (value.HasValue && !string.IsNullOrWhiteSpace(propertyName))
+            {
+                valuesByName[propertyName] = value.Value;
+                valuesInOrder.Add((propertyName, value.Value));
+            }
+        }
+
+        throw new JsonException("CAD numeric parameter object ended unexpectedly.");
+    }
+
+    private static double[] OrderObjectValues(
+        IReadOnlyDictionary<string, double> valuesByName,
+        IReadOnlyList<(string Name, double Value)> valuesInOrder)
+    {
+        List<double> ordered = [];
+        HashSet<string> used = new(StringComparer.OrdinalIgnoreCase);
+
+        AddFirst(ordered, used, valuesByName, "width", "w", "x");
+        AddFirst(ordered, used, valuesByName, "depth", "length", "d", "y");
+        AddFirst(ordered, used, valuesByName, "height", "h", "z");
+        AddFirst(ordered, used, valuesByName, "radius", "r");
+        AddFirst(ordered, used, valuesByName, "diameter");
+        AddFirst(ordered, used, valuesByName, "radiusBottom", "bottomRadius");
+        AddFirst(ordered, used, valuesByName, "radiusTop", "topRadius");
+        AddFirst(ordered, used, valuesByName, "angle");
+
+        foreach (var (name, value) in valuesInOrder)
+        {
+            if (used.Add(name))
+            {
+                ordered.Add(value);
+            }
+        }
+
+        return ordered.ToArray();
+    }
+
+    private static void AddFirst(
+        ICollection<double> ordered,
+        ISet<string> used,
+        IReadOnlyDictionary<string, double> valuesByName,
+        params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (valuesByName.TryGetValue(name, out var value))
+            {
+                ordered.Add(value);
+                used.Add(name);
+                return;
+            }
+        }
     }
 
     /// <inheritdoc />
