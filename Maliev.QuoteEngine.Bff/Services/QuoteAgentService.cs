@@ -5885,6 +5885,7 @@ Customer message:
             command.TargetId = NormalizeCadShapeReference(command.TargetId);
             command.ToolId = NormalizeCadShapeReference(command.ToolId);
             command.ResultId = NormalizeCadShapeReference(command.ResultId);
+            NormalizeCadPrimitiveParams(command);
             if (command.Profile is not null)
             {
                 command.Profile.Plane = NormalizeCadProfilePlane(command.Profile.Plane);
@@ -5894,6 +5895,38 @@ Customer message:
                 }
             }
         }
+    }
+
+    private static void NormalizeCadPrimitiveParams(CadCommandDto command)
+    {
+        if (command.Params is { Length: > 0 })
+        {
+            return;
+        }
+
+        command.Params = command.Op switch
+        {
+            "box" => BuildParams(command.Width, command.Depth ?? command.Length, command.Height),
+            "cylinder" => BuildParams(command.Radius ?? Half(command.Diameter), command.Height),
+            "sphere" => BuildParams(command.Radius ?? Half(command.Diameter)),
+            "cone" => BuildParams(
+                command.RadiusBottom ?? command.BottomRadius,
+                command.RadiusTop ?? command.TopRadius ?? 0,
+                command.Height),
+            _ => command.Params
+        };
+    }
+
+    private static double? Half(double? value)
+    {
+        return value.HasValue ? value.Value / 2d : null;
+    }
+
+    private static double[]? BuildParams(params double?[] values)
+    {
+        return values.All(value => value.HasValue)
+            ? values.Select(value => value!.Value).ToArray()
+            : null;
     }
 
     private static string? NormalizeCadShapeReference(string? value)

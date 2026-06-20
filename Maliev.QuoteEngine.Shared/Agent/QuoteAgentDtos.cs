@@ -874,6 +874,18 @@ public sealed class CadCommandDto
     /// fillet/chamfer: [radius].</summary>
     public double[]? Params { get; set; }
 
+    /// <summary>Named box/profile width or X dimension, normalized to params when present.</summary>
+    public double? Width { get; set; }
+
+    /// <summary>Named box depth or Y dimension, normalized to params when present.</summary>
+    public double? Depth { get; set; }
+
+    /// <summary>Named box depth/length fallback, normalized to params when depth is omitted.</summary>
+    public double? Length { get; set; }
+
+    /// <summary>Named primitive height or Z dimension, normalized to params when present.</summary>
+    public double? Height { get; set; }
+
     /// <summary>Translation offset [x, y, z] for the translate op.</summary>
     public double[]? Offset { get; set; }
 
@@ -885,6 +897,21 @@ public sealed class CadCommandDto
 
     /// <summary>Fillet or chamfer radius.</summary>
     public double? Radius { get; set; }
+
+    /// <summary>Diameter shorthand for cylinder and sphere primitives.</summary>
+    public double? Diameter { get; set; }
+
+    /// <summary>Named cone bottom radius, normalized to params when present.</summary>
+    public double? RadiusBottom { get; set; }
+
+    /// <summary>Named cone top radius, normalized to params when present.</summary>
+    public double? RadiusTop { get; set; }
+
+    /// <summary>Named cone bottom radius alias, normalized to params when radiusBottom is omitted.</summary>
+    public double? BottomRadius { get; set; }
+
+    /// <summary>Named cone top radius alias, normalized to params when radiusTop is omitted.</summary>
+    public double? TopRadius { get; set; }
 
     /// <summary>2D profile definition for extrude/revolve operations.</summary>
     public CadProfileDto? Profile { get; set; }
