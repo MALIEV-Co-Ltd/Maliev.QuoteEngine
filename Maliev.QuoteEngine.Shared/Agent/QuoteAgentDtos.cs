@@ -1030,6 +1030,16 @@ public sealed class CadCommandDto
 
     /// <summary>2D profile definition for extrude/revolve operations.</summary>
     public CadProfileDto? Profile { get; set; }
+
+    /// <summary>Sketch alias often emitted by model tool calls; normalized into <see cref="Profile"/>.</summary>
+    public CadProfileDto? Sketch { get; set; }
+
+    /// <summary>Profile2D alias often emitted by model tool calls; normalized into <see cref="Profile"/>.</summary>
+    public CadProfileDto? Profile2D { get; set; }
+
+    /// <summary>Snake-case Profile2D alias; normalized into <see cref="Profile"/>.</summary>
+    [JsonPropertyName("profile_2d")]
+    public CadProfileDto? Profile2DSnake { get; set; }
 }
 
 /// <summary>

@@ -5418,6 +5418,56 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_sketch_profile_alias()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new object[]
+        {
+            new
+            {
+                op = "extrude",
+                id = "sketched_plate",
+                height = 4.0,
+                sketch = new
+                {
+                    type = "rectangle",
+                    plane = "xy",
+                    width = 30.0,
+                    height = 12.0
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Sketch profile alias preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var commandJson = viewerArtifact.Metadata["cad_commands"];
+        using var commandDoc = JsonDocument.Parse(commandJson);
+        var command = commandDoc.RootElement.EnumerateArray().Single();
+        var profile = command.GetProperty("profile");
+
+        Assert.Equal("rectangle", profile.GetProperty("type").GetString());
+        Assert.Equal("XY", profile.GetProperty("plane").GetString());
+        Assert.Equal(30.0, profile.GetProperty("width").GetDouble());
+        Assert.Equal(12.0, profile.GetProperty("height").GetDouble());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_normalizes_profile_segment_types_for_browser_worker()
     {
         using var client = factory.CreateClient();
