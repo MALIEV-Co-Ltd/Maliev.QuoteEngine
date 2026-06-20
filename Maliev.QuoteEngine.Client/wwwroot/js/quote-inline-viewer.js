@@ -127,75 +127,97 @@
     canvas.style.height = '100%';
     canvas.style.display = 'block';
     canvas.style.borderRadius = '8px';
-    container.innerHTML = '';
-    container.appendChild(canvas);
 
-    var engine = new BABYLON.Engine(canvas, true, {
-      premultipliedAlpha: false,
-      alpha: true,
-      disableUniformBuffers: true,
-    });
+    var engine = null;
+    var scene = null;
+    var ro = null;
 
-    var scene = new BABYLON.Scene(engine);
-    scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
+    try {
+      container.innerHTML = '';
+      container.appendChild(canvas);
 
-    buildDefaultLighting(scene);
+      engine = new BABYLON.Engine(canvas, true, {
+        premultipliedAlpha: false,
+        alpha: true,
+        disableUniformBuffers: true,
+      });
 
-    var vertexData = new BABYLON.VertexData();
-    vertexData.positions = vertices;
-    vertexData.indices = indexArray;
-    vertexData.normals = normals;
+      scene = new BABYLON.Scene(engine);
+      scene.clearColor = new BABYLON.Color4(0, 0, 0, 0);
 
-    var mesh = new BABYLON.Mesh('preview', scene);
-    vertexData.applyToMesh(mesh);
-    mesh.material = buildMaterial(scene);
-    mesh.isPickable = false;
+      buildDefaultLighting(scene);
 
-    var camera = new BABYLON.ArcRotateCamera(
-      'cam',
-      -Math.PI / 4,
-      Math.acos(1 / Math.sqrt(3)),
-      radius,
-      center,
-      scene
-    );
-    camera.lowerRadiusLimit = radius * 0.2;
-    camera.upperRadiusLimit = radius * 5;
-    camera.panningSensibility = 50;
-    camera.wheelPrecision = 50;
-    camera.attachControl(canvas, false);
-    scene.activeCamera = camera;
+      var vertexData = new BABYLON.VertexData();
+      vertexData.positions = vertices;
+      vertexData.indices = indexArray;
+      vertexData.normals = normals;
 
-    var renderInitialFrame = function () {
-      engine.resize(true);
-      if (scene.activeCamera) {
-        scene.render(false, false);
+      var mesh = new BABYLON.Mesh('preview', scene);
+      vertexData.applyToMesh(mesh);
+      mesh.material = buildMaterial(scene);
+      mesh.isPickable = false;
+
+      var camera = new BABYLON.ArcRotateCamera(
+        'cam',
+        -Math.PI / 4,
+        Math.acos(1 / Math.sqrt(3)),
+        radius,
+        center,
+        scene
+      );
+      camera.lowerRadiusLimit = radius * 0.2;
+      camera.upperRadiusLimit = radius * 5;
+      camera.panningSensibility = 50;
+      camera.wheelPrecision = 50;
+      camera.attachControl(canvas, false);
+      scene.activeCamera = camera;
+
+      var renderInitialFrame = function () {
+        engine.resize(true);
+        if (scene.activeCamera) {
+          scene.render(false, false);
+        }
+      };
+
+      engine.runRenderLoop(function () {
+        if (scene.activeCamera) {
+          scene.render();
+        }
+      });
+      renderInitialFrame();
+      requestAnimationFrame(renderInitialFrame);
+      scene.executeWhenReady(renderInitialFrame);
+
+      ro = new ResizeObserver(function () {
+        engine.resize();
+      });
+      ro.observe(container);
+
+      return {
+        scene: scene,
+        engine: engine,
+        canvas: canvas,
+        camera: camera,
+        center: center,
+        radius: radius,
+        resizeObserver: ro,
+      };
+    } catch (creationError) {
+      if (ro) {
+        ro.disconnect();
       }
-    };
-
-    engine.runRenderLoop(function () {
-      if (scene.activeCamera) {
-        scene.render();
+      if (engine) {
+        engine.stopRenderLoop();
+        engine.dispose();
       }
-    });
-    renderInitialFrame();
-    requestAnimationFrame(renderInitialFrame);
-    scene.executeWhenReady(renderInitialFrame);
-
-    var ro = new ResizeObserver(function () {
-      engine.resize();
-    });
-    ro.observe(container);
-
-    return {
-      scene: scene,
-      engine: engine,
-      canvas: canvas,
-      camera: camera,
-      center: center,
-      radius: radius,
-      resizeObserver: ro,
-    };
+      if (scene) {
+        scene.dispose();
+      }
+      if (canvas.parentNode) {
+        canvas.parentNode.removeChild(canvas);
+      }
+      throw creationError;
+    }
   }
 
   function disposePreview(containerId) {

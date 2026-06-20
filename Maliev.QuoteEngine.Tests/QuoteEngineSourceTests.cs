@@ -4469,8 +4469,8 @@ public sealed class QuoteEngineSourceTests
         Assert.True(createSceneEnd > createSceneStart, "createScene must end before disposePreview.");
 
         var createScene = viewer[createSceneStart..createSceneEnd];
-        var engineIndex = createScene.IndexOf("var engine = new BABYLON.Engine(canvas, true", StringComparison.Ordinal);
-        var sceneIndex = createScene.IndexOf("var scene = new BABYLON.Scene(engine);", StringComparison.Ordinal);
+        var engineIndex = createScene.IndexOf("engine = new BABYLON.Engine(canvas, true", StringComparison.Ordinal);
+        var sceneIndex = createScene.IndexOf("scene = new BABYLON.Scene(engine);", StringComparison.Ordinal);
         var vertexDataIndex = createScene.IndexOf("var vertexData = new BABYLON.VertexData();", StringComparison.Ordinal);
         var meshIndex = createScene.IndexOf("var mesh = new BABYLON.Mesh('preview', scene);", StringComparison.Ordinal);
         var materialIndex = createScene.IndexOf("mesh.material = buildMaterial(scene);", StringComparison.Ordinal);
@@ -4513,12 +4513,43 @@ public sealed class QuoteEngineSourceTests
         var createScene = viewer[createSceneStart..createSceneEnd];
         var validationIndex = createScene.IndexOf("validateMeshData(meshData);", StringComparison.Ordinal);
         var verticesIndex = createScene.IndexOf("var vertices = new Float32Array(meshData.vertices);", StringComparison.Ordinal);
-        var engineIndex = createScene.IndexOf("var engine = new BABYLON.Engine(canvas, true", StringComparison.Ordinal);
+        var engineIndex = createScene.IndexOf("engine = new BABYLON.Engine(canvas, true", StringComparison.Ordinal);
 
         Assert.True(validationIndex >= 0, "createScene must validate mesh data first.");
         Assert.True(verticesIndex > validationIndex, "createScene must not read typed arrays before validation.");
         Assert.True(engineIndex > validationIndex, "createScene must not construct Babylon before validation.");
         Assert.Contains("if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz))", createScene, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteInlineViewer_disposes_partial_babylon_scene_when_creation_fails()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        var createSceneStart = viewer.IndexOf("function createScene(container, meshData)", StringComparison.Ordinal);
+        Assert.True(createSceneStart >= 0, "createScene must exist.");
+
+        var createSceneEnd = viewer.IndexOf("\n  function disposePreview", createSceneStart, StringComparison.Ordinal);
+        Assert.True(createSceneEnd > createSceneStart, "createScene must end before disposePreview.");
+
+        var createScene = viewer[createSceneStart..createSceneEnd];
+        var engineIndex = createScene.IndexOf("var engine = null;", StringComparison.Ordinal);
+        var sceneIndex = createScene.IndexOf("var scene = null;", StringComparison.Ordinal);
+        var tryIndex = createScene.IndexOf("try {", StringComparison.Ordinal);
+        var catchIndex = createScene.IndexOf("} catch (creationError) {", StringComparison.Ordinal);
+
+        Assert.True(engineIndex >= 0, "createScene must track a partial engine for cleanup.");
+        Assert.True(sceneIndex > engineIndex, "createScene must track a partial scene for cleanup.");
+        Assert.True(tryIndex > sceneIndex, "Babylon scene setup must run inside the cleanup try block.");
+        Assert.True(catchIndex > tryIndex, "createScene must catch setup failures before they leak resources.");
+        Assert.Contains("if (engine) {", createScene, StringComparison.Ordinal);
+        Assert.Contains("engine.stopRenderLoop();", createScene, StringComparison.Ordinal);
+        Assert.Contains("engine.dispose();", createScene, StringComparison.Ordinal);
+        Assert.Contains("if (scene) {", createScene, StringComparison.Ordinal);
+        Assert.Contains("scene.dispose();", createScene, StringComparison.Ordinal);
+        Assert.Contains("if (canvas.parentNode) {", createScene, StringComparison.Ordinal);
+        Assert.Contains("throw creationError;", createScene, StringComparison.Ordinal);
     }
 
     [Fact]
