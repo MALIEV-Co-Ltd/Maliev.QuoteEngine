@@ -5029,6 +5029,69 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_preview_feedback_records_artifact_feedback_when_memory_observation_fails()
+    {
+        var customerId = Guid.NewGuid();
+        var customerClient = new MemoryCustomerServiceClient(customerId)
+        {
+            ThrowOnObserve = true
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<ICustomerServiceClient>();
+                services.AddSingleton<ICustomerServiceClient>(customerClient);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new[]
+        {
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            }
+        };
+        await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Memory outage preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            },
+            customerId);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var artifact = Assert.Single(state.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var feedbackResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{artifact.ArtifactId:D}/feedback",
+            new QuoteAgentPreviewFeedbackRequest
+            {
+                Rating = 3,
+                Comment = "The proportions are right, but move the hole pattern inward."
+            },
+            JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode);
+        var body = await feedbackResponse.Content.ReadFromJsonAsync<QuoteAgentPreviewFeedbackResponse>(JsonOptions);
+        Assert.NotNull(body);
+        Assert.Equal("recorded", body.Status);
+        Assert.False(body.MemoryObserved);
+
+        var updatedArtifact = Assert.Single(body.State!.Artifacts, item => item.ArtifactId == artifact.ArtifactId);
+        Assert.Equal("3", updatedArtifact.Metadata["customerRating"]);
+        Assert.Equal("The proportions are right, but move the hole pattern inward.", updatedArtifact.Metadata["customerComment"]);
+        Assert.Equal("feedback_recorded", updatedArtifact.Status);
+    }
+
+    [Fact]
     public async Task Agent_preview_feedback_rejects_whitespace_only_comment()
     {
         using var client = factory.CreateClient();
@@ -5445,6 +5508,7 @@ Customer message:
         public Guid? LastMemoryCustomerId { get; private set; }
         public Guid? LastObservedMemoryCustomerId { get; private set; }
         public CustomerMemoryObserveRequest? LastObservedMemory { get; private set; }
+        public bool ThrowOnObserve { get; init; }
 
         public Task<CustomerProfileResponse?> GetByIdAsync(Guid customerId, CancellationToken ct = default)
         {
@@ -5543,6 +5607,11 @@ Customer message:
             CustomerMemoryObserveRequest request,
             CancellationToken cancellationToken)
         {
+            if (ThrowOnObserve)
+            {
+                throw new HttpRequestException("Simulated customer memory failure");
+            }
+
             LastObservedMemoryCustomerId = customerId;
             LastObservedMemory = request;
             var response = new CustomerMemoryResponse

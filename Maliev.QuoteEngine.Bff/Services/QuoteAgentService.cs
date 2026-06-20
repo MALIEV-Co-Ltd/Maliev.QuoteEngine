@@ -534,18 +534,33 @@ internal sealed class QuoteAgentService(
         var memoryObserved = false;
         if (customerId.HasValue)
         {
-            var observed = await customerClient.ObserveCustomerMemoryAsync(
-                customerId.Value,
-                new CustomerMemoryObserveRequest
-                {
-                    MemoryType = "make_studio_feedback",
-                    Key = "generated_3d_preview_feedback",
-                    Value = $"3D preview feedback for {artifactDescription}: rating {request.Rating}/5; comment: {comment}",
-                    Confidence = Math.Clamp(request.Rating / 5m, 0.2m, 0.95m),
-                    Source = "quote_agent"
-                },
-                cancellationToken);
-            memoryObserved = observed is not null;
+            try
+            {
+                var observed = await customerClient.ObserveCustomerMemoryAsync(
+                    customerId.Value,
+                    new CustomerMemoryObserveRequest
+                    {
+                        MemoryType = "make_studio_feedback",
+                        Key = "generated_3d_preview_feedback",
+                        Value = $"3D preview feedback for {artifactDescription}: rating {request.Rating}/5; comment: {comment}",
+                        Confidence = Math.Clamp(request.Rating / 5m, 0.2m, 0.95m),
+                        Source = "quote_agent"
+                    },
+                    cancellationToken);
+                memoryObserved = observed is not null;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Could not observe generated 3D preview feedback memory for customer {CustomerId} in quote agent session {SessionId}.",
+                    customerId.Value,
+                    sessionId);
+            }
         }
 
         logger.LogInformation(
