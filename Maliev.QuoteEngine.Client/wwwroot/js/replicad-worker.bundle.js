@@ -23738,6 +23738,11 @@
       return target;
     }
   }
+  function requireSegmentParams(seg, values, requiredLength) {
+    if (!Array.isArray(values) || values.length < requiredLength || values.slice(0, requiredLength).some((value) => !Number.isFinite(Number(value)))) {
+      throw new Error(`Profile segment ${seg.type} requires ${requiredLength} finite parameter(s)`);
+    }
+  }
   function buildProfile(profile) {
     const plane = profile.plane || "XY";
     const sketch = new Sketcher(plane);
@@ -23745,26 +23750,33 @@
       const p = seg.params || [];
       switch (seg.type) {
         case "move":
+          requireSegmentParams(seg, p, 2);
           sketch.movePointerTo(p);
           break;
         case "line":
           if (p.length >= 4) {
+            requireSegmentParams(seg, p, 4);
             sketch.movePointerTo([p[0], p[1]]);
             sketch.lineTo(p[2], p[3]);
           } else {
+            requireSegmentParams(seg, p, 2);
             sketch.lineTo(p[0], p[1]);
           }
           break;
         case "hLine":
+          requireSegmentParams(seg, p, 1);
           sketch.hLine(p[0]);
           break;
         case "vLine":
+          requireSegmentParams(seg, p, 1);
           sketch.vLine(p[0]);
           break;
         case "arc":
+          requireSegmentParams(seg, p, 4);
           sketch.threePointsArc(p[0], p[1], p[2], p[3]);
           break;
         case "bezier":
+          requireSegmentParams(seg, p, 4);
           sketch.quadraticBezierCurveTo([p[0], p[1]], [p[2], p[3]]);
           break;
         default:

@@ -4225,6 +4225,27 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void ReplicadWorker_validates_profile_segment_params_before_sketch_calls()
+    {
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function requireSegmentParams(seg, values, requiredLength)", worker, StringComparison.Ordinal);
+        Assert.Contains("throw new Error(`Profile segment ${seg.type} requires ${requiredLength} finite parameter(s)`);", worker, StringComparison.Ordinal);
+
+        var buildProfileStart = worker.IndexOf("function buildProfile(profile)", StringComparison.Ordinal);
+        Assert.True(buildProfileStart >= 0, "buildProfile must exist.");
+
+        var buildProfileEnd = worker.IndexOf("\nfunction buildFaceFromProfile", buildProfileStart, StringComparison.Ordinal);
+        Assert.True(buildProfileEnd > buildProfileStart, "buildProfile must end before buildFaceFromProfile.");
+
+        var buildProfile = worker[buildProfileStart..buildProfileEnd];
+        Assert.Contains("requireSegmentParams(seg, p, 2);", buildProfile, StringComparison.Ordinal);
+        Assert.Contains("requireSegmentParams(seg, p, 4);", buildProfile, StringComparison.Ordinal);
+        Assert.Contains("requireSegmentParams(seg, p, 1);", buildProfile, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteInlineViewer_creates_babylon_engine_before_scene()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
