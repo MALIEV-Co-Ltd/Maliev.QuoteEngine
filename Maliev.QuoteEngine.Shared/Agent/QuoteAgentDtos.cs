@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Maliev.QuoteEngine.Shared.Quotes;
@@ -902,33 +903,42 @@ public sealed class CadCommandDto
     /// box: [w, d, h]; cylinder: [radius, height]; sphere: [radius];
     /// cone: [radiusBottom, radiusTop, height]; extrude/revolve: [height/angle];
     /// fillet/chamfer: [radius].</summary>
+    [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
     public double[]? Params { get; set; }
 
     /// <summary>Numeric parameter alias often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
+    [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
     public double[]? Parameters { get; set; }
 
     /// <summary>Nested primitive dimensions often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
     public CadDimensionsDto? Dimensions { get; set; }
 
     /// <summary>Named box/profile width or X dimension, normalized to params when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Width { get; set; }
 
     /// <summary>Named box depth or Y dimension, normalized to params when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Depth { get; set; }
 
     /// <summary>Named box depth/length fallback, normalized to params when depth is omitted.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Length { get; set; }
 
     /// <summary>Named primitive height or Z dimension, normalized to params when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Height { get; set; }
 
     /// <summary>Named X translation component, normalized to offset when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? X { get; set; }
 
     /// <summary>Named Y translation component, normalized to offset when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Y { get; set; }
 
     /// <summary>Named Z translation component, normalized to offset when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Z { get; set; }
 
     /// <summary>Translation offset [x, y, z] for the translate op.</summary>
@@ -940,12 +950,15 @@ public sealed class CadCommandDto
     public double[]? Translation { get; set; }
 
     /// <summary>Named rotation axis X component, normalized to axis when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? AxisX { get; set; }
 
     /// <summary>Named rotation axis Y component, normalized to axis when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? AxisY { get; set; }
 
     /// <summary>Named rotation axis Z component, normalized to axis when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? AxisZ { get; set; }
 
     /// <summary>Rotation axis [x, y, z] for the rotate or revolve op.</summary>
@@ -957,24 +970,31 @@ public sealed class CadCommandDto
     public double[]? RotationAxis { get; set; }
 
     /// <summary>Rotation angle in radians.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Angle { get; set; }
 
     /// <summary>Fillet or chamfer radius.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Radius { get; set; }
 
     /// <summary>Diameter shorthand for cylinder and sphere primitives.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Diameter { get; set; }
 
     /// <summary>Named cone bottom radius, normalized to params when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? RadiusBottom { get; set; }
 
     /// <summary>Named cone top radius, normalized to params when present.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? RadiusTop { get; set; }
 
     /// <summary>Named cone bottom radius alias, normalized to params when radiusBottom is omitted.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? BottomRadius { get; set; }
 
     /// <summary>Named cone top radius alias, normalized to params when radiusTop is omitted.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? TopRadius { get; set; }
 
     /// <summary>2D profile definition for extrude/revolve operations.</summary>
@@ -987,46 +1007,229 @@ public sealed class CadCommandDto
 public sealed class CadDimensionsDto
 {
     /// <summary>Box/profile width or X dimension.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Width { get; set; }
 
     /// <summary>X dimension alias for generated model payloads.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? X { get; set; }
 
     /// <summary>Box depth or Y dimension.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Depth { get; set; }
 
     /// <summary>Y dimension alias for generated model payloads.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Y { get; set; }
 
     /// <summary>Box depth/length fallback.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Length { get; set; }
 
     /// <summary>Primitive height or Z dimension.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Height { get; set; }
 
     /// <summary>Z dimension alias for generated model payloads.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Z { get; set; }
 
     /// <summary>Primitive radius.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Radius { get; set; }
 
     /// <summary>Primitive diameter shorthand.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Diameter { get; set; }
 
     /// <summary>Short diameter alias commonly emitted by model payloads.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? D { get; set; }
 
     /// <summary>Cone bottom radius.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? RadiusBottom { get; set; }
 
     /// <summary>Cone top radius.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? RadiusTop { get; set; }
 
     /// <summary>Cone bottom radius alias.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? BottomRadius { get; set; }
 
     /// <summary>Cone top radius alias.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? TopRadius { get; set; }
+}
+
+/// <summary>
+/// Reads CAD numeric values from numbers or numeric strings such as "50 mm".
+/// </summary>
+public sealed class CadNullableDoubleJsonConverter : JsonConverter<double?>
+{
+    /// <inheritdoc />
+    public override double? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return CadJsonNumberReader.ReadNullableDouble(ref reader);
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, double? value, JsonSerializerOptions options)
+    {
+        if (value.HasValue)
+        {
+            writer.WriteNumberValue(value.Value);
+        }
+        else
+        {
+            writer.WriteNullValue();
+        }
+    }
+}
+
+/// <summary>
+/// Reads CAD numeric arrays from arrays that may contain numeric strings.
+/// </summary>
+public sealed class CadDoubleArrayJsonConverter : JsonConverter<double[]?>
+{
+    /// <inheritdoc />
+    public override double[]? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+
+        if (reader.TokenType != JsonTokenType.StartArray)
+        {
+            throw new JsonException("CAD numeric parameters must be an array.");
+        }
+
+        var values = new List<double>();
+        while (reader.Read())
+        {
+            if (reader.TokenType == JsonTokenType.EndArray)
+            {
+                return values.ToArray();
+            }
+
+            var value = CadJsonNumberReader.ReadNullableDouble(ref reader);
+            if (value.HasValue)
+            {
+                values.Add(value.Value);
+            }
+        }
+
+        throw new JsonException("CAD numeric parameters ended unexpectedly.");
+    }
+
+    /// <inheritdoc />
+    public override void Write(Utf8JsonWriter writer, double[]? value, JsonSerializerOptions options)
+    {
+        JsonSerializer.Serialize(writer, value, options);
+    }
+}
+
+internal static class CadJsonNumberReader
+{
+    public static double? ReadNullableDouble(ref Utf8JsonReader reader)
+    {
+        return reader.TokenType switch
+        {
+            JsonTokenType.Null => null,
+            JsonTokenType.Number => reader.GetDouble(),
+            JsonTokenType.String => ParseCadNumberString(reader.GetString()),
+            _ => throw new JsonException("CAD numeric value must be a number or numeric string.")
+        };
+    }
+
+    private static double? ParseCadNumberString(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        if (double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var direct))
+        {
+            return direct;
+        }
+
+        var numericLength = GetNumericPrefixLength(trimmed);
+        if (numericLength == 0 ||
+            !double.TryParse(trimmed[..numericLength], NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+        {
+            throw new JsonException($"CAD numeric string '{value}' does not start with a number.");
+        }
+
+        return parsed * GetMillimeterUnitFactor(trimmed[numericLength..]);
+    }
+
+    private static int GetNumericPrefixLength(string value)
+    {
+        var index = 0;
+        var seenDigit = false;
+        var seenDecimal = false;
+        var seenExponent = false;
+        var allowSign = true;
+
+        while (index < value.Length)
+        {
+            var c = value[index];
+            if ((c == '+' || c == '-') && allowSign)
+            {
+                allowSign = false;
+                index++;
+                continue;
+            }
+
+            if (char.IsDigit(c))
+            {
+                seenDigit = true;
+                allowSign = false;
+                index++;
+                continue;
+            }
+
+            if (c == '.' && !seenDecimal && !seenExponent)
+            {
+                seenDecimal = true;
+                allowSign = false;
+                index++;
+                continue;
+            }
+
+            if ((c == 'e' || c == 'E') && seenDigit && !seenExponent)
+            {
+                seenExponent = true;
+                allowSign = true;
+                seenDigit = false;
+                index++;
+                continue;
+            }
+
+            break;
+        }
+
+        return seenDigit ? index : 0;
+    }
+
+    private static double GetMillimeterUnitFactor(string unit)
+    {
+        var normalized = unit.Trim().ToLowerInvariant().Replace(".", string.Empty, StringComparison.Ordinal);
+        normalized = normalized.Replace(" ", string.Empty, StringComparison.Ordinal);
+        return normalized switch
+        {
+            "" or "mm" or "millimeter" or "millimeters" => 1d,
+            "cm" or "centimeter" or "centimeters" => 10d,
+            "m" or "meter" or "meters" => 1000d,
+            "in" or "inch" or "inches" or "\"" => 25.4d,
+            "ft" or "foot" or "feet" or "'" => 304.8d,
+            _ => 1d
+        };
+    }
 }
 
 /// <summary>
@@ -1044,7 +1247,22 @@ public sealed class CadVectorJsonConverter : JsonConverter<double[]?>
 
         if (reader.TokenType == JsonTokenType.StartArray)
         {
-            return JsonSerializer.Deserialize<double[]>(ref reader, options);
+            var values = new List<double>();
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndArray)
+                {
+                    return values.ToArray();
+                }
+
+                var value = CadJsonNumberReader.ReadNullableDouble(ref reader);
+                if (value.HasValue)
+                {
+                    values.Add(value.Value);
+                }
+            }
+
+            throw new JsonException("CAD vector array ended unexpectedly.");
         }
 
         if (reader.TokenType != JsonTokenType.StartObject)
@@ -1076,7 +1294,7 @@ public sealed class CadVectorJsonConverter : JsonConverter<double[]?>
                 throw new JsonException("CAD vector object ended unexpectedly.");
             }
 
-            var value = reader.TokenType == JsonTokenType.Number ? reader.GetDouble() : (double?)null;
+            var value = CadJsonNumberReader.ReadNullableDouble(ref reader);
             switch (propertyName?.Trim().ToLowerInvariant())
             {
                 case "x":
@@ -1116,21 +1334,26 @@ public sealed class CadProfileDto
     public List<CadSegmentDto> Segments { get; set; } = [];
 
     /// <summary>Profile shorthand parameters: rectangle [width, height], circle [radius].</summary>
+    [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
     public double[]? Params { get; set; }
 
     /// <summary>Profile shorthand parameter alias often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
+    [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
     public double[]? Parameters { get; set; }
 
     /// <summary>Whether to auto-close the profile. Default true.</summary>
     public bool Close { get; set; } = true;
 
     /// <summary>Circle radius (shorthand — sets a full circle profile).</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Radius { get; set; }
 
     /// <summary>Rectangle width (shorthand — sets a full rect profile).</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Width { get; set; }
 
     /// <summary>Rectangle height (shorthand — sets a full rect profile).</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Height { get; set; }
 }
 
@@ -1143,24 +1366,31 @@ public sealed class CadSegmentDto
     public string Type { get; set; } = "line";
 
     /// <summary>Segment parameters, type-dependent.</summary>
+    [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
     public double[]? Params { get; set; }
 
     /// <summary>Segment parameter alias often emitted by model tool calls; normalized into <see cref="Params"/>.</summary>
+    [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
     public double[]? Parameters { get; set; }
 
     /// <summary>Named X coordinate for move/line sketch segments.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? X { get; set; }
 
     /// <summary>Named Y coordinate for move/line sketch segments.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Y { get; set; }
 
     /// <summary>Named horizontal delta for hLine sketch segments.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Dx { get; set; }
 
     /// <summary>Named vertical delta for vLine sketch segments.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Dy { get; set; }
 
     /// <summary>Named line length fallback for hLine/vLine sketch segments.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Length { get; set; }
 }
 
