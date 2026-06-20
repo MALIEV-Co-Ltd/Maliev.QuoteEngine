@@ -6485,7 +6485,7 @@ Customer message:
         foreach (var command in commands)
         {
             command.Op = NormalizeCadOperation(command);
-            command.Id = NormalizeCadShapeReference(command.Id);
+            command.Id = NormalizeCadShapeReference(FirstNonWhiteSpace(command.Id, command.Name, command.ShapeId, command.ShapeIdSnake));
             command.TargetId = NormalizeCadShapeReference(FirstNonWhiteSpace(command.TargetId, command.TargetIdSnake, command.Target));
             command.ToolId = NormalizeCadShapeReference(FirstNonWhiteSpace(command.ToolId, command.ToolIdSnake, command.Tool));
             command.ResultId = NormalizeCadShapeReference(FirstNonWhiteSpace(command.ResultId, command.ResultIdSnake, command.Result));

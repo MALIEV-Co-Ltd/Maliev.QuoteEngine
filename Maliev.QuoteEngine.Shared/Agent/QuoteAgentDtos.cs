@@ -869,6 +869,16 @@ public sealed class CadCommandDto
     /// <summary>Identifier for referencing this shape in subsequent commands.</summary>
     public string? Id { get; set; }
 
+    /// <summary>Identifier alias often emitted by model tool calls; normalized into <see cref="Id"/>.</summary>
+    public string? Name { get; set; }
+
+    /// <summary>Shape identifier alias often emitted by model tool calls; normalized into <see cref="Id"/>.</summary>
+    public string? ShapeId { get; set; }
+
+    /// <summary>Snake-case shape identifier alias; normalized into <see cref="Id"/>.</summary>
+    [JsonPropertyName("shape_id")]
+    public string? ShapeIdSnake { get; set; }
+
     /// <summary>Target shape reference (for boolean ops, fillet, translate, etc.).</summary>
     public string? TargetId { get; set; }
 

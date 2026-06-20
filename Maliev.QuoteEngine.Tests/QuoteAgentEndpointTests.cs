@@ -5133,6 +5133,63 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_shape_identifier_aliases()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "box",
+                name = "Base",
+                width = 50.0,
+                depth = 30.0,
+                height = 5.0
+            },
+            new
+            {
+                op = "cylinder",
+                shapeId = "Hole",
+                diameter = 6.0,
+                height = 8.0
+            },
+            new
+            {
+                op = "cut",
+                target = "BASE",
+                tool = "hole",
+                result = "Bracket"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Identifier alias generated preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommands = commandDoc.RootElement.EnumerateArray().ToArray();
+
+        Assert.Equal("base", normalizedCommands[0].GetProperty("id").GetString());
+        Assert.Equal("hole", normalizedCommands[1].GetProperty("id").GetString());
+        Assert.Equal("base", normalizedCommands[2].GetProperty("targetId").GetString());
+        Assert.Equal("hole", normalizedCommands[2].GetProperty("toolId").GetString());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_snake_case_shape_reference_fields()
     {
         using var client = factory.CreateClient();
