@@ -5300,6 +5300,9 @@ internal sealed class QuoteAgentService(
             "Generate 3D previews only from explicit, readable, CAD-derived, or confirmed dimensions. " +
             "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, intersect, fillet, chamfer, extrude, revolve, translate, rotate, loft. " +
             "Prefer canonical params arrays for CAD commands; accepted named shorthands include width/depth/height, diameter/radius, x/y/z or translation object offsets, axisX/axisY/axisZ or rotationAxis object axes, and sketch segment x/y/dx/dy. " +
+            "The command array may also be wrapped under commands/cadCommands or split into shapes/objects/parts plus operations/actions/steps. " +
+            "Profiles may use params, size, radius/diameter, points/polyline/vertices, or sketch/profile2D aliases. " +
+            "Use angle in radians or angleDegrees/degrees for rotate/revolve. " +
             "Build primitives first, translate/rotate them, combine/cut/intersect or loft explicit targets, then apply edge operations. " +
             "After a preview, describe the assumptions and ask the customer to verify shape and dimensions.");
         contextLines.Add(

@@ -4512,6 +4512,9 @@ public sealed class QuoteEngineSourceTests
             "Prefer canonical params arrays for CAD commands; accepted named shorthands include width/depth/height, diameter/radius, x/y/z or translation object offsets, axisX/axisY/axisZ or rotationAxis object axes, and sketch segment x/y/dx/dy.";
 
         Assert.Contains(parameterContract, service, StringComparison.Ordinal);
+        Assert.Contains("The command array may also be wrapped under commands/cadCommands or split into shapes/objects/parts plus operations/actions/steps.", service, StringComparison.Ordinal);
+        Assert.Contains("Profiles may use params, size, radius/diameter, points/polyline/vertices, or sketch/profile2D aliases.", service, StringComparison.Ordinal);
+        Assert.Contains("Use angle in radians or angleDegrees/degrees for rotate/revolve.", service, StringComparison.Ordinal);
         Assert.Contains("\"extrude\" => BuildParams(command.Height)", service, StringComparison.Ordinal);
         Assert.Contains("command.Offset = command.Translation;", service, StringComparison.Ordinal);
         Assert.Contains("command.Offset = BuildParams(command.X, command.Y, command.Z);", service, StringComparison.Ordinal);
