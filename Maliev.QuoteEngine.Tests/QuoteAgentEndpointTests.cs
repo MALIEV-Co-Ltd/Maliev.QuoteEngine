@@ -6112,6 +6112,51 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_model_wrapper_commands()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var payload = new
+        {
+            description = "Model wrapper plate preview",
+            model = new
+            {
+                commands = new[]
+                {
+                    new
+                    {
+                        op = "box",
+                        id = "base",
+                        Params = new[] { 42.0, 28.0, 6.0 }
+                    }
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["arguments"] = JsonSerializer.SerializeToElement(payload, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(toolDoc.RootElement.TryGetProperty("command_count", out var count) && count.GetInt32() == 1);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal("Model wrapper plate preview", viewerArtifact.Metadata["description"]);
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var command = commandDoc.RootElement.EnumerateArray().Single();
+        Assert.Equal("box", command.GetProperty("op").GetString());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_single_cad_command_object()
     {
         // Defense-in-depth: tolerate tool calls that send a single CAD command object

@@ -6386,7 +6386,11 @@ Customer message:
             !arguments.TryGetValue("cadCommands", out value) &&
             !arguments.TryGetValue("command", out value) &&
             !arguments.TryGetValue("cadCommand", out value) &&
-            !arguments.TryGetValue("cad_command", out value))
+            !arguments.TryGetValue("cad_command", out value) &&
+            !arguments.TryGetValue("model", out value) &&
+            !arguments.TryGetValue("preview", out value) &&
+            !arguments.TryGetValue("cad", out value) &&
+            !arguments.TryGetValue("geometry", out value))
         {
             return [];
         }
@@ -6452,6 +6456,14 @@ Customer message:
             value.TryGetProperty("cad_commands", out commands))
         {
             return ReadCommands(commands);
+        }
+
+        if (value.TryGetProperty("model", out var wrapper) ||
+            value.TryGetProperty("preview", out wrapper) ||
+            value.TryGetProperty("cad", out wrapper) ||
+            value.TryGetProperty("geometry", out wrapper))
+        {
+            return ReadCommands(wrapper);
         }
 
         if (LooksLikeCadCommand(value))
