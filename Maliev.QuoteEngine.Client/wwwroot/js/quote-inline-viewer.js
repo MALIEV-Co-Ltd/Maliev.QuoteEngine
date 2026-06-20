@@ -245,27 +245,34 @@
         var result = await new Promise(function (resolve, reject) {
           pendingBuilds.set(buildId, { resolve: resolve, reject: reject });
 
-          var timeout = setTimeout(function () {
+          var cleanup = function () {
             worker.removeEventListener('message', handler);
             pendingBuilds.delete(buildId);
+            worker.removeEventListener('error', errorHandler);
+            clearTimeout(timeout);
+          };
+
+          var timeout = setTimeout(function () {
+            cleanup();
             reject(new Error('3D model build timed out'));
           }, 20000);
 
           var handler = function (e) {
             var data = e.data;
             if (data.type === 'result' && data.id === buildId) {
-              clearTimeout(timeout);
-              worker.removeEventListener('message', handler);
-              pendingBuilds.delete(buildId);
+              cleanup();
               resolve(data);
             } else if (data.type === 'error' && data.id === buildId) {
-              clearTimeout(timeout);
-              worker.removeEventListener('message', handler);
-              pendingBuilds.delete(buildId);
+              cleanup();
               reject(new Error(data.message));
             }
           };
+          var errorHandler = function (event) {
+            cleanup();
+            reject(new Error(event.message || '3D worker failed while building the model'));
+          };
           worker.addEventListener('message', handler);
+          worker.addEventListener('error', errorHandler);
 
           worker.postMessage({ type: 'build', id: buildId, commands: commands });
         });

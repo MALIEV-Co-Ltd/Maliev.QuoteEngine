@@ -4497,6 +4497,27 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteInlineViewer_rejects_pending_preview_when_worker_errors()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        var promiseStart = viewer.IndexOf("var result = await new Promise(function (resolve, reject)", StringComparison.Ordinal);
+        Assert.True(promiseStart >= 0, "inline viewer build promise must exist.");
+
+        var promiseEnd = viewer.IndexOf("worker.postMessage({ type: 'build', id: buildId, commands: commands });", promiseStart, StringComparison.Ordinal);
+        Assert.True(promiseEnd > promiseStart, "inline viewer build promise must post to the worker.");
+
+        var buildPromise = viewer[promiseStart..promiseEnd];
+        Assert.Contains("var cleanup = function ()", buildPromise, StringComparison.Ordinal);
+        Assert.Contains("worker.removeEventListener('message', handler);", buildPromise, StringComparison.Ordinal);
+        Assert.Contains("worker.removeEventListener('error', errorHandler);", buildPromise, StringComparison.Ordinal);
+        Assert.Contains("var errorHandler = function (event)", buildPromise, StringComparison.Ordinal);
+        Assert.Contains("reject(new Error(event.message || '3D worker failed while building the model'));", buildPromise, StringComparison.Ordinal);
+        Assert.Contains("worker.addEventListener('error', errorHandler);", buildPromise, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
