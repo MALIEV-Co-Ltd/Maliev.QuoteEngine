@@ -985,6 +985,14 @@ public sealed class CadCommandDto
     [JsonConverter(typeof(CadVectorJsonConverter))]
     public double[]? Translation { get; set; }
 
+    /// <summary>Position vector alias [x, y, z] commonly emitted for translate operations.</summary>
+    [JsonConverter(typeof(CadVectorJsonConverter))]
+    public double[]? Position { get; set; }
+
+    /// <summary>Location vector alias [x, y, z] commonly emitted for translate operations.</summary>
+    [JsonConverter(typeof(CadVectorJsonConverter))]
+    public double[]? Location { get; set; }
+
     /// <summary>Named rotation axis X component, normalized to axis when present.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? AxisX { get; set; }

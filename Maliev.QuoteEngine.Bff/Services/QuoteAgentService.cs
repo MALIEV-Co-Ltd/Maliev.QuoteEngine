@@ -6675,6 +6675,18 @@ Customer message:
         }
 
         if (command.Offset is not { Length: > 0 } &&
+            command.Position is { Length: > 0 })
+        {
+            command.Offset = command.Position;
+        }
+
+        if (command.Offset is not { Length: > 0 } &&
+            command.Location is { Length: > 0 })
+        {
+            command.Offset = command.Location;
+        }
+
+        if (command.Offset is not { Length: > 0 } &&
             command.Op.Equals("translate", StringComparison.OrdinalIgnoreCase))
         {
             command.Offset = BuildParams(command.X, command.Y, command.Z);
