@@ -969,6 +969,21 @@ public sealed class CadSegmentDto
 
     /// <summary>Segment parameters, type-dependent.</summary>
     public double[]? Params { get; set; }
+
+    /// <summary>Named X coordinate for move/line sketch segments.</summary>
+    public double? X { get; set; }
+
+    /// <summary>Named Y coordinate for move/line sketch segments.</summary>
+    public double? Y { get; set; }
+
+    /// <summary>Named horizontal delta for hLine sketch segments.</summary>
+    public double? Dx { get; set; }
+
+    /// <summary>Named vertical delta for vLine sketch segments.</summary>
+    public double? Dy { get; set; }
+
+    /// <summary>Named line length fallback for hLine/vLine sketch segments.</summary>
+    public double? Length { get; set; }
 }
 
 /// <summary>

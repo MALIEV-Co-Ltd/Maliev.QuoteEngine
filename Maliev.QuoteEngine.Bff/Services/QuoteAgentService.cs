@@ -5893,6 +5893,7 @@ Customer message:
                 foreach (var segment in command.Profile.Segments)
                 {
                     segment.Type = NormalizeCadProfileSegmentType(segment.Type);
+                    NormalizeCadProfileSegmentParams(segment);
                 }
             }
         }
@@ -5916,6 +5917,22 @@ Customer message:
                 command.Height),
             "extrude" => BuildParams(command.Height),
             _ => command.Params
+        };
+    }
+
+    private static void NormalizeCadProfileSegmentParams(CadSegmentDto segment)
+    {
+        if (segment.Params is { Length: > 0 })
+        {
+            return;
+        }
+
+        segment.Params = segment.Type switch
+        {
+            "move" or "line" => BuildParams(segment.X, segment.Y),
+            "hLine" => BuildParams(segment.Dx ?? segment.Length),
+            "vLine" => BuildParams(segment.Dy ?? segment.Length),
+            _ => segment.Params
         };
     }
 

@@ -4547,6 +4547,67 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_normalizes_named_profile_segment_coordinates_for_browser_worker()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new object[]
+        {
+            new
+            {
+                op = "extrude",
+                id = "sketched_plate",
+                Params = new[] { 4.0 },
+                profile = new
+                {
+                    plane = "XY",
+                    segments = new object[]
+                    {
+                        new { type = "move", x = 0.0, y = 0.0 },
+                        new { type = "line", x = 30.0, y = 0.0 },
+                        new { type = "vLine", dy = 12.0 },
+                        new { type = "hLine", dx = -30.0 }
+                    }
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Named sketch segment coordinate preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 1);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var segments = commandDoc.RootElement
+            .EnumerateArray()
+            .Single()
+            .GetProperty("profile")
+            .GetProperty("segments")
+            .EnumerateArray()
+            .ToArray();
+
+        Assert.Equal(new[] { 0.0, 0.0 }, segments[0].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal(new[] { 30.0, 0.0 }, segments[1].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal(new[] { 12.0 }, segments[2].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+        Assert.Equal(new[] { -30.0 }, segments[3].GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_normalizes_named_extrude_height_for_browser_worker()
     {
         using var client = factory.CreateClient();
