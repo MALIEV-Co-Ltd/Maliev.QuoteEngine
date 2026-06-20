@@ -388,13 +388,15 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             {
                 Id = Guid.NewGuid(),
                 CustomerId = request.CustomerId,
+                SourceProjectId = request.SourceProjectId,
+                SourceProjectNumber = request.SourceProjectNumber,
                 QuotationNumber = $"MQ-TEST-{Guid.NewGuid():N}"[..16],
                 Status = "Draft",
                 Total = request.LineItems.Sum(x => x.UnitPrice * x.Quantity),
                 CurrencyCode = "THB",
                 UpdatedAt = DateTime.UtcNow,
                 QuoteVersionId = Guid.NewGuid(),
-                QuoteVersionNumber = 2,
+                QuoteVersionNumber = 1,
                 PdfArtifactUrl = $"https://files.example.test/quotations/{request.CustomerId:N}/formal-quote.pdf",
                 PdfArtifactStoragePath = $"quotations/{request.CustomerId:N}/{Guid.NewGuid():N}/formal-quote.pdf"
             };
@@ -402,8 +404,52 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             return Task.FromResult<QuotationCreatedResult?>(result);
         }
 
+        public Task<QuotationCreatedResult?> CreateOrReviseProjectQuoteAsync(QuotationCreateRequest request, CancellationToken ct = default)
+        {
+            if (request.SourceProjectId is not { } sourceProjectId)
+            {
+                return CreateAsync(request, ct);
+            }
+
+            var existing = _quotes.Values.FirstOrDefault(quote =>
+                quote.CustomerId == request.CustomerId &&
+                quote.SourceProjectId == sourceProjectId);
+            if (existing is null)
+            {
+                return CreateAsync(request, ct);
+            }
+
+            LastCreateRequest = request;
+            var result = new QuotationCreatedResult
+            {
+                Id = existing.Id,
+                CustomerId = existing.CustomerId,
+                SourceProjectId = existing.SourceProjectId,
+                SourceProjectNumber = existing.SourceProjectNumber,
+                QuotationNumber = existing.QuotationNumber,
+                Status = existing.Status,
+                Total = request.LineItems.Sum(x => x.UnitPrice * x.Quantity),
+                CurrencyCode = existing.CurrencyCode,
+                UpdatedAt = DateTime.UtcNow,
+                QuoteVersionId = Guid.NewGuid(),
+                QuoteVersionNumber = existing.QuoteVersionNumber.GetValueOrDefault(1) + 1,
+                PdfArtifactUrl = $"https://files.example.test/quotations/{request.CustomerId:N}/formal-quote-v{existing.QuoteVersionNumber.GetValueOrDefault(1) + 1}.pdf",
+                PdfArtifactStoragePath = $"quotations/{request.CustomerId:N}/{Guid.NewGuid():N}/formal-quote-v{existing.QuoteVersionNumber.GetValueOrDefault(1) + 1}.pdf"
+            };
+            _quotes[result.Id] = result;
+            return Task.FromResult<QuotationCreatedResult?>(result);
+        }
+
         public Task<QuotationCreatedResult?> GetByIdAsync(Guid quotationId, CancellationToken ct = default) =>
             Task.FromResult(_quotes.TryGetValue(quotationId, out var r) ? r : null);
+
+        public Task<QuotationCreatedResult?> GetBySourceProjectAsync(Guid customerId, Guid sourceProjectId, CancellationToken ct = default)
+        {
+            var result = _quotes.Values.FirstOrDefault(quote =>
+                quote.CustomerId == customerId &&
+                quote.SourceProjectId == sourceProjectId);
+            return Task.FromResult<QuotationCreatedResult?>(result);
+        }
 
         public Task<IReadOnlyList<CustomerQuoteSummaryDto>> GetByCustomerAsync(Guid customerId, CancellationToken ct = default)
         {
@@ -3023,6 +3069,58 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var body = await orderResponse.Content.ReadAsStringAsync();
         Assert.Contains("DFM review is required", body, StringComparison.Ordinal);
         Assert.Contains("thin-wall-bracket.stl", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Formal_quote_for_same_project_creates_new_version_on_existing_quotation()
+    {
+        using var client = await CreateSignedInClientAsync("project-quote-versions@example.com");
+        var projectId = Guid.NewGuid();
+        var part = new QuotePartDraftDto
+        {
+            PartId = Guid.NewGuid(),
+            FileId = Guid.NewGuid(),
+            UploadId = "upload-project-quote-version",
+            FileName = "versioned-bracket.stl",
+            ProcessId = "fdm",
+            MaterialId = "pla-black",
+            Quantity = 2,
+            VolumeCc = 10m,
+            SurfaceAreaCm2 = 40m,
+            DfmAcknowledged = true
+        };
+
+        var firstResponse = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(projectId, "session-project-quote-version-1", [part], "Initial project quote."));
+        firstResponse.EnsureSuccessStatusCode();
+        var firstQuote = await firstResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(firstQuote);
+        Assert.Equal(1, firstQuote.QuoteVersionNumber);
+        Assert.NotNull(firstQuote.QuoteVersionId);
+
+        var firstCreateRequest = factory.LastQuotationCreateRequest;
+        Assert.NotNull(firstCreateRequest);
+        Assert.Equal(projectId, firstCreateRequest.SourceProjectId);
+        Assert.False(string.IsNullOrWhiteSpace(firstCreateRequest.ProjectSnapshotJson));
+        Assert.False(string.IsNullOrWhiteSpace(firstCreateRequest.ProjectSnapshotHash));
+
+        part.Quantity = 4;
+        var secondResponse = await client.PostAsJsonAsync(
+            "/quote/v1/quotes/formal",
+            new GenerateFormalQuoteRequest(projectId, "session-project-quote-version-2", [part], "Updated project quote."));
+        secondResponse.EnsureSuccessStatusCode();
+        var secondQuote = await secondResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
+        Assert.NotNull(secondQuote);
+        Assert.Equal(firstQuote.QuoteId, secondQuote.QuoteId);
+        Assert.Equal(firstQuote.QuoteNumber, secondQuote.QuoteNumber);
+        Assert.Equal(2, secondQuote.QuoteVersionNumber);
+        Assert.NotEqual(firstQuote.QuoteVersionId, secondQuote.QuoteVersionId);
+
+        var secondCreateRequest = factory.LastQuotationCreateRequest;
+        Assert.NotNull(secondCreateRequest);
+        Assert.Equal(projectId, secondCreateRequest.SourceProjectId);
+        Assert.Contains("Updated project quote.", secondCreateRequest.ChangeSummary, StringComparison.Ordinal);
     }
 
     [Fact]

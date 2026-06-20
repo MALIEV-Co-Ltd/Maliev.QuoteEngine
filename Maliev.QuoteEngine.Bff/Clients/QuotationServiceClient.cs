@@ -14,8 +14,14 @@ public interface IQuotationServiceClient
     /// <summary>Creates a new quotation and returns a summary on success.</summary>
     Task<QuotationCreatedResult?> CreateAsync(QuotationCreateRequest request, CancellationToken ct = default);
 
+    /// <summary>Creates the first project quotation or revises the existing project quotation.</summary>
+    Task<QuotationCreatedResult?> CreateOrReviseProjectQuoteAsync(QuotationCreateRequest request, CancellationToken ct = default);
+
     /// <summary>Returns the quotation with the given ID, or null if not found.</summary>
     Task<QuotationCreatedResult?> GetByIdAsync(Guid quotationId, CancellationToken ct = default);
+
+    /// <summary>Returns the quotation for a source project, or null if none exists.</summary>
+    Task<QuotationCreatedResult?> GetBySourceProjectAsync(Guid customerId, Guid sourceProjectId, CancellationToken ct = default);
 
     /// <summary>Returns all quotations for the given customer as <see cref="CustomerQuoteSummaryDto"/>.</summary>
     Task<IReadOnlyList<CustomerQuoteSummaryDto>> GetByCustomerAsync(Guid customerId, CancellationToken ct = default);
@@ -29,6 +35,8 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
     {
         public Guid Id { get; set; }
         public Guid CustomerId { get; set; }
+        public Guid? SourceProjectId { get; set; }
+        public string? SourceProjectNumber { get; set; }
         public string QuotationNumber { get; set; } = string.Empty;
         public JsonElement Status { get; set; }
         public decimal Total { get; set; }
@@ -66,6 +74,8 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
         {
             Id = r.Id,
             CustomerId = r.CustomerId,
+            SourceProjectId = r.SourceProjectId,
+            SourceProjectNumber = r.SourceProjectNumber,
             QuotationNumber = r.QuotationNumber,
             Status = ReadStatus(r.Status),
             Total = r.Total,
@@ -103,6 +113,22 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
         }
     }
 
+    public async Task<QuotationCreatedResult?> CreateOrReviseProjectQuoteAsync(QuotationCreateRequest request, CancellationToken ct = default)
+    {
+        if (request.SourceProjectId is not { } sourceProjectId)
+        {
+            return await CreateAsync(request, ct);
+        }
+
+        var existing = await GetBySourceProjectAsync(request.CustomerId, sourceProjectId, ct);
+        if (existing is null)
+        {
+            return await CreateAsync(request, ct);
+        }
+
+        return await UpdateAsync(existing.Id, QuotationUpdateRequest.FromCreate(request), ct);
+    }
+
     public async Task<QuotationCreatedResult?> GetByIdAsync(Guid quotationId, CancellationToken ct = default)
     {
         try
@@ -115,6 +141,53 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
         catch (Exception ex)
         {
             logger.LogWarning(ex, "QuotationService GetById failed for {Id}.", quotationId);
+            return null;
+        }
+    }
+
+    public async Task<QuotationCreatedResult?> GetBySourceProjectAsync(Guid customerId, Guid sourceProjectId, CancellationToken ct = default)
+    {
+        try
+        {
+            var paged = await http.GetFromJsonAsync<QsPagedResponse>(
+                $"/quotation/v1/quotations?customerId={customerId:D}&pageSize=100", ct);
+            return paged?.Data?
+                .Where(quotation => quotation.SourceProjectId == sourceProjectId)
+                .OrderByDescending(quotation => quotation.UpdatedAt)
+                .Select(MapResult)
+                .FirstOrDefault();
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "QuotationService GetBySourceProject failed for customer {CustomerId} project {SourceProjectId}.",
+                customerId,
+                sourceProjectId);
+            return null;
+        }
+    }
+
+    private async Task<QuotationCreatedResult?> UpdateAsync(Guid quotationId, QuotationUpdateRequest request, CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await http.PutAsJsonAsync($"/quotation/v1/quotations/{quotationId:D}", request, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                var body = await response.Content.ReadAsStringAsync(ct);
+                logger.LogWarning("QuotationService returned {Status} on update: {Body}", response.StatusCode, body);
+                return null;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<QsQuotationResponse>(cancellationToken: ct);
+            return result is null ? null : MapResult(result);
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "QuotationService update failed for {Id}.", quotationId);
             return null;
         }
     }
@@ -184,6 +257,8 @@ public sealed class QuotationCreatedResult
 {
     public Guid Id { get; init; }
     public Guid CustomerId { get; init; }
+    public Guid? SourceProjectId { get; init; }
+    public string? SourceProjectNumber { get; init; }
     public string QuotationNumber { get; init; } = string.Empty;
     public string Status { get; init; } = string.Empty;
     public decimal Total { get; init; }
@@ -202,8 +277,34 @@ public sealed class QuotationCreateRequest
     public int BillingIdentityType { get; set; } = 1; // Corporate
     public DateTime ValidityPeriodStart { get; set; }
     public DateTime ValidityPeriodEnd { get; set; }
+    public Guid? SourceProjectId { get; set; }
+    public string? SourceProjectNumber { get; set; }
+    public string? ProjectSnapshotJson { get; set; }
+    public string? ProjectSnapshotHash { get; set; }
+    public string? ChangeSummary { get; set; }
     public List<QuotationLineItemCreate> LineItems { get; set; } = [];
     public string? GeneratedByDisplayName { get; set; }
+}
+
+/// <summary>Request body for creating a revised quotation version.</summary>
+public sealed class QuotationUpdateRequest
+{
+    public List<QuotationLineItemCreate>? LineItems { get; set; }
+    public string ChangeSummary { get; set; } = string.Empty;
+    public string? ProjectSnapshotJson { get; set; }
+    public string? ProjectSnapshotHash { get; set; }
+    public string? GeneratedByDisplayName { get; set; }
+
+    public static QuotationUpdateRequest FromCreate(QuotationCreateRequest request) => new()
+    {
+        LineItems = request.LineItems,
+        ChangeSummary = string.IsNullOrWhiteSpace(request.ChangeSummary)
+            ? "Make Studio project quote revision"
+            : request.ChangeSummary,
+        ProjectSnapshotJson = request.ProjectSnapshotJson,
+        ProjectSnapshotHash = request.ProjectSnapshotHash,
+        GeneratedByDisplayName = request.GeneratedByDisplayName
+    };
 }
 
 /// <summary>A single line item in a quotation creation request.</summary>

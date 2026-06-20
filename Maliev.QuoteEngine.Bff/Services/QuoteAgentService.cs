@@ -2800,7 +2800,7 @@ internal sealed class QuoteAgentService(
         CancellationToken cancellationToken)
     {
         var request = await BuildFormalQuoteRequestAsync(state, customerId, action, cancellationToken);
-        var result = await quotationClient.CreateAsync(request, cancellationToken);
+        var result = await quotationClient.CreateOrReviseProjectQuoteAsync(request, cancellationToken);
         if (result is null)
         {
             throw new InvalidOperationException("QuotationService did not create the formal quote.");
@@ -2896,15 +2896,79 @@ internal sealed class QuoteAgentService(
         }
 
         var today = DateTime.UtcNow.Date;
+        var sourceProjectId = TryGetCurrentDraftProjectServiceId(state, out var projectServiceProjectId)
+            ? projectServiceProjectId
+            : (Guid?)null;
+        var sourceProjectNumber = TryGetCurrentDraftProjectServiceNumber(state, out var projectServiceProjectNumber)
+            ? projectServiceProjectNumber
+            : null;
+        var snapshotJson = BuildFormalQuoteProjectSnapshotJson(state, customerId, sourceProjectId, sourceProjectNumber);
         return new QuotationCreateRequest
         {
             CustomerId = customerId,
             BillingIdentityType = 1,
             ValidityPeriodStart = today,
             ValidityPeriodEnd = today.AddDays(14),
+            SourceProjectId = sourceProjectId,
+            SourceProjectNumber = sourceProjectNumber,
+            ProjectSnapshotJson = snapshotJson,
+            ProjectSnapshotHash = ComputeSha256Hex(snapshotJson),
+            ChangeSummary = ReadString(action.Arguments, "change_summary")
+                ?? ReadString(action.Arguments, "changeSummary")
+                ?? ReadString(action.Arguments, "requirements")
+                ?? "Make Studio formal quote",
             GeneratedByDisplayName = "Make Studio",
             LineItems = lineItems
         };
+    }
+
+    private static string BuildFormalQuoteProjectSnapshotJson(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        Guid? sourceProjectId,
+        string? sourceProjectNumber)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            customerId,
+            sourceProjectId,
+            sourceProjectNumber,
+            quoteSessionId = state.SessionId,
+            estimate = state.Estimate,
+            parts = state.Parts.Select(part => new
+            {
+                part.PartId,
+                part.FileId,
+                part.UploadId,
+                part.FileName,
+                part.ProcessId,
+                part.MaterialId,
+                part.FinishId,
+                part.FinishCode,
+                part.Color,
+                part.Quantity,
+                part.VolumeCc,
+                part.SurfaceAreaCm2,
+                part.ToleranceId,
+                part.ToleranceCode,
+                part.InspectionLevel,
+                part.RoughnessCode,
+                part.ProcessOptionValues,
+                part.HasThreadedHoles,
+                part.ThreadSpecification,
+                part.ThreadedHoleCount,
+                part.InsertType,
+                part.InsertCount,
+                part.BodyCount,
+                part.SelectedBodyIndex,
+                part.DfmAcknowledged,
+                part.Findings,
+                part.StoragePath,
+                part.ViewerStoragePath,
+                part.ViewerFileExtension,
+                part.DrawingFiles
+            })
+        }, JsonOptions);
     }
 
     private static string BuildFormalQuoteLineNotes(QuotePartDraftDto part, QuoteAgentPendingAction action)
@@ -3676,6 +3740,25 @@ internal sealed class QuoteAgentService(
             artifact.Metadata.TryGetValue("projectServiceProjectId", out var rawProjectId) &&
             Guid.TryParse(rawProjectId, out projectId);
     }
+
+    private static bool TryGetCurrentDraftProjectServiceNumber(QuoteAgentSessionState state, out string projectNumber)
+    {
+        projectNumber = string.Empty;
+        var artifact = state.Artifacts
+            .LastOrDefault(item => item.ArtifactType.Equals("draft_project", StringComparison.OrdinalIgnoreCase));
+        if (artifact is null ||
+            !artifact.Metadata.TryGetValue("projectServiceProjectNumber", out var rawProjectNumber) ||
+            string.IsNullOrWhiteSpace(rawProjectNumber))
+        {
+            return false;
+        }
+
+        projectNumber = rawProjectNumber.Trim();
+        return true;
+    }
+
+    private static string ComputeSha256Hex(string input) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
 
     private static bool TryResolveProjectId(
         QuoteAgentSessionState state,

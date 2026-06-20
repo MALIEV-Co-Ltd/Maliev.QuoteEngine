@@ -703,10 +703,16 @@ public sealed class QuoteController(
             ValidityPeriodStart = DateTime.UtcNow,
             ValidityPeriodEnd = DateTime.UtcNow.AddDays(30),
             LineItems = lineItems,
+            SourceProjectId = request.ProjectId,
+            ProjectSnapshotJson = BuildFormalQuoteProjectSnapshotJson(customerId, request),
+            ChangeSummary = string.IsNullOrWhiteSpace(request.Notes)
+                ? "Customer self-service formal quote"
+                : request.Notes.Trim(),
             GeneratedByDisplayName = "Customer Self-Service"
         };
+        createRequest.ProjectSnapshotHash = ComputeSha256Hex(createRequest.ProjectSnapshotJson);
 
-        var result = await quotationClient.CreateAsync(createRequest, cancellationToken);
+        var result = await quotationClient.CreateOrReviseProjectQuoteAsync(createRequest, cancellationToken);
         if (result is null)
         {
             logger.LogError("QuotationService returned null for customerId {CustomerId}", customerId);
@@ -794,6 +800,55 @@ public sealed class QuoteController(
         if (part.SelectedBodyIndex.HasValue) notes.Add($"selected body {part.SelectedBodyIndex.Value}");
         return string.Join("; ", notes);
     }
+
+    private static string BuildFormalQuoteProjectSnapshotJson(
+        Guid customerId,
+        GenerateFormalQuoteRequest request)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            customerId,
+            sourceProjectId = request.ProjectId,
+            quoteSessionId = request.QuoteSessionId,
+            notes = request.Notes,
+            parts = request.Parts.Select(part => new
+            {
+                part.PartId,
+                part.FileId,
+                part.UploadId,
+                part.FileName,
+                part.ProcessId,
+                part.MaterialId,
+                part.FinishId,
+                part.FinishCode,
+                part.Color,
+                part.Quantity,
+                part.VolumeCc,
+                part.SurfaceAreaCm2,
+                part.ToleranceId,
+                part.ToleranceCode,
+                part.InspectionLevel,
+                part.RoughnessCode,
+                part.ProcessOptionValues,
+                part.HasThreadedHoles,
+                part.ThreadSpecification,
+                part.ThreadedHoleCount,
+                part.InsertType,
+                part.InsertCount,
+                part.BodyCount,
+                part.SelectedBodyIndex,
+                part.DfmAcknowledged,
+                part.Findings,
+                part.StoragePath,
+                part.ViewerStoragePath,
+                part.ViewerFileExtension,
+                part.DrawingFiles
+            })
+        }, SnapshotJsonOptions);
+    }
+
+    private static string ComputeSha256Hex(string input) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
 
     private static bool Matches(string candidate, string? value)
     {
