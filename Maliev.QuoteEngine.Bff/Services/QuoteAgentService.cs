@@ -6560,6 +6560,7 @@ Customer message:
             command.Profile ??= command.Sketch ?? command.Profile2D ?? command.Profile2DSnake;
             NormalizeCadCommandParams(command);
             NormalizeCadTransformVectors(command);
+            NormalizeCadCommandAngle(command);
             if (command.Profile is not null)
             {
                 NormalizeCadProfileParams(command.Profile);
@@ -6775,6 +6776,20 @@ Customer message:
                 command.Op.Equals("revolve", StringComparison.OrdinalIgnoreCase)))
         {
             command.Axis = BuildParams(command.AxisX, command.AxisY, command.AxisZ);
+        }
+    }
+
+    private static void NormalizeCadCommandAngle(CadCommandDto command)
+    {
+        if (command.Angle is > 0)
+        {
+            return;
+        }
+
+        var degrees = command.AngleDegrees ?? command.Degrees;
+        if (degrees.HasValue)
+        {
+            command.Angle = degrees.Value * Math.PI / 180d;
         }
     }
 
