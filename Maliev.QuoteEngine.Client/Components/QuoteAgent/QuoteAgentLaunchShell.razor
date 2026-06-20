@@ -5143,8 +5143,7 @@
     {
         return !viewer.IsFeedbackSubmitting &&
             viewer.ArtifactId != Guid.Empty &&
-            viewer.FeedbackRating is >= 1 and <= 5 &&
-            !string.IsNullOrWhiteSpace(viewer.FeedbackComment);
+            viewer.FeedbackRating is >= 1 and <= 5;
     }
 
     private async Task SubmitInlineViewerFeedbackAsync(AgentMessageRow message)

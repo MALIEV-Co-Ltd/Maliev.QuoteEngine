@@ -550,7 +550,7 @@ internal sealed class QuoteAgentService(
     {
         var state = sessionStore.GetOrCreate(sessionId);
         var customerId = ResolveCustomerId() ?? state.CustomerId;
-        var comment = request.Comment.Trim();
+        var comment = request.Comment?.Trim() ?? string.Empty;
         string artifactTitle;
         string artifactDescription;
 
@@ -572,7 +572,15 @@ internal sealed class QuoteAgentService(
                 ? description
                 : artifact.Title;
             artifact.Metadata["customerRating"] = request.Rating.ToString(CultureInfo.InvariantCulture);
-            artifact.Metadata["customerComment"] = comment;
+            if (string.IsNullOrWhiteSpace(comment))
+            {
+                artifact.Metadata.Remove("customerComment");
+            }
+            else
+            {
+                artifact.Metadata["customerComment"] = comment;
+            }
+
             artifact.Metadata["feedbackObservedAt"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
             artifact.Status = "feedback_recorded";
             state.CustomerId = customerId ?? state.CustomerId;
@@ -590,7 +598,7 @@ internal sealed class QuoteAgentService(
                     {
                         MemoryType = "make_studio_feedback",
                         Key = "generated_3d_preview_feedback",
-                        Value = $"3D preview feedback for {artifactDescription}: rating {request.Rating}/5; comment: {comment}",
+                        Value = BuildPreviewFeedbackMemoryValue(artifactDescription, request.Rating, comment),
                         Confidence = Math.Clamp(request.Rating / 5m, 0.2m, 0.95m),
                         Source = "quote_agent"
                     },
@@ -5410,9 +5418,7 @@ Customer message:
             .Where(IsGeneratedViewerArtifact)
             .Where(artifact =>
                 artifact.Metadata.TryGetValue("customerRating", out var rating) &&
-                !string.IsNullOrWhiteSpace(rating) &&
-                artifact.Metadata.TryGetValue("customerComment", out var comment) &&
-                !string.IsNullOrWhiteSpace(comment))
+                !string.IsNullOrWhiteSpace(rating))
             .TakeLast(3)
             .Reverse()
             .Select(artifact =>
@@ -5422,19 +5428,30 @@ Customer message:
                         ? value.Trim()
                         : artifact.Title;
                 var rating = artifact.Metadata["customerRating"].Trim();
-                var comment = artifact.Metadata["customerComment"].Trim();
+                var comment = artifact.Metadata.TryGetValue("customerComment", out var commentValue)
+                    ? commentValue.Trim()
+                    : string.Empty;
                 if (comment.Length > 220)
                 {
                     comment = comment[..220] + "...";
                 }
 
-                return $"{description}: rating {rating}/5; customer comment: {comment}";
+                return string.IsNullOrWhiteSpace(comment)
+                    ? $"{description}: rating {rating}/5"
+                    : $"{description}: rating {rating}/5; customer comment: {comment}";
             })
             .ToArray();
 
         return feedbackItems.Length == 0
             ? null
             : $"Generated preview feedback: {string.Join("; ", feedbackItems)}. Use this feedback when revising or generating the next 3D draft.";
+    }
+
+    private static string BuildPreviewFeedbackMemoryValue(string artifactDescription, int rating, string comment)
+    {
+        return string.IsNullOrWhiteSpace(comment)
+            ? $"3D preview feedback for {artifactDescription}: rating {rating.ToString(CultureInfo.InvariantCulture)}/5"
+            : $"3D preview feedback for {artifactDescription}: rating {rating.ToString(CultureInfo.InvariantCulture)}/5; comment: {comment}";
     }
 
     private static string BuildArtifactMetadataContext(IReadOnlyDictionary<string, string> metadata)

@@ -4833,6 +4833,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_allows_rating_only_generated_preview_feedback()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
+            .ReplaceLineEndings("\n");
+
+        var gateStart = shell.IndexOf("private static bool CanSubmitInlineViewerFeedback(InlineViewerInfo viewer)", StringComparison.Ordinal);
+        Assert.True(gateStart >= 0, "CanSubmitInlineViewerFeedback must exist.");
+
+        var gateEnd = shell.IndexOf("\n    private async Task SubmitInlineViewerFeedbackAsync", gateStart, StringComparison.Ordinal);
+        Assert.True(gateEnd > gateStart, "CanSubmitInlineViewerFeedback must end before SubmitInlineViewerFeedbackAsync.");
+
+        var gate = shell[gateStart..gateEnd];
+        Assert.Contains("viewer.FeedbackRating is >= 1 and <= 5", gate, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsNullOrWhiteSpace(viewer.FeedbackComment)", gate, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");

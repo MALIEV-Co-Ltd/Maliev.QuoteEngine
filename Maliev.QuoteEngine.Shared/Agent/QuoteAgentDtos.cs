@@ -475,9 +475,8 @@ public sealed class QuoteAgentPreviewFeedbackRequest
     [Range(1, 5)]
     public int Rating { get; set; }
 
-    /// <summary>Gets or sets customer comments that should improve future generated drafts.</summary>
-    [Required]
-    [StringLength(1200, MinimumLength = 1)]
+    /// <summary>Gets or sets optional customer comments that should improve future generated drafts.</summary>
+    [StringLength(1200)]
     public string Comment { get; set; } = string.Empty;
 }
 
