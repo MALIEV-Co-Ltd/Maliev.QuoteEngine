@@ -4432,6 +4432,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Generate3DPreview_returns_the_artifact_it_created()
+    {
+        var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs")
+            .ReplaceLineEndings("\n");
+
+        var methodStart = service.IndexOf("private static object Generate3DPreview", StringComparison.Ordinal);
+        Assert.True(methodStart >= 0, "Generate3DPreview must exist.");
+
+        var methodEnd = service.IndexOf("\n    private static IReadOnlyList<CadCommandDto> ReadCommands", methodStart, StringComparison.Ordinal);
+        Assert.True(methodEnd > methodStart, "Generate3DPreview must end before ReadCommands.");
+
+        var method = service[methodStart..methodEnd];
+        Assert.Contains("artifact_id = artifact.ArtifactId", method, StringComparison.Ordinal);
+        Assert.DoesNotContain("state.Artifacts.Last().ArtifactId", method, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteInlineViewer_creates_babylon_engine_before_scene()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")

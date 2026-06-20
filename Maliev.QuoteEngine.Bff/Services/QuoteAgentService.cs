@@ -5694,6 +5694,17 @@ Customer message:
         var process = !string.IsNullOrWhiteSpace(processHint) ? processHint : "fdm";
         var commandsJson = JsonSerializer.Serialize(commands, JsonOptions);
         var partId = Guid.NewGuid();
+        var artifact = new QuoteAgentArtifactDto
+        {
+            ArtifactType = "viewer",
+            Title = $"3D preview - {description}",
+            Status = "ready",
+            PartId = partId
+        };
+        artifact.Metadata["generated"] = "true";
+        artifact.Metadata["description"] = EscapeMetadataValue(description);
+        artifact.Metadata["cad_commands"] = commandsJson;
+        artifact.Metadata["commandCount"] = commands.Count.ToString(CultureInfo.InvariantCulture);
 
         lock (state.SyncRoot)
         {
@@ -5715,18 +5726,6 @@ Customer message:
                 PartNotes = "Generated 3D preview from inferred description."
             });
 
-            var artifact = new QuoteAgentArtifactDto
-            {
-                ArtifactType = "viewer",
-                Title = $"3D preview - {description}",
-                Status = "ready",
-                PartId = partId
-            };
-            artifact.Metadata["generated"] = "true";
-            artifact.Metadata["description"] = EscapeMetadataValue(description);
-            artifact.Metadata["cad_commands"] = commandsJson;
-            artifact.Metadata["commandCount"] = commands.Count.ToString(CultureInfo.InvariantCulture);
-
             state.Artifacts.Add(artifact);
             state.UpdatedAt = DateTimeOffset.UtcNow;
         }
@@ -5734,7 +5733,7 @@ Customer message:
         return new
         {
             success = true,
-            artifact_id = state.Artifacts.Last().ArtifactId,
+            artifact_id = artifact.ArtifactId,
             part_id = partId,
             description,
             command_count = commands.Count,
