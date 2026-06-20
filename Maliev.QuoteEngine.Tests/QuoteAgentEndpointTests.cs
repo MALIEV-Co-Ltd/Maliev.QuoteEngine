@@ -4818,6 +4818,54 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_normalizes_profile_type_params_for_browser_worker()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new object[]
+        {
+            new
+            {
+                op = "extrude",
+                id = "rectangular_plate",
+                height = 4.0,
+                profile = new
+                {
+                    type = "rectangle",
+                    Params = new[] { 30.0, 12.0 }
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Rectangle profile params preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var profile = commandDoc.RootElement
+            .EnumerateArray()
+            .Single()
+            .GetProperty("profile");
+
+        Assert.Equal("rectangle", profile.GetProperty("type").GetString());
+        Assert.Equal(30.0, profile.GetProperty("width").GetDouble());
+        Assert.Equal(12.0, profile.GetProperty("height").GetDouble());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_requires_at_least_one_command()
     {
         using var client = factory.CreateClient();

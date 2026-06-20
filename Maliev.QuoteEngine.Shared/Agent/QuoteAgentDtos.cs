@@ -940,11 +940,17 @@ public sealed class CadCommandDto
 /// </summary>
 public sealed class CadProfileDto
 {
+    /// <summary>Optional shorthand profile type, such as circle, rect, or rectangle.</summary>
+    public string? Type { get; set; }
+
     /// <summary>Sketch plane: "XY", "XZ", or "YZ". Default "XY".</summary>
     public string Plane { get; set; } = "XY";
 
     /// <summary>Sketch segments defining the 2D profile.</summary>
     public List<CadSegmentDto> Segments { get; set; } = [];
+
+    /// <summary>Profile shorthand parameters: rectangle [width, height], circle [radius].</summary>
+    public double[]? Params { get; set; }
 
     /// <summary>Whether to auto-close the profile. Default true.</summary>
     public bool Close { get; set; } = true;

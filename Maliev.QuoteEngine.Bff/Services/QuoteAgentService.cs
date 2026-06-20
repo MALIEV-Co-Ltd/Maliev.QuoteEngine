@@ -6301,7 +6301,9 @@ Customer message:
             NormalizeCadTransformVectors(command);
             if (command.Profile is not null)
             {
+                NormalizeCadProfileParams(command.Profile);
                 command.Profile.Plane = NormalizeCadProfilePlane(command.Profile.Plane);
+                command.Profile.Type = NormalizeCadProfileType(command.Profile.Type);
                 foreach (var segment in command.Profile.Segments)
                 {
                     segment.Type = NormalizeCadProfileSegmentType(segment.Type);
@@ -6348,6 +6350,24 @@ Customer message:
         };
     }
 
+    private static void NormalizeCadProfileParams(CadProfileDto profile)
+    {
+        var profileType = profile.Type?.Trim().ToLowerInvariant();
+        if ((profileType is "rect" or "rectangle") &&
+            profile is not { Width: > 0, Height: > 0 } &&
+            profile.Params is { Length: >= 2 })
+        {
+            profile.Width = profile.Params[0];
+            profile.Height = profile.Params[1];
+        }
+        else if (profileType is "circle" &&
+                 profile.Radius is not > 0 &&
+                 profile.Params is { Length: >= 1 })
+        {
+            profile.Radius = profile.Params[0];
+        }
+    }
+
     private static void NormalizeCadTransformVectors(CadCommandDto command)
     {
         if (command.Offset is not { Length: > 0 } &&
@@ -6388,6 +6408,13 @@ Customer message:
         return string.IsNullOrWhiteSpace(value)
             ? "XY"
             : value.Trim().ToUpperInvariant();
+    }
+
+    private static string? NormalizeCadProfileType(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim().ToLowerInvariant();
     }
 
     private static string NormalizeCadProfileSegmentType(string? value)
