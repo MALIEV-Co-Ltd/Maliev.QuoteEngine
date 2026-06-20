@@ -6508,7 +6508,9 @@ Customer message:
     private static string NormalizeCadOperation(CadCommandDto command)
     {
         var operation = FirstNonWhiteSpace(command.Op, command.Operation, command.Type, command.Shape);
-        var normalized = operation?.Trim().Replace('-', '_').ToLowerInvariant();
+        var normalized = operation is null
+            ? null
+            : Regex.Replace(operation.Trim(), @"[\s-]+", "_", RegexOptions.CultureInvariant).ToLowerInvariant();
         return normalized switch
         {
             "rectangular_prism" or "rectangularprism" or "cuboid" or "block" or "cube" => "box",

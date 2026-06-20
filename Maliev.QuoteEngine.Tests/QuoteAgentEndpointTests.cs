@@ -4933,6 +4933,43 @@ Customer message:
         Assert.Equal(new[] { 50.0, 30.0, 5.0 }, normalizedCommand.GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
     }
 
+    [Fact]
+    public async Task Generate_3d_preview_tool_accepts_whitespace_separated_operation_alias()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var command = new
+        {
+            op = "rectangular prism",
+            id = "body",
+            width = 50.0,
+            depth = 30.0,
+            height = 5.0
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Whitespace alias generated preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(command, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommand = commandDoc.RootElement.EnumerateArray().Single();
+
+        Assert.Equal("box", normalizedCommand.GetProperty("op").GetString());
+    }
+
     [Theory]
     [InlineData("subtract", "cut")]
     [InlineData("difference", "cut")]
