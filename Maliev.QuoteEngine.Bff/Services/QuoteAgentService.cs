@@ -6658,11 +6658,24 @@ Customer message:
             profile.Width = profile.Params[0];
             profile.Height = profile.Params[1];
         }
+        else if ((profileType is "rect" or "rectangle") &&
+                 profile is not { Width: > 0, Height: > 0 } &&
+                 profile.Size is { Length: >= 2 })
+        {
+            profile.Width = profile.Size[0];
+            profile.Height = profile.Size[1];
+        }
         else if (profileType is "circle" &&
                  profile.Radius is not > 0 &&
                  profile.Params is { Length: >= 1 })
         {
             profile.Radius = profile.Params[0];
+        }
+        else if (profileType is "circle" &&
+                 profile.Radius is not > 0 &&
+                 profile.Diameter is > 0)
+        {
+            profile.Radius = profile.Diameter.Value / 2;
         }
     }
 

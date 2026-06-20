@@ -1560,12 +1560,20 @@ public sealed class CadProfileDto
     [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
     public double[]? Parameters { get; set; }
 
+    /// <summary>Rectangle size alias often emitted by model tool calls; normalized into width and height.</summary>
+    [JsonConverter(typeof(CadDoubleArrayJsonConverter))]
+    public double[]? Size { get; set; }
+
     /// <summary>Whether to auto-close the profile. Default true.</summary>
     public bool Close { get; set; } = true;
 
     /// <summary>Circle radius (shorthand — sets a full circle profile).</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Radius { get; set; }
+
+    /// <summary>Circle diameter alias; normalized into <see cref="Radius"/>.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? Diameter { get; set; }
 
     /// <summary>Rectangle width (shorthand — sets a full rect profile).</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
