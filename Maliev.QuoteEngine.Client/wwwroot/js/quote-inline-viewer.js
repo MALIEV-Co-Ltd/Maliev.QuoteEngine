@@ -274,7 +274,12 @@
           worker.addEventListener('message', handler);
           worker.addEventListener('error', errorHandler);
 
-          worker.postMessage({ type: 'build', id: buildId, commands: commands });
+          try {
+            worker.postMessage({ type: 'build', id: buildId, commands: commands });
+          } catch (postError) {
+            cleanup();
+            reject(postError instanceof Error ? postError : new Error('3D worker could not receive the model commands'));
+          }
         });
 
         // Clean up any previous scene for this container

@@ -4518,6 +4518,26 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteInlineViewer_cleans_up_when_worker_post_throws()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        var promiseStart = viewer.IndexOf("var result = await new Promise(function (resolve, reject)", StringComparison.Ordinal);
+        Assert.True(promiseStart >= 0, "inline viewer build promise must exist.");
+
+        var promiseEnd = viewer.IndexOf("\n        });", promiseStart, StringComparison.Ordinal);
+        Assert.True(promiseEnd > promiseStart, "inline viewer build promise must be closed.");
+
+        var buildPromise = viewer[promiseStart..promiseEnd];
+        Assert.Contains("try {", buildPromise, StringComparison.Ordinal);
+        Assert.Contains("worker.postMessage({ type: 'build', id: buildId, commands: commands });", buildPromise, StringComparison.Ordinal);
+        Assert.Contains("} catch (postError) {", buildPromise, StringComparison.Ordinal);
+        Assert.Contains("cleanup();", buildPromise, StringComparison.Ordinal);
+        Assert.Contains("reject(postError instanceof Error ? postError : new Error('3D worker could not receive the model commands'));", buildPromise, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeInlinePartViewer_implements_async_disposal_for_preview_resources()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")
