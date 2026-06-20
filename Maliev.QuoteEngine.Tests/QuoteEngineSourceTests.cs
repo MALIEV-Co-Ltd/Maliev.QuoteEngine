@@ -4213,6 +4213,30 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void ReplicadWorker_validates_primitive_params_before_cad_constructors()
+    {
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function requireCommandParams(cmd, values, requiredLength, options = {})", worker, StringComparison.Ordinal);
+        Assert.Contains("throw new Error(`CAD operation ${cmd.op} requires ${requiredLength} valid parameter(s)`);", worker, StringComparison.Ordinal);
+
+        var processStart = worker.IndexOf("function processCommands(commands)", StringComparison.Ordinal);
+        Assert.True(processStart >= 0, "processCommands must exist.");
+
+        var processEnd = worker.IndexOf("\nself.onmessage", processStart, StringComparison.Ordinal);
+        Assert.True(processEnd > processStart, "processCommands must end before self.onmessage.");
+
+        var processCommands = worker[processStart..processEnd];
+        Assert.Contains("requireCommandParams(cmd, p, 3);", processCommands, StringComparison.Ordinal);
+        Assert.Contains("requireCommandParams(cmd, p, 2);", processCommands, StringComparison.Ordinal);
+        Assert.Contains("requireCommandParams(cmd, p, 1);", processCommands, StringComparison.Ordinal);
+        Assert.Contains("requireCommandParams(cmd, p, 3, { allowZeroAfterFirst: true });", processCommands, StringComparison.Ordinal);
+        Assert.Contains("shape = makeCone(p[0], p[1], p[2]);", processCommands, StringComparison.Ordinal);
+        Assert.DoesNotContain("shape = makeCone(p[0], p[1] || 0, p[2]);", processCommands, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ReplicadWorker_renders_bff_profile_shorthands_without_type_field()
     {
         var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js")

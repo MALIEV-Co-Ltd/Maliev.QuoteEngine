@@ -23743,6 +23743,14 @@
       throw new Error(`Profile segment ${seg.type} requires ${requiredLength} finite parameter(s)`);
     }
   }
+  function requireCommandParams(cmd, values, requiredLength, options = {}) {
+    if (!Array.isArray(values) || values.length < requiredLength || values.slice(0, requiredLength).some((value, index) => {
+      const numeric = Number(value);
+      return !Number.isFinite(numeric) || numeric < 0 || numeric <= 0 && (!options.allowZeroAfterFirst || index === 0);
+    })) {
+      throw new Error(`CAD operation ${cmd.op} requires ${requiredLength} valid parameter(s)`);
+    }
+  }
   function requirePositiveProfileNumber(profile, fieldName) {
     const value = Number(profile[fieldName]);
     if (!Number.isFinite(value) || value <= 0) {
@@ -23836,19 +23844,23 @@
       const offset2 = cmd.offset;
       switch (cmd.op) {
         case "box": {
+          requireCommandParams(cmd, p, 3);
           shape = makeBox([-p[0] / 2, -p[1] / 2, 0], [p[0] / 2, p[1] / 2, p[2]]);
           break;
         }
         case "cylinder": {
+          requireCommandParams(cmd, p, 2);
           shape = makeCylinder(p[0], p[1]);
           break;
         }
         case "sphere": {
+          requireCommandParams(cmd, p, 1);
           shape = makeSphere(p[0]);
           break;
         }
         case "cone": {
-          shape = makeCone(p[0], p[1] || 0, p[2]);
+          requireCommandParams(cmd, p, 3, { allowZeroAfterFirst: true });
+          shape = makeCone(p[0], p[1], p[2]);
           break;
         }
         case "extrude": {
