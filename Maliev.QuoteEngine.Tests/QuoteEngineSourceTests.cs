@@ -1663,6 +1663,27 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_shows_summary_strip_only_for_quote_ready_non_pending_parts()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css").ReplaceLineEndings("\n");
+        var summaryBlock = ExtractSourceBlock(component, "private string SummaryDfmState", "private AgentMessageRow? LastUserMessage");
+        var stripMarkup = ExtractSourceBlock(component, "<div class=\"qe-agent-summary-strip\"", "<section class=\"@ComposerWrapClass\"");
+        var stripStyle = ExtractSourceBlock(styles, ".qe-agent-summary-strip {", ".qe-agent-summary-strip-item {");
+
+        Assert.Contains("private int QuoteReadyPartCount => UploadedParts.Count(IsQuoteReadyPart);", summaryBlock, StringComparison.Ordinal);
+        Assert.Contains("private bool ShowSummaryStrip => QuoteReadyPartCount > 0;", summaryBlock, StringComparison.Ordinal);
+        Assert.Contains("IsPendingComposerAttachment(part)", summaryBlock, StringComparison.Ordinal);
+        Assert.Contains("IsReadyStatus(part.Status)", summaryBlock, StringComparison.Ordinal);
+        Assert.Contains("status?.Equals(\"Ready\"", summaryBlock, StringComparison.Ordinal);
+        Assert.Contains("status?.Equals(\"GlbReady\"", summaryBlock, StringComparison.Ordinal);
+        Assert.Contains("status?.Equals(\"DfmAnalysisReady\"", summaryBlock, StringComparison.Ordinal);
+        Assert.Contains("@QuoteReadyPartCount.ToString(CultureInfo.InvariantCulture)", stripMarkup, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 8px;", stripStyle, StringComparison.Ordinal);
+        Assert.DoesNotContain("border-radius: 999px;", stripStyle, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_uses_native_file_input_label_for_composer_add_button()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");

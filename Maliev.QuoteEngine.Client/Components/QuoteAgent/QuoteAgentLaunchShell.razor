@@ -1093,7 +1093,7 @@
             <div class="qe-agent-summary-strip" role="group" aria-label="@Text("Project quick summary", "สรุปโปรเจกต์อย่างย่อ")">
                 <span class="qe-agent-summary-strip-item">
                     <MudIcon Icon="@Icons.Material.Outlined.Category" Size="Size.Small" />
-                    <span class="qe-agent-summary-strip-value">@UploadedParts.Count.ToString(CultureInfo.InvariantCulture)</span>
+                    <span class="qe-agent-summary-strip-value">@QuoteReadyPartCount.ToString(CultureInfo.InvariantCulture)</span>
                     <span class="qe-agent-summary-strip-label">@Text("parts", "ชิ้นงาน")</span>
                 </span>
                 <span class="qe-agent-summary-strip-divider" aria-hidden="true"></span>
@@ -2263,7 +2263,8 @@
     private string SummaryDfmState => LatestWorkbench?.DfmIssues.Count > 0
         ? Text($"{LatestWorkbench.DfmIssues.Count} item(s) to review", $"ต้องตรวจสอบ {LatestWorkbench.DfmIssues.Count} รายการ")
         : Text("No current DFM items", "ยังไม่มีรายการ DFM");
-    private bool ShowSummaryStrip => UploadedParts.Count > 0 || LatestWorkbench is not null;
+    private int QuoteReadyPartCount => UploadedParts.Count(IsQuoteReadyPart);
+    private bool ShowSummaryStrip => QuoteReadyPartCount > 0;
     private string SummaryStripTotal => LatestWorkbench?.TotalPrice ?? Text("Not priced", "ยังไม่มีราคา");
     private bool ShowUsageRing => _usageSnapshot?.IsEnabled == true;
     private double UsageRingRatio => Math.Clamp(_usageSnapshot?.UsedRatio ?? 0, 0, 1);
@@ -2289,6 +2290,29 @@
         : Text(
             $"{FormatCompactTokenCount(_usageSnapshot.UsedTokens)} of {FormatCompactTokenCount(_usageSnapshot.DailyTokenBudget)} chatbot tokens used today.",
             $"ใช้โทเคนแชตบอตวันนี้ {FormatCompactTokenCount(_usageSnapshot.UsedTokens)} จาก {FormatCompactTokenCount(_usageSnapshot.DailyTokenBudget)}");
+
+    private bool IsQuoteReadyPart(QuotePartViewModel part)
+    {
+        if (!IsReadyStatus(part.Status) || IsPendingComposerAttachment(part))
+        {
+            return false;
+        }
+
+        return QuoteUploadConstraints.IsSupportedCadFileName(part.FileName) ||
+               !string.IsNullOrWhiteSpace(part.StoragePath);
+    }
+
+    private bool IsPendingComposerAttachment(QuotePartViewModel part)
+    {
+        var attachment = ComposerAttachmentPreview.FromPart(part);
+        return _pendingComposerAttachments.Any(pending => pending.Matches(attachment));
+    }
+
+    private static bool IsReadyStatus(string? status) =>
+        status?.Equals("Ready", StringComparison.OrdinalIgnoreCase) == true ||
+        status?.Equals("GlbReady", StringComparison.OrdinalIgnoreCase) == true ||
+        status?.Equals("DfmAnalysisReady", StringComparison.OrdinalIgnoreCase) == true;
+
     private AgentMessageRow? LastUserMessage => _messages.LastOrDefault(message => message.Role.Equals("user", StringComparison.OrdinalIgnoreCase));
     private IReadOnlyList<UseCaseOption> VisibleUseCases => BuildVisibleUseCases();
     private string UseCaseListClass => "qe-agent-use-cases";

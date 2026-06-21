@@ -3438,7 +3438,7 @@
     margin: 0 auto 10px;
     padding: 6px 16px;
     border: 1px solid var(--qe-agent-line);
-    border-radius: 999px;
+    border-radius: 8px;
     background: var(--qe-agent-raised);
     color: var(--qe-agent-ink);
     font-size: 13px;
