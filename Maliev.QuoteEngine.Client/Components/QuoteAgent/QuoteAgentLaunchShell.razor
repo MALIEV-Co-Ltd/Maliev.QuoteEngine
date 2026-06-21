@@ -2140,6 +2140,9 @@
     public EventCallback OnNewProjectRequested { get; set; }
 
     [Parameter]
+    public EventCallback<string> OnProjectNameChanged { get; set; }
+
+    [Parameter]
     public EventCallback<int> OnUploadedPartSelected { get; set; }
 
     [CascadingParameter(Name = "IsDarkMode")]
@@ -2847,7 +2850,7 @@
                     {
                         await Preferences.SetCultureAsync(streamEvent.Response.UiCulture);
                     }
-                    ApplyAgentProjectName(streamEvent.Response.ProjectName);
+                    await ApplyAgentProjectNameAsync(streamEvent.Response.ProjectName);
                     _customerQuestion = streamEvent.Response.CustomerQuestion;
                     RequestScrollToLatestMessage();
                     await InvokeAsync(StateHasChanged);
@@ -3362,7 +3365,7 @@
         _artifacts = state.Artifacts;
         _proposedActions = state.ProposedActions;
         _stateWorkbench = BuildRestoredWorkbench(state);
-        ApplyAgentProjectName(state.ProjectName);
+        await ApplyAgentProjectNameAsync(state.ProjectName);
         await ApplyUiDirectivesAsync(state.UiDirectives, suppressPanelAutoOpen);
         if (!suppressPanelAutoOpen && HasVisiblePaymentArtifact())
         {
@@ -4079,12 +4082,13 @@
         }
     }
 
-    private Task OnProjectNameInputAsync(ChangeEventArgs args)
+    private async Task OnProjectNameInputAsync(ChangeEventArgs args)
     {
         _projectName = args.Value?.ToString() ?? string.Empty;
         _projectNameUserSet = true;
+        UpdateCurrentProjectNavTitle(_projectName);
+        await NotifyProjectNameChangedAsync(_projectName);
         StateHasChanged();
-        return Task.CompletedTask;
     }
 
     private async Task ScrollToLatestMessageAsync()
@@ -5637,34 +5641,79 @@
 
     private void EnsureLocalProjectFromMessage(string message)
     {
+        var projectTitle = NormalizeProjectNavTitle(_projectName) ?? DefaultProjectTitle;
         var existingProject = _projects.FirstOrDefault(project => project.ProjectId == SessionId);
         if (existingProject is not null)
         {
             if (string.IsNullOrWhiteSpace(existingProject.NameEn))
             {
-                existingProject.NameEn = DefaultProjectTitle;
+                existingProject.NameEn = projectTitle;
             }
 
             if (string.IsNullOrWhiteSpace(existingProject.NameTh))
             {
-                existingProject.NameTh = DefaultProjectTitle;
+                existingProject.NameTh = projectTitle;
             }
 
             existingProject.Status = "draft";
             return;
         }
 
-        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, DefaultProjectTitle, DefaultProjectTitle, "draft", false, false));
+        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, projectTitle, projectTitle, "draft", false, false));
     }
 
     private string DefaultProjectTitle => Text("New manufacturing project", "โปรเจกต์ผลิตใหม่");
 
-    private void ApplyAgentProjectName(string? projectName)
+    private async Task ApplyAgentProjectNameAsync(string? projectName)
     {
-        if (!_projectNameUserSet && !string.IsNullOrWhiteSpace(projectName))
+        var normalizedProjectName = NormalizeProjectNavTitle(projectName);
+        if (normalizedProjectName is null)
         {
-            _projectName = projectName;
+            return;
         }
+
+        if (!_projectNameUserSet)
+        {
+            _projectName = normalizedProjectName;
+        }
+
+        UpdateCurrentProjectNavTitle(normalizedProjectName);
+        await NotifyProjectNameChangedAsync(normalizedProjectName);
+    }
+
+    private void UpdateCurrentProjectNavTitle(string? projectName)
+    {
+        var normalizedProjectName = NormalizeProjectNavTitle(projectName);
+        if (normalizedProjectName is null)
+        {
+            return;
+        }
+
+        var existingProject = _projects.FirstOrDefault(project => project.ProjectId == SessionId);
+        if (existingProject is not null)
+        {
+            existingProject.NameEn = normalizedProjectName;
+            existingProject.NameTh = normalizedProjectName;
+            existingProject.Status = "draft";
+            return;
+        }
+
+        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, normalizedProjectName, normalizedProjectName, "draft", false, false));
+    }
+
+    private async Task NotifyProjectNameChangedAsync(string? projectName)
+    {
+        var normalizedProjectName = NormalizeProjectNavTitle(projectName);
+        if (normalizedProjectName is not null)
+        {
+            await OnProjectNameChanged.InvokeAsync(normalizedProjectName);
+        }
+    }
+
+    private static string? NormalizeProjectNavTitle(string? projectName)
+    {
+        var normalizedProjectName = projectName?.Trim();
+        return string.IsNullOrWhiteSpace(normalizedProjectName) ? null : normalizedProjectName;
     }
 
     private static string ProjectHref(ProjectNavItem project)

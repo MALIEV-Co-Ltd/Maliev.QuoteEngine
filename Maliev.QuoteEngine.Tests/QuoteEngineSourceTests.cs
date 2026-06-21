@@ -784,6 +784,34 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public async Task QuoteAgentLaunchShell_updates_current_project_nav_title_from_agent_project_name()
+    {
+        var sessionId = Guid.NewGuid();
+        var shellType = typeof(QuoteAgentLaunchShell);
+        var shell = Activator.CreateInstance(shellType, nonPublic: true)!;
+        shellType.GetProperty(nameof(QuoteAgentLaunchShell.SessionId))!.SetValue(shell, sessionId);
+
+        var projectType = shellType.GetNestedType("ProjectNavItem", BindingFlags.NonPublic)!;
+        var projectCtor = projectType.GetConstructor(
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
+            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool)])!;
+        var project = projectCtor.Invoke([sessionId, string.Empty, "New manufacturing project", "New manufacturing project", "draft", false, false]);
+        var projects = Activator.CreateInstance(typeof(List<>).MakeGenericType(projectType))!;
+        ((IList)projects).Add(project);
+        shellType.GetField("_projects", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(shell, projects);
+
+        var applyTask = (Task)shellType.GetMethod("ApplyAgentProjectNameAsync", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(shell, ["Plastic Hammer - FDM PLA"])!;
+        await applyTask;
+
+        Assert.Equal("Plastic Hammer - FDM PLA", shellType.GetField("_projectName", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(shell));
+        Assert.Equal("Plastic Hammer - FDM PLA", projectType.GetProperty("NameEn")!.GetValue(project));
+        Assert.Equal("Plastic Hammer - FDM PLA", projectType.GetProperty("NameTh")!.GetValue(project));
+        Assert.Equal("draft", projectType.GetProperty("Status")!.GetValue(project));
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_starts_new_sessions_and_returns_from_management_pages()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
@@ -1913,6 +1941,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@ref=\"_agentShell\"", workspace, StringComparison.Ordinal);
         Assert.Contains("private QuoteAgentLaunchShell? _agentShell;", workspace, StringComparison.Ordinal);
         Assert.Contains("await _agentShell.ApplyAgentStateAsync(state);", workspace, StringComparison.Ordinal);
+        Assert.Contains("OnProjectNameChanged=\"UpdateProjectTitleFromAgentAsync\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("private Task UpdateProjectTitleFromAgentAsync(string projectName)", workspace, StringComparison.Ordinal);
+        Assert.Contains("_title = normalizedProjectName;", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("agent registered the uploaded file", workspace, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("public async Task ApplyAgentStateAsync(QuoteAgentStateResponse state)", shell, StringComparison.Ordinal);
         Assert.Contains("await ApplyStateAsync(state, suppressPanelAutoOpen: true);", shell, StringComparison.Ordinal);

@@ -49,6 +49,7 @@
                                    UploadInputElementId="@UploadInputId"
                                    OnUploadedPartSelected="SelectPart"
                                    OnUploadRequested="OpenFilePickerAsync"
+                                   OnProjectNameChanged="UpdateProjectTitleFromAgentAsync"
                                    OnNewProjectRequested="StartNewProjectAsync" />
         </main>
     </div>
@@ -220,6 +221,17 @@
         {
             await SynchronizeRouteStateAsync(force: false);
         }
+    }
+
+    private Task UpdateProjectTitleFromAgentAsync(string projectName)
+    {
+        var normalizedProjectName = projectName.Trim();
+        if (!string.IsNullOrWhiteSpace(normalizedProjectName))
+        {
+            _title = normalizedProjectName;
+        }
+
+        return Task.CompletedTask;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
