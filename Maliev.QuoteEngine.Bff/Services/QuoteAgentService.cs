@@ -5293,7 +5293,7 @@ internal sealed class QuoteAgentService(
             "Default to qty=1, standard tolerance, and standard lead time when not stated. " +
             "State your inferred assumptions first, then ask only for genuinely missing critical information. " +
             "For UI language changes, call quote_set_ui_language only. " +
-            "For customer follow-up questions, call quote_ask_customer with 2-4 discrete options. " +
+            "For customer follow-up questions, call quote_ask_customer only for genuinely blocking ambiguity that cannot be safely inferred or defaulted, with 2-4 discrete mutually exclusive options. " +
             "Project naming: call quote_set_project_name with a short part/process/material title, not the customer's literal question. " +
             "Unlabeled sketches need dimension confirmation and must not trigger a 3D preview by themselves. " +
             "For PDF/technical drawings, inspect the attached document as drawing context; summarize visible/readable shape, dimensions, tolerances, material, finish, and blockers before asking for missing facts. " +
@@ -5315,11 +5315,10 @@ internal sealed class QuoteAgentService(
             "Project naming: When calling quote_set_project_name, derive a short descriptive title from the part file name and inferred process/material " +
             "(e.g. 'Flower Oval – FDM PLA', 'L-Bracket – SLA Resin'). Never set the project name to the customer's literal question.");
         contextLines.Add(
-            "Customer questions: Use quote_ask_customer for short confirmation prompts, missing quote requirements, and customer decisions with 2–4 discrete mutually exclusive options, " +
-            "including yes/no confirmations such as whether to use inferred details or edit them; never leave those as only plain assistant text. " +
-            "When multiple quote details are missing, ask one focused question with quote_ask_customer, wait for the customer response, then ask the next missing detail in the following turn. " +
-            "Do not put a checklist of multiple missing details in assistant text when quote_ask_customer can ask the first question. " +
-            "Use normal text only for details you can confidently infer. At most once per turn.");
+            "Customer questions: Use quote_ask_customer only when a customer decision is required and the options are truly mutually exclusive, such as choosing between processes when material, use case, and file context do not imply one. " +
+            "Do not use quote_ask_customer for quantity, lead time, finish, tolerance, or other quote details that can be defaulted or inferred; state the default assumption in normal text instead. " +
+            "When multiple non-defaultable details are missing, ask one focused question with quote_ask_customer, wait for the customer response, then ask the next missing detail in the following turn. " +
+            "Never use quote_ask_customer as a checklist of missing requirements. At most once per turn.");
 
         if (!string.IsNullOrWhiteSpace(replyToPreview))
         {

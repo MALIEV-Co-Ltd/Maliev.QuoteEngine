@@ -4386,6 +4386,9 @@ Customer message:
         Assert.Contains("Project naming:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("quote_set_project_name", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("quote_ask_customer", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("only for genuinely blocking ambiguity", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Do not use quote_ask_customer for quantity, lead time, finish, tolerance", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("state the default assumption in normal text", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("Unlabeled sketches need dimension confirmation", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("For PDF/technical drawings, inspect the attached document as drawing context", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("Do not claim you cannot read the PDF", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
