@@ -60,6 +60,26 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteEngine_animation_surfaces_do_not_default_to_reduced_motion()
+    {
+        var loader = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
+        var viewerScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js");
+
+        Assert.Contains("setMotion(resolveMotion(false));", loader, StringComparison.Ordinal);
+        Assert.Contains("const isMotionReduced = resolveMotion(false);", loader, StringComparison.Ordinal);
+        Assert.DoesNotContain("setMotion(resolveMotion(true));", loader, StringComparison.Ordinal);
+        Assert.DoesNotContain("const isMotionReduced = resolveMotion(true);", loader, StringComparison.Ordinal);
+        Assert.DoesNotContain("prefers-reduced-motion", loader, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("matchMedia('(prefers-reduced-motion", loader, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("matchMedia(\"(prefers-reduced-motion", loader, StringComparison.OrdinalIgnoreCase);
+
+        Assert.DoesNotContain("prefers-reduced-motion", viewerScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("reducedMotion", viewerScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("matchMedia('(prefers-reduced-motion", viewerScript, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("matchMedia(\"(prefers-reduced-motion", viewerScript, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void QeDfmDtos_round_trip_through_json()
     {
         var report = new QeFdmDfmReport(
