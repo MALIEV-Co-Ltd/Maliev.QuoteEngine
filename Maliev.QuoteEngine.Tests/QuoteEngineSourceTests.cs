@@ -4533,7 +4533,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("The command array may also be wrapped under commands/cadCommands or split into shapes/objects/parts plus operations/actions/steps.", service, StringComparison.Ordinal);
         Assert.Contains("Profiles may use params, size, radius/diameter, points/polyline/vertices, or sketch/profile2D aliases.", service, StringComparison.Ordinal);
         Assert.Contains("Use angle in radians or angleDegrees/degrees for rotate/revolve.", service, StringComparison.Ordinal);
-        Assert.Contains("\"extrude\" => BuildParams(command.Height)", service, StringComparison.Ordinal);
+        Assert.Contains("Generated 3D preview iterations are revisions of one active quote workbench artifact", service, StringComparison.Ordinal);
+        Assert.Contains("\"extrude\" => BuildParams(command.Height ?? command.Thickness)", service, StringComparison.Ordinal);
         Assert.Contains("command.Offset = command.Translation;", service, StringComparison.Ordinal);
         Assert.Contains("command.Offset = BuildParams(command.X, command.Y, command.Z);", service, StringComparison.Ordinal);
         Assert.Contains("command.Axis = command.RotationAxis;", service, StringComparison.Ordinal);
@@ -4542,7 +4543,7 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void Generate3DPreview_returns_the_artifact_it_created()
+    public void Generate3DPreview_returns_the_artifact_it_created_or_revised()
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs")
             .ReplaceLineEndings("\n");
@@ -4554,6 +4555,9 @@ public sealed class QuoteEngineSourceTests
         Assert.True(methodEnd > methodStart, "Generate3DPreview must end before ReadCommands.");
 
         var method = service[methodStart..methodEnd];
+        Assert.Contains("state.Artifacts.LastOrDefault(IsGeneratedViewerArtifact)", method, StringComparison.Ordinal);
+        Assert.Contains("UpsertGeneratedPreviewPart(state, partId, description, process, commands);", method, StringComparison.Ordinal);
+        Assert.Contains("artifact.Metadata[\"workbenchAttached\"] = \"true\";", method, StringComparison.Ordinal);
         Assert.Contains("artifact_id = artifact.ArtifactId", method, StringComparison.Ordinal);
         Assert.DoesNotContain("state.Artifacts.Last().ArtifactId", method, StringComparison.Ordinal);
     }
@@ -4890,22 +4894,24 @@ public sealed class QuoteEngineSourceTests
 
         var submit = shell[submitStart..submitEnd];
         Assert.Contains("result?.MemoryObserved == true", submit, StringComparison.Ordinal);
-        Assert.Contains("Feedback recorded for future drafts", submit, StringComparison.Ordinal);
-        Assert.Contains("Feedback recorded", submit, StringComparison.Ordinal);
+        Assert.Contains("Design marked usable for this quote", submit, StringComparison.Ordinal);
+        Assert.Contains("Issue report recorded for future drafts", submit, StringComparison.Ordinal);
+        Assert.Contains("Issue report recorded", submit, StringComparison.Ordinal);
 
         var buildStart = shell.IndexOf("private static InlineViewerInfo? FindInlinePreview", StringComparison.Ordinal);
         Assert.True(buildStart >= 0, "FindInlinePreview must exist.");
 
-        var buildEnd = shell.IndexOf("\n    private static string InlineViewerRatingClass", buildStart, StringComparison.Ordinal);
-        Assert.True(buildEnd > buildStart, "FindInlinePreview must end before InlineViewerRatingClass.");
+        var buildEnd = shell.IndexOf("\n    private static string InlineViewerSentimentClass", buildStart, StringComparison.Ordinal);
+        Assert.True(buildEnd > buildStart, "FindInlinePreview must end before InlineViewerSentimentClass.");
 
         var build = shell[buildStart..buildEnd];
         Assert.Contains("feedbackMemoryObserved", build, StringComparison.Ordinal);
-        Assert.Contains("Feedback recorded for future drafts", build, StringComparison.Ordinal);
+        Assert.Contains("InlineViewerFeedbackStatus(generated)", build, StringComparison.Ordinal);
+        Assert.Contains("Design marked usable for this quote", shell, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_allows_rating_only_generated_preview_feedback()
+    public void QuoteAgentLaunchShell_allows_sentiment_only_generated_preview_feedback()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
             .ReplaceLineEndings("\n");
@@ -4917,12 +4923,13 @@ public sealed class QuoteEngineSourceTests
         Assert.True(gateEnd > gateStart, "CanSubmitInlineViewerFeedback must end before SubmitInlineViewerFeedbackAsync.");
 
         var gate = shell[gateStart..gateEnd];
-        Assert.Contains("viewer.FeedbackRating is >= 1 and <= 5", gate, StringComparison.Ordinal);
+        Assert.Contains("viewer.FeedbackSentiment.Equals(\"up\", StringComparison.OrdinalIgnoreCase)", gate, StringComparison.Ordinal);
+        Assert.Contains("viewer.FeedbackSentiment.Equals(\"down\", StringComparison.OrdinalIgnoreCase)", gate, StringComparison.Ordinal);
         Assert.DoesNotContain("IsNullOrWhiteSpace(viewer.FeedbackComment)", gate, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_rating_buttons_expose_pressed_state_and_isolate_clicks()
+    public void QuoteAgentLaunchShell_thumb_buttons_expose_pressed_state_and_isolate_clicks()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
             .ReplaceLineEndings("\n");
@@ -4934,10 +4941,14 @@ public sealed class QuoteEngineSourceTests
         Assert.True(ratingEnd > ratingStart, "Inline viewer rating controls must be scoped before the comment field.");
 
         var ratingMarkup = shell[ratingStart..ratingEnd];
-        Assert.Contains("aria-pressed=\"@InlineViewerRatingPressed(message.InlineViewer, currentRating)\"", ratingMarkup, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Filled.ThumbUp", ratingMarkup, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Filled.ThumbDown", ratingMarkup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Icons.Material.Filled.Star", ratingMarkup, StringComparison.Ordinal);
+        Assert.Contains("aria-pressed=\"@InlineViewerSentimentPressed(message.InlineViewer, ThumbUpSentiment)\"", ratingMarkup, StringComparison.Ordinal);
+        Assert.Contains("aria-pressed=\"@InlineViewerSentimentPressed(message.InlineViewer, ThumbDownSentiment)\"", ratingMarkup, StringComparison.Ordinal);
         Assert.Contains("@onclick:stopPropagation=\"true\"", ratingMarkup, StringComparison.Ordinal);
-        Assert.Contains("private static string InlineViewerRatingPressed(InlineViewerInfo viewer, int rating)", shell, StringComparison.Ordinal);
-        Assert.Contains("return rating <= viewer.FeedbackRating ? \"true\" : \"false\";", shell, StringComparison.Ordinal);
+        Assert.Contains("private static string InlineViewerSentimentPressed(InlineViewerInfo viewer, string sentiment)", shell, StringComparison.Ordinal);
+        Assert.Contains("viewer.FeedbackSentiment.Equals(sentiment, StringComparison.OrdinalIgnoreCase) ? \"true\" : \"false\";", shell, StringComparison.Ordinal);
     }
 
     [Fact]

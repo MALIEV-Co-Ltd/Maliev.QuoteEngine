@@ -472,11 +472,12 @@ public sealed class QuoteAgentToolRequest
 /// </summary>
 public sealed class QuoteAgentPreviewFeedbackRequest
 {
-    /// <summary>Gets or sets the customer rating from 1 (poor) to 5 (excellent).</summary>
-    [Range(1, 5)]
-    public int Rating { get; set; }
+    /// <summary>Gets or sets the customer sentiment: up or down.</summary>
+    [Required]
+    [RegularExpression("^(up|down)$")]
+    public string Sentiment { get; set; } = string.Empty;
 
-    /// <summary>Gets or sets optional customer comments that should improve future generated drafts.</summary>
+    /// <summary>Gets or sets optional customer comments for reporting issues with the generated asset.</summary>
     [StringLength(1200)]
     public string Comment { get; set; } = string.Empty;
 }

@@ -553,6 +553,7 @@ internal sealed class QuoteAgentService(
     {
         var state = sessionStore.GetOrCreate(sessionId);
         var customerId = ResolveCustomerId() ?? state.CustomerId;
+        var sentiment = NormalizePreviewFeedbackSentiment(request.Sentiment);
         var comment = SanitizePreviewFeedbackForAgentContext(request.Comment ?? string.Empty);
         string artifactTitle;
         string artifactDescription;
@@ -578,7 +579,8 @@ internal sealed class QuoteAgentService(
             cadCommandSummary = artifact.Metadata.TryGetValue("cad_commands", out var commandsJson)
                 ? BuildPreviewFeedbackCommandSummary(commandsJson)
                 : null;
-            artifact.Metadata["customerRating"] = request.Rating.ToString(CultureInfo.InvariantCulture);
+            artifact.Metadata.Remove("customerRating");
+            artifact.Metadata["customerSentiment"] = sentiment;
             if (string.IsNullOrWhiteSpace(comment))
             {
                 artifact.Metadata.Remove("customerComment");
@@ -589,7 +591,10 @@ internal sealed class QuoteAgentService(
             }
 
             artifact.Metadata["feedbackObservedAt"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-            artifact.Status = "feedback_recorded";
+            artifact.Metadata["customerApproved"] = sentiment.Equals("up", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+            artifact.Status = sentiment.Equals("up", StringComparison.OrdinalIgnoreCase)
+                ? "customer_approved"
+                : "issue_reported";
             state.CustomerId = customerId ?? state.CustomerId;
             state.UpdatedAt = DateTimeOffset.UtcNow;
         }
@@ -605,8 +610,8 @@ internal sealed class QuoteAgentService(
                     {
                         MemoryType = "make_studio_feedback",
                         Key = "generated_3d_preview_feedback",
-                        Value = BuildPreviewFeedbackMemoryValue(artifactDescription, request.Rating, comment, cadCommandSummary),
-                        Confidence = Math.Clamp(request.Rating / 5m, 0.2m, 0.95m),
+                        Value = BuildPreviewFeedbackMemoryValue(artifactDescription, sentiment, comment, cadCommandSummary),
+                        Confidence = sentiment.Equals("up", StringComparison.OrdinalIgnoreCase) ? 0.85m : 0.35m,
                         Source = "quote_agent"
                     },
                     cancellationToken);
@@ -651,6 +656,14 @@ internal sealed class QuoteAgentService(
             MemoryObserved = memoryObserved,
             State = ToStateResponse(state)
         };
+    }
+
+    private static string NormalizePreviewFeedbackSentiment(string? sentiment)
+    {
+        var normalized = sentiment?.Trim().ToLowerInvariant();
+        return normalized is "up" or "down"
+            ? normalized
+            : throw new InvalidOperationException("Preview feedback sentiment must be up or down.");
     }
 
     public async Task<QuoteAgentSearchResponse> SearchCustomerDataAsync(
@@ -5516,6 +5529,7 @@ internal sealed class QuoteAgentService(
             "Profiles may use params, size, radius/diameter, points/polyline/vertices, or sketch/profile2D aliases. " +
             "Use angle in radians or angleDegrees/degrees for rotate/revolve. " +
             "Build primitives first, translate/rotate them, combine/cut/intersect or loft explicit targets, then apply edge operations. " +
+            "Generated 3D preview iterations are revisions of one active quote workbench artifact: when the customer asks for changes such as moving holes or correcting dimensions, call quote_generate_3d_preview with the full revised cad_commands for the current design, not a separate replacement asset. " +
             "After a preview, describe the assumptions and ask the customer to verify shape and dimensions.");
         contextLines.Add(
             "Structured presentation: Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables " +
@@ -5703,8 +5717,8 @@ Customer message:
         var feedbackItems = artifacts
             .Where(IsGeneratedViewerArtifact)
             .Where(artifact =>
-                artifact.Metadata.TryGetValue("customerRating", out var rating) &&
-                !string.IsNullOrWhiteSpace(rating))
+                artifact.Metadata.TryGetValue("customerSentiment", out var sentiment) &&
+                !string.IsNullOrWhiteSpace(sentiment))
             .TakeLast(3)
             .Reverse()
             .Select(artifact =>
@@ -5713,7 +5727,7 @@ Customer message:
                     !string.IsNullOrWhiteSpace(value)
                         ? value.Trim()
                         : artifact.Title;
-                var rating = artifact.Metadata["customerRating"].Trim();
+                var sentiment = artifact.Metadata["customerSentiment"].Trim();
                 var comment = artifact.Metadata.TryGetValue("customerComment", out var commentValue)
                     ? SanitizePreviewFeedbackForAgentContext(commentValue)
                     : string.Empty;
@@ -5723,8 +5737,8 @@ Customer message:
                 }
 
                 var feedback = string.IsNullOrWhiteSpace(comment)
-                    ? $"{description}: rating {rating}/5"
-                    : $"{description}: rating {rating}/5; customer comment: {comment}";
+                    ? $"{description}: thumbs {sentiment}"
+                    : $"{description}: thumbs {sentiment}; customer issue report: {comment}";
                 var cadCommandSummary = artifact.Metadata.TryGetValue("cad_commands", out var commandsJson)
                     ? BuildPreviewFeedbackCommandSummary(commandsJson)
                     : null;
@@ -5739,11 +5753,11 @@ Customer message:
             : $"Generated preview feedback: {string.Join("; ", feedbackItems)}. Use this feedback when revising or generating the next 3D draft.";
     }
 
-    private static string BuildPreviewFeedbackMemoryValue(string artifactDescription, int rating, string comment, string? cadCommandSummary)
+    private static string BuildPreviewFeedbackMemoryValue(string artifactDescription, string sentiment, string comment, string? cadCommandSummary)
     {
         var feedback = string.IsNullOrWhiteSpace(comment)
-            ? $"3D preview feedback for {artifactDescription}: rating {rating.ToString(CultureInfo.InvariantCulture)}/5"
-            : $"3D preview feedback for {artifactDescription}: rating {rating.ToString(CultureInfo.InvariantCulture)}/5; comment: {comment}";
+            ? $"3D preview feedback for {artifactDescription}: thumbs {sentiment}"
+            : $"3D preview feedback for {artifactDescription}: thumbs {sentiment}; issue report: {comment}";
         return string.IsNullOrWhiteSpace(cadCommandSummary)
             ? feedback
             : $"{feedback}; CAD commands: {cadCommandSummary}";
@@ -6673,40 +6687,44 @@ Customer message:
 
         var process = !string.IsNullOrWhiteSpace(processHint) ? processHint : "fdm";
         var commandsJson = JsonSerializer.Serialize(commands, JsonOptions);
-        var partId = Guid.NewGuid();
-        var artifact = new QuoteAgentArtifactDto
-        {
-            ArtifactType = "viewer",
-            Title = $"3D preview - {description}",
-            Status = "ready",
-            PartId = partId
-        };
-        artifact.Metadata["generated"] = "true";
-        artifact.Metadata["description"] = EscapeMetadataValue(description);
-        artifact.Metadata["cad_commands"] = commandsJson;
-        artifact.Metadata["commandCount"] = commands.Count.ToString(CultureInfo.InvariantCulture);
+        Guid partId;
+        QuoteAgentArtifactDto artifact;
 
         lock (state.SyncRoot)
         {
-            state.Parts.Add(new QuotePartDraftDto
+            artifact = state.Artifacts.LastOrDefault(IsGeneratedViewerArtifact) ?? new QuoteAgentArtifactDto
             {
-                PartId = partId,
-                FileId = Guid.NewGuid(),
-                UploadId = $"generated-{partId:N}",
-                FileName = $"[Preview] {description}",
-                ProcessId = InferProcessFromMessage(description) ?? process,
-                MaterialId = InferMaterial(process, description),
-                Quantity = InferQuantity(description),
-                VolumeCc = EstimateCommandsVolume(commands),
-                SurfaceAreaCm2 = EstimateCommandsArea(commands),
-                Status = "ModelGenerated",
-                IsManifold = true,
-                BodyCount = commands.Count,
-                SelectedBodyIndex = 0,
-                PartNotes = "Generated 3D preview from inferred description."
-            });
+                ArtifactType = "viewer"
+            };
+            var isRevision = artifact.ArtifactId != Guid.Empty && state.Artifacts.Contains(artifact);
+            partId = artifact.PartId ?? Guid.NewGuid();
 
-            state.Artifacts.Add(artifact);
+            artifact.ArtifactType = "viewer";
+            artifact.Title = $"3D preview - {description}";
+            artifact.Status = "ready";
+            artifact.PartId = partId;
+            artifact.Url = null;
+            artifact.Metadata["generated"] = "true";
+            artifact.Metadata["description"] = EscapeMetadataValue(description);
+            artifact.Metadata["cad_commands"] = commandsJson;
+            artifact.Metadata["commandCount"] = commands.Count.ToString(CultureInfo.InvariantCulture);
+            artifact.Metadata["workbenchAttached"] = "true";
+            artifact.Metadata["currentDesign"] = "true";
+            artifact.Metadata["revision"] = NextGeneratedPreviewRevision(artifact).ToString(CultureInfo.InvariantCulture);
+            artifact.Metadata["updatedAt"] = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+            artifact.Metadata.Remove("customerRating");
+            artifact.Metadata.Remove("customerSentiment");
+            artifact.Metadata.Remove("customerComment");
+            artifact.Metadata.Remove("feedbackObservedAt");
+            artifact.Metadata.Remove("feedbackMemoryObserved");
+            artifact.Metadata.Remove("customerApproved");
+
+            if (!isRevision)
+            {
+                state.Artifacts.Add(artifact);
+            }
+
+            UpsertGeneratedPreviewPart(state, partId, description, process, commands);
             state.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
@@ -6719,6 +6737,47 @@ Customer message:
             command_count = commands.Count,
             message = $"Generated 3D preview with {commands.Count} command(s): {description}"
         };
+    }
+
+    private static int NextGeneratedPreviewRevision(QuoteAgentArtifactDto artifact)
+    {
+        return artifact.Metadata.TryGetValue("revision", out var revision) &&
+            int.TryParse(revision, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) &&
+            parsed > 0
+                ? parsed + 1
+                : 1;
+    }
+
+    private static void UpsertGeneratedPreviewPart(
+        QuoteAgentSessionState state,
+        Guid partId,
+        string description,
+        string process,
+        IReadOnlyList<CadCommandDto> commands)
+    {
+        var part = state.Parts.FirstOrDefault(item => item.PartId == partId);
+        if (part is null)
+        {
+            part = new QuotePartDraftDto
+            {
+                PartId = partId,
+                FileId = Guid.NewGuid(),
+                UploadId = $"generated-{partId:N}"
+            };
+            state.Parts.Add(part);
+        }
+
+        part.FileName = $"[Preview] {description}";
+        part.ProcessId = InferProcessFromMessage(description) ?? process;
+        part.MaterialId = InferMaterial(process, description);
+        part.Quantity = InferQuantity(description);
+        part.VolumeCc = EstimateCommandsVolume(commands);
+        part.SurfaceAreaCm2 = EstimateCommandsArea(commands);
+        part.Status = "ModelGenerated";
+        part.IsManifold = true;
+        part.BodyCount = commands.Count;
+        part.SelectedBodyIndex = 0;
+        part.PartNotes = "Generated 3D preview from inferred description.";
     }
 
     private static IReadOnlyList<CadCommandDto> ReadCommands(IReadOnlyDictionary<string, JsonElement> arguments)

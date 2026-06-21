@@ -642,25 +642,30 @@
                                     <section class="qe-agent-inline-viewer">
                                         <QeInlinePartViewer CommandsJson="@message.InlineViewer.CommandsJson" />
                                         <div class="qe-inline-viewer-feedback" aria-label="@Text("3D preview feedback", "ความคิดเห็นต่อพรีวิว 3D")">
-                                            <div class="qe-inline-viewer-rating" role="group" aria-label="@Text("Rate this 3D preview", "ให้คะแนนพรีวิว 3D นี้")">
-                                                @for (var rating = 1; rating <= 5; rating++)
-                                                {
-                                                    var currentRating = rating;
-                                                    <button type="button"
-                                                            class="@InlineViewerRatingClass(message.InlineViewer, currentRating)"
-                                                            title="@Text($"Rate {currentRating} out of 5", $"ให้ {currentRating} จาก 5")"
-                                                            aria-label="@Text($"Rate {currentRating} out of 5", $"ให้ {currentRating} จาก 5")"
-                                                            aria-pressed="@InlineViewerRatingPressed(message.InlineViewer, currentRating)"
-                                                            @onclick:stopPropagation="true"
-                                                            @onclick="@(() => SetInlineViewerRating(message.InlineViewer, currentRating))">
-                                                        <MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Small" />
-                                                    </button>
-                                                }
+                                            <div class="qe-inline-viewer-rating" role="group" aria-label="@Text("Was this 3D preview useful?", "พรีวิว 3D นี้ใช้ได้หรือไม่")">
+                                                <button type="button"
+                                                        class="@InlineViewerSentimentClass(message.InlineViewer, ThumbUpSentiment)"
+                                                        title="@Text("This design is usable", "แบบนี้ใช้ได้")"
+                                                        aria-label="@Text("This design is usable", "แบบนี้ใช้ได้")"
+                                                        aria-pressed="@InlineViewerSentimentPressed(message.InlineViewer, ThumbUpSentiment)"
+                                                        @onclick:stopPropagation="true"
+                                                        @onclick="@(() => SetInlineViewerSentiment(message.InlineViewer, ThumbUpSentiment))">
+                                                    <MudIcon Icon="@Icons.Material.Filled.ThumbUp" Size="Size.Small" />
+                                                </button>
+                                                <button type="button"
+                                                        class="@InlineViewerSentimentClass(message.InlineViewer, ThumbDownSentiment)"
+                                                        title="@Text("Report an issue with this design", "แจ้งปัญหาของแบบนี้")"
+                                                        aria-label="@Text("Report an issue with this design", "แจ้งปัญหาของแบบนี้")"
+                                                        aria-pressed="@InlineViewerSentimentPressed(message.InlineViewer, ThumbDownSentiment)"
+                                                        @onclick:stopPropagation="true"
+                                                        @onclick="@(() => SetInlineViewerSentiment(message.InlineViewer, ThumbDownSentiment))">
+                                                    <MudIcon Icon="@Icons.Material.Filled.ThumbDown" Size="Size.Small" />
+                                                </button>
                                             </div>
                                             <textarea class="qe-inline-viewer-comment"
                                                       rows="2"
                                                       maxlength="1200"
-                                                      placeholder="@Text("Add design feedback for the next draft", "เพิ่มความคิดเห็นสำหรับแบบร่างถัดไป")"
+                                                      placeholder="@Text("Optional: report what is wrong with the generated asset", "ไม่บังคับ: แจ้งปัญหาของไฟล์ที่สร้าง")"
                                                       @bind="message.InlineViewer.FeedbackComment"
                                                       @bind:event="oninput"></textarea>
                                             <div class="qe-inline-viewer-feedback-actions">
@@ -669,7 +674,7 @@
                                                         disabled="@(!CanSubmitInlineViewerFeedback(message.InlineViewer))"
                                                         @onclick="@(() => SubmitInlineViewerFeedbackAsync(message))">
                                                     <MudIcon Icon="@Icons.Material.Outlined.Send" Size="Size.Small" />
-                                                    <span>@Text("Send feedback", "ส่งความคิดเห็น")</span>
+                                                    <span>@Text("Send", "ส่ง")</span>
                                                 </button>
                                                 @if (!string.IsNullOrWhiteSpace(message.InlineViewer.FeedbackStatus))
                                                 {
@@ -1907,6 +1912,8 @@
     private const int SearchPromptVisibleCharacters = 28;
     private const int DictationMeterBarCount = 320;
     private const int AgentStreamRevealCharacters = 18;
+    private const string ThumbUpSentiment = "up";
+    private const string ThumbDownSentiment = "down";
     private static readonly TimeSpan AgentHealthRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan AgentStreamRevealInterval = TimeSpan.FromMilliseconds(28);
     private List<QuoteAgentGateDto> _gates = [];
@@ -5151,33 +5158,47 @@
         {
             ArtifactId = generated.ArtifactId,
             CommandsJson = commandsJson,
-            FeedbackRating = int.TryParse(ArtifactMetadata(generated, "customerRating"), CultureInfo.InvariantCulture, out var rating)
-                ? Math.Clamp(rating, 1, 5)
-                : 0,
+            FeedbackSentiment = ArtifactMetadata(generated, "customerSentiment") ?? string.Empty,
             FeedbackComment = ArtifactMetadata(generated, "customerComment") ?? string.Empty,
-            FeedbackStatus = generated.Status.Equals("feedback_recorded", StringComparison.OrdinalIgnoreCase)
-                ? ArtifactMetadata(generated, "feedbackMemoryObserved") == "true"
-                    ? "Feedback recorded for future drafts"
-                    : "Feedback recorded"
-                : string.Empty
+            FeedbackStatus = InlineViewerFeedbackStatus(generated)
         };
     }
 
-    private static string InlineViewerRatingClass(InlineViewerInfo viewer, int rating)
+    private static string InlineViewerFeedbackStatus(QuoteAgentArtifactDto artifact)
     {
-        return rating <= viewer.FeedbackRating
+        if (artifact.Status.Equals("customer_approved", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Design marked usable for this quote";
+        }
+
+        if (artifact.Status.Equals("issue_reported", StringComparison.OrdinalIgnoreCase))
+        {
+            return artifact.Metadata.TryGetValue("feedbackMemoryObserved", out var observed) &&
+                observed.Equals("true", StringComparison.OrdinalIgnoreCase)
+                    ? "Issue report recorded for future drafts"
+                    : "Issue report recorded";
+        }
+
+        return artifact.Status.Equals("feedback_recorded", StringComparison.OrdinalIgnoreCase)
+            ? "Feedback recorded"
+            : string.Empty;
+    }
+
+    private static string InlineViewerSentimentClass(InlineViewerInfo viewer, string sentiment)
+    {
+        return viewer.FeedbackSentiment.Equals(sentiment, StringComparison.OrdinalIgnoreCase)
             ? "qe-inline-viewer-rating-button is-selected"
             : "qe-inline-viewer-rating-button";
     }
 
-    private static string InlineViewerRatingPressed(InlineViewerInfo viewer, int rating)
+    private static string InlineViewerSentimentPressed(InlineViewerInfo viewer, string sentiment)
     {
-        return rating <= viewer.FeedbackRating ? "true" : "false";
+        return viewer.FeedbackSentiment.Equals(sentiment, StringComparison.OrdinalIgnoreCase) ? "true" : "false";
     }
 
-    private static void SetInlineViewerRating(InlineViewerInfo viewer, int rating)
+    private static void SetInlineViewerSentiment(InlineViewerInfo viewer, string sentiment)
     {
-        viewer.FeedbackRating = Math.Clamp(rating, 1, 5);
+        viewer.FeedbackSentiment = sentiment;
         viewer.FeedbackStatus = string.Empty;
     }
 
@@ -5185,7 +5206,8 @@
     {
         return !viewer.IsFeedbackSubmitting &&
             viewer.ArtifactId != Guid.Empty &&
-            viewer.FeedbackRating is >= 1 and <= 5;
+            (viewer.FeedbackSentiment.Equals("up", StringComparison.OrdinalIgnoreCase) ||
+                viewer.FeedbackSentiment.Equals("down", StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task SubmitInlineViewerFeedbackAsync(AgentMessageRow message)
@@ -5204,7 +5226,7 @@
                 $"/quote/v1/agent/sessions/{SessionId:D}/artifacts/{viewer.ArtifactId:D}/feedback",
                 new QuoteAgentPreviewFeedbackRequest
                 {
-                    Rating = viewer.FeedbackRating,
+                    Sentiment = viewer.FeedbackSentiment,
                     Comment = viewer.FeedbackComment.Trim()
                 });
 
@@ -5223,9 +5245,11 @@
             }
 
             viewer.FeedbackComment = viewer.FeedbackComment.Trim();
-            viewer.FeedbackStatus = result?.MemoryObserved == true
-                ? Text("Feedback recorded for future drafts", "บันทึกความคิดเห็นสำหรับแบบร่างถัดไปแล้ว")
-                : Text("Feedback recorded", "บันทึกความคิดเห็นแล้ว");
+            viewer.FeedbackStatus = viewer.FeedbackSentiment.Equals(ThumbUpSentiment, StringComparison.OrdinalIgnoreCase)
+                ? Text("Design marked usable for this quote", "ทำเครื่องหมายว่าแบบนี้ใช้กับใบเสนอราคาได้")
+                : result?.MemoryObserved == true
+                    ? Text("Issue report recorded for future drafts", "บันทึกรายงานปัญหาสำหรับแบบร่างถัดไปแล้ว")
+                    : Text("Issue report recorded", "บันทึกรายงานปัญหาแล้ว");
         }
         catch
         {
@@ -6274,7 +6298,7 @@
 
         public string CommandsJson { get; set; } = string.Empty;
 
-        public int FeedbackRating { get; set; }
+        public string FeedbackSentiment { get; set; } = string.Empty;
 
         public string FeedbackComment { get; set; } = string.Empty;
 

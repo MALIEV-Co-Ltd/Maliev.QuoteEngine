@@ -2480,17 +2480,17 @@
 .qe-inline-viewer-rating {
     display: inline-flex;
     align-items: center;
-    gap: 2px;
+    gap: 6px;
 }
 
 .qe-inline-viewer-rating-button {
     display: inline-grid;
-    width: 28px;
-    height: 28px;
+    width: 34px;
+    height: 32px;
     place-items: center;
-    border: 0;
+    border: 1px solid var(--qe-agent-border, #e9ecef);
     border-radius: 6px;
-    background: transparent;
+    background: var(--qe-agent-raised, #fff);
     color: var(--qe-agent-muted, #868e96);
     cursor: pointer;
 }
@@ -2498,8 +2498,9 @@
 .qe-inline-viewer-rating-button:hover,
 .qe-inline-viewer-rating-button:focus-visible,
 .qe-inline-viewer-rating-button.is-selected {
-    color: #b7791f;
-    background: rgba(183, 121, 31, .12);
+    color: var(--qe-agent-accent, #2563eb);
+    border-color: var(--qe-agent-accent, #2563eb);
+    background: rgba(37, 99, 235, .1);
     outline: none;
 }
 
