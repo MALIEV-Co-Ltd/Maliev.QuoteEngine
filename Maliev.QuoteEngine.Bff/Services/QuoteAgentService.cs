@@ -809,7 +809,7 @@ internal sealed class QuoteAgentService(
                 "account_profile_update" => await ExecuteAccountProfileUpdateAsync(state, customerId!.Value, action, cancellationToken),
                 "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
                 "quote_approval" => ExecuteQuoteApproval(state),
-                "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state),
+                "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state, action),
                 "create_order" => await ExecuteCreateOrderAsync(state, customerId!.Value, action, cancellationToken),
                 "start_payment" => await ExecuteStartPaymentAsync(state, customerId!.Value, action, cancellationToken),
                 _ => $"Action {action.ActionType} completed."
@@ -1489,11 +1489,10 @@ internal sealed class QuoteAgentService(
             };
         }
 
-        var issueCodes = CollectDfmIssueCodes(state)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (issueCodes.Length > 0)
+        var issueReferences = CollectDfmIssueReferences(state).ToArray();
+        if (issueReferences.Length > 0)
         {
+            var requiredIssueIds = BuildRequiredDfmIssueIds(issueReferences);
             var acknowledgedIssueIds = ReadStringArray(arguments, "issue_ids", "issueIds")
                 .Select(item => item.Trim())
                 .Where(item => !string.IsNullOrWhiteSpace(item))
@@ -1506,14 +1505,12 @@ internal sealed class QuoteAgentService(
                     error = "DFM issue identifiers are required before recording acknowledgement.",
                     requiredGateCode = "dfm_reviewed",
                     actionType = "dfm_acknowledgement",
-                    requiredIssueIds = issueCodes,
+                    requiredIssueIds,
                     state = ToStateResponse(state)
                 };
             }
 
-            var missingIssueIds = issueCodes
-                .Where(issueCode => !acknowledgedIssueIds.Contains(issueCode))
-                .ToArray();
+            var missingIssueIds = GetMissingDfmIssueIds(issueReferences, acknowledgedIssueIds);
             if (missingIssueIds.Length > 0)
             {
                 return new
@@ -1538,13 +1535,51 @@ internal sealed class QuoteAgentService(
 
     private static IEnumerable<string> CollectDfmIssueCodes(QuoteAgentSessionState state)
     {
+        return CollectDfmIssueReferences(state).Select(issue => issue.Code);
+    }
+
+    private static IReadOnlyList<string> BuildRequiredDfmIssueIds(IReadOnlyCollection<DfmIssueReference> issueReferences)
+    {
+        var duplicateCodes = issueReferences
+            .GroupBy(issue => issue.Code, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return issueReferences
+            .Select(issue => duplicateCodes.Contains(issue.Code) ? issue.ScopedId : issue.Code)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static string[] GetMissingDfmIssueIds(
+        IReadOnlyCollection<DfmIssueReference> issueReferences,
+        ISet<string> acknowledgedIssueIds)
+    {
+        var duplicateCodes = issueReferences
+            .GroupBy(issue => issue.Code, StringComparer.OrdinalIgnoreCase)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return issueReferences
+            .Where(issue => duplicateCodes.Contains(issue.Code)
+                ? !acknowledgedIssueIds.Contains(issue.ScopedId)
+                : !acknowledgedIssueIds.Contains(issue.Code))
+            .Select(issue => duplicateCodes.Contains(issue.Code) ? issue.ScopedId : issue.Code)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+    }
+
+    private static IEnumerable<DfmIssueReference> CollectDfmIssueReferences(QuoteAgentSessionState state)
+    {
         foreach (var part in state.Parts.Where(QuoteAgentSessionStore.HasDfmIssues))
         {
             foreach (var finding in part.Findings)
             {
                 if (!string.IsNullOrWhiteSpace(finding.Code))
                 {
-                    yield return finding.Code;
+                    yield return DfmIssueReference.Create(part, finding.Code);
                 }
             }
 
@@ -1552,7 +1587,7 @@ internal sealed class QuoteAgentService(
             {
                 if (!string.IsNullOrWhiteSpace(issue.Code))
                 {
-                    yield return issue.Code;
+                    yield return DfmIssueReference.Create(part, issue.Code);
                 }
             }
 
@@ -1560,7 +1595,7 @@ internal sealed class QuoteAgentService(
             {
                 if (!string.IsNullOrWhiteSpace(issue.Code))
                 {
-                    yield return issue.Code;
+                    yield return DfmIssueReference.Create(part, issue.Code);
                 }
             }
 
@@ -1568,14 +1603,29 @@ internal sealed class QuoteAgentService(
             {
                 if (!string.IsNullOrWhiteSpace(issue.Code))
                 {
-                    yield return issue.Code;
+                    yield return DfmIssueReference.Create(part, issue.Code);
                 }
             }
 
             if (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason))
             {
-                yield return "NON_MANIFOLD";
+                yield return DfmIssueReference.Create(part, "NON_MANIFOLD");
             }
+        }
+    }
+
+    private sealed record DfmIssueReference(string Code, string ScopedId)
+    {
+        public static DfmIssueReference Create(QuotePartDraftDto part, string code)
+        {
+            var normalizedCode = code.Trim();
+            var partKey = !string.IsNullOrWhiteSpace(part.UploadId)
+                ? part.UploadId.Trim()
+                : !string.IsNullOrWhiteSpace(part.FileName)
+                    ? part.FileName.Trim()
+                    : part.PartId.ToString("D");
+
+            return new DfmIssueReference(normalizedCode, $"{partKey}:{normalizedCode}");
         }
     }
 
@@ -3587,9 +3637,25 @@ internal sealed class QuoteAgentService(
         return $"Formal quote {state.FormalQuote.QuoteNumber} is approved.";
     }
 
-    private static string ExecuteDfmAcknowledgement(QuoteAgentSessionState state)
+    private static string ExecuteDfmAcknowledgement(QuoteAgentSessionState state, QuoteAgentPendingAction action)
     {
-        foreach (var part in state.Parts)
+        var issueReferences = CollectDfmIssueReferences(state).ToArray();
+        if (issueReferences.Length > 0)
+        {
+            var acknowledgedIssueIds = ReadStringArray(action.Arguments, "issue_ids", "issueIds")
+                .Select(item => item.Trim())
+                .Where(item => !string.IsNullOrWhiteSpace(item))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var missingIssueIds = GetMissingDfmIssueIds(issueReferences, acknowledgedIssueIds);
+            if (missingIssueIds.Length > 0)
+            {
+                throw new InvalidOperationException(
+                    "The DFM acknowledgement is stale. Review and acknowledge every current DFM issue before continuing.");
+            }
+        }
+
+        foreach (var part in state.Parts.Where(QuoteAgentSessionStore.HasDfmIssues))
         {
             part.DfmAcknowledged = true;
         }

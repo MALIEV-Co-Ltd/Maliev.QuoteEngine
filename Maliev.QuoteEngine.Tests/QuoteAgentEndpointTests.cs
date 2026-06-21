@@ -10,6 +10,7 @@ using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.AspNetCore.WebUtilities;
@@ -2239,6 +2240,120 @@ Customer message:
 
         Assert.NotNull(pricedState.Estimate);
         Assert.Contains(pricedState.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+    }
+
+    [Fact]
+    public async Task Agent_dfm_acknowledgement_revalidates_duplicate_issue_scope_on_confirmation()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement(
+                    "Quote this STEP as 10 aluminum pieces. Local DFM found a thin wall risk.",
+                    JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "thin-wall-bracket-a.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "dfm-risk-a-upload",
+                        storage_path = "quotes/temp/session/dfm-risk-a-upload/thin-wall-bracket-a.step"
+                    }
+                }, JsonOptions)
+            });
+
+        var staleAcknowledgementState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_acknowledge_dfm",
+            new Dictionary<string, JsonElement>
+            {
+                ["issue_ids"] = JsonSerializer.SerializeToElement(new[] { "THIN_WALL" }, JsonOptions),
+                ["note"] = JsonSerializer.SerializeToElement("I reviewed the current thin-wall DFM risk.", JsonOptions)
+            });
+        var staleAction = Assert.Single(staleAcknowledgementState.ProposedActions);
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement(
+                    "Added a second STEP. Local DFM also found a thin wall risk.",
+                    JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "thin-wall-bracket-b.step",
+                        content_type = "model/step",
+                        file_size_bytes = 250_000,
+                        kind = "cad",
+                        upload_id = "dfm-risk-b-upload",
+                        storage_path = "quotes/temp/session/dfm-risk-b-upload/thin-wall-bracket-b.step"
+                    }
+                }, JsonOptions)
+            });
+
+        var staleConfirmResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{staleAction.ActionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest
+            {
+                ConfirmationNote = "Customer confirmed the stale DFM acknowledgement."
+            });
+
+        Assert.Equal(HttpStatusCode.BadRequest, staleConfirmResponse.StatusCode);
+        var staleProblem = await staleConfirmResponse.Content.ReadFromJsonAsync<ProblemDetails>(JsonOptions);
+        Assert.NotNull(staleProblem);
+        Assert.Contains("stale", staleProblem.Detail, StringComparison.OrdinalIgnoreCase);
+
+        var partialAcknowledgementJson = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_acknowledge_dfm",
+            new Dictionary<string, JsonElement>
+            {
+                ["issue_ids"] = JsonSerializer.SerializeToElement(new[] { "THIN_WALL" }, JsonOptions)
+            });
+        using (var partialAcknowledgement = JsonDocument.Parse(partialAcknowledgementJson))
+        {
+            var missingIssueIds = partialAcknowledgement.RootElement.GetProperty("missingIssueIds")
+                .EnumerateArray()
+                .Select(issue => issue.GetString())
+                .ToArray();
+
+            Assert.Contains("dfm-risk-a-upload:THIN_WALL", missingIssueIds);
+            Assert.Contains("dfm-risk-b-upload:THIN_WALL", missingIssueIds);
+        }
+
+        var scopedAcknowledgementState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_acknowledge_dfm",
+            new Dictionary<string, JsonElement>
+            {
+                ["issue_ids"] = JsonSerializer.SerializeToElement(
+                    new[] { "dfm-risk-a-upload:THIN_WALL", "dfm-risk-b-upload:THIN_WALL" },
+                    JsonOptions),
+                ["note"] = JsonSerializer.SerializeToElement("I reviewed both scoped thin-wall DFM risks.", JsonOptions)
+            });
+        var scopedAction = Assert.Single(scopedAcknowledgementState.ProposedActions);
+
+        var scopedResult = await ConfirmActionAsync(client, scopedAction.ActionId);
+
+        Assert.NotNull(scopedResult.State);
+        Assert.All(scopedResult.State.Parts.Where(part => part.Findings.Count > 0), part => Assert.True(part.DfmAcknowledged));
+        Assert.Contains(scopedResult.State.Gates, gate => gate.Code == "dfm_reviewed" && gate.Status == "passed");
     }
 
     [Fact]
