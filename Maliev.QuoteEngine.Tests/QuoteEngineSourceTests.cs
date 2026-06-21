@@ -4926,8 +4926,10 @@ public sealed class QuoteEngineSourceTests
         Assert.True(ratingEnd > ratingStart, "Inline viewer rating controls must be scoped before the comment field.");
 
         var ratingMarkup = shell[ratingStart..ratingEnd];
-        Assert.Contains("aria-pressed=\"@(currentRating <= message.InlineViewer.FeedbackRating)", ratingMarkup, StringComparison.Ordinal);
+        Assert.Contains("aria-pressed=\"@InlineViewerRatingPressed(message.InlineViewer, currentRating)\"", ratingMarkup, StringComparison.Ordinal);
         Assert.Contains("@onclick:stopPropagation=\"true\"", ratingMarkup, StringComparison.Ordinal);
+        Assert.Contains("private static string InlineViewerRatingPressed(InlineViewerInfo viewer, int rating)", shell, StringComparison.Ordinal);
+        Assert.Contains("return rating <= viewer.FeedbackRating ? \"true\" : \"false\";", shell, StringComparison.Ordinal);
     }
 
     [Fact]

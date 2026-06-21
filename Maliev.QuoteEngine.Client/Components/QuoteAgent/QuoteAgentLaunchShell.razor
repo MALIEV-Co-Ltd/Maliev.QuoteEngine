@@ -650,7 +650,7 @@
                                                             class="@InlineViewerRatingClass(message.InlineViewer, currentRating)"
                                                             title="@Text($"Rate {currentRating} out of 5", $"ให้ {currentRating} จาก 5")"
                                                             aria-label="@Text($"Rate {currentRating} out of 5", $"ให้ {currentRating} จาก 5")"
-                                                            aria-pressed="@(currentRating <= message.InlineViewer.FeedbackRating)"
+                                                            aria-pressed="@InlineViewerRatingPressed(message.InlineViewer, currentRating)"
                                                             @onclick:stopPropagation="true"
                                                             @onclick="@(() => SetInlineViewerRating(message.InlineViewer, currentRating))">
                                                         <MudIcon Icon="@Icons.Material.Filled.Star" Size="Size.Small" />
@@ -5168,6 +5168,11 @@
         return rating <= viewer.FeedbackRating
             ? "qe-inline-viewer-rating-button is-selected"
             : "qe-inline-viewer-rating-button";
+    }
+
+    private static string InlineViewerRatingPressed(InlineViewerInfo viewer, int rating)
+    {
+        return rating <= viewer.FeedbackRating ? "true" : "false";
     }
 
     private static void SetInlineViewerRating(InlineViewerInfo viewer, int rating)
