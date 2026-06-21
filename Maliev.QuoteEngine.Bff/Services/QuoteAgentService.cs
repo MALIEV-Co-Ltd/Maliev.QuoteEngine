@@ -6930,7 +6930,7 @@ Customer message:
         return normalized switch
         {
             "rectangular_prism" or "rectangularprism" or "cuboid" or "block" or "cube" or "plate" or "flat_plate" or "base_plate" or "sheet" or "slot" or "cutout" or "rectangular_cutout" or "pocket" or "notch" => "box",
-            "tube" or "rod" or "pin" or "post" or "hole" or "drill_hole" or "bore" or "bored_hole" => "cylinder",
+            "tube" or "rod" or "pin" or "post" or "hole" or "drill_hole" or "bore" or "bored_hole" or "boss" or "mounting_boss" or "standoff" or "spacer" or "pillar" => "cylinder",
             "ball" => "sphere",
             "linear_extrude" or "linearextrude" or "extrusion" or "extruded" => "extrude",
             "lathe" or "revolved" or "revolved_solid" or "revolvedsolid" => "revolve",
