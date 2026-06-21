@@ -6946,7 +6946,7 @@ Customer message:
         normalized = StripCadOperationActionPrefix(normalized);
         return normalized switch
         {
-            "rectangular_prism" or "rectangularprism" or "cuboid" or "block" or "cube" or "plate" or "flat_plate" or "base_plate" or "sheet" or "slot" or "cutout" or "rectangular_cutout" or "pocket" or "notch" or "enclosure" or "housing" or "case" or "cover" or "lid" => "box",
+            "rect" or "rectangle" or "rectangular" or "rectangular_box" or "rectangularbox" or "rectangular_prism" or "rectangularprism" or "cuboid" or "block" or "cube" or "plate" or "flat_plate" or "base_plate" or "sheet" or "slot" or "cutout" or "rectangular_cutout" or "pocket" or "notch" or "enclosure" or "housing" or "case" or "cover" or "lid" => "box",
             "tube" or "rod" or "pin" or "post" or "hole" or "drill_hole" or "bore" or "bored_hole" or "boss" or "mounting_boss" or "standoff" or "spacer" or "pillar" => "cylinder",
             "ball" => "sphere",
             "linear_extrude" or "linearextrude" or "extrusion" or "extruded" => "extrude",
