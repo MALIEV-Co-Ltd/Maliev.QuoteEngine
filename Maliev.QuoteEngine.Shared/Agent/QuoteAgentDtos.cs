@@ -1088,6 +1088,10 @@ public sealed class CadDimensionsDto
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? X { get; set; }
 
+    /// <summary>Short width alias for generated model payloads.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? W { get; set; }
+
     /// <summary>Box depth or Y dimension.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Depth { get; set; }
@@ -1104,6 +1108,10 @@ public sealed class CadDimensionsDto
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Height { get; set; }
 
+    /// <summary>Short height alias for generated model payloads.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? H { get; set; }
+
     /// <summary>Plate/sheet thickness alias for primitive height.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Thickness { get; set; }
@@ -1115,6 +1123,10 @@ public sealed class CadDimensionsDto
     /// <summary>Primitive radius.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Radius { get; set; }
+
+    /// <summary>Short radius alias for generated model payloads.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? R { get; set; }
 
     /// <summary>Primitive diameter shorthand.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
