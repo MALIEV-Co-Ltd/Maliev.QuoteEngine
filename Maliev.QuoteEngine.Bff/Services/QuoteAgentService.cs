@@ -6876,7 +6876,9 @@ Customer message:
             (value.TryGetProperty("op", out _) ||
                 value.TryGetProperty("operation", out _) ||
                 value.TryGetProperty("type", out _) ||
-                value.TryGetProperty("shape", out _));
+                value.TryGetProperty("shape", out _) ||
+                value.TryGetProperty("primitive", out _) ||
+                value.TryGetProperty("kind", out _));
     }
 
     private static IReadOnlyList<CadCommandDto> ReadStringifiedCommands(JsonElement value)
@@ -6937,7 +6939,7 @@ Customer message:
 
     private static string NormalizeCadOperation(CadCommandDto command)
     {
-        var operation = FirstNonWhiteSpace(command.Op, command.Operation, command.Type, command.Shape);
+        var operation = FirstNonWhiteSpace(command.Op, command.Operation, command.Type, command.Shape, command.Primitive, command.Kind);
         var normalized = operation is null
             ? null
             : Regex.Replace(operation.Trim(), @"[\s-]+", "_", RegexOptions.CultureInvariant).ToLowerInvariant();

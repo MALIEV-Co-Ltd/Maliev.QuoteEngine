@@ -866,6 +866,12 @@ public sealed class CadCommandDto
     /// <summary>Shape alias often emitted by model tool calls for primitive operations; normalized into <see cref="Op"/>.</summary>
     public string? Shape { get; set; }
 
+    /// <summary>Primitive alias often emitted by model tool calls; normalized into <see cref="Op"/>.</summary>
+    public string? Primitive { get; set; }
+
+    /// <summary>Kind alias often emitted by model tool calls; normalized into <see cref="Op"/>.</summary>
+    public string? Kind { get; set; }
+
     /// <summary>Identifier for referencing this shape in subsequent commands.</summary>
     public string? Id { get; set; }
 
