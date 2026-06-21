@@ -6642,10 +6642,18 @@ Customer message:
             !arguments.TryGetValue("cad", out value) &&
             !arguments.TryGetValue("geometry", out value))
         {
-            return [];
+            return ReadSplitCommandCollections(arguments);
         }
 
         return ReadCommands(value);
+    }
+
+    private static IReadOnlyList<CadCommandDto> ReadSplitCommandCollections(IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var collected = new List<CadCommandDto>();
+        AppendCommands(arguments, collected, "shapes", "objects", "parts");
+        AppendCommands(arguments, collected, "operations", "actions", "steps");
+        return collected;
     }
 
     private static IReadOnlyDictionary<string, JsonElement> UnwrapToolArguments(IReadOnlyDictionary<string, JsonElement> arguments)
@@ -6752,6 +6760,20 @@ Customer message:
         foreach (var propertyName in propertyNames)
         {
             if (!value.TryGetProperty(propertyName, out var propertyValue))
+            {
+                continue;
+            }
+
+            collected.AddRange(ReadCommands(propertyValue));
+            return;
+        }
+    }
+
+    private static void AppendCommands(IReadOnlyDictionary<string, JsonElement> value, List<CadCommandDto> collected, params string[] propertyNames)
+    {
+        foreach (var propertyName in propertyNames)
+        {
+            if (!value.TryGetValue(propertyName, out var propertyValue))
             {
                 continue;
             }

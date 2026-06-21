@@ -6767,6 +6767,62 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_top_level_split_command_collections()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var shapes = new[]
+        {
+            new
+            {
+                op = "box",
+                id = "base",
+                width = 40.0,
+                depth = 24.0,
+                height = 6.0
+            }
+        };
+        var operations = new[]
+        {
+            new
+            {
+                op = "fillet",
+                targetId = "base",
+                radius = 2.0
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Split collections preview", JsonOptions),
+                ["shapes"] = JsonSerializer.SerializeToElement(shapes, JsonOptions),
+                ["operations"] = JsonSerializer.SerializeToElement(operations, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        var root = toolDoc.RootElement;
+
+        Assert.True(root.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.True(root.TryGetProperty("command_count", out var count) && count.GetInt32() == 2);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var commands = commandDoc.RootElement.EnumerateArray().ToArray();
+
+        Assert.Equal(2, commands.Length);
+        Assert.Equal("box", commands[0].GetProperty("op").GetString());
+        Assert.Equal("fillet", commands[1].GetProperty("op").GetString());
+        Assert.Equal("base", commands[1].GetProperty("targetId").GetString());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_singular_command_argument_alias()
     {
         using var client = factory.CreateClient();
