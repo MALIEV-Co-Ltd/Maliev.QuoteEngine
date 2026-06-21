@@ -1362,35 +1362,38 @@
 }
 
 .qe-agent-signin-card {
-    display: grid;
-    gap: 4px;
-    width: min(100%, 156px);
-    max-width: 156px;
-    margin: 0 auto;
+    display: block;
+    width: 100%;
+    max-width: none;
+    margin: 0;
 }
 
 .qe-agent-signin-panel {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
     width: 100%;
-    padding: 7px;
+    min-height: 40px;
+    padding: 5px 6px 5px 8px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 8px;
-    background: var(--qe-agent-raised);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+    background: transparent;
+    box-shadow: none;
     color: var(--qe-agent-ink);
 }
 
 .qe-agent-signin-card strong {
     display: block;
-    max-width: none;
-    font-size: 11px;
-    font-weight: 700;
+    min-width: 0;
+    font-size: 12px;
+    font-weight: 650;
     color: var(--qe-agent-ink);
     line-height: 1.25;
     letter-spacing: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .qe-agent-signin-panel > p {
@@ -1432,7 +1435,8 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    width: 100%;
+    flex: 0 0 auto;
+    width: auto;
     min-height: 28px;
     padding: 5px 8px;
     border: 1px solid var(--qe-agent-inverse);
@@ -1734,6 +1738,8 @@
 .qe-agent-main--empty .qe-agent-thread-wrap {
     display: grid;
     place-items: center;
+    justify-self: center;
+    align-self: center;
     width: min(760px, calc(100% - 32px));
     margin-inline: auto;
     margin-top: 0;
@@ -2142,7 +2148,7 @@
 
 .qe-agent-prompt {
     display: grid;
-    justify-items: center;
+    place-items: center;
     width: 100%;
     max-width: 760px;
     margin-inline: auto;
@@ -2152,13 +2158,14 @@
 }
 
 .qe-agent-prompt h1 {
-    width: 100%;
-    max-width: 760px;
+    width: fit-content;
+    max-width: min(680px, 100%);
     margin: 0 auto;
     font-size: clamp(26px, 3.1vw, 34px);
     font-weight: 500;
     line-height: 1.2;
     text-align: center;
+    text-wrap: balance;
     user-select: none;
     -webkit-user-select: none;
 }
@@ -5684,8 +5691,8 @@
     }
 
     .qe-agent-signin-card {
-        display: grid;
-        max-width: min(240px, 100%);
+        display: block;
+        max-width: 100%;
     }
 
     .qe-agent-signin-icon-btn {
