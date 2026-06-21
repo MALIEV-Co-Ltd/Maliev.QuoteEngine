@@ -60,6 +60,109 @@ public sealed class OrderServiceClientContractTests
         Assert.Equal("PO-QUOTE-TOTAL", body.GetProperty("customerPoNumber").GetString());
     }
 
+    [Fact]
+    public async Task GetDetailAsync_InProgressOrderMarksManufacturingCurrent()
+    {
+        using var handler = new RouteHandler(
+            ("GET", "/order/v1/orders/ORD-2026-00043", JsonContent.Create(new
+            {
+                orderId = "ORD-2026-00043",
+                currentStatus = "InProgress",
+                paymentStatus = "Paid",
+                quotedAmount = 2140.00m,
+                quoteCurrency = "THB",
+                customerPoNumber = "PO-43",
+                requirements = "Active production order.",
+                createdAt = DateTime.UtcNow.AddDays(-2),
+                updatedAt = DateTime.UtcNow,
+                promisedDeliveryDate = (DateTime?)null,
+                actualDeliveryDate = (DateTime?)null
+            })),
+            ("GET", "/order/v1/orders/ORD-2026-00043/statuses", JsonContent.Create(new[]
+            {
+                new
+                {
+                    status = "Paid",
+                    customerNotes = "Payment confirmed.",
+                    timestamp = DateTime.UtcNow.AddDays(-1)
+                },
+                new
+                {
+                    status = "InProgress",
+                    customerNotes = "Production has started.",
+                    timestamp = DateTime.UtcNow
+                }
+            })));
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var result = await client.GetDetailAsync("ORD-2026-00043");
+
+        Assert.NotNull(result);
+        Assert.Contains(result.ManufacturingMilestones, milestone =>
+            milestone.Key == "manufacturing" &&
+            milestone.State == "current");
+        Assert.Contains(result.ManufacturingMilestones, milestone =>
+            milestone.Key == "quality-inspection" &&
+            milestone.State == "pending");
+    }
+
+    [Fact]
+    public async Task GetDetailAsync_FinishedOrderMarksManufacturingCompleteAndQualityCurrent()
+    {
+        using var handler = new RouteHandler(
+            ("GET", "/order/v1/orders/ORD-2026-00044", JsonContent.Create(new
+            {
+                orderId = "ORD-2026-00044",
+                currentStatus = "Finished",
+                paymentStatus = "Paid",
+                quotedAmount = 2140.00m,
+                quoteCurrency = "THB",
+                customerPoNumber = "PO-44",
+                requirements = "Finished production order.",
+                createdAt = DateTime.UtcNow.AddDays(-3),
+                updatedAt = DateTime.UtcNow,
+                promisedDeliveryDate = (DateTime?)null,
+                actualDeliveryDate = (DateTime?)null
+            })),
+            ("GET", "/order/v1/orders/ORD-2026-00044/statuses", JsonContent.Create(new[]
+            {
+                new
+                {
+                    status = "InProgress",
+                    customerNotes = "Production has started.",
+                    timestamp = DateTime.UtcNow.AddDays(-1)
+                },
+                new
+                {
+                    status = "Finished",
+                    customerNotes = "Production completed; QC release is required before shipping.",
+                    timestamp = DateTime.UtcNow
+                }
+            })));
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var result = await client.GetDetailAsync("ORD-2026-00044");
+
+        Assert.NotNull(result);
+        Assert.Contains(result.ManufacturingMilestones, milestone =>
+            milestone.Key == "manufacturing" &&
+            milestone.State == "complete");
+        Assert.Contains(result.ManufacturingMilestones, milestone =>
+            milestone.Key == "quality-inspection" &&
+            milestone.State == "current");
+        Assert.Contains(result.ManufacturingMilestones, milestone =>
+            milestone.Key == "delivery" &&
+            milestone.State == "pending");
+    }
+
     private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler
     {
         private string? _body;
@@ -81,6 +184,29 @@ public sealed class OrderServiceClientContractTests
                 ? string.Empty
                 : await request.Content.ReadAsStringAsync(cancellationToken);
             return response;
+        }
+    }
+
+    private sealed class RouteHandler(params (string Method, string Path, HttpContent Content)[] routes) : HttpMessageHandler
+    {
+        private readonly IReadOnlyDictionary<(string Method, string Path), HttpContent> _routes = routes.ToDictionary(
+            route => (route.Method, route.Path),
+            route => route.Content);
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            var key = (request.Method.Method, request.RequestUri?.AbsolutePath ?? string.Empty);
+            if (_routes.TryGetValue(key, out var content))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = content
+                });
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
         }
     }
 }

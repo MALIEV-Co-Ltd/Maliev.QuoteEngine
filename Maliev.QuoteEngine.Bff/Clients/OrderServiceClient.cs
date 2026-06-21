@@ -375,12 +375,17 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
         var delivered = actualDeliveryDate.HasValue || normalizedStatus.Contains("delivered", StringComparison.Ordinal);
         var shipped = delivered || normalizedStatus.Contains("shipped", StringComparison.Ordinal);
         var inspected = shipped ||
+            normalizedStatus.Contains("qualityreleased", StringComparison.Ordinal) ||
             normalizedStatus.Contains("quality", StringComparison.Ordinal) ||
             normalizedStatus.Contains("inspection", StringComparison.Ordinal);
-        var manufacturing = inspected ||
+        var manufacturingComplete = inspected ||
+            normalizedStatus.Contains("finished", StringComparison.Ordinal) ||
+            normalizedStatus.Contains("completed", StringComparison.Ordinal);
+        var manufacturingStarted = manufacturingComplete ||
+            normalizedStatus.Contains("inprogress", StringComparison.Ordinal) ||
             normalizedStatus.Contains("manufacturing", StringComparison.Ordinal) ||
             normalizedStatus.Contains("production", StringComparison.Ordinal);
-        var accepted = manufacturing ||
+        var accepted = manufacturingStarted ||
             paid ||
             normalizedStatus.Contains("accepted", StringComparison.Ordinal) ||
             normalizedStatus.Contains("quoted", StringComparison.Ordinal) ||
@@ -394,7 +399,7 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 "We have received the order and attached customer requirements.",
                 15,
                 true,
-                !accepted && !manufacturing && !inspected && !shipped && !delivered,
+                !accepted && !manufacturingStarted && !inspected && !shipped && !delivered,
                 FindStatusTimestamp(statusHistory, "pending", "new", "received")),
             CreateMilestone(
                 "quote-payment",
@@ -409,17 +414,17 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 "Manufacturing",
                 "The parts are queued or active on the selected manufacturing process.",
                 55,
-                manufacturing,
-                accepted && !manufacturing,
-                FindStatusTimestamp(statusHistory, "manufacturing", "production")),
+                manufacturingComplete,
+                accepted && !manufacturingComplete,
+                FindStatusTimestamp(statusHistory, "inprogress", "finished", "manufacturing", "production")),
             CreateMilestone(
                 "quality-inspection",
                 "Quality inspection",
                 "Finished parts move through quality review before delivery handoff.",
                 75,
                 inspected,
-                manufacturing && !inspected,
-                FindStatusTimestamp(statusHistory, "quality", "inspection")),
+                manufacturingComplete && !inspected,
+                FindStatusTimestamp(statusHistory, "qualityreleased", "quality", "inspection")),
             CreateMilestone(
                 "delivery",
                 "Delivery",
