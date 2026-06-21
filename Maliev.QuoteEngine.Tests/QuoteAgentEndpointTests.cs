@@ -2623,8 +2623,21 @@ Customer message:
         Assert.Equal(CheckoutShippingAddressId, initiation.ShippingAddressId);
         Assert.Equal("MALIEV Buyer Co.", initiation.BillingCompanyName);
         Assert.Equal("TH1234567890", initiation.BillingVatNumber);
-        Assert.Null(initiation.DeliveryContactName);
-        Assert.Equal("+66 2 555 0100", initiation.DeliveryContactPhone);
+        Assert.Equal("Receiving", initiation.DeliveryContactName);
+        Assert.Equal("+66810000002", initiation.DeliveryContactPhone);
+        var snapshot = factory.LastOrderDeliverySnapshot;
+        Assert.NotNull(snapshot);
+        Assert.Equal(orderArtifact.Metadata["orderNumber"], snapshot.OrderNumber);
+        Assert.Equal(CheckoutBillingAddressId, snapshot.BillingAddressId);
+        Assert.Equal(CheckoutShippingAddressId, snapshot.ShippingAddressId);
+        Assert.Equal("34 Shipping Road", snapshot.ShippingAddressLine1);
+        Assert.Equal("Bangkok", snapshot.ShippingCity);
+        Assert.Equal("Bangkok", snapshot.ShippingProvince);
+        Assert.Equal("10110", snapshot.ShippingPostalCode);
+        Assert.Equal("MALIEV Buyer Co.", snapshot.BillingCompanyName);
+        Assert.Equal("TH1234567890", snapshot.BillingVatNumber);
+        Assert.Equal("Receiving", snapshot.DeliveryContactName);
+        Assert.Equal("+66810000002", snapshot.DeliveryContactPhone);
         Assert.StartsWith("qe:", initiation.IdempotencyKey, StringComparison.Ordinal);
         Assert.True(initiation.IdempotencyKey.Length <= 100);
         Assert.StartsWith("https://", initiation.ReturnUrl, StringComparison.OrdinalIgnoreCase);
@@ -2778,6 +2791,45 @@ Customer message:
             "Billing",
             document.RootElement.GetProperty("error").GetString(),
             StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_start_payment_rejects_checkout_addresses_that_are_not_customer_owned()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        factory.ClearPaymentIdempotencyKeys();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-payment-address-owner@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        await ConfirmActionAsync(client, Assert.Single(formalQuoteState.ProposedActions).ActionId);
+        var approvalState = await ExecuteToolForStateAsync(client, sessionId, "quote_approve_quote");
+        await ConfirmActionAsync(client, Assert.Single(approvalState.ProposedActions).ActionId);
+        var orderState = await ExecuteToolForStateAsync(client, sessionId, "quote_create_order");
+        await ConfirmActionAsync(client, Assert.Single(orderState.ProposedActions).ActionId);
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_checkout_details",
+            new Dictionary<string, JsonElement>
+            {
+                ["billing_address_id"] = JsonSerializer.SerializeToElement(Guid.Parse("11111111-1111-1111-1111-111111111111").ToString("D"), JsonOptions),
+                ["shipping_address_id"] = JsonSerializer.SerializeToElement(Guid.Parse("22222222-2222-2222-2222-222222222222").ToString("D"), JsonOptions),
+                ["accepted_terms"] = JsonSerializer.SerializeToElement(true, JsonOptions),
+                ["consent"] = JsonSerializer.SerializeToElement(true, JsonOptions)
+            });
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_start_payment");
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("checkout_ready", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("update_checkout_details", document.RootElement.GetProperty("actionType").GetString());
+        Assert.Contains(
+            "belong to the signed-in customer",
+            document.RootElement.GetProperty("error").GetString(),
+            StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, document.RootElement.GetProperty("state").GetProperty("proposedActions").GetArrayLength());
+        Assert.Empty(factory.PaymentInitiations);
     }
 
     [Fact]

@@ -761,7 +761,7 @@ internal sealed class QuoteAgentService(
                 ReadString(request.Arguments, "requirements") ?? "Create a manufacturing order from the approved quote.",
                 requiresAuthentication: true,
                 request.Arguments),
-            "quote_start_payment" => PreparePaymentActionOrGateError(state, request.Arguments),
+            "quote_start_payment" => await PreparePaymentActionOrGateErrorAsync(state, request.Arguments, cancellationToken),
             "quote_set_ui_language" => SetUiLanguage(state, request.Arguments),
             "quote_set_project_name" => SetProjectName(state, request.Arguments),
             "quote_ask_customer" => AskCustomer(state, request.Arguments),
@@ -1927,9 +1927,10 @@ internal sealed class QuoteAgentService(
         };
     }
 
-    private object PreparePaymentActionOrGateError(
+    private async Task<object> PreparePaymentActionOrGateErrorAsync(
         QuoteAgentSessionState state,
-        Dictionary<string, JsonElement> arguments)
+        Dictionary<string, JsonElement> arguments,
+        CancellationToken cancellationToken)
     {
         var blocker = GetActionBlocker(state, "start_payment", requiresAuthentication: true);
         if (blocker is not null)
@@ -1982,6 +1983,28 @@ internal sealed class QuoteAgentService(
                 "Payment amount does not match the current server-side estimate.");
         }
 
+        var customerId = ResolveCustomerId() ?? state.CustomerId;
+        if (!customerId.HasValue)
+        {
+            return new
+            {
+                error = "Sign in before starting payment.",
+                requiredGateCode = "customer_authenticated",
+                actionType = "start_payment",
+                authHandoff = BuildAuthHandoff(state, arguments),
+                state = ToStateResponse(state)
+            };
+        }
+
+        var addressValidation = await ValidateAgentCheckoutAddressesAsync(
+            state,
+            customerId.Value,
+            cancellationToken);
+        if (addressValidation.Error is not null)
+        {
+            return addressValidation.Error;
+        }
+
         return PrepareAction(
             state,
             "start_payment",
@@ -2003,6 +2026,57 @@ internal sealed class QuoteAgentService(
             expectedOrderNumber = state.Order?.OrderNumber,
             state = ToStateResponse(state)
         };
+    }
+
+    private async Task<AgentCheckoutAddressValidationResult> ValidateAgentCheckoutAddressesAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        if (!state.CheckoutBillingAddressId.HasValue || !state.CheckoutShippingAddressId.HasValue)
+        {
+            return AgentCheckoutAddressValidationResult.Blocked(CheckoutDetailsGateError(
+                state,
+                "Billing and shipping addresses are required before checkout."));
+        }
+
+        var addresses = await GetCustomerAddressesForContextAsync(customerId, cancellationToken);
+        if (addresses is null)
+        {
+            return AgentCheckoutAddressValidationResult.Blocked(new
+            {
+                error = "Customer addresses are temporarily unavailable.",
+                requiredGateCode = "checkout_ready",
+                actionType = "start_payment",
+                state = ToStateResponse(state)
+            });
+        }
+
+        var billingAddress = addresses.FirstOrDefault(address => address.Id == state.CheckoutBillingAddressId.Value);
+        var shippingAddress = addresses.FirstOrDefault(address => address.Id == state.CheckoutShippingAddressId.Value);
+        if (billingAddress is null || shippingAddress is null)
+        {
+            return AgentCheckoutAddressValidationResult.Blocked(CheckoutDetailsGateError(
+                state,
+                "Billing and shipping addresses must belong to the signed-in customer."));
+        }
+
+        if (!billingAddress.Type.Equals("Billing", StringComparison.OrdinalIgnoreCase) ||
+            !shippingAddress.Type.Equals("Shipping", StringComparison.OrdinalIgnoreCase))
+        {
+            return AgentCheckoutAddressValidationResult.Blocked(CheckoutDetailsGateError(
+                state,
+                "Use a billing address for billing and a shipping address for delivery before payment."));
+        }
+
+        if (string.IsNullOrWhiteSpace(shippingAddress.RecipientPhone))
+        {
+            return AgentCheckoutAddressValidationResult.Blocked(CheckoutDetailsGateError(
+                state,
+                "Select or update a shipping address with a recipient phone number before payment."));
+        }
+
+        return AgentCheckoutAddressValidationResult.Valid(billingAddress, shippingAddress);
     }
 
     private async Task<object> BuildAccountContextAsync(
@@ -4011,6 +4085,25 @@ internal sealed class QuoteAgentService(
             throw new InvalidOperationException("A manufacturing order is required before payment.");
         }
 
+        var addressValidation = await ValidateAgentCheckoutAddressesAsync(state, customerId, cancellationToken);
+        if (addressValidation.Error is not null ||
+            addressValidation.BillingAddress is null ||
+            addressValidation.ShippingAddress is null)
+        {
+            throw new InvalidOperationException("Checkout addresses must be verified before payment.");
+        }
+
+        var deliverySnapshotUpdated = await orderClient.UpdateDeliverySnapshotAsync(
+            BuildAgentOrderDeliverySnapshot(
+                state,
+                addressValidation.BillingAddress,
+                addressValidation.ShippingAddress),
+            cancellationToken);
+        if (!deliverySnapshotUpdated)
+        {
+            throw new InvalidOperationException("OrderService did not persist checkout delivery details before payment.");
+        }
+
         var invoice = await PrepareOrderInvoiceAsync(state, customerId, state.Order.OrderNumber, cancellationToken);
         if (invoice is null)
         {
@@ -4043,8 +4136,8 @@ internal sealed class QuoteAgentService(
             state.CheckoutShippingAddressId,
             state.CheckoutCompany,
             state.CheckoutVatNumber,
-            null,
-            state.CheckoutPhone,
+            addressValidation.ShippingAddress.RecipientName,
+            addressValidation.ShippingAddress.RecipientPhone,
             null,
             state.CheckoutAcceptedTerms,
             cancellationToken);
@@ -4060,6 +4153,33 @@ internal sealed class QuoteAgentService(
         UpsertArtifact(state, "payment", "Payment handoff", state.Payment.Status, null, state.Payment.PaymentUrl);
         SetArtifactMetadata(state, "payment", BuildPaymentSummaryMetadata(state));
         return $"Payment handoff is ready for {state.Order.OrderNumber}.";
+    }
+
+    private static OrderDeliverySnapshotRequest BuildAgentOrderDeliverySnapshot(
+        QuoteAgentSessionState state,
+        CustomerAddressDto billingAddress,
+        CustomerAddressDto shippingAddress)
+    {
+        if (state.Order is null)
+        {
+            throw new InvalidOperationException("A manufacturing order is required before saving checkout delivery details.");
+        }
+
+        return new OrderDeliverySnapshotRequest(
+            state.Order.OrderNumber,
+            billingAddress.Id,
+            shippingAddress.Id,
+            shippingAddress.AddressLine1,
+            shippingAddress.AddressLine2,
+            shippingAddress.City,
+            shippingAddress.StateProvince,
+            shippingAddress.PostalCode,
+            shippingAddress.CountryId == Guid.Empty ? null : shippingAddress.CountryId.ToString("D"),
+            state.CheckoutCompany,
+            state.CheckoutVatNumber,
+            shippingAddress.RecipientName,
+            shippingAddress.RecipientPhone,
+            null);
     }
 
     private string BuildPaymentCallbackUrl(string outcome, string orderNumber)
@@ -7443,6 +7563,19 @@ Customer message:
         return hasParts
             ? "Tell me the material, finish, tolerance, quantity, or lead time you want, or describe the part for a 3D preview."
             : "Describe the part you need — shape, size, material, and quantity — and I can create a 3D preview and estimate for you.";
+    }
+
+    private sealed record AgentCheckoutAddressValidationResult(
+        object? Error,
+        CustomerAddressDto? BillingAddress,
+        CustomerAddressDto? ShippingAddress)
+    {
+        public static AgentCheckoutAddressValidationResult Blocked(object error) => new(error, null, null);
+
+        public static AgentCheckoutAddressValidationResult Valid(
+            CustomerAddressDto billingAddress,
+            CustomerAddressDto shippingAddress) =>
+            new(null, billingAddress, shippingAddress);
     }
 
     private sealed record UploadRegistration(
