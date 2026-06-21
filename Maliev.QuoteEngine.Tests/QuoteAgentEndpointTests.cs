@@ -2862,6 +2862,39 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_action_confirmation_rejects_another_signed_in_customer_for_pending_and_completed_actions()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var ownerClient = await CreateSignedInClientAsync(scopedFactory, "agent-action-owner@example.com");
+        var ownerSessionId = await StartPricedCadSessionAsync(ownerClient);
+        var draftState = await ExecuteToolForStateAsync(ownerClient, ownerSessionId, "quote_prepare_draft_project");
+        var draftAction = Assert.Single(draftState.ProposedActions);
+
+        using var otherClient = await CreateSignedInClientAsync(scopedFactory, "agent-action-other@example.com");
+        var otherPendingResponse = await otherClient.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{draftAction.ActionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest
+            {
+                ConfirmationNote = "Attempt to confirm another customer's pending draft action."
+            });
+
+        Assert.Equal(HttpStatusCode.NotFound, otherPendingResponse.StatusCode);
+
+        var ownerResult = await ConfirmActionAsync(ownerClient, draftAction.ActionId);
+        Assert.NotNull(ownerResult.State);
+        Assert.Contains(ownerResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+
+        var otherCompletedReplayResponse = await otherClient.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{draftAction.ActionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest
+            {
+                ConfirmationNote = "Attempt to replay another customer's completed draft action."
+            });
+
+        Assert.Equal(HttpStatusCode.NotFound, otherCompletedReplayResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Agent_order_confirmation_rejects_superseded_formal_quote_before_order_service_call()
     {
         await using var scopedFactory = CreateAgentFactory();

@@ -793,9 +793,10 @@ internal sealed class QuoteAgentService(
         await actionLock.WaitAsync(cancellationToken);
         try
         {
+            var customerId = ResolveCustomerId();
             if (!sessionStore.TryGetAction(actionId, out var action))
             {
-                if (sessionStore.TryGetCompletedAction(actionId, out var completed))
+                if (sessionStore.TryGetCompletedAction(actionId, customerId, out var completed))
                 {
                     return completed;
                 }
@@ -803,10 +804,14 @@ internal sealed class QuoteAgentService(
                 return null;
             }
 
-            var customerId = ResolveCustomerId();
             if (action.RequiresAuthentication && !customerId.HasValue)
             {
                 throw new UnauthorizedAccessException("This action requires a signed-in customer session.");
+            }
+
+            if (!QuoteAgentSessionStore.CanAccessAction(action.CustomerId, customerId))
+            {
+                return null;
             }
 
             var state = sessionStore.GetOrCreate(action.SessionId);

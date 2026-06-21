@@ -9,7 +9,7 @@ internal sealed class QuoteAgentSessionStore
 {
     private readonly ConcurrentDictionary<Guid, QuoteAgentSessionState> _sessions = new();
     private readonly ConcurrentDictionary<Guid, QuoteAgentPendingAction> _actions = new();
-    private readonly ConcurrentDictionary<Guid, QuoteAgentActionResultResponse> _completedActions = new();
+    private readonly ConcurrentDictionary<Guid, QuoteAgentCompletedAction> _completedActions = new();
     private readonly ConcurrentDictionary<Guid, SemaphoreSlim> _actionLocks = new();
 
     public QuoteAgentSessionState GetOrCreate(Guid sessionId, string language = "en")
@@ -87,6 +87,7 @@ internal sealed class QuoteAgentSessionStore
             title,
             summary,
             requiresAuthentication,
+            state.CustomerId,
             arguments,
             DateTimeOffset.UtcNow);
         _actions[action.ActionId] = action;
@@ -108,9 +109,20 @@ internal sealed class QuoteAgentSessionStore
         return _actions.TryGetValue(actionId, out action!);
     }
 
-    public bool TryGetCompletedAction(Guid actionId, out QuoteAgentActionResultResponse result)
+    public bool TryGetCompletedAction(
+        Guid actionId,
+        Guid? customerId,
+        out QuoteAgentActionResultResponse result)
     {
-        return _completedActions.TryGetValue(actionId, out result!);
+        result = default!;
+        if (!_completedActions.TryGetValue(actionId, out var completed) ||
+            !CanAccessAction(completed.CustomerId, customerId))
+        {
+            return false;
+        }
+
+        result = completed.Result;
+        return true;
     }
 
     public SemaphoreSlim GetActionLock(Guid actionId)
@@ -128,8 +140,8 @@ internal sealed class QuoteAgentSessionStore
         Guid actionId,
         QuoteAgentActionResultResponse result)
     {
-        _actions.TryRemove(actionId, out _);
-        _completedActions[actionId] = result;
+        _actions.TryRemove(actionId, out var pendingAction);
+        _completedActions[actionId] = new QuoteAgentCompletedAction(result, pendingAction?.CustomerId);
         lock (state.SyncRoot)
         {
             var action = state.ProposedActions.FirstOrDefault(item => item.ActionId == actionId);
@@ -140,6 +152,16 @@ internal sealed class QuoteAgentSessionStore
 
             Touch(state);
         }
+    }
+
+    public static bool CanAccessAction(Guid? actionCustomerId, Guid? customerId)
+    {
+        if (!actionCustomerId.HasValue)
+        {
+            return true;
+        }
+
+        return customerId == actionCustomerId;
     }
 
     public QuoteAgentStateResponse ToResponse(
@@ -462,6 +484,7 @@ internal sealed record QuoteAgentPendingAction(
     string Title,
     string Summary,
     bool RequiresAuthentication,
+    Guid? CustomerId,
     Dictionary<string, JsonElement> Arguments,
     DateTimeOffset CreatedAt)
 {
@@ -479,3 +502,7 @@ internal sealed record QuoteAgentPendingAction(
         };
     }
 }
+
+internal sealed record QuoteAgentCompletedAction(
+    QuoteAgentActionResultResponse Result,
+    Guid? CustomerId);
