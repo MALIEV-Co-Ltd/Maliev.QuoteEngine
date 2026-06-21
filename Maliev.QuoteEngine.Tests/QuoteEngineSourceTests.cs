@@ -2036,12 +2036,20 @@ public sealed class QuoteEngineSourceTests
     public void Root_route_is_chat_workspace_and_auth_routes_redirect_to_web()
     {
         var program = ReadRepoFile("Maliev.QuoteEngine.Bff", "Program.cs");
+        var bffProject = ReadRepoFile("Maliev.QuoteEngine.Bff", "Maliev.QuoteEngine.Bff.csproj");
         var authPath = RepoPath("Maliev.QuoteEngine.Bff", "Pages", "AuthPageRenderer.cs");
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var loader = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
         var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
 
         Assert.Contains("app.MapGet(\"/\", RenderClientAppAsync)", program, StringComparison.Ordinal);
+        Assert.Contains("<StaticWebAssetEndpointExclusionPattern>$(StaticWebAssetEndpointExclusionPattern);index.html</StaticWebAssetEndpointExclusionPattern>", bffProject, StringComparison.Ordinal);
+        Assert.Contains("context.Request.Path.Equals(\"/index.html\", StringComparison.OrdinalIgnoreCase)", program, StringComparison.Ordinal);
+        Assert.Contains("context.Response.Redirect(\"/quotes/new\");", program, StringComparison.Ordinal);
+        Assert.True(
+            program.IndexOf("context.Request.Path.Equals(\"/index.html\"", StringComparison.Ordinal) <
+            program.IndexOf("app.UseStaticFiles();", StringComparison.Ordinal),
+            "/index.html must redirect before static files can serve the legacy shell.");
         Assert.DoesNotContain("LandingPageRenderer.RenderAsync", program, StringComparison.Ordinal);
         Assert.Contains("@page \"/\"", workspace, StringComparison.Ordinal);
         Assert.Contains("@page \"/quote/new\"", workspace, StringComparison.Ordinal);

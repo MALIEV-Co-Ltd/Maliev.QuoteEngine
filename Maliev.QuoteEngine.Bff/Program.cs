@@ -188,6 +188,16 @@ var app = builder.Build();
 
 app.MapDefaultEndpoints("quote");
 app.UseForwardedHeaders();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.Equals("/index.html", StringComparison.OrdinalIgnoreCase))
+    {
+        context.Response.Redirect("/quotes/new");
+        return;
+    }
+
+    await next();
+});
 app.UseStaticFiles();
 app.MapStaticAssets().ShortCircuit();
 
