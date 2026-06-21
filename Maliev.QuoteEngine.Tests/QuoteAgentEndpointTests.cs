@@ -4814,6 +4814,33 @@ Customer message:
             });
     }
 
+    private static async Task<List<QuoteAgentStreamEvent>> SendStreamMessageAsync(
+        HttpClient client,
+        Guid sessionId,
+        string message)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                SessionId = sessionId,
+                Message = message,
+                Language = "en"
+            }, options: JsonOptions)
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        return body
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonSerializer.Deserialize<QuoteAgentStreamEvent>(line, JsonOptions))
+            .Where(streamEvent => streamEvent is not null)
+            .Select(streamEvent => streamEvent!)
+            .ToList();
+    }
+
     private static async Task<QuoteAgentStateResponse> ExecuteToolForStateAsync(
         HttpClient client,
         Guid sessionId,
@@ -8994,6 +9021,61 @@ Customer message:
         Assert.NotNull(commands);
         Assert.Contains(commands, command => command.Op.Equals("box", StringComparison.OrdinalIgnoreCase));
         Assert.Equal(4, commands.Count(command => command.Op.Equals("cut", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task Agent_message_stream_when_chatbot_fails_allows_next_generated_preview_after_feedback()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ThrowStreamException = true
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var firstEvents = await SendStreamMessageAsync(
+            client,
+            sessionId,
+            "Create a simple 3D preview of a 40 by 30 by 12 mm electronics enclosure with four mounting holes.");
+
+        var firstFinal = Assert.Single(firstEvents, streamEvent => streamEvent.Type == "final");
+        Assert.NotNull(firstFinal.Response);
+        var firstArtifact = Assert.Single(firstFinal.Response.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        var feedbackResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{firstArtifact.ArtifactId:D}/feedback",
+            new QuoteAgentPreviewFeedbackRequest
+            {
+                Rating = 4,
+                Comment = "Cable slot works; make the corner bosses taller and add a snap-fit lid lip."
+            },
+            JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, feedbackResponse.StatusCode);
+
+        var secondEvents = await SendStreamMessageAsync(
+            client,
+            sessionId,
+            "Use my feedback and generate the next 3D draft with taller corner bosses and a snap-fit lid lip.");
+
+        var secondFinal = Assert.Single(secondEvents, streamEvent => streamEvent.Type == "final");
+        Assert.NotNull(secondFinal.Response);
+        Assert.Contains("3D preview", secondFinal.Response.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, secondFinal.Response.Artifacts.Count(item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase)));
     }
 
     private sealed class RecordingChatbotServiceClient : IChatbotServiceClient

@@ -7565,7 +7565,8 @@ Customer message:
 
         lock (state.SyncRoot)
         {
-            if (state.Artifacts.Any(IsGeneratedViewerArtifact))
+            if (state.Artifacts.Any(IsGeneratedViewerArtifact) &&
+                !IsIterativeGeneratedPreviewRequest(message))
             {
                 return false;
             }
@@ -7650,6 +7651,23 @@ Customer message:
              normalized.Contains("design", StringComparison.Ordinal) ||
              normalized.Contains("generate", StringComparison.Ordinal) ||
              normalized.Contains("create", StringComparison.Ordinal));
+    }
+
+    private static bool IsIterativeGeneratedPreviewRequest(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        var normalized = message.ToLowerInvariant();
+        return normalized.Contains("feedback", StringComparison.Ordinal) ||
+            normalized.Contains("next", StringComparison.Ordinal) ||
+            normalized.Contains("another", StringComparison.Ordinal) ||
+            normalized.Contains("revise", StringComparison.Ordinal) ||
+            normalized.Contains("revision", StringComparison.Ordinal) ||
+            normalized.Contains("iterate", StringComparison.Ordinal) ||
+            normalized.Contains("iteration", StringComparison.Ordinal);
     }
 
     private static (double Width, double Depth, double Height) ExtractPreviewDimensions(string? message)
