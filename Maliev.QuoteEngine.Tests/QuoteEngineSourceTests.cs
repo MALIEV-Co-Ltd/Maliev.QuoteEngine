@@ -1726,6 +1726,19 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_honors_explicit_open_panel_directives_when_auto_open_is_suppressed()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var applyUiDirectives = ExtractSourceBlock(
+            component,
+            "private async Task ApplyUiDirectivesAsync",
+            "private void OpenDirectivePanel");
+
+        Assert.Contains("if (!suppressPanelAutoOpen || _uiFocusDirectives.Any(directive => directive.OpenPanel))", applyUiDirectives, StringComparison.Ordinal);
+        Assert.Contains("OpenDirectivePanel(_uiFocusDirectives)", applyUiDirectives, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_uses_native_file_input_label_for_composer_add_button()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");

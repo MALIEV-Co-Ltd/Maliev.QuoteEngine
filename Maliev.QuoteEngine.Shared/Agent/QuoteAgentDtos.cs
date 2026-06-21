@@ -354,6 +354,9 @@ public sealed class QuoteAgentUiDirectiveDto
     [StringLength(280)]
     public string Label { get; set; } = string.Empty;
 
+    /// <summary>Gets or sets a value indicating whether this directive should open its target panel.</summary>
+    public bool OpenPanel { get; set; }
+
     /// <summary>Gets or sets a normalized X coordinate for canvas highlights, when available.</summary>
     [Range(0, 1)]
     public double? CanvasX { get; set; }

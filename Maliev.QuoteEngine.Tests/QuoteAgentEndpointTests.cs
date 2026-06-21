@@ -1393,6 +1393,72 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_stream_rewrites_ungrounded_viewer_open_claims()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = """
+                I can display the 3D model for your `3D_FOR_A SHAPE-1-1.stp` part directly in our viewer.
+                Here is an interactive 3D preview of your part:
+                I've opened the 3D viewer in Make Studio so you can inspect it.
+                Please let me know if you would like to know any specific dimensions.
+                """
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "show me the 3d model of the part. I don't have program to open and see it.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "3D_FOR_A SHAPE-1-1.stp",
+                        ContentType = "model/step",
+                        FileSizeBytes = 146_300,
+                        Kind = "cad",
+                        StoragePath = "quotes/temp/shape.stp"
+                    }
+                ]
+            }, options: JsonOptions)
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var body = await response.Content.ReadAsStringAsync();
+        var events = body
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonSerializer.Deserialize<QuoteAgentStreamEvent>(line, JsonOptions))
+            .Where(streamEvent => streamEvent is not null)
+            .Select(streamEvent => streamEvent!)
+            .ToList();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var streamedText = string.Concat(events.Where(streamEvent => streamEvent.Type == "delta").Select(streamEvent => streamEvent.Delta));
+        var final = Assert.Single(events, streamEvent => streamEvent.Type == "final").Response;
+        Assert.NotNull(final);
+        Assert.Contains("A 3D viewer is available in the Artifacts panel", final.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(final.AssistantText, streamedText);
+        Assert.DoesNotContain("I've opened", streamedText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Here is an interactive", streamedText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("I can display", streamedText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(final.UiDirectives, directive =>
+            directive.TargetType == "viewer" &&
+            directive.Panel == "artifacts" &&
+            !directive.OpenPanel &&
+            directive.Label.Contains("available", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Agent_focus_ui_tool_returns_panel_directive_for_client_highlight()
     {
         using var client = factory.CreateClient();
@@ -1419,6 +1485,7 @@ Customer message:
         Assert.Equal("THIN_WALL", directive.TargetId);
         Assert.Equal(0.42, directive.CanvasX);
         Assert.Equal(0.35, directive.CanvasY);
+        Assert.True(directive.OpenPanel);
     }
 
     [Fact]
@@ -9167,6 +9234,8 @@ Customer message:
 
         public bool TruncateLastTurnResult { get; init; } = true;
 
+        public string ResponseContent { get; init; } = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.";
+
         public QuoteAgentUsageSnapshotDto UsageSnapshot { get; init; } = new()
         {
             IsEnabled = true,
@@ -9211,7 +9280,7 @@ Customer message:
             return Task.FromResult<ChatbotMessageResponse?>(new ChatbotMessageResponse
             {
                 MessageId = Guid.Parse("d127db4e-1106-4106-8f6b-32c6b467e8ad"),
-                Content = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.",
+                Content = ResponseContent,
                 Role = "assistant",
                 Language = "en",
                 CreatedAt = DateTimeOffset.UtcNow,
@@ -9235,12 +9304,12 @@ Customer message:
             yield return new ChatbotMessageStreamEvent
             {
                 Type = "delta",
-                Delta = "Upload the bracket CAD file "
+                Delta = ResponseContent.Length > 28 ? ResponseContent[..28] : ResponseContent
             };
             yield return new ChatbotMessageStreamEvent
             {
                 Type = "delta",
-                Delta = "and I will check geometry, DFM, material, and price gates."
+                Delta = ResponseContent.Length > 28 ? ResponseContent[28..] : string.Empty
             };
             yield return new ChatbotMessageStreamEvent
             {
@@ -9248,7 +9317,7 @@ Customer message:
                 Message = new ChatbotMessageResponse
                 {
                     MessageId = Guid.Parse("d127db4e-1106-4106-8f6b-32c6b467e8ad"),
-                    Content = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.",
+                    Content = ResponseContent,
                     Role = "assistant",
                     Language = "en",
                     CreatedAt = DateTimeOffset.UtcNow,

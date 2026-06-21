@@ -3603,7 +3603,7 @@
         // Mid-conversation agent directives may still focus a panel (agent-directed
         // workbench focus); upload/attach refreshes pass suppressPanelAutoOpen so the
         // panel never pops open just because files were added.
-        if (!suppressPanelAutoOpen)
+        if (!suppressPanelAutoOpen || _uiFocusDirectives.Any(directive => directive.OpenPanel))
         {
             OpenDirectivePanel(_uiFocusDirectives);
         }

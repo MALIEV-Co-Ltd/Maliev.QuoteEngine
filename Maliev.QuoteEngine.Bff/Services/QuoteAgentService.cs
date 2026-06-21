@@ -213,7 +213,7 @@ internal sealed class QuoteAgentService(
             MessageId = chatbotResponse?.MessageId,
             AssistantText = string.IsNullOrWhiteSpace(chatbotResponse?.Content)
                 ? FallbackAgentAnswer(currentState, generatedFallbackPreview)
-                : StripToolTraces(chatbotResponse.Content),
+                : GroundAssistantText(StripToolTraces(chatbotResponse.Content), currentState),
             Role = string.IsNullOrWhiteSpace(chatbotResponse?.Role) ? "assistant" : chatbotResponse.Role,
             Language = NormalizeLanguage(chatbotResponse?.Language, request.Message),
             CreatedAt = chatbotResponse?.CreatedAt == default ? DateTimeOffset.UtcNow : chatbotResponse!.CreatedAt,
@@ -272,7 +272,6 @@ internal sealed class QuoteAgentService(
         }
 
         ChatbotMessageResponse? finalMessage = null;
-        var receivedDelta = false;
         var receivedError = false;
         var accumulatedThought = new StringBuilder();
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
@@ -340,12 +339,7 @@ internal sealed class QuoteAgentService(
             if (streamEvent.Type.Equals("delta", StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrEmpty(streamEvent.Delta))
             {
-                receivedDelta = true;
-                yield return new QuoteAgentStreamEvent
-                {
-                    Type = "delta",
-                    Delta = streamEvent.Delta
-                };
+                continue;
             }
             else if (streamEvent.Type.Equals("thought", StringComparison.OrdinalIgnoreCase) &&
                      !string.IsNullOrEmpty(streamEvent.Thought))
@@ -390,7 +384,7 @@ internal sealed class QuoteAgentService(
             MessageId = finalMessage?.MessageId,
             AssistantText = string.IsNullOrWhiteSpace(finalMessage?.Content)
                 ? FallbackAgentAnswer(currentState, generatedFallbackPreview)
-                : StripToolTraces(finalMessage.Content),
+                : GroundAssistantText(StripToolTraces(finalMessage.Content), currentState),
             Role = string.IsNullOrWhiteSpace(finalMessage?.Role) ? "assistant" : finalMessage.Role,
             Language = NormalizeLanguage(finalMessage?.Language, request.Message),
             CreatedAt = finalMessage?.CreatedAt == default ? DateTimeOffset.UtcNow : finalMessage!.CreatedAt,
@@ -406,18 +400,15 @@ internal sealed class QuoteAgentService(
             UsageSnapshot = finalMessage?.UsageSnapshot
         };
 
-        if (!receivedDelta)
+        foreach (var delta in ChunkAssistantText(response.AssistantText))
         {
-            foreach (var delta in ChunkAssistantText(response.AssistantText))
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return new QuoteAgentStreamEvent
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                yield return new QuoteAgentStreamEvent
-                {
-                    Type = "delta",
-                    Delta = delta
-                };
-                await Task.Delay(12, cancellationToken);
-            }
+                Type = "delta",
+                Delta = delta
+            };
+            await Task.Delay(12, cancellationToken);
         }
 
         yield return new QuoteAgentStreamEvent
@@ -1106,7 +1097,7 @@ internal sealed class QuoteAgentService(
                 HighlightKey = firstViewer.PartId.HasValue
                     ? $"part:{firstViewer.PartId.Value:D}"
                     : $"artifact:{firstViewer.ArtifactId:D}",
-                Label = $"Opened the 3D viewer for {firstViewer.Title}.",
+                Label = $"3D viewer available for {firstViewer.Title}.",
                 CanvasX = 0.62,
                 CanvasY = 0.42,
                 CanvasZ = 0.5
@@ -1187,7 +1178,8 @@ internal sealed class QuoteAgentService(
             Label = ReadString(arguments, "label") ?? "The agent highlighted the relevant workspace area.",
             CanvasX = ReadDouble(arguments, "canvas_x") ?? ReadDouble(arguments, "canvasX"),
             CanvasY = ReadDouble(arguments, "canvas_y") ?? ReadDouble(arguments, "canvasY"),
-            CanvasZ = ReadDouble(arguments, "canvas_z") ?? ReadDouble(arguments, "canvasZ")
+            CanvasZ = ReadDouble(arguments, "canvas_z") ?? ReadDouble(arguments, "canvasZ"),
+            OpenPanel = true
         };
 
         if (string.IsNullOrWhiteSpace(directive.HighlightKey))
@@ -5522,6 +5514,8 @@ internal sealed class QuoteAgentService(
             "For PDF/technical drawings, inspect the attached document as drawing context; summarize visible/readable shape, dimensions, tolerances, material, finish, and blockers before asking for missing facts. " +
             "Do not claim you cannot read the PDF before summarizing what the PDF provides. " +
             "Never ask for a CAD file as your first or only response, and never make CAD upload a gate. " +
+            "Grounding rule: only quote prices, volumes, surface areas, dimensions, materials, processes, or lead times that are present in Current parts, Current estimate, or a tool result in this turn; otherwise state what is missing and ask for the exact measurement needed. " +
+            "UI action rule: never say that you opened, displayed, loaded, or showed a viewer/panel/model unless you called quote_focus_ui and received a UI directive for that target; if a viewer artifact is merely available, say it is available in the Artifacts panel. " +
             "Generate 3D previews only from explicit, readable, CAD-derived, or confirmed dimensions. " +
             "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, intersect, fillet, chamfer, extrude, revolve, translate, rotate, loft. " +
             "Prefer canonical params arrays for CAD commands; accepted named shorthands include width/depth/height, diameter/radius, x/y/z or translation object offsets, axisX/axisY/axisZ or rotationAxis object axes, and sketch segment x/y/dx/dy. " +
@@ -6235,6 +6229,81 @@ Customer message:
         return startIndex >= lines.Length || startIndex == 0
             ? content
             : string.Join('\n', lines[startIndex..]).Trim();
+    }
+
+    private static string GroundAssistantText(string content, QuoteAgentStateResponse state)
+    {
+        if (string.IsNullOrWhiteSpace(content) ||
+            HasExplicitViewerOpenDirective(state.UiDirectives) ||
+            !ContainsViewerOpenedClaim(content))
+        {
+            return content;
+        }
+
+        var groundedViewerLine = state.Artifacts.Any(artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase))
+                ? "A 3D viewer is available in the Artifacts panel for this part. Open Artifacts to inspect it."
+                : "I do not have a verified 3D viewer artifact available for this part yet.";
+
+        var lines = content.Replace("\r\n", "\n").Split('\n');
+        var sanitizedLines = new List<string>();
+        var insertedGroundedViewerLine = false;
+
+        foreach (var line in lines)
+        {
+            if (ContainsViewerOpenedClaim(line))
+            {
+                if (!insertedGroundedViewerLine)
+                {
+                    sanitizedLines.Add(groundedViewerLine);
+                    insertedGroundedViewerLine = true;
+                }
+
+                continue;
+            }
+
+            sanitizedLines.Add(line);
+        }
+
+        return string.Join('\n', sanitizedLines).Trim();
+    }
+
+    private static bool HasExplicitViewerOpenDirective(IEnumerable<QuoteAgentUiDirectiveDto> directives)
+    {
+        return directives.Any(directive =>
+            directive.OpenPanel &&
+            (directive.TargetType.Equals("viewer", StringComparison.OrdinalIgnoreCase) ||
+             directive.Panel.Equals("artifacts", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool ContainsViewerOpenedClaim(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return false;
+        }
+
+        var normalized = content.ToLowerInvariant();
+        var referencesViewer = normalized.Contains("3d", StringComparison.Ordinal) ||
+            normalized.Contains("viewer", StringComparison.Ordinal) ||
+            normalized.Contains("model", StringComparison.Ordinal) ||
+            normalized.Contains("preview", StringComparison.Ordinal) ||
+            normalized.Contains("artifacts", StringComparison.Ordinal);
+        if (!referencesViewer)
+        {
+            return false;
+        }
+
+        return normalized.Contains("i've opened", StringComparison.Ordinal) ||
+            normalized.Contains("i have opened", StringComparison.Ordinal) ||
+            normalized.Contains("i opened", StringComparison.Ordinal) ||
+            normalized.Contains("i can display", StringComparison.Ordinal) ||
+            normalized.Contains("i will display", StringComparison.Ordinal) ||
+            normalized.Contains("here is an interactive", StringComparison.Ordinal) ||
+            normalized.Contains("here's an interactive", StringComparison.Ordinal) ||
+            normalized.Contains("displayed", StringComparison.Ordinal) ||
+            normalized.Contains("showing", StringComparison.Ordinal) ||
+            normalized.Contains("loaded", StringComparison.Ordinal);
     }
 
     private string? BuildThinkingCallbackUrl(Guid sessionId)

@@ -351,6 +351,7 @@ internal sealed class QuoteAgentSessionStore
             TargetId = source.TargetId,
             HighlightKey = source.HighlightKey,
             Label = source.Label,
+            OpenPanel = source.OpenPanel,
             CanvasX = source.CanvasX,
             CanvasY = source.CanvasY,
             CanvasZ = source.CanvasZ
