@@ -5636,9 +5636,15 @@ Customer message:
                     comment = comment[..220] + "...";
                 }
 
-                return string.IsNullOrWhiteSpace(comment)
+                var feedback = string.IsNullOrWhiteSpace(comment)
                     ? $"{description}: rating {rating}/5"
                     : $"{description}: rating {rating}/5; customer comment: {comment}";
+                var cadCommandSummary = artifact.Metadata.TryGetValue("cad_commands", out var commandsJson)
+                    ? BuildPreviewFeedbackCommandSummary(commandsJson)
+                    : null;
+                return string.IsNullOrWhiteSpace(cadCommandSummary)
+                    ? feedback
+                    : $"{feedback}; CAD commands: {cadCommandSummary}";
             })
             .ToArray();
 

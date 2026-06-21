@@ -8244,6 +8244,7 @@ Customer message:
         Assert.Contains("Session feedback plate", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("rating 2/5", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Make the mounting ears wider and remove the center boss.", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CAD commands: box(base)", chatbot.LastSendRequest.Content, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
