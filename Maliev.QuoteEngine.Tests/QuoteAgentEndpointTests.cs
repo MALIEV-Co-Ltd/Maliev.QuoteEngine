@@ -7733,6 +7733,8 @@ Customer message:
         Assert.Equal("make_studio_feedback", customerClient.LastObservedMemory!.MemoryType);
         Assert.Equal("generated_3d_preview_feedback", customerClient.LastObservedMemory.Key);
         Assert.Contains("rounded edges", customerClient.LastObservedMemory.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("CAD commands:", customerClient.LastObservedMemory.Value, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("box(base)", customerClient.LastObservedMemory.Value, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

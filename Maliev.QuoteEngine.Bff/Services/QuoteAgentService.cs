@@ -555,6 +555,7 @@ internal sealed class QuoteAgentService(
         var comment = SanitizePreviewFeedbackForAgentContext(request.Comment ?? string.Empty);
         string artifactTitle;
         string artifactDescription;
+        string? cadCommandSummary = null;
 
         lock (state.SyncRoot)
         {
@@ -573,6 +574,9 @@ internal sealed class QuoteAgentService(
             artifactDescription = artifact.Metadata.TryGetValue("description", out var description)
                 ? description
                 : artifact.Title;
+            cadCommandSummary = artifact.Metadata.TryGetValue("cad_commands", out var commandsJson)
+                ? BuildPreviewFeedbackCommandSummary(commandsJson)
+                : null;
             artifact.Metadata["customerRating"] = request.Rating.ToString(CultureInfo.InvariantCulture);
             if (string.IsNullOrWhiteSpace(comment))
             {
@@ -600,7 +604,7 @@ internal sealed class QuoteAgentService(
                     {
                         MemoryType = "make_studio_feedback",
                         Key = "generated_3d_preview_feedback",
-                        Value = BuildPreviewFeedbackMemoryValue(artifactDescription, request.Rating, comment),
+                        Value = BuildPreviewFeedbackMemoryValue(artifactDescription, request.Rating, comment, cadCommandSummary),
                         Confidence = Math.Clamp(request.Rating / 5m, 0.2m, 0.95m),
                         Source = "quote_agent"
                     },
@@ -5523,11 +5527,73 @@ Customer message:
             : $"Generated preview feedback: {string.Join("; ", feedbackItems)}. Use this feedback when revising or generating the next 3D draft.";
     }
 
-    private static string BuildPreviewFeedbackMemoryValue(string artifactDescription, int rating, string comment)
+    private static string BuildPreviewFeedbackMemoryValue(string artifactDescription, int rating, string comment, string? cadCommandSummary)
     {
-        return string.IsNullOrWhiteSpace(comment)
+        var feedback = string.IsNullOrWhiteSpace(comment)
             ? $"3D preview feedback for {artifactDescription}: rating {rating.ToString(CultureInfo.InvariantCulture)}/5"
             : $"3D preview feedback for {artifactDescription}: rating {rating.ToString(CultureInfo.InvariantCulture)}/5; comment: {comment}";
+        return string.IsNullOrWhiteSpace(cadCommandSummary)
+            ? feedback
+            : $"{feedback}; CAD commands: {cadCommandSummary}";
+    }
+
+    private static string? BuildPreviewFeedbackCommandSummary(string commandsJson)
+    {
+        if (string.IsNullOrWhiteSpace(commandsJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(commandsJson);
+            if (document.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var commands = document.RootElement
+                .EnumerateArray()
+                .Where(command => command.ValueKind == JsonValueKind.Object)
+                .Take(6)
+                .Select(SummarizePreviewFeedbackCommand)
+                .Where(summary => !string.IsNullOrWhiteSpace(summary))
+                .ToArray();
+
+            return commands.Length == 0
+                ? null
+                : string.Join(", ", commands);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string SummarizePreviewFeedbackCommand(JsonElement command)
+    {
+        var op = ReadJsonString(command, "op") ?? "command";
+        var id = ReadJsonString(command, "id");
+        if (!string.IsNullOrWhiteSpace(id))
+        {
+            return $"{op}({id})";
+        }
+
+        var target = ReadJsonString(command, "targetId");
+        var result = ReadJsonString(command, "resultId");
+        if (!string.IsNullOrWhiteSpace(target) && !string.IsNullOrWhiteSpace(result))
+        {
+            return $"{op}({target}->{result})";
+        }
+
+        return op;
+    }
+
+    private static string? ReadJsonString(JsonElement element, string propertyName)
+    {
+        return element.TryGetProperty(propertyName, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
     }
 
     private static string SanitizePreviewFeedbackForAgentContext(string comment)
