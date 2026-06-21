@@ -10088,27 +10088,6 @@ textarea::placeholder {
     margin: 8px;
 }
 
-.qe-live-notifications {
-    flex-shrink: 0;
-    display: grid;
-    gap: 4px;
-    margin: 8px 8px 0;
-}
-
-/* Use shadow-as-border instead of traditional border per DESIGN.md §1.
-   Notifications stay achromatic — DESIGN.md §7 forbids decorative warm colors,
-   so we use the badge blue surface for the success state. */
-.qe-live-notifications span {
-    padding: 8px 12px;
-    color: var(--badge-blue-text);
-    background: var(--badge-blue-bg);
-    border: 0;
-    border-radius: var(--maliev-radius-sm);
-    box-shadow: rgba(0, 0, 0, 0.08) 0 0 0 1px;
-    font-size: var(--maliev-font-small);
-    font-weight: 500;
-}
-
 .qe-empty-state {
     flex: 1 1 0;
     display: flex;

@@ -599,6 +599,20 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspace_does_not_render_full_width_top_notification_banners()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.DoesNotContain("_liveNotifications", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-live-notifications", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("New project started", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("Resumed {project.ProjectNumber}", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("Analysis complete for", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-live-notifications", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteWorkspace_RetainsBrowserViewerFilesUntilPartLifecycleEnds()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
