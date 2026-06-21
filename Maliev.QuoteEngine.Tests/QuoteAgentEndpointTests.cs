@@ -5586,6 +5586,44 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_enclosure_operation_as_box_primitive()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var command = new
+        {
+            op = "enclosure",
+            id = "electronics_case",
+            width = 90.0,
+            depth = 55.0,
+            height = 24.0
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Enclosure alias generated preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(command, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommand = commandDoc.RootElement.EnumerateArray().Single();
+
+        Assert.Equal("box", normalizedCommand.GetProperty("op").GetString());
+        Assert.Equal(new[] { 90.0, 55.0, 24.0 }, normalizedCommand.GetProperty("params").EnumerateArray().Select(value => value.GetDouble()).ToArray());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_boss_operation_as_cylinder_feature()
     {
         using var client = factory.CreateClient();
