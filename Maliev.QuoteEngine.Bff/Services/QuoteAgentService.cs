@@ -139,6 +139,8 @@ internal sealed class QuoteAgentService(
     // message) reach the model without TrimChatbotContent silently dropping the guidance,
     // while still staying under the value ChatbotService will reject with a 400.
     private const int ChatbotServiceMaxContentCharacters = 8000;
+    private const long ChatbotInlineImageMaxBytes = 10L * 1024 * 1024;
+    private const long ChatbotInlinePdfMaxBytes = 20L * 1024 * 1024;
 
     public async Task<QuoteAgentTurnResponse> SendAsync(
         QuoteAgentMessageRequest request,
@@ -171,7 +173,7 @@ internal sealed class QuoteAgentService(
 
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         await RefreshOrderStatusAsync(state, cancellationToken);
-        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts);
+        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts, cancellationToken);
         var customerMemoryContext = await BuildCustomerMemoryContextAsync(customerId, cancellationToken);
         ChatbotMessageResponse? chatbotResponse = null;
         var generatedFallbackPreview = false;
@@ -297,7 +299,7 @@ internal sealed class QuoteAgentService(
 
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         await RefreshOrderStatusAsync(state, cancellationToken);
-        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts);
+        var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts, cancellationToken);
         var customerMemoryContext = await BuildCustomerMemoryContextAsync(customerId, cancellationToken);
         var chatbotStream = chatbotClient.SendMessageStreamAsync(new ChatbotSendMessageRequest
         {
@@ -5561,7 +5563,8 @@ Customer message:
 
     private async Task<List<ChatbotMessageAttachmentRequest>?> BuildChatbotAttachmentsAsync(
         IReadOnlyCollection<QuoteAgentAttachmentDto> attachments,
-        IReadOnlyCollection<QuoteAgentArtifactDto> artifacts)
+        IReadOnlyCollection<QuoteAgentArtifactDto> artifacts,
+        CancellationToken cancellationToken)
     {
         var supported = new List<ChatbotMessageAttachmentRequest>(attachments.Count + Math.Min(artifacts.Count, 6));
         foreach (var attachment in BuildWorkbenchAttachmentCandidates(attachments, artifacts))
@@ -5572,23 +5575,12 @@ Customer message:
                 continue;
             }
 
-            var url = attachment.Url;
-            if (string.IsNullOrWhiteSpace(url) ||
-                url.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ||
-                url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
-            {
-                if (!string.IsNullOrWhiteSpace(attachment.StoragePath))
-                {
-                    url = await ResolveSketchUrlAsync(attachment.StoragePath);
-                }
-                else
-                {
-                    url = null;
-                }
-            }
-
+            var url = await ResolveChatbotAttachmentDataAsync(attachment, attachmentType, cancellationToken);
             if (string.IsNullOrWhiteSpace(url))
             {
+                logger.LogInformation(
+                    "Skipping QuoteEngine attachment {FileName} for ChatbotService because no supported media payload could be resolved.",
+                    attachment.FileName);
                 continue;
             }
 
@@ -5604,6 +5596,76 @@ Customer message:
 
         return supported.Count == 0 ? null : supported;
     }
+
+    private async Task<string?> ResolveChatbotAttachmentDataAsync(
+        QuoteAgentAttachmentDto attachment,
+        string attachmentType,
+        CancellationToken cancellationToken)
+    {
+        if (!string.IsNullOrWhiteSpace(attachment.StoragePath))
+        {
+            var inlineData = await TryBuildInlineAttachmentDataUrlAsync(
+                attachment.StoragePath,
+                attachment.ContentType,
+                AttachmentInlineMaxBytes(attachmentType),
+                cancellationToken);
+            if (!string.IsNullOrWhiteSpace(inlineData))
+            {
+                return inlineData;
+            }
+
+            return null;
+        }
+
+        var url = attachment.Url?.Trim();
+        if (string.IsNullOrWhiteSpace(url) ||
+            url.StartsWith("blob:", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (url.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            return url.Length <= 10_000 ? url : null;
+        }
+
+        return url;
+    }
+
+    private async Task<string?> TryBuildInlineAttachmentDataUrlAsync(
+        string storagePath,
+        string contentType,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var bytes = await uploadClient.GetFileBytesByPathAsync(storagePath, maxBytes, cancellationToken);
+            if (bytes.Length == 0)
+            {
+                return null;
+            }
+
+            return $"data:{contentType};base64,{Convert.ToBase64String(bytes)}";
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "Failed to inline QuoteEngine attachment {StoragePath} for ChatbotService.",
+                storagePath);
+            return null;
+        }
+    }
+
+    private static long AttachmentInlineMaxBytes(string attachmentType) =>
+        attachmentType.Equals("pdf", StringComparison.OrdinalIgnoreCase)
+            ? ChatbotInlinePdfMaxBytes
+            : ChatbotInlineImageMaxBytes;
 
     private static IEnumerable<QuoteAgentAttachmentDto> BuildWorkbenchAttachmentCandidates(
         IReadOnlyCollection<QuoteAgentAttachmentDto> attachments,

@@ -106,6 +106,53 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
     }
 
     /// <summary>
+    /// Downloads file bytes for a storage path through UploadService's signed URL flow.
+    /// </summary>
+    public virtual async Task<byte[]> GetFileBytesByPathAsync(
+        string storagePath,
+        long maxBytes,
+        CancellationToken ct = default)
+    {
+        var signedUrl = await GetDownloadUrlByPathAsync(storagePath, expirationMinutes: 10, ct);
+        using var response = await http.GetAsync(signedUrl, HttpCompletionOption.ResponseHeadersRead, ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            logger.LogError(
+                "UploadService signed download failed {Status} for {StoragePath}: {Body}",
+                response.StatusCode,
+                storagePath,
+                responseBody);
+            response.EnsureSuccessStatusCode();
+        }
+
+        var contentLength = response.Content.Headers.ContentLength;
+        if (contentLength is > 0 && contentLength > maxBytes)
+        {
+            throw new InvalidOperationException(
+                $"UploadService file {storagePath} exceeds the {maxBytes} byte inline attachment limit.");
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var memory = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), ct)) > 0)
+        {
+            if (memory.Length + read > maxBytes)
+            {
+                throw new InvalidOperationException(
+                    $"UploadService file {storagePath} exceeds the {maxBytes} byte inline attachment limit.");
+            }
+
+            memory.Write(buffer, 0, read);
+        }
+
+        return memory.ToArray();
+    }
+
+    /// <summary>
     /// Copies a file within the storage bucket (used for demo file duplication if needed).
     /// </summary>
     public virtual async Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken ct)

@@ -864,7 +864,7 @@ Customer message:
     }
 
     [Fact]
-    public async Task Agent_message_stream_with_uploaded_sketch_prefers_signed_storage_url_over_inline_preview()
+    public async Task Agent_message_stream_with_uploaded_sketch_inlines_storage_media_for_chatbot()
     {
         var chatbot = new RecordingChatbotServiceClient();
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
@@ -910,9 +910,58 @@ Customer message:
         Assert.True(chatbot.LastStreamRequest.Content.Length <= 8000);
         Assert.Contains("Please quote this hand sketch.", chatbot.LastStreamRequest.Content, StringComparison.Ordinal);
         var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
-        Assert.Equal("https://upload.example.test/download/quotes%2Ftemp%2Fsession%2Fmanufacturing-sketch.png", attachment.Url);
-        Assert.False(attachment.Url.StartsWith("data:", StringComparison.OrdinalIgnoreCase));
+        Assert.StartsWith("data:image/png;base64,", attachment.Url, StringComparison.OrdinalIgnoreCase);
+        var base64 = attachment.Url[(attachment.Url.IndexOf(',') + 1)..];
+        Assert.Equal(
+            "stored:quotes/temp/session/manufacturing-sketch.png",
+            Encoding.UTF8.GetString(Convert.FromBase64String(base64)));
         Assert.True(attachment.Url.Length < 10_000);
+    }
+
+    [Fact]
+    public async Task Agent_message_stream_skips_storage_media_when_inline_download_fails()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(new RecordingUploadServiceClient
+                {
+                    ThrowOnDownload = true
+                });
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Please quote this hand sketch.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "manufacturing-sketch.png",
+                        ContentType = "image/png",
+                        FileSizeBytes = 120_000,
+                        Kind = "sketch",
+                        StoragePath = "quotes/temp/session/manufacturing-sketch.png"
+                    }
+                ]
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        Assert.Null(chatbot.LastStreamRequest!.Attachments);
     }
 
     [Fact]
@@ -1033,9 +1082,11 @@ Customer message:
         Assert.Equal("image", attachment.Type);
         Assert.Equal("image/png", attachment.MimeType);
         Assert.Equal("manufacturing-sketch.png", attachment.Filename);
+        Assert.StartsWith("data:image/png;base64,", attachment.Url, StringComparison.OrdinalIgnoreCase);
+        var base64 = attachment.Url[(attachment.Url.IndexOf(',') + 1)..];
         Assert.Equal(
-            "https://upload.example.test/download/agent%2Fsketches%2Fabc%2Fmanufacturing-sketch.png",
-            attachment.Url);
+            "stored:agent/sketches/abc/manufacturing-sketch.png",
+            Encoding.UTF8.GetString(Convert.FromBase64String(base64)));
     }
 
     [Fact]
@@ -8311,6 +8362,8 @@ Customer message:
 
         public string? LastStreamedStoragePath { get; private set; }
 
+        public bool ThrowOnDownload { get; init; }
+
         public override Task<string> InitiateResumableUploadAsync(
             string fileName,
             string contentType,
@@ -8342,6 +8395,19 @@ Customer message:
             CancellationToken ct = default)
         {
             return Task.FromResult($"https://upload.example.test/download/{Uri.EscapeDataString(storagePath)}");
+        }
+
+        public override Task<byte[]> GetFileBytesByPathAsync(
+            string storagePath,
+            long maxBytes,
+            CancellationToken ct = default)
+        {
+            if (ThrowOnDownload)
+            {
+                throw new HttpRequestException("download failed");
+            }
+
+            return Task.FromResult(Encoding.UTF8.GetBytes($"stored:{storagePath}"));
         }
     }
 
