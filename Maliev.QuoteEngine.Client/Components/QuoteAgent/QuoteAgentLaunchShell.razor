@@ -2622,7 +2622,7 @@
         try
         {
             var state = await Api.GetAgentStateAsync(SessionId);
-            await ApplyStateAsync(state);
+            await ApplyStateAsync(state, suppressPanelAutoOpen: true);
             await LoadMessageHistoryAsync(forceReloadExistingMessages);
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)

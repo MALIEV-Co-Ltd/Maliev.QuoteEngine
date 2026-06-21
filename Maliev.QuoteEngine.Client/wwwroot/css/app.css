@@ -1363,19 +1363,19 @@
 
 .qe-agent-signin-card {
     display: block;
-    width: min(100%, 210px);
-    max-width: 210px;
+    width: min(100%, 220px);
+    max-width: 220px;
     margin: 0 auto;
 }
 
 .qe-agent-signin-panel {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 6px;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    gap: 8px;
     width: 100%;
-    min-height: 34px;
-    padding: 4px 4px 4px 8px;
+    min-height: 0;
+    padding: 7px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 8px;
     background: transparent;
@@ -1391,9 +1391,8 @@
     color: var(--qe-agent-ink);
     line-height: 1.25;
     letter-spacing: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow-wrap: anywhere;
+    white-space: normal;
 }
 
 .qe-agent-signin-panel > p {
@@ -1433,12 +1432,12 @@
 .qe-agent-signin-btn {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     gap: 6px;
     flex: 0 0 auto;
-    width: auto;
-    min-height: 26px;
-    padding: 4px 7px;
+    width: 100%;
+    min-height: 32px;
+    padding: 6px 9px;
     border: 1px solid var(--qe-agent-inverse);
     border-radius: 8px;
     white-space: nowrap;
@@ -1520,13 +1519,13 @@
 
 .qe-agent-main--empty .qe-agent-chat-stack {
     display: grid;
-    grid-template-rows: minmax(160px, 1fr) auto;
-    align-content: stretch;
+    grid-template-rows: auto auto auto;
+    align-content: center;
     justify-items: center;
-    gap: 22px;
+    gap: 18px;
     width: 100%;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     padding-bottom: 36px;
 }
 
