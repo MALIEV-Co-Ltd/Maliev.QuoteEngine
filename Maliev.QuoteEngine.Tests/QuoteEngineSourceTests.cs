@@ -4911,6 +4911,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_rating_buttons_expose_pressed_state_and_isolate_clicks()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
+            .ReplaceLineEndings("\n");
+
+        var ratingStart = shell.IndexOf("<div class=\"qe-inline-viewer-rating\"", StringComparison.Ordinal);
+        Assert.True(ratingStart >= 0, "Inline viewer rating controls must exist.");
+
+        var ratingEnd = shell.IndexOf("\n                                            </div>", ratingStart, StringComparison.Ordinal);
+        Assert.True(ratingEnd > ratingStart, "Inline viewer rating controls must be scoped before the comment field.");
+
+        var ratingMarkup = shell[ratingStart..ratingEnd];
+        Assert.Contains("aria-pressed=\"@(currentRating <= message.InlineViewer.FeedbackRating)", ratingMarkup, StringComparison.Ordinal);
+        Assert.Contains("@onclick:stopPropagation=\"true\"", ratingMarkup, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_and_detail_card_wire_browser_local_dfm_to_part_state()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
