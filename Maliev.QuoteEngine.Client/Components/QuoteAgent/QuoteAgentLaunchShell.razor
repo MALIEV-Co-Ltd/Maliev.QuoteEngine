@@ -1916,6 +1916,7 @@
     private QuoteAgentAuthHandoffResponse? _authHandoff;
     private List<QuoteAgentConnectorDto> _connectors = [];
     private Guid _loadedSessionId;
+    private bool _loadedSessionWasSignedIn;
     private string _draftMessage = string.Empty;
     private AgentMessageRow? _replyTo;
     private AgentMessageRow? _editingLastUserMessage;
@@ -2419,6 +2420,12 @@
 
         if (SessionId == _loadedSessionId)
         {
+            if (IsSignedIn && !_loadedSessionWasSignedIn)
+            {
+                _loadedSessionWasSignedIn = true;
+                await LoadStateAsync(forceReloadExistingMessages: true);
+            }
+
             return;
         }
 
@@ -2430,7 +2437,8 @@
         }
 
         _loadedSessionId = SessionId;
-        await LoadStateAsync();
+        _loadedSessionWasSignedIn = IsSignedIn;
+        await LoadStateAsync(forceReloadExistingMessages: IsSignedIn);
     }
 
     private static string NormalizeAuthMode(string? mode)
@@ -2566,13 +2574,13 @@
         }
     }
 
-    private async Task LoadStateAsync()
+    private async Task LoadStateAsync(bool forceReloadExistingMessages = false)
     {
         try
         {
             var state = await Api.GetAgentStateAsync(SessionId);
             await ApplyStateAsync(state);
-            await LoadMessageHistoryAsync();
+            await LoadMessageHistoryAsync(forceReloadExistingMessages);
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
@@ -2580,9 +2588,9 @@
         }
     }
 
-    private async Task LoadMessageHistoryAsync()
+    private async Task LoadMessageHistoryAsync(bool forceReloadExistingMessages = false)
     {
-        if (_messages.Count > 0 || SessionId == Guid.Empty)
+        if (SessionId == Guid.Empty || (_messages.Count > 0 && !forceReloadExistingMessages))
         {
             return;
         }
@@ -2600,6 +2608,11 @@
         if (history.Messages.Count == 0)
         {
             return;
+        }
+
+        if (forceReloadExistingMessages)
+        {
+            _messages.Clear();
         }
 
         foreach (var message in history.Messages)

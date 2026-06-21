@@ -1990,9 +1990,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("public void OnAuthPopupCompleted()", shell, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(Navigation.Uri, forceLoad: true);", shell, StringComparison.Ordinal);
         Assert.Contains("if (SessionId == _loadedSessionId)", shell, StringComparison.Ordinal);
-        Assert.Contains("await LoadStateAsync();", shell, StringComparison.Ordinal);
-        Assert.Contains("await LoadMessageHistoryAsync();", shell, StringComparison.Ordinal);
-        Assert.Contains("if (_messages.Count > 0 || SessionId == Guid.Empty)", shell, StringComparison.Ordinal);
+        Assert.Contains("private bool _loadedSessionWasSignedIn;", shell, StringComparison.Ordinal);
+        Assert.Contains("if (IsSignedIn && !_loadedSessionWasSignedIn)", shell, StringComparison.Ordinal);
+        Assert.Contains("await LoadStateAsync(forceReloadExistingMessages: true);", shell, StringComparison.Ordinal);
+        Assert.Contains("await LoadStateAsync(forceReloadExistingMessages: IsSignedIn);", shell, StringComparison.Ordinal);
+        Assert.Contains("await LoadMessageHistoryAsync(forceReloadExistingMessages);", shell, StringComparison.Ordinal);
+        Assert.Contains("if (SessionId == Guid.Empty || (_messages.Count > 0 && !forceReloadExistingMessages))", shell, StringComparison.Ordinal);
+        Assert.Contains("if (history.Messages.Count == 0)", shell, StringComparison.Ordinal);
+        Assert.Contains("_messages.Clear();", shell, StringComparison.Ordinal);
         Assert.Contains("history = await Api.GetAgentMessageHistoryAsync(SessionId);", shell, StringComparison.Ordinal);
         Assert.Contains("new AgentMessageRow(message.Role, message.Content, createdAt: message.CreatedAt)", shell, StringComparison.Ordinal);
 
