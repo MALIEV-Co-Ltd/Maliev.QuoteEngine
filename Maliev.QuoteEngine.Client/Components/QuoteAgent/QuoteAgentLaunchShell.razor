@@ -1189,13 +1189,27 @@
                 @if (!IsDictationActive)
                 {
                     <div class="qe-agent-composer-tooltip qe-agent-add-tooltip">
-                        <button type="button"
-                                class="qe-agent-round-btn qe-agent-add-btn"
-                                aria-describedby="qe-agent-add-tooltip"
-                                aria-label="@Text("Add files", "เพิ่มไฟล์")"
-                                @onclick="RequestUploadAsync">
-                            <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
-                        </button>
+                        @if (!string.IsNullOrWhiteSpace(UploadInputElementId))
+                        {
+                            <label class="qe-agent-round-btn qe-agent-add-btn"
+                                   for="@UploadInputElementId"
+                                   role="button"
+                                   tabindex="0"
+                                   aria-describedby="qe-agent-add-tooltip"
+                                   aria-label="@Text("Add files", "เพิ่มไฟล์")">
+                                <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
+                            </label>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="qe-agent-round-btn qe-agent-add-btn"
+                                    aria-describedby="qe-agent-add-tooltip"
+                                    aria-label="@Text("Add files", "เพิ่มไฟล์")"
+                                    @onclick="RequestUploadAsync">
+                                <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
+                            </button>
+                        }
                         <span id="qe-agent-add-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
                             <span class="qe-agent-tooltip-content">
                                 <span>@Text("Add files", "เพิ่มไฟล์")</span>
@@ -2112,6 +2126,9 @@
 
     [Parameter]
     public int SelectedPartIndex { get; set; }
+
+    [Parameter]
+    public string? UploadInputElementId { get; set; }
 
     [Parameter]
     public string Culture { get; set; } = SupportedCultures.DefaultCulture;

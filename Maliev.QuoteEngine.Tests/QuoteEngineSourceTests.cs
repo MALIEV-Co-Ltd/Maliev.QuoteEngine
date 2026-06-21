@@ -1643,6 +1643,21 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_uses_native_file_input_label_for_composer_add_button()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var addButtonBlock = ExtractSourceBlock(component, "class=\"qe-agent-composer-tooltip qe-agent-add-tooltip\"", "<span id=\"qe-agent-add-tooltip\"");
+
+        Assert.Contains("UploadInputElementId=\"@UploadInputId\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("public string? UploadInputElementId { get; set; }", component, StringComparison.Ordinal);
+        Assert.Contains("<label class=\"qe-agent-round-btn qe-agent-add-btn\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("for=\"@UploadInputElementId\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("role=\"button\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"RequestUploadAsync\"", addButtonBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_scroll_button_stays_hidden_during_programmatic_scroll()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
