@@ -4251,14 +4251,16 @@ internal sealed class QuoteAgentService(
 
     private string BuildPaymentCallbackUrl(string outcome, string orderNumber)
     {
-        var configuredBaseUrl = configuration["Web:BaseUrl"]?.Trim();
+        var configuredBaseUrl = configuration["QuoteEngine:BaseUrl"]?.Trim();
         var path = $"/payment/{outcome}?orderNumber={Uri.EscapeDataString(orderNumber)}";
-        if (string.IsNullOrWhiteSpace(configuredBaseUrl))
+        if (string.IsNullOrWhiteSpace(configuredBaseUrl) ||
+            !Uri.TryCreate(configuredBaseUrl.TrimEnd('/'), UriKind.Absolute, out var baseUri) ||
+            !baseUri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
-            return path;
+            return $"https://quote.maliev.com{path}";
         }
 
-        return $"{configuredBaseUrl.TrimEnd('/')}{path}";
+        return $"{baseUri.ToString().TrimEnd('/')}{path}";
     }
 
     private static string BuildPaymentIdempotencyKey(Guid customerId, Guid orderId, Guid checkoutAttemptId)

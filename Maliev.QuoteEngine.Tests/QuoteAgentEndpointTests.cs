@@ -2638,7 +2638,17 @@ Customer message:
     [Fact]
     public async Task Agent_payment_confirmation_after_order_sets_payment_gate_and_artifact()
     {
-        await using var scopedFactory = CreateAgentFactory();
+        await using var scopedFactory = CreateAgentFactory().WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Web:BaseUrl"] = "https://www.maliev.com",
+                    ["QuoteEngine:BaseUrl"] = "https://quote.example.com"
+                });
+            });
+        });
         factory.ClearPaymentIdempotencyKeys();
         using var client = await CreateSignedInClientAsync(scopedFactory, "agent-payment@example.com");
         var sessionId = await StartPricedCadSessionAsync(client);
@@ -2755,10 +2765,12 @@ Customer message:
         Assert.Equal("+66810000002", snapshot.DeliveryContactPhone);
         Assert.StartsWith("qe:", initiation.IdempotencyKey, StringComparison.Ordinal);
         Assert.True(initiation.IdempotencyKey.Length <= 100);
-        Assert.StartsWith("https://", initiation.ReturnUrl, StringComparison.OrdinalIgnoreCase);
-        Assert.StartsWith("https://", initiation.CancelUrl, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("/payment/success", initiation.ReturnUrl, StringComparison.Ordinal);
-        Assert.Contains("/payment/cancel", initiation.CancelUrl, StringComparison.Ordinal);
+        Assert.Equal(
+            $"https://quote.example.com/payment/success?orderNumber={Uri.EscapeDataString(orderArtifact.Metadata["orderNumber"])}",
+            initiation.ReturnUrl);
+        Assert.Equal(
+            $"https://quote.example.com/payment/cancel?orderNumber={Uri.EscapeDataString(orderArtifact.Metadata["orderNumber"])}",
+            initiation.CancelUrl);
     }
 
     [Fact]
