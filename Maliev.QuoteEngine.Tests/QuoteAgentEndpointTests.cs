@@ -8281,6 +8281,7 @@ Customer message:
         var updatedArtifact = Assert.Single(updatedState.Artifacts, item => item.ArtifactId == artifact.ArtifactId);
         Assert.Equal("2", updatedArtifact.Metadata["customerRating"]);
         Assert.Equal("Holes should be closer to the corners and the plate needs rounded edges.", updatedArtifact.Metadata["customerComment"]);
+        Assert.Equal("true", updatedArtifact.Metadata["feedbackMemoryObserved"]);
 
         Assert.Equal(customerId, customerClient.LastObservedMemoryCustomerId);
         Assert.NotNull(customerClient.LastObservedMemory);

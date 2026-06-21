@@ -4881,6 +4881,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("result?.MemoryObserved == true", submit, StringComparison.Ordinal);
         Assert.Contains("Feedback recorded for future drafts", submit, StringComparison.Ordinal);
         Assert.Contains("Feedback recorded", submit, StringComparison.Ordinal);
+
+        var buildStart = shell.IndexOf("private static InlineViewerInfo? FindInlinePreview", StringComparison.Ordinal);
+        Assert.True(buildStart >= 0, "FindInlinePreview must exist.");
+
+        var buildEnd = shell.IndexOf("\n    private static string InlineViewerRatingClass", buildStart, StringComparison.Ordinal);
+        Assert.True(buildEnd > buildStart, "FindInlinePreview must end before InlineViewerRatingClass.");
+
+        var build = shell[buildStart..buildEnd];
+        Assert.Contains("feedbackMemoryObserved", build, StringComparison.Ordinal);
+        Assert.Contains("Feedback recorded for future drafts", build, StringComparison.Ordinal);
     }
 
     [Fact]

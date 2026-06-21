@@ -5120,7 +5120,9 @@
                 : 0,
             FeedbackComment = ArtifactMetadata(generated, "customerComment") ?? string.Empty,
             FeedbackStatus = generated.Status.Equals("feedback_recorded", StringComparison.OrdinalIgnoreCase)
-                ? "Feedback recorded"
+                ? ArtifactMetadata(generated, "feedbackMemoryObserved") == "true"
+                    ? "Feedback recorded for future drafts"
+                    : "Feedback recorded"
                 : string.Empty
         };
     }

@@ -611,6 +611,18 @@ internal sealed class QuoteAgentService(
                     },
                     cancellationToken);
                 memoryObserved = observed is not null;
+                if (memoryObserved)
+                {
+                    lock (state.SyncRoot)
+                    {
+                        var artifact = state.Artifacts.FirstOrDefault(item => item.ArtifactId == artifactId);
+                        if (artifact is not null)
+                        {
+                            artifact.Metadata["feedbackMemoryObserved"] = "true";
+                            state.UpdatedAt = DateTimeOffset.UtcNow;
+                        }
+                    }
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
