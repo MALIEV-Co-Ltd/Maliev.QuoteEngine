@@ -835,7 +835,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-signin-panel\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-signin-btn\"", component, StringComparison.Ordinal);
         Assert.Contains("@Text(\"Sign in to save projects\", \"เข้าสู่ระบบเพื่อบันทึกโปรเจกต์\")", component, StringComparison.Ordinal);
-        Assert.Contains("@Text(\"Continue\", \"ดำเนินการต่อ\")", component, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Sign in\", \"เข้าสู่ระบบ\")", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-signin-icon-btn\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Sign in / Sign up", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-signup-btn\"", component, StringComparison.Ordinal);
@@ -1498,7 +1498,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("opacity: 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-empty-projects", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-panel", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("max-width: 214px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("width: min(100%, 156px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("max-width: 156px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("width: min(760px, calc(100% - 32px));", agentStyles, StringComparison.Ordinal);
         Assert.Contains("max-width: 760px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-rail-foot .qe-agent-signin-btn", agentStyles, StringComparison.Ordinal);
