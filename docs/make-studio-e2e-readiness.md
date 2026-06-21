@@ -77,7 +77,7 @@ ordering, retries) — exactly what the E2E proves.
 | 7 | Login redirect restore stricter gate | **Base committed; stricter E2E pending** | QE `7e78489 fix: restore make studio chat after auth`; QE `33c0c22 fix: return agent auth handoff to active chat` |
 | 8 | Real browser upload→DFM→reupload proof | **Real path exists (w/ fallback); browser E2E pending** | `QuoteController.cs:96-122`; DFM consumers + SignalR |
 | 9 | ChatbotService tool/prompt schema full audit | **Core registry/dispatch verified; compatibility hardening committed**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken`; QuoteEngine now accepts common model-emitted CAD numeric strings such as `"50 mm"`, object-shaped `params`, correctly ordered object-shaped primitive params, diameter-to-radius object params, primitive operation aliases, whitespace-separated operation aliases, the singular `command` argument alias, plate/hole/slot/boss/standoff shorthands, thickness and scalar square-profile shorthands; ChatbotService now advertises those generated-preview aliases in the model-facing function schema; generated-preview feedback is sanitized before durable memory or next-turn prompt context | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244`; QE `47ca397`, `2ecf184`, `875cd28`, `dbd07ae`, `ca7fcf9`, `f90f7ea`, `be166d6`, `b5e49ae`, `ed97942`, `d111e74`, `92bb14d`, `c1858bc`, `76123e5`, `065bb24`; ChatbotService `f379013` |
-| 10 | Payment non-happy paths gating | **QuoteEngine relay coverage strengthened**: 5 consumers committed; unit tests cover completed, pending, failed, expired, cancelled mapping, shared order-group routing, completed order-status update failure, and null-payload skip behavior for all states. Duplicate-webhook/idempotency remains a PaymentService/OrderService cross-service proof item. | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs`; `PaymentNotificationConsumerTests.cs`; QE `402c468` |
+| 10 | Payment non-happy paths gating | **QuoteEngine relay coverage strengthened and PaymentService duplicate-webhook side effects pinned**: QuoteEngine tests cover completed, pending, failed, expired, cancelled mapping, shared order-group routing, completed order-status update failure, and null-payload skip behavior for all states. PaymentService now proves duplicate/completed webhooks do not republish terminal payment events. OrderService already ignores duplicate completed-payment events for the same payment. | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs`; `PaymentNotificationConsumerTests.cs`; QE `402c468`; PaymentService `c0eef0d`; OrderService `PaymentCompletedEventConsumerDuplicatePaidStatusForSamePaymentDoesNotThrow` |
 
 Net: 4 of 10 are simply **already done** (2,3,4,6); 4 are **code-complete, proof-pending** (1,5,7,8);
 2 need **targeted release-gate evidence** (9 residual tool authorization/schema coverage, 10 payment
@@ -121,9 +121,11 @@ PaymentService, Intranet, or Aspire at this reconciliation point.
   payment start, project resume, project summary, order creation, and employee review request.
 - **P1 — Payment duplicate/idempotency release evidence (gap 10 residual)**: QuoteEngine now has focused
   relay tests for completed, pending, failed, expired, cancelled, status-update failure, group routing,
-  and null payloads (`402c468`). The remaining proof is cross-service duplicate-webhook/idempotency:
-  PaymentService should not emit duplicate terminal side effects, and OrderService must keep repeated
-  payment/status writes idempotent.
+  and null payloads (`402c468`). PaymentService unit coverage proves duplicate provider events and
+  completed-webhook retries do not republish terminal payment events (`c0eef0d`). OrderService unit
+  coverage already proves a repeated completed-payment event for the same payment is ignored instead of
+  creating a second Paid transition. The remaining evidence is a Tier 3 Aspire/system run through the
+  paid-order path, not another known code gap.
 
 ## Validation lanes (per AGENTS.md)
 
