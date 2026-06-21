@@ -7063,6 +7063,14 @@ Customer message:
         }
 
         var profileType = profile.Type?.Trim().ToLowerInvariant();
+        if (profileType is "square" &&
+            profile is not { Width: > 0, Height: > 0 } &&
+            profile.Size is { Length: >= 1 })
+        {
+            profile.Width = profile.Size[0];
+            profile.Height = profile.Size[0];
+        }
+
         if ((profileType is "rect" or "rectangle") &&
             profile is not { Width: > 0, Height: > 0 } &&
             profile.Params is { Length: >= 2 })
@@ -7180,7 +7188,13 @@ Customer message:
     {
         return string.IsNullOrWhiteSpace(value)
             ? null
-            : value.Trim().ToLowerInvariant();
+            : value.Trim().ToLowerInvariant() switch
+            {
+                "square" => "rectangle",
+                "rectangular" => "rectangle",
+                "circular" or "round" => "circle",
+                var normalized => normalized
+            };
     }
 
     private static string NormalizeCadProfileSegmentType(string? value)

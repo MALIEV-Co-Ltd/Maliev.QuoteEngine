@@ -1189,7 +1189,13 @@ public sealed class CadDoubleArrayJsonConverter : JsonConverter<double[]?>
             return ReadObject(ref reader);
         }
 
-        throw new JsonException("CAD numeric parameters must be an array or object.");
+        var scalar = CadJsonNumberReader.ReadNullableDouble(ref reader);
+        if (scalar.HasValue)
+        {
+            return [scalar.Value];
+        }
+
+        throw new JsonException("CAD numeric parameters must be a number, array, or object.");
     }
 
     private static double[] ReadArray(ref Utf8JsonReader reader)
