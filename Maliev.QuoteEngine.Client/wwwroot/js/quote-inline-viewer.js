@@ -43,10 +43,46 @@
 
   function parseCommandsPayload(commandsPayload) {
     if (typeof commandsPayload === 'string') {
-      return JSON.parse(commandsPayload);
+      return unwrapCommandsPayload(JSON.parse(commandsPayload));
     }
 
-    return commandsPayload;
+    return unwrapCommandsPayload(commandsPayload);
+  }
+
+  function unwrapCommandsPayload(value) {
+    if (!value || Array.isArray(value) || typeof value !== 'object') {
+      return value;
+    }
+
+    if (Array.isArray(value.commands)) {
+      return value.commands;
+    }
+
+    if (Array.isArray(value.cadCommands)) {
+      return value.cadCommands;
+    }
+
+    if (Array.isArray(value.cad_commands)) {
+      return value.cad_commands;
+    }
+
+    if (Array.isArray(value.model)) {
+      return value.model;
+    }
+
+    if (Array.isArray(value.preview)) {
+      return value.preview;
+    }
+
+    if (Array.isArray(value.cad)) {
+      return value.cad;
+    }
+
+    if (Array.isArray(value.geometry)) {
+      return value.geometry;
+    }
+
+    return value;
   }
 
   function buildDefaultLighting(scene) {

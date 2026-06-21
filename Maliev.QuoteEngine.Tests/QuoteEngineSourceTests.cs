@@ -4716,11 +4716,36 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("function parseCommandsPayload(commandsPayload)", viewer, StringComparison.Ordinal);
         Assert.Contains("if (typeof commandsPayload === 'string')", viewer, StringComparison.Ordinal);
-        Assert.Contains("return commandsPayload;", viewer, StringComparison.Ordinal);
+        Assert.Contains("return unwrapCommandsPayload(commandsPayload);", viewer, StringComparison.Ordinal);
         Assert.Contains("createPreview: async function (containerId, commandsPayload)", viewer, StringComparison.Ordinal);
         Assert.Contains("commands = parseCommandsPayload(commandsPayload);", viewer, StringComparison.Ordinal);
         Assert.DoesNotContain("createPreview: async function (containerId, commandsJson)", viewer, StringComparison.Ordinal);
         Assert.DoesNotContain("commands = JSON.parse(commandsJson);", viewer, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteInlineViewer_unwraps_common_command_payload_containers()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        var parserStart = viewer.IndexOf("function parseCommandsPayload(commandsPayload)", StringComparison.Ordinal);
+        Assert.True(parserStart >= 0, "parseCommandsPayload must exist.");
+
+        var parserEnd = viewer.IndexOf("\n  function buildDefaultLighting", parserStart, StringComparison.Ordinal);
+        Assert.True(parserEnd > parserStart, "parseCommandsPayload must end before lighting setup.");
+
+        var parser = viewer[parserStart..parserEnd];
+        Assert.Contains("return unwrapCommandsPayload(JSON.parse(commandsPayload));", parser, StringComparison.Ordinal);
+        Assert.Contains("return unwrapCommandsPayload(commandsPayload);", parser, StringComparison.Ordinal);
+        Assert.Contains("function unwrapCommandsPayload(value)", viewer, StringComparison.Ordinal);
+        Assert.Contains("return value.commands;", viewer, StringComparison.Ordinal);
+        Assert.Contains("return value.cadCommands;", viewer, StringComparison.Ordinal);
+        Assert.Contains("return value.cad_commands;", viewer, StringComparison.Ordinal);
+        Assert.Contains("return value.model;", viewer, StringComparison.Ordinal);
+        Assert.Contains("return value.preview;", viewer, StringComparison.Ordinal);
+        Assert.Contains("return value.cad;", viewer, StringComparison.Ordinal);
+        Assert.Contains("return value.geometry;", viewer, StringComparison.Ordinal);
     }
 
     [Fact]
