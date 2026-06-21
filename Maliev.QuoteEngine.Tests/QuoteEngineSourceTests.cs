@@ -4692,7 +4692,7 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("function failPreview(container, message)", viewer, StringComparison.Ordinal);
 
-        var createPreviewStart = viewer.IndexOf("createPreview: async function (containerId, commandsJson)", StringComparison.Ordinal);
+        var createPreviewStart = viewer.IndexOf("createPreview: async function (containerId, commandsPayload)", StringComparison.Ordinal);
         Assert.True(createPreviewStart >= 0, "createPreview must exist.");
 
         var createPreviewEnd = viewer.IndexOf("\n    disposePreview: disposePreview", createPreviewStart, StringComparison.Ordinal);
@@ -4706,6 +4706,21 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("showPreviewError(container, 'Could not parse 3D commands');\n        return;", createPreview, StringComparison.Ordinal);
         Assert.DoesNotContain("showPreviewError(container, 'No shapes to display');\n        return;", createPreview, StringComparison.Ordinal);
         Assert.DoesNotContain("showPreviewError(container, '3D engine not available');\n        return;", createPreview, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteInlineViewer_accepts_parsed_command_payloads_from_js_interop()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function parseCommandsPayload(commandsPayload)", viewer, StringComparison.Ordinal);
+        Assert.Contains("if (typeof commandsPayload === 'string')", viewer, StringComparison.Ordinal);
+        Assert.Contains("return commandsPayload;", viewer, StringComparison.Ordinal);
+        Assert.Contains("createPreview: async function (containerId, commandsPayload)", viewer, StringComparison.Ordinal);
+        Assert.Contains("commands = parseCommandsPayload(commandsPayload);", viewer, StringComparison.Ordinal);
+        Assert.DoesNotContain("createPreview: async function (containerId, commandsJson)", viewer, StringComparison.Ordinal);
+        Assert.DoesNotContain("commands = JSON.parse(commandsJson);", viewer, StringComparison.Ordinal);
     }
 
     [Fact]

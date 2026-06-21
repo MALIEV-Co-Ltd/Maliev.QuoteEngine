@@ -41,6 +41,14 @@
       .replace(/'/g, '&#39;');
   }
 
+  function parseCommandsPayload(commandsPayload) {
+    if (typeof commandsPayload === 'string') {
+      return JSON.parse(commandsPayload);
+    }
+
+    return commandsPayload;
+  }
+
   function buildDefaultLighting(scene) {
     var hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0.5), scene);
     hemi.intensity = 0.6;
@@ -240,13 +248,13 @@
   }
 
   window.quoteInlineViewer = {
-    createPreview: async function (containerId, commandsJson) {
+    createPreview: async function (containerId, commandsPayload) {
       var container = document.getElementById(containerId);
       if (!container) return;
 
       var commands;
       try {
-        commands = JSON.parse(commandsJson);
+        commands = parseCommandsPayload(commandsPayload);
       } catch (e) {
         failPreview(container, 'Could not parse 3D commands');
       }
