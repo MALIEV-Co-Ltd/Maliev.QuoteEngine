@@ -6919,17 +6919,17 @@ Customer message:
                 : BuildParams(
                     command.Width ?? dimensions?.Width ?? dimensions?.X,
                     command.Depth ?? command.Length ?? dimensions?.Depth ?? dimensions?.Length ?? dimensions?.Y,
-                    command.Height ?? dimensions?.Height ?? dimensions?.Z),
+                    command.Height ?? command.Thickness ?? dimensions?.Height ?? dimensions?.Thickness ?? dimensions?.Z),
             "cylinder" => BuildParams(
                 command.Radius ?? Half(command.Diameter) ?? dimensions?.Radius ?? Half(dimensions?.Diameter ?? dimensions?.D),
-                command.Height ?? dimensions?.Height),
+                command.Height ?? command.Thickness ?? dimensions?.Height ?? dimensions?.Thickness),
             "sphere" => BuildParams(command.Radius ?? Half(command.Diameter) ?? dimensions?.Radius ?? Half(dimensions?.Diameter ?? dimensions?.D)),
             "cone" => BuildParams(
                 command.RadiusBottom ?? command.BottomRadius ?? dimensions?.RadiusBottom ?? dimensions?.BottomRadius,
                 command.RadiusTop ?? command.TopRadius ?? dimensions?.RadiusTop ?? dimensions?.TopRadius ?? 0,
-                command.Height ?? dimensions?.Height),
+                command.Height ?? command.Thickness ?? dimensions?.Height ?? dimensions?.Thickness),
             "fillet" or "chamfer" => BuildParams(command.Radius ?? command.CornerRadius ?? command.EdgeRadius),
-            "extrude" => BuildParams(command.Height),
+            "extrude" => BuildParams(command.Height ?? command.Thickness),
             _ => command.Params
         };
     }

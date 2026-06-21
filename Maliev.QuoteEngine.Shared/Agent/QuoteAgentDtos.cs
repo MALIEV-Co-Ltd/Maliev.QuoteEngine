@@ -965,6 +965,10 @@ public sealed class CadCommandDto
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Height { get; set; }
 
+    /// <summary>Plate/sheet thickness alias for box height or extrusion height.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? Thickness { get; set; }
+
     /// <summary>Named X translation component, normalized to offset when present.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? X { get; set; }
@@ -1099,6 +1103,10 @@ public sealed class CadDimensionsDto
     /// <summary>Primitive height or Z dimension.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
     public double? Height { get; set; }
+
+    /// <summary>Plate/sheet thickness alias for primitive height.</summary>
+    [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
+    public double? Thickness { get; set; }
 
     /// <summary>Z dimension alias for generated model payloads.</summary>
     [JsonConverter(typeof(CadNullableDoubleJsonConverter))]
