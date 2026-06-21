@@ -1919,6 +1919,8 @@
     private List<QuoteAgentConnectorDto> _connectors = [];
     private Guid _loadedSessionId;
     private bool _loadedSessionWasSignedIn;
+    private Task? _projectNavigationLoadTask;
+    private Task? _sessionStateLoadTask;
     private string _draftMessage = string.Empty;
     private AgentMessageRow? _replyTo;
     private AgentMessageRow? _editingLastUserMessage;
@@ -2386,7 +2388,7 @@
         await InvokeAsync(StateHasChanged);
     }
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnParametersSetAsync()
     {
         var requestedAuthMode = NormalizeAuthMode(InitialAuthMode);
         if (!IsSignedIn &&
@@ -2400,10 +2402,7 @@
         if (IsSignedIn)
         {
             CloseAuthDialog();
-            if (!_projectNavigationLoaded)
-            {
-                await LoadProjectNavigationAsync();
-            }
+            EnsureProjectNavigationLoadStarted();
         }
         else
         {
@@ -2411,24 +2410,25 @@
             _customerSearchResults.Clear();
             _customerSearchUnavailable = true;
             _projectNavigationLoaded = false;
+            _projectNavigationLoadTask = null;
         }
 
         if (SessionId == Guid.Empty)
         {
-            return;
+            return Task.CompletedTask;
         }
 
-        await EnsureAgentNotificationConnectionAsync();
+        _ = EnsureAgentNotificationConnectionAsync();
 
         if (SessionId == _loadedSessionId)
         {
             if (IsSignedIn && !_loadedSessionWasSignedIn)
             {
                 _loadedSessionWasSignedIn = true;
-                await LoadStateAsync(forceReloadExistingMessages: true);
+                EnsureSessionStateLoadStarted(forceReloadExistingMessages: true);
             }
 
-            return;
+            return Task.CompletedTask;
         }
 
         if (_loadedSessionId != Guid.Empty)
@@ -2440,7 +2440,41 @@
 
         _loadedSessionId = SessionId;
         _loadedSessionWasSignedIn = IsSignedIn;
-        await LoadStateAsync(forceReloadExistingMessages: IsSignedIn);
+        EnsureSessionStateLoadStarted(forceReloadExistingMessages: IsSignedIn);
+
+        return Task.CompletedTask;
+    }
+
+    private void EnsureProjectNavigationLoadStarted()
+    {
+        if (_projectNavigationLoaded || _projectNavigationLoadTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        _projectNavigationLoadTask = LoadProjectNavigationAndRefreshAsync();
+    }
+
+    private async Task LoadProjectNavigationAndRefreshAsync()
+    {
+        await LoadProjectNavigationAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void EnsureSessionStateLoadStarted(bool forceReloadExistingMessages)
+    {
+        if (_sessionStateLoadTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        _sessionStateLoadTask = LoadStateAndRefreshAsync(forceReloadExistingMessages);
+    }
+
+    private async Task LoadStateAndRefreshAsync(bool forceReloadExistingMessages)
+    {
+        await LoadStateAsync(forceReloadExistingMessages);
+        await InvokeAsync(StateHasChanged);
     }
 
     private static string NormalizeAuthMode(string? mode)

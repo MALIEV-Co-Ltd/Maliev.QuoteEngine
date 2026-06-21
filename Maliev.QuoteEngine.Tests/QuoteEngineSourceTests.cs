@@ -1994,8 +1994,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("if (SessionId == _loadedSessionId)", shell, StringComparison.Ordinal);
         Assert.Contains("private bool _loadedSessionWasSignedIn;", shell, StringComparison.Ordinal);
         Assert.Contains("if (IsSignedIn && !_loadedSessionWasSignedIn)", shell, StringComparison.Ordinal);
-        Assert.Contains("await LoadStateAsync(forceReloadExistingMessages: true);", shell, StringComparison.Ordinal);
-        Assert.Contains("await LoadStateAsync(forceReloadExistingMessages: IsSignedIn);", shell, StringComparison.Ordinal);
+        Assert.Contains("EnsureSessionStateLoadStarted(forceReloadExistingMessages: true);", shell, StringComparison.Ordinal);
+        Assert.Contains("EnsureSessionStateLoadStarted(forceReloadExistingMessages: IsSignedIn);", shell, StringComparison.Ordinal);
+        Assert.Contains("private async Task LoadStateAndRefreshAsync(bool forceReloadExistingMessages)", shell, StringComparison.Ordinal);
+        Assert.Contains("await LoadStateAsync(forceReloadExistingMessages);", shell, StringComparison.Ordinal);
+        Assert.Contains("await InvokeAsync(StateHasChanged);", shell, StringComparison.Ordinal);
         Assert.Contains("await LoadMessageHistoryAsync(forceReloadExistingMessages);", shell, StringComparison.Ordinal);
         Assert.Contains("if (SessionId == Guid.Empty || (_messages.Count > 0 && !forceReloadExistingMessages))", shell, StringComparison.Ordinal);
         Assert.Contains("if (history.Messages.Count == 0)", shell, StringComparison.Ordinal);
