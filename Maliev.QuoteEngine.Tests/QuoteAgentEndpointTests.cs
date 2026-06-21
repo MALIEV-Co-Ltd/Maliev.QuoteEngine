@@ -5082,6 +5082,85 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_accepts_common_cad_operation_synonyms()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "linear_extrude",
+                id = "extruded_plate",
+                height = 5.0,
+                profile = new
+                {
+                    type = "rectangle",
+                    size = new[] { 50.0, 30.0 }
+                }
+            },
+            new
+            {
+                op = "lathe",
+                id = "turned_boss",
+                degrees = 360.0,
+                profile = new
+                {
+                    type = "rectangle",
+                    width = 4.0,
+                    height = 12.0
+                }
+            },
+            new
+            {
+                op = "move",
+                targetId = "turned_boss",
+                resultId = "moved_boss",
+                position = new[] { 10.0, 0.0, 0.0 }
+            },
+            new
+            {
+                op = "roundover",
+                targetId = "extruded_plate",
+                radius = 1.0,
+                resultId = "rounded_plate"
+            },
+            new
+            {
+                op = "bevel",
+                targetId = "rounded_plate",
+                radius = 0.5,
+                resultId = "finished_plate"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Common CAD operation synonym preview", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var ops = commandDoc.RootElement
+            .EnumerateArray()
+            .Select(command => command.GetProperty("op").GetString())
+            .ToArray();
+
+        Assert.Equal(new[] { "extrude", "revolve", "translate", "fillet", "chamfer" }, ops);
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_edge_radius_aliases()
     {
         using var client = factory.CreateClient();
