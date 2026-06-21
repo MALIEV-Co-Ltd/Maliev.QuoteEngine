@@ -13,8 +13,10 @@ The Make Studio quote→paid-order→production handoff is **wired and internall
 already committed.** The latest customer-facing fixes are also committed: launch layout polish,
 auth-return-to-active-chat restore, QuoteEngine-hosted payment return URLs, attachment handling for
 Gemini file references, and generated-preview CAD command/schema compatibility across QuoteEngine and
-ChatbotService. The remaining deployment gate is therefore **green E2E proof + targeted cross-service
-audit coverage**, not known uncommitted feature code.
+ChatbotService. The major deployment gate was **green E2E proof + targeted cross-service audit coverage**,
+not known uncommitted feature code. The green E2E proof was obtained on 2026-06-21; the remaining work
+is now the finite P1 hardening and final release-candidate rerun defined in
+`make-studio-production-readiness-goals.md`.
 
 ## Architecture (verified)
 
@@ -68,20 +70,19 @@ ordering, retries) — exactly what the E2E proves.
 
 | # | Stated gap | Actual state | Evidence |
 |---|---|---|---|
-| 1 | Project/order linkage proof pending | **Code wired; proof-pending** | deterministic order/item ids align (table above) |
+| 1 | Project/order linkage proof pending | **Passed in Aspire E2E** | deterministic order/item ids align (table above); `make-studio-e2e-20260621-addresses.trx` |
 | 2 | Intranet project-part DTO must be committed/validated | **Committed** | Intranet `585baf8 fix: expose project part order links`; tree clean |
 | 3 | Order ID contract across QE/OS/PS | **Resolved in code** | `MD5(orderNumber)` both sides; QE `c64f543` |
 | 4 | OrderService GUID-preservation dirty change | **Committed, not dirty** | OS `2a28b02 fix: preserve order event guid identities`; tree clean |
-| 5 | Payment→production/job lifecycle unproven | **Code wired end-to-end; proof-pending** | OrderPaid→JobCreated→part.JobId chain (table above) |
+| 5 | Payment→production/job lifecycle unproven | **Passed in Aspire E2E** | OrderPaid→JobCreated→part.JobId chain (table above); full paid-order E2E passed |
 | 6 | Customer order-status tracking | **Wired** | `QuoteOrderStatusChangedConsumer.cs` → SignalR per-order group |
-| 7 | Login redirect restore stricter gate | **Base committed; stricter E2E pending** | QE `7e78489 fix: restore make studio chat after auth`; QE `33c0c22 fix: return agent auth handoff to active chat` |
-| 8 | Real browser upload→DFM→reupload proof | **Real path exists (w/ fallback); browser E2E pending** | `QuoteController.cs:96-122`; DFM consumers + SignalR |
+| 7 | Login redirect restore stricter gate | **Passed in Aspire E2E** | QE `7e78489 fix: restore make studio chat after auth`; QE `33c0c22 fix: return agent auth handoff to active chat`; `QuoteEngine_MakeStudioAgent_LoginRedirectRestoresActiveChat`; full E2E restored workbench artifacts |
+| 8 | Real browser upload→DFM→reupload proof | **Passed in Aspire E2E** | full E2E covers DFM-blocked upload, corrected reupload, stale-state reset, and finalization |
 | 9 | ChatbotService tool/prompt schema full audit | **Core registry/dispatch verified; compatibility hardening committed**: 32 tools consistent across `ToolRegistry` (declared) ↔ `QuoteEngineToolHandler.AllowedTools` ↔ BFF `QuoteAgentService` dispatch; customer channel exposes only `quote-engine` tools; BFF tool endpoint requires signed `QuoteAgentContextToken`; QuoteEngine now accepts common model-emitted CAD numeric strings such as `"50 mm"`, object-shaped `params`, correctly ordered object-shaped primitive params, diameter-to-radius object params, primitive operation aliases, whitespace-separated operation aliases, the singular `command` argument alias, plate/hole/slot/boss/standoff shorthands, thickness and scalar square-profile shorthands; ChatbotService now advertises those generated-preview aliases in the model-facing function schema; generated-preview feedback is sanitized before durable memory or next-turn prompt context | `ToolRegistry.cs:30`, `QuoteEngineToolHandler.cs:22-56`, `AgentController.cs:244`; QE `47ca397`, `2ecf184`, `875cd28`, `dbd07ae`, `ca7fcf9`, `f90f7ea`, `be166d6`, `b5e49ae`, `ed97942`, `d111e74`, `92bb14d`, `c1858bc`, `76123e5`, `065bb24`; ChatbotService `f379013` |
 | 10 | Payment non-happy paths gating | **QuoteEngine relay coverage strengthened and PaymentService duplicate-webhook side effects pinned**: QuoteEngine tests cover completed, pending, failed, expired, cancelled mapping, shared order-group routing, completed order-status update failure, and null-payload skip behavior for all states. PaymentService now proves duplicate/completed webhooks do not republish terminal payment events. OrderService already ignores duplicate completed-payment events for the same payment. | BFF `QuotePayment{Completed,Pending,Failed,Expired,Cancelled}Consumer.cs`; `PaymentNotificationConsumerTests.cs`; QE `402c468`; PaymentService `c0eef0d`; OrderService `PaymentCompletedEventConsumerDuplicatePaidStatusForSamePaymentDoesNotThrow` |
 
-Net: 4 of 10 are simply **already done** (2,3,4,6); 4 are **code-complete, proof-pending** (1,5,7,8);
-2 need **targeted release-gate evidence** (9 residual tool authorization/schema coverage, 10 payment
-non-happy-path sign-off).
+Net: gaps 1,5,7,8 are now closed by the 2026-06-21 focused Aspire E2E pass; 2,3,4,6 were already
+resolved; 9 and 10 retain targeted P1 release-hardening evidence work rather than known feature gaps.
 
 ## Current uncommitted work
 
@@ -90,10 +91,11 @@ PaymentService, Intranet, or Aspire at this reconciliation point.
 
 ## True remaining gate (prioritized)
 
-- **P0 — Green Aspire Make Studio E2E** with the stricter (`jobId`) assertion: DFM correction → quote
-  approval → order creation → payment completion → Intranet order/project visibility → **project-part
-  ↔ order ↔ production-job linkage** → restored chat/workbench. This is the single proof that closes
-  gaps 1,5,7,8.
+- **P0 — Green Aspire Make Studio E2E (PASSED 2026-06-21)** with the stricter (`jobId`) assertion: DFM
+  correction → quote approval → order creation → payment completion → Intranet order/project visibility
+  → **project-part ↔ order ↔ production-job linkage** → restored chat/workbench. Evidence:
+  `Maliev.Aspire.Tests\TestResults\make-studio-e2e-20260621-addresses.trx` and run note
+  `Maliev.Aspire.Tests/specs/E2E_USER_JOURNEY_RUN_RESULTS.md`.
 - **P0 — Backing config (VERIFIED this session)**: the mutating money/order/quote endpoints resolve to
   **real** clients and fail-closed in production:
   - `quotes/formal` → `quotationClient.CreateAsync` (QuoteController.cs:709); `quotes/{id}/approve` →
@@ -102,11 +104,11 @@ PaymentService, Intranet, or Aspire at this reconciliation point.
   - The prototype-store `GenerateQuote`/`CreateOrder`/`StartPayment` methods are **not called by the
     controller** (dead code). Upload→prototype fallback is gated to dev/test only (1378-1379), so prod
     fails-closed (502).
-  - Residual (product decision, not a blocker): `estimate` falls back unconditionally to `store.Estimate`
-    when PricingService returns null (`pricingEstimate ?? store.Estimate`, line 310). Estimates are
-    non-binding, so this is graceful degradation; decide whether prod should instead surface a "pricing
-    unavailable" state. Draft projects are in-memory only (no `ProjectServiceClient`); the durable
-    project record is created Intranet-side on quotation acceptance.
+  - Production estimate fallback has since been pinned by focused tests: PricingService-backed estimates
+    are required in production, and unavailable pricing returns a controlled pricing gate rather than
+    prototype pricing. Draft project fallback behavior remains development/testing-only for the Make
+    Studio agent path; the durable project record is created through ProjectService-backed flow during
+    confirmation/finalization.
 - **P1 — ChatbotService Make Studio tool-schema residual audit (gap 9)**: core registry/dispatch is
   verified, and `quote_generate_3d_preview` compatibility coverage is now committed on both sides. The
   BFF accepts numeric strings (`47ca397`), the singular `command` argument alias (`2ecf184`),
@@ -124,8 +126,11 @@ PaymentService, Intranet, or Aspire at this reconciliation point.
   and null payloads (`402c468`). PaymentService unit coverage proves duplicate provider events and
   completed-webhook retries do not republish terminal payment events (`c0eef0d`). OrderService unit
   coverage already proves a repeated completed-payment event for the same payment is ignored instead of
-  creating a second Paid transition. The remaining evidence is a Tier 3 Aspire/system run through the
-  paid-order path, not another known code gap.
+  creating a second Paid transition. The 2026-06-21 Aspire paid-order E2E gives the happy-path system
+  proof; residual work is negative/idempotency replay evidence, not another known code gap.
+
+See `make-studio-production-readiness-goals.md` for the finite G1-G14 launch gate matrix and completion
+rule.
 
 ## Validation lanes (per AGENTS.md)
 
