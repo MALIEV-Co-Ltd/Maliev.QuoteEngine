@@ -100,6 +100,7 @@ internal sealed class QuoteAgentService(
     IQePricingServiceClient pricingClient,
     IHostEnvironment environment) : IQuoteAgentService
 {
+    private const string DefaultAuthReturnUrl = "/auth/chatbot-complete";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private static readonly string[] ArtifactContextMetadataKeys =
     [
@@ -2260,7 +2261,7 @@ internal sealed class QuoteAgentService(
         var returnUrl = NormalizeAuthReturnUrl(
             ReadString(arguments, "return_url") ??
             ReadString(arguments, "returnUrl") ??
-            "/quotes");
+            DefaultAuthReturnUrl);
 
         if (customerId.HasValue)
         {
@@ -5436,7 +5437,7 @@ internal sealed class QuoteAgentService(
     {
         if (string.IsNullOrWhiteSpace(returnUrl))
         {
-            return "/quotes";
+            return DefaultAuthReturnUrl;
         }
 
         var trimmed = returnUrl.Trim();
@@ -5446,10 +5447,10 @@ internal sealed class QuoteAgentService(
             trimmed.Contains("\r", StringComparison.Ordinal) ||
             trimmed.Contains("\n", StringComparison.Ordinal))
         {
-            return "/quotes";
+            return DefaultAuthReturnUrl;
         }
 
-        return trimmed.Length > 512 ? "/quotes" : trimmed;
+        return trimmed.Length > 512 ? DefaultAuthReturnUrl : trimmed;
     }
 
     private static string ComposeAgentMessage(

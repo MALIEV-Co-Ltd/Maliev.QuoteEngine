@@ -4387,6 +4387,27 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_auth_handoff_defaults_to_chatbot_completion_return_for_active_chat_restore()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_get_auth_handoff");
+        using var document = JsonDocument.Parse(json);
+        var methods = document.RootElement.GetProperty("methods").EnumerateArray().ToArray();
+
+        Assert.False(document.RootElement.GetProperty("isAuthenticated").GetBoolean());
+        Assert.Equal("/auth/chatbot-complete", document.RootElement.GetProperty("returnUrl").GetString());
+
+        Assert.All(methods, method =>
+        {
+            Assert.Equal(
+                "/auth/sign-in?returnUrl=%2Fauth%2Fchatbot-complete",
+                method.GetProperty("url").GetString());
+        });
+    }
+
+    [Fact]
     public async Task Agent_turn_includes_auth_handoff_when_authenticated_gate_blocks_next_steps()
     {
         using var client = factory.CreateClient();
