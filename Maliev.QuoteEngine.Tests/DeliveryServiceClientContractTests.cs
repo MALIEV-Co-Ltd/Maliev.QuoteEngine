@@ -116,6 +116,39 @@ public sealed class DeliveryServiceClientContractTests
         Assert.Equal("Shippop", courier.Provider);
     }
 
+    [Fact]
+    public async Task GetShippingTrackingAsync_TargetsDeliveryServiceTrackingRoute()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                trackingCode = "TH-E2E-001",
+                courierCode = "thaipost",
+                courierName = "Thailand Post",
+                status = "in_transit",
+                description = "Parcel is in transit",
+                provider = "Shippop"
+            })
+        };
+        var handler = new RecordingHandler(response);
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://delivery.test")
+        };
+        var client = new DeliveryServiceClient(http);
+
+        var tracking = await client.GetShippingTrackingAsync("TH-E2E-001");
+
+        Assert.Equal(HttpMethod.Get, handler.Request!.Method);
+        Assert.Equal("/delivery/v1/shipping/tracking/TH-E2E-001", handler.Request.RequestUri!.PathAndQuery);
+        Assert.NotNull(tracking);
+        Assert.Equal("TH-E2E-001", tracking.TrackingCode);
+        Assert.Equal("thaipost", tracking.CourierCode);
+        Assert.Equal("in_transit", tracking.Status);
+        Assert.Equal("Shippop", tracking.Provider);
+    }
+
     private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler
     {
         public HttpRequestMessage? Request { get; private set; }
