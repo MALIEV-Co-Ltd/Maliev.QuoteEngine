@@ -29,6 +29,9 @@ public sealed class ShippingAddressDto
     [Required]
     public string Postcode { get; set; } = string.Empty;
 
+    /// <summary>ISO 3166-1 alpha-2 country code.</summary>
+    public string CountryCode { get; set; } = "TH";
+
     /// <summary>Contact phone number.</summary>
     [Required]
     public string Tel { get; set; } = string.Empty;

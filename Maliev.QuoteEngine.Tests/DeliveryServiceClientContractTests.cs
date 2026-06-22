@@ -54,6 +54,7 @@ public sealed class DeliveryServiceClientContractTests
                 State = "Bang Rak",
                 Province = "Bangkok",
                 Postcode = "10500",
+                CountryCode = "SG",
                 Tel = "0800000000"
             },
             Parcel = new ShippingParcelDto
@@ -72,6 +73,7 @@ public sealed class DeliveryServiceClientContractTests
         Assert.NotNull(handler.Payload);
         Assert.Equal("10400", handler.Payload.RootElement.GetProperty("from").GetProperty("postcode").GetString());
         Assert.Equal("10500", handler.Payload.RootElement.GetProperty("to").GetProperty("postcode").GetString());
+        Assert.Equal("SG", handler.Payload.RootElement.GetProperty("to").GetProperty("countryCode").GetString());
         Assert.Equal(1250m, handler.Payload.RootElement.GetProperty("parcel").GetProperty("weight").GetDecimal());
         Assert.Equal("flash", handler.Payload.RootElement.GetProperty("courierCodes")[0].GetString());
         var rate = Assert.Single(result.Rates);
