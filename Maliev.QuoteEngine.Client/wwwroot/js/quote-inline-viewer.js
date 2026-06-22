@@ -85,6 +85,87 @@
     return value;
   }
 
+  function normalizeNumericArray(value) {
+    if (value == null) {
+      return value;
+    }
+
+    if (Array.isArray(value)) {
+      return value;
+    }
+
+    if (typeof value === 'object') {
+      const ordered = [];
+      const used = new Set();
+      const add = function (...names) {
+        for (const name of names) {
+          if (Object.prototype.hasOwnProperty.call(value, name)) {
+            const numeric = Number(value[name]);
+            if (Number.isFinite(numeric)) {
+              ordered.push(numeric);
+              used.add(name);
+              return;
+            }
+          }
+        }
+      };
+
+      add('radiusBottom', 'bottomRadius');
+      add('radiusTop', 'topRadius');
+      add('radius', 'r');
+      add('width', 'w', 'x');
+      add('depth', 'length', 'd', 'y');
+      add('height', 'h', 'z');
+
+      for (const [key, raw] of Object.entries(value)) {
+        if (used.has(key)) {
+          continue;
+        }
+
+        const numeric = Number(raw);
+        if (Number.isFinite(numeric)) {
+          ordered.push(numeric);
+        }
+      }
+
+      return ordered;
+    }
+
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) {
+      return [numeric];
+    }
+
+    return value;
+  }
+
+  function normalizeCommandsForWorker(commands) {
+    return commands.map(function (source) {
+      const command = { ...source };
+      command.params = normalizeNumericArray(command.params);
+      command.parameters = normalizeNumericArray(command.parameters);
+      command.size = normalizeNumericArray(command.size);
+
+      if (command.profile && typeof command.profile === 'object') {
+        command.profile = { ...command.profile };
+        command.profile.params = normalizeNumericArray(command.profile.params);
+        command.profile.parameters = normalizeNumericArray(command.profile.parameters);
+        command.profile.size = normalizeNumericArray(command.profile.size);
+
+        if (Array.isArray(command.profile.segments)) {
+          command.profile.segments = command.profile.segments.map(function (sourceSegment) {
+            const segment = { ...sourceSegment };
+            segment.params = normalizeNumericArray(segment.params);
+            segment.parameters = normalizeNumericArray(segment.parameters);
+            return segment;
+          });
+        }
+      }
+
+      return command;
+    });
+  }
+
   function buildDefaultLighting(scene) {
     var hemi = new BABYLON.HemisphericLight('hemi', new BABYLON.Vector3(0, 1, 0.5), scene);
     hemi.intensity = 0.6;
@@ -298,6 +379,7 @@
       if (!Array.isArray(commands) || commands.length === 0) {
         failPreview(container, 'No shapes to display');
       }
+      commands = normalizeCommandsForWorker(commands);
 
       var worker;
       try {

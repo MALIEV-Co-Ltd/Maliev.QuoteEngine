@@ -1818,6 +1818,17 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentThoughtProcess_is_expanded_while_steps_stream()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("<details class=\"qe-agent-thinking\" open>", component, StringComparison.Ordinal);
+        Assert.Contains("ApplyStreamingThinkingStep(step)", component, StringComparison.Ordinal);
+        Assert.Contains("UpsertThinkingStep(assistantMessage, step);", component, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentPrompt_routes_choice_questions_and_requirements_to_structured_ui()
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
@@ -4878,6 +4889,20 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteInlineViewer_normalizes_legacy_scalar_command_params_before_worker_build()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("function normalizeCommandsForWorker(commands)", viewer, StringComparison.Ordinal);
+        Assert.Contains("function normalizeNumericArray(value)", viewer, StringComparison.Ordinal);
+        Assert.Contains("return [numeric];", viewer, StringComparison.Ordinal);
+        Assert.Contains("command.params = normalizeNumericArray(command.params);", viewer, StringComparison.Ordinal);
+        Assert.Contains("segment.params = normalizeNumericArray(segment.params);", viewer, StringComparison.Ordinal);
+        Assert.Contains("commands = normalizeCommandsForWorker(commands);", viewer, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeInlinePartViewer_implements_async_disposal_for_preview_resources()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")
@@ -5063,6 +5088,39 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@onclick:stopPropagation=\"true\"", ratingMarkup, StringComparison.Ordinal);
         Assert.Contains("private static string InlineViewerSentimentPressed(InlineViewerInfo viewer, string sentiment)", shell, StringComparison.Ordinal);
         Assert.Contains("viewer.FeedbackSentiment.Equals(sentiment, StringComparison.OrdinalIgnoreCase) ? \"true\" : \"false\";", shell, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_hides_inline_viewer_feedback_text_until_sentiment_is_selected()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
+            .ReplaceLineEndings("\n");
+
+        var feedbackStart = shell.IndexOf("<div class=\"qe-inline-viewer-feedback\"", StringComparison.Ordinal);
+        Assert.True(feedbackStart >= 0, "Inline viewer feedback controls must exist.");
+
+        var feedbackEnd = shell.IndexOf("\n                                        </div>", feedbackStart, StringComparison.Ordinal);
+        Assert.True(feedbackEnd > feedbackStart, "Inline viewer feedback block must end before the viewer section closes.");
+
+        var feedbackMarkup = shell[feedbackStart..feedbackEnd];
+        Assert.Contains("@if (ShouldShowInlineViewerFeedbackForm(message.InlineViewer))", feedbackMarkup, StringComparison.Ordinal);
+        Assert.Contains("private static bool ShouldShowInlineViewerFeedbackForm(InlineViewerInfo viewer)", shell, StringComparison.Ordinal);
+        Assert.Contains("!string.IsNullOrWhiteSpace(viewer.FeedbackSentiment)", shell, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_uses_borderless_inline_viewer_thumb_buttons()
+    {
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css")
+            .ReplaceLineEndings("\n");
+
+        var buttonBlock = ExtractSourceBlock(styles, ".qe-inline-viewer-rating-button {", ".qe-inline-viewer-rating-button:hover");
+        Assert.Contains("border: 0;", buttonBlock, StringComparison.Ordinal);
+        Assert.Contains("background: transparent;", buttonBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("border: 1px solid", buttonBlock, StringComparison.Ordinal);
+
+        var selectedBlock = ExtractSourceBlock(styles, ".qe-inline-viewer-rating-button:hover,", ".qe-inline-viewer-comment");
+        Assert.DoesNotContain("border-color:", selectedBlock, StringComparison.Ordinal);
     }
 
     [Fact]

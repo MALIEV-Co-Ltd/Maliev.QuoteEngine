@@ -662,25 +662,28 @@
                                                     <MudIcon Icon="@Icons.Material.Filled.ThumbDown" Size="Size.Small" />
                                                 </button>
                                             </div>
-                                            <textarea class="qe-inline-viewer-comment"
-                                                      rows="2"
-                                                      maxlength="1200"
-                                                      placeholder="@Text("Optional: report what is wrong with the generated asset", "ไม่บังคับ: แจ้งปัญหาของไฟล์ที่สร้าง")"
-                                                      @bind="message.InlineViewer.FeedbackComment"
-                                                      @bind:event="oninput"></textarea>
-                                            <div class="qe-inline-viewer-feedback-actions">
-                                                <button type="button"
-                                                        class="qe-inline-viewer-submit"
-                                                        disabled="@(!CanSubmitInlineViewerFeedback(message.InlineViewer))"
-                                                        @onclick="@(() => SubmitInlineViewerFeedbackAsync(message))">
-                                                    <MudIcon Icon="@Icons.Material.Outlined.Send" Size="Size.Small" />
-                                                    <span>@Text("Send", "ส่ง")</span>
-                                                </button>
-                                                @if (!string.IsNullOrWhiteSpace(message.InlineViewer.FeedbackStatus))
-                                                {
-                                                    <span class="qe-inline-viewer-feedback-status">@message.InlineViewer.FeedbackStatus</span>
-                                                }
-                                            </div>
+                                            @if (ShouldShowInlineViewerFeedbackForm(message.InlineViewer))
+                                            {
+                                                <textarea class="qe-inline-viewer-comment"
+                                                          rows="2"
+                                                          maxlength="1200"
+                                                          placeholder="@Text("Optional: report what is wrong with the generated asset", "ไม่บังคับ: แจ้งปัญหาของไฟล์ที่สร้าง")"
+                                                          @bind="message.InlineViewer.FeedbackComment"
+                                                          @bind:event="oninput"></textarea>
+                                                <div class="qe-inline-viewer-feedback-actions">
+                                                    <button type="button"
+                                                            class="qe-inline-viewer-submit"
+                                                            disabled="@(!CanSubmitInlineViewerFeedback(message.InlineViewer))"
+                                                            @onclick="@(() => SubmitInlineViewerFeedbackAsync(message))">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.Send" Size="Size.Small" />
+                                                        <span>@Text("Send", "ส่ง")</span>
+                                                    </button>
+                                                    @if (!string.IsNullOrWhiteSpace(message.InlineViewer.FeedbackStatus))
+                                                    {
+                                                        <span class="qe-inline-viewer-feedback-status">@message.InlineViewer.FeedbackStatus</span>
+                                                    }
+                                                </div>
+                                            }
                                         </div>
                                     </section>
                                 }
@@ -701,7 +704,7 @@
                                         .ToList();
                                     var bundledThoughtSteps = BuildBundledThoughtSteps(orderedThinkingSteps);
                                     <section class="qe-agent-thinking-shell" aria-label="@ThinkingSummary(message.ThinkingSteps)">
-                                        <details class="qe-agent-thinking">
+                                        <details class="qe-agent-thinking" open>
                                             <summary>
                                                 <span class="qe-agent-thinking-summary-main">
                                                     <span class="qe-agent-thinking-title">@Text("Thought process", "กระบวนการคิด")</span>
@@ -5239,6 +5242,11 @@
     private static string InlineViewerSentimentPressed(InlineViewerInfo viewer, string sentiment)
     {
         return viewer.FeedbackSentiment.Equals(sentiment, StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+    }
+
+    private static bool ShouldShowInlineViewerFeedbackForm(InlineViewerInfo viewer)
+    {
+        return !string.IsNullOrWhiteSpace(viewer.FeedbackSentiment);
     }
 
     private static void SetInlineViewerSentiment(InlineViewerInfo viewer, string sentiment)
