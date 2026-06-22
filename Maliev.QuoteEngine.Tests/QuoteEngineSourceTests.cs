@@ -80,6 +80,18 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteEngine_public_base_url_defaults_to_make_host()
+    {
+        var appsettings = ReadRepoFile("Maliev.QuoteEngine.Bff", "appsettings.json");
+        var agentService = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
+
+        Assert.Contains("\"BaseUrl\": \"https://make.maliev.com\"", appsettings, StringComparison.Ordinal);
+        Assert.Contains("https://make.maliev.com{path}", agentService, StringComparison.Ordinal);
+        Assert.DoesNotContain("https://quote.maliev.com", appsettings, StringComparison.Ordinal);
+        Assert.DoesNotContain("https://quote.maliev.com", agentService, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QeDfmDtos_round_trip_through_json()
     {
         var report = new QeFdmDfmReport(

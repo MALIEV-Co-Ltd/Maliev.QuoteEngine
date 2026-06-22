@@ -4319,7 +4319,7 @@ internal sealed class QuoteAgentService(
             !Uri.TryCreate(configuredBaseUrl.TrimEnd('/'), UriKind.Absolute, out var baseUri) ||
             !baseUri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
         {
-            return $"https://quote.maliev.com{path}";
+            return $"https://make.maliev.com{path}";
         }
 
         return $"{baseUri.ToString().TrimEnd('/')}{path}";
