@@ -212,7 +212,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         string ProcessId,
         bool DfmAcknowledged,
         bool HasDfmWarnings,
-        string? StoragePath);
+        string? StoragePath,
+        IReadOnlyList<QuotePartAttachmentDto> DrawingFiles);
 
     // ── Upload no-op ──────────────────────────────────────────────────────────
 
@@ -606,7 +607,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     part.SlaReport?.Issues.Count > 0 ||
                     part.CncReport?.Issues.Count > 0 ||
                     (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason)),
-                    part.StoragePath ?? part.ViewerStoragePath ?? part.UploadId);
+                    part.StoragePath ?? part.ViewerStoragePath ?? part.UploadId,
+                    part.DrawingFiles.ToArray());
                 projectParts.Add(capturedPart);
                 PartCreates.Enqueue(capturedPart);
             }
@@ -668,7 +670,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                     part.ProcessId,
                     part.DfmAcknowledged,
                     part.HasDfmWarnings,
-                    part.StoragePath);
+                    part.StoragePath,
+                    part.DrawingFiles);
                 duplicateParts.Add(captured);
                 PartCreates.Enqueue(captured);
             }
@@ -848,7 +851,8 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
                 StoragePath = part.StoragePath,
                 Status = "Draft",
                 IsManifold = true,
-                DfmAcknowledged = part.DfmAcknowledged
+                DfmAcknowledged = part.DfmAcknowledged,
+                DrawingFiles = part.DrawingFiles.ToList()
             };
     }
 

@@ -2937,7 +2937,8 @@ Customer message:
         factory.DelayOrderCreateBy(TimeSpan.FromMilliseconds(100));
         try
         {
-            using var client = await CreateSignedInClientAsync(scopedFactory, "agent-order-double-submit@example.com");
+            const string customerEmail = "agent-order-double-submit@example.com";
+            using var client = await CreateSignedInClientAsync(scopedFactory, customerEmail);
             var sessionId = await StartPricedCadSessionAsync(client);
 
             var formalQuoteState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
@@ -2962,7 +2963,10 @@ Customer message:
             Assert.Equal(
                 firstOrderArtifact.Metadata["orderNumber"],
                 secondOrderArtifact.Metadata["orderNumber"]);
-            Assert.Single(factory.OrderCreateRequests);
+            var customerId = new Guid(MD5.HashData(Encoding.UTF8.GetBytes(customerEmail.Trim().ToLowerInvariant())));
+            var matchingOrderRequests = factory.OrderCreateRequests
+                .Where(request => string.Equals(request.CustomerId, customerId.ToString("D"), StringComparison.OrdinalIgnoreCase));
+            Assert.Single(matchingOrderRequests);
         }
         finally
         {
@@ -4597,6 +4601,52 @@ Customer message:
         Assert.Contains(body.AuthHandoff.Methods, method => method.MethodId == "google" && method.Status == "preferred");
         Assert.Contains(body.AuthHandoff.Methods, method => method.MethodId == "passkey" && method.RequiresBrowserSupport);
         Assert.Contains(body.AuthHandoff.Methods, method => method.MethodId == "email-password" && method.Status == "fallback");
+    }
+
+    [Fact]
+    public async Task Agent_turn_removes_model_written_auth_urls_when_auth_handoff_is_present()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "Please use this secure link to sign in: [Sign in to MALIEV](https://maliev.com/auth/sign-in?returnUrl=%2Fauth%2Fchatbot-complete)."
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Quote this STEP as 25 black nylon SLS enclosures, then help me place the order.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "enclosure.step",
+                    ContentType = "model/step",
+                    FileSizeBytes = 240_000,
+                    Kind = "cad",
+                    StoragePath = "quotes/temp/enclosure.step",
+                    SatisfiesGeometryGate = true
+                }
+            ]
+        });
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.NotNull(body);
+        Assert.NotNull(body.AuthHandoff);
+        Assert.Equal("authentication_required", body.AuthHandoff.Status);
+        Assert.DoesNotContain("maliev.com/auth/sign-in", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/auth/sign-in", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("secure sign-in options shown in this chat", body.AssistantText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

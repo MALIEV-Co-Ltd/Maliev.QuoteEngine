@@ -1757,7 +1757,7 @@ public sealed class QuoteEngineSourceTests
     public void QuoteAgentLaunchShell_scroll_button_stays_hidden_during_programmatic_scroll()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
-        var onScrollBlock = ExtractSourceBlock(component, "private async Task OnThreadScrollAsync", "private Task OnProjectNameInputAsync");
+        var onScrollBlock = ExtractSourceBlock(component, "private async Task OnThreadScrollAsync", "private async Task OnProjectNameInputAsync");
         var scrollButtonBlock = ExtractSourceBlock(component, "private async Task ScrollToLatestMessageAsync", "private async Task<bool> ApplyLocalGeometryRuntimeResultAsync");
 
         Assert.Contains("_suppressScrollToBottomButtonUntilBottom", component, StringComparison.Ordinal);
@@ -1844,10 +1844,10 @@ public sealed class QuoteEngineSourceTests
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
 
-        Assert.Contains("Use quote_ask_customer for short confirmation prompts, missing quote requirements", service, StringComparison.Ordinal);
-        Assert.Contains("When multiple quote details are missing, ask one focused question with quote_ask_customer", service, StringComparison.Ordinal);
-        Assert.Contains("Do not put a checklist of multiple missing details in assistant text", service, StringComparison.Ordinal);
-        Assert.Contains("never leave those as only plain assistant text", service, StringComparison.Ordinal);
+        Assert.Contains("Use quote_ask_customer only when a customer decision is required", service, StringComparison.Ordinal);
+        Assert.Contains("Do not use quote_ask_customer for quantity, lead time, finish, tolerance", service, StringComparison.Ordinal);
+        Assert.Contains("When multiple non-defaultable details are missing, ask one focused question with quote_ask_customer", service, StringComparison.Ordinal);
+        Assert.Contains("Never use quote_ask_customer as a checklist of missing requirements", service, StringComparison.Ordinal);
         Assert.Contains("Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables", service, StringComparison.Ordinal);
         Assert.Contains("Feature | Value | Source", service, StringComparison.Ordinal);
         Assert.DoesNotContain("Use quote_ask_customer ONLY when", service, StringComparison.Ordinal);

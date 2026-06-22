@@ -133,6 +133,12 @@ internal sealed class QuoteAgentService(
     private static readonly Regex PreviewDimensionRegex = new(
         @"(?<w>\d+(?:\.\d+)?)\s*(?:mm|millimeters?)?\s*(?:x|by)\s*(?<d>\d+(?:\.\d+)?)\s*(?:mm|millimeters?)?\s*(?:x|by)\s*(?<h>\d+(?:\.\d+)?)\s*(?:mm|millimeters?)?",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex AuthSignInMarkdownLinkRegex = new(
+        @"\[[^\]]*(?:sign\s*in|log\s*in|authenticate)[^\]]*\]\((?:https?://[^)\s]+)?/auth/sign-in[^)]*\)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex AuthSignInUrlRegex = new(
+        @"(?:https?://[^\s)]+)?/auth/sign-in[^\s)]*",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Mirrors the downstream ChatbotService request limit: SendMessageRequest.Content
     // [StringLength] and MessagePipelinePolicy.MaxContentCharacters are both 8000. Keeping
@@ -2994,6 +3000,7 @@ internal sealed class QuoteAgentService(
 
             foreach (var part in project.Parts)
             {
+                NormalizeResumedProjectPart(part);
                 state.Parts.Add(part);
                 UpsertArtifact(state, "viewer", $"3D viewer - {part.FileName}", "ready", part.PartId, part.ViewerGlbUrl);
                 UpsertArtifact(state, "dfm", $"DFM analysis - {part.FileName}", "ready", part.PartId, null);
@@ -3016,6 +3023,34 @@ internal sealed class QuoteAgentService(
         {
             await CalculateEstimateAsync(state, cancellationToken);
         }
+    }
+
+    private static void NormalizeResumedProjectPart(QuotePartDraftDto part)
+    {
+        if (IsAnalysisReadyStatus(part.Status))
+        {
+            return;
+        }
+
+        var hasRestorableAnalysisContext =
+            part.VolumeCc > 0 ||
+            part.SurfaceAreaCm2 > 0 ||
+            !string.IsNullOrWhiteSpace(part.ViewerGlbUrl) ||
+            !string.IsNullOrWhiteSpace(part.ViewerStoragePath) ||
+            QuoteUploadConstraints.IsSupportedCadFileName(part.FileName);
+        if (hasRestorableAnalysisContext)
+        {
+            part.Status = "DfmAnalysisReady";
+        }
+    }
+
+    private static bool IsAnalysisReadyStatus(string? status)
+    {
+        return status is not null &&
+            (status.Equals("Analyzed", StringComparison.OrdinalIgnoreCase) ||
+             status.Equals("DfmAnalysisReady", StringComparison.OrdinalIgnoreCase) ||
+             status.Equals("GlbReady", StringComparison.OrdinalIgnoreCase) ||
+             status.Equals("Failed", StringComparison.OrdinalIgnoreCase));
     }
 
     private static void RestoreSupplementalAttachmentsFromParts(QuoteAgentSessionState state, string projectNotes)
@@ -3113,6 +3148,11 @@ internal sealed class QuoteAgentService(
         string defaultTitle,
         CancellationToken cancellationToken)
     {
+        foreach (var part in state.Parts)
+        {
+            AttachSupplementalFiles(part, state.Attachments);
+        }
+
         var request = new CreateDraftProjectRequest(
             state.SessionId.ToString("N"),
             state.Parts,
@@ -6234,6 +6274,8 @@ Customer message:
 
     private static string GroundAssistantText(string content, QuoteAgentStateResponse state)
     {
+        content = GroundAuthHandoffText(content, state);
+
         if (string.IsNullOrWhiteSpace(content) ||
             HasExplicitViewerOpenDirective(state.UiDirectives) ||
             !ContainsViewerOpenedClaim(content))
@@ -6267,6 +6309,33 @@ Customer message:
         }
 
         return string.Join('\n', sanitizedLines).Trim();
+    }
+
+    private static string GroundAuthHandoffText(string content, QuoteAgentStateResponse state)
+    {
+        if (string.IsNullOrWhiteSpace(content) ||
+            !IsAuthenticationBlocked(state) ||
+            !ContainsAuthSignInUrl(content))
+        {
+            return content;
+        }
+
+        var replacement = "Use the secure sign-in options shown in this chat; the agent will not collect credentials or provide a separate sign-in URL.";
+        var grounded = AuthSignInMarkdownLinkRegex.Replace(content, replacement);
+        grounded = AuthSignInUrlRegex.Replace(grounded, replacement);
+        return grounded.Trim();
+    }
+
+    private static bool IsAuthenticationBlocked(QuoteAgentStateResponse state)
+    {
+        return state.Gates.Any(gate =>
+            gate.Code.Equals("customer_authenticated", StringComparison.OrdinalIgnoreCase) &&
+            gate.Status.Equals("blocked", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ContainsAuthSignInUrl(string content)
+    {
+        return content.Contains("/auth/sign-in", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool HasExplicitViewerOpenDirective(IEnumerable<QuoteAgentUiDirectiveDto> directives)
