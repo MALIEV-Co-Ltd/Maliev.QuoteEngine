@@ -144,6 +144,44 @@ else
                         <strong>@DeliveryTrackingText</strong>
                     </div>
                 </div>
+                <div class="order-shipping-quote" data-order-section="shipment-tracking">
+                    <div class="order-shipping-form">
+                        <label>
+                            <span>@Text("Tracking code", "เลขติดตามพัสดุ")</span>
+                            <input type="text"
+                                   autocomplete="off"
+                                   @bind="_trackingCode"
+                                   @bind:event="oninput" />
+                        </label>
+                    </div>
+                    <button type="button"
+                            class="qe-secondary-btn"
+                            disabled="@(_trackingBusy || string.IsNullOrWhiteSpace(_trackingCode))"
+                            @onclick="FetchShipmentTrackingAsync">
+                        @(_trackingBusy ? Text("Checking tracking...", "กำลังตรวจสอบสถานะ...") : Text("Check shipment status", "ตรวจสอบสถานะพัสดุ"))
+                    </button>
+                    @if (!string.IsNullOrWhiteSpace(_trackingError))
+                    {
+                        <p class="order-payment-error">@_trackingError</p>
+                    }
+                    @if (_trackingStatus is not null)
+                    {
+                        <div class="order-shipping-rates">
+                            <div class="order-shipping-rate is-selected">
+                                <span>@TrackingCourierLabel</span>
+                                @if (!string.IsNullOrWhiteSpace(_trackingStatus.Provider))
+                                {
+                                    <small>@Text("Via", "ผ่าน") @_trackingStatus.Provider</small>
+                                }
+                                <strong>@_trackingStatus.Status</strong>
+                                @if (!string.IsNullOrWhiteSpace(_trackingStatus.Description))
+                                {
+                                    <small>@_trackingStatus.Description</small>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
                 <div class="order-shipping-quote">
                     <div class="order-shipping-form">
                         <label>
@@ -304,6 +342,10 @@ else
     private ShippingRateOptionDto? _selectedShippingRate;
     private bool _shippingBusy;
     private string? _shippingError;
+    private string _trackingCode = string.Empty;
+    private ShippingTrackingDto? _trackingStatus;
+    private bool _trackingBusy;
+    private string? _trackingError;
     private decimal _shippingWeightGrams = 1000m;
     private decimal _shippingLengthCm = 20m;
     private decimal _shippingWidthCm = 15m;
@@ -362,11 +404,20 @@ else
     private string DeliveryTrackingText => _order switch
     {
         null => Text("Pending", "รอดำเนินการ"),
+        _ when _trackingStatus is not null => TrackingStatusSummary,
         { ActualDeliveryDate: not null } => Text("Delivered to customer", "ส่งมอบให้ลูกค้าแล้ว"),
         var order when order.CurrentStatus.Contains("shipped", StringComparison.OrdinalIgnoreCase) => Text("Shipment is on the way.", "พัสดุกำลังอยู่ระหว่างจัดส่ง"),
         var order when order.PromisedDeliveryDate.HasValue => Text("Tracking will appear after shipment handoff.", "ข้อมูลติดตามจะแสดงหลังส่งมอบให้ขนส่ง"),
         _ => Text("Delivery schedule is pending.", "กำลังรอกำหนดการจัดส่ง")
     };
+
+    private string TrackingCourierLabel => _trackingStatus is null
+        ? Text("Shipment", "พัสดุ")
+        : FirstNonEmpty(_trackingStatus.CourierName, _trackingStatus.CourierCode, _trackingStatus.TrackingCode);
+
+    private string TrackingStatusSummary => _trackingStatus is null
+        ? Text("Tracking pending", "รอข้อมูลติดตาม")
+        : $"{_trackingStatus.Status} - {TrackingCourierLabel}";
 
     private Guid? BillingAddressId => SelectAddressId("Billing");
     private Guid? ShippingAddressId => SelectAddressId("Shipping");
@@ -417,6 +468,41 @@ else
             _documents = [];
             _couriers = [];
             _shippingRates = [];
+            _trackingStatus = null;
+        }
+    }
+
+    private async Task FetchShipmentTrackingAsync()
+    {
+        _trackingError = null;
+        _trackingStatus = null;
+        var trackingCode = _trackingCode.Trim();
+        if (string.IsNullOrWhiteSpace(trackingCode))
+        {
+            _trackingError = Text("Enter a tracking code before checking shipment status.", "กรอกเลขติดตามพัสดุก่อนตรวจสอบสถานะ");
+            return;
+        }
+
+        _trackingBusy = true;
+        try
+        {
+            _trackingStatus = await Api.GetShippingTrackingAsync(trackingCode);
+            if (_trackingStatus is null)
+            {
+                _trackingError = Text("No shipment status was found for this tracking code.", "ไม่พบสถานะพัสดุสำหรับเลขติดตามนี้");
+            }
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _trackingError = ex.UserMessage;
+        }
+        catch (HttpRequestException)
+        {
+            _trackingError = Text("Shipment tracking is temporarily unavailable.", "ยังไม่สามารถตรวจสอบสถานะพัสดุได้ชั่วคราว");
+        }
+        finally
+        {
+            _trackingBusy = false;
         }
     }
 

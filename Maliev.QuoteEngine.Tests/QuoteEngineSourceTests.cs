@@ -2597,6 +2597,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ActualDeliveryDate", detail, StringComparison.Ordinal);
         Assert.Contains("DeliveryStatusText", detail, StringComparison.Ordinal);
         Assert.Contains("DeliveryTrackingText", detail, StringComparison.Ordinal);
+        Assert.Contains("data-order-section=\"shipment-tracking\"", detail, StringComparison.Ordinal);
+        Assert.Contains("FetchShipmentTrackingAsync", detail, StringComparison.Ordinal);
+        Assert.Contains("GetShippingTrackingAsync(trackingCode)", detail, StringComparison.Ordinal);
+        Assert.Contains("ShippingTrackingDto? _trackingStatus", detail, StringComparison.Ordinal);
+        Assert.Contains("TrackingCourierLabel", detail, StringComparison.Ordinal);
+        Assert.Contains("Via", detail, StringComparison.Ordinal);
         Assert.Contains("ManufacturingProgressPercent", detail, StringComparison.Ordinal);
         Assert.Contains("milestone.State", detail, StringComparison.Ordinal);
         Assert.Contains("MilestoneTimestamp", detail, StringComparison.Ordinal);
