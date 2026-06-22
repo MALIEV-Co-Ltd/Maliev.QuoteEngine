@@ -5263,6 +5263,70 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_rewrites_candy_like_golf_tee_commands()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "cylinder",
+                id = "shaft",
+                Params = new[] { 2.5, 45.0 }
+            },
+            new
+            {
+                op = "sphere",
+                id = "round_head",
+                Params = new[] { 5.0 }
+            },
+            new
+            {
+                op = "translate",
+                targetId = "round_head",
+                resultId = "round_head_positioned",
+                Offset = new[] { 0.0, 0.0, 45.0 }
+            },
+            new
+            {
+                op = "fuse",
+                targetId = "shaft",
+                toolId = "round_head_positioned",
+                resultId = "tee_preview"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Golf tee 50 mm tall, 5 mm shaft diameter, 10 mm head diameter", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var ops = commandDoc.RootElement
+            .EnumerateArray()
+            .Select(command => command.GetProperty("op").GetString() ?? string.Empty)
+            .ToArray();
+
+        Assert.DoesNotContain("sphere", ops);
+        Assert.Contains("cone", ops);
+        Assert.Contains("translate", ops);
+        Assert.Contains("fuse", ops);
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_operation_and_type_command_aliases()
     {
         using var client = factory.CreateClient();

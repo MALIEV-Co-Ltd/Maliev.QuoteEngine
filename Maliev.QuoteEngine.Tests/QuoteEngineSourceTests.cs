@@ -1818,12 +1818,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentThoughtProcess_is_expanded_while_steps_stream()
+    public void QuoteAgentThoughtProcess_is_collapsed_and_borderless_by_default()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
             .ReplaceLineEndings("\n");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css")
+            .ReplaceLineEndings("\n");
 
-        Assert.Contains("<details class=\"qe-agent-thinking\" open>", component, StringComparison.Ordinal);
+        var shellStart = styles.IndexOf(".qe-agent-thinking-shell {", StringComparison.Ordinal);
+        Assert.True(shellStart >= 0, "thought process shell styles must exist.");
+        var shellEnd = styles.IndexOf("\n}", shellStart, StringComparison.Ordinal);
+        Assert.True(shellEnd > shellStart, "thought process shell style block must close.");
+        var shellBlock = styles[shellStart..shellEnd];
+
+        Assert.Contains("<details class=\"qe-agent-thinking\">", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("<details class=\"qe-agent-thinking\" open>", component, StringComparison.Ordinal);
+        Assert.Contains("border: 0;", shellBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("border: 1px", shellBlock, StringComparison.Ordinal);
         Assert.Contains("ApplyStreamingThinkingStep(step)", component, StringComparison.Ordinal);
         Assert.Contains("UpsertThinkingStep(assistantMessage, step);", component, StringComparison.Ordinal);
     }
@@ -4657,6 +4668,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(parameterContract, service, StringComparison.Ordinal);
         Assert.Contains("The command array may also be wrapped under commands/cadCommands or split into shapes/objects/parts plus operations/actions/steps.", service, StringComparison.Ordinal);
         Assert.Contains("Profiles may use params, size, radius/diameter, points/polyline/vertices, or sketch/profile2D aliases.", service, StringComparison.Ordinal);
+        Assert.Contains("For golf tees, never model the head as a sphere", service, StringComparison.Ordinal);
         Assert.Contains("Use angle in radians or angleDegrees/degrees for rotate/revolve.", service, StringComparison.Ordinal);
         Assert.Contains("Generated 3D preview iterations are revisions of one active quote workbench artifact", service, StringComparison.Ordinal);
         Assert.Contains("\"extrude\" => BuildParams(command.Height ?? command.Thickness)", service, StringComparison.Ordinal);
@@ -4717,6 +4729,9 @@ public sealed class QuoteEngineSourceTests
         Assert.True(vertexDataIndex > sceneIndex, "Vertex data must be applied only after the scene exists.");
         Assert.True(meshIndex > sceneIndex, "Preview mesh must be constructed only after the scene exists.");
         Assert.True(materialIndex > sceneIndex, "Preview material must be constructed only after the scene exists.");
+        Assert.Contains("BABYLON.VertexData.ComputeNormals(vertices, indexArray, normals);", createScene, StringComparison.Ordinal);
+        Assert.True(createScene.IndexOf("BABYLON.VertexData.ComputeNormals(vertices, indexArray, normals);", StringComparison.Ordinal) < meshIndex,
+            "Inline preview must recompute normals before applying vertex data to avoid backface-looking dark meshes.");
         Assert.True(activeCameraIndex > meshIndex, "Inline preview must set the generated camera as the active scene camera.");
         Assert.True(initialRenderIndex > activeCameraIndex, "Inline preview must define a deterministic first-frame render helper.");
         Assert.True(firstRenderCallIndex > renderLoopIndex, "Inline preview must render once after the render loop starts.");

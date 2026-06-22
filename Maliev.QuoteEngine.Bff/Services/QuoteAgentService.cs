@@ -5518,6 +5518,7 @@ internal sealed class QuoteAgentService(
             "UI action rule: never say that you opened, displayed, loaded, or showed a viewer/panel/model unless you called quote_focus_ui and received a UI directive for that target; if a viewer artifact is merely available, say it is available in the Artifacts panel. " +
             "Generate 3D previews only from explicit, readable, CAD-derived, or confirmed dimensions. " +
             "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, intersect, fillet, chamfer, extrude, revolve, translate, rotate, loft. " +
+            "For golf tees, never model the head as a sphere; use tapered cone/revolve geometry with a flared head/cup so the preview does not look like a candy or lollipop. " +
             "Prefer canonical params arrays for CAD commands; accepted named shorthands include width/depth/height, diameter/radius, x/y/z or translation object offsets, axisX/axisY/axisZ or rotationAxis object axes, and sketch segment x/y/dx/dy. " +
             "The command array may also be wrapped under commands/cadCommands or split into shapes/objects/parts plus operations/actions/steps. " +
             "Profiles may use params, size, radius/diameter, points/polyline/vertices, or sketch/profile2D aliases. " +
@@ -6748,6 +6749,7 @@ Customer message:
         }
 
         NormalizeCadCommandsForBrowserWorker(commands);
+        commands = NormalizeKnownGeneratedPreviewCommands(description, commands);
         var validationError = ValidateCadCommands(commands);
         if (!string.IsNullOrWhiteSpace(validationError))
         {
@@ -7068,6 +7070,96 @@ Customer message:
                 }
             }
         }
+    }
+
+    private static IReadOnlyList<CadCommandDto> NormalizeKnownGeneratedPreviewCommands(
+        string description,
+        IReadOnlyList<CadCommandDto> commands)
+    {
+        return ShouldRewriteCandyLikeGolfTeeCommands(description, commands)
+            ? BuildGolfTeePreviewCommands(commands)
+            : commands;
+    }
+
+    private static bool ShouldRewriteCandyLikeGolfTeeCommands(string description, IReadOnlyList<CadCommandDto> commands)
+    {
+        if (!IsGolfTeeDescription(description))
+        {
+            return false;
+        }
+
+        var hasSphere = commands.Any(command => command.Op.Equals("sphere", StringComparison.OrdinalIgnoreCase));
+        var hasCylinder = commands.Any(command => command.Op.Equals("cylinder", StringComparison.OrdinalIgnoreCase));
+        return hasSphere && hasCylinder;
+    }
+
+    private static bool IsGolfTeeDescription(string description)
+    {
+        var normalized = description.Trim().ToLowerInvariant();
+        return normalized.Contains("golf tee", StringComparison.Ordinal) ||
+            normalized.Contains("golf-tee", StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyList<CadCommandDto> BuildGolfTeePreviewCommands(IReadOnlyList<CadCommandDto> commands)
+    {
+        var shaft = commands.FirstOrDefault(command => command.Op.Equals("cylinder", StringComparison.OrdinalIgnoreCase));
+        var sphereHead = commands.FirstOrDefault(command => command.Op.Equals("sphere", StringComparison.OrdinalIgnoreCase));
+        var shaftRadius = ClampPositive(FirstCommandParam(shaft, 0), fallback: 2.5d, min: 0.4d, max: 12d);
+        var shaftHeight = ClampPositive(FirstCommandParam(shaft, 1), fallback: 45d, min: 8d, max: 200d);
+        var headRadius = ClampPositive(
+            FirstCommandParam(sphereHead, 0),
+            fallback: Math.Max(shaftRadius * 2d, 5d),
+            min: shaftRadius * 1.2d,
+            max: shaftRadius * 4d);
+        var headHeight = ClampPositive(
+            Math.Min(headRadius, shaftHeight * 0.25d),
+            fallback: Math.Max(shaftRadius, 4d),
+            min: Math.Max(shaftRadius * 0.6d, 1d),
+            max: Math.Max(headRadius, 2d));
+        var tipRadius = Math.Max(shaftRadius * 0.18d, 0.35d);
+
+        return
+        [
+            new CadCommandDto
+            {
+                Op = "cone",
+                Id = "tee_shaft",
+                Params = [tipRadius, shaftRadius, shaftHeight]
+            },
+            new CadCommandDto
+            {
+                Op = "cone",
+                Id = "tee_head",
+                Params = [shaftRadius, headRadius, headHeight]
+            },
+            new CadCommandDto
+            {
+                Op = "translate",
+                TargetId = "tee_head",
+                ResultId = "tee_head_positioned",
+                Offset = [0d, 0d, shaftHeight]
+            },
+            new CadCommandDto
+            {
+                Op = "fuse",
+                TargetId = "tee_shaft",
+                ToolId = "tee_head_positioned",
+                ResultId = "tee_preview"
+            }
+        ];
+    }
+
+    private static double? FirstCommandParam(CadCommandDto? command, int index)
+    {
+        return command?.Params is { } parameters && parameters.Length > index
+            ? parameters[index]
+            : null;
+    }
+
+    private static double ClampPositive(double? value, double fallback, double min, double max)
+    {
+        var candidate = value is > 0 && double.IsFinite(value.Value) ? value.Value : fallback;
+        return Math.Clamp(candidate, min, max);
     }
 
     private static string NormalizeCadOperation(CadCommandDto command)

@@ -276,6 +276,9 @@
       vertexData.positions = vertices;
       vertexData.indices = indexArray;
       vertexData.normals = normals;
+      if (BABYLON.VertexData.ComputeNormals) {
+        BABYLON.VertexData.ComputeNormals(vertices, indexArray, normals);
+      }
 
       var mesh = new BABYLON.Mesh('preview', scene);
       vertexData.applyToMesh(mesh);
