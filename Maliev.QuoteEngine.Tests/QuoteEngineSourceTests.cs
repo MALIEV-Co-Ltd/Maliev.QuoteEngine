@@ -1772,6 +1772,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("<QeQuoteSummaryBar", demoWorkbench, StringComparison.Ordinal);
         Assert.Contains("CanRequestFormalQuote=\"false\"", demoWorkbench, StringComparison.Ordinal);
         Assert.Contains("CanAttachDocuments=\"false\"", demoWorkbench, StringComparison.Ordinal);
+        Assert.Contains("BillingHint=\"@Text(\"Sample workspace\"", demoWorkbench, StringComparison.Ordinal);
         Assert.Contains("private Task SelectDemoProcessAsync", workspace, StringComparison.Ordinal);
         Assert.Contains("SelectedPart.ApplyProjectNewProcessSelection(processId, _reference);", workspace, StringComparison.Ordinal);
         Assert.Contains(".qe-demo-workbench {", styles, StringComparison.Ordinal);
