@@ -384,6 +384,36 @@
     opacity: 1;
 }
 
+.qe-agent-demo-notice {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: min(820px, calc(100% - 32px));
+    margin: 0 auto 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    color: #1e3a8a;
+    font-size: 0.84rem;
+    line-height: 1.35;
+}
+
+.qe-agent-demo-notice .mud-icon-root {
+    flex: none;
+    font-size: 1.05rem;
+}
+
+.qe-agent-demo-notice strong {
+    margin-right: 4px;
+}
+
+:root[data-maliev-theme="dark"] .qe-agent-demo-notice {
+    border-color: rgba(147, 197, 253, 0.38);
+    background: rgba(30, 58, 138, 0.28);
+    color: #bfdbfe;
+}
+
 .qe-agent-composer {
     display: grid;
     grid-template-columns: 38px minmax(0, 1fr) 38px;

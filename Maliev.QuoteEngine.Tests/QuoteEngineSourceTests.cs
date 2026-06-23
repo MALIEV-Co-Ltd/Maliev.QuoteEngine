@@ -1738,6 +1738,25 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_exposes_demo_mode_notice_for_sample_workspace()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css").ReplaceLineEndings("\n");
+        var noticeMarkup = ExtractSourceBlock(component, "@if (IsDemoMode)", "@if (ShowSummaryStrip)");
+        var noticeStyle = ExtractSourceBlock(styles, ".qe-agent-demo-notice {", ".qe-agent-demo-notice .mud-icon-root {");
+
+        Assert.Contains("class=\"qe-agent-demo-notice\"", noticeMarkup, StringComparison.Ordinal);
+        Assert.Contains("role=\"status\"", noticeMarkup, StringComparison.Ordinal);
+        Assert.Contains("Demo mode", noticeMarkup, StringComparison.Ordinal);
+        Assert.Contains("Demo sample only", noticeMarkup, StringComparison.Ordinal);
+        Assert.Contains("sample.step", noticeMarkup, StringComparison.Ordinal);
+        Assert.Contains("will not create customer projects, quotes, orders, or history", noticeMarkup, StringComparison.Ordinal);
+        Assert.Contains("width: min(820px, calc(100% - 32px));", noticeStyle, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 8px;", noticeStyle, StringComparison.Ordinal);
+        Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-demo-notice", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_honors_explicit_open_panel_directives_when_auto_open_is_suppressed()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");

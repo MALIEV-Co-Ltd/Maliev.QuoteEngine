@@ -1064,6 +1064,17 @@
         }
 
 
+        @if (IsDemoMode)
+        {
+            <div class="qe-agent-demo-notice" role="status">
+                <MudIcon Icon="@Icons.Material.Outlined.Science" Size="Size.Small" />
+                <span>
+                    <strong>@Text("Demo mode", "โหมดตัวอย่าง")</strong>
+                    @Text("Demo sample only. Make Studio uses the MALIEV sample.step file here and will not create customer projects, quotes, orders, or history.", "ใช้ตัวอย่างสำหรับสาธิตเท่านั้น Make Studio ใช้ไฟล์ sample.step ของ MALIEV ในหน้านี้และจะไม่สร้างโปรเจกต์ ใบเสนอราคา คำสั่งซื้อ หรือประวัติของลูกค้า")
+                </span>
+            </div>
+        }
+
         @if (ShowSummaryStrip)
         {
             <div class="qe-agent-summary-strip" role="group" aria-label="@Text("Project quick summary", "สรุปโปรเจกต์อย่างย่อ")">
