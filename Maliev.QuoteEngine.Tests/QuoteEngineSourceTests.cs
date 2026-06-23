@@ -1747,6 +1747,7 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("class=\"qe-agent-demo-notice\"", noticeMarkup, StringComparison.Ordinal);
         Assert.Contains("role=\"status\"", noticeMarkup, StringComparison.Ordinal);
+        Assert.Contains("Demo only", noticeMarkup, StringComparison.Ordinal);
         Assert.Contains("Demo mode", noticeMarkup, StringComparison.Ordinal);
         Assert.Contains("Demo sample only", noticeMarkup, StringComparison.Ordinal);
         Assert.Contains("sample.step", noticeMarkup, StringComparison.Ordinal);
