@@ -1682,6 +1682,30 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             });
         }
     }
+
+    public sealed class SentinelPricingServiceClient : IQePricingServiceClient
+    {
+        public Task<PricingCalculationResult?> CalculateAsync(
+            QuotePartDraftDto part,
+            Guid customerId,
+            Guid materialId,
+            Guid manufacturingProcessId,
+            string leadTimeCode,
+            decimal? toleranceAdditionalCostPercent,
+            CancellationToken ct = default) =>
+            Task.FromResult<PricingCalculationResult?>(new PricingCalculationResult
+            {
+                UnitPrice = 99_999m,
+                TotalAmount = 99_999m * part.Quantity,
+                UnitPriceBeforeVolumeDiscount = 99_999m,
+                VolumeDiscountUnitAmount = 0m,
+                VolumeDiscountPercent = 0m,
+                ConfidenceScore = 1m,
+                EngineName = "sentinel-pricing",
+                AuditId = Guid.Parse("99999999-9999-9999-9999-999999999999"),
+                EstimatedLeadTimeDays = 99
+            });
+    }
 }
 
 [Collection(QuoteEngineEndpointTestCollection.Name)]
@@ -2462,6 +2486,71 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.NotNull(completed);
         Assert.Equal("Processing", completed.Status);
         Assert.Equal("my-custom-bracket.step", completed.FileName);
+    }
+
+    [Fact]
+    public async Task Estimate_uses_deterministic_demo_sample_pricing_before_pricing_service()
+    {
+        await using var demoFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new QuoteEngineWebApplicationFactory.SentinelPricingServiceClient());
+            });
+        });
+        using var client = demoFactory.CreateClient();
+
+        var demo = await client.GetFromJsonAsync<QuoteEngineDemoProjectResponse>("/quote/v1/demo/project");
+        Assert.NotNull(demo);
+        var part = Assert.Single(demo.Parts);
+        part.ProcessId = "fdm";
+        part.MaterialId = "pla";
+        part.FinishId = "fdm-matte";
+        part.FinishCode = "MATTE";
+        part.ToleranceId = "fdm-standard";
+        part.ToleranceCode = "FDM_STANDARD";
+        part.InspectionLevel = "STANDARD";
+        part.Quantity = 2;
+
+        var standard = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
+        {
+            QuoteSessionId = demo.DemoSessionId,
+            LeadTimeCode = "STANDARD",
+            Parts = [part]
+        });
+        standard.EnsureSuccessStatusCode();
+        var standardBody = await standard.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
+
+        Assert.NotNull(standardBody);
+        Assert.Equal(2_596.00m, standardBody.Total);
+        var standardLine = Assert.Single(standardBody.Lines);
+        Assert.Equal(1_298.00m, standardLine.UnitPrice);
+
+        var express = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
+        {
+            QuoteSessionId = demo.DemoSessionId,
+            LeadTimeCode = "EXPRESS",
+            Parts = [part]
+        });
+        express.EnsureSuccessStatusCode();
+        var expressBody = await express.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
+
+        Assert.NotNull(expressBody);
+        Assert.Equal(3_504.60m, expressBody.Total);
+
+        part.Quantity = 3;
+        var quantityThree = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
+        {
+            QuoteSessionId = demo.DemoSessionId,
+            LeadTimeCode = "EXPRESS",
+            Parts = [part]
+        });
+        quantityThree.EnsureSuccessStatusCode();
+        var quantityThreeBody = await quantityThree.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
+
+        Assert.NotNull(quantityThreeBody);
+        Assert.Equal(5_256.90m, quantityThreeBody.Total);
     }
 
     [Fact]

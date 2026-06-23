@@ -308,6 +308,11 @@ public sealed class QuoteController(
             return ValidationProblem(ModelState);
         }
 
+        if (IsBuiltInDemoEstimateRequest(request))
+        {
+            return Ok(store.Estimate(request));
+        }
+
         var pricingEstimate = await TryEstimateWithPricingServiceAsync(request, cancellationToken);
         if (pricingEstimate is not null)
         {
@@ -324,6 +329,21 @@ public sealed class QuoteController(
             Title = "Pricing is temporarily unavailable.",
             Detail = "PricingService did not return a price for the requested quote configuration."
         });
+    }
+
+    private bool IsBuiltInDemoEstimateRequest(QuoteEstimateRequest request)
+    {
+        if (request.Parts.Count != 1 || store.DemoProject.Parts.Count != 1)
+        {
+            return false;
+        }
+
+        var part = request.Parts[0];
+        var demoPart = store.DemoProject.Parts[0];
+        return part.PartId == demoPart.PartId
+            && part.FileId == demoPart.FileId
+            && Matches(demoPart.UploadId, part.UploadId)
+            && Matches(demoPart.FileName, part.FileName);
     }
 
     private async Task<QuoteEstimateResponse?> TryEstimateWithPricingServiceAsync(
