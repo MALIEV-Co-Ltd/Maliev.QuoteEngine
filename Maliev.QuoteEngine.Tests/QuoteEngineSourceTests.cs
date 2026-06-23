@@ -679,9 +679,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OnUploadRequested=\"OpenFilePickerAsync\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("OnSampleRequested=\"LoadSampleFileAsync\"", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowDemoSampleCard", source, StringComparison.Ordinal);
-        Assert.Contains("LoadSampleFileAsync", source, StringComparison.Ordinal);
-        Assert.Contains("await LoadDemoProjectAsync();", source, StringComparison.Ordinal);
-        Assert.Contains("private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadSampleFileAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadDemoProjectAsync", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("@page \"/demo\"", source, StringComparison.Ordinal);
+        Assert.Contains("private bool ShowLaunchAccountCard => !IsSignedIn;", source, StringComparison.Ordinal);
         Assert.Contains("private Guid AgentSessionId", source, StringComparison.Ordinal);
         Assert.Contains("[SupplyParameterFromQuery(Name = \"projectId\")]", source, StringComparison.Ordinal);
         Assert.Contains("public Guid? ProjectId { get; set; }", source, StringComparison.Ordinal);
@@ -1739,45 +1740,33 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_exposes_demo_mode_notice_for_sample_workspace()
+    public void QuoteAgentLaunchShell_does_not_expose_demo_mode_notice()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css").ReplaceLineEndings("\n");
-        var noticeMarkup = ExtractSourceBlock(component, "@if (IsDemoMode)", "@if (ShowSummaryStrip)");
-        var noticeStyle = ExtractSourceBlock(styles, ".qe-agent-demo-notice {", ".qe-agent-demo-notice .mud-icon-root {");
 
-        Assert.Contains("class=\"qe-agent-demo-notice\"", noticeMarkup, StringComparison.Ordinal);
-        Assert.Contains("role=\"status\"", noticeMarkup, StringComparison.Ordinal);
-        Assert.Contains("Demo only", noticeMarkup, StringComparison.Ordinal);
-        Assert.Contains("Demo mode", noticeMarkup, StringComparison.Ordinal);
-        Assert.Contains("Demo sample only", noticeMarkup, StringComparison.Ordinal);
-        Assert.Contains("sample.step", noticeMarkup, StringComparison.Ordinal);
-        Assert.Contains("will not create customer projects, quotes, orders, or history", noticeMarkup, StringComparison.Ordinal);
-        Assert.Contains("width: min(820px, calc(100% - 32px));", noticeStyle, StringComparison.Ordinal);
-        Assert.Contains("border-radius: 8px;", noticeStyle, StringComparison.Ordinal);
-        Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-demo-notice", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsDemoMode", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-agent-demo-notice", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Demo only", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Demo mode", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Demo sample only", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-agent-demo-notice", styles, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void QuoteWorkspace_restores_demo_workbench_controls_for_sample_workspace()
+    public void QuoteWorkspace_removes_demo_workbench_controls_from_current_workspace()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css").ReplaceLineEndings("\n");
-        var demoWorkbench = ExtractSourceBlock(workspace, "@if (IsDemoMode && SelectedPart is not null)", "</section>");
 
-        Assert.Contains("class=\"qe-demo-workbench\"", demoWorkbench, StringComparison.Ordinal);
-        Assert.Contains("SelectDemoProcessAsync(\"cnc\")", demoWorkbench, StringComparison.Ordinal);
-        Assert.Contains("SelectDemoProcessAsync(\"fdm\")", demoWorkbench, StringComparison.Ordinal);
-        Assert.Contains("<QePartDetailCard", demoWorkbench, StringComparison.Ordinal);
-        Assert.Contains("<QePartConfigSidebar", demoWorkbench, StringComparison.Ordinal);
-        Assert.Contains("<QeQuoteSummaryBar", demoWorkbench, StringComparison.Ordinal);
-        Assert.Contains("CanRequestFormalQuote=\"false\"", demoWorkbench, StringComparison.Ordinal);
-        Assert.Contains("CanAttachDocuments=\"false\"", demoWorkbench, StringComparison.Ordinal);
-        Assert.Contains("BillingHint=\"@Text(\"Sample workspace\"", demoWorkbench, StringComparison.Ordinal);
-        Assert.Contains("private Task SelectDemoProcessAsync", workspace, StringComparison.Ordinal);
-        Assert.Contains("SelectedPart.ApplyProjectNewProcessSelection(processId, _reference);", workspace, StringComparison.Ordinal);
-        Assert.Contains(".qe-demo-workbench {", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-demo-process-shortcuts", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("@page \"/demo\"", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsDemoMode", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-demo-workbench", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectDemoProcessAsync", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadDemoProjectAsync", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("LoadSampleFileAsync", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain(".qe-demo-workbench", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".qe-demo-process-shortcuts", styles, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2909,8 +2898,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("BuildOrderRequirements", quoteController, StringComparison.Ordinal);
         Assert.Contains("BuildConfiguredPartSummary", quoteController, StringComparison.Ordinal);
         Assert.Contains("AllDfmIssuesAcknowledged", workspace, StringComparison.Ordinal);
-        Assert.Contains("CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged", workspace, StringComparison.Ordinal);
-        Assert.Contains("CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged", workspace, StringComparison.Ordinal);
+        Assert.Contains("CanRequestFormalQuote => _estimate is not null && IsSignedIn && AllDfmIssuesAcknowledged", workspace, StringComparison.Ordinal);
+        Assert.Contains("CanCreateOrder => _formalQuote is not null && IsSignedIn && AllDfmIssuesAcknowledged", workspace, StringComparison.Ordinal);
         Assert.Contains("IReadOnlyList<QuotePartDraftDto> Parts", quoteDtos, StringComparison.Ordinal);
         Assert.DoesNotContain("<span class=\"qe-zone-label\">Bill To</span>", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("CustomerPicker", workspace, StringComparison.Ordinal);
@@ -3722,20 +3711,21 @@ public sealed class QuoteEngineSourceTests
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
 
-        Assert.Contains("disabled=\"@(!_routeStateInitialized || IsDemoMode)\"", src, StringComparison.Ordinal);
+        Assert.Contains("disabled=\"@(!_routeStateInitialized)\"", src, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void QuoteWorkspaceRazor_resets_demo_workspace_when_leaving_demo_route()
+    public void QuoteWorkspaceRazor_has_no_demo_route_or_workspace_reset()
     {
         var src = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
 
         Assert.Contains("SynchronizeRouteStateAsync", src, StringComparison.Ordinal);
-        Assert.Contains("HasDemoWorkspace", src, StringComparison.Ordinal);
         Assert.Contains("ResetWorkspaceState", src, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowDemoSampleCard", src, StringComparison.Ordinal);
-        Assert.Contains("ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode", src, StringComparison.Ordinal);
-        Assert.Contains("Navigation.NavigateTo(\"/demo\")", src, StringComparison.Ordinal);
+        Assert.Contains("ShowLaunchAccountCard => !IsSignedIn", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("HasDemoWorkspace", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("Navigation.NavigateTo(\"/demo\")", src, StringComparison.Ordinal);
+        Assert.DoesNotContain("@page \"/demo\"", src, StringComparison.Ordinal);
     }
 
     [Fact]

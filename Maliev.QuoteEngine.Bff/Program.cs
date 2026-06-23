@@ -243,7 +243,6 @@ app.MapFallback(async context =>
     var normalizedPath = context.Request.Path.Value?.TrimEnd('/') ?? string.Empty;
     var isPublicQuoteStartRoute =
         normalizedPath.Equals("/quotes", StringComparison.OrdinalIgnoreCase) ||
-        context.Request.Path.StartsWithSegments("/demo") ||
         context.Request.Path.StartsWithSegments("/quote/new") ||
         context.Request.Path.StartsWithSegments("/quotes/new") ||
         context.Request.Path.StartsWithSegments("/projects/new");

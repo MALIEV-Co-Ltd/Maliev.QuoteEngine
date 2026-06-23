@@ -3,7 +3,6 @@
 @page "/quotes/new"
 @page "/quote/new"
 @page "/projects/new"
-@page "/demo"
 @using System.Net
 @using System.Net.Http
 @using System.Text.Json
@@ -19,7 +18,7 @@
 
 <div id="@PageDropzoneId" class="@WorkspaceRootClass">
     <div id="@UploadContainerId">
-        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@QuoteUploadConstraints.SupportedAttachmentAccept" disabled="@(!_routeStateInitialized || IsDemoMode)" />
+        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@QuoteUploadConstraints.SupportedAttachmentAccept" disabled="@(!_routeStateInitialized)" />
     </div>
 
     <div class="qe-page-drop-overlay" aria-hidden="true">
@@ -39,7 +38,6 @@
             <QuoteAgentLaunchShell @ref="_agentShell"
                                    SessionId="@AgentSessionId"
                                    IsSignedIn="@IsSignedIn"
-                                   IsDemoMode="@IsDemoMode"
                                    ShowLaunchAccountCard="@ShowLaunchAccountCard"
                                    InitialAuthMode="@AuthMode"
                                    AuthReturnUrl="@WorkspaceAuthReturnUrl"
@@ -51,60 +49,6 @@
                                    OnUploadRequested="OpenFilePickerAsync"
                                    OnProjectNameChanged="UpdateProjectTitleFromAgentAsync"
                                    OnNewProjectRequested="StartNewProjectAsync" />
-            @if (IsDemoMode && SelectedPart is not null)
-            {
-                <section class="qe-demo-workbench" aria-label="@Text("Demo quote workbench", "พื้นที่ทดลองเสนอราคา")">
-                    <div class="qe-demo-process-shortcuts" role="group" aria-label="@Text("Demo manufacturing process shortcuts", "ทางลัดกระบวนการผลิตตัวอย่าง")">
-                        <button type="button" class="qe-secondary-btn" @onclick='@(() => SelectDemoProcessAsync("cnc"))'>
-                            @Text("CNC Machining", "การกัดซีเอ็นซี")
-                        </button>
-                        <button type="button" class="qe-secondary-btn" @onclick='@(() => SelectDemoProcessAsync("fdm"))'>
-                            @Text("FDM 3D Printing", "พิมพ์ 3D แบบ FDM")
-                        </button>
-                    </div>
-
-                    <QePartDetailCard Part="@SelectedPart"
-                                      Parts="@_parts"
-                                      ReferenceData="@_reference"
-                                      Estimate="@_estimate"
-                                      CenterMode="@_centerMode"
-                                      CenterModeChanged="SetCenterMode"
-                                      OnPartChanged="OnPartConfigurationChanged"
-                                      OnSelectPart="SelectPartFromTable"
-                                      OnAddFilesRequested="@(() => Task.CompletedTask)"
-                                      OnRequestFreshViewerUrl="RequestFreshViewerUrlAsync"
-                                      IsDarkMode="@IsDarkMode"
-                                      CanAttachDocuments="false" />
-
-                    <QePartConfigSidebar Part="@SelectedPart"
-                                         ReferenceData="@_reference"
-                                         OnPartChanged="OnPartConfigurationChanged" />
-
-                    <QeQuoteSummaryBar Parts="@_parts"
-                                       ReferenceData="@_reference"
-                                       Estimate="@_estimate"
-                                       FormalQuote="@_formalQuote"
-                                       Order="@_order"
-                                       Payment="@_payment"
-                                       LeadTimeCode="@_leadTimeCode"
-                                       CanRequestFormalQuote="false"
-                                       CanApproveQuote="false"
-                                       CanCreateOrder="false"
-                                       CanPay="false"
-                                       TermsAccepted="@_acceptedCheckoutTerms"
-                                       PaymentBusy="@_paymentBusy"
-                                       QuoteButtonLabel="@Text("Quote", "ใบเสนอราคา")"
-                                       BillingName="@Text("Demo customer", "ลูกค้าตัวอย่าง")"
-                                       BillingHint="@Text("Sample workspace", "พื้นที่ตัวอย่าง")"
-                                       OnLeadTimeSelected="SelectLeadTime"
-                                       OnCalculateRequested="CalculateAsync"
-                                       OnQuoteRequested="SubmitQuoteAsync"
-                                       OnApproveQuoteRequested="ApproveQuoteAsync"
-                                       OnOrderRequested="CreateOrderAsync"
-                                       OnPaymentRequested="InitiatePaymentAsync"
-                                       TermsAcceptedChanged="@((bool accepted) => _acceptedCheckoutTerms = accepted)" />
-                </section>
-            }
         </main>
     </div>
 </div>
@@ -167,23 +111,21 @@
     [CascadingParameter(Name = "Culture")]
     private string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
-    private bool IsDemoMode => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/demo", StringComparison.OrdinalIgnoreCase);
     private bool IsSignedIn => _authStatus.IsSignedIn;
     private bool IsWorkspaceReady => _parts.Count > 0;
     private string WorkspaceRootClass => IsWorkspaceReady ? "qe-pn-root is-launch-screen is-agent-studio has-uploads" : "qe-pn-root is-launch-screen is-agent-studio";
-    private bool CanRequestFormalQuote => _estimate is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged;
-    private bool CanApproveQuote => _formalQuote is not null && IsSignedIn && !IsDemoMode && !_formalQuote.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase);
-    private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && !IsDemoMode && AllDfmIssuesAcknowledged;
+    private bool CanRequestFormalQuote => _estimate is not null && IsSignedIn && AllDfmIssuesAcknowledged;
+    private bool CanApproveQuote => _formalQuote is not null && IsSignedIn && !_formalQuote.Status.Contains("Approved", StringComparison.OrdinalIgnoreCase);
+    private bool CanCreateOrder => _formalQuote is not null && IsSignedIn && AllDfmIssuesAcknowledged;
     private bool AllDfmIssuesAcknowledged => _parts.All(part => part.DfmAcknowledged || !HasDfmIssues(part));
     private Guid? BillingAddressId => SelectAddressId("Billing");
     private Guid? ShippingAddressId => SelectAddressId("Shipping");
     private bool CanPay => _order is not null &&
         _estimate is not null &&
         IsSignedIn &&
-        !IsDemoMode &&
         BillingAddressId.HasValue &&
         ShippingAddressId.HasValue;
-    private bool ShowLaunchAccountCard => !IsSignedIn && !IsDemoMode;
+    private bool ShowLaunchAccountCard => !IsSignedIn;
     private Guid AgentSessionId => Guid.TryParse(_quoteSessionId, out var parsed) ? parsed : Guid.Empty;
     private string WorkspaceAuthReturnUrl => BuildWorkspaceAuthReturnUrl(Navigation.Uri);
     [SupplyParameterFromQuery(Name = "handoff")]
@@ -346,11 +288,6 @@
 
     private async Task OpenFilePickerAsync()
     {
-        if (IsDemoMode)
-        {
-            return;
-        }
-
         if (!_routeStateInitialized || _isOpeningFilePicker)
         {
             return;
@@ -394,7 +331,7 @@
 
     private async Task SaveCurrentProjectBeforeResetAsync()
     {
-        if (!IsSignedIn || IsDemoMode || _draftProjectId.HasValue || _parts.Count == 0)
+        if (!IsSignedIn || _draftProjectId.HasValue || _parts.Count == 0)
         {
             return;
         }
@@ -436,31 +373,18 @@
             return;
         }
 
-        var isDemoPath = IsDemoPath(path);
-        var wasDemoPath = _lastWorkspacePath is not null && IsDemoPath(_lastWorkspacePath);
-        if (isDemoPath)
+        if (projectChanged)
         {
-            if (force || pathChanged || !HasDemoWorkspace)
-            {
-                await ResetWorkspaceStateAsync();
-                await LoadDemoProjectAsync();
-            }
+            await ResetWorkspaceStateAsync();
         }
-        else
-        {
-            if (wasDemoPath || HasDemoWorkspace || projectChanged)
-            {
-                await ResetWorkspaceStateAsync();
-            }
 
-            if (ProjectId.HasValue && (force || pathChanged || projectChanged))
-            {
-                await ResumeProjectAsync(ProjectId.Value);
-            }
-            else if (!string.IsNullOrWhiteSpace(Handoff) && (force || pathChanged || handoffChanged))
-            {
-                await ImportHandoffAsync(Handoff);
-            }
+        if (ProjectId.HasValue && (force || pathChanged || projectChanged))
+        {
+            await ResumeProjectAsync(ProjectId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(Handoff) && (force || pathChanged || handoffChanged))
+        {
+            await ImportHandoffAsync(Handoff);
         }
 
         _lastWorkspacePath = path;
@@ -501,12 +425,6 @@
     }
 
     private string CurrentWorkspacePath() => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
-
-    private static bool IsDemoPath(string path) => path.Equals("/demo", StringComparison.OrdinalIgnoreCase);
-
-    private bool HasDemoWorkspace =>
-        _parts.Any(part => part.UploadId.StartsWith("demo-upload-", StringComparison.OrdinalIgnoreCase))
-        || _title.Contains("sample bracket demo", StringComparison.OrdinalIgnoreCase);
 
     private async Task ResetWorkspaceStateAsync()
     {
@@ -561,11 +479,6 @@
     [JSInvokable]
     public async Task HandleDroppedFilesAsync(DroppedBrowserFile[] files)
     {
-        if (IsDemoMode)
-        {
-            return;
-        }
-
         _error = null;
         _estimate = null;
         _formalQuote = null;
@@ -970,19 +883,6 @@
         return Task.CompletedTask;
     }
 
-    private Task SelectDemoProcessAsync(string processId)
-    {
-        if (SelectedPart is null || _reference is null)
-        {
-            return Task.CompletedTask;
-        }
-
-        SelectedPart.ApplyProjectNewProcessSelection(processId, _reference);
-        ClearEstimate();
-        StateHasChanged();
-        return Task.CompletedTask;
-    }
-
     private void SelectLeadTime(string code)
     {
         _leadTimeCode = code;
@@ -1015,7 +915,7 @@
 
     private async Task SubmitQuoteAsync()
     {
-        if (!IsSignedIn || IsDemoMode)
+        if (!IsSignedIn)
         {
             Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
@@ -1040,7 +940,7 @@
 
     private async Task DuplicateProjectAsync()
     {
-        if (!IsSignedIn || IsDemoMode)
+        if (!IsSignedIn)
         {
             Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
@@ -1097,7 +997,7 @@
             return;
         }
 
-        if (!IsSignedIn || IsDemoMode)
+        if (!IsSignedIn)
         {
             Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
@@ -1113,7 +1013,7 @@
             return;
         }
 
-        if (!IsSignedIn || IsDemoMode)
+        if (!IsSignedIn)
         {
             Navigation.NavigateTo("/auth/sign-in?returnUrl=/quote/new");
             return;
@@ -1142,7 +1042,7 @@
             return;
         }
 
-        if (!IsSignedIn || IsDemoMode)
+        if (!IsSignedIn)
         {
             Navigation.NavigateTo($"/auth/sign-in?returnUrl={Uri.EscapeDataString(CheckoutReturnUrl)}");
             return;
@@ -1552,78 +1452,6 @@
         }
     }
 
-    private async Task LoadDemoProjectAsync()
-    {
-        var demo = await Api.GetDemoProjectAsync();
-        if (demo is null)
-        {
-            return;
-        }
-
-        _title = demo.Title;
-        await ClearRetainedBrowserUploadFilesAsync("demo-project");
-        _parts.Clear();
-        foreach (var part in demo.Parts)
-        {
-            _parts.Add(new QuotePartViewModel
-            {
-                PartId = part.PartId,
-                FileId = part.FileId,
-                UploadId = part.UploadId,
-                FileName = part.FileName,
-                ProcessId = part.ProcessId,
-                MaterialId = part.MaterialId,
-                FinishId = part.FinishId,
-                FinishCode = part.FinishCode,
-                ToleranceId = part.ToleranceId,
-                ToleranceCode = part.ToleranceCode,
-                InspectionLevel = part.InspectionLevel,
-                RoughnessCode = part.RoughnessCode,
-                Color = part.Color,
-                HasThreadedHoles = part.HasThreadedHoles,
-                ThreadSpecification = part.ThreadSpecification,
-                ThreadedHoleCount = part.ThreadedHoleCount,
-                InsertType = part.InsertType,
-                InsertCount = part.InsertCount,
-                Quantity = part.Quantity,
-                VolumeCc = part.VolumeCc,
-                SurfaceAreaCm2 = part.SurfaceAreaCm2,
-                DfmAcknowledged = part.DfmAcknowledged,
-                BodyCount = part.BodyCount ?? 1,
-                SelectedBodyIndex = part.SelectedBodyIndex,
-                DrawingFiles = [.. part.DrawingFiles],
-                ViewerSettings = part.ViewerSettings,
-                Status = "DfmAnalysisReady",
-                GlbUrl = string.IsNullOrWhiteSpace(demo.ViewerUrl) ? null : demo.ViewerUrl,
-                ViewerFileExtension = ".glb",
-                ThumbnailUrl = string.IsNullOrWhiteSpace(demo.ThumbnailUrl) ? null : demo.ThumbnailUrl,
-                CncDfmReport = new QeCncDfmReport(0, false, true, 2, false, false, false, []),
-                Findings =
-                [
-                    new("Info", "DEMO_SAMPLE", demo.Notice),
-                    new("Info", "DFM_SAMPLE", Text("Sample geometry is suitable for demo pricing.", "รูปทรงตัวอย่างเหมาะสำหรับการคำนวณราคาสาธิต"))
-                ]
-            });
-        }
-
-        if (_parts.Count > 0)
-        {
-            _selectedPartIndex = 0;
-        }
-    }
-
-    private async Task LoadSampleFileAsync()
-    {
-        _error = null;
-        if (!IsDemoMode)
-        {
-            Navigation.NavigateTo("/demo");
-            return;
-        }
-
-        await LoadDemoProjectAsync();
-    }
-
     private void ApplyDefaultRouting(QuotePartViewModel part, string fileName)
     {
         var extension = Path.GetExtension(fileName).TrimStart('.').ToLowerInvariant();
@@ -1679,11 +1507,6 @@
 
     private async Task<bool> RestoreAgentSessionAsync()
     {
-        if (IsDemoMode)
-        {
-            return true;
-        }
-
         try
         {
             var storedSessionId = await Js.InvokeAsync<string?>("malievChatbot.readSharedSessionId", MakeStudioSessionStorageKey);
@@ -1702,7 +1525,7 @@
 
     private async Task PersistAgentSessionAsync()
     {
-        if (IsDemoMode || !Guid.TryParse(_quoteSessionId, out var sessionId) || sessionId == Guid.Empty)
+        if (!Guid.TryParse(_quoteSessionId, out var sessionId) || sessionId == Guid.Empty)
         {
             return;
         }
