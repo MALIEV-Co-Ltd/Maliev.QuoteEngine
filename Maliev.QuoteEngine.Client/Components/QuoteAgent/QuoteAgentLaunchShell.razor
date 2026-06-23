@@ -1376,6 +1376,7 @@
                     {
                         <button type="button"
                                 class="qe-agent-use-case-card"
+                                aria-label="@Text(useCase.TitleEn, useCase.TitleTh)"
                                 @onclick="@(() => ApplyUseCaseAsync(useCase))">
                             <span>@Text(useCase.TitleEn, useCase.TitleTh)</span>
                             <small>@Text(useCase.PromptEn, useCase.PromptTh)</small>

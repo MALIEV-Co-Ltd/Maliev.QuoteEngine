@@ -1254,6 +1254,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SampleUseCases", component, StringComparison.Ordinal);
         Assert.Contains("VisibleUseCases", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-use-case-card\"", component, StringComparison.Ordinal);
+        Assert.Contains("aria-label=\"@Text(useCase.TitleEn, useCase.TitleTh)\"", component, StringComparison.Ordinal);
         Assert.Contains("Random.Shared.Next()", component, StringComparison.Ordinal);
         Assert.Contains("ApplyUseCaseAsync", component, StringComparison.Ordinal);
         // Use case ideas scroll natively now; the transform-based fake rotation was removed.
