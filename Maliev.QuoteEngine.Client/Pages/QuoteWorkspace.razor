@@ -51,6 +51,60 @@
                                    OnUploadRequested="OpenFilePickerAsync"
                                    OnProjectNameChanged="UpdateProjectTitleFromAgentAsync"
                                    OnNewProjectRequested="StartNewProjectAsync" />
+            @if (IsDemoMode && SelectedPart is not null)
+            {
+                <section class="qe-demo-workbench" aria-label="@Text("Demo quote workbench", "พื้นที่ทดลองเสนอราคา")">
+                    <div class="qe-demo-process-shortcuts" role="group" aria-label="@Text("Demo manufacturing process shortcuts", "ทางลัดกระบวนการผลิตตัวอย่าง")">
+                        <button type="button" class="qe-secondary-btn" @onclick='@(() => SelectDemoProcessAsync("cnc"))'>
+                            @Text("CNC Machining", "การกัดซีเอ็นซี")
+                        </button>
+                        <button type="button" class="qe-secondary-btn" @onclick='@(() => SelectDemoProcessAsync("fdm"))'>
+                            @Text("FDM 3D Printing", "พิมพ์ 3D แบบ FDM")
+                        </button>
+                    </div>
+
+                    <QePartDetailCard Part="@SelectedPart"
+                                      Parts="@_parts"
+                                      ReferenceData="@_reference"
+                                      Estimate="@_estimate"
+                                      CenterMode="@_centerMode"
+                                      CenterModeChanged="SetCenterMode"
+                                      OnPartChanged="OnPartConfigurationChanged"
+                                      OnSelectPart="SelectPartFromTable"
+                                      OnAddFilesRequested="@(() => Task.CompletedTask)"
+                                      OnRequestFreshViewerUrl="RequestFreshViewerUrlAsync"
+                                      IsDarkMode="@IsDarkMode"
+                                      CanAttachDocuments="false" />
+
+                    <QePartConfigSidebar Part="@SelectedPart"
+                                         ReferenceData="@_reference"
+                                         OnPartChanged="OnPartConfigurationChanged" />
+
+                    <QeQuoteSummaryBar Parts="@_parts"
+                                       ReferenceData="@_reference"
+                                       Estimate="@_estimate"
+                                       FormalQuote="@_formalQuote"
+                                       Order="@_order"
+                                       Payment="@_payment"
+                                       LeadTimeCode="@_leadTimeCode"
+                                       CanRequestFormalQuote="false"
+                                       CanApproveQuote="false"
+                                       CanCreateOrder="false"
+                                       CanPay="false"
+                                       TermsAccepted="@_acceptedCheckoutTerms"
+                                       PaymentBusy="@_paymentBusy"
+                                       QuoteButtonLabel="@Text("Quote", "ใบเสนอราคา")"
+                                       BillingName="@Text("Demo customer", "ลูกค้าตัวอย่าง")"
+                                       BillingHint="@Text("Demo only", "ตัวอย่างเท่านั้น")"
+                                       OnLeadTimeSelected="SelectLeadTime"
+                                       OnCalculateRequested="CalculateAsync"
+                                       OnQuoteRequested="SubmitQuoteAsync"
+                                       OnApproveQuoteRequested="ApproveQuoteAsync"
+                                       OnOrderRequested="CreateOrderAsync"
+                                       OnPaymentRequested="InitiatePaymentAsync"
+                                       TermsAcceptedChanged="@((bool accepted) => _acceptedCheckoutTerms = accepted)" />
+                </section>
+            }
         </main>
     </div>
 </div>
@@ -911,6 +965,19 @@
     private Task OnPartConfigurationChanged(QuotePartViewModel part)
     {
         _ = part;
+        ClearEstimate();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task SelectDemoProcessAsync(string processId)
+    {
+        if (SelectedPart is null || _reference is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        SelectedPart.ApplyProjectNewProcessSelection(processId, _reference);
         ClearEstimate();
         StateHasChanged();
         return Task.CompletedTask;

@@ -414,6 +414,33 @@
     color: #bfdbfe;
 }
 
+.qe-demo-workbench {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+    gap: 16px;
+    align-items: start;
+    width: min(1180px, calc(100% - 32px));
+    margin: 16px auto 32px;
+}
+
+.qe-demo-process-shortcuts {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.qe-demo-workbench .qe-qsb-root {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+    .qe-demo-workbench {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
 .qe-agent-composer {
     display: grid;
     grid-template-columns: 38px minmax(0, 1fr) 38px;

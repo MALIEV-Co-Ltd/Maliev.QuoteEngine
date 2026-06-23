@@ -1758,6 +1758,27 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteWorkspace_restores_demo_workbench_controls_for_sample_workspace()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css").ReplaceLineEndings("\n");
+        var demoWorkbench = ExtractSourceBlock(workspace, "@if (IsDemoMode && SelectedPart is not null)", "</section>");
+
+        Assert.Contains("class=\"qe-demo-workbench\"", demoWorkbench, StringComparison.Ordinal);
+        Assert.Contains("SelectDemoProcessAsync(\"cnc\")", demoWorkbench, StringComparison.Ordinal);
+        Assert.Contains("SelectDemoProcessAsync(\"fdm\")", demoWorkbench, StringComparison.Ordinal);
+        Assert.Contains("<QePartDetailCard", demoWorkbench, StringComparison.Ordinal);
+        Assert.Contains("<QePartConfigSidebar", demoWorkbench, StringComparison.Ordinal);
+        Assert.Contains("<QeQuoteSummaryBar", demoWorkbench, StringComparison.Ordinal);
+        Assert.Contains("CanRequestFormalQuote=\"false\"", demoWorkbench, StringComparison.Ordinal);
+        Assert.Contains("CanAttachDocuments=\"false\"", demoWorkbench, StringComparison.Ordinal);
+        Assert.Contains("private Task SelectDemoProcessAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("SelectedPart.ApplyProjectNewProcessSelection(processId, _reference);", workspace, StringComparison.Ordinal);
+        Assert.Contains(".qe-demo-workbench {", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-demo-process-shortcuts", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_honors_explicit_open_panel_directives_when_auto_open_is_suppressed()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
