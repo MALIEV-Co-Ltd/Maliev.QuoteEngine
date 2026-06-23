@@ -1459,6 +1459,59 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_stream_neutralizes_unbacked_3d_generation_claims()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = """
+                Sure! I've generated a 3D model of the L-bracket for your review.
+                Let me know if the dimensions look right and I can refine it.
+                """
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Can you make a 3D model of an L-bracket for me?",
+                Language = "en"
+            }, options: JsonOptions)
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var body = await response.Content.ReadAsStringAsync();
+        var events = body
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonSerializer.Deserialize<QuoteAgentStreamEvent>(line, JsonOptions))
+            .Where(streamEvent => streamEvent is not null)
+            .Select(streamEvent => streamEvent!)
+            .ToList();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var streamedText = string.Concat(events.Where(streamEvent => streamEvent.Type == "delta").Select(streamEvent => streamEvent.Delta));
+        var final = Assert.Single(events, streamEvent => streamEvent.Type == "final").Response;
+        Assert.NotNull(final);
+
+        // No generated viewer artifact exists, so the unbacked "I've generated a 3D model" claim must be
+        // neutralized in both the streamed text and the authoritative final response.
+        Assert.DoesNotContain("I've generated", streamedText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("I've generated", final.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("have not generated a 3D preview", final.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(final.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Agent_focus_ui_tool_returns_panel_directive_for_client_highlight()
     {
         using var client = factory.CreateClient();
@@ -1583,6 +1636,62 @@ Customer message:
             part.UploadId == "upload-agent-sync");
         Assert.Contains(body.Artifacts, artifact => artifact.ArtifactType == "viewer");
         Assert.Contains(body.Gates, gate => gate.Code == "geometry_required" && gate.Status == "passed");
+    }
+
+    [Fact]
+    public async Task Agent_local_dfm_submission_hydrates_session_part_dfm()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        const string storagePath = "quotes/temp/session/dfm-bracket.stl";
+
+        // Register a CAD part so the session has a part keyed by this storage path.
+        var register = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
+            new QuoteAgentAttachmentRegisterRequest
+            {
+                Message = "Customer uploaded an STL for an FDM bracket.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "dfm-bracket.stl",
+                        ContentType = "model/stl",
+                        FileSizeBytes = 240_000,
+                        Kind = "cad",
+                        UploadId = "upload-dfm-1",
+                        StoragePath = storagePath
+                    }
+                ]
+            });
+        Assert.Equal(HttpStatusCode.OK, register.StatusCode);
+
+        // Submit a browser-computed local DFM report with a real issue into the authoritative store.
+        var response = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/dfm",
+            new QuoteAgentLocalDfmRequest
+            {
+                StoragePath = storagePath,
+                UploadId = "upload-dfm-1",
+                ProcessCode = "FDM",
+                IsManifold = true,
+                FdmReport = new QeFdmDfmReport(
+                    2,
+                    3,
+                    1.5m,
+                    true,
+                    0,
+                    [new QeDfmIssueItem("warning", "thin_wall", "Wall thinner than 1.0 mm at 2 regions.")])
+            });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        var part = Assert.Single(body!.Parts, p => p.StoragePath == storagePath);
+        Assert.NotNull(part.FdmReport);
+        Assert.Contains(part.FdmReport!.Issues, issue => issue.Code == "thin_wall");
+        Assert.Equal("DfmAnalysisReady", part.Status);
     }
 
     [Fact]

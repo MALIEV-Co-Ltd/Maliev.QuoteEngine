@@ -418,6 +418,17 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public Task<QuoteAgentStateResponse> SubmitAgentLocalDfmAsync(
+        Guid sessionId,
+        QuoteAgentLocalDfmRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return PostAsync<QuoteAgentLocalDfmRequest, QuoteAgentStateResponse>(
+            $"quote/v1/agent/sessions/{sessionId:D}/dfm",
+            request,
+            cancellationToken);
+    }
+
     public async Task<QuoteAgentSearchResponse> SearchCustomerDataAsync(
         Guid sessionId,
         string? query,

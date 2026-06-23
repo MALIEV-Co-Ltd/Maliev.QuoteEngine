@@ -44,6 +44,12 @@ public interface IQuoteAgentService
     /// <summary>Registers uploaded browser files with the current agent session.</summary>
     QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request);
 
+    /// <summary>Applies a browser-computed local DFM report into the authoritative analysis store and session.</summary>
+    Task<QuoteAgentStateResponse> ApplyLocalDfmReportAsync(
+        Guid sessionId,
+        QuoteAgentLocalDfmRequest request,
+        CancellationToken cancellationToken);
+
     /// <summary>Records customer feedback for a generated 3D preview artifact.</summary>
     Task<QuoteAgentPreviewFeedbackResponse> RecordPreviewFeedbackAsync(
         Guid sessionId,
@@ -98,6 +104,7 @@ internal sealed class QuoteAgentService(
     IInvoiceServiceClient invoiceClient,
     IProjectServiceClient projectClient,
     IQePricingServiceClient pricingClient,
+    IQuoteFileAnalysisStatusService fileAnalysisStatus,
     IHostEnvironment environment) : IQuoteAgentService
 {
     private const string DefaultAuthReturnUrl = "/auth/chatbot-complete";
@@ -162,6 +169,7 @@ internal sealed class QuoteAgentService(
         sessionStore.AddAttachments(state, request.Attachments);
         MaterializeSupplementalAnalysis(state, request);
         MaterializePrototypeParts(state, request);
+        await HydratePartDfmFromAuthoritativeStoreAsync(state, cancellationToken);
         if (TryBuildUiLanguageTurnResponse(state, request.Message, out var localLanguageResponse))
         {
             return localLanguageResponse;
@@ -251,6 +259,7 @@ internal sealed class QuoteAgentService(
         sessionStore.AddAttachments(state, request.Attachments);
         MaterializeSupplementalAnalysis(state, request);
         MaterializePrototypeParts(state, request);
+        await HydratePartDfmFromAuthoritativeStoreAsync(state, cancellationToken);
         if (TryBuildUiLanguageTurnResponse(state, request.Message, out var localLanguageResponse))
         {
             foreach (var delta in ChunkAssistantText(localLanguageResponse.AssistantText))
@@ -345,6 +354,11 @@ internal sealed class QuoteAgentService(
             if (streamEvent.Type.Equals("delta", StringComparison.OrdinalIgnoreCase) &&
                 !string.IsNullOrEmpty(streamEvent.Delta))
             {
+                // ChatbotService streams raw model deltas, but the customer-facing answer must be grounded
+                // before display: ungrounded "I opened the viewer" claims are rewritten and tool traces are
+                // stripped (GroundAssistantText/StripToolTraces). Grounding requires the complete text plus
+                // final session state, so text deltas are accumulated here and the grounded answer is
+                // re-chunked once the turn completes. Model reasoning ("thought") streams live below.
                 continue;
             }
             else if (streamEvent.Type.Equals("thought", StringComparison.OrdinalIgnoreCase) &&
@@ -406,6 +420,8 @@ internal sealed class QuoteAgentService(
             UsageSnapshot = finalMessage?.UsageSnapshot
         };
 
+        // Re-chunk the grounded answer so the customer sees the safe, post-processed text type out (never
+        // the raw ungrounded model deltas). Model reasoning already streamed live during the turn above.
         foreach (var delta in ChunkAssistantText(response.AssistantText))
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -540,6 +556,115 @@ internal sealed class QuoteAgentService(
         MaterializeSupplementalAnalysis(state, messageRequest);
         MaterializePrototypeParts(state, messageRequest);
         return ToStateResponse(state);
+    }
+
+    public async Task<QuoteAgentStateResponse> ApplyLocalDfmReportAsync(
+        Guid sessionId,
+        QuoteAgentLocalDfmRequest request,
+        CancellationToken cancellationToken)
+    {
+        var state = sessionStore.GetOrCreate(sessionId);
+        state.CustomerId = ResolveCustomerId() ?? state.CustomerId;
+
+        // Write the browser-computed report into the single authoritative analysis store, keyed by storage
+        // path. The server DFM pipeline writes to the same store, so the assistant reads one consistent
+        // source for both local and server analysis. Basic manifold state is set first (so it survives the
+        // DFM merge), then the process DFM reports.
+        await fileAnalysisStatus.SetLocalGeometryMetricsAsync(
+            request.StoragePath,
+            volumeCc: null,
+            surfaceAreaCm2: null,
+            isManifold: request.IsManifold,
+            nonManifoldReason: request.NonManifoldReason,
+            cancellationToken);
+        await fileAnalysisStatus.SetDfmReportsAsync(
+            request.StoragePath,
+            request.FdmReport,
+            request.SlaReport,
+            request.CncReport,
+            request.OverlayGlbUrls,
+            request.NonManifoldReason,
+            analysisErrorCode: null,
+            cancellationToken);
+
+        await HydratePartDfmFromAuthoritativeStoreAsync(state, cancellationToken);
+        return ToStateResponse(state);
+    }
+
+    /// <summary>
+    /// Refreshes each session part's DFM from the authoritative analysis store (server + local writers),
+    /// so the assistant always reflects real DFM results instead of a stale or empty session copy.
+    /// </summary>
+    private async Task HydratePartDfmFromAuthoritativeStoreAsync(
+        QuoteAgentSessionState state,
+        CancellationToken cancellationToken)
+    {
+        List<QuotePartDraftDto> parts;
+        lock (state.SyncRoot)
+        {
+            parts = state.Parts.Where(part => !string.IsNullOrWhiteSpace(part.StoragePath)).ToList();
+        }
+
+        if (parts.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var part in parts)
+        {
+            QuoteFileAnalysisStatus? status;
+            try
+            {
+                status = await fileAnalysisStatus.GetStatusAsync(part.StoragePath!, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to read authoritative DFM status for {StoragePath}.", part.StoragePath);
+                continue;
+            }
+
+            if (status is null)
+            {
+                continue;
+            }
+
+            lock (state.SyncRoot)
+            {
+                ApplyAuthoritativeDfmToPart(part, status);
+            }
+        }
+    }
+
+    private static void ApplyAuthoritativeDfmToPart(QuotePartDraftDto part, QuoteFileAnalysisStatus status)
+    {
+        if (status.FdmReport is not null)
+        {
+            part.FdmReport = status.FdmReport;
+        }
+
+        if (status.SlaReport is not null)
+        {
+            part.SlaReport = status.SlaReport;
+        }
+
+        if (status.CncReport is not null)
+        {
+            part.CncReport = status.CncReport;
+        }
+
+        if (status.OverlayGlbUrls.Count > 0)
+        {
+            part.OverlayGlbUrls = status.OverlayGlbUrls;
+        }
+
+        part.IsManifold = status.IsManifold;
+        part.NonManifoldReason = status.IsManifold ? null : status.NonManifoldReason;
+
+        var hasReports = status.FdmReport is not null || status.SlaReport is not null || status.CncReport is not null;
+        if (hasReports || status.Status.Equals("DfmAnalysisReady", StringComparison.OrdinalIgnoreCase))
+        {
+            part.Status = "DfmAnalysisReady";
+        }
     }
 
     public async Task<QuoteAgentPreviewFeedbackResponse> RecordPreviewFeedbackAsync(
@@ -791,7 +916,50 @@ internal sealed class QuoteAgentService(
             "quote_generate_3d_preview" => Generate3DPreview(state, request.Arguments),
             _ => new { error = $"Unknown QuoteEngine tool: {toolName}" }
         };
+
+        // Stream the generated 3D preview to the client at creation time (typed artifact event) so the inline
+        // preview appears as soon as it exists, instead of only when the whole turn completes.
+        if (toolName.Equals("quote_generate_3d_preview", StringComparison.OrdinalIgnoreCase) &&
+            IsSuccessfulToolResult(result))
+        {
+            await PublishGeneratedPreviewArtifactAsync(state, context.QuoteSessionId, cancellationToken);
+        }
+
         return result;
+    }
+
+    private static bool IsSuccessfulToolResult(object result) =>
+        result.GetType().GetProperty("success")?.GetValue(result) is true;
+
+    private async Task PublishGeneratedPreviewArtifactAsync(
+        QuoteAgentSessionState state,
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        QuoteAgentArtifactDto? artifact;
+        lock (state.SyncRoot)
+        {
+            var generated = state.Artifacts.LastOrDefault(IsGeneratedViewerArtifact);
+            artifact = generated is null ? null : new QuoteAgentArtifactDto
+            {
+                ArtifactId = generated.ArtifactId,
+                ArtifactType = generated.ArtifactType,
+                Title = generated.Title,
+                Status = generated.Status,
+                PartId = generated.PartId,
+                Url = generated.Url,
+                Metadata = new Dictionary<string, string>(generated.Metadata, StringComparer.OrdinalIgnoreCase)
+            };
+        }
+
+        if (artifact is null)
+        {
+            return;
+        }
+
+        await hubContext.Clients
+            .Group(QuoteNotificationsHub.QuoteSessionGroup(sessionId))
+            .SendAsync("QuoteAgentArtifact", artifact, cancellationToken);
     }
 
     public async Task<QuoteAgentActionResultResponse?> ConfirmActionAsync(
@@ -5567,6 +5735,10 @@ internal sealed class QuoteAgentService(
             "Generated 3D preview iterations are revisions of one active quote workbench artifact: when the customer asks for changes such as moving holes or correcting dimensions, call quote_generate_3d_preview with the full revised cad_commands for the current design, not a separate replacement asset. " +
             "After a preview, describe the assumptions and ask the customer to verify shape and dimensions.");
         contextLines.Add(
+            "DFM truthfulness: DFM runs locally in the customer's browser and is reported back per part. Only state DFM results — issues found or a clean result — for parts whose status is DfmAnalysisReady. " +
+            "If a part has no DFM yet (status not DfmAnalysisReady and no DFM report in Current parts), say the design check is still running or needs the manufacturing process chosen; never claim there are no DFM issues for a part that has not been analyzed. " +
+            "Report the specific issues listed in Current parts rather than inventing or omitting them.");
+        contextLines.Add(
             "Structured presentation: Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables " +
             "instead of bullet-only prose when there are 3 or more comparable fields. Prefer columns like Feature | Value | Source, " +
             "Line | Qty | Unit price | Total, or Requirement | Selection | Basis. Keep explanatory text short around the table.");
@@ -6275,6 +6447,7 @@ Customer message:
     private static string GroundAssistantText(string content, QuoteAgentStateResponse state)
     {
         content = GroundAuthHandoffText(content, state);
+        content = GroundGeneratedPreviewText(content, state);
 
         if (string.IsNullOrWhiteSpace(content) ||
             HasExplicitViewerOpenDirective(state.UiDirectives) ||
@@ -6374,6 +6547,77 @@ Customer message:
             normalized.Contains("displayed", StringComparison.Ordinal) ||
             normalized.Contains("showing", StringComparison.Ordinal) ||
             normalized.Contains("loaded", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Detects first-person claims that the assistant generated/created/prepared a 3D preview or model.
+    /// </summary>
+    private static bool ContainsGeneratedPreviewClaim(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return false;
+        }
+
+        var normalized = content.ToLowerInvariant();
+        var referencesModel = normalized.Contains("3d", StringComparison.Ordinal) ||
+            normalized.Contains("model", StringComparison.Ordinal) ||
+            normalized.Contains("preview", StringComparison.Ordinal);
+        if (!referencesModel)
+        {
+            return false;
+        }
+
+        return normalized.Contains("i've generated", StringComparison.Ordinal) ||
+            normalized.Contains("i have generated", StringComparison.Ordinal) ||
+            normalized.Contains("i generated", StringComparison.Ordinal) ||
+            normalized.Contains("i've created", StringComparison.Ordinal) ||
+            normalized.Contains("i have created", StringComparison.Ordinal) ||
+            normalized.Contains("i created", StringComparison.Ordinal) ||
+            normalized.Contains("i've made", StringComparison.Ordinal) ||
+            normalized.Contains("i made", StringComparison.Ordinal) ||
+            normalized.Contains("i've prepared", StringComparison.Ordinal) ||
+            normalized.Contains("i prepared", StringComparison.Ordinal) ||
+            normalized.Contains("i've built", StringComparison.Ordinal) ||
+            normalized.Contains("i built", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Neutralizes claims that a 3D preview was generated when no generated viewer artifact actually
+    /// exists in the session, so customers are never told a model was created when none is available.
+    /// </summary>
+    private static string GroundGeneratedPreviewText(string content, QuoteAgentStateResponse state)
+    {
+        if (string.IsNullOrWhiteSpace(content) ||
+            state.Artifacts.Any(IsGeneratedViewerArtifact) ||
+            !ContainsGeneratedPreviewClaim(content))
+        {
+            return content;
+        }
+
+        const string groundedLine =
+            "I have not generated a 3D preview for this part yet. Share the confirmed dimensions, or upload a CAD file, and I can prepare one.";
+        var lines = content.Replace("\r\n", "\n").Split('\n');
+        var sanitizedLines = new List<string>();
+        var insertedGroundedLine = false;
+
+        foreach (var line in lines)
+        {
+            if (ContainsGeneratedPreviewClaim(line))
+            {
+                if (!insertedGroundedLine)
+                {
+                    sanitizedLines.Add(groundedLine);
+                    insertedGroundedLine = true;
+                }
+
+                continue;
+            }
+
+            sanitizedLines.Add(line);
+        }
+
+        return string.Join('\n', sanitizedLines).Trim();
     }
 
     private string? BuildThinkingCallbackUrl(Guid sessionId)

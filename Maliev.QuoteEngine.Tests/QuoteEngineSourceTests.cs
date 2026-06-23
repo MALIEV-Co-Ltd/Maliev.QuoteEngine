@@ -1093,8 +1093,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("part.ThumbnailUrl", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-artifact-thumb", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-markdown\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-thinking\"", component, StringComparison.Ordinal);
-        Assert.Contains("assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-reasoning-summary\"", component, StringComparison.Ordinal);
+        Assert.Contains("assistantMessage.Content = streamEvent.Response.AssistantText;", component, StringComparison.Ordinal);
         Assert.Contains("await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives, suppressPanelAutoOpen: true);", component, StringComparison.Ordinal);
         Assert.Contains("private async Task ApplyUiDirectivesAsync", component, StringComparison.Ordinal);
         Assert.Contains("OpenDirectivePanel(_uiFocusDirectives)", component, StringComparison.Ordinal);
@@ -1102,7 +1102,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ActivateUiHighlights(_uiFocusDirectives)", component, StringComparison.Ordinal);
         Assert.Contains("UiFocusClass(\"viewer\", PartFocusKey(SelectedUploadedPart.PartId))", component, StringComparison.Ordinal);
         Assert.Contains("TryGetCanvasFocusPoint(out var canvasFocusStyle)", component, StringComparison.Ordinal);
-        Assert.Contains("<details class=\"qe-agent-thinking\"", component, StringComparison.Ordinal);
+        Assert.Contains("<details class=\"@ReasoningDetailsClass(message)\"", component, StringComparison.Ordinal);
         Assert.Contains("streamEvent.Type.Equals(\"delta\"", component, StringComparison.Ordinal);
         Assert.Contains("streamEvent.Type.Equals(\"final\"", component, StringComparison.Ordinal);
         Assert.Contains("ConfirmAgentActionAsync", component, StringComparison.Ordinal);
@@ -1187,7 +1187,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OpenSketchFromComposerMenuAsync", component, StringComparison.Ordinal);
         Assert.Contains("EnsureLocalProjectFromMessage(message);", component, StringComparison.Ordinal);
         Assert.Contains("DefaultProjectTitle", component, StringComparison.Ordinal);
-        Assert.Contains("ThinkingStepDisplayTitle(step)", component, StringComparison.Ordinal);
+        Assert.Contains("ThinkingStepTitle(step)", component, StringComparison.Ordinal);
         Assert.Contains("HumanizeAgentActivity", component, StringComparison.Ordinal);
         Assert.Contains("await FocusComposerAsync();", component, StringComparison.Ordinal);
         Assert.Contains("focusComposer", component, StringComparison.Ordinal);
@@ -1466,8 +1466,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-workflow", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-markdown", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-markdown-table", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-thinking", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-thinking summary", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-reasoning", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-reasoning-summary", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-flow-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-analysis-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-requirements-card table", agentStyles, StringComparison.Ordinal);
@@ -1813,42 +1813,63 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentThoughtProcess_uses_timeline_layout_with_right_aligned_durations()
+    public void QuoteAgentReasoning_streams_interleaved_thoughts_and_tool_markers()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
-        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
-        Assert.Contains("class=\"qe-agent-thinking-shell\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-thinking-summary-meta\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-thinking-step-index\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-thinking-step-card\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-thinking-step-compact\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-thinking-step-duration\"", component, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-thinking-step-duration", styles, StringComparison.Ordinal);
-        Assert.Contains("justify-self: end;", styles, StringComparison.Ordinal);
-        Assert.Contains("text-align: right;", styles, StringComparison.Ordinal);
+        // Live reasoning renders as a single interleaved stream of model thoughts and concise tool markers
+        // (Claude Code style), replacing the numbered tool-call summary that used to sit at the bottom.
+        Assert.Contains("class=\"qe-agent-reasoning-stream\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-reasoning-thought\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-reasoning-tool\"", component, StringComparison.Ordinal);
+        Assert.Contains("AppendReasoningThought(streamEvent.Thought)", component, StringComparison.Ordinal);
+        Assert.Contains("AddReasoningTool(ThinkingStepTitle(step))", component, StringComparison.Ordinal);
+
+        // The bottom tool-call summary timeline is gone from the response.
+        Assert.DoesNotContain("class=\"qe-agent-thinking-shell\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-thinking-step-card\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-model-thinking\"", component, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void QuoteAgentThoughtProcess_is_collapsed_and_borderless_by_default()
+    public void QuoteAgentReasoning_is_collapsed_by_default_with_thought_for_duration_label()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
             .ReplaceLineEndings("\n");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css")
             .ReplaceLineEndings("\n");
 
-        var shellStart = styles.IndexOf(".qe-agent-thinking-shell {", StringComparison.Ordinal);
-        Assert.True(shellStart >= 0, "thought process shell styles must exist.");
-        var shellEnd = styles.IndexOf("\n}", shellStart, StringComparison.Ordinal);
-        Assert.True(shellEnd > shellStart, "thought process shell style block must close.");
-        var shellBlock = styles[shellStart..shellEnd];
-
-        Assert.Contains("<details class=\"qe-agent-thinking\">", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("<details class=\"qe-agent-thinking\" open>", component, StringComparison.Ordinal);
-        Assert.Contains("border: 0;", shellBlock, StringComparison.Ordinal);
-        Assert.DoesNotContain("border: 1px", shellBlock, StringComparison.Ordinal);
+        // Collapsed by default: the reasoning disclosure renders without the `open` attribute, so the
+        // customer sees "Thinking…" / "Thought for Ns" and expands to watch the live stream.
+        Assert.Contains("<details class=\"@ReasoningDetailsClass(message)\">", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("<details class=\"@ReasoningDetailsClass(message)\" open>", component, StringComparison.Ordinal);
+        Assert.Contains("Thinking…", component, StringComparison.Ordinal);
+        Assert.Contains("Thought for ", component, StringComparison.Ordinal);
+        Assert.Contains("private string ReasoningSummaryLabel(AgentMessageRow message)", component, StringComparison.Ordinal);
         Assert.Contains("ApplyStreamingThinkingStep(step)", component, StringComparison.Ordinal);
-        Assert.Contains("UpsertThinkingStep(assistantMessage, step);", component, StringComparison.Ordinal);
+
+        // Subtle, self-contained reasoning styles exist.
+        var reasoningStart = styles.IndexOf(".qe-agent-reasoning {", StringComparison.Ordinal);
+        Assert.True(reasoningStart >= 0, "reasoning disclosure styles must exist.");
+        Assert.Contains(".qe-agent-reasoning-stream", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentArtifact_streams_at_creation_time_and_inline_preview_survives_final()
+    {
+        var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+
+        // BFF emits a typed artifact event the moment a 3D preview is generated (creation-time streaming).
+        Assert.Contains("SendAsync(\"QuoteAgentArtifact\"", service, StringComparison.Ordinal);
+        Assert.Contains("PublishGeneratedPreviewArtifactAsync", service, StringComparison.Ordinal);
+
+        // Client subscribes, upserts the artifact at creation time, and shows the inline preview immediately.
+        Assert.Contains(".On<QuoteAgentArtifactDto>(\"QuoteAgentArtifact\"", component, StringComparison.Ordinal);
+        Assert.Contains("private void ApplyStreamingArtifact(QuoteAgentArtifactDto artifact)", component, StringComparison.Ordinal);
+
+        // The final snapshot upserts and never nulls an inline preview already shown during the turn.
+        Assert.Contains("if (finalInlinePreview is not null)", component, StringComparison.Ordinal);
     }
 
     [Fact]

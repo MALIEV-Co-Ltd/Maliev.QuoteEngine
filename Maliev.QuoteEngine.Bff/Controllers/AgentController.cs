@@ -216,6 +216,25 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Submits a browser-computed local DFM report into the session's authoritative analysis store.
+    /// </summary>
+    [HttpPost("sessions/{sessionId:guid}/dfm")]
+    [ProducesResponseType(typeof(QuoteAgentStateResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<QuoteAgentStateResponse>> SubmitLocalDfm(
+        Guid sessionId,
+        [FromBody] QuoteAgentLocalDfmRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(await agentService.ApplyLocalDfmReportAsync(sessionId, request, cancellationToken));
+    }
+
+    /// <summary>
     /// Records customer feedback for an inline generated 3D preview artifact.
     /// </summary>
     [HttpPost("sessions/{sessionId:guid}/artifacts/{artifactId:guid}/feedback")]

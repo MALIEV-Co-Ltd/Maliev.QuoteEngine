@@ -94,6 +94,45 @@ public sealed class QuoteAgentAttachmentRegisterRequest
 }
 
 /// <summary>
+/// Browser-computed local DFM report submitted into the agent session's authoritative analysis store,
+/// so the assistant reflects the same DFM results the customer sees in the workbench.
+/// </summary>
+public sealed class QuoteAgentLocalDfmRequest
+{
+    /// <summary>Gets or sets the storage path of the part the report applies to.</summary>
+    [Required]
+    [StringLength(500)]
+    public string StoragePath { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the optional upload ID of the part the report applies to.</summary>
+    [StringLength(120)]
+    public string? UploadId { get; set; }
+
+    /// <summary>Gets or sets the manufacturing process the full DFM report was computed for, when known.</summary>
+    [StringLength(40)]
+    public string? ProcessCode { get; set; }
+
+    /// <summary>Gets or sets whether the geometry is manifold (basic check).</summary>
+    public bool IsManifold { get; set; } = true;
+
+    /// <summary>Gets or sets a customer-safe reason when the geometry is not manifold.</summary>
+    [StringLength(500)]
+    public string? NonManifoldReason { get; set; }
+
+    /// <summary>Gets or sets the FDM DFM report, when computed for this process.</summary>
+    public QeFdmDfmReport? FdmReport { get; set; }
+
+    /// <summary>Gets or sets the SLA DFM report, when computed for this process.</summary>
+    public QeSlaDfmReport? SlaReport { get; set; }
+
+    /// <summary>Gets or sets the CNC DFM report, when computed for this process.</summary>
+    public QeCncDfmReport? CncReport { get; set; }
+
+    /// <summary>Gets or sets overlay GLB URLs for highlighting DFM regions.</summary>
+    public List<string> OverlayGlbUrls { get; set; } = [];
+}
+
+/// <summary>
 /// Attachment metadata for an agent turn.
 /// </summary>
 public sealed class QuoteAgentAttachmentDto

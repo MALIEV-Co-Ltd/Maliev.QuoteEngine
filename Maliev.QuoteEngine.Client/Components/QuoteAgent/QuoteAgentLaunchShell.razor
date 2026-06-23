@@ -609,7 +609,32 @@
                             }
                             else
                             {
-                                @if (message.IsProcessing && string.IsNullOrEmpty(message.Content))
+                                @if (message.HasReasoning)
+                                {
+                                    <details class="@ReasoningDetailsClass(message)">
+                                        <summary class="qe-agent-reasoning-summary">
+                                            <span class="qe-agent-reasoning-caret" aria-hidden="true"></span>
+                                            <span class="qe-agent-reasoning-label">@ReasoningSummaryLabel(message)</span>
+                                        </summary>
+                                        <div class="qe-agent-reasoning-stream">
+                                            @foreach (var entry in message.ReasoningEntries)
+                                            {
+                                                @if (entry.IsTool)
+                                                {
+                                                    <div class="qe-agent-reasoning-tool">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.Bolt" Size="Size.Small" />
+                                                        <span>@entry.Text</span>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="qe-agent-reasoning-thought">@entry.Text</div>
+                                                }
+                                            }
+                                        </div>
+                                    </details>
+                                }
+                                @if (message.IsProcessing && string.IsNullOrEmpty(message.Content) && !message.HasReasoning)
                                 {
                                     <div class="qe-agent-response-loader" aria-label="@Text("Agent is thinking…", "เอเจนต์กำลังคิด…")" aria-live="polite">
                                         <span class="qe-agent-response-dot" aria-hidden="true"></span>
@@ -617,7 +642,7 @@
                                         <span class="qe-agent-response-dot" aria-hidden="true"></span>
                                     </div>
                                 }
-                                else if (!string.IsNullOrEmpty(message.Content))
+                                @if (!string.IsNullOrEmpty(message.Content))
                                 {
                                     <div class="qe-agent-markdown">
                                         @QuoteAgentMarkdownRenderer.Render(message.Content)
@@ -687,70 +712,34 @@
                                         </div>
                                     </section>
                                 }
-                                @if (message.IsThinking && !string.IsNullOrWhiteSpace(message.ModelThoughtContent))
+                                @if (message.CustomerQuestion is not null)
                                 {
-                                    <details class="qe-agent-model-thinking" open>
-                                        <summary>
-                                            <span>@Text("Model reasoning…", "การคิดของโมเดล...")</span>
-                                        </summary>
-                                        <div class="qe-agent-model-thinking-content">@message.ModelThoughtContent</div>
-                                    </details>
-                                }
-                                @if (message.ThinkingSteps.Count > 0)
-                                {
-                                    var orderedThinkingSteps = message.ThinkingSteps
-                                        .OrderBy(step => step.StepNumber <= 0 ? int.MaxValue : step.StepNumber)
-                                        .ThenBy(step => step.Timestamp)
-                                        .ToList();
-                                    var bundledThoughtSteps = BuildBundledThoughtSteps(orderedThinkingSteps);
-                                    <section class="qe-agent-thinking-shell" aria-label="@ThinkingSummary(message.ThinkingSteps)">
-                                        <details class="qe-agent-thinking">
-                                            <summary>
-                                                <span class="qe-agent-thinking-summary-main">
-                                                    <span class="qe-agent-thinking-title">@Text("Thought process", "กระบวนการคิด")</span>
-                                                </span>
-                                                <span class="qe-agent-thinking-summary-meta">
-                                                    <span class="qe-agent-thinking-count">@ThinkingStepCountLabel(message.ThinkingSteps)</span>
-                                                    @if (ThinkingDurationLabel(message.ThinkingSteps) is { Length: > 0 } thinkingDuration)
-                                                    {
-                                                        <span class="qe-agent-thinking-total">
-                                                            <MudIcon Icon="@Icons.Material.Outlined.Schedule" Size="Size.Small" />
-                                                            <span>@thinkingDuration</span>
-                                                        </span>
-                                                    }
-                                                </span>
-                                            </summary>
-                                            <div class="qe-agent-thinking-steps">
-                                                @for (var stepIndex = 0; stepIndex < bundledThoughtSteps.Count; stepIndex++)
+                                    <section class="qe-agent-question" aria-label="@Text("Question from agent", "คำถามจากผู้ช่วย")">
+                                        <div class="qe-agent-question-head">
+                                            <MudIcon Icon="@Icons.Material.Outlined.HelpOutline" Size="Size.Small" />
+                                            <p class="qe-agent-question-text">@message.CustomerQuestion.Question</p>
+                                        </div>
+                                        @if (string.IsNullOrEmpty(message.CustomerQuestionAnswer))
+                                        {
+                                            <div class="qe-agent-question-options" role="group" aria-label="@Text("Answer options", "ตัวเลือกคำตอบ")">
+                                                @foreach (var option in message.CustomerQuestion.Options)
                                                 {
-                                                    var step = bundledThoughtSteps[stepIndex];
-                                                    var stepTitle = ThinkingStepDisplayTitle(step);
-                                                    var compactLines = ThinkingStepDisplayCompacts(step).ToArray();
-                                                    var displayStepNumber = step.DisplayIndex > 0 ? step.DisplayIndex : stepIndex + 1;
-                                                    if (!string.IsNullOrWhiteSpace(stepTitle))
-                                                    {
-                                                            <div class="qe-agent-thinking-step-row">
-                                                                <span class="qe-agent-thinking-step-index">@displayStepNumber</span>
-                                                                <article class="qe-agent-thinking-step-card">
-                                                                    <header class="qe-agent-thinking-step-header">
-                                                                        <span class="qe-agent-thinking-step-heading">
-                                                                            <span class="qe-agent-thinking-step-title">@stepTitle</span>
-                                                                        </span>
-                                                                        @if (step.TotalDurationMs is > 0)
-                                                                        {
-                                                                            <span class="qe-agent-thinking-step-duration">@FormatDuration(step.TotalDurationMs.Value)</span>
-                                                                        }
-                                                                    </header>
-                                                                    @foreach (var compactLine in compactLines)
-                                                                    {
-                                                                        <p class="qe-agent-thinking-step-compact">@compactLine</p>
-                                                                    }
-                                                                </article>
-                                                        </div>
-                                                    }
+                                                    <button type="button"
+                                                            class="qe-agent-question-option"
+                                                            disabled="@_sending"
+                                                            @onclick="@(() => SubmitQuestionOptionAsync(option, message))">
+                                                        @option
+                                                    </button>
                                                 }
                                             </div>
-                                        </details>
+                                        }
+                                        else
+                                        {
+                                            <div class="qe-agent-question-answered" aria-live="polite">
+                                                <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Small" />
+                                                <span>@Text("You answered:", "คุณตอบว่า:") <strong>@message.CustomerQuestionAnswer</strong></span>
+                                            </div>
+                                        }
                                     </section>
                                 }
                             }
@@ -1074,22 +1063,6 @@
             </section>
         }
 
-        @if (_customerQuestion is not null && !_sending)
-        {
-            <section class="qe-agent-question" aria-label="@Text("Question from agent", "คำถามจากผู้ช่วย")">
-                <p class="qe-agent-question-text">@_customerQuestion.Question</p>
-                <div class="qe-agent-question-options" role="group" aria-label="@Text("Answer options", "ตัวเลือกคำตอบ")">
-                    @foreach (var option in _customerQuestion.Options)
-                    {
-                        <button type="button"
-                                class="qe-agent-question-option"
-                                @onclick="@(() => SubmitQuestionOptionAsync(option))">
-                            @option
-                        </button>
-                    }
-                </div>
-            </section>
-        }
 
         @if (ShowSummaryStrip)
         {
@@ -1119,6 +1092,21 @@
                         <span class="qe-agent-summary-strip-label">@Text("usage", "การใช้งาน")</span>
                     </span>
                 }
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(_dictationNotice))
+        {
+            <div class="qe-agent-dictation-notice" role="status">
+                <MudIcon Icon="@Icons.Material.Outlined.MicOff" Size="Size.Small" />
+                <span class="qe-agent-dictation-notice-text">@_dictationNotice</span>
+                <button type="button"
+                        class="qe-agent-dictation-notice-dismiss"
+                        title="@Text("Dismiss", "ปิด")"
+                        aria-label="@Text("Dismiss microphone notice", "ปิดการแจ้งเตือนไมโครโฟน")"
+                        @onclick="DismissDictationNotice">
+                    <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                </button>
             </div>
         }
 
@@ -1556,13 +1544,36 @@
                     <span>@Text("Workbench", "พื้นที่งาน")</span>
                     <strong>@Text("Artifacts", "ไฟล์งาน")</strong>
                 </div>
-                <button type="button" class="qe-agent-round-btn" @onclick="ToggleArtifactPanel" title="@Text("Close", "ปิด")">
-                    <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
-                </button>
+                <div class="qe-agent-artifact-header-actions">
+                    @if (!string.IsNullOrWhiteSpace(UploadInputElementId))
+                    {
+                        <label class="qe-agent-round-btn qe-agent-artifact-upload-btn"
+                               for="@UploadInputElementId"
+                               role="button"
+                               tabindex="0"
+                               title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
+                               aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")">
+                            <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
+                        </label>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                class="qe-agent-round-btn qe-agent-artifact-upload-btn"
+                                title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
+                                aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
+                                @onclick="RequestUploadAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
+                        </button>
+                    }
+                    <button type="button" class="qe-agent-round-btn" @onclick="ToggleArtifactPanel" title="@Text("Close", "ปิด")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
+                </div>
             </header>
             @if (ArtifactCount == 0)
             {
-                <p class="qe-agent-muted">@Text("Viewer, DFM reports, estimates, quote PDFs, order records, and payment handoffs will appear here.", "โมเดล รายงาน DFM ราคา ใบเสนอราคา คำสั่งซื้อ และการชำระเงินจะแสดงที่นี่")</p>
+                <p class="qe-agent-muted">@Text("Add files with the upload button above, or they will appear here as the assistant works: viewer, DFM reports, estimates, quote PDFs, order records, and payment handoffs.", "เพิ่มไฟล์ด้วยปุ่มอัปโหลดด้านบน หรือไฟล์จะปรากฏที่นี่เมื่อผู้ช่วยทำงาน เช่น โมเดล รายงาน DFM ราคา ใบเสนอราคา คำสั่งซื้อ และการชำระเงิน")</p>
             }
             else
             {
@@ -1949,6 +1960,8 @@
     private AgentMessageRow? _replyTo;
     private AgentMessageRow? _editingLastUserMessage;
     private string? _error;
+
+    private string? _dictationNotice;
     private bool _sending;
     private bool _exportingPdf;
     private bool _artifactPanelOpen;
@@ -1989,7 +2002,6 @@
     private WorkspacePage _activeWorkspacePage = WorkspacePage.Chat;
     private string _projectName = string.Empty;
     private bool _projectNameUserSet;
-    private QuoteAgentCustomerQuestionDto? _customerQuestion;
     private string _searchQuery = string.Empty;
     private string _animatedSearchPrompt = string.Empty;
     private string? _highlightConnectorId;
@@ -2489,7 +2501,6 @@
         {
             _messages.Clear();
             _pendingComposerAttachments.Clear();
-            _customerQuestion = null;
         }
 
         _loadedSessionId = SessionId;
@@ -2791,7 +2802,6 @@
         _error = null;
         _composerMenuOpen = false;
         _draftMessage = string.Empty;
-        _customerQuestion = null;
         _pendingComposerAttachments.Clear();
         EnsureLocalProjectFromMessage(message);
         var userMessage = new AgentMessageRow("user", message, attachments: pendingAttachments)
@@ -2820,6 +2830,7 @@
                 if (!assistantMessage.IsProcessing)
                 {
                     assistantMessage.IsProcessing = true;
+                    assistantMessage.ThinkingStartedAt ??= DateTimeOffset.UtcNow;
                     await InvokeAsync(StateHasChanged);
                 }
 
@@ -2830,7 +2841,8 @@
                 else if (streamEvent.Type.Equals("thought", StringComparison.OrdinalIgnoreCase) &&
                          !string.IsNullOrWhiteSpace(streamEvent.Thought))
                 {
-                    assistantMessage.ModelThoughtContent += streamEvent.Thought;
+                    assistantMessage.ThinkingStartedAt ??= DateTimeOffset.UtcNow;
+                    assistantMessage.AppendReasoningThought(streamEvent.Thought);
                     assistantMessage.IsThinking = true;
                     await InvokeAsync(StateHasChanged);
                 }
@@ -2838,15 +2850,32 @@
                          streamEvent.Response is not null)
                 {
                     await FlushAssistantStreamAsync(assistantMessage);
+                    // The final event carries the authoritative grounded/stripped assistant text. Reconcile
+                    // the live-streamed deltas onto it so any transient raw frame is replaced by safe text.
+                    if (!string.IsNullOrWhiteSpace(streamEvent.Response.AssistantText))
+                    {
+                        assistantMessage.Content = streamEvent.Response.AssistantText;
+                    }
                     assistantMessage.IsThinking = false;
-                    assistantMessage.ThinkingSteps = streamEvent.Response.ThinkingSteps ?? [];
+                    if (assistantMessage.ThinkingStartedAt is { } startedAt && assistantMessage.HasReasoning)
+                    {
+                        assistantMessage.ThinkingDurationSeconds =
+                            Math.Max(1, (int)Math.Round((DateTimeOffset.UtcNow - startedAt).TotalSeconds));
+                    }
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
                     _proposedActions = streamEvent.Response.ProposedActions;
                     _usageSnapshot = streamEvent.Response.UsageSnapshot;
-                    assistantMessage.InlineViewer = FindInlinePreview(
+                    // Only overwrite the inline preview when the final state carries a new generated viewer;
+                    // never null one already streamed at creation time during this turn (prevents the flicker
+                    // where the preview appears then vanishes when the final snapshot has no new artifact).
+                    var finalInlinePreview = FindInlinePreview(
                         streamEvent.Response.Artifacts,
                         generatedViewerArtifactIdsBeforeTurn);
+                    if (finalInlinePreview is not null)
+                    {
+                        assistantMessage.InlineViewer = finalInlinePreview;
+                    }
                     ApplyAuthHandoff(streamEvent.Response.AuthHandoff);
                     await ApplyUiDirectivesAsync(streamEvent.Response.UiDirectives, suppressPanelAutoOpen: true);
                     if (!string.IsNullOrWhiteSpace(streamEvent.Response.UiCulture))
@@ -2854,7 +2883,9 @@
                         await Preferences.SetCultureAsync(streamEvent.Response.UiCulture);
                     }
                     await ApplyAgentProjectNameAsync(streamEvent.Response.ProjectName);
-                    _customerQuestion = streamEvent.Response.CustomerQuestion;
+                    // Attach the clarifying question to the assistant turn that asked it so it renders inline
+                    // (Claude Code style) and persists in the transcript once the customer answers.
+                    assistantMessage.CustomerQuestion = streamEvent.Response.CustomerQuestion;
                     RequestScrollToLatestMessage();
                     await InvokeAsync(StateHasChanged);
                 }
@@ -3136,9 +3167,16 @@
         _dictating = false;
         _dictationProcessing = false;
         StopDictationTimer();
-        _error = DictationErrorMessage(code);
+        // Microphone/dictation problems are non-blocking: surface them as a compact, dismissable notice
+        // by the composer instead of the persistent error banner, so the customer can keep typing.
+        _dictationNotice = DictationErrorMessage(code);
         await InvokeAsync(StateHasChanged);
         await FocusComposerAsync();
+    }
+
+    private void DismissDictationNotice()
+    {
+        _dictationNotice = null;
     }
 
     [JSInvokable]
@@ -3148,6 +3186,7 @@
         _dictationProcessing = false;
         _quickActionsMenuOpen = false;
         _error = null;
+        _dictationNotice = null;
         StartDictationTimer();
         await InvokeAsync(StateHasChanged);
     }
@@ -3528,6 +3567,11 @@
                 {
                     _ = InvokeAsync(() => ApplyStreamingThinkingStep(step));
                 });
+
+                _notificationConnection.On<QuoteAgentArtifactDto>("QuoteAgentArtifact", artifact =>
+                {
+                    _ = InvokeAsync(() => ApplyStreamingArtifact(artifact));
+                });
             }
 
             if (_notificationConnection.State == HubConnectionState.Disconnected)
@@ -3554,6 +3598,49 @@
         }
     }
 
+    private void ApplyStreamingArtifact(QuoteAgentArtifactDto artifact)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        // Upsert the typed artifact event into the workbench list at creation time, so a generated 3D
+        // preview appears immediately during the turn instead of only when the whole turn completes.
+        var index = _artifacts.FindIndex(existing => existing.ArtifactId == artifact.ArtifactId);
+        if (index >= 0)
+        {
+            _artifacts[index] = artifact;
+        }
+        else
+        {
+            _artifacts.Add(artifact);
+        }
+
+        if (IsGeneratedViewerArtifact(artifact) &&
+            artifact.Metadata.TryGetValue("cad_commands", out var commandsJson) &&
+            !string.IsNullOrWhiteSpace(commandsJson))
+        {
+            var inProgress = _messages.LastOrDefault(message =>
+                message.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase) &&
+                message.IsProcessing);
+            if (inProgress is not null)
+            {
+                inProgress.InlineViewer = new InlineViewerInfo
+                {
+                    ArtifactId = artifact.ArtifactId,
+                    CommandsJson = commandsJson,
+                    FeedbackSentiment = ArtifactMetadata(artifact, "customerSentiment") ?? string.Empty,
+                    FeedbackComment = ArtifactMetadata(artifact, "customerComment") ?? string.Empty,
+                    FeedbackStatus = InlineViewerFeedbackStatus(artifact)
+                };
+            }
+        }
+
+        RequestScrollToLatestMessage();
+        StateHasChanged();
+    }
+
     private void ApplyStreamingThinkingStep(QuoteAgentThinkingStepDto step)
     {
         if (_disposed)
@@ -3569,12 +3656,21 @@
             return;
         }
 
-        UpsertThinkingStep(assistantMessage, step);
+        var added = UpsertThinkingStep(assistantMessage, step);
+        // Interleave a concise tool-call marker into the live reasoning stream (Claude Code style),
+        // so the collapsed "Thinking…" disclosure shows both the model's reasoning and the actions it takes.
+        if (added && step.Type.Equals("function_call", StringComparison.OrdinalIgnoreCase))
+        {
+            assistantMessage.ThinkingStartedAt ??= DateTimeOffset.UtcNow;
+            assistantMessage.IsThinking = true;
+            assistantMessage.AddReasoningTool(ThinkingStepTitle(step));
+        }
+
         RequestScrollToLatestMessage();
         StateHasChanged();
     }
 
-    private static void UpsertThinkingStep(AgentMessageRow assistantMessage, QuoteAgentThinkingStepDto step)
+    private static bool UpsertThinkingStep(AgentMessageRow assistantMessage, QuoteAgentThinkingStepDto step)
     {
         if (step.StepNumber <= 0)
         {
@@ -3589,10 +3685,30 @@
         if (index >= 0)
         {
             assistantMessage.ThinkingSteps[index] = step;
-            return;
+            return false;
         }
 
         assistantMessage.ThinkingSteps.Add(step);
+        return true;
+    }
+
+    private string ReasoningSummaryLabel(AgentMessageRow message)
+    {
+        if (message.IsThinking)
+        {
+            return Text("Thinking…", "กำลังคิด…");
+        }
+
+        return message.ThinkingDurationSeconds > 0
+            ? Text($"Thought for {message.ThinkingDurationSeconds}s", $"คิดอยู่ {message.ThinkingDurationSeconds} วินาที")
+            : Text("Thought process", "กระบวนการคิด");
+    }
+
+    private static string ReasoningDetailsClass(AgentMessageRow message)
+    {
+        return message.IsThinking
+            ? "qe-agent-reasoning qe-agent-reasoning--live"
+            : "qe-agent-reasoning";
     }
 
     private async Task ApplyUiDirectivesAsync(IReadOnlyCollection<QuoteAgentUiDirectiveDto> directives, bool suppressPanelAutoOpen = false)
@@ -4106,18 +4222,57 @@
     private async Task<bool> ApplyLocalGeometryRuntimeResultAsync(LocalGeometryRuntimeResult result)
     {
         var selectedPart = SelectedUploadedPart;
-        if (result.Metrics?.VolumeMm3 is > 0)
+
+        // Apply the full local DFM result (process findings + metrics + manifold) to the part, matching the
+        // workspace flow, then submit it to the agent's authoritative analysis store so the assistant
+        // reports the same DFM the customer sees — not a guess or a false "no issues".
+        var applied = QeLocalDfmMapper.TryApply(selectedPart, result);
+        if (!applied)
         {
-            selectedPart.VolumeCc = (decimal)(result.Metrics.VolumeMm3.Value / 1000d);
+            // Full process DFM may not apply yet (e.g. process not chosen); keep the basic metrics.
+            if (result.Metrics?.VolumeMm3 is > 0)
+            {
+                selectedPart.VolumeCc = (decimal)(result.Metrics.VolumeMm3.Value / 1000d);
+            }
+
+            if (result.Metrics?.BoundingBoxMm is not null)
+            {
+                selectedPart.BoundingBox = result.Metrics.BoundingBoxMm;
+            }
         }
 
-        if (result.Metrics?.BoundingBoxMm is not null)
-        {
-            selectedPart.BoundingBox = result.Metrics.BoundingBoxMm;
-        }
-
+        await SubmitLocalDfmToAgentAsync(selectedPart, result);
         await InvokeAsync(StateHasChanged);
-        return true;
+        return applied;
+    }
+
+    private async Task SubmitLocalDfmToAgentAsync(QuotePartViewModel part, LocalGeometryRuntimeResult result)
+    {
+        if (string.IsNullOrWhiteSpace(part.StoragePath))
+        {
+            return;
+        }
+
+        var isManifold = result.Metrics?.IsManifold ?? part.IsManifold;
+        try
+        {
+            await Api.SubmitAgentLocalDfmAsync(SessionId, new QuoteAgentLocalDfmRequest
+            {
+                StoragePath = part.StoragePath!,
+                UploadId = part.UploadId,
+                ProcessCode = result.ProcessCode ?? part.ProcessId,
+                IsManifold = isManifold,
+                NonManifoldReason = isManifold ? null : part.NonManifoldReason,
+                FdmReport = part.FdmDfmReport,
+                SlaReport = part.SlaDfmReport,
+                CncReport = part.CncDfmReport,
+                OverlayGlbUrls = part.OverlayGlbUrls?.ToList() ?? []
+            });
+        }
+        catch (Exception ex) when (ex is HttpRequestException or QuoteEngineApiException or InvalidOperationException)
+        {
+            // Non-blocking: the workbench still shows local DFM even if the agent sync fails this turn.
+        }
     }
 
     public async Task NotifyUploadStartedAsync(QuotePartViewModel part)
@@ -4646,328 +4801,6 @@
         return role.Equals("user", StringComparison.OrdinalIgnoreCase)
             ? Text("You", "คุณ")
             : "Mali";
-    }
-
-    private string ThinkingSummary(IReadOnlyCollection<QuoteAgentThinkingStepDto> steps)
-    {
-        var totalDuration = steps.Sum(step => step.DurationMs.GetValueOrDefault());
-        if (totalDuration > 0)
-        {
-            return Text($"{steps.Count} steps · {FormatDuration(totalDuration)}", $"{steps.Count} ขั้นตอน · {FormatDuration(totalDuration)}");
-        }
-
-        return Text($"{steps.Count} steps", $"{steps.Count} ขั้นตอน");
-    }
-
-    private string ThinkingStepCountLabel(IReadOnlyCollection<QuoteAgentThinkingStepDto> steps)
-    {
-        return Text($"{steps.Count} steps", $"{steps.Count} ขั้นตอน");
-    }
-
-    private string ThinkingDurationLabel(IReadOnlyCollection<QuoteAgentThinkingStepDto> steps)
-    {
-        var totalDuration = steps.Sum(step => step.DurationMs.GetValueOrDefault());
-        return totalDuration > 0 ? FormatDuration(totalDuration) : string.Empty;
-    }
-
-    private sealed class ThoughtStepBundle
-    {
-        public required QuoteAgentThinkingStepDto Request { get; init; }
-        public QuoteAgentThinkingStepDto? Response { get; init; }
-        public int DisplayIndex { get; init; }
-        public long? TotalDurationMs { get; init; }
-        public bool IsToolPair => Response is not null;
-    }
-
-    private static IReadOnlyList<ThoughtStepBundle> BuildBundledThoughtSteps(IReadOnlyList<QuoteAgentThinkingStepDto> orderedSteps)
-    {
-        if (orderedSteps.Count == 0)
-            return [];
-
-        var bundles = new List<ThoughtStepBundle>();
-
-        var index = 1;
-        for (var i = 0; i < orderedSteps.Count; i++)
-        {
-            var current = orderedSteps[i];
-            if (!LooksLikeToolRequestStep(current))
-            {
-                bundles.Add(BuildThoughtStepBundle(current, null, index));
-                index++;
-                continue;
-            }
-
-            var nextToolResultIndex = FindNextToolResultStepIndex(orderedSteps, i + 1, current);
-            if (nextToolResultIndex >= 0)
-            {
-                for (var skipped = i + 1; skipped < nextToolResultIndex; skipped++)
-                {
-                    bundles.Add(BuildThoughtStepBundle(orderedSteps[skipped], null, index));
-                    index++;
-                }
-
-                var result = orderedSteps[nextToolResultIndex];
-                bundles.Add(BuildThoughtStepBundle(current, result, index));
-                i = nextToolResultIndex;
-                index++;
-                continue;
-            }
-
-            bundles.Add(BuildThoughtStepBundle(current, null, index));
-            index++;
-        }
-
-        return bundles;
-    }
-
-    private static int FindNextToolResultStepIndex(
-        IReadOnlyList<QuoteAgentThinkingStepDto> orderedSteps,
-        int startIndex,
-        QuoteAgentThinkingStepDto request)
-    {
-        const int maxLookahead = 8;
-        for (var i = startIndex; i < orderedSteps.Count; i++)
-        {
-            if (i - startIndex >= maxLookahead)
-            {
-                return -1;
-            }
-
-            var candidate = orderedSteps[i];
-
-            if (LooksLikeToolRequestStep(candidate))
-            {
-                return -1;
-            }
-
-            if (!LooksLikeToolResultStep(candidate))
-            {
-                continue;
-            }
-
-            if (LooksLikeToolPair(request, candidate))
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    private static ThoughtStepBundle BuildThoughtStepBundle(
-        QuoteAgentThinkingStepDto request,
-        QuoteAgentThinkingStepDto? response,
-        int displayIndex)
-    {
-        return new ThoughtStepBundle
-        {
-            Request = request,
-            Response = response,
-            DisplayIndex = displayIndex,
-            TotalDurationMs = request.DurationMs.GetValueOrDefault() + (response?.DurationMs.GetValueOrDefault() ?? 0L)
-        };
-    }
-
-    private static string? ThinkingStepDisplayTitle(ThoughtStepBundle bundle)
-    {
-        var requestTitle = ThinkingStepTitle(bundle.Request);
-        if (!string.IsNullOrWhiteSpace(requestTitle))
-        {
-            if (bundle.Response is not null &&
-                LooksLikeToolRequestStep(bundle.Request) &&
-                LooksLikeToolResultStep(bundle.Response))
-            {
-                return requestTitle;
-            }
-
-            if (bundle.Response is null)
-                return requestTitle;
-
-            var responseTitle = ThinkingStepTitle(bundle.Response);
-            if (string.Equals(
-                    NormalizeThoughtStepType(bundle.Response.Type),
-                    NormalizeThoughtStepType(bundle.Request.Type),
-                    StringComparison.OrdinalIgnoreCase))
-            {
-                return string.Equals(responseTitle, requestTitle, StringComparison.OrdinalIgnoreCase)
-                    ? requestTitle
-                    : responseTitle;
-            }
-        }
-
-        return ThinkingStepTitle(bundle.Request);
-    }
-
-    private IEnumerable<string> ThinkingStepDisplayCompacts(ThoughtStepBundle bundle)
-    {
-        var requestCompact = ThinkingStepCompact(bundle.Request);
-        var responseCompact = bundle.Response is null ? null : ThinkingStepCompact(bundle.Response);
-
-        var normalizedRequest = NormalizeCompactTextForDisplayDedupe(requestCompact);
-        var normalizedResponse = NormalizeCompactTextForDisplayDedupe(responseCompact);
-
-        if (!string.IsNullOrWhiteSpace(requestCompact)
-            && !string.IsNullOrWhiteSpace(responseCompact)
-            && string.Equals(normalizedRequest, normalizedResponse, StringComparison.OrdinalIgnoreCase))
-        {
-            yield return $"{Text("Tool call", "คำสั่ง")}: {requestCompact}";
-            yield break;
-        }
-
-        if (!string.IsNullOrWhiteSpace(requestCompact))
-            yield return $"{Text("Tool call", "คำสั่ง")}: {requestCompact}";
-
-        if (string.IsNullOrWhiteSpace(responseCompact))
-            yield break;
-
-        yield return $"{Text("Result", "ผลลัพธ์")}: {responseCompact}";
-    }
-
-    private static string? NormalizeCompactTextForDisplayDedupe(string? text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-            return null;
-
-        return Regex.Replace(text.Trim(), "\\s+", " ");
-    }
-
-    private static bool LooksLikeToolRequestStep(QuoteAgentThinkingStepDto step)
-    {
-        return (step.Detail?.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase) == true) ||
-               (NormalizeThoughtStepType(step.Type).Contains("tool", StringComparison.OrdinalIgnoreCase)) ||
-               (NormalizeThoughtStepType(step.Title).Contains("tool", StringComparison.OrdinalIgnoreCase)) ||
-               (step.Summary?.Contains("tool", StringComparison.OrdinalIgnoreCase) == true) ||
-               ((step.Type?.Contains("quote_", StringComparison.OrdinalIgnoreCase) == true) &&
-                !LooksLikeToolResultStep(step));
-    }
-
-    private static bool LooksLikeToolResultStep(QuoteAgentThinkingStepDto step)
-    {
-        return (step.Detail is null || !step.Detail.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase)) &&
-               (step.Title?.StartsWith("Got Result From ", StringComparison.OrdinalIgnoreCase) == true ||
-                step.Detail?.Contains("Result", StringComparison.OrdinalIgnoreCase) == true ||
-                step.Title?.Contains("result", StringComparison.OrdinalIgnoreCase) == true ||
-                step.Type?.Contains("result", StringComparison.OrdinalIgnoreCase) == true ||
-                step.Summary?.Contains("result", StringComparison.OrdinalIgnoreCase) == true);
-    }
-
-    private static bool LooksLikeToolPair(QuoteAgentThinkingStepDto request, QuoteAgentThinkingStepDto response)
-    {
-        var requestType = NormalizeToolPairingKey(request.Type);
-        var responseType = NormalizeToolPairingKey(response.Type);
-        if (!string.IsNullOrWhiteSpace(requestType) && !string.IsNullOrWhiteSpace(responseType) &&
-            ToolPairSignaturesMatch(requestType, responseType))
-        {
-            return true;
-        }
-
-        var requestTitle = NormalizeToolPairingKey(request.Title);
-        var responseTitle = NormalizeToolPairingKey(response.Title);
-        if (!string.IsNullOrWhiteSpace(requestTitle) &&
-            !string.IsNullOrWhiteSpace(responseTitle) &&
-            ToolPairSignaturesMatch(requestTitle, responseTitle))
-        {
-            return true;
-        }
-
-        var gotResultFromTool = NormalizeToolPairingKey(GetGotResultFromTool(response.Title));
-        return !string.IsNullOrWhiteSpace(requestTitle) &&
-            !string.IsNullOrWhiteSpace(gotResultFromTool) &&
-            ToolPairSignaturesMatch(requestTitle, gotResultFromTool);
-    }
-
-    private static string NormalizeToolPairingKey(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-            return string.Empty;
-
-        var normalized = raw.ToLowerInvariant();
-        normalized = normalized.Replace("Got Result From ", string.Empty, StringComparison.OrdinalIgnoreCase);
-        normalized = normalized.Replace("quote_", " ", StringComparison.OrdinalIgnoreCase);
-        normalized = Regex.Replace(normalized, @"\bquote\b", " ", RegexOptions.IgnoreCase);
-        normalized = Regex.Replace(normalized, @"\btool\b", " ", RegexOptions.IgnoreCase);
-        normalized = normalized.Replace("tool_call", " ");
-        normalized = normalized.Replace("toolresult", " ");
-        normalized = normalized.Replace("tool_result", " ");
-        normalized = normalized.Replace("call", " ");
-        normalized = normalized.Replace("result", " ");
-        normalized = normalized.Replace("got", " ");
-        normalized = normalized.Replace("_", " ");
-        normalized = normalized.Replace("-", " ");
-        normalized = Regex.Replace(normalized, "[^a-z0-9]+", " ", RegexOptions.IgnoreCase);
-
-        var tokens = normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Where(token => token is not ("from" or "the" or "with" or "for" or "to" or "and" or "of" or "a" or "an" or "at"));
-
-        return string.Join(" ", tokens);
-    }
-
-    private static bool ToolPairSignaturesMatch(string requestSignature, string responseSignature)
-    {
-        if (string.IsNullOrWhiteSpace(requestSignature) || string.IsNullOrWhiteSpace(responseSignature))
-            return false;
-
-        if (string.Equals(requestSignature, responseSignature, StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (requestSignature.Contains(responseSignature, StringComparison.OrdinalIgnoreCase) ||
-            responseSignature.Contains(requestSignature, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        var requestTokens = requestSignature
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Where(token => token.Length >= 2)
-            .ToArray();
-        if (requestTokens.Length == 0)
-            return false;
-
-        if (requestTokens.Length == 1)
-            return requestSignature.Equals(responseSignature, StringComparison.OrdinalIgnoreCase);
-
-        var responseTokens = new HashSet<string>(responseSignature
-            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Where(token => token.Length >= 2),
-            StringComparer.OrdinalIgnoreCase);
-        if (responseTokens.Count == 0)
-            return false;
-
-        var overlap = requestTokens.Count(responseTokens.Contains);
-        return overlap >= Math.Min(2, requestTokens.Length);
-    }
-
-    private static string GetGotResultFromTool(string? resultTitle)
-    {
-        if (string.IsNullOrWhiteSpace(resultTitle))
-            return string.Empty;
-
-        var separator = "Got Result From ";
-        var gotResultFromIndex = resultTitle.IndexOf(separator, StringComparison.OrdinalIgnoreCase);
-        if (gotResultFromIndex < 0)
-            return string.Empty;
-
-        return resultTitle[(gotResultFromIndex + separator.Length)..].Trim();
-    }
-
-    private static string NormalizeThoughtStepType(string? raw)
-    {
-        var normalized = (raw ?? string.Empty).Trim().ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(normalized))
-            return string.Empty;
-
-        normalized = normalized.Replace("-", "_", StringComparison.OrdinalIgnoreCase);
-        if (normalized.StartsWith("quote_", StringComparison.OrdinalIgnoreCase))
-            normalized = normalized["quote_".Length..];
-
-        normalized = normalized
-            .Replace("tool_call", "")
-            .Replace("toolresult", "")
-            .Replace("tool_result", "")
-            .Replace("_call", "")
-            .Replace("_result", "");
-
-        return Regex.Replace(normalized, "_{2,}", "_").Trim('_');
     }
 
     private static string ThinkingStepTitle(QuoteAgentThinkingStepDto step)
@@ -5504,8 +5337,11 @@
         _draftMessage = prompt;
     }
 
-    private Task SubmitQuestionOptionAsync(string option)
+    private Task SubmitQuestionOptionAsync(string option, AgentMessageRow message)
     {
+        // Record the chosen answer on the asking turn so the inline question card shows it as resolved,
+        // then submit the option as the customer's next message so both question and answer stay in chat.
+        message.CustomerQuestionAnswer = option;
         _draftMessage = option;
         return HandleSubmitAsync();
     }
@@ -6373,7 +6209,40 @@
 
         public bool IsThinking { get; set; }
 
-        public string ModelThoughtContent { get; set; } = string.Empty;
+        public DateTimeOffset? ThinkingStartedAt { get; set; }
+
+        public int ThinkingDurationSeconds { get; set; }
+
+        public List<ReasoningEntry> ReasoningEntries { get; } = [];
+
+        public bool HasReasoning => ReasoningEntries.Count > 0;
+
+        public void AppendReasoningThought(string? text)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            if (ReasoningEntries.Count > 0 && !ReasoningEntries[^1].IsTool)
+            {
+                ReasoningEntries[^1].Text += text;
+            }
+            else
+            {
+                ReasoningEntries.Add(new ReasoningEntry { Text = text });
+            }
+        }
+
+        public void AddReasoningTool(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            ReasoningEntries.Add(new ReasoningEntry { IsTool = true, Text = text.Trim() });
+        }
 
         public IReadOnlyList<ComposerAttachmentPreview> Attachments { get; } = attachments ?? [];
 
@@ -6385,9 +6254,20 @@
 
         public InlineViewerInfo? InlineViewer { get; set; }
 
+        public QuoteAgentCustomerQuestionDto? CustomerQuestion { get; set; }
+
+        public string? CustomerQuestionAnswer { get; set; }
+
         public DateTimeOffset CreatedAt { get; } = createdAt ?? DateTimeOffset.Now;
 
         public bool HasExternalAttachments => Attachments.Count > 0 || !string.IsNullOrWhiteSpace(SketchPreviewDataUrl);
+    }
+
+    private sealed class ReasoningEntry
+    {
+        public bool IsTool { get; init; }
+
+        public string Text { get; set; } = string.Empty;
     }
 
     private sealed class InlineViewerInfo
