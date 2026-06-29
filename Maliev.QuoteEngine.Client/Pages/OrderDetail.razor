@@ -183,17 +183,44 @@ else
                     }
                 </div>
                 <div class="order-shipping-quote">
+                    <div class="order-courier-picker" role="radiogroup" aria-label="@Text("Preferred courier", "ขนส่งที่ต้องการ")">
+                        <button type="button"
+                                class="order-courier-card @(string.IsNullOrWhiteSpace(_selectedCourierCode) ? "is-selected" : "")"
+                                role="radio"
+                                aria-checked="@string.IsNullOrWhiteSpace(_selectedCourierCode)"
+                                @onclick="@(() => SelectPreferredCourier(null))">
+                            <span class="order-courier-radio" aria-hidden="true"></span>
+                            <span class="order-courier-copy">
+                                <strong>@Text("Any available courier", "ขนส่งที่พร้อมให้บริการ")</strong>
+                                <small>@Text("Compare all live rates", "เปรียบเทียบราคาทั้งหมด")</small>
+                            </span>
+                        </button>
+                        @foreach (var courier in _couriers)
+                        {
+                            var isPreferred = string.Equals(_selectedCourierCode, courier.CourierCode, StringComparison.OrdinalIgnoreCase);
+                            <button type="button"
+                                    class="order-courier-card @(isPreferred ? "is-selected" : "")"
+                                    role="radio"
+                                    aria-checked="@isPreferred"
+                                    @onclick="@(() => SelectPreferredCourier(courier.CourierCode))">
+                                <span class="order-courier-radio" aria-hidden="true"></span>
+                                <span class="order-courier-copy">
+                                    <strong>@(string.IsNullOrWhiteSpace(courier.CourierName) ? courier.CourierCode : courier.CourierName)</strong>
+                                    <small>
+                                        @if (!string.IsNullOrWhiteSpace(courier.Provider))
+                                        {
+                                            <span>@courier.Provider</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(courier.Note))
+                                        {
+                                            <span>@courier.Note</span>
+                                        }
+                                    </small>
+                                </span>
+                            </button>
+                        }
+                    </div>
                     <div class="order-shipping-form">
-                        <label>
-                            <span>@Text("Courier", "ขนส่ง")</span>
-                            <select @bind="_selectedCourierCode">
-                                <option value="">@Text("Any available courier", "ขนส่งที่พร้อมให้บริการ")</option>
-                                @foreach (var courier in _couriers)
-                                {
-                                    <option value="@courier.CourierCode">@CourierLabel(courier)</option>
-                                }
-                            </select>
-                        </label>
                         <label>
                             <span>@Text("Weight (g)", "น้ำหนัก (กรัม)")</span>
                             <input type="number" min="1" step="1" @bind="_shippingWeightGrams" @bind:event="oninput" />
@@ -220,22 +247,36 @@ else
                     }
                     @if (_shippingRates.Count > 0)
                     {
-                        <div class="order-shipping-rates">
+                        <div class="order-shipping-rates" role="listbox" aria-label="@Text("Available courier rates", "ราคาขนส่งที่เลือกได้")">
                             @foreach (var rate in _shippingRates)
                             {
+                                var isSelected = ReferenceEquals(rate, _selectedShippingRate);
                                 <button type="button"
-                                        class="order-shipping-rate @(ReferenceEquals(rate, _selectedShippingRate) ? "is-selected" : "")"
+                                        class="order-shipping-rate @(isSelected ? "is-selected" : "")"
+                                        aria-pressed="@isSelected"
                                         @onclick="@(() => SelectShippingRate(rate))">
-                                    <span>@rate.ProductName</span>
-                                    @if (!string.IsNullOrWhiteSpace(rate.Provider))
-                                    {
-                                        <small>@Text("Via", "ผ่าน") @rate.Provider</small>
-                                    }
-                                    <strong>@FormatMoney(rate.TotalPrice, rate.CurrencyCode)</strong>
-                                    @if (!string.IsNullOrWhiteSpace(rate.EstimatedDeliveryDate))
-                                    {
-                                        <small>@Text("ETA", "ถึงประมาณ") @rate.EstimatedDeliveryDate</small>
-                                    }
+                                    <span class="order-rate-radio" aria-hidden="true"></span>
+                                    <span class="order-rate-main">
+                                        <span>@rate.ProductName</span>
+                                        <small>
+                                            @if (!string.IsNullOrWhiteSpace(rate.Provider))
+                                            {
+                                                <span>@rate.Provider</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(rate.CourierCode))
+                                            {
+                                                <span>@rate.CourierCode</span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(rate.ServiceLevel))
+                                            {
+                                                <span>@rate.ServiceLevel</span>
+                                            }
+                                        </small>
+                                    </span>
+                                    <span class="order-rate-price">
+                                        <strong>@FormatMoney(rate.TotalPrice, rate.CurrencyCode)</strong>
+                                        <small>@(string.IsNullOrWhiteSpace(rate.EstimatedDeliveryDate) ? Text("ETA pending", "รอเวลาจัดส่ง") : $"{Text("ETA", "ถึงประมาณ")} {rate.EstimatedDeliveryDate}")</small>
+                                    </span>
                                 </button>
                             }
                         </div>
@@ -1035,6 +1076,20 @@ else
                    string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase))
                ?? _addresses.FirstOrDefault(address =>
                    string.Equals(address.Type, addressType, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void SelectPreferredCourier(string? courierCode)
+    {
+        var normalized = string.IsNullOrWhiteSpace(courierCode) ? null : courierCode.Trim();
+        if (string.Equals(_selectedCourierCode, normalized, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _selectedCourierCode = normalized;
+        _selectedShippingRate = null;
+        _shippingRates = [];
+        _shippingError = null;
     }
 
     private string CourierLabel(ShippingCourierDto courier)
