@@ -216,6 +216,9 @@ public sealed class QuotePartViewModel
         Quantity = Quantity,
         VolumeCc = Math.Max(VolumeCc, 1m),
         SurfaceAreaCm2 = SurfaceAreaCm2,
+        BoundingBoxMm = BoundingBox is null
+            ? null
+            : new QuotePartBoundingBoxDto(BoundingBox.X, BoundingBox.Y, BoundingBox.Z),
         StoragePath = StoragePath,
         Status = Status,
         ViewerGlbUrl = GlbUrl,

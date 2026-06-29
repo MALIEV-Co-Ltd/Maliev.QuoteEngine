@@ -163,6 +163,14 @@ public static class QeLocalDfmMapper
             part.SurfaceAreaCm2 = (decimal)surfaceAreaMm2 / 100m;
         }
 
+        if (metrics.BoundingBoxMm is not null &&
+            IsPositiveFinite(metrics.BoundingBoxMm.X) &&
+            IsPositiveFinite(metrics.BoundingBoxMm.Y) &&
+            IsPositiveFinite(metrics.BoundingBoxMm.Z))
+        {
+            part.BoundingBox = metrics.BoundingBoxMm;
+        }
+
         if (metrics.IsManifold.HasValue)
         {
             part.IsManifold = metrics.IsManifold.Value;
@@ -189,6 +197,8 @@ public static class QeLocalDfmMapper
         number = value.GetValueOrDefault();
         return value.HasValue && double.IsFinite(number) && number >= 0;
     }
+
+    private static bool IsPositiveFinite(decimal value) => value > 0;
 
     /// <summary>
     /// Returns true when a browser runtime process code matches the part's selected process.

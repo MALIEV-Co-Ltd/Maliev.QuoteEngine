@@ -400,9 +400,9 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             customNotes = part.PartNotes,
             volumeCm3 = part.VolumeCc,
             surfaceAreaCm2 = part.SurfaceAreaCm2,
-            boundingBoxX = (decimal?)null,
-            boundingBoxY = (decimal?)null,
-            boundingBoxZ = (decimal?)null,
+            boundingBoxX = part.BoundingBoxMm?.X,
+            boundingBoxY = part.BoundingBoxMm?.Y,
+            boundingBoxZ = part.BoundingBoxMm?.Z,
             isManifold = part.IsManifold
         };
     }
@@ -562,6 +562,7 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             Quantity = Math.Max(1, part.Quantity),
             VolumeCc = Math.Max(0.01m, part.VolumeCm3 ?? 0.01m),
             SurfaceAreaCm2 = Math.Max(0m, part.SurfaceAreaCm2 ?? 0m),
+            BoundingBoxMm = TryCreateBoundingBox(part.BoundingBoxX, part.BoundingBoxY, part.BoundingBoxZ),
             StoragePath = part.FileReference,
             Status = part.Status,
             ViewerStoragePath = part.GlbStoragePath,
@@ -582,6 +583,13 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             attachment.ContentType ?? "application/octet-stream",
             attachment.SizeBytes ?? 0,
             "Drawing");
+
+    private static QuotePartBoundingBoxDto? TryCreateBoundingBox(decimal? x, decimal? y, decimal? z)
+    {
+        return x is > 0 && y is > 0 && z is > 0
+            ? new QuotePartBoundingBoxDto(x.Value, y.Value, z.Value)
+            : null;
+    }
 
     private static bool IsArchivedStatus(ProjectServiceProjectResponse project) =>
         project.IsArchived ||
@@ -637,6 +645,9 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
         public string? CustomNotes { get; set; }
         public decimal? VolumeCm3 { get; set; }
         public decimal? SurfaceAreaCm2 { get; set; }
+        public decimal? BoundingBoxX { get; set; }
+        public decimal? BoundingBoxY { get; set; }
+        public decimal? BoundingBoxZ { get; set; }
         public bool? IsManifold { get; set; }
         public string Status { get; set; } = string.Empty;
         public List<ProjectServiceAttachmentResponse> DrawingFiles { get; set; } = [];

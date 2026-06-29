@@ -111,6 +111,84 @@ public sealed class OrderServiceClientContractTests
     }
 
     [Fact]
+    public async Task GetDetailAsync_MapsProductionItemsToCustomerShippingParts()
+    {
+        var partId = Guid.NewGuid();
+        var materialId = Guid.NewGuid();
+        var orderItemId = Guid.NewGuid();
+        var configurationSnapshotJson = JsonSerializer.Serialize(new
+        {
+            partId,
+            fileName = "bracket.stl",
+            processId = "fdm",
+            materialId = "pla-black",
+            quantity = 20,
+            volumeCc = 12.5m,
+            boundingBoxMm = new
+            {
+                x = 80m,
+                y = 120m,
+                z = 40m
+            }
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        var materialSnapshotJson = JsonSerializer.Serialize(new
+        {
+            sourceMaterialId = "pla-black",
+            resolvedMaterialId = materialId
+        }, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        using var handler = new RouteHandler(
+            ("GET", "/order/v1/orders/ORD-2026-00045", JsonContent.Create(new
+            {
+                orderId = "ORD-2026-00045",
+                currentStatus = "Paid",
+                paymentStatus = "Paid",
+                quotedAmount = 1250.00m,
+                quoteCurrency = "THB",
+                customerPoNumber = "PO-45",
+                requirements = "Package-aware shipping order.",
+                createdAt = DateTime.UtcNow.AddDays(-1),
+                updatedAt = DateTime.UtcNow,
+                promisedDeliveryDate = (DateTime?)null,
+                actualDeliveryDate = (DateTime?)null
+            })),
+            ("GET", "/order/v1/orders/ORD-2026-00045/statuses", JsonContent.Create(Array.Empty<object>())),
+            ("GET", "/order/v1/orders/ORD-2026-00045/items", JsonContent.Create(new[]
+            {
+                new
+                {
+                    orderItemId,
+                    sourceProjectPartId = partId,
+                    materialId,
+                    materialSnapshotJson,
+                    configurationSnapshotJson,
+                    technology = "FDM",
+                    volumeCm3 = 12.5m,
+                    quantity = 20
+                }
+            })));
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var result = await client.GetDetailAsync("ORD-2026-00045");
+
+        Assert.NotNull(result);
+        var shippingPart = Assert.Single(result.ShippingParts);
+        Assert.Equal(partId, shippingPart.PartId);
+        Assert.Equal("bracket.stl", shippingPart.FileName);
+        Assert.Equal("fdm", shippingPart.ProcessId);
+        Assert.Equal("pla-black", shippingPart.MaterialId);
+        Assert.Equal(20, shippingPart.Quantity);
+        Assert.Equal(12.5m, shippingPart.VolumeCc);
+        Assert.Equal(15.5m, shippingPart.WeightGrams);
+        Assert.Equal(8m, shippingPart.WidthCm);
+        Assert.Equal(12m, shippingPart.LengthCm);
+        Assert.Equal(4m, shippingPart.HeightCm);
+    }
+
+    [Fact]
     public async Task GetDetailAsync_FinishedOrderMarksManufacturingCompleteAndQualityCurrent()
     {
         using var handler = new RouteHandler(

@@ -154,6 +154,8 @@ public sealed record QuoteUploadHandoffResponse(string QuoteSessionId, IReadOnly
 
 public sealed record DfmFindingDto(string Severity, string Code, string Message);
 
+public sealed record QuotePartBoundingBoxDto(decimal X, decimal Y, decimal Z);
+
 public sealed record QuotePartAttachmentDto(
     string FileName,
     string StoragePath,
@@ -295,6 +297,8 @@ public sealed class QuotePartDraftDto
 
     [Range(0, 1_000_000)]
     public decimal SurfaceAreaCm2 { get; set; }
+
+    public QuotePartBoundingBoxDto? BoundingBoxMm { get; set; }
 
     public string? StoragePath { get; set; }
 

@@ -1362,6 +1362,9 @@
             Quantity = part.Quantity,
             VolumeCc = part.VolumeCc,
             SurfaceAreaCm2 = part.SurfaceAreaCm2,
+            BoundingBox = part.BoundingBoxMm is null
+                ? null
+                : new QuoteBoundingBoxDto(part.BoundingBoxMm.X, part.BoundingBoxMm.Y, part.BoundingBoxMm.Z),
             StoragePath = part.StoragePath,
             GlbUrl = part.ViewerGlbUrl,
             ViewerStoragePath = part.ViewerStoragePath,

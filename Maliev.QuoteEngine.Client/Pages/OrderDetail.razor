@@ -495,6 +495,12 @@ else
         .OrderByDescending(file => file.UploadedAt)
         .ToArray() ?? [];
 
+    private IReadOnlyList<CustomerOrderShippingPartDto> ShippingParts => _order?.ShippingParts
+        .Where(IsValidShippingPart)
+        .ToArray() ?? [];
+
+    private bool HasAutomaticShippingParts => ShippingParts.Count > 0;
+
     private int OrderArtifactCount => OrderFiles.Count + OrderDocuments.Count;
 
     protected override async Task OnParametersSetAsync()
@@ -508,6 +514,7 @@ else
 
         if (_order is not null)
         {
+            ApplyAutomaticShippingDefaults();
             _profile = await Api.GetProfileAsync();
             _addresses = await Api.GetAddressesAsync();
             _documents = await Api.GetDocumentsAsync();
@@ -627,8 +634,24 @@ else
                 Width = _shippingWidthCm,
                 Height = _shippingHeightCm
             },
-            CourierCodes = string.IsNullOrWhiteSpace(_selectedCourierCode) ? [] : [_selectedCourierCode]
+            CourierCodes = string.IsNullOrWhiteSpace(_selectedCourierCode) ? [] : [_selectedCourierCode],
+            Parts = BuildShippingPackageParts()
         };
+    }
+
+    private List<ShippingPackagePartDto> BuildShippingPackageParts()
+    {
+        return ShippingParts
+            .Select(part => new ShippingPackagePartDto
+            {
+                Name = string.IsNullOrWhiteSpace(part.FileName) ? "MALIEV part" : part.FileName,
+                Quantity = Math.Max(1, part.Quantity),
+                Weight = Math.Max(1m, part.WeightGrams),
+                Width = part.WidthCm,
+                Length = part.LengthCm,
+                Height = part.HeightCm
+            })
+            .ToList();
     }
 
     private string? ValidateShippingRateInputs()
@@ -648,12 +671,36 @@ else
             return Text("Complete the shipping address and phone number before checking courier rates.", "กรอกที่อยู่จัดส่งและเบอร์โทรให้ครบก่อนตรวจสอบราคาขนส่ง");
         }
 
-        if (_shippingWeightGrams <= 0 || _shippingLengthCm <= 0 || _shippingWidthCm <= 0 || _shippingHeightCm <= 0)
+        if (!HasAutomaticShippingParts &&
+            (_shippingWeightGrams <= 0 || _shippingLengthCm <= 0 || _shippingWidthCm <= 0 || _shippingHeightCm <= 0))
         {
             return Text("Enter positive parcel weight and dimensions before checking courier rates.", "กรอกน้ำหนักและขนาดพัสดุให้มากกว่าศูนย์ก่อนตรวจสอบราคา");
         }
 
         return null;
+    }
+
+    private void ApplyAutomaticShippingDefaults()
+    {
+        var parts = ShippingParts;
+        if (parts.Count == 0)
+        {
+            return;
+        }
+
+        _shippingWeightGrams = Math.Max(1m, Math.Round(parts.Sum(part => Math.Max(1, part.Quantity) * Math.Max(1m, part.WeightGrams)) + 250m, 0));
+        _shippingLengthCm = Math.Max(1m, Math.Round(parts.Max(part => part.LengthCm) + 6m, 1));
+        _shippingWidthCm = Math.Max(1m, Math.Round(parts.Max(part => part.WidthCm) + 6m, 1));
+        _shippingHeightCm = Math.Max(1m, Math.Round(parts.Max(part => part.HeightCm) + 6m, 1));
+    }
+
+    private static bool IsValidShippingPart(CustomerOrderShippingPartDto part)
+    {
+        return part.Quantity > 0 &&
+            part.WeightGrams > 0 &&
+            part.WidthCm > 0 &&
+            part.LengthCm > 0 &&
+            part.HeightCm > 0;
     }
 
     private void SelectShippingRate(ShippingRateOptionDto rate)

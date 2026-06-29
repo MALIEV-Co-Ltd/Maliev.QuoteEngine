@@ -384,6 +384,7 @@ internal sealed class QuoteAgentSessionStore
             Quantity = source.Quantity,
             VolumeCc = source.VolumeCc,
             SurfaceAreaCm2 = source.SurfaceAreaCm2,
+            BoundingBoxMm = source.BoundingBoxMm,
             StoragePath = source.StoragePath,
             Status = source.Status,
             ViewerGlbUrl = source.ViewerGlbUrl,

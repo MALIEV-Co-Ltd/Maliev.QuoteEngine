@@ -151,6 +151,41 @@ public sealed partial record CustomerOrderDetailDto
 
     public IReadOnlyList<CustomerManufacturingMilestoneDto> ManufacturingMilestones { get; init; } = [];
     public IReadOnlyList<CustomerOrderFileDto> OrderFiles { get; init; } = [];
+    public IReadOnlyList<CustomerOrderShippingPartDto> ShippingParts { get; init; } = [];
+}
+
+/// <summary>A customer-visible order part used for automatic shipping package planning.</summary>
+public sealed class CustomerOrderShippingPartDto
+{
+    /// <summary>Gets or sets the source part identifier.</summary>
+    public Guid PartId { get; set; }
+
+    /// <summary>Gets or sets the customer-visible file or part name.</summary>
+    public string FileName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the manufacturing process code.</summary>
+    public string ProcessId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the selected material identifier or code.</summary>
+    public string MaterialId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the ordered quantity for this part.</summary>
+    public int Quantity { get; set; } = 1;
+
+    /// <summary>Gets or sets the per-unit part volume in cubic centimeters.</summary>
+    public decimal VolumeCc { get; set; }
+
+    /// <summary>Gets or sets the estimated per-unit shipping weight in grams.</summary>
+    public decimal WeightGrams { get; set; }
+
+    /// <summary>Gets or sets the bounding-box width in centimeters.</summary>
+    public decimal WidthCm { get; set; }
+
+    /// <summary>Gets or sets the bounding-box length in centimeters.</summary>
+    public decimal LengthCm { get; set; }
+
+    /// <summary>Gets or sets the bounding-box height in centimeters.</summary>
+    public decimal HeightCm { get; set; }
 }
 
 /// <summary>A customer-visible file attached to the manufacturing order record.</summary>

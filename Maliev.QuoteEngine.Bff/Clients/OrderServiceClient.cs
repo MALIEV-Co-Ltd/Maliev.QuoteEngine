@@ -2,8 +2,9 @@
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
-using Maliev.QuoteEngine.Shared.Account;
+using System.Text.Json;
 using System.Net;
+using Maliev.QuoteEngine.Shared.Account;
 
 namespace Maliev.QuoteEngine.Bff.Clients;
 
@@ -83,6 +84,18 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
         public string FileType { get; set; } = "application/octet-stream";
         public string ObjectPath { get; set; } = string.Empty;
         public DateTime UploadedAt { get; set; }
+    }
+
+    private sealed class OsOrderLineItemResponse
+    {
+        public Guid OrderItemId { get; set; }
+        public Guid? SourceProjectPartId { get; set; }
+        public Guid MaterialId { get; set; }
+        public string MaterialSnapshotJson { get; set; } = string.Empty;
+        public string ConfigurationSnapshotJson { get; set; } = string.Empty;
+        public string Technology { get; set; } = string.Empty;
+        public decimal VolumeCm3 { get; set; }
+        public int Quantity { get; set; } = 1;
     }
 
     private static CustomerOrderSummaryDto MapSummary(OsOrderResponse r) => new(
@@ -168,16 +181,18 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
     {
         try
         {
-            // Fetch order detail, status history, and order files in parallel.
+            // Fetch order detail, status history, files, and production items in parallel.
             var detailTask = http.GetAsync($"/order/v1/orders/{Uri.EscapeDataString(orderNumber)}", ct);
             var statusTask = http.GetAsync($"/order/v1/orders/{Uri.EscapeDataString(orderNumber)}/statuses", ct);
             var filesTask = http.GetAsync($"/order/v1/orders/{Uri.EscapeDataString(orderNumber)}/files", ct);
+            var itemsTask = http.GetAsync($"/order/v1/orders/{Uri.EscapeDataString(orderNumber)}/items", ct);
 
-            await Task.WhenAll(detailTask, statusTask, filesTask);
+            await Task.WhenAll(detailTask, statusTask, filesTask, itemsTask);
 
             using var detailResponse = detailTask.Result;
             using var statusResponse = statusTask.Result;
             using var filesResponse = filesTask.Result;
+            using var itemsResponse = itemsTask.Result;
 
             if (detailResponse.StatusCode == HttpStatusCode.NotFound) return null;
             if (!detailResponse.IsSuccessStatusCode)
@@ -216,6 +231,17 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 logger.LogWarning("OrderService GetFiles returned {Status} for {OrderNumber}.", filesResponse.StatusCode, orderNumber);
             }
 
+            var shippingParts = Array.Empty<CustomerOrderShippingPartDto>();
+            if (itemsResponse.IsSuccessStatusCode)
+            {
+                var items = await itemsResponse.Content.ReadFromJsonAsync<List<OsOrderLineItemResponse>>(cancellationToken: ct);
+                shippingParts = BuildShippingParts(items ?? []);
+            }
+            else if (itemsResponse.StatusCode != HttpStatusCode.NotFound)
+            {
+                logger.LogWarning("OrderService GetItems returned {Status} for {OrderNumber}.", itemsResponse.StatusCode, orderNumber);
+            }
+
             return new CustomerOrderDetailDto(
                 OrderId: DeterministicGuid(detail.OrderId),
                 OrderNumber: detail.OrderId,
@@ -240,6 +266,7 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 QuoteVersionId = detail.QuoteVersionId,
                 QuoteVersionNumber = detail.QuoteVersionNumber,
                 OrderFiles = orderFiles,
+                ShippingParts = shippingParts,
                 ManufacturingMilestones = BuildCustomerManufacturingMilestones(
                     detail.CurrentStatus ?? "Pending",
                     detail.PaymentStatus,
@@ -269,6 +296,225 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
         file.FileType,
         file.FileSize,
         new DateTimeOffset(file.UploadedAt, TimeSpan.Zero));
+
+    private static CustomerOrderShippingPartDto[] BuildShippingParts(IReadOnlyList<OsOrderLineItemResponse> items)
+    {
+        return items
+            .Select(MapShippingPart)
+            .Where(part => part is not null)
+            .Select(part => part!)
+            .ToArray();
+    }
+
+    private static CustomerOrderShippingPartDto? MapShippingPart(OsOrderLineItemResponse item)
+    {
+        using var configuration = TryParseJson(item.ConfigurationSnapshotJson);
+        if (configuration is null || !TryReadBoundingBoxCm(configuration.RootElement, out var widthCm, out var lengthCm, out var heightCm))
+        {
+            return null;
+        }
+
+        using var material = TryParseJson(item.MaterialSnapshotJson);
+        var materialId = FirstNonEmpty(
+            TryReadString(configuration.RootElement, "materialId"),
+            material is null ? null : TryReadString(material.RootElement, "sourceMaterialId"),
+            item.MaterialId == Guid.Empty ? null : item.MaterialId.ToString("D"));
+        var processId = FirstNonEmpty(
+            TryReadString(configuration.RootElement, "processId"),
+            item.Technology);
+        var volumeCc = TryReadDecimal(configuration.RootElement, "volumeCc") ?? item.VolumeCm3;
+        var quantity = TryReadInt(configuration.RootElement, "quantity") ?? item.Quantity;
+
+        return new CustomerOrderShippingPartDto
+        {
+            PartId = TryReadGuid(configuration.RootElement, "partId") ?? item.SourceProjectPartId ?? item.OrderItemId,
+            FileName = FirstNonEmpty(TryReadString(configuration.RootElement, "fileName"), "Manufactured part"),
+            ProcessId = processId,
+            MaterialId = materialId,
+            Quantity = Math.Max(1, quantity),
+            VolumeCc = Math.Max(0m, volumeCc),
+            WeightGrams = EstimatePartWeightGrams(volumeCc, materialId, processId),
+            WidthCm = widthCm,
+            LengthCm = lengthCm,
+            HeightCm = heightCm
+        };
+    }
+
+    private static JsonDocument? TryParseJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonDocument.Parse(json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool TryReadBoundingBoxCm(JsonElement root, out decimal widthCm, out decimal lengthCm, out decimal heightCm)
+    {
+        widthCm = 0m;
+        lengthCm = 0m;
+        heightCm = 0m;
+
+        if (!TryGetProperty(root, "boundingBoxMm", out var box) || box.ValueKind != JsonValueKind.Object)
+        {
+            return false;
+        }
+
+        var xMm = TryReadDecimal(box, "x") ?? TryReadDecimal(box, "X");
+        var yMm = TryReadDecimal(box, "y") ?? TryReadDecimal(box, "Y");
+        var zMm = TryReadDecimal(box, "z") ?? TryReadDecimal(box, "Z");
+        if (xMm is not > 0 || yMm is not > 0 || zMm is not > 0)
+        {
+            return false;
+        }
+
+        widthCm = Math.Round(xMm.Value / 10m, 2);
+        lengthCm = Math.Round(yMm.Value / 10m, 2);
+        heightCm = Math.Round(zMm.Value / 10m, 2);
+        return true;
+    }
+
+    private static string FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
+
+    private static string? TryReadString(JsonElement root, string name)
+    {
+        return TryGetProperty(root, name, out var property) && property.ValueKind == JsonValueKind.String
+            ? property.GetString()
+            : null;
+    }
+
+    private static int? TryReadInt(JsonElement root, string name)
+    {
+        if (!TryGetProperty(root, name, out var property))
+        {
+            return null;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.Number when property.TryGetInt32(out var value) => value,
+            JsonValueKind.String when int.TryParse(property.GetString(), out var value) => value,
+            _ => null
+        };
+    }
+
+    private static Guid? TryReadGuid(JsonElement root, string name)
+    {
+        if (!TryGetProperty(root, name, out var property))
+        {
+            return null;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.String when Guid.TryParse(property.GetString(), out var value) => value,
+            _ => null
+        };
+    }
+
+    private static decimal? TryReadDecimal(JsonElement root, string name)
+    {
+        if (!TryGetProperty(root, name, out var property))
+        {
+            return null;
+        }
+
+        return property.ValueKind switch
+        {
+            JsonValueKind.Number when property.TryGetDecimal(out var value) => value,
+            JsonValueKind.String when decimal.TryParse(property.GetString(), out var value) => value,
+            _ => null
+        };
+    }
+
+    private static bool TryGetProperty(JsonElement root, string name, out JsonElement value)
+    {
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var property in root.EnumerateObject())
+            {
+                if (property.Name.Equals(name, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = property.Value;
+                    return true;
+                }
+            }
+        }
+
+        value = default;
+        return false;
+    }
+
+    private static decimal EstimatePartWeightGrams(decimal volumeCc, string? materialId, string? processId)
+    {
+        var density = ResolveDensityGramsPerCc(materialId, processId);
+        return Math.Max(1m, Math.Round(Math.Max(volumeCc, 0.1m) * density, 1));
+    }
+
+    private static decimal ResolveDensityGramsPerCc(string? materialId, string? processId)
+    {
+        var material = materialId ?? string.Empty;
+        if (material.Contains("al", StringComparison.OrdinalIgnoreCase) ||
+            material.Contains("aluminum", StringComparison.OrdinalIgnoreCase) ||
+            material.Contains("aluminium", StringComparison.OrdinalIgnoreCase))
+        {
+            return 2.70m;
+        }
+
+        if (material.Contains("steel", StringComparison.OrdinalIgnoreCase) ||
+            material.Contains("stainless", StringComparison.OrdinalIgnoreCase))
+        {
+            return 7.85m;
+        }
+
+        if (material.Contains("brass", StringComparison.OrdinalIgnoreCase))
+        {
+            return 8.50m;
+        }
+
+        if (material.Contains("copper", StringComparison.OrdinalIgnoreCase))
+        {
+            return 8.96m;
+        }
+
+        if (material.Contains("petg", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1.27m;
+        }
+
+        if (material.Contains("abs", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1.04m;
+        }
+
+        if (material.Contains("tpu", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1.20m;
+        }
+
+        if (material.Contains("nylon", StringComparison.OrdinalIgnoreCase) ||
+            material.Contains("pa12", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1.01m;
+        }
+
+        if (material.Contains("resin", StringComparison.OrdinalIgnoreCase) ||
+            (processId ?? string.Empty).Contains("sla", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1.12m;
+        }
+
+        return (processId ?? string.Empty).Contains("cnc", StringComparison.OrdinalIgnoreCase) ? 2.70m : 1.24m;
+    }
 
     public async Task<bool> AddStatusAsync(string orderId, string status, CancellationToken ct = default)
     {
