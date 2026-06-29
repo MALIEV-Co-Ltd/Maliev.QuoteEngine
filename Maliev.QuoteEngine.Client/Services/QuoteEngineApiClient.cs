@@ -407,6 +407,12 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public async Task<bool> DisconnectGoogleDriveAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync("quote/v1/connectors/google-drive/disconnect", content: null, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     public Task<QuoteAgentStateResponse> RegisterAgentAttachmentsAsync(
         Guid sessionId,
         QuoteAgentAttachmentRegisterRequest request,

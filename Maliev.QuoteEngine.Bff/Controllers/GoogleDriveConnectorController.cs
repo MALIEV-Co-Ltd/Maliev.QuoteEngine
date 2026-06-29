@@ -131,6 +131,23 @@ public sealed class GoogleDriveConnectorController(
     }
 
     /// <summary>
+    /// Disconnects Google Drive for the signed-in customer.
+    /// </summary>
+    [HttpPost("quote/v1/connectors/google-drive/disconnect")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public IActionResult Disconnect()
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        connectorStore.Remove(customerId);
+        return NoContent();
+    }
+
+    /// <summary>
     /// Lists Google Drive files available to attach to the current Make Studio message.
     /// </summary>
     [HttpGet("quote/v1/connectors/google-drive/files")]
@@ -295,12 +312,12 @@ public sealed class GoogleDriveConnectorController(
 
     private string? GoogleClientId()
     {
-        return configuration["GoogleDrive:ClientId"] ?? configuration["Authentication:Google:ClientId"];
+        return GoogleDriveOAuthConfiguration.ClientId(configuration);
     }
 
     private string? GoogleClientSecret()
     {
-        return configuration["GoogleDrive:ClientSecret"] ?? configuration["Authentication:Google:ClientSecret"];
+        return GoogleDriveOAuthConfiguration.ClientSecret(configuration);
     }
 
     private string ResolveRedirectUri()

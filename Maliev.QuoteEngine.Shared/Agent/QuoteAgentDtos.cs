@@ -727,6 +727,9 @@ public sealed class QuoteAgentConnectorDto
     /// <summary>Gets or sets whether this connector is currently connected for the customer.</summary>
     public bool IsConnected { get; set; }
 
+    /// <summary>Gets or sets whether Make Studio has the OAuth credentials needed to connect this integration.</summary>
+    public bool IsConfigured { get; set; } = true;
+
     /// <summary>Gets or sets supported file types or payload types.</summary>
     public List<string> SupportedFileTypes { get; set; } = [];
 

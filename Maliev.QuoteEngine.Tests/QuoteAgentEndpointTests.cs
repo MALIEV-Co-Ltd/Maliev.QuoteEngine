@@ -4275,6 +4275,78 @@ Customer message:
     }
 
     [Fact]
+    public async Task Google_drive_connector_registry_reports_not_configured_without_oauth_credentials()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-unconfigured@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var registry = await client.GetFromJsonAsync<QuoteAgentConnectorRegistryResponse>(
+            $"/quote/v1/agent/sessions/{sessionId:D}/connectors");
+
+        Assert.NotNull(registry);
+        var drive = Assert.Single(registry.Connectors, connector => connector.ConnectorId == "google-drive");
+        Assert.False(drive.IsConfigured);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_registry_reports_configured_with_oauth_credentials()
+    {
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-configured@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var registry = await client.GetFromJsonAsync<QuoteAgentConnectorRegistryResponse>(
+            $"/quote/v1/agent/sessions/{sessionId:D}/connectors");
+
+        Assert.NotNull(registry);
+        var drive = Assert.Single(registry.Connectors, connector => connector.ConnectorId == "google-drive");
+        Assert.True(drive.IsConfigured);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_disconnect_requires_customer_session()
+    {
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig();
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsync("/quote/v1/connectors/google-drive/disconnect", content: null);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_disconnect_clears_connection_for_signed_in_customer()
+    {
+        var google = new FakeGoogleTokenHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(google);
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            HandleCookies = true,
+            AllowAutoRedirect = false
+        });
+        var signIn = await client.GetAsync("/test/sign-in?email=drive-disconnect@example.com");
+        signIn.EnsureSuccessStatusCode();
+
+        var startResponse = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+        Assert.Equal(HttpStatusCode.Redirect, startResponse.StatusCode);
+        var state = QueryHelpers.ParseQuery(new Uri(startResponse.Headers.Location!.OriginalString).Query)["state"].ToString();
+
+        var callbackResponse = await client.GetAsync(
+            $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state)}");
+        Assert.Equal(HttpStatusCode.Redirect, callbackResponse.StatusCode);
+
+        var connectedStatus = await client.GetFromJsonAsync<JsonElement>("/quote/v1/connectors/google-drive/status");
+        Assert.True(connectedStatus.GetProperty("isConnected").GetBoolean());
+
+        var disconnectResponse = await client.PostAsync("/quote/v1/connectors/google-drive/disconnect", content: null);
+        Assert.Equal(HttpStatusCode.NoContent, disconnectResponse.StatusCode);
+
+        var disconnectedStatus = await client.GetFromJsonAsync<JsonElement>("/quote/v1/connectors/google-drive/status");
+        Assert.False(disconnectedStatus.GetProperty("isConnected").GetBoolean());
+    }
+
+    [Fact]
     public async Task Agent_settings_tool_returns_and_updates_customer_safe_session_settings()
     {
         using var client = factory.CreateClient();
@@ -5186,7 +5258,7 @@ Customer message:
         });
     }
 
-    private WebApplicationFactory<Program> CreateAgentFactoryWithGoogleDriveConfig()
+    private WebApplicationFactory<Program> CreateAgentFactoryWithGoogleDriveConfig(IHttpClientFactory? googleHttpClientFactory = null)
     {
         return factory.WithWebHostBuilder(builder =>
         {
@@ -5203,6 +5275,11 @@ Customer message:
             {
                 services.RemoveAll<IChatbotServiceClient>();
                 services.AddSingleton<IChatbotServiceClient, RecordingChatbotServiceClient>();
+                if (googleHttpClientFactory is not null)
+                {
+                    services.RemoveAll<IHttpClientFactory>();
+                    services.AddSingleton(googleHttpClientFactory);
+                }
             });
         });
     }
@@ -5256,6 +5333,33 @@ Customer message:
 
         public void Remove(Guid customerId)
         {
+        }
+    }
+
+    private sealed class FakeGoogleTokenHttpClientFactory : IHttpClientFactory
+    {
+        private readonly FakeGoogleTokenHandler _handler = new();
+
+        public HttpClient CreateClient(string name)
+        {
+            return new HttpClient(_handler, disposeHandler: false);
+        }
+    }
+
+    private sealed class FakeGoogleTokenHandler : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    access_token = "fake-access-token",
+                    refresh_token = "fake-refresh-token",
+                    expires_in = 3600
+                })
+            };
+            return Task.FromResult(response);
         }
     }
 

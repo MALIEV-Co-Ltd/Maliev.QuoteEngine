@@ -2602,13 +2602,15 @@ internal sealed class QuoteAgentService(
 
         state.CustomerId = customerId;
         var isGoogleDriveConnected = googleDriveConnectorStore.IsConnected(customerId.Value);
+        var googleDriveConnector = BuildGoogleDriveConnector(isGoogleDriveConnected);
+        googleDriveConnector.IsConfigured = GoogleDriveOAuthConfiguration.IsConfigured(configuration);
         return new QuoteAgentConnectorRegistryResponse
         {
             SessionId = state.SessionId,
             RequiresAuthenticationToList = false,
             Connectors =
             [
-                BuildGoogleDriveConnector(isGoogleDriveConnected)
+                googleDriveConnector
             ]
         };
     }

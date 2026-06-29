@@ -1929,6 +1929,94 @@
             </section>
         </div>
     }
+
+    @if (_driveConnectorModalOpen)
+    {
+        <div class="qe-agent-connector-modal" role="dialog" aria-modal="true" aria-labelledby="qe-agent-connector-title">
+            <button type="button"
+                    class="qe-agent-connector-modal-backdrop"
+                    aria-label="@Text("Close", "ปิด")"
+                    @onclick="CloseDriveConnectorModal"></button>
+            <section class="qe-agent-connector-dialog">
+                <header>
+                    <span class="qe-agent-connector-modal-icons" aria-hidden="true">
+                        <svg class="qe-agent-connector-modal-mark" viewBox="0 0 1024 1024" focusable="false">
+                            <path fill="currentColor" d="M171.714706,443.000000 C171.703735,365.007935 171.691452,287.515839 171.688156,210.023773 C171.687851,202.618408 171.713882,202.595551 179.076660,202.592773 C231.571213,202.573013 284.065918,202.611343 336.559998,202.444931 C340.148834,202.433563 341.515930,204.247864 343.019470,206.727875 C364.954803,242.909424 386.923859,279.070496 408.866058,315.247864 C438.755646,364.528564 468.627716,413.819824 498.510956,463.104370 C503.586426,471.475067 508.680206,479.834625 513.703186,488.096771 C516.378601,487.734406 516.850464,485.716827 517.735474,484.250214 C544.242310,440.322876 570.699463,396.365601 597.187866,352.427124 C623.503723,308.774902 649.844299,265.137482 676.176453,221.495056 C678.499390,217.645035 681.256165,213.991608 683.075500,209.918167 C685.795593,203.828003 690.077759,202.392990 696.510925,202.436035 C739.338013,202.722626 782.167908,202.602646 824.996887,202.555099 C832.657532,202.546600 840.317261,202.203094 847.978577,202.119186 C854.758789,202.044922 855.101074,202.442001 855.101501,209.044434 C855.111938,369.361420 855.122925,529.678406 855.132263,689.995361 C855.134705,731.991028 855.138672,773.986755 855.125854,815.982422 C855.123657,823.167114 855.086243,823.187622 847.855042,823.189087 C799.193298,823.199097 750.531616,823.200256 701.869873,823.202454 C694.681152,823.202820 694.664978,823.198303 694.664673,816.039612 C694.660217,713.716675 694.665710,611.393677 694.625122,509.070740 C694.624207,506.827515 695.295776,504.430084 693.858826,502.269775 C691.120300,502.028687 690.590698,504.383484 689.645386,505.914490 C676.870850,526.604309 664.097717,547.295837 651.483276,568.083374 C627.462463,607.667480 603.549988,647.317383 579.577454,686.930847 C575.265625,694.055969 570.771240,701.073181 566.585083,708.270508 C564.955322,711.072510 562.917358,712.190125 559.729675,712.182922 C529.566223,712.115051 499.402588,712.111755 469.239197,712.182983 C466.187988,712.190186 464.415070,710.976440 462.857025,708.416321 C429.603394,653.775208 396.309113,599.158752 362.942963,544.586243 C354.601715,530.943604 345.993622,517.463867 337.477356,503.928589 C336.612030,502.553375 335.533264,501.312469 334.162933,499.489685 C332.524628,502.698792 333.143982,505.527557 333.143890,508.191315 C333.140411,610.014221 333.184448,711.837097 333.223236,813.659973 C333.226837,823.169617 333.230103,823.180786 323.786957,823.182312 C275.458527,823.190369 227.130096,823.193787 178.801666,823.194519 C171.678268,823.194641 171.669434,823.183777 171.670242,815.953186 C171.684082,691.802124 171.700241,567.651062 171.714706,443.000000 Z" />
+                        </svg>
+                        <span class="qe-agent-connector-modal-sep" aria-hidden="true">⋯</span>
+                        <svg class="qe-agent-connector-modal-drive" viewBox="0 0 24 24" focusable="false">
+                            <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                            <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                            <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                        </svg>
+                    </span>
+                    <h2 id="qe-agent-connector-title">@DriveConnectorModalTitle</h2>
+                    <button type="button" class="qe-agent-round-btn" @onclick="CloseDriveConnectorModal" title="@Text("Close", "ปิด")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
+                </header>
+
+                @if (_driveConnectorModalMode == "unavailable")
+                {
+                    <p>@Text("Google Drive isn't available in Make Studio yet. Upload files directly or drag them into the chat for now.", "ยังไม่พร้อมใช้งาน Google Drive ใน Make Studio ในขณะนี้ กรุณาอัปโหลดไฟล์โดยตรงหรือลากไฟล์มาวางในแชทไปก่อน")</p>
+                    <button type="button" class="qe-agent-connector-modal-cta" @onclick="CloseDriveConnectorModal">
+                        @Text("Got it", "เข้าใจแล้ว")
+                    </button>
+                }
+                else if (_driveConnectorModalMode == "manage")
+                {
+                    <p>@Text("Google Drive is connected. Type @drive in the composer to choose files from Drive.", "เชื่อมต่อ Google Drive แล้ว พิมพ์ @drive ในช่องข้อความเพื่อเลือกไฟล์จาก Drive")</p>
+                    <button type="button"
+                            class="qe-agent-connector-modal-cta qe-agent-connector-modal-cta--danger"
+                            disabled="@_driveConnectorDisconnecting"
+                            @onclick="DisconnectGoogleDriveAsync">
+                        @if (_driveConnectorDisconnecting)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        <span>@Text("Disconnect Google Drive", "ยกเลิกการเชื่อมต่อ Google Drive")</span>
+                    </button>
+                    <a class="qe-agent-connector-modal-link"
+                       href="https://myaccount.google.com/permissions"
+                       target="_blank"
+                       rel="noopener noreferrer">
+                        @Text("Manage access on Google", "จัดการสิทธิ์การเข้าถึงบน Google")
+                    </a>
+                }
+                else
+                {
+                    <ul class="qe-agent-connector-modal-points">
+                        <li>
+                            <strong>@Text("Pick files when you need them", "เลือกไฟล์เมื่อต้องใช้งาน")</strong>
+                            <span>@Text("Choose CAD files, drawings, or photos from Drive whenever you attach to a quote.", "เลือกไฟล์ CAD, แบบงาน, หรือรูปภาพจาก Drive เมื่อต้องการแนบไปกับใบเสนอราคา")</span>
+                        </li>
+                        <li>
+                            <strong>@Text("This page will redirect to Google", "หน้านี้จะเปลี่ยนไปยัง Google")</strong>
+                            <span>@Text("You'll sign in and confirm access on Google's page.", "คุณจะลงชื่อเข้าใช้และยืนยันสิทธิ์การเข้าถึงบนหน้าของ Google")</span>
+                        </li>
+                        <li>
+                            <strong>@Text("Private and secure", "เป็นส่วนตัวและปลอดภัย")</strong>
+                            <span>@Text("Make Studio only sees files you open or select, never your whole Drive.", "Make Studio จะเห็นเฉพาะไฟล์ที่คุณเปิดหรือเลือกเท่านั้น ไม่ใช่ทั้ง Drive ของคุณ")</span>
+                        </li>
+                        <li>
+                            <strong>@Text("You're in control", "คุณควบคุมได้เอง")</strong>
+                            <span>@Text("Disconnect anytime from Plugins, or revoke access from your Google Account.", "ยกเลิกการเชื่อมต่อได้ทุกเมื่อจากปลั๊กอิน หรือเพิกถอนสิทธิ์จากบัญชี Google ของคุณ")</span>
+                        </li>
+                    </ul>
+                    <button type="button"
+                            class="qe-agent-connector-modal-cta"
+                            disabled="@_driveConnectorContinuing"
+                            @onclick="ContinueToGoogleDriveAsync">
+                        @if (_driveConnectorContinuing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
+                        }
+                        <span>@Text("Continue to Google Drive", "ดำเนินการต่อไปยัง Google Drive")</span>
+                    </button>
+                }
+            </section>
+        </div>
+    }
 </section>
 
 @code {
@@ -1995,6 +2083,10 @@
     private string _authDialogMode = "sign-in";
     private string _lastInitialAuthMode = string.Empty;
     private string _authEmail = string.Empty;
+    private bool _driveConnectorModalOpen;
+    private string _driveConnectorModalMode = "connect";
+    private bool _driveConnectorContinuing;
+    private bool _driveConnectorDisconnecting;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
     private bool _searchPromptHovered;
@@ -4807,122 +4899,6 @@
         return HumanizeAgentActivity(title);
     }
 
-    private static string? ThinkingStepCompact(QuoteAgentThinkingStepDto step)
-    {
-        if (!string.IsNullOrWhiteSpace(step.Summary))
-            return step.Summary;
-
-        var detail = step.Detail;
-        if (string.IsNullOrWhiteSpace(detail))
-            return null;
-
-        string? jsonStr = null;
-        var isJsonLike = false;
-        if (detail.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase))
-        {
-            jsonStr = detail["Arguments:".Length..].Trim();
-            isJsonLike = true;
-        }
-        else
-        {
-            var trimmed = detail.TrimStart();
-            if (trimmed.StartsWith('{') || trimmed.StartsWith('['))
-            {
-                jsonStr = trimmed;
-                isJsonLike = true;
-            }
-        }
-
-        if (jsonStr is not null)
-        {
-            try
-            {
-                using var doc = JsonDocument.Parse(NormalizeJsonLiterals(jsonStr));
-                return FormatJsonAsInline(doc.RootElement);
-            }
-            catch (JsonException) { }
-        }
-
-        if (isJsonLike)
-            return null;
-
-        return HumanizeAgentActivity(detail);
-    }
-
-    private static string NormalizeJsonLiterals(string json)
-    {
-        json = Regex.Replace(json, @"\bTrue\b", "true");
-        json = Regex.Replace(json, @"\bFalse\b", "false");
-        json = Regex.Replace(json, @"\bNull\b", "null");
-        json = Regex.Replace(json, @"\bNone\b", "null");
-        return json;
-    }
-
-    private static readonly HashSet<string> SkippedJsonKeys = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "sessionId", "customerId", "uploadId", "storagePath", "url", "contentType",
-        "fileSizeBytes", "kind", "messageId", "attachments", "artifact_id", "part_id",
-        "commandCount", "command_count", "success", "result", "status", "messageId", "statusCode"
-    };
-
-    private static string? FormatJsonAsInline(JsonElement element)
-    {
-        if (element.ValueKind != JsonValueKind.Object)
-            return null;
-
-        var values = new List<string>();
-        foreach (var prop in element.EnumerateObject())
-        {
-            if (SkippedJsonKeys.Contains(prop.Name))
-                continue;
-
-            var value = FormatJsonValue(prop.Name, prop.Value);
-            if (value is not null)
-                values.Add(value);
-        }
-
-        return values.Count > 0 ? string.Join(" · ", values) : null;
-    }
-
-    private static string? FormatJsonValue(string propertyName, JsonElement element)
-    {
-        return element.ValueKind switch
-        {
-            JsonValueKind.Null => null,
-            JsonValueKind.True => "Yes",
-            JsonValueKind.False => "No",
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Number => element.ToString(),
-            JsonValueKind.Array => FormatJsonArrayValue(propertyName, element),
-            _ => null
-        };
-    }
-
-    private static string? FormatJsonArrayValue(string propertyName, JsonElement element)
-    {
-        if (element.GetArrayLength() == 0)
-            return null;
-
-        if (propertyName.Contains("commands", StringComparison.OrdinalIgnoreCase))
-            return $"{element.GetArrayLength()} CAD command(s)";
-
-        var items = new List<string>();
-        foreach (var item in element.EnumerateArray())
-        {
-            var val = FormatJsonValue(propertyName, item);
-            if (val is not null)
-                items.Add(val);
-        }
-
-        if (items.Count == 0)
-            return null;
-
-        if (items.Count > 3)
-            return $"{items.Count} item(s)";
-
-        return string.Join(", ", items);
-    }
-
     private static string HumanizeAgentActivity(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -4945,13 +4921,6 @@
 
         var textInfo = CultureInfo.CurrentCulture.TextInfo;
         return textInfo.ToTitleCase(normalized.Trim().ToLower(CultureInfo.CurrentCulture));
-    }
-
-    private static string FormatDuration(long durationMs)
-    {
-        return durationMs < 1000
-            ? FormattableString.Invariant($"{durationMs} ms")
-            : FormattableString.Invariant($"{durationMs / 1000.0:0.#} s");
     }
 
     private static string FormatCompactTokenCount(long tokens)
@@ -5923,8 +5892,62 @@
                || connector.DisplayName.Contains("Google Drive", StringComparison.OrdinalIgnoreCase);
     }
 
+    private string DriveConnectorModalTitle =>
+        _driveConnectorModalMode == "connect"
+            ? Text("Connect Google Drive", "เชื่อมต่อ Google Drive")
+            : Text("Google Drive", "Google Drive");
+
+    private void OpenDriveConnectorModal(string mode)
+    {
+        _driveConnectorModalMode = mode;
+        _driveConnectorModalOpen = true;
+    }
+
+    private void CloseDriveConnectorModal()
+    {
+        _driveConnectorModalOpen = false;
+        _driveConnectorContinuing = false;
+        _driveConnectorDisconnecting = false;
+    }
+
+    private Task ContinueToGoogleDriveAsync()
+    {
+        _driveConnectorContinuing = true;
+        Navigation.NavigateTo(
+            $"/quote/v1/connectors/google-drive/start?returnUrl={Uri.EscapeDataString("/quotes?connect=google-drive")}",
+            forceLoad: true);
+        return Task.CompletedTask;
+    }
+
+    private async Task DisconnectGoogleDriveAsync()
+    {
+        _driveConnectorDisconnecting = true;
+        try
+        {
+            await Api.DisconnectGoogleDriveAsync();
+            CloseDriveConnectorModal();
+            await LoadConnectorRegistryAsync();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _error = Text(
+                "Disconnecting Google Drive is temporarily unavailable.",
+                "การยกเลิกเชื่อมต่อ Google Drive ยังไม่พร้อมใช้งานชั่วคราว");
+        }
+        finally
+        {
+            _driveConnectorDisconnecting = false;
+        }
+    }
+
     private async Task ApplyConnectorAsync(QuoteAgentConnectorDto connector)
     {
+        if (IsGoogleDriveConnector(connector))
+        {
+            OpenDriveConnectorModal(!connector.IsConfigured ? "unavailable" : connector.IsConnected ? "manage" : "connect");
+            return;
+        }
+
         try
         {
             QuoteAgentConnectorHandoffResponse handoff = await Api.GetConnectorHandoffAsync(SessionId, connector.ConnectorId);
@@ -5932,25 +5955,6 @@
                 handoff.Status.Equals("authentication_required", StringComparison.OrdinalIgnoreCase))
             {
                 Navigation.NavigateTo(handoff.HandoffUrl);
-                return;
-            }
-
-            if (IsGoogleDriveConnector(connector) &&
-                handoff.Status.Equals("ready_to_connect", StringComparison.OrdinalIgnoreCase))
-            {
-                Navigation.NavigateTo(
-                    $"/quote/v1/connectors/google-drive/start?returnUrl={Uri.EscapeDataString("/quotes?connect=google-drive")}",
-                    forceLoad: true);
-                return;
-            }
-
-            if (IsGoogleDriveConnector(connector) && connector.IsConnected)
-            {
-                _error = Text(
-                    "Google Drive is connected. Type @drive in the composer to choose files from Drive.",
-                    "เชื่อมต่อ Google Drive แล้ว พิมพ์ @drive ในช่องข้อความเพื่อเลือกไฟล์จาก Drive");
-                _activeWorkspacePage = WorkspacePage.Chat;
-                await FocusComposerAsync();
                 return;
             }
 
