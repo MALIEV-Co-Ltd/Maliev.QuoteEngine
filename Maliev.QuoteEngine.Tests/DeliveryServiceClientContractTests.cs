@@ -23,6 +23,44 @@ public sealed class DeliveryServiceClientContractTests
                     currency = "THB",
                     serviceLevel = "standard",
                     estimatedDelivery = "2026-06-22",
+                    courierLogoUrl = "https://cdn.example/flash.svg",
+                    packageCount = 2,
+                    totalWeight = 1820m,
+                    packages = new[]
+                    {
+                        new
+                        {
+                            packageNumber = 1,
+                            name = "MALIEV box 1",
+                            weight = 920m,
+                            width = 20m,
+                            length = 30m,
+                            height = 12m,
+                            price = 40m,
+                            currency = "THB",
+                            estimatedDelivery = "2026-06-22",
+                            items = new[]
+                            {
+                                new { name = "Bracket", quantity = 10, unitWidth = 8m, unitLength = 12m, unitHeight = 4m, unitWeight = 75m }
+                            }
+                        },
+                        new
+                        {
+                            packageNumber = 2,
+                            name = "MALIEV box 2",
+                            weight = 900m,
+                            width = 20m,
+                            length = 30m,
+                            height = 12m,
+                            price = 42.25m,
+                            currency = "THB",
+                            estimatedDelivery = "2026-06-22",
+                            items = new[]
+                            {
+                                new { name = "Bracket", quantity = 10, unitWidth = 8m, unitLength = 12m, unitHeight = 4m, unitWeight = 75m }
+                            }
+                        }
+                    },
                     provider = "GoShip"
                 }
             })
@@ -65,7 +103,19 @@ public sealed class DeliveryServiceClientContractTests
                 Width = 15m,
                 Height = 10m
             },
-            CourierCodes = ["flash"]
+            CourierCodes = ["flash"],
+            Parts =
+            [
+                new ShippingPackagePartDto
+                {
+                    Name = "Bracket",
+                    Quantity = 20,
+                    Weight = 75m,
+                    Width = 8m,
+                    Length = 12m,
+                    Height = 4m
+                }
+            ]
         });
 
         Assert.Equal(HttpMethod.Post, handler.Request!.Method);
@@ -76,10 +126,18 @@ public sealed class DeliveryServiceClientContractTests
         Assert.Equal("SG", handler.Payload.RootElement.GetProperty("to").GetProperty("countryCode").GetString());
         Assert.Equal(1250m, handler.Payload.RootElement.GetProperty("parcel").GetProperty("weight").GetDecimal());
         Assert.Equal("flash", handler.Payload.RootElement.GetProperty("courierCodes")[0].GetString());
+        Assert.Equal("Bracket", handler.Payload.RootElement.GetProperty("parts")[0].GetProperty("name").GetString());
+        Assert.Equal(20, handler.Payload.RootElement.GetProperty("parts")[0].GetProperty("quantity").GetInt32());
+        Assert.Equal(12m, handler.Payload.RootElement.GetProperty("parts")[0].GetProperty("length").GetDecimal());
         var rate = Assert.Single(result.Rates);
         Assert.Equal("flash", rate.CourierCode);
         Assert.Equal("Flash Express", rate.ProductName);
         Assert.Equal(82.25m, rate.TotalPrice);
+        Assert.Equal("https://cdn.example/flash.svg", rate.CourierLogoUrl);
+        Assert.Equal(2, rate.PackageCount);
+        Assert.Equal(1820m, rate.TotalWeight);
+        Assert.Equal(2, rate.Packages.Count);
+        Assert.Equal("Bracket", rate.Packages[0].Items[0].Name);
         Assert.Equal("GoShip", rate.Provider);
     }
 
@@ -94,6 +152,7 @@ public sealed class DeliveryServiceClientContractTests
                 {
                     courierCode = "thaipost",
                     courierName = "Thailand Post",
+                    logoUrl = "https://cdn.example/thailand-post.svg",
                     scope = "domestic",
                     provider = "Shippop"
                 }
@@ -113,6 +172,7 @@ public sealed class DeliveryServiceClientContractTests
         var courier = Assert.Single(couriers);
         Assert.Equal("thaipost", courier.CourierCode);
         Assert.Equal("Thailand Post", courier.CourierName);
+        Assert.Equal("https://cdn.example/thailand-post.svg", courier.LogoUrl);
         Assert.Equal("Shippop", courier.Provider);
     }
 

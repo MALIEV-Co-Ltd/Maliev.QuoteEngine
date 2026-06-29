@@ -51,6 +51,10 @@ internal sealed class DeliveryServiceClient(HttpClient http) : IDeliveryServiceC
                 CurrencyCode = FirstNonEmpty(rate.Currency, "THB"),
                 EstimatedDeliveryDate = rate.EstimatedDelivery,
                 ServiceLevel = rate.ServiceLevel,
+                CourierLogoUrl = rate.CourierLogoUrl,
+                PackageCount = rate.PackageCount,
+                TotalWeight = rate.TotalWeight,
+                Packages = rate.Packages,
                 Provider = rate.Provider
             }).ToList()
         };
@@ -83,6 +87,14 @@ internal sealed class DeliveryServiceClient(HttpClient http) : IDeliveryServiceC
         public string? ServiceLevel { get; set; }
 
         public string? EstimatedDelivery { get; set; }
+
+        public string? CourierLogoUrl { get; set; }
+
+        public int PackageCount { get; set; } = 1;
+
+        public decimal TotalWeight { get; set; }
+
+        public List<ShippingPackageQuoteDto> Packages { get; set; } = [];
 
         public string Provider { get; set; } = string.Empty;
     }

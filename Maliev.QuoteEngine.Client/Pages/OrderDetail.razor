@@ -204,6 +204,10 @@ else
                                     aria-checked="@isPreferred"
                                     @onclick="@(() => SelectPreferredCourier(courier.CourierCode))">
                                 <span class="order-courier-radio" aria-hidden="true"></span>
+                                @if (!string.IsNullOrWhiteSpace(courier.LogoUrl))
+                                {
+                                    <img class="order-courier-logo" src="@courier.LogoUrl" alt="" loading="lazy" />
+                                }
                                 <span class="order-courier-copy">
                                     <strong>@(string.IsNullOrWhiteSpace(courier.CourierName) ? courier.CourierCode : courier.CourierName)</strong>
                                     <small>
@@ -256,6 +260,10 @@ else
                                         aria-pressed="@isSelected"
                                         @onclick="@(() => SelectShippingRate(rate))">
                                     <span class="order-rate-radio" aria-hidden="true"></span>
+                                    @if (!string.IsNullOrWhiteSpace(rate.CourierLogoUrl))
+                                    {
+                                        <img class="order-rate-logo" src="@rate.CourierLogoUrl" alt="" loading="lazy" />
+                                    }
                                     <span class="order-rate-main">
                                         <span>@rate.ProductName</span>
                                         <small>
@@ -275,6 +283,10 @@ else
                                     </span>
                                     <span class="order-rate-price">
                                         <strong>@FormatMoney(rate.TotalPrice, rate.CurrencyCode)</strong>
+                                        @if (rate.PackageCount > 1)
+                                        {
+                                            <small>@rate.PackageCount boxes · @($"{rate.TotalWeight:N0} g")</small>
+                                        }
                                         <small>@(string.IsNullOrWhiteSpace(rate.EstimatedDeliveryDate) ? Text("ETA pending", "รอเวลาจัดส่ง") : $"{Text("ETA", "ถึงประมาณ")} {rate.EstimatedDeliveryDate}")</small>
                                     </span>
                                 </button>

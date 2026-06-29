@@ -8227,7 +8227,7 @@ p {
 
 .order-courier-card {
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
+    grid-template-columns: 18px 32px minmax(0, 1fr);
     gap: 9px;
     align-items: center;
     min-height: 58px;
@@ -8272,7 +8272,20 @@ p {
     background: var(--accent);
 }
 
+.order-courier-logo,
+.order-rate-logo {
+    grid-column: 2;
+    width: 32px;
+    height: 32px;
+    border: 1px solid var(--border);
+    border-radius: var(--maliev-radius-sm);
+    background: #fff;
+    object-fit: contain;
+    padding: 4px;
+}
+
 .order-courier-copy {
+    grid-column: 3;
     display: grid;
     gap: 3px;
     min-width: 0;
@@ -8351,7 +8364,7 @@ p {
 
 .order-shipping-rate {
     display: grid;
-    grid-template-columns: 18px minmax(0, 1fr) auto;
+    grid-template-columns: 18px 32px minmax(0, 1fr) auto;
     gap: 5px 10px;
     align-items: center;
     width: 100%;
@@ -8386,6 +8399,10 @@ p {
     gap: 3px;
 }
 
+.order-rate-main {
+    grid-column: 3;
+}
+
 .order-rate-main span {
     min-width: 0;
     overflow-wrap: anywhere;
@@ -8412,6 +8429,7 @@ p {
 }
 
 .order-rate-price {
+    grid-column: 4;
     justify-items: end;
 }
 
@@ -9707,12 +9725,12 @@ textarea::placeholder {
     }
 
     .order-shipping-rate {
-        grid-template-columns: 18px minmax(0, 1fr);
+        grid-template-columns: 18px 32px minmax(0, 1fr);
         justify-items: stretch;
     }
 
     .order-rate-price {
-        grid-column: 2;
+        grid-column: 3;
         justify-items: start;
     }
 
