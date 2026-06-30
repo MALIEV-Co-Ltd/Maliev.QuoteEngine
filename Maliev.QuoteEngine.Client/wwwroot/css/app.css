@@ -5306,6 +5306,53 @@
     line-height: 1.45;
 }
 
+.qe-agent-artifact-analysis-note {
+    display: grid;
+    gap: 8px;
+    padding: 10px 0 0;
+    border-top: 1px solid var(--qe-agent-line);
+}
+
+.qe-agent-artifact-analysis-note > header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.qe-agent-artifact-analysis-note > header span {
+    color: var(--qe-agent-ink);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.qe-agent-artifact-note-edit {
+    display: inline-grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--qe-agent-muted);
+    cursor: pointer;
+}
+
+.qe-agent-artifact-note-edit:hover {
+    border-color: var(--qe-agent-primary);
+    color: var(--qe-agent-primary);
+}
+
+.qe-agent-artifact-note-edit .mud-icon-root {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
 .qe-agent-artifact,
 .qe-agent-action {
     background: var(--qe-agent-raised);
@@ -5427,6 +5474,93 @@
     min-width: 0;
     padding: 14px 16px;
     border-bottom: 1px solid var(--qe-agent-line);
+}
+
+.qe-agent-artifact-note-dialog {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: auto minmax(220px, 1fr) auto;
+    gap: 14px;
+    width: min(680px, 92vw);
+    max-height: min(620px, 86dvh);
+    padding: 16px;
+    border: 1px solid color-mix(in srgb, var(--qe-agent-line) 82%, transparent);
+    border-radius: 14px;
+    background: var(--qe-agent-raised);
+    box-shadow: 0 28px 80px rgba(0, 0, 0, .32);
+}
+
+.qe-agent-artifact-note-dialog > header,
+.qe-agent-artifact-note-dialog > footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.qe-agent-artifact-note-dialog > header div {
+    min-width: 0;
+}
+
+.qe-agent-artifact-note-dialog > header span,
+.qe-agent-artifact-note-dialog > header small {
+    display: block;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+}
+
+.qe-agent-artifact-note-dialog h2 {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--qe-agent-ink);
+    font-size: 18px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.qe-agent-artifact-note-input {
+    width: 100%;
+    min-height: 220px;
+    resize: vertical;
+    padding: 12px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 10px;
+    background: var(--qe-agent-bg);
+    color: var(--qe-agent-ink);
+    font: inherit;
+    line-height: 1.5;
+}
+
+.qe-agent-artifact-note-input:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--qe-agent-primary) 40%, transparent);
+    outline-offset: 2px;
+}
+
+.qe-agent-artifact-note-primary,
+.qe-agent-artifact-note-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 14px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 999px;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.qe-agent-artifact-note-primary {
+    border-color: var(--qe-agent-primary);
+    background: var(--qe-agent-primary);
+    color: #fff;
+}
+
+.qe-agent-artifact-note-secondary {
+    background: transparent;
+    color: var(--qe-agent-ink);
 }
 
 .qe-agent-preview-dialog > header div {

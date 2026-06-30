@@ -163,17 +163,20 @@ public sealed record QuotePartAttachmentDto(
     long FileSizeBytes,
     string Kind);
 
+// EdgesEnabled: true/false once the user has explicitly toggled edge rendering; null when
+// never customized, in which case the viewer applies its format-aware default (native CAD
+// exchange formats like STEP/IGES default to edges-on, mesh formats default to edges-off).
 public sealed record QuotePartViewerSettingsDto(
     string CameraPreset,
-    bool EdgesEnabled,
+    bool? EdgesEnabled,
     bool GridEnabled,
     bool DfmOverlayEnabled)
 {
-    public string RenderMode { get; init; } = "realistic";
+    public string RenderMode { get; init; } = "solid";
 
-    public string InitialRenderMode { get; init; } = "realistic";
+    public string InitialRenderMode { get; init; } = "solid";
 
-    public string TargetRenderMode { get; init; } = "realistic";
+    public string TargetRenderMode { get; init; } = "solid";
 
     public RenderModeTransitionSettings RenderModeTransition { get; init; } = new();
 
@@ -342,7 +345,7 @@ public sealed class QuotePartDraftDto
 
     public List<QuotePartAttachmentDto> DrawingFiles { get; set; } = [];
 
-    public QuotePartViewerSettingsDto ViewerSettings { get; set; } = new("iso", true, true, false);
+    public QuotePartViewerSettingsDto ViewerSettings { get; set; } = new("iso", null, true, false);
 }
 
 public sealed class QuoteEstimateRequest

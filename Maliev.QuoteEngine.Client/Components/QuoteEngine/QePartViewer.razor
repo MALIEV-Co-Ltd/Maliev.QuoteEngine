@@ -178,7 +178,7 @@
     private string? _loadError;
     private string? _lastMeasurement;
     private string _cameraPreset = "iso";
-    private string _renderMode = "realistic";
+    private string _renderMode = "solid";
     private string _sectionAxis = "z";
     private double _sectionOffsetMm;
     private bool _sectionOn;
@@ -299,14 +299,20 @@
                 ? "wireframe"
                 : ViewerSettings.RenderMode.Equals("transparent", StringComparison.OrdinalIgnoreCase)
                     ? "transparent"
-                    : ViewerSettings.RenderMode.Equals("solid", StringComparison.OrdinalIgnoreCase)
-                        ? "solid"
-                        : "realistic";
+                    : "solid"; // "realistic" (removed) and anything unrecognized fall back to solid
         }
 
-        _edgesOn = ViewerSettings.EdgesEnabled && _renderMode != "wireframe";
+        // Edges default to ON for native CAD exchange formats (STEP/IGES) and OFF for mesh
+        // formats (STL/OBJ/3MF/GLB) until the user explicitly toggles them.
+        _edgesOn = (ViewerSettings.EdgesEnabled ?? IsCadNativeExtension(FileExtension)) && _renderMode != "wireframe";
         _gridOn = ViewerSettings.GridEnabled;
         _ortho = !string.Equals(ViewerSettings.CameraProjection, "perspective", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCadNativeExtension(string? fileExtension)
+    {
+        var ext = (fileExtension ?? string.Empty).Trim().ToLowerInvariant();
+        return ext is ".step" or ".stp" or ".iges" or ".igs";
     }
 
     private object CaptureViewerRuntimeSettings()
@@ -317,9 +323,7 @@
                 ? "wireframe"
                 : ViewerSettings.InitialRenderMode.Equals("transparent", StringComparison.OrdinalIgnoreCase)
                     ? "transparent"
-                    : ViewerSettings.InitialRenderMode.Equals("solid", StringComparison.OrdinalIgnoreCase)
-                        ? "solid"
-                        : "realistic";
+                    : "solid"; // "realistic" (removed) and anything unrecognized fall back to solid
 
         var targetRenderMode = string.IsNullOrWhiteSpace(ViewerSettings?.TargetRenderMode)
             ? _renderMode
@@ -327,9 +331,7 @@
                 ? "wireframe"
                 : ViewerSettings.TargetRenderMode.Equals("transparent", StringComparison.OrdinalIgnoreCase)
                     ? "transparent"
-                    : ViewerSettings.TargetRenderMode.Equals("solid", StringComparison.OrdinalIgnoreCase)
-                        ? "solid"
-                        : "realistic";
+                    : "solid"; // "realistic" (removed) and anything unrecognized fall back to solid
 
         var transition = ViewerSettings?.RenderModeTransition ?? new RenderModeTransitionSettings();
 
@@ -372,7 +374,7 @@
         try
         {
             _module ??= await JSRuntime.InvokeAsync<IJSObjectReference>(
-                "import", "./js/quote-part-viewer.js");
+                "import", "./js/quote-part-viewer-three.js");
             _dotNetRef ??= DotNetObjectReference.Create(this);
 
             await _module.InvokeVoidAsync("initialize",

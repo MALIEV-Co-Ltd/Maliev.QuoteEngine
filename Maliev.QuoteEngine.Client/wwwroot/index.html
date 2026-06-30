@@ -67,14 +67,20 @@
     </div>
     <div id="app"></div>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
-    <script src="lib/babylonjs/babylon.js"></script>
-    <script src="lib/babylonjs/babylonjs.materials.min.js"></script>
-    <script src="js/quote-engine-loader.js"></script>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "lib/three/build/three.module.min.js",
+                "three/addons/": "lib/three/jsm/"
+            }
+        }
+    </script>
+    <script src="js/quote-engine-loader.js?v=inline-preview-bridge"></script>
     <script src="js/maliev-reconnect.js"></script>
     <script src="js/maliev-chatbot.js"></script>
     <script src="js/maliev-typewriter.js"></script>
     <script src="js/quote-upload.js"></script>
-    <script src="js/quote-inline-viewer.js"></script>
+    <script type="module" src="js/quote-inline-viewer-three.js?v=inline-preview-runtime"></script>
     <script src="js/quote-google-address-picker.js"></script>
     <script src="js/home-shader.bundle.js"></script>
     <script src="_framework/blazor.webassembly.js" autostart="false"></script>

@@ -2915,7 +2915,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal("duplicate-fixture.pdf", drawing.FileName);
         Assert.Equal("customers/owner/q/drawing.pdf", drawing.StoragePath);
         Assert.Equal("right", duplicatedPart.ViewerSettings.CameraPreset);
-        Assert.False(duplicatedPart.ViewerSettings.EdgesEnabled);
+        Assert.False(duplicatedPart.ViewerSettings.EdgesEnabled.GetValueOrDefault());
         Assert.False(duplicatedPart.ViewerSettings.GridEnabled);
         Assert.True(duplicatedPart.ViewerSettings.DfmOverlayEnabled);
     }

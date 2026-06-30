@@ -1708,6 +1708,19 @@
                                             <MudIcon Icon="@UploadedPartIcon(SelectedUploadedPart)" Size="Size.Large" />
                                         </div>
                                     }
+                                    <section class="qe-agent-artifact-analysis-note">
+                                        <header>
+                                            <span>@Text("Artifact analysis", "การวิเคราะห์ไฟล์")</span>
+                                            <button type="button"
+                                                    class="qe-agent-artifact-note-edit"
+                                                    title="@Text("Edit artifact analysis", "แก้ไขการวิเคราะห์ไฟล์")"
+                                                    aria-label="@Text("Edit artifact analysis", "แก้ไขการวิเคราะห์ไฟล์")"
+                                                    @onclick="@(() => OpenArtifactNoteDialog(SelectedPartIndex))">
+                                                <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
+                                            </button>
+                                        </header>
+                                        <p>@ArtifactAnalysisNoteText(SelectedUploadedPart)</p>
+                                    </section>
                                     <p>@SupplementalArtifactHint(SelectedUploadedPart)</p>
                                 </div>
                             </section>
@@ -1868,6 +1881,42 @@
                         aria-label="@Text("Next file", "ไฟล์ถัดไป")">
                     <MudIcon Icon="@Icons.Material.Outlined.ChevronRight" Size="Size.Medium" />
                 </button>
+            </section>
+        </div>
+    }
+
+    @if (_artifactNoteDialogOpen && ArtifactNoteDialogPart is not null)
+    {
+        var notePart = ArtifactNoteDialogPart;
+        <div class="qe-agent-preview-modal" role="dialog" aria-modal="true" aria-labelledby="qe-agent-artifact-note-title">
+            <button type="button"
+                    class="qe-agent-preview-backdrop"
+                    aria-label="@Text("Close artifact analysis editor", "ปิดตัวแก้ไขการวิเคราะห์ไฟล์")"
+                    @onclick="CloseArtifactNoteDialog"></button>
+            <section class="qe-agent-artifact-note-dialog">
+                <header>
+                    <div>
+                        <span>@SupplementalArtifactLabel(notePart)</span>
+                        <h2 id="qe-agent-artifact-note-title">@Text("Edit artifact analysis", "แก้ไขการวิเคราะห์ไฟล์")</h2>
+                        <small>@notePart.FileName</small>
+                    </div>
+                    <button type="button" class="qe-agent-round-btn" @onclick="CloseArtifactNoteDialog" title="@Text("Close", "ปิด")">
+                        <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
+                    </button>
+                </header>
+                <textarea class="qe-agent-artifact-note-input"
+                          value="@_artifactNoteDraft"
+                          @oninput="UpdateArtifactNoteDraft"
+                          aria-label="@Text("Artifact analysis note", "หมายเหตุการวิเคราะห์ไฟล์")"></textarea>
+                <footer>
+                    <button type="button" class="qe-agent-artifact-note-secondary" @onclick="CloseArtifactNoteDialog">
+                        @Text("Cancel", "ยกเลิก")
+                    </button>
+                    <button type="button" class="qe-agent-artifact-note-primary" @onclick="SaveArtifactNoteAsync">
+                        <MudIcon Icon="@Icons.Material.Outlined.Check" Size="Size.Small" />
+                        <span>@Text("Save", "บันทึก")</span>
+                    </button>
+                </footer>
             </section>
         </div>
     }
@@ -2058,7 +2107,10 @@
     private bool _artifactPanelOpen;
     private bool _summaryPanelOpen;
     private bool _previewDialogOpen;
+    private bool _artifactNoteDialogOpen;
     private int _previewIndex;
+    private int _artifactNotePartIndex = -1;
+    private string _artifactNoteDraft = string.Empty;
     private bool _navigationDrawerOpen;
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
@@ -2252,6 +2304,9 @@
     [Parameter]
     public EventCallback<int> OnUploadedPartSelected { get; set; }
 
+    [Parameter]
+    public EventCallback<QuotePartViewModel> OnUploadedPartChanged { get; set; }
+
     [CascadingParameter(Name = "IsDarkMode")]
     private bool IsDarkMode { get; set; }
 
@@ -2335,6 +2390,9 @@
             .Where(a => a.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase))
             .ToList();
     private QuotePartViewModel SelectedUploadedPart => UploadedParts[Math.Clamp(SelectedPartIndex, 0, Math.Max(UploadedParts.Count - 1, 0))];
+    private QuotePartViewModel? ArtifactNoteDialogPart => _artifactNotePartIndex >= 0 && _artifactNotePartIndex < UploadedParts.Count
+        ? UploadedParts[_artifactNotePartIndex]
+        : null;
     private IReadOnlyList<PreviewItem> PreviewItems => BuildPreviewItems();
     private PreviewItem? CurrentPreviewItem => PreviewItems.Count == 0
         ? null
@@ -3990,6 +4048,50 @@
         _previewDialogOpen = false;
     }
 
+    private void OpenArtifactNoteDialog(int uploadedPartIndex)
+    {
+        if (uploadedPartIndex < 0 || uploadedPartIndex >= UploadedParts.Count)
+        {
+            return;
+        }
+
+        _artifactNotePartIndex = uploadedPartIndex;
+        _artifactNoteDraft = UploadedParts[uploadedPartIndex].PartNotes ?? string.Empty;
+        _artifactNoteDialogOpen = true;
+    }
+
+    private void CloseArtifactNoteDialog()
+    {
+        _artifactNoteDialogOpen = false;
+        _artifactNotePartIndex = -1;
+        _artifactNoteDraft = string.Empty;
+    }
+
+    private void UpdateArtifactNoteDraft(ChangeEventArgs args)
+    {
+        _artifactNoteDraft = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private async Task SaveArtifactNoteAsync()
+    {
+        var part = ArtifactNoteDialogPart;
+        if (part is null)
+        {
+            CloseArtifactNoteDialog();
+            return;
+        }
+
+        part.PartNotes = string.IsNullOrWhiteSpace(_artifactNoteDraft)
+            ? null
+            : _artifactNoteDraft.Trim();
+        if (OnUploadedPartChanged.HasDelegate)
+        {
+            await OnUploadedPartChanged.InvokeAsync(part);
+        }
+
+        CloseArtifactNoteDialog();
+    }
+
     private void MovePreview(int direction)
     {
         var items = PreviewItems;
@@ -4567,6 +4669,13 @@
         return Text(
             "I will keep this with the project as supporting manufacturing context until usable CAD/3D geometry is available.",
             "ฉันจะเก็บไฟล์นี้ไว้เป็นข้อมูลประกอบการผลิตจนกว่าจะมีไฟล์ CAD/3D ที่ใช้ได้");
+    }
+
+    private string ArtifactAnalysisNoteText(QuotePartViewModel part)
+    {
+        return string.IsNullOrWhiteSpace(part.PartNotes)
+            ? Text("No artifact analysis note has been saved yet.", "ยังไม่มีหมายเหตุการวิเคราะห์ไฟล์")
+            : part.PartNotes.Trim();
     }
 
     private static string UploadedPartIcon(QuotePartViewModel part)

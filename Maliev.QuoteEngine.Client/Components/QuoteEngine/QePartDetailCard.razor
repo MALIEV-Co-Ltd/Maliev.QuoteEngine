@@ -89,7 +89,7 @@
                          OnConfiguratorRequested='@(() => SetCenterMode("model"))' />
         }
 
-        @* Retain-and-hide: keep the Babylon engine alive across tab switches so GLB is not reloaded. *@
+        @* Retain-and-hide: keep the three.js viewer alive across tab switches so GLB is not reloaded. *@
         <div class="qe-pdc-viewer-wrap qe-pdc-polkadot" style="@(CenterMode == "model" ? "" : "display:none")" aria-hidden="@(CenterMode == "model" ? null : "true")">
             <div class="qe-pdc-thumb-area">
                 <QePartViewer @ref="_viewer"

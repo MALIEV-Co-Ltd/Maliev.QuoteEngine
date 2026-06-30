@@ -145,6 +145,69 @@
   let blazorReady = false;
   let loadingProgress = 0;
 
+  function createInlineViewerBridge() {
+    const timeoutMs = 12000;
+    let runtime = null;
+    const pending = [];
+
+    function flushPending() {
+      while (pending.length > 0) {
+        const item = pending.shift();
+        invoke(item.methodName, item.args).then(item.resolve, item.reject);
+      }
+    }
+
+    function invoke(methodName, args) {
+      if (runtime && typeof runtime[methodName] === "function") {
+        return Promise.resolve(runtime[methodName].apply(runtime, args));
+      }
+
+      return new Promise(function (resolve, reject) {
+        const timeout = window.setTimeout(function () {
+          const index = pending.findIndex(function (item) { return item.resolve === resolve; });
+          if (index >= 0) {
+            pending.splice(index, 1);
+          }
+          reject(new Error("3D preview runtime is still loading."));
+        }, timeoutMs);
+
+        pending.push({
+          methodName,
+          args,
+          resolve: function (value) {
+            window.clearTimeout(timeout);
+            resolve(value);
+          },
+          reject: function (error) {
+            window.clearTimeout(timeout);
+            reject(error);
+          }
+        });
+      });
+    }
+
+    return {
+      registerRuntime: function (nextRuntime) {
+        runtime = nextRuntime || null;
+        flushPending();
+      },
+      createPreview: function () {
+        return invoke("createPreview", Array.prototype.slice.call(arguments));
+      },
+      disposePreview: function () {
+        return invoke("disposePreview", Array.prototype.slice.call(arguments));
+      },
+      resetPreviewCamera: function () {
+        return invoke("resetPreviewCamera", Array.prototype.slice.call(arguments));
+      },
+      resizePreviews: function () {
+        return invoke("resizePreviews", Array.prototype.slice.call(arguments));
+      }
+    };
+  }
+
+  window.quoteInlineViewer = window.quoteInlineViewer || createInlineViewerBridge();
+
   function updateLoadingProgress() {
     const blazorProgress = blazorReady ? 50 : (loadedResources / Math.max(totalResources + 2, 1)) * 50;
     const replicadProgress = replicadReady ? 50 : 0;

@@ -60,7 +60,7 @@ public sealed class QuotePartViewModel
     public IReadOnlyList<string> OverlayGlbUrls { get; set; } = [];
     public decimal? UnitPriceTHB { get; set; }
     public List<QuotePartAttachmentDto> DrawingFiles { get; set; } = [];
-    public QuotePartViewerSettingsDto ViewerSettings { get; set; } = new("iso", true, true, false);
+    public QuotePartViewerSettingsDto ViewerSettings { get; set; } = new("iso", null, true, false);
 
     public void ApplyProjectNewProcessSelection(string? processId, QuoteReferenceDataResponse? referenceData)
     {

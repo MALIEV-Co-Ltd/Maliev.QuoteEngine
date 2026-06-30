@@ -63,7 +63,6 @@ public sealed class QuoteEngineSourceTests
     public void QuoteEngine_animation_surfaces_do_not_default_to_reduced_motion()
     {
         var loader = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
-        var viewerScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js");
 
         Assert.Contains("setMotion(resolveMotion(false));", loader, StringComparison.Ordinal);
         Assert.Contains("const isMotionReduced = resolveMotion(false);", loader, StringComparison.Ordinal);
@@ -72,11 +71,6 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("prefers-reduced-motion", loader, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("matchMedia('(prefers-reduced-motion", loader, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("matchMedia(\"(prefers-reduced-motion", loader, StringComparison.OrdinalIgnoreCase);
-
-        Assert.DoesNotContain("prefers-reduced-motion", viewerScript, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("reducedMotion", viewerScript, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("matchMedia('(prefers-reduced-motion", viewerScript, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("matchMedia(\"(prefers-reduced-motion", viewerScript, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -486,9 +480,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Single(deserialized.DrawingFiles);
         Assert.Equal("Drawing", deserialized.DrawingFiles[0].Kind);
         Assert.Equal("iso", deserialized.ViewerSettings.CameraPreset);
-        Assert.Equal("realistic", deserialized.ViewerSettings.RenderMode);
+        Assert.Equal("solid", deserialized.ViewerSettings.RenderMode);
         Assert.Equal("orthographic", deserialized.ViewerSettings.CameraProjection);
-        Assert.True(deserialized.ViewerSettings.EdgesEnabled);
+        Assert.True(deserialized.ViewerSettings.EdgesEnabled.GetValueOrDefault());
         Assert.False(deserialized.ViewerSettings.GridEnabled);
         Assert.True(deserialized.ViewerSettings.DfmOverlayEnabled);
         Assert.Contains("\"finishId\"", json, StringComparison.Ordinal);
@@ -924,7 +918,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private string _projectName = string.Empty;", component, StringComparison.Ordinal);
         Assert.Contains("OpenSketchAsync", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-sketch.js", component, StringComparison.Ordinal);
-        Assert.Contains("js/quote-inline-viewer.js", index, StringComparison.Ordinal);
+        Assert.Contains("js/quote-inline-viewer-three.js", index, StringComparison.Ordinal);
         Assert.Contains("initSketchCanvas", component, StringComparison.Ordinal);
         Assert.Contains("setSketchBrushColor", component, StringComparison.Ordinal);
         Assert.Contains("exportSketchCanvas", component, StringComparison.Ordinal);
@@ -1868,7 +1862,7 @@ public sealed class QuoteEngineSourceTests
         // Live reasoning renders as a single interleaved stream of model thoughts and concise tool markers
         // (Claude Code style), replacing the numbered tool-call summary that used to sit at the bottom.
         Assert.Contains("class=\"qe-agent-reasoning-stream\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-reasoning-thought\"", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-reasoning-thought", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-reasoning-tool\"", component, StringComparison.Ordinal);
         Assert.Contains("AppendReasoningThought(streamEvent.Thought)", component, StringComparison.Ordinal);
         Assert.Contains("AddReasoningTool(ThinkingStepTitle(step))", component, StringComparison.Ordinal);
@@ -1877,6 +1871,23 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("class=\"qe-agent-thinking-shell\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-thinking-step-card\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-model-thinking\"", component, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentReasoning_thoughts_are_rendered_with_markdown_support()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
+            .ReplaceLineEndings("\n");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("class=\"qe-agent-reasoning-thought qe-agent-markdown\"", component, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentMarkdownRenderer.Render(entry.Text)", component, StringComparison.Ordinal);
+
+        var reasoningStyleBlock = ExtractSourceBlock(styles, ".qe-agent-reasoning {", ".qe-agent-reasoning-summary {");
+        Assert.Contains("background: transparent;", reasoningStyleBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("color-mix", reasoningStyleBlock, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-reasoning-stream", styles, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -4167,7 +4178,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("aria-label=\"Rotate model 90 degrees\"", viewer, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"Toggle section cut\"", viewer, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Filled.FlipCameraIos", viewer, StringComparison.Ordinal);
-        Assert.Contains("private string _renderMode = \"realistic\";", viewer, StringComparison.Ordinal);
+        Assert.Contains("private string _renderMode = \"solid\";", viewer, StringComparison.Ordinal);
         Assert.Contains("private bool _ortho = true;", viewer, StringComparison.Ordinal);
         Assert.Contains("[Parameter] public QuotePartViewerSettingsDto?", viewer, StringComparison.Ordinal);
         Assert.Contains("ViewerSettings=\"@Part.ViewerSettings\"", ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor"), StringComparison.Ordinal);
@@ -4175,10 +4186,6 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("public string CameraProjection", ReadRepoFile("Maliev.QuoteEngine.Shared", "Quotes", "QuoteEngineDtos.cs"), StringComparison.Ordinal);
         Assert.Contains("renderMode = _renderMode", viewer, StringComparison.Ordinal);
         Assert.Contains("cameraProjection = _ortho ? \"orthographic\" : \"perspective\"", viewer, StringComparison.Ordinal);
-        Assert.Contains("normalizeMode(settings.renderMode)", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js"), StringComparison.Ordinal);
-        Assert.Contains("normalizeMode(settings.initialRenderMode)", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js"), StringComparison.Ordinal);
-        Assert.Contains("normalizeMode(settings.targetRenderMode)", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js"), StringComparison.Ordinal);
-        Assert.Contains("if (isMaterialAppliedMode) mesh.material = mat;", ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js"), StringComparison.Ordinal);
         Assert.Contains(".qe-viewer-loading-orbit", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-vt-subtools", styles, StringComparison.Ordinal);
     }
@@ -4188,51 +4195,12 @@ public sealed class QuoteEngineSourceTests
     {
         var detailCard = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartDetailCard.razor");
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js");
 
         Assert.Contains("[Parameter] public string? MaterialId", viewer, StringComparison.Ordinal);
         Assert.Contains("MaterialId=\"@Part.MaterialId\"", detailCard, StringComparison.Ordinal);
         Assert.Contains("materialId = MaterialId", viewer, StringComparison.Ordinal);
         Assert.Contains("await _module.InvokeVoidAsync(\"setPartMaterial\", _canvasId, ProcessId, FinishCode, RoughnessCode, PartColor, MaterialId);", viewer, StringComparison.Ordinal);
         Assert.Contains("MaterialId != _lastMaterialId", viewer, StringComparison.Ordinal);
-
-        Assert.Contains("MATERIAL_REALISTIC", js, StringComparison.Ordinal);
-        Assert.Contains("'steel'", js, StringComparison.Ordinal);
-        Assert.Contains("'stainless-steel'", js, StringComparison.Ordinal);
-        Assert.Contains("'black-pom'", js, StringComparison.Ordinal);
-        Assert.Contains("'white-pom'", js, StringComparison.Ordinal);
-        Assert.Contains("'blue-pom'", js, StringComparison.Ordinal);
-        Assert.Contains("'brass'", js, StringComparison.Ordinal);
-        Assert.Contains("'copper'", js, StringComparison.Ordinal);
-        Assert.Contains("'bronze'", js, StringComparison.Ordinal);
-        Assert.Contains("'titanium'", js, StringComparison.Ordinal);
-        Assert.Contains("'abs'", js, StringComparison.Ordinal);
-        Assert.Contains("'petg'", js, StringComparison.Ordinal);
-        Assert.Contains("'nylon'", js, StringComparison.Ordinal);
-        Assert.Contains("'nylon-powder'", js, StringComparison.Ordinal);
-        Assert.Contains("'peek'", js, StringComparison.Ordinal);
-        Assert.Contains("'carbon-fiber'", js, StringComparison.Ordinal);
-        Assert.Contains("'petg-clear'", js, StringComparison.Ordinal);
-        Assert.Contains("'acrylic-clear'", js, StringComparison.Ordinal);
-        Assert.Contains("'resin-clear'", js, StringComparison.Ordinal);
-        Assert.Contains("resolveRealisticMaterialKey", js, StringComparison.Ordinal);
-        Assert.Contains("materialKey.includes('pom')", js, StringComparison.Ordinal);
-        Assert.Contains("materialKey.includes('brass')", js, StringComparison.Ordinal);
-        Assert.Contains("materialKey.includes('carbon')", js, StringComparison.Ordinal);
-        Assert.Contains("materialKey.includes('stainless')", js, StringComparison.Ordinal);
-        Assert.Contains("processKey === 'sls'", js, StringComparison.Ordinal);
-        Assert.Contains("applyRealisticTransparencySettings", js, StringComparison.Ordinal);
-        Assert.Contains("material.transparencyMode = BABYLON.Material?.MATERIAL_ALPHABLEND ?? 2;", js, StringComparison.Ordinal);
-        Assert.Contains("material.needDepthPrePass = true;", js, StringComparison.Ordinal);
-        Assert.Contains("material.separateCullingPass = true;", js, StringComparison.Ordinal);
-        Assert.Contains("material.linkRefractionWithTransparency = true;", js, StringComparison.Ordinal);
-        Assert.Contains("material.useRadianceOverAlpha = true;", js, StringComparison.Ordinal);
-        Assert.Contains("material.useSpecularOverAlpha = true;", js, StringComparison.Ordinal);
-        Assert.Contains("material.indexOfRefraction = preset.indexOfRefraction;", js, StringComparison.Ordinal);
-        Assert.Contains("material.subSurface.isRefractionEnabled", js, StringComparison.Ordinal);
-        Assert.Contains("material.subSurface.isTranslucencyEnabled = true;", js, StringComparison.Ordinal);
-        Assert.Contains("const mat = albedo || realisticPreset", js, StringComparison.Ordinal);
-        Assert.Contains("setPartMaterial(canvasId, processId, finishCode, roughnessCode, cssColor, materialId", js, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -4255,103 +4223,21 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuotePartViewerJs_has_correct_window_handle_and_no_internal_tools()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js");
-
-        // Customer-facing debug handle
-        Assert.Contains("window.quotePartViewer", js);
-
-        // Internal tools must not be in the exported debug handle
-        // (they may still exist as functions — just not exported via the handle)
-        var handleBlock = ExtractWindowHandleBlock(js, "quotePartViewer");
-        Assert.DoesNotContain("enableMeasureTool", handleBlock);
-        Assert.DoesNotContain("enableThicknessAnalysis", handleBlock);
-        Assert.DoesNotContain("enableBodyPicking", handleBlock);
-
-        // Must have the customer-facing exports
-        Assert.Contains("initialize", handleBlock);
-        Assert.Contains("toggleDfmOverlay", handleBlock);
-        Assert.Contains("setCameraPreset", handleBlock);
-        Assert.Contains("collectAdvisoryMeshBuffers", handleBlock);
-        Assert.Contains("runLocalAdvisoryGeometry", handleBlock);
-        Assert.DoesNotContain("tryLoadLocalViewerMeshFromRuntime", handleBlock, StringComparison.Ordinal);
-        Assert.Contains("/quote/v1/geometry/runtime/manifest", js, StringComparison.Ordinal);
-        Assert.Contains("fetchLocalAdvisoryManifest", js, StringComparison.Ordinal);
-        Assert.Contains("LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS = 6", js, StringComparison.Ordinal);
-        Assert.Contains("/quote/v1/geometry/runtime/telemetry", js, StringComparison.Ordinal);
-        Assert.Contains("Local preliminary DFM", js, StringComparison.Ordinal);
-        Assert.Contains("maliev:geometry-local-runtime-complete", js, StringComparison.Ordinal);
-        Assert.Contains("dispatchLocalAdvisoryTelemetry", js, StringComparison.Ordinal);
-        Assert.Contains("postLocalAdvisoryTelemetry", js, StringComparison.Ordinal);
-        Assert.Contains("navigator.sendBeacon", js, StringComparison.Ordinal);
-        Assert.Contains("NotifyLocalGeometryRuntimeComplete", js, StringComparison.Ordinal);
-        Assert.Contains("dispatchLocalAdvisoryStartedTelemetry", js, StringComparison.Ordinal);
-        Assert.Contains("status: 'started'", js, StringComparison.Ordinal);
-        Assert.Contains("inputByteCount: payload?.inputByteCount ?? null", js, StringComparison.Ordinal);
-        Assert.Contains("inputTriangleCount: payload?.inputTriangleCount ?? null", js, StringComparison.Ordinal);
-        Assert.Contains("dispatchLocalAdvisoryUnavailableTelemetry", js, StringComparison.Ordinal);
-        Assert.Contains("status: 'unavailable'", js, StringComparison.Ordinal);
-        Assert.Contains("reason: payload?.reason ?? 'local_runtime_unavailable'", js, StringComparison.Ordinal);
-        Assert.Contains("notifyLocalAdvisoryDotNet", js, StringComparison.Ordinal);
-        Assert.Contains("normalizeAdvisoryFileBytes(options.fileBytes)", js, StringComparison.Ordinal);
-        Assert.Contains("resolveAdvisoryFileBytes(options)", js, StringComparison.Ordinal);
-        Assert.Contains("fileBytesProvider", js, StringComparison.Ordinal);
-        Assert.Contains("{ fileBytes: runtimeFileBytes, fileName: runtimeFileName }", js, StringComparison.Ordinal);
-        Assert.Contains("createLocalViewerMeshFromBuffers", js, StringComparison.Ordinal);
-        Assert.Contains("tryLoadLocalViewerMeshFromRuntime", js, StringComparison.Ordinal);
-        Assert.Contains("operation: 'extract_mesh'", js, StringComparison.Ordinal);
-        Assert.Contains("const wasmUrl = resolveRuntimeAssetUrl(", js, StringComparison.Ordinal);
-        Assert.Contains("manifest.assets?.wasm", js, StringComparison.Ordinal);
-        Assert.Contains("worker.postMessage({ id: messageId, input, processCode, wasmUrl }, transferFiles);", js, StringComparison.Ordinal);
-        Assert.Contains("storagePath: result?.storagePath ?? null", js, StringComparison.Ordinal);
-        Assert.Contains("result.storagePath = typeof options.storagePath === 'string' && options.storagePath.trim()", js, StringComparison.Ordinal);
-        Assert.Contains("metrics: result?.metrics", js, StringComparison.Ordinal);
-        Assert.Contains("issues,", js, StringComparison.Ordinal);
-        Assert.Contains("local_primary", js, StringComparison.Ordinal);
-        Assert.Contains("primary_interactive", js, StringComparison.Ordinal);
-        Assert.DoesNotContain("authority !== 'advisory'", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_tries_browser_runtime_mesh_extraction_before_signed_url_fallback()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        var normalizeIndex = js.IndexOf("browserFileClientId:", StringComparison.Ordinal);
-        Assert.True(normalizeIndex >= 0, "normalizeViewerSettings must preserve the retained browser upload id.");
-
-        var localIndex = js.IndexOf("tryLoadLocalViewerMeshFromRuntime(canvasId, scene, forcedExt, viewerSettings", StringComparison.Ordinal);
-        var fallbackIndex = js.IndexOf("_loadAttempt(0);", StringComparison.Ordinal);
-
-        Assert.True(localIndex >= 0, "initialize should try local runtime mesh extraction.");
-        Assert.True(fallbackIndex >= 0, "initialize should retain signed-url SceneLoader fallback.");
-        Assert.True(localIndex < fallbackIndex, "local runtime mesh extraction must run before signed-url fallback.");
-    }
-
-    [Fact]
     public void QuoteGeometryRuntimeTelemetry_tracks_browser_local_start_attempts()
     {
         var controller = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "GeometryRuntimeController.cs");
         var metrics = ReadRepoFile("Maliev.QuoteEngine.Bff", "BffMetrics.cs");
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
 
         Assert.Contains("public bool IsStarted", controller, StringComparison.Ordinal);
         Assert.Contains("InputByteCount", controller, StringComparison.Ordinal);
         Assert.Contains("InputTriangleCount", controller, StringComparison.Ordinal);
         Assert.Contains("RecordBrowserDfmRuntimeStart", controller, StringComparison.Ordinal);
-        Assert.Contains("inputByteCount: result?.inputByteCount ?? null", js, StringComparison.Ordinal);
-        Assert.Contains("inputTriangleCount: result?.inputTriangleCount ?? null", js, StringComparison.Ordinal);
         Assert.Contains("quote_browser_dfm_runtime_starts", metrics, StringComparison.Ordinal);
         Assert.Contains("quote_browser_dfm_runtime_input_bytes", metrics, StringComparison.Ordinal);
         Assert.Contains("quote_browser_dfm_runtime_input_triangles", metrics, StringComparison.Ordinal);
         Assert.Contains("quote_dfm_server_avoided_input_bytes", metrics, StringComparison.Ordinal);
         Assert.Contains("quote_dfm_server_avoided_input_triangles", metrics, StringComparison.Ordinal);
         Assert.Contains("RecordBrowserDfmRuntimeStart", metrics, StringComparison.Ordinal);
-        Assert.Contains("function dispatchLocalAdvisoryStartedTelemetry(payload)", js, StringComparison.Ordinal);
-        Assert.Contains("dispatchLocalAdvisoryStartedTelemetry(payload);", js, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -4367,129 +4253,6 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Equal("fdm", part.LocalDfmRuntimeRunningProcessId);
         Assert.True(part.LocalDfmRuntimeStartedAtUtc.HasValue);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_clears_local_dfm_panel_only_when_blazor_accepts_result()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js");
-
-        Assert.Contains("const accepted = await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeComplete', result);", js, StringComparison.Ordinal);
-        Assert.Contains("return accepted === true;", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_suppresses_internal_local_dfm_panel_when_blazor_handles_status()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("function shouldRenderLocalAdvisoryPanel(options)", js, StringComparison.Ordinal);
-        Assert.Contains("const renderLocalPanel = shouldRenderLocalAdvisoryPanel(options);", js, StringComparison.Ordinal);
-        Assert.DoesNotContain("\n    renderLocalAdvisoryStatus(canvasId, 'pending');", js, StringComparison.Ordinal);
-        Assert.Contains("if (renderLocalPanel) renderLocalAdvisoryStatus(canvasId, 'pending');", js, StringComparison.Ordinal);
-        Assert.Contains("if (renderLocalPanel) renderLocalAdvisoryStatus(canvasId, 'complete', result);", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_notifies_blazor_when_local_dfm_starts()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("function notifyLocalAdvisoryStartedDotNet(dotNetRef, payload)", js, StringComparison.Ordinal);
-        Assert.Contains("NotifyLocalGeometryRuntimeStarted", js, StringComparison.Ordinal);
-        Assert.Contains("const LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS = 6;", js, StringComparison.Ordinal);
-        Assert.Contains("function waitLocalAdvisoryManifestRetry(attempt)", js, StringComparison.Ordinal);
-        Assert.Contains("attempt < LOCAL_ADVISORY_MANIFEST_RETRY_ATTEMPTS - 1", js, StringComparison.Ordinal);
-        Assert.Contains("await waitLocalAdvisoryManifestRetry(attempt);", js, StringComparison.Ordinal);
-        Assert.DoesNotContain("for (let attempt = 0; attempt < 2; attempt += 1)", js, StringComparison.Ordinal);
-
-        var runStart = js.IndexOf("export async function runLocalAdvisoryGeometry", StringComparison.Ordinal);
-        Assert.True(runStart >= 0, "runLocalAdvisoryGeometry must exist.");
-        var runEnd = js.IndexOf("\nfunction getPointerRenderCoordinates", runStart, StringComparison.Ordinal);
-        Assert.True(runEnd > runStart, "runLocalAdvisoryGeometry block must end before pointer helpers.");
-        var runBlock = js[runStart..runEnd];
-
-        var inputIndex = runBlock.IndexOf("const runtimeInput =", StringComparison.Ordinal);
-        var startedIndex = runBlock.IndexOf("await notifyLocalAdvisoryStartedDotNet(\n        options.dotNetRef", StringComparison.Ordinal);
-        var fetchIndex = runBlock.IndexOf("const manifestResponse = await fetch", StringComparison.Ordinal);
-
-        Assert.True(inputIndex >= 0, "runtime input creation must exist");
-        Assert.True(startedIndex > inputIndex, "local DFM start must be reported after local input is available");
-        Assert.True(fetchIndex > startedIndex, "local DFM start must be reported before manifest/worker work can stall");
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_uses_geometry_manifest_device_profile_timeout()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("function resolveLocalAdvisoryDeviceProfileName()", js, StringComparison.Ordinal);
-        Assert.Contains("function resolveLocalAdvisoryTimeoutMs(manifest, options = {})", js, StringComparison.Ordinal);
-        Assert.Contains("manifest?.deviceProfiles", js, StringComparison.Ordinal);
-        Assert.Contains("resolveLocalAdvisoryTimeoutMs(manifest, options));", js, StringComparison.Ordinal);
-        Assert.DoesNotContain(
-            "Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 15000",
-            js,
-            StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_serializes_local_geometry_workers()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("let localAdvisoryWorkerQueue = Promise.resolve();", js, StringComparison.Ordinal);
-        Assert.Contains("function enqueueLocalAdvisoryWorker(work)", js, StringComparison.Ordinal);
-        Assert.Contains("localAdvisoryWorkerQueue = run.catch(() => {});", js, StringComparison.Ordinal);
-        Assert.Contains("const result = await enqueueLocalAdvisoryWorker(() => {", js, StringComparison.Ordinal);
-        Assert.Contains("if (localAdvisoryRuns[canvasId] !== runId) return null;", js, StringComparison.Ordinal);
-        Assert.Contains("return analyzeWithLocalAdvisoryWorker(", js, StringComparison.Ordinal);
-        Assert.Contains("if (!result) {", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_honors_geometry_manifest_device_input_limits()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("function isLocalAdvisoryInputWithinDeviceProfile(manifest, input)", js, StringComparison.Ordinal);
-        Assert.Contains("profile?.maxInputBytes", js, StringComparison.Ordinal);
-        Assert.Contains("profile?.maxTriangles", js, StringComparison.Ordinal);
-        Assert.Contains("function getArrayLikeByteLength(values, bytesPerElement)", js, StringComparison.Ordinal);
-        Assert.Contains("countLocalAdvisoryInputTriangles(input)", js, StringComparison.Ordinal);
-        Assert.Contains("if (!isLocalAdvisoryInputWithinDeviceProfile(manifest, runtimeInput))", js, StringComparison.Ordinal);
-        Assert.Contains("clearLocalAdvisoryPanel(canvasId);", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_notifies_blazor_when_local_dfm_cannot_run()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("function notifyLocalAdvisoryUnavailableDotNet(dotNetRef, payload)", js, StringComparison.Ordinal);
-        Assert.Contains("NotifyLocalGeometryRuntimeUnavailable", js, StringComparison.Ordinal);
-        Assert.Contains("options.dotNetRef", js, StringComparison.Ordinal);
-        Assert.Contains("dispatchLocalAdvisoryUnavailableTelemetry(payload);", js, StringComparison.Ordinal);
-        Assert.Contains("'input_too_large'", js, StringComparison.Ordinal);
-        Assert.Contains("'worker_failed'", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_refuses_missing_process_code_instead_of_defaulting_to_fdm()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("const processCode = typeof options.processCode === 'string' && options.processCode.trim()", js, StringComparison.Ordinal);
-        Assert.Contains("processCode,", js, StringComparison.Ordinal);
-        Assert.Contains("unavailablePayload('process_code_missing')", js, StringComparison.Ordinal);
-        Assert.DoesNotContain("options.processCode ?? 'FDM'", js, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -4788,224 +4551,6 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteInlineViewer_creates_babylon_engine_before_scene()
-    {
-        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        var createSceneStart = viewer.IndexOf("function createScene(container, meshData)", StringComparison.Ordinal);
-        Assert.True(createSceneStart >= 0, "createScene must exist.");
-
-        var createSceneEnd = viewer.IndexOf("\n  function disposePreview", createSceneStart, StringComparison.Ordinal);
-        Assert.True(createSceneEnd > createSceneStart, "createScene must end before disposePreview.");
-
-        var createScene = viewer[createSceneStart..createSceneEnd];
-        var engineIndex = createScene.IndexOf("engine = new BABYLON.Engine(canvas, true", StringComparison.Ordinal);
-        var sceneIndex = createScene.IndexOf("scene = new BABYLON.Scene(engine);", StringComparison.Ordinal);
-        var vertexDataIndex = createScene.IndexOf("var vertexData = new BABYLON.VertexData();", StringComparison.Ordinal);
-        var meshIndex = createScene.IndexOf("var mesh = new BABYLON.Mesh('preview', scene);", StringComparison.Ordinal);
-        var materialIndex = createScene.IndexOf("mesh.material = buildMaterial(scene);", StringComparison.Ordinal);
-        var activeCameraIndex = createScene.IndexOf("scene.activeCamera = camera;", StringComparison.Ordinal);
-        var initialRenderIndex = createScene.IndexOf("var renderInitialFrame = function ()", StringComparison.Ordinal);
-        var renderLoopIndex = createScene.IndexOf("engine.runRenderLoop(function ()", StringComparison.Ordinal);
-        var firstRenderCallIndex = createScene.IndexOf("renderInitialFrame();", renderLoopIndex, StringComparison.Ordinal);
-        var animationFrameRenderIndex = createScene.IndexOf("requestAnimationFrame(renderInitialFrame);", StringComparison.Ordinal);
-        var readyRenderIndex = createScene.IndexOf("scene.executeWhenReady(renderInitialFrame);", StringComparison.Ordinal);
-
-        Assert.True(engineIndex >= 0, "inline viewer must construct a Babylon engine for the canvas.");
-        Assert.True(sceneIndex > engineIndex, "Babylon Scene must be constructed with the canvas engine.");
-        Assert.True(vertexDataIndex > sceneIndex, "Vertex data must be applied only after the scene exists.");
-        Assert.True(meshIndex > sceneIndex, "Preview mesh must be constructed only after the scene exists.");
-        Assert.True(materialIndex > sceneIndex, "Preview material must be constructed only after the scene exists.");
-        Assert.Contains("BABYLON.VertexData.ComputeNormals(vertices, indexArray, normals);", createScene, StringComparison.Ordinal);
-        Assert.True(createScene.IndexOf("BABYLON.VertexData.ComputeNormals(vertices, indexArray, normals);", StringComparison.Ordinal) < meshIndex,
-            "Inline preview must recompute normals before applying vertex data to avoid backface-looking dark meshes.");
-        Assert.True(activeCameraIndex > meshIndex, "Inline preview must set the generated camera as the active scene camera.");
-        Assert.True(initialRenderIndex > activeCameraIndex, "Inline preview must define a deterministic first-frame render helper.");
-        Assert.True(firstRenderCallIndex > renderLoopIndex, "Inline preview must render once after the render loop starts.");
-        Assert.True(animationFrameRenderIndex > firstRenderCallIndex, "Inline preview must schedule a next-frame render for browser paint timing.");
-        Assert.True(readyRenderIndex > firstRenderCallIndex, "Inline preview must render again when Babylon reports the scene ready.");
-        Assert.DoesNotContain("new BABYLON.Scene();", createScene, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuoteInlineViewer_validates_mesh_buffers_before_babylon_scene_creation()
-    {
-        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("function validateMeshData(meshData)", viewer, StringComparison.Ordinal);
-        Assert.Contains("throw new Error('3D preview mesh is empty');", viewer, StringComparison.Ordinal);
-        Assert.Contains("throw new Error('3D preview mesh contains invalid coordinates');", viewer, StringComparison.Ordinal);
-
-        var createSceneStart = viewer.IndexOf("function createScene(container, meshData)", StringComparison.Ordinal);
-        Assert.True(createSceneStart >= 0, "createScene must exist.");
-
-        var createSceneEnd = viewer.IndexOf("\n  function disposePreview", createSceneStart, StringComparison.Ordinal);
-        Assert.True(createSceneEnd > createSceneStart, "createScene must end before disposePreview.");
-
-        var createScene = viewer[createSceneStart..createSceneEnd];
-        var validationIndex = createScene.IndexOf("validateMeshData(meshData);", StringComparison.Ordinal);
-        var verticesIndex = createScene.IndexOf("var vertices = new Float32Array(meshData.vertices);", StringComparison.Ordinal);
-        var engineIndex = createScene.IndexOf("engine = new BABYLON.Engine(canvas, true", StringComparison.Ordinal);
-
-        Assert.True(validationIndex >= 0, "createScene must validate mesh data first.");
-        Assert.True(verticesIndex > validationIndex, "createScene must not read typed arrays before validation.");
-        Assert.True(engineIndex > validationIndex, "createScene must not construct Babylon before validation.");
-        Assert.Contains("if (!Number.isFinite(vx) || !Number.isFinite(vy) || !Number.isFinite(vz))", createScene, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuoteInlineViewer_disposes_partial_babylon_scene_when_creation_fails()
-    {
-        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        var createSceneStart = viewer.IndexOf("function createScene(container, meshData)", StringComparison.Ordinal);
-        Assert.True(createSceneStart >= 0, "createScene must exist.");
-
-        var createSceneEnd = viewer.IndexOf("\n  function disposePreview", createSceneStart, StringComparison.Ordinal);
-        Assert.True(createSceneEnd > createSceneStart, "createScene must end before disposePreview.");
-
-        var createScene = viewer[createSceneStart..createSceneEnd];
-        var engineIndex = createScene.IndexOf("var engine = null;", StringComparison.Ordinal);
-        var sceneIndex = createScene.IndexOf("var scene = null;", StringComparison.Ordinal);
-        var tryIndex = createScene.IndexOf("try {", StringComparison.Ordinal);
-        var catchIndex = createScene.IndexOf("} catch (creationError) {", StringComparison.Ordinal);
-
-        Assert.True(engineIndex >= 0, "createScene must track a partial engine for cleanup.");
-        Assert.True(sceneIndex > engineIndex, "createScene must track a partial scene for cleanup.");
-        Assert.True(tryIndex > sceneIndex, "Babylon scene setup must run inside the cleanup try block.");
-        Assert.True(catchIndex > tryIndex, "createScene must catch setup failures before they leak resources.");
-        Assert.Contains("if (engine) {", createScene, StringComparison.Ordinal);
-        Assert.Contains("engine.stopRenderLoop();", createScene, StringComparison.Ordinal);
-        Assert.Contains("engine.dispose();", createScene, StringComparison.Ordinal);
-        Assert.Contains("if (scene) {", createScene, StringComparison.Ordinal);
-        Assert.Contains("scene.dispose();", createScene, StringComparison.Ordinal);
-        Assert.Contains("if (canvas.parentNode) {", createScene, StringComparison.Ordinal);
-        Assert.Contains("throw creationError;", createScene, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuoteInlineViewer_rejects_pending_preview_when_worker_errors()
-    {
-        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        var promiseStart = viewer.IndexOf("var result = await new Promise(function (resolve, reject)", StringComparison.Ordinal);
-        Assert.True(promiseStart >= 0, "inline viewer build promise must exist.");
-
-        var promiseEnd = viewer.IndexOf("worker.postMessage({ type: 'build', id: buildId, commands: commands });", promiseStart, StringComparison.Ordinal);
-        Assert.True(promiseEnd > promiseStart, "inline viewer build promise must post to the worker.");
-
-        var buildPromise = viewer[promiseStart..promiseEnd];
-        Assert.Contains("var cleanup = function ()", buildPromise, StringComparison.Ordinal);
-        Assert.Contains("worker.removeEventListener('message', handler);", buildPromise, StringComparison.Ordinal);
-        Assert.Contains("worker.removeEventListener('error', errorHandler);", buildPromise, StringComparison.Ordinal);
-        Assert.Contains("var errorHandler = function (event)", buildPromise, StringComparison.Ordinal);
-        Assert.Contains("reject(new Error(event.message || '3D worker failed while building the model'));", buildPromise, StringComparison.Ordinal);
-        Assert.Contains("worker.addEventListener('error', errorHandler);", buildPromise, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuoteInlineViewer_cleans_up_when_worker_post_throws()
-    {
-        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        var promiseStart = viewer.IndexOf("var result = await new Promise(function (resolve, reject)", StringComparison.Ordinal);
-        Assert.True(promiseStart >= 0, "inline viewer build promise must exist.");
-
-        var promiseEnd = viewer.IndexOf("\n        });", promiseStart, StringComparison.Ordinal);
-        Assert.True(promiseEnd > promiseStart, "inline viewer build promise must be closed.");
-
-        var buildPromise = viewer[promiseStart..promiseEnd];
-        Assert.Contains("try {", buildPromise, StringComparison.Ordinal);
-        Assert.Contains("worker.postMessage({ type: 'build', id: buildId, commands: commands });", buildPromise, StringComparison.Ordinal);
-        Assert.Contains("} catch (postError) {", buildPromise, StringComparison.Ordinal);
-        Assert.Contains("cleanup();", buildPromise, StringComparison.Ordinal);
-        Assert.Contains("reject(postError instanceof Error ? postError : new Error('3D worker could not receive the model commands'));", buildPromise, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuoteInlineViewer_rejects_create_preview_after_rendering_error_fallback()
-    {
-        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("function failPreview(container, message)", viewer, StringComparison.Ordinal);
-
-        var createPreviewStart = viewer.IndexOf("createPreview: async function (containerId, commandsPayload)", StringComparison.Ordinal);
-        Assert.True(createPreviewStart >= 0, "createPreview must exist.");
-
-        var createPreviewEnd = viewer.IndexOf("\n    disposePreview: disposePreview", createPreviewStart, StringComparison.Ordinal);
-        Assert.True(createPreviewEnd > createPreviewStart, "createPreview must end before disposePreview export.");
-
-        var createPreview = viewer[createPreviewStart..createPreviewEnd];
-        Assert.Contains("failPreview(container, 'Could not parse 3D commands');", createPreview, StringComparison.Ordinal);
-        Assert.Contains("failPreview(container, 'No shapes to display');", createPreview, StringComparison.Ordinal);
-        Assert.Contains("failPreview(container, '3D engine not available');", createPreview, StringComparison.Ordinal);
-        Assert.Contains("throw e instanceof Error ? e : new Error(message);", createPreview, StringComparison.Ordinal);
-        Assert.DoesNotContain("showPreviewError(container, 'Could not parse 3D commands');\n        return;", createPreview, StringComparison.Ordinal);
-        Assert.DoesNotContain("showPreviewError(container, 'No shapes to display');\n        return;", createPreview, StringComparison.Ordinal);
-        Assert.DoesNotContain("showPreviewError(container, '3D engine not available');\n        return;", createPreview, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuoteInlineViewer_accepts_parsed_command_payloads_from_js_interop()
-    {
-        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("function parseCommandsPayload(commandsPayload)", viewer, StringComparison.Ordinal);
-        Assert.Contains("if (typeof commandsPayload === 'string')", viewer, StringComparison.Ordinal);
-        Assert.Contains("return unwrapCommandsPayload(commandsPayload);", viewer, StringComparison.Ordinal);
-        Assert.Contains("createPreview: async function (containerId, commandsPayload)", viewer, StringComparison.Ordinal);
-        Assert.Contains("commands = parseCommandsPayload(commandsPayload);", viewer, StringComparison.Ordinal);
-        Assert.DoesNotContain("createPreview: async function (containerId, commandsJson)", viewer, StringComparison.Ordinal);
-        Assert.DoesNotContain("commands = JSON.parse(commandsJson);", viewer, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuoteInlineViewer_unwraps_common_command_payload_containers()
-    {
-        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        var parserStart = viewer.IndexOf("function parseCommandsPayload(commandsPayload)", StringComparison.Ordinal);
-        Assert.True(parserStart >= 0, "parseCommandsPayload must exist.");
-
-        var parserEnd = viewer.IndexOf("\n  function buildDefaultLighting", parserStart, StringComparison.Ordinal);
-        Assert.True(parserEnd > parserStart, "parseCommandsPayload must end before lighting setup.");
-
-        var parser = viewer[parserStart..parserEnd];
-        Assert.Contains("return unwrapCommandsPayload(JSON.parse(commandsPayload));", parser, StringComparison.Ordinal);
-        Assert.Contains("return unwrapCommandsPayload(commandsPayload);", parser, StringComparison.Ordinal);
-        Assert.Contains("function unwrapCommandsPayload(value)", viewer, StringComparison.Ordinal);
-        Assert.Contains("return value.commands;", viewer, StringComparison.Ordinal);
-        Assert.Contains("return value.cadCommands;", viewer, StringComparison.Ordinal);
-        Assert.Contains("return value.cad_commands;", viewer, StringComparison.Ordinal);
-        Assert.Contains("return value.model;", viewer, StringComparison.Ordinal);
-        Assert.Contains("return value.preview;", viewer, StringComparison.Ordinal);
-        Assert.Contains("return value.cad;", viewer, StringComparison.Ordinal);
-        Assert.Contains("return value.geometry;", viewer, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuoteInlineViewer_normalizes_legacy_scalar_command_params_before_worker_build()
-    {
-        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-inline-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        Assert.Contains("function normalizeCommandsForWorker(commands)", viewer, StringComparison.Ordinal);
-        Assert.Contains("function normalizeNumericArray(value)", viewer, StringComparison.Ordinal);
-        Assert.Contains("return [numeric];", viewer, StringComparison.Ordinal);
-        Assert.Contains("command.params = normalizeNumericArray(command.params);", viewer, StringComparison.Ordinal);
-        Assert.Contains("segment.params = normalizeNumericArray(segment.params);", viewer, StringComparison.Ordinal);
-        Assert.Contains("commands = normalizeCommandsForWorker(commands);", viewer, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void QeInlinePartViewer_implements_async_disposal_for_preview_resources()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")
@@ -5283,21 +4828,6 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuotePartViewerJs_initial_local_dfm_uses_retained_browser_file_bytes()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js")
-            .ReplaceLineEndings("\n");
-
-        var runIndex = js.IndexOf("runLocalAdvisoryGeometry(canvasId, {", StringComparison.Ordinal);
-        Assert.True(runIndex >= 0, "Initial model-load local DFM invocation must exist.");
-
-        var runBlock = js[runIndex..js.IndexOf("});", runIndex, StringComparison.Ordinal)];
-        Assert.Contains("clientUploadId: viewerSettings.browserFileClientId ?? viewerSettings.clientUploadId", runBlock, StringComparison.Ordinal);
-        Assert.Contains("fileName: viewerSettings.browserFileName ?? viewerSettings.fileName", runBlock, StringComparison.Ordinal);
-        Assert.Contains("fileBytesProvider: viewerSettings.fileBytesProvider ?? 'quoteEngineUploads'", runBlock, StringComparison.Ordinal);
-    }
-
-    [Fact]
     public void QuotePartViewer_DefersBrowserLocalDfmUntilJsModuleExists()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor")
@@ -5516,89 +5046,6 @@ public sealed class QuoteEngineSourceTests
     }
 
     private static string GetSourceDirectory([CallerFilePath] string sourceFile = "") => Path.GetDirectoryName(sourceFile) ?? Directory.GetCurrentDirectory();
-
-    [Fact]
-    public void QuotePartViewerJs_NormalizeViewerSettings_IncludesInitialRenderModeAndTransition()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
-
-        // Verify normalizeViewerSettings parses initialRenderMode, targetRenderMode, and renderModeTransition
-        Assert.Contains("const initialRenderMode = normalizeMode(settings.initialRenderMode);", js, StringComparison.Ordinal);
-        Assert.Contains("const targetRenderMode = normalizeMode(settings.targetRenderMode);", js, StringComparison.Ordinal);
-        Assert.Contains("const transition = settings.renderModeTransition", js, StringComparison.Ordinal);
-        Assert.Contains("transitionEnabled", js, StringComparison.Ordinal);
-        Assert.Contains("fallbackDelayMs", js, StringComparison.Ordinal);
-        Assert.Contains("transitionMs", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_StagedRender_InitialRenderModeDefaultsToSolidWhenTargetIsRealistic()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
-
-        // Verify that when target is realistic and initial is not realistic, solid is used for first paint
-        Assert.Contains("const effectiveInitialMode = (targetMode === 'realistic' && initialMode !== 'realistic')", js, StringComparison.Ordinal);
-        Assert.Contains("setRenderMode(canvasId, effectiveInitialMode);", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_StagedRender_ScheduleFallbackTransition_UsesConfiguredDelayAndDuration()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
-
-        // Verify fallback scheduling with configurable delay and transition duration
-        Assert.Contains("function scheduleRenderModeFallback(canvasId, delayMs = 1200, transitionMs = 250)", js, StringComparison.Ordinal);
-        Assert.Contains("clearTimeout(state.fallbackTimer);", js, StringComparison.Ordinal);
-        Assert.Contains("state.fallbackTimer = setTimeout(() =>", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_StagedRender_TransitionToRealistic_AnimatesAlphaFade()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
-
-        // Verify transition animates material alpha from 0 to 1
-        Assert.Contains("function transitionToRealistic(canvasId, transitionMs = 250)", js, StringComparison.Ordinal);
-        Assert.Contains("sharedRealisticMaterial.alpha = 0;", js, StringComparison.Ordinal);
-        Assert.Contains("animateMaterialAlpha(sharedRealisticMaterial, 0, 1, scene, transitionMs);", js, StringComparison.Ordinal);
-        Assert.Contains("activeRenderModes[canvasId] = 'realistic';", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_StagedRender_RuntimeComplete_CancelsFallbackAndTransitions()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
-
-        // Verify that on runtime complete, fallback timer is cleared and transition occurs
-        Assert.Contains("if (transitionState.fallbackTimer) {", js, StringComparison.Ordinal);
-        Assert.Contains("clearTimeout(transitionState.fallbackTimer);", js, StringComparison.Ordinal);
-        Assert.Contains("transitionState.fallbackTimer = null;", js, StringComparison.Ordinal);
-        Assert.Contains("transitionToRealistic(canvasId, transitionState.transitionMs);", js, StringComparison.Ordinal);
-        Assert.Contains("transitionState.completed = true;", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_StagedRender_ManualModeChange_UpdatesTransitionState()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
-
-        // Verify that manual render mode change updates transition state
-        Assert.Contains("const transitionState = renderModeTransitionState[canvasId];", js, StringComparison.Ordinal);
-        Assert.Contains("if (mode === 'realistic') {", js, StringComparison.Ordinal);
-        Assert.Contains("targetRenderModes[canvasId] = mode;", js, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void QuotePartViewerJs_UsesProjectNewCanvasFadeInContract()
-    {
-        var js = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer.js").ReplaceLineEndings("\n");
-
-        Assert.Contains("canvas.style.opacity = '0';", js, StringComparison.Ordinal);
-        Assert.Contains("canvas.style.transition = `opacity ${CONFIG.ANIMATION_CANVAS_FADE_IN} ease-in`;", js, StringComparison.Ordinal);
-        Assert.Contains("requestAnimationFrame(() => { canvas.style.opacity = '1'; });", js, StringComparison.Ordinal);
-        Assert.DoesNotContain("engine.loadingScreen = { displayLoadingUI: () => {}, hideLoadingUI: () => {} };", js, StringComparison.Ordinal);
-        Assert.DoesNotContain("canvas.style.filter = 'blur(", js, StringComparison.Ordinal);
-    }
 
     [Fact]
     public void QuotePartViewerSettingsDto_IncludesRenderModeTransitionFields()

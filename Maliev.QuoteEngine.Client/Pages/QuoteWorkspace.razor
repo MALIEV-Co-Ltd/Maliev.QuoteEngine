@@ -46,6 +46,7 @@
                                    SelectedPartIndex="@_selectedPartIndex"
                                    UploadInputElementId="@UploadInputId"
                                    OnUploadedPartSelected="SelectPart"
+                                   OnUploadedPartChanged="HandleUploadedPartChangedAsync"
                                    OnUploadRequested="OpenFilePickerAsync"
                                    OnProjectNameChanged="UpdateProjectTitleFromAgentAsync"
                                    OnNewProjectRequested="StartNewProjectAsync" />
@@ -544,20 +545,28 @@
                 part.UploadId = upload.UploadId;
                 part.StoragePath = upload.StoragePath;
                 part.Status = "Processing";
-                var (viewerResolved, viewerUrl, viewerExt) = await TryResolveViewerUrlDeferredAsync(part);
-                if (viewerResolved)
+
+                if (IsSupplementalUpload(candidate.FileName, candidate.ContentType))
                 {
-                    _pendingViewerParts.Add((part, viewerUrl!, viewerExt!));
+                    ApplySupplementalUploadReview(part, candidate.FileName, candidate.ContentType);
                 }
                 else
                 {
-                    var status = await Api.GetAnalysisStatusAsync(upload.UploadId);
-                    part.Status = status.Status;
-                    part.VolumeCc = status.VolumeCc;
-                    part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
-                    part.Findings = status.Findings;
-                    ApplyAnalysisStatus(part, status);
-                    await TryApplyLocalViewerUrlAsync(part);
+                    var (viewerResolved, viewerUrl, viewerExt) = await TryResolveViewerUrlDeferredAsync(part);
+                    if (viewerResolved)
+                    {
+                        _pendingViewerParts.Add((part, viewerUrl!, viewerExt!));
+                    }
+                    else
+                    {
+                        var status = await Api.GetAnalysisStatusAsync(upload.UploadId);
+                        part.Status = status.Status;
+                        part.VolumeCc = status.VolumeCc;
+                        part.SurfaceAreaCm2 = status.SurfaceAreaCm2;
+                        part.Findings = status.Findings;
+                        ApplyAnalysisStatus(part, status);
+                        await TryApplyLocalViewerUrlAsync(part);
+                    }
                 }
 
                 if (!ShouldRetainBrowserUploadFile(part))
@@ -613,6 +622,48 @@
         {
             // Preview is optional; the upload path remains authoritative.
         }
+    }
+
+    private static bool IsSupplementalUpload(string fileName, string contentType)
+    {
+        return !QuoteUploadConstraints.IsSupportedCadFileName(fileName) &&
+            (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+             contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ||
+             QuoteUploadConstraints.SupplementalDocumentExtensions.Any(item =>
+                 item.Equals(Path.GetExtension(fileName).TrimStart('.'), StringComparison.OrdinalIgnoreCase)) ||
+             QuoteUploadConstraints.SupplementalImageExtensions.Any(item =>
+                 item.Equals(Path.GetExtension(fileName).TrimStart('.'), StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static void ApplySupplementalUploadReview(QuotePartViewModel part, string fileName, string contentType)
+    {
+        part.Status = "Ready";
+        if (!string.IsNullOrWhiteSpace(part.PartNotes))
+        {
+            return;
+        }
+
+        part.PartNotes = BuildSupplementalArtifactAnalysisNote(fileName, contentType);
+    }
+
+    private static string BuildSupplementalArtifactAnalysisNote(string fileName, string contentType)
+    {
+        var extension = Path.GetExtension(fileName).TrimStart('.');
+        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+            QuoteUploadConstraints.SupplementalImageExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "I have analyzed this image as manufacturing context. Use this note to capture the visible object type, colors, dimensions, material clues, finish, and manufacturing intent. CAD/3D geometry is still required for final DFM, viewer, pricing, order, and payment.";
+        }
+
+        if (contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase) ||
+            QuoteUploadConstraints.SupplementalDocumentExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "I have reviewed this document as drawing/manufacturing context. Use this note to capture readable dimensions, tolerances, material, finish, revision, and blockers. CAD/3D geometry is still required for final DFM, viewer, pricing, order, and payment.";
+        }
+
+        return "I have reviewed this file as supplemental manufacturing context. Use this note to capture the requirements the agent should keep with the project.";
     }
 
     private string BuildUploadFailureMessage(string fileName)
@@ -674,7 +725,7 @@
                             Kind = InferAgentAttachmentKind(candidate.FileName, candidate.ContentType),
                             UploadId = part.UploadId,
                             StoragePath = part.StoragePath,
-                            Url = part.GlbUrl ?? part.ThumbnailUrl,
+                            Url = BuildAgentAttachmentUrl(part),
                             SatisfiesGeometryGate = QuoteUploadConstraints.IsSupportedCadFileName(candidate.FileName)
                         }
                     ]
@@ -748,6 +799,11 @@
                         : part.ContentType
                 };
                 ApplyDefaultRouting(importedPart, part.FileName);
+                if (IsSupplementalUpload(importedPart.FileName, importedPart.ContentType) &&
+                    importedPart.Status.Equals("Processing", StringComparison.OrdinalIgnoreCase))
+                {
+                    ApplySupplementalUploadReview(importedPart, importedPart.FileName, importedPart.ContentType);
+                }
                 _parts.Add(importedPart);
                 await RegisterImportedHandoffPartWithAgentAsync(importedPart);
                 if (_agentShell is not null)
@@ -766,6 +822,79 @@
         {
             _error = Text("We could not import the files from the website upload. Please drop them here again.", "เราไม่สามารถนำเข้าไฟล์จากการอัปโหลดบนเว็บไซต์ได้ กรุณาลากไฟล์มาวางอีกครั้ง");
         }
+    }
+
+    private async Task HandleUploadedPartChangedAsync(QuotePartViewModel part)
+    {
+        await RegisterUploadedPartNoteWithAgentAsync(part);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RegisterUploadedPartNoteWithAgentAsync(QuotePartViewModel part)
+    {
+        if (AgentSessionId == Guid.Empty ||
+            QuoteUploadConstraints.IsSupportedCadFileName(part.FileName) ||
+            string.IsNullOrWhiteSpace(part.FileName))
+        {
+            return;
+        }
+
+        var contentType = string.IsNullOrWhiteSpace(part.ContentType)
+            ? InferImportedContentType(part.FileName)
+            : part.ContentType;
+        try
+        {
+            var state = await Api.RegisterAgentAttachmentsAsync(
+                AgentSessionId,
+                new QuoteAgentAttachmentRegisterRequest
+                {
+                    Message = BuildSupplementalArtifactNoteMessage(part),
+                    Language = SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? "th" : "en",
+                    Attachments =
+                    [
+                        new QuoteAgentAttachmentDto
+                        {
+                            FileName = part.FileName,
+                            ContentType = contentType,
+                            FileSizeBytes = Math.Max(1, part.FileSizeBytes),
+                            Kind = InferAgentAttachmentKind(part.FileName, contentType),
+                            UploadId = part.UploadId,
+                            StoragePath = part.StoragePath,
+                            Url = BuildAgentAttachmentUrl(part),
+                            SatisfiesGeometryGate = false
+                        }
+                    ]
+                });
+
+            if (_agentShell is not null)
+            {
+                await _agentShell.ApplyAgentStateAsync(state);
+            }
+        }
+        catch (Exception ex) when (ex is QuoteEngineApiException or HttpRequestException or InvalidOperationException)
+        {
+            _error = Text("Artifact note was saved locally, but agent context could not refresh yet.", "บันทึกหมายเหตุไฟล์ไว้ในเครื่องแล้ว แต่ยังรีเฟรชบริบทเอเจนต์ไม่ได้");
+        }
+    }
+
+    private static string BuildSupplementalArtifactNoteMessage(QuotePartViewModel part)
+    {
+        return string.IsNullOrWhiteSpace(part.PartNotes)
+            ? $"Customer cleared artifact analysis notes for {part.FileName}."
+            : $"Customer edited artifact analysis for {part.FileName}: {TrimAgentNote(part.PartNotes)}";
+    }
+
+    private static string? BuildAgentAttachmentUrl(QuotePartViewModel part)
+    {
+        return QuoteUploadConstraints.IsSupportedCadFileName(part.FileName)
+            ? part.GlbUrl ?? part.ThumbnailUrl
+            : null;
+    }
+
+    private static string TrimAgentNote(string value)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length <= 2000 ? trimmed : trimmed[..2000];
     }
 
     private async Task RegisterImportedHandoffPartWithAgentAsync(QuotePartViewModel part)
