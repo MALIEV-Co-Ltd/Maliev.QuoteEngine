@@ -628,7 +628,9 @@
                                                 }
                                                 else
                                                 {
-                                                    <div class="qe-agent-reasoning-thought">@entry.Text</div>
+                                                    <div class="qe-agent-reasoning-thought qe-agent-markdown">
+                                                        @QuoteAgentMarkdownRenderer.Render(entry.Text)
+                                                    </div>
                                                 }
                                             }
                                         </div>
@@ -2934,6 +2936,7 @@
                     assistantMessage.ThinkingStartedAt ??= DateTimeOffset.UtcNow;
                     assistantMessage.AppendReasoningThought(streamEvent.Thought);
                     assistantMessage.IsThinking = true;
+                    RequestScrollToLatestMessage();
                     await InvokeAsync(StateHasChanged);
                 }
                 else if (streamEvent.Type.Equals("final", StringComparison.OrdinalIgnoreCase) &&

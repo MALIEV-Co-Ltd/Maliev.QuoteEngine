@@ -1,5 +1,7 @@
 :root {
     color-scheme: light;
+    --selection-bg: hsla(0, 0%, 95%, 1);
+    --selection-color: var(--ink);
 
     /* ─── Core palette (DESIGN.md §2) ──────────────────────────────────── */
     --ink: #171717;                 /* Vercel Black: primary text */
@@ -3026,10 +3028,11 @@
 /* Live reasoning disclosure — collapsed "Thinking…" / "Thought for Ns", expandable to the live stream. */
 .qe-agent-reasoning {
     margin: 6px 0 10px;
-    border-radius: 10px;
-    border: 1px solid var(--mud-palette-lines-default, rgba(0, 0, 0, 0.12));
-    background: var(--mud-palette-background-grey, rgba(0, 0, 0, 0.03));
-    overflow: hidden;
+    border-radius: 8px;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+    padding: 0;
 }
 
 .qe-agent-reasoning-summary {
@@ -3038,7 +3041,7 @@
     gap: 8px;
     cursor: pointer;
     list-style: none;
-    padding: 7px 12px;
+    padding: 8px 0;
     font-size: 0.82rem;
     font-weight: 600;
     color: var(--mud-palette-text-secondary, rgba(0, 0, 0, 0.6));
@@ -3067,11 +3070,12 @@
 }
 
 .qe-agent-reasoning-stream {
-    display: flex;
+    display: grid;
     flex-direction: column;
     gap: 8px;
-    padding: 4px 12px 12px 26px;
-    border-top: 1px solid var(--mud-palette-lines-default, rgba(0, 0, 0, 0.08));
+    padding: 0 0 6px 26px;
+    border-left: 1px solid var(--qe-agent-line);
+    border-top: 0;
 }
 
 .qe-agent-reasoning-thought {
@@ -3079,7 +3083,7 @@
     font-size: 0.82rem;
     line-height: 1.55;
     color: var(--mud-palette-text-secondary, rgba(0, 0, 0, 0.62));
-    white-space: pre-wrap;
+    white-space: normal;
 }
 
 .qe-agent-reasoning-tool {
@@ -6013,6 +6017,8 @@
 
 :root[data-maliev-theme="dark"] {
     color-scheme: dark;
+    --selection-bg: rgba(79, 156, 255, 0.42);
+    --selection-color: #f5f5f5;
     --ink: #f5f5f5;
     --ink-strong: #ffffff;
     --muted: #c7c7c7;
@@ -6111,8 +6117,8 @@ b {
 }
 
 ::selection {
-    background: hsla(0, 0%, 95%, 1);
-    color: var(--ink);
+    background: var(--selection-bg);
+    color: var(--selection-color);
 }
 
 :focus-visible {
