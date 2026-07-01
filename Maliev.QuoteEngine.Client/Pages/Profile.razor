@@ -45,6 +45,25 @@ else
             </div>
         </article>
 
+        <div class="account-stats-grid" aria-label="@Text("Account activity", "กิจกรรมบัญชี")">
+            <div class="account-stat">
+                <strong>@_quotes.Count</strong>
+                <span>@Text("Quotes", "ใบเสนอราคา")</span>
+            </div>
+            <div class="account-stat">
+                <strong>@_orders.Count</strong>
+                <span>@Text("Orders", "คำสั่งซื้อ")</span>
+            </div>
+            <div class="account-stat">
+                <strong>@_addresses.Count</strong>
+                <span>@Text("Addresses", "ที่อยู่")</span>
+            </div>
+            <div class="account-stat">
+                <strong>@ActiveNdaCount</strong>
+                <span>@Text("Active NDAs", "NDA ที่ใช้งานอยู่")</span>
+            </div>
+        </div>
+
         <div class="account-action-grid" aria-label="@Text("Customer data", "ข้อมูลลูกค้า")">
             <a href="/quotes/new">
                 <MudIcon Icon="@Icons.Material.Outlined.RequestQuote" Size="Size.Small" />
@@ -170,6 +189,7 @@ else
     private List<CustomerAddressDto> _addresses = [];
     private List<CustomerNdaDto> _ndas = [];
     private List<CustomerQuoteSummaryDto> _quotes = [];
+    private List<CustomerOrderSummaryDto> _orders = [];
     private bool _addressesLoading;
 
     [CascadingParameter(Name = "Culture")]
@@ -178,6 +198,7 @@ else
     private bool IsThai => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture;
 
     private string ProfileInitials => GetInitials(_profile?.DisplayName ?? Text("Customer", "ลูกค้า"));
+    private int ActiveNdaCount => _ndas.Count(nda => nda.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
     private CustomerNdaDto? ActiveNda => _ndas.FirstOrDefault(nda => nda.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
     private string NdaStatus => DisplayNdaStatus(ActiveNda?.Status ?? _profile?.NdaStatus);
     private string NdaExpiryNotice
@@ -213,6 +234,7 @@ else
         _profile = await Api.GetProfileAsync();
         _ndas = [.. await Api.GetNdasAsync()];
         _quotes = [.. await Api.GetQuotesAsync()];
+        _orders = [.. await Api.GetOrdersAsync()];
         await LoadAddressesAsync();
     }
 
