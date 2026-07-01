@@ -85,28 +85,30 @@
     --maliev-reconnect-button-focus: rgba(10, 114, 239, 0.24);
 
     /* ─── Typography scale (DESIGN.md §3) ──────────────────────────────── */
-    --maliev-font-sans: "Albert Sans", Geist, "Noto Sans Thai", Arial, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
-    --maliev-font-mono: "Geist Mono", ui-monospace, "SFMono-Regular", "Roboto Mono", Menlo, Monaco, "Liberation Mono", "DejaVu Sans Mono", "Courier New", monospace;
+    --maliev-font-sans-en: "Noto Sans", sans-serif;
+    --maliev-font-sans-th: "Noto Sans Thai", sans-serif;
+    --maliev-font-sans: var(--maliev-font-sans-en);
+    --maliev-font-mono: var(--maliev-font-sans);
     --maliev-font-nano: 10px;       /* Tiny chips */
     --maliev-font-micro: 12px;      /* Caption (was 10.5px — DESIGN.md says 12px) */
-    --maliev-font-small: 14px;      /* Button / link (was 12px — DESIGN.md says 14px) */
-    --maliev-font-base: 14px;       /* UI text (was 13px) */
-    --maliev-font-body: 16px;       /* Body Small / standard reading */
-    --maliev-font-body-lg: 18px;    /* Body */
-    --maliev-font-body-xl: 20px;    /* Body Large */
-    --maliev-font-card: 24px;       /* Card title */
-    --maliev-font-sub: 32px;        /* Sub-heading */
-    --maliev-font-section: 40px;    /* Section heading */
-    --maliev-font-display: 48px;    /* Display hero */
-    --maliev-font-large: 18px;      /* Legacy alias — kept for back-compat */
+    --maliev-font-small: 13px;      /* Compact Codex-like buttons and links */
+    --maliev-font-base: 13px;       /* Dense UI text */
+    --maliev-font-body: 14px;       /* Standard UI text */
+    --maliev-font-body-lg: 16px;    /* Body */
+    --maliev-font-body-xl: 18px;    /* Body Large */
+    --maliev-font-card: 20px;       /* Card title */
+    --maliev-font-sub: 24px;        /* Sub-heading */
+    --maliev-font-section: 30px;    /* Section heading */
+    --maliev-font-display: 36px;    /* Display hero */
+    --maliev-font-large: 16px;      /* Legacy alias — kept for back-compat */
 
     /* Letter-spacing scale (DESIGN.md §3) */
-    --maliev-track-display: -2.4px;     /* 48px display */
-    --maliev-track-section: -2.4px;     /* 40px section heading */
-    --maliev-track-sub: -1.28px;        /* 32px sub-heading */
-    --maliev-track-card: -0.96px;       /* 24px card title */
-    --maliev-track-body-semi: -0.32px;  /* 16px Body Semibold */
-    --maliev-track-tight: -0.24px;      /* General mild tightening */
+    --maliev-track-display: 0;
+    --maliev-track-section: 0;
+    --maliev-track-sub: 0;
+    --maliev-track-card: 0;
+    --maliev-track-body-semi: 0;
+    --maliev-track-tight: 0;
 
     /* MudBlazor palette overrides (consumed by MudThemeProvider) */
     --mud-palette-primary: var(--primary);
@@ -121,6 +123,12 @@
 
     /* WASM startup progress (Make Studio story screen) */
     --ms-progress: 0%;
+}
+
+:root:lang(th),
+:root[data-culture="th-TH"] {
+    --maliev-font-sans: var(--maliev-font-sans-th);
+    --maliev-font-mono: var(--maliev-font-sans-th);
 }
 
 /* Quote agent chat-first shell */
@@ -661,18 +669,18 @@
 
 .qe-agent-shell {
     --qe-agent-bg: #ffffff;
-    --qe-agent-surface: #ffffff;
-    --qe-agent-raised: #f7f7f8;
-    --qe-agent-line: #e5e5e5;
+    --qe-agent-surface: #f4f4f4;
+    --qe-agent-raised: #eeeeee;
+    --qe-agent-line: #dedede;
     --qe-agent-ink: #0d0d0d;
     --qe-agent-muted: #6f6f6f;
-    --qe-agent-soft: #ececec;
-    --qe-agent-hover: #f4f4f4;
+    --qe-agent-soft: #e5e5e5;
+    --qe-agent-hover: #e9e9e9;
     --qe-agent-inverse: #0d0d0d;
     --qe-agent-inverse-text: #ffffff;
     --qe-agent-primary: #0a72ef;
     display: grid;
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) 0;
+    grid-template-columns: 284px minmax(0, 1fr) 0;
     min-height: 100dvh;
     height: 100dvh;
     border-top: 0;
@@ -681,7 +689,7 @@
 }
 
 .qe-agent-shell--artifacts-open {
-    grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(320px, 380px);
+    grid-template-columns: 284px minmax(0, 1fr) minmax(320px, 380px);
 }
 
 :root[data-maliev-theme="dark"] .qe-agent-shell {
@@ -702,9 +710,9 @@
     position: relative;
     z-index: 1;
     display: grid;
-    gap: 10px;
+    gap: 8px;
     grid-template-rows: auto auto minmax(0, 1fr) auto;
-    padding: 18px 14px;
+    padding: 10px 8px;
     background: var(--qe-agent-surface);
     border-right: 1px solid var(--qe-agent-line);
     min-width: 0;
@@ -719,7 +727,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    min-height: 42px;
+    min-height: 34px;
     width: 100%;
     margin: 0;
     padding: 0;
@@ -727,7 +735,7 @@
 
 .qe-agent-brand-wordmark {
     display: block;
-    width: 118px;
+    width: 96px;
     height: auto;
 }
 
@@ -841,8 +849,8 @@
 .qe-agent-round-btn {
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     border: 0;
     border-radius: 999px;
     background: transparent;
@@ -872,7 +880,7 @@
     grid-template-columns: 1fr;
     width: 100%;
     margin: 0;
-    padding: 8px 0;
+    padding: 4px 0;
 }
 
 .qe-agent-rail-search {
@@ -887,17 +895,17 @@
 .qe-agent-global-search {
     position: relative;
     display: grid;
-    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-columns: 18px minmax(0, 1fr);
     align-items: center;
-    gap: 8px;
+    gap: 7px;
     inline-size: 100%;
     max-inline-size: 100%;
     min-width: 0;
-    min-height: 36px;
-    padding: 0 10px;
+    min-height: 30px;
+    padding: 0 9px;
     margin: 0;
     border: 1px solid color-mix(in srgb, var(--qe-agent-line) 82%, transparent);
-    border-radius: 11px;
+    border-radius: 8px;
     outline: 0;
     background: var(--qe-agent-raised);
     color: var(--qe-agent-muted);
@@ -926,14 +934,14 @@
     grid-row: 1;
     width: 100%;
     min-width: 0;
-    min-height: 36px;
+    min-height: 30px;
     padding: 0;
     border: 0;
     outline: 0;
     background: transparent !important;
     color: var(--qe-agent-ink);
     font: inherit;
-    font-size: 14px;
+    font-size: 13px;
     letter-spacing: inherit;
     appearance: none;
     box-shadow: none !important;
@@ -943,16 +951,16 @@
 .qe-agent-search-prompt-hover {
     position: absolute;
     inset-block: 0;
-    inset-inline: 40px 4px;
+    inset-inline: 34px 4px;
     z-index: 1;
     display: block;
     overflow: hidden;
     color: var(--qe-agent-muted);
     font-family: inherit;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: inherit;
     letter-spacing: inherit;
-    line-height: 36px;
+    line-height: 30px;
     text-align: left;
     white-space: nowrap;
     pointer-events: none;
@@ -1005,22 +1013,22 @@
 .qe-agent-pin-btn {
     display: grid;
     align-items: center;
-    gap: 9px;
-    min-height: 36px;
-    padding: 7px 10px;
+    gap: 8px;
+    min-height: 32px;
+    padding: 6px 8px;
     border: 0;
-    border-radius: 9px;
+    border-radius: 8px;
     background: transparent;
     color: var(--qe-agent-ink);
     cursor: pointer;
     text-align: left;
     text-decoration: none;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .qe-agent-primary-nav a,
 .qe-agent-primary-nav button {
-    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-columns: 20px minmax(0, 1fr);
     width: 100%;
 }
 
@@ -1039,7 +1047,7 @@
     margin: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 4px 0 24px;
+    padding: 2px 0 18px;
     scrollbar-gutter: stable;
     opacity: 1;
     transform: translateX(0);
@@ -1269,7 +1277,7 @@
 }
 
 .qe-agent-rail-group {
-    margin-top: 14px;
+    margin-top: 12px;
 }
 
 .qe-agent-rail-group-toggle {
@@ -1277,8 +1285,8 @@
     grid-template-columns: minmax(0, 1fr) 18px;
     align-items: center;
     width: 100%;
-    min-height: 30px;
-    padding: 6px 10px;
+    min-height: 28px;
+    padding: 5px 8px;
     border: 0;
     border-radius: 8px;
     background: transparent;
@@ -1303,15 +1311,15 @@
 .qe-agent-rail-group a {
     grid-template-columns: minmax(0, 1fr);
     min-width: 0;
-    min-height: 34px;
+    min-height: 31px;
     width: 100%;
-    padding-left: 10px;
+    padding-left: 8px;
     color: color-mix(in srgb, var(--qe-agent-ink) 82%, var(--qe-agent-muted));
 }
 
 .qe-agent-project-row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 30px;
+    grid-template-columns: minmax(0, 1fr) 28px;
     align-items: center;
     border-radius: 9px;
 }
@@ -1328,8 +1336,8 @@
 
 .qe-agent-pin-btn {
     justify-content: center;
-    width: 30px;
-    min-height: 30px;
+    width: 28px;
+    min-height: 28px;
     padding: 0;
     color: var(--qe-agent-muted);
     opacity: 0;
@@ -1351,18 +1359,18 @@
 }
 
 .qe-agent-empty-projects {
-    margin: 4px 10px;
+    margin: 4px 8px;
     color: var(--qe-agent-muted);
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.35;
 }
 
 .qe-agent-rail-foot {
     display: block;
     width: 100%;
-    min-height: 44px;
+    min-height: 40px;
     margin: 0;
-    padding: 10px 0 8px;
+    padding: 8px 0 6px;
 }
 
 .qe-agent-rail-foot a {
@@ -1372,12 +1380,12 @@
 
 .qe-agent-user-btn {
     display: inline-grid;
-    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-columns: 22px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    min-height: 36px;
+    min-height: 32px;
     width: 100%;
-    padding: 8px 9px;
+    padding: 6px 8px;
     border: 0;
     border-radius: 8px;
     background: transparent;
@@ -1393,7 +1401,7 @@
 }
 
 .qe-agent-user-btn span:not(.qe-agent-user-avatar) {
-    font-size: 13px;
+    font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1403,8 +1411,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     color: inherit;
 }
 
@@ -1574,20 +1582,20 @@
     grid-template-rows: auto auto auto;
     align-content: center;
     justify-items: center;
-    gap: 18px;
+    gap: 16px;
     width: 100%;
     min-height: 0;
     overflow: visible;
-    padding-bottom: 36px;
+    padding-bottom: 28px;
 }
 
 .qe-agent-topline {
     display: flex;
     align-items: center;
     justify-content: flex-start;
-    gap: 8px;
-    min-height: 58px;
-    padding: 0 20px;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 14px;
 }
 
 .qe-agent-menu-trigger {
@@ -1705,9 +1713,9 @@
 .qe-agent-summary-toggle {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    min-height: 34px;
-    padding: 7px 10px;
+    gap: 6px;
+    min-height: 30px;
+    padding: 5px 8px;
     border: 0;
     border-radius: 10px;
     background: transparent;
@@ -1740,10 +1748,10 @@
 
 .qe-agent-thread {
     align-content: center;
-    max-width: 820px;
+    max-width: 760px;
     width: 100%;
     margin: 0 auto;
-    padding: 40px 20px;
+    padding: 32px 18px;
 }
 
 .qe-agent-main--empty .qe-agent-thread {
@@ -1765,11 +1773,11 @@
     min-height: 0;
     align-content: start;
     display: grid;
-    gap: 28px;
+    gap: 22px;
     width: 100%;
     max-width: none;
     margin: 0;
-    padding: 34px max(20px, calc((100% - 880px) / 2)) 24px;
+    padding: 28px max(18px, calc((100% - 840px) / 2)) 20px;
     min-height: 0;
     overflow-y: auto;
     overflow-x: hidden;
@@ -1793,7 +1801,7 @@
     place-items: center;
     justify-self: center;
     align-self: center;
-    width: min(760px, calc(100% - 32px));
+    width: min(730px, calc(100% - 32px));
     margin-inline: auto;
     margin-top: 0;
 }
@@ -2362,7 +2370,7 @@
     display: grid;
     place-items: center;
     width: 100%;
-    max-width: 760px;
+    max-width: 730px;
     margin-inline: auto;
     justify-self: center;
     text-align: center;
@@ -2372,11 +2380,11 @@
 
 .qe-agent-prompt h1 {
     width: 100%;
-    max-width: min(680px, 100%);
+    max-width: min(640px, 100%);
     margin: 0 auto;
-    font-size: clamp(26px, 3.1vw, 34px);
-    font-weight: 500;
-    line-height: 1.2;
+    font-size: clamp(24px, 2.1vw, 29px);
+    font-weight: 400;
+    line-height: 1.28;
     text-align: center;
     text-wrap: balance;
     user-select: none;
@@ -2414,7 +2422,7 @@
     box-shadow: none;
     background: transparent;
     /* Default chat UI text size. */
-    font-size: 14px;
+    font-size: 13px;
     line-height: 1.55;
 }
 
@@ -2971,7 +2979,7 @@
     border-radius: 6px;
     background: var(--qe-agent-soft);
     color: var(--qe-agent-ink);
-    font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+    font-family: var(--maliev-font-mono);
     /* Default chat code text size. */
     font-size: 12px;
 }
@@ -3229,7 +3237,7 @@
 
 .qe-agent-analysis-step small {
     color: var(--qe-agent-muted);
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    font-family: var(--maliev-font-mono);
     font-size: 12px;
 }
 
@@ -3391,7 +3399,7 @@
 
 .qe-agent-model-stage text {
     fill: var(--qe-agent-primary);
-    font: 700 16px ui-monospace, SFMono-Regular, Consolas, monospace;
+    font: 700 16px var(--maliev-font-mono);
 }
 
 .qe-agent-model-tools,
@@ -3500,11 +3508,11 @@
 
 .qe-agent-composer-wrap {
     display: grid;
-    gap: 16px;
+    gap: 10px;
     position: relative;
-    width: min(780px, calc(100% - 32px));
+    width: min(730px, calc(100% - 32px));
     margin: 0 auto;
-    padding: 0 0 36px;
+    padding: 0 0 24px;
     transition: transform 220ms ease, width 220ms ease, bottom 220ms ease, top 220ms ease;
 }
 
@@ -3512,16 +3520,16 @@
 .qe-agent-summary-strip {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     flex-wrap: wrap;
-    width: min(780px, calc(100% - 32px));
-    margin: 0 auto 10px;
-    padding: 6px 16px;
+    width: min(730px, calc(100% - 32px));
+    margin: 0 auto 8px;
+    padding: 5px 12px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 8px;
     background: var(--qe-agent-raised);
     color: var(--qe-agent-ink);
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.2;
 }
 
@@ -3683,7 +3691,7 @@
 
 .qe-agent-main--empty .qe-agent-composer-wrap {
     position: static;
-    width: min(820px, calc(100% - 32px));
+    width: min(730px, calc(100% - 32px));
     margin: 0 auto;
     padding: 0;
     grid-template-rows: auto auto;
@@ -3708,29 +3716,29 @@
        and zero-sized, so the resting shadow is unchanged. */
     --qe-dictation-level: 0;
     --qe-dictation-color: var(--qe-agent-primary);
-    --qe-composer-collapsed-height: 104px;
+    --qe-composer-collapsed-height: 94px;
     --qe-composer-expansion-offset: 0px;
     display: grid;
     position: relative;
     /* Persistent rectangle: the textarea sits on its own top row and a bottom
        toolbar holds the + button, the quick-action chips (which share the
        "tools" slot with the dictation waveform), and the mic / send buttons. */
-    grid-template-columns: 42px minmax(0, 1fr) 42px 42px;
+    grid-template-columns: 36px minmax(0, 1fr) 36px 36px;
     grid-template-areas:
         "text text text text"
         "add tools dictate send";
-    grid-template-rows: auto 40px;
+    grid-template-rows: auto 34px;
     align-items: center;
-    gap: 4px 8px;
+    gap: 3px 6px;
     width: 100%;
     margin-top: calc(-1 * var(--qe-composer-expansion-offset));
-    min-height: 104px;
-    padding: 10px 12px;
-    border-radius: 24px;
+    min-height: 94px;
+    padding: 9px 10px;
+    border-radius: 16px;
     background: #ffffff;
     box-shadow:
-        0 18px 44px rgba(16, 24, 40, .10),
-        0 2px 8px rgba(16, 24, 40, .06),
+        0 12px 34px rgba(16, 24, 40, .08),
+        0 1px 4px rgba(16, 24, 40, .05),
         0 0 calc(var(--qe-dictation-level) * 64px) calc(var(--qe-dictation-level) * 18px) color-mix(in srgb, var(--qe-dictation-color) calc(var(--qe-dictation-level) * 55%), transparent);
     border: 1px solid color-mix(in srgb, var(--qe-agent-line) 80%, #ffffff);
     overflow: visible;
@@ -3772,12 +3780,12 @@
         "attachments attachments attachments attachments"
         "text text text text"
         "add tools dictate send";
-    grid-template-rows: auto auto 40px;
+    grid-template-rows: auto auto 34px;
 }
 
 .qe-agent-composer.qe-agent-composer--dictating,
 .qe-agent-composer.qe-agent-composer--dictation-processing {
-    grid-template-columns: minmax(0, 1fr) 42px 42px;
+    grid-template-columns: minmax(0, 1fr) 36px 36px;
     grid-template-areas:
         "text text text"
         "tools dictate send";
@@ -3789,7 +3797,7 @@
         "attachments attachments attachments"
         "text text text"
         "tools dictate send";
-    grid-template-rows: auto auto 40px;
+    grid-template-rows: auto auto 34px;
 }
 
 .qe-agent-add-backdrop {
@@ -4021,7 +4029,7 @@
    dictation uses its own wider grid so the waveform can occupy the hidden
    add/tools space. */
 .qe-agent-composer.qe-agent-composer--multiline {
-    grid-template-rows: auto 40px;
+    grid-template-rows: auto 34px;
 }
 
 .qe-agent-composer.qe-agent-composer--has-attachments.qe-agent-composer--multiline {
@@ -4029,16 +4037,16 @@
         "attachments attachments attachments attachments"
         "text text text text"
         "add tools dictate send";
-    grid-template-rows: auto auto 40px;
+    grid-template-rows: auto auto 34px;
 }
 
 .qe-agent-composer textarea {
     grid-area: text;
     position: relative;
     z-index: 1;
-    min-height: 38px;
-    max-height: 170px;
-    padding: 8px 4px;
+    min-height: 34px;
+    max-height: 150px;
+    padding: 6px 4px;
     border: 0 !important;
     outline: 0 !important;
     background: transparent !important;
@@ -4046,7 +4054,7 @@
     resize: none;
     field-sizing: content;
     overflow-y: auto;
-    font-size: 16px !important;
+    font-size: 14px !important;
     line-height: 1.5 !important;
     transition:
         min-height 220ms cubic-bezier(.2, .8, .2, 1),
@@ -4074,9 +4082,9 @@
     align-self: stretch;
     position: relative;
     z-index: 2;
-    min-height: 38px;
-    max-height: 170px;
-    padding: 8px 4px;
+    min-height: 34px;
+    max-height: 150px;
+    padding: 6px 4px;
     overflow: hidden;
     color: var(--qe-agent-ink);
     font-size: 14px;
@@ -4147,16 +4155,16 @@
 }
 
 .qe-agent-composer.qe-agent-composer--multiline textarea {
-    min-height: 44px;
-    padding-top: 10px;
-    padding-bottom: 10px;
+    min-height: 40px;
+    padding-top: 8px;
+    padding-bottom: 8px;
     align-self: stretch;
     max-height: 132px;
 }
 
 .qe-agent-composer .qe-agent-round-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 999px;
 }
 
@@ -4276,13 +4284,13 @@
 .qe-agent-dictation-btn {
     grid-area: dictate;
     justify-self: end;
-    margin-right: 6px;
+    margin-right: 2px;
 }
 
 .qe-agent-dictation-tooltip {
     grid-area: dictate;
     justify-self: end;
-    margin-right: 6px;
+    margin-right: 2px;
 }
 
 .qe-agent-send-btn {
@@ -4707,10 +4715,10 @@
 .qe-agent-management-page {
     display: grid;
     align-content: start;
-    gap: 24px;
-    width: min(760px, calc(100% - 40px));
+    gap: 20px;
+    width: min(730px, calc(100% - 40px));
     margin: 0 auto;
-    padding: clamp(88px, 12vh, 140px) 0 80px;
+    padding: clamp(72px, 10vh, 116px) 0 72px;
     color: var(--qe-agent-ink);
 }
 
@@ -4718,15 +4726,15 @@
     display: flex;
     align-items: flex-end;
     justify-content: space-between;
-    gap: 20px;
+    gap: 16px;
 }
 
 .qe-agent-management-back {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    min-height: 36px;
-    padding: 8px 12px;
+    min-height: 32px;
+    padding: 6px 10px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 999px;
     background: var(--qe-agent-surface);
@@ -4754,17 +4762,17 @@
 
 .qe-agent-management-head h1 {
     margin: 0;
-    font-size: clamp(30px, 4vw, 44px);
-    font-weight: 650;
-    line-height: 1.1;
+    font-size: clamp(26px, 3vw, 32px);
+    font-weight: 500;
+    line-height: 1.18;
     letter-spacing: 0;
 }
 
 .qe-agent-management-head p {
     max-width: 580px;
-    margin: 8px 0 0;
+    margin: 6px 0 0;
     color: var(--qe-agent-muted);
-    font-size: 16px;
+    font-size: 14px;
     line-height: 1.45;
 }
 
@@ -4773,8 +4781,8 @@
     grid-template-columns: 22px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    min-height: 44px;
-    padding: 0 14px;
+    min-height: 34px;
+    padding: 0 12px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 999px;
     background: var(--qe-agent-surface);
@@ -4845,18 +4853,18 @@
 
 .qe-agent-management-list {
     display: grid;
-    gap: 10px;
+    gap: 8px;
 }
 
 .qe-agent-management-row {
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr) auto auto;
+    grid-template-columns: 38px minmax(0, 1fr) auto auto;
     align-items: center;
     gap: 12px;
-    min-height: 68px;
-    padding: 12px;
+    min-height: 60px;
+    padding: 10px;
     border: 1px solid var(--qe-agent-line);
-    border-radius: 14px;
+    border-radius: 10px;
     background: var(--qe-agent-surface);
 }
 
@@ -4883,9 +4891,9 @@
 
 .qe-agent-management-row > .mud-icon-root,
 .qe-agent-management-row > .qe-agent-plugin-icon {
-    width: 38px;
-    height: 38px;
-    border-radius: 12px;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
     background: var(--qe-agent-raised);
 }
 
@@ -4894,14 +4902,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 15px;
+    font-size: 14px;
 }
 
 .qe-agent-management-row p,
 .qe-agent-management-row small {
     margin: 3px 0 0;
     color: var(--qe-agent-muted);
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.35;
 }
 
@@ -4914,15 +4922,15 @@
     align-items: center;
     justify-content: center;
     gap: 8px;
-    min-height: 36px;
-    padding: 8px 12px;
+    min-height: 32px;
+    padding: 6px 10px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 999px;
     background: var(--qe-agent-raised);
     color: var(--qe-agent-ink);
     cursor: pointer;
     font: inherit;
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
     text-decoration: none;
 }
@@ -6209,7 +6217,7 @@ body {
     -moz-osx-font-smoothing: grayscale;
 }
 
-/* Tabular numbers wherever monospace is used (DESIGN.md §3 — `"tnum"` on captions). */
+/* Tabular numbers wherever compact numeric labels are used. */
 code,
 kbd,
 samp,
@@ -6244,7 +6252,7 @@ textarea {
     letter-spacing: inherit;
 }
 
-/* Geist's three-weight system (DESIGN.md §3 / §7) */
+/* Noto-based three-weight system. */
 strong,
 b {
     font-weight: 600;
@@ -6828,7 +6836,7 @@ body.quote-loading-failed .ms-stage {
 
 /* Mono-style technical labels per DESIGN.md §3 (Mono Small / micro badges).
    DESIGN.md §7 forbids weight 700 on body text; eyebrows use weight 500 and
-   Geist Mono to read as a "developer console" voice. */
+   the compact app font to read as a technical label. */
 .eyebrow {
     display: block;
     color: var(--muted);
@@ -7123,7 +7131,7 @@ body.quote-loading-failed .ms-stage {
 /* DESIGN.md §4 Buttons:
    - Primary Dark: #171717 background, white text, 6px radius, 8px 16px padding
    - Primary White (Shadow-bordered): white background, #171717 text, ring shadow
-   - All buttons: Geist 14px weight 500, no border, focus ring 2px focus-blue
+   - All buttons: 13px weight 500, no border, focus ring 2px focus-blue
    DESIGN.md §7 forbids pill radius on primary actions. */
 .primary-button,
 .secondary-button,
@@ -7735,7 +7743,7 @@ body.quote-loading-failed .ms-stage {
     border: 1px solid #747775;
     border-radius: 4px;
     box-shadow: none;
-    font-family: Roboto, var(--maliev-font-sans);
+    font-family: var(--maliev-font-sans);
     font-size: 14px;
     font-weight: 500;
     line-height: 20px;
@@ -7991,7 +7999,7 @@ p {
 }
 
 /* Display Hero per DESIGN.md §3:
-   48px Geist weight 600, line-height 1.00–1.17, letter-spacing -2.4px to -2.88px.
+   Compact display type, line-height 1.00-1.17, letter-spacing 0.
    Scales down on mobile but keeps proportional negative tracking. */
 h1 {
     max-width: 760px;
@@ -8002,7 +8010,7 @@ h1 {
     letter-spacing: clamp(var(--maliev-track-sub), -0.2vw, var(--maliev-track-display));
 }
 
-/* Section heading: 40px Geist weight 600, tracking -2.4px. */
+/* Section heading: app display token, weight 600, tracking 0. */
 h2 {
     color: var(--ink);
     font-size: var(--maliev-font-section);
@@ -9137,7 +9145,7 @@ p {
     margin-top: 12px;
 }
 
-/* Labels: caption-sized (12px) Geist Mono technical voice per DESIGN.md §3.
+/* Labels: caption-sized (12px) technical voice.
    DESIGN.md §7 forbids weight 700 on body text — labels use weight 500 in mono. */
 label {
     display: grid;
@@ -9202,7 +9210,7 @@ textarea::placeholder {
     margin-top: 12px;
 }
 
-/* Pill Badge per DESIGN.md §4: 9999px radius, 0px 10px padding, 12px Geist weight 500. */
+/* Pill Badge per DESIGN.md §4: 9999px radius, 0px 10px padding, 12px weight 500. */
 .dfm-strip span,
 .part-title span,
 .success-panel span {
@@ -10143,7 +10151,7 @@ textarea::placeholder {
 }
 
 /* Title input behaves as Body Semibold per DESIGN.md §3:
-   16px Geist weight 600, tracking -0.32px. */
+   16px weight 600, tracking 0. */
 .qe-plp-title-input {
     flex: 1;
     min-width: 0;
@@ -10294,7 +10302,7 @@ textarea::placeholder {
     letter-spacing: 0;
 }
 
-/* Hero dropzone reads as Card Title (24px Geist weight 600, -0.96px tracking). */
+/* Hero dropzone reads as Card Title, weight 600, tracking 0. */
 .qe-dropzone--hero {
     display: grid;
     gap: 8px;
@@ -10725,7 +10733,7 @@ textarea::placeholder {
     letter-spacing: var(--maliev-track-body-semi);
 }
 
-/* DFM count chip — pill badge per DESIGN.md §4 (12px Geist weight 500).
+/* DFM count chip - pill badge per DESIGN.md §4 (12px weight 500).
    DESIGN.md §7 forbids weight 700/800 — was 800, now 500. Color is the
    tinted-blue badge unless the workflow surfaces a warning severity. */
 .qe-pdc-tab span {
@@ -11266,7 +11274,7 @@ textarea::placeholder {
     box-shadow: var(--maliev-shadow-ring);
 }
 
-/* Footer total — monospace 18px Body, weight 500 ("tnum" on body covers numerals). */
+/* Footer total - compact 18px Body, weight 500 ("tnum" on body covers numerals). */
 .qe-pdc-footer strong {
     margin-left: auto;
     font-family: var(--maliev-font-mono);
@@ -11296,7 +11304,7 @@ textarea::placeholder {
 }
 
 /* Mono technical labels per DESIGN.md §3 (Mono Small):
-   12px Geist Mono weight 500, tracking 0, uppercase, "tnum" enabled. */
+   12px weight 500, tracking 0, uppercase, "tnum" enabled. */
 .qe-pcs-header span,
 .qe-pcs-section-header,
 .qe-zone-label {
@@ -11590,7 +11598,7 @@ textarea::placeholder {
     gap: 6px;
 }
 
-/* Quote total reads as Card Title (24px Geist Mono weight 500) per DESIGN.md §3.
+/* Quote total reads as Card Title (24px weight 500) per DESIGN.md §3.
    Tracking stays at 0 — tightness comes from the mono glyphs. */
 .qe-qsb-total > strong {
     font-family: var(--maliev-font-mono);
@@ -12251,13 +12259,13 @@ textarea::placeholder {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   MudBlazor overrides — apply Geist tokens to MudBlazor primitives.
+   MudBlazor overrides — apply app typography tokens to MudBlazor primitives.
    We keep MudBlazor for icons, dialogs, drawer, snackbar, and progress
    indicators (per user direction), but its Material Design colors,
-   borders, and shadows are replaced with Geist values from DESIGN.md.
+   borders, and shadows are replaced with MALIEV values from DESIGN.md.
    ──────────────────────────────────────────────────────────────────── */
 
-/* Theme provider root carries MudBlazor's base font. Override to Geist. */
+/* Theme provider root carries MudBlazor's base font. Override to app typography. */
 .mud-theme-provider,
 body.mud-blazor {
     font-family: var(--maliev-font-sans);
@@ -12312,7 +12320,7 @@ body.mud-blazor {
     background-color: var(--panel-tint);
 }
 
-/* Icon buttons remain compact 40×40 circles with the Geist ring shadow. */
+/* Icon buttons remain compact 40×40 circles with the MALIEV ring shadow. */
 .mud-icon-button {
     color: var(--muted);
     background-color: transparent;
@@ -12351,7 +12359,7 @@ body.mud-blazor {
     padding: 12px 24px;
 }
 
-/* MudInputControl / MudTextField surfaces — strip MD floating-label ink, use Geist tokens.
+/* MudInputControl / MudTextField surfaces — strip MD floating-label ink, use app tokens.
    We keep the input visually similar to native inputs styled above. */
 .mud-input-root,
 .mud-input-control {
@@ -12437,7 +12445,7 @@ body.mud-blazor {
     box-shadow: var(--maliev-shadow-ring-light);
 }
 
-/* Tooltip styled as a compact Geist pill. */
+/* Tooltip styled as a compact app pill. */
 .mud-tooltip {
     background-color: var(--ink) !important;
     color: var(--paper);
@@ -12523,30 +12531,6 @@ body.mud-blazor {
 .mud-icon-root,
 .mud-icon-default {
     color: inherit;
-}
-
-/* ──────────────────────────────────────────────────────────────────────
-   Geist font face wiring.
-   Geist binaries aren't shipped in /wwwroot/lib by this app, so we
-   declare the font family with Inter as a near-identical fallback.
-   When/if Geist OTF files are added to /wwwroot/lib/fonts/geist/, the
-   @font-face rules above the fallback take precedence automatically.
-   DESIGN.md §3 mandates "liga" globally; that is set on body above.
-   ──────────────────────────────────────────────────────────────────── */
-@font-face {
-    font-family: "Geist";
-    src: local("Geist"), local("Geist Sans");
-    font-display: swap;
-    font-weight: 100 900;
-    font-style: normal;
-}
-
-@font-face {
-    font-family: "Geist Mono";
-    src: local("Geist Mono"), local("GeistMono-Regular");
-    font-display: swap;
-    font-weight: 100 900;
-    font-style: normal;
 }
 
 /* ──────────────────────────────────────────────────────────────────────

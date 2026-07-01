@@ -1255,7 +1255,7 @@ function createAxisGizmo(canvasId, canvas, mainCamera) {
     const labelDivs = labelDefs.map(({ name, color, pos }) => {
         const div = document.createElement('div');
         div.textContent = name;
-        div.style.cssText = `position:fixed;transform:translate(-50%,-50%);color:${color};font-size:11px;font-weight:700;font-family:'JetBrains Mono',ui-monospace,monospace;pointer-events:none;opacity:0;transition:opacity .18s ease;z-index:25;text-shadow:0 0 4px rgba(0,0,0,.8);`;
+        div.style.cssText = `position:fixed;transform:translate(-50%,-50%);color:${color};font-size:11px;font-weight:700;font-family:'Noto Sans','Noto Sans Thai',sans-serif;pointer-events:none;opacity:0;transition:opacity .18s ease;z-index:25;text-shadow:0 0 4px rgba(0,0,0,.8);`;
         document.body.appendChild(div);
         return { div, localPos: pos };
     });
@@ -1418,7 +1418,7 @@ export function setTurningAxis(canvasId, primaryAxis, axisVector, axisPoint) {
 
     const labelDiv = document.createElement('div');
     labelDiv.textContent = `${primaryAxis || 'axis'} (turning)`;
-    labelDiv.style.cssText = 'position:fixed;transform:translate(-50%,-100%);color:#ffa726;font-size:11px;font-weight:600;font-family:ui-monospace,monospace;pointer-events:none;z-index:20;text-shadow:0 0 4px rgba(0,0,0,.8);';
+    labelDiv.style.cssText = "position:fixed;transform:translate(-50%,-100%);color:#ffa726;font-size:11px;font-weight:600;font-family:'Noto Sans','Noto Sans Thai',sans-serif;pointer-events:none;z-index:20;text-shadow:0 0 4px rgba(0,0,0,.8);";
     document.body.appendChild(labelDiv);
 
     turningAxisObjects[canvasId] = { line, labelDiv, worldPoint: a };
