@@ -329,23 +329,45 @@
                         <input placeholder="@Text("Search plugins and connectors", "ค้นหาปลั๊กอินและตัวเชื่อมต่อ")"
                                aria-label="@Text("Search plugins and connectors", "ค้นหาปลั๊กอินและตัวเชื่อมต่อ")" />
                     </div>
+                    <div class="qe-agent-management-tabs" role="tablist" aria-label="@Text("Plugin categories", "หมวดหมู่ปลั๊กอิน")">
+                        <button type="button"
+                                class="@PluginsTabClass("all")"
+                                role="tab"
+                                aria-selected="@(_pluginsTab == "all")"
+                                @onclick='@(() => SetPluginsTab("all"))'>
+                            @Text("All connectors", "ตัวเชื่อมต่อทั้งหมด")
+                        </button>
+                        <button type="button"
+                                class="@PluginsTabClass("installed")"
+                                role="tab"
+                                aria-selected="@(_pluginsTab == "installed")"
+                                @onclick='@(() => SetPluginsTab("installed"))'>
+                            @Text("Installed", "ติดตั้งแล้ว")
+                            @if (InstalledConnectors.Count > 0)
+                            {
+                                <b>@InstalledConnectors.Count</b>
+                            }
+                        </button>
+                    </div>
                     <section class="qe-agent-management-section">
                         <header>
                             <strong>@Text("Available connectors", "ตัวเชื่อมต่อที่มี")</strong>
                             <small>@Text("Google Drive is available for signed-in customers.", "Google Drive พร้อมใช้งานสำหรับลูกค้าที่ลงชื่อเข้าใช้")</small>
                         </header>
-                        @if (_connectors.Count == 0)
+                        @if (VisiblePluginConnectors.Count == 0)
                         {
                             <p class="qe-agent-management-empty">
-                                @(_connectorRegistryRequiresAuthentication
-                                    ? Text("Sign in to connect Google Drive.", "ลงชื่อเข้าใช้เพื่อเชื่อมต่อ Google Drive")
-                                    : Text("Connectors will appear here when the registry is available.", "ตัวเชื่อมต่อจะแสดงที่นี่เมื่อทะเบียนพร้อมใช้งาน"))
+                                @(_pluginsTab == "installed"
+                                    ? Text("No connectors installed yet.", "ยังไม่มีตัวเชื่อมต่อที่ติดตั้ง")
+                                    : _connectorRegistryRequiresAuthentication
+                                        ? Text("Sign in to connect Google Drive.", "ลงชื่อเข้าใช้เพื่อเชื่อมต่อ Google Drive")
+                                        : Text("Connectors will appear here when the registry is available.", "ตัวเชื่อมต่อจะแสดงที่นี่เมื่อทะเบียนพร้อมใช้งาน"))
                             </p>
                         }
                         else
                         {
                             <div class="qe-agent-management-list">
-                                @foreach (var connector in _connectors)
+                                @foreach (var connector in VisiblePluginConnectors)
                                 {
                                     <article class="@ConnectorRowClass(connector)">
                                         <span class="qe-agent-plugin-icon" aria-hidden="true">
@@ -2134,6 +2156,7 @@
     private List<QuoteAgentUiDirectiveDto> _uiFocusDirectives = [];
     private QuoteAgentAuthHandoffResponse? _authHandoff;
     private List<QuoteAgentConnectorDto> _connectors = [];
+    private string _pluginsTab = "all";
     private Guid _loadedSessionId;
     private bool _loadedSessionWasSignedIn;
     private Task? _projectNavigationLoadTask;
@@ -6038,6 +6061,20 @@
             _connectorRegistryLoaded = false;
             _error = Text("Connector registry is temporarily unavailable.", "ทะเบียนตัวเชื่อมต่อยังไม่พร้อมใช้งานชั่วคราว");
         }
+    }
+
+    private List<QuoteAgentConnectorDto> InstalledConnectors => _connectors.Where(connector => connector.IsConnected).ToList();
+
+    private List<QuoteAgentConnectorDto> VisiblePluginConnectors => _pluginsTab == "installed" ? InstalledConnectors : _connectors;
+
+    private void SetPluginsTab(string tab)
+    {
+        _pluginsTab = tab == "installed" ? "installed" : "all";
+    }
+
+    private string PluginsTabClass(string tab)
+    {
+        return _pluginsTab == tab ? "qe-agent-management-tab is-active" : "qe-agent-management-tab";
     }
 
     private string ConnectorStatus(QuoteAgentConnectorDto connector)

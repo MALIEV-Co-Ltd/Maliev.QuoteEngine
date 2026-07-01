@@ -4843,6 +4843,54 @@
     font: inherit;
 }
 
+.qe-agent-management-tabs {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.qe-agent-management-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 6px 14px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 999px;
+    background: var(--qe-agent-surface);
+    color: var(--qe-agent-muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.qe-agent-management-tab:hover {
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-management-tab.is-active {
+    border-color: var(--qe-agent-primary);
+    background: color-mix(in srgb, var(--qe-agent-primary) 14%, var(--qe-agent-hover));
+    color: var(--qe-agent-primary);
+}
+
+.qe-agent-management-tab b {
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--qe-agent-primary) 18%, transparent);
+    color: var(--qe-agent-primary);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+}
+
+.qe-agent-management-tab:not(.is-active) b {
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-muted);
+}
+
 .qe-agent-management-section {
     display: grid;
     gap: 12px;
