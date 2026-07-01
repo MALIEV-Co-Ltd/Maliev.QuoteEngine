@@ -543,25 +543,56 @@
     return normalizedCulture;
   }
 
+  const cultureModePreferenceKey = "maliev.quote.culture-mode";
+  const autoCultureMode = "auto";
+  const manualCultureMode = "manual";
+
+  function detectBrowserCulture(fallback) {
+    return (navigator.languages && navigator.languages.length > 0 ? navigator.languages[0] : navigator.language) || fallback;
+  }
+
+  function resolveCultureMode(fallback) {
+    return getPreference(cultureModePreferenceKey) === manualCultureMode ? manualCultureMode : (fallback || autoCultureMode);
+  }
+
   function resolveCulture(fallback) {
     // Query string wins — it is how Maliev.Web hands the chosen language across
     // the subdomain hop, where its host-scoped cookie/localStorage can't reach.
-    const storedCulture =
-      getQueryCulture() ||
-      getPreference("maliev.quote.culture") ||
-      getPreference("maliev.culture") ||
-      getCookie("maliev.culture") ||
-      (navigator.languages && navigator.languages.length > 0 ? navigator.languages[0] : navigator.language) ||
-      fallback;
+    const queryCulture = getQueryCulture();
+    if (queryCulture) {
+      return applyDocumentCulture(queryCulture);
+    }
 
-    return applyDocumentCulture(storedCulture);
+    // In "auto" mode (the default), the customer has never made an explicit
+    // pick, so the browser's own language always wins — ignoring any stale
+    // stored/cookie culture from a previous auto-resolution.
+    if (resolveCultureMode(autoCultureMode) === manualCultureMode) {
+      const storedCulture =
+        getPreference("maliev.quote.culture") ||
+        getPreference("maliev.culture") ||
+        getCookie("maliev.culture");
+      if (storedCulture) {
+        return applyDocumentCulture(storedCulture);
+      }
+    }
+
+    return applyDocumentCulture(detectBrowserCulture(fallback));
   }
 
   function setCulture(culture) {
     const normalizedCulture = applyDocumentCulture(culture);
+    setPreference(cultureModePreferenceKey, manualCultureMode);
     setPreference("maliev.quote.culture", normalizedCulture);
     setPreference("maliev.culture", normalizedCulture);
     setCookie("maliev.culture", normalizedCulture, 60 * 60 * 24 * 365);
+    currentStrings = STRINGS[normalizedCulture] || STRINGS["en-US"];
+    applyStoryStrings();
+    return normalizedCulture;
+  }
+
+  function setCultureAuto() {
+    setPreference(cultureModePreferenceKey, autoCultureMode);
+    const normalizedCulture = applyDocumentCulture(detectBrowserCulture("en-US"));
     currentStrings = STRINGS[normalizedCulture] || STRINGS["en-US"];
     applyStoryStrings();
     return normalizedCulture;
@@ -639,6 +670,8 @@
     setPreference,
     resolveCulture,
     setCulture,
+    resolveCultureMode,
+    setCultureAuto,
     resolveTheme,
     setTheme,
     resolveMotion,

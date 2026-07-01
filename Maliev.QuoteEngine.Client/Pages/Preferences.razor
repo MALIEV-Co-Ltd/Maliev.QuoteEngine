@@ -20,6 +20,11 @@
         </div>
         <div class="preferences-segmented" role="group" aria-label="@Text("Platform language", "ภาษาของแพลตฟอร์ม")">
             <button type="button"
+                    class="@AutoLanguageButtonClass()"
+                    @onclick="SetCultureAutoAsync">
+                @Text("Auto-detect", "ตรวจจับอัตโนมัติ")
+            </button>
+            <button type="button"
                     class="@LanguageButtonClass(SupportedCultures.DefaultCulture)"
                     @onclick="() => SetCultureAsync(SupportedCultures.DefaultCulture)">
                 English
@@ -147,6 +152,7 @@
     private QuoteReferenceDataResponse? _referenceData;
     private string _selectedCurrency = "THB";
     private string _selectedCulture = SupportedCultures.DefaultCulture;
+    private bool _isCultureAuto = true;
     private string _defaultProcessId = "fdm";
     private string? _defaultToleranceId;
     private string _defaultInspectionCode = "STANDARD";
@@ -173,6 +179,7 @@
         _isDarkMode = PreferenceState.IsDarkMode;
         _isMotionReduced = PreferenceState.IsMotionReduced;
         _selectedCulture = PreferenceState.Culture;
+        _isCultureAuto = PreferenceState.IsCultureAuto;
         _selectedCurrency = NormalizeCurrency(PreferenceState.Currency);
         await LoadQuoteDefaultsAsync();
         StateHasChanged();
@@ -186,6 +193,11 @@
     private async Task SetCultureAsync(string culture)
     {
         await PreferenceState.SetCultureAsync(culture);
+    }
+
+    private async Task SetCultureAutoAsync()
+    {
+        await PreferenceState.SetCultureAutoAsync();
     }
 
     private async Task SetMotionReducedAsync(bool reduced)
@@ -281,9 +293,14 @@
 
     private string LanguageButtonClass(string culture)
     {
-        return string.Equals(SupportedCultures.Normalize(_selectedCulture), SupportedCultures.Normalize(culture), StringComparison.Ordinal)
+        return !_isCultureAuto && string.Equals(SupportedCultures.Normalize(_selectedCulture), SupportedCultures.Normalize(culture), StringComparison.Ordinal)
             ? "preferences-segment is-active"
             : "preferences-segment";
+    }
+
+    private string AutoLanguageButtonClass()
+    {
+        return _isCultureAuto ? "preferences-segment is-active" : "preferences-segment";
     }
 
     private string MotionButtonClass(bool reduced)
@@ -301,6 +318,7 @@
         _isDarkMode = PreferenceState.IsDarkMode;
         _isMotionReduced = PreferenceState.IsMotionReduced;
         _selectedCulture = PreferenceState.Culture;
+        _isCultureAuto = PreferenceState.IsCultureAuto;
         _selectedCurrency = NormalizeCurrency(PreferenceState.Currency);
         _ = InvokeAsync(StateHasChanged);
     }

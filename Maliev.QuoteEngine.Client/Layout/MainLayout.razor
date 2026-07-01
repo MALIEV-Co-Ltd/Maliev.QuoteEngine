@@ -37,6 +37,10 @@
             </button>
             <div class="quote-language-toggle" role="group" aria-label="@Text("Language", "ภาษา")">
                 <button type="button"
+                        class="@AutoLanguageButtonClass()"
+                        title="@Text("Match browser language", "ใช้ภาษาตามเบราว์เซอร์")"
+                        @onclick="ChangeCultureToAutoAsync">@Text("Auto", "อัตโนมัติ")</button>
+                <button type="button"
                         class="@LanguageButtonClass(SupportedCultures.DefaultCulture)"
                         @onclick="() => ChangeCultureAsync(SupportedCultures.DefaultCulture)">EN</button>
                 <button type="button"
@@ -396,6 +400,16 @@
     private Task ChangeCultureAsync(string culture)
     {
         return Preferences.SetCultureAsync(culture);
+    }
+
+    private Task ChangeCultureToAutoAsync()
+    {
+        return Preferences.SetCultureAutoAsync();
+    }
+
+    private string AutoLanguageButtonClass()
+    {
+        return Preferences.IsCultureAuto ? "quote-language-button is-active" : "quote-language-button";
     }
 
     private async Task PersistCurrencyAsync()

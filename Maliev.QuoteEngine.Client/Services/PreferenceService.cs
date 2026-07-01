@@ -12,12 +12,18 @@ public sealed class PreferenceService(IJSRuntime js)
     public const string DarkTheme = "dark";
     public const string DefaultCurrency = "THB";
     public const string MotionReducedPreferenceKey = "maliev.quote.motion-reduced";
+    public const string AutoCultureMode = "auto";
+    public const string ManualCultureMode = "manual";
 
     private bool _initialized;
 
     public event Action? Changed;
 
     public string Culture { get; private set; } = SupportedCultures.DefaultCulture;
+
+    public string CultureMode { get; private set; } = AutoCultureMode;
+
+    public bool IsCultureAuto => string.Equals(CultureMode, AutoCultureMode, StringComparison.OrdinalIgnoreCase);
 
     public string Theme { get; private set; } = LightTheme;
 
@@ -39,6 +45,10 @@ public sealed class PreferenceService(IJSRuntime js)
         Culture = SupportedCultures.Apply(await js.InvokeAsync<string?>(
             "quoteEnginePreferences.resolveCulture",
             SupportedCultures.DefaultCulture));
+
+        CultureMode = NormalizeCultureMode(await js.InvokeAsync<string?>(
+            "quoteEnginePreferences.resolveCultureMode",
+            AutoCultureMode));
 
         Theme = NormalizeTheme(await js.InvokeAsync<string?>(
             "quoteEnginePreferences.resolveTheme",
@@ -63,13 +73,22 @@ public sealed class PreferenceService(IJSRuntime js)
     public async Task SetCultureAsync(string? cultureName)
     {
         var normalized = SupportedCultures.Apply(cultureName);
-        if (string.Equals(Culture, normalized, StringComparison.Ordinal))
+        if (string.Equals(Culture, normalized, StringComparison.Ordinal) && string.Equals(CultureMode, ManualCultureMode, StringComparison.Ordinal))
         {
             return;
         }
 
         Culture = normalized;
+        CultureMode = ManualCultureMode;
         await js.InvokeVoidAsync("quoteEnginePreferences.setCulture", normalized);
+        Changed?.Invoke();
+    }
+
+    public async Task SetCultureAutoAsync()
+    {
+        var resolved = SupportedCultures.Apply(await js.InvokeAsync<string?>("quoteEnginePreferences.setCultureAuto"));
+        Culture = resolved;
+        CultureMode = AutoCultureMode;
         Changed?.Invoke();
     }
 
@@ -119,6 +138,13 @@ public sealed class PreferenceService(IJSRuntime js)
     public string Text(string en, string th)
     {
         return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
+
+    private static string NormalizeCultureMode(string? mode)
+    {
+        return string.Equals(mode, ManualCultureMode, StringComparison.OrdinalIgnoreCase)
+            ? ManualCultureMode
+            : AutoCultureMode;
     }
 
     private static string NormalizeTheme(string? theme)
