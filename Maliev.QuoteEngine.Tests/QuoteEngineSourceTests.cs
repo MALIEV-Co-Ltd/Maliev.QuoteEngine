@@ -1768,7 +1768,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("flex-direction: column;", stackStyleBlock, StringComparison.Ordinal);
         Assert.Contains("gap: 16px;", stackStyleBlock, StringComparison.Ordinal);
         Assert.Contains("flex: 1 1 0;", threadStyleBlock, StringComparison.Ordinal);
-        Assert.Contains("padding: 34px max(20px, calc((100% - 880px) / 2)) 24px;", threadStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("padding: 28px max(18px, calc((100% - 840px) / 2)) 20px;", threadStyleBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("160px", threadStyleBlock, StringComparison.Ordinal);
         Assert.Contains("flex: 0 0 auto;", composerWrapStyleBlock, StringComparison.Ordinal);
     }
