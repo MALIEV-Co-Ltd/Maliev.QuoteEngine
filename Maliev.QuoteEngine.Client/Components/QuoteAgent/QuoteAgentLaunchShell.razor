@@ -184,32 +184,74 @@
         <div class="qe-agent-rail-foot">
             @if (IsSignedIn)
             {
-                <button type="button"
-                        class="qe-agent-user-btn @PageNavClass(WorkspacePage.Settings)"
-                        aria-current="@(IsWorkspacePage(WorkspacePage.Settings) ? "page" : null)"
-                        @onclick="OpenSettingsPage">
-                    <span class="qe-agent-user-avatar" aria-hidden="true">
-                        <MudIcon Icon="@Icons.Material.Filled.AccountCircle" Size="Size.Small" />
-                    </span>
-                    <span>@Text("Settings", "ตั้งค่า")</span>
-                </button>
+                <details class="qe-agent-account-menu">
+                    <summary class="qe-agent-user-btn"
+                             aria-label="@Text("Account menu", "เมนูบัญชี")">
+                        <span class="qe-agent-user-avatar" aria-hidden="true">
+                            @if (!string.IsNullOrWhiteSpace(AccountProfileImageUrl))
+                            {
+                                <img src="@AccountProfileImageUrl" alt="" />
+                            }
+                            else
+                            {
+                                <span>@AccountInitials</span>
+                            }
+                        </span>
+                        <span class="qe-agent-user-copy">
+                            <strong>@AccountDisplayName</strong>
+                            <small>@AccountTierLabel</small>
+                        </span>
+                        <MudIcon Class="qe-agent-user-menu-icon" Icon="@Icons.Material.Outlined.MoreVert" Size="Size.Small" />
+                    </summary>
+                    <div class="qe-agent-account-panel" role="menu" aria-label="@Text("Account menu", "เมนูบัญชี")">
+                        @if (!string.IsNullOrWhiteSpace(AccountEmail))
+                        {
+                            <div class="qe-agent-account-email">@AccountEmail</div>
+                        }
+                        <button type="button" role="menuitem" @onclick="OpenPersonalAccountPage">
+                            <MudIcon Icon="@Icons.Material.Outlined.AccountCircle" Size="Size.Small" />
+                            <span>@Text("Personal account", "บัญชีส่วนตัว")</span>
+                        </button>
+                        <a href="/profile" role="menuitem">
+                            <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
+                            <span>@Text("Profile", "โปรไฟล์")</span>
+                        </a>
+                        <button type="button" role="menuitem" @onclick="OpenSettingsPage">
+                            <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
+                            <span>@Text("Settings", "ตั้งค่า")</span>
+                            <kbd>Ctrl+,</kbd>
+                        </button>
+                        <a href="mailto:?subject=Try%20Make%20Studio&body=https%3A%2F%2Fmake.maliev.com" role="menuitem">
+                            <MudIcon Icon="@Icons.Material.Outlined.Send" Size="Size.Small" />
+                            <span>@Text("Invite a friend", "ชวนเพื่อน")</span>
+                        </a>
+                        <button type="button" role="menuitem" @onclick="OpenSettingsPage">
+                            <MudIcon Icon="@Icons.Material.Outlined.DataUsage" Size="Size.Small" />
+                            <span>@Text("Usage remaining", "การใช้งานคงเหลือ")</span>
+                            <MudIcon Class="qe-agent-account-menu-caret" Icon="@Icons.Material.Outlined.ChevronRight" Size="Size.Small" />
+                        </button>
+                        <div class="qe-agent-account-menu-divider" aria-hidden="true"></div>
+                        <button type="button" role="menuitem" class="qe-agent-account-menu-row--danger" @onclick="SignOutAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.Logout" Size="Size.Small" />
+                            <span>@Text("Log out", "ออกจากระบบ")</span>
+                        </button>
+                    </div>
+                </details>
             }
             else
             {
-                <div class="qe-agent-signin-card">
-                    <div class="qe-agent-signin-panel">
-                        <strong>@Text("Sign in to save projects", "เข้าสู่ระบบเพื่อบันทึกโปรเจกต์")</strong>
-                        <p>@Text("Keep quotes, uploads, and order status in your workspace.", "เก็บใบเสนอราคา ไฟล์อัปโหลด และสถานะคำสั่งซื้อไว้ในพื้นที่ทำงานของคุณ")</p>
-                        <button type="button" class="qe-agent-signin-btn" @onclick='@(() => OpenAuthDialog("sign-in"))'>
-                            <span>@Text("Sign in", "เข้าสู่ระบบ")</span>
-                            <MudIcon Icon="@Icons.Material.Outlined.ArrowForward" Size="Size.Small" />
-                        </button>
-                    </div>
-                    <p class="qe-agent-signin-secure">
-                        <MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" />
-                        <span>@Text("Secure, private, and built for business", "ปลอดภัย เป็นส่วนตัว และสร้างมาเพื่อธุรกิจ")</span>
-                    </p>
-                </div>
+                <button type="button"
+                        class="qe-agent-user-btn qe-agent-signin-row"
+                        @onclick='@(() => OpenAuthDialog("sign-in"))'>
+                    <span class="qe-agent-user-avatar" aria-hidden="true">
+                        <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
+                    </span>
+                    <span class="qe-agent-user-copy">
+                        <strong>@Text("Sign in", "เข้าสู่ระบบ")</strong>
+                        <small>@Text("Save projects", "บันทึกโปรเจกต์")</small>
+                    </span>
+                    <MudIcon Class="qe-agent-user-menu-icon" Icon="@Icons.Material.Outlined.Login" Size="Size.Small" />
+                </button>
             }
         </div>
     </aside>
@@ -2272,7 +2314,16 @@
     public bool IsSignedIn { get; set; }
 
     [Parameter]
-    public bool ShowLaunchAccountCard { get; set; }
+    public string? ProfileDisplayName { get; set; }
+
+    [Parameter]
+    public string? ProfileEmail { get; set; }
+
+    [Parameter]
+    public string? ProfileImageUrl { get; set; }
+
+    [Parameter]
+    public string? ProfileTier { get; set; }
 
     [Parameter]
     public string? InitialAuthMode { get; set; }
@@ -2509,6 +2560,13 @@
         AgentBackendStatus.Offline => Text("offline", "ออฟไลน์"),
         _ => Text("connected", "เชื่อมต่อแล้ว")
     };
+    private string AccountDisplayName => CleanAccountText(ProfileDisplayName) ??
+        CleanAccountText(ProfileEmail) ??
+        Text("MALIEV customer", "ลูกค้า MALIEV");
+    private string? AccountEmail => CleanAccountText(ProfileEmail);
+    private string? AccountProfileImageUrl => CleanAccountText(ProfileImageUrl);
+    private string AccountTierLabel => CleanAccountText(ProfileTier) ?? Text("Account", "บัญชี");
+    private string AccountInitials => GetAccountInitials(AccountDisplayName);
     private string AuthDialogTitle => _authDialogMode.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
         ? Text("Create your MALIEV account", "สร้างบัญชี MALIEV")
         : Text("Sign in to continue", "เข้าสู่ระบบเพื่อดำเนินการต่อ");
@@ -4209,6 +4267,24 @@
         _activeWorkspacePage = WorkspacePage.Settings;
         _searchOpen = false;
         _navigationDrawerOpen = false;
+    }
+
+    private void OpenPersonalAccountPage()
+    {
+        Navigation.NavigateTo("/profile");
+    }
+
+    private async Task SignOutAsync()
+    {
+        try
+        {
+            await Api.SignOutAsync();
+            Navigation.NavigateTo("/quotes", forceLoad: true);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or QuoteEngineApiException or TaskCanceledException)
+        {
+            _error = Text("Log out is temporarily unavailable.", "ยังออกจากระบบไม่ได้ชั่วคราว");
+        }
     }
 
     private async Task ToggleComposerMenuAsync()
@@ -6175,6 +6251,23 @@
 
         _draftMessage = prompt;
         await FocusComposerAsync();
+    }
+
+    private static string? CleanAccountText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string GetAccountInitials(string value)
+    {
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return "M";
+        }
+
+        var initials = string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+        return string.IsNullOrWhiteSpace(initials) ? "M" : initials;
     }
 
     private enum WorkspacePage

@@ -34,7 +34,10 @@
             <QuoteAgentLaunchShell @ref="_agentShell"
                                    SessionId="@AgentSessionId"
                                    IsSignedIn="@IsSignedIn"
-                                   ShowLaunchAccountCard="@ShowLaunchAccountCard"
+                                   ProfileDisplayName="@ProfileDisplayName"
+                                   ProfileEmail="@ProfileEmail"
+                                   ProfileImageUrl="@ProfileImageUrl"
+                                   ProfileTier="@ProfileTier"
                                    InitialAuthMode="@AuthMode"
                                    AuthReturnUrl="@WorkspaceAuthReturnUrl"
                                    Culture="@Culture"
@@ -122,9 +125,15 @@
         IsSignedIn &&
         BillingAddressId.HasValue &&
         ShippingAddressId.HasValue;
-    private bool ShowLaunchAccountCard => !IsSignedIn;
     private Guid AgentSessionId => Guid.TryParse(_quoteSessionId, out var parsed) ? parsed : Guid.Empty;
     private string WorkspaceAuthReturnUrl => BuildWorkspaceAuthReturnUrl(Navigation.Uri);
+    private string ProfileDisplayName => CleanProfileText(_profile?.DisplayName) ??
+        CleanProfileText(_authStatus.DisplayName) ??
+        CleanProfileText(_profile?.Email) ??
+        Text("MALIEV customer", "ลูกค้า MALIEV");
+    private string? ProfileEmail => CleanProfileText(_profile?.Email);
+    private string? ProfileImageUrl => CleanProfileText(_profile?.ProfileImageUrl);
+    private string? ProfileTier => CleanProfileText(_profile?.Tier);
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
 
@@ -1816,6 +1825,11 @@
     private string Text(string en, string th)
     {
         return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
+
+    private static string? CleanProfileText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 
     public async ValueTask DisposeAsync()

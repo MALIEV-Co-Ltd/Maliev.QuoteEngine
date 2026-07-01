@@ -756,8 +756,7 @@
 
 /* Elements hidden when collapsed */
 .qe-agent-shell--rail-collapsed .qe-agent-brand-wordmark,
-.qe-agent-shell--rail-collapsed .qe-agent-rail-search,
-.qe-agent-shell--rail-collapsed .qe-agent-signin-card {
+.qe-agent-shell--rail-collapsed .qe-agent-rail-search {
     display: none;
 }
 
@@ -790,17 +789,18 @@
     gap: 4px;
 }
 
-/* Collapsed user-btn: icon only, tooltip on hover */
 .qe-agent-shell--rail-collapsed .qe-agent-user-btn {
     grid-template-columns: 1fr;
     justify-items: center;
     padding-inline: 0;
     position: relative;
+    width: 34px;
+    min-height: 34px;
 }
 
-/* Floating tooltip for nav spans, user-btn label, and sign-in icon btn */
+/* Floating tooltip for nav spans and the collapsed account row */
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav span,
-.qe-agent-shell--rail-collapsed .qe-agent-user-btn span:not(.qe-agent-user-avatar),
+.qe-agent-shell--rail-collapsed .qe-agent-user-copy,
 .qe-agent-shell--rail-collapsed .qe-agent-signin-icon-btn span {
     display: block;
     position: absolute;
@@ -823,9 +823,14 @@
 
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav button:hover span,
 .qe-agent-shell--rail-collapsed .qe-agent-primary-nav a:hover span,
-.qe-agent-shell--rail-collapsed .qe-agent-user-btn:hover span:not(.qe-agent-user-avatar),
+.qe-agent-shell--rail-collapsed .qe-agent-user-btn:hover .qe-agent-user-copy,
 .qe-agent-shell--rail-collapsed .qe-agent-signin-icon-btn:hover span {
     opacity: 1;
+}
+
+.qe-agent-shell--rail-collapsed .qe-agent-user-menu-icon,
+.qe-agent-shell--rail-collapsed .qe-agent-account-panel {
+    display: none;
 }
 
 :root[data-maliev-theme="dark"] .qe-agent-brand-wordmark {
@@ -1366,11 +1371,13 @@
 }
 
 .qe-agent-rail-foot {
+    position: relative;
     display: block;
     width: 100%;
-    min-height: 40px;
+    min-height: 50px;
     margin: 0;
-    padding: 8px 0 6px;
+    padding: 7px 0 5px;
+    border-top: 1px solid var(--qe-agent-line);
 }
 
 .qe-agent-rail-foot a {
@@ -1378,165 +1385,203 @@
     text-decoration: none;
 }
 
+.qe-agent-account-menu {
+    position: relative;
+    display: block;
+}
+
+.qe-agent-account-menu > summary {
+    list-style: none;
+}
+
+.qe-agent-account-menu > summary::-webkit-details-marker {
+    display: none;
+}
+
 .qe-agent-user-btn {
     display: inline-grid;
-    grid-template-columns: 22px minmax(0, 1fr);
+    grid-template-columns: 28px minmax(0, 1fr) 18px;
     align-items: center;
-    gap: 8px;
-    min-height: 32px;
+    gap: 9px;
+    min-height: 48px;
     width: 100%;
     padding: 6px 8px;
     border: 0;
     border-radius: 8px;
     background: transparent;
-    color: var(--qe-agent-muted);
+    color: var(--qe-agent-ink);
     cursor: pointer;
     text-align: left;
 }
 
 .qe-agent-user-btn:hover,
-.qe-agent-user-btn.active {
+.qe-agent-user-btn:focus-visible,
+.qe-agent-account-menu[open] > .qe-agent-user-btn {
     background: var(--qe-agent-soft);
     color: var(--qe-agent-ink);
+    outline: none;
 }
 
-.qe-agent-user-btn span:not(.qe-agent-user-avatar) {
-    font-size: 12px;
+.qe-agent-user-copy {
+    display: grid;
+    gap: 1px;
+    min-width: 0;
+}
+
+.qe-agent-user-copy strong,
+.qe-agent-user-copy small {
+    display: block;
+    min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    line-height: 1.15;
+}
+
+.qe-agent-user-copy strong {
+    color: var(--qe-agent-ink);
+    font-size: 12px;
+    font-weight: 650;
+}
+
+.qe-agent-user-copy small {
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    font-weight: 400;
 }
 
 .qe-agent-user-avatar {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 22px;
-    color: inherit;
-}
-
-.qe-agent-signin-icon-btn {
-    display: none;
-}
-
-.qe-agent-signin-card {
-    display: block;
-    width: min(100%, 220px);
-    max-width: 220px;
-    margin: 0 auto;
-}
-
-.qe-agent-signin-panel {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    align-items: stretch;
-    gap: 8px;
-    width: min(100%, 156px);
-    max-width: 156px;
-    min-height: 0;
-    padding: 7px;
+    width: 28px;
+    height: 28px;
+    overflow: hidden;
     border: 1px solid var(--qe-agent-line);
-    border-radius: 8px;
-    background: transparent;
-    box-shadow: none;
-    color: var(--qe-agent-ink);
-}
-
-.qe-agent-signin-card strong {
-    display: block;
-    min-width: 0;
-    font-size: 11px;
-    font-weight: 650;
-    color: var(--qe-agent-ink);
-    line-height: 1.25;
-    letter-spacing: 0;
-    overflow-wrap: anywhere;
-    white-space: normal;
-}
-
-.qe-agent-signin-panel > p {
-    display: none;
-}
-
-.qe-agent-signin-panel ul {
-    display: grid;
-    gap: 5px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
-}
-
-.qe-agent-signin-panel li {
-    display: grid;
-    grid-template-columns: 18px minmax(0, 1fr);
-    align-items: center;
-    gap: 7px;
-    min-height: 32px;
-    padding: 6px 8px;
-    border: 1px solid var(--qe-agent-line);
-    border-radius: 8px;
+    border-radius: 999px;
     background: var(--qe-agent-soft);
-    color: var(--qe-agent-ink);
-    font-size: 12px;
-    line-height: 1.25;
+    color: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1;
 }
 
-.qe-agent-signin-panel li .mud-icon-size-small {
+.qe-agent-user-avatar img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.qe-agent-user-avatar svg {
+    width: 17px;
+    height: 17px;
+}
+
+.qe-agent-user-menu-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-account-panel {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    left: 0;
+    z-index: 150;
+    display: grid;
+    gap: 1px;
+    min-width: 260px;
+    padding: 6px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 10px;
+    background: var(--qe-agent-raised);
+    box-shadow: 0 18px 46px rgba(0, 0, 0, .18);
+}
+
+.qe-agent-account-email {
+    min-width: 0;
+    padding: 6px 8px 7px;
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    line-height: 1.25;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-account-panel a,
+.qe-agent-account-panel button {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    min-height: 30px;
+    width: 100%;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--qe-agent-ink);
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: left;
+    cursor: pointer;
+}
+
+.qe-agent-account-panel a:hover,
+.qe-agent-account-panel button:hover,
+.qe-agent-account-panel a:focus-visible,
+.qe-agent-account-panel button:focus-visible {
+    background: var(--qe-agent-soft);
+    outline: none;
+}
+
+.qe-agent-account-panel span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-account-panel .mud-icon-size-small {
     width: 16px;
     height: 16px;
     min-width: 16px;
     color: var(--qe-agent-muted);
 }
 
-.qe-agent-signin-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 6px;
-    flex: 0 0 auto;
-    width: 100%;
-    min-height: 32px;
-    padding: 6px 9px;
-    border: 1px solid var(--qe-agent-inverse);
-    border-radius: 8px;
-    white-space: nowrap;
-    line-height: 1.2;
-    background: var(--qe-agent-inverse);
-    color: var(--qe-agent-inverse-text) !important;
-    font-size: 10.5px;
-    font-weight: 700;
-    text-decoration: none;
-    cursor: pointer;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, .14);
-}
-
-.qe-agent-signin-btn:hover {
-    background: color-mix(in srgb, var(--qe-agent-inverse) 88%, var(--qe-agent-bg));
-    border-color: color-mix(in srgb, var(--qe-agent-inverse) 88%, var(--qe-agent-bg));
-    color: var(--qe-agent-inverse-text) !important;
-}
-
-.qe-agent-rail-foot .qe-agent-signin-btn {
-    text-align: center;
-}
-
-.qe-agent-signin-secure {
-    display: none;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 6px;
-    margin: 0;
-    padding: 0 2px;
+.qe-agent-account-panel kbd {
+    padding: 2px 5px;
+    border-radius: 999px;
+    background: var(--qe-agent-soft);
+    color: var(--qe-agent-muted);
+    font: inherit;
     font-size: 10px;
-    color: color-mix(in srgb, var(--qe-agent-muted) 86%, transparent);
-    line-height: 1.35;
 }
 
-.qe-agent-signin-secure .mud-icon-size-small {
-    width: 16px;
-    height: 16px;
-    min-width: 16px;
+.qe-agent-account-menu-caret {
+    justify-self: end;
+}
+
+.qe-agent-account-menu-divider {
+    height: 1px;
+    margin: 4px 6px;
+    background: var(--qe-agent-line);
+}
+
+.qe-agent-account-menu-row--danger {
+    color: var(--qe-agent-ink) !important;
+}
+
+.qe-agent-signin-row .qe-agent-user-avatar {
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-signin-icon-btn {
+    display: none;
 }
 
 
@@ -5921,13 +5966,6 @@
         width: 100%;
     }
 
-    .qe-agent-signin-card {
-        display: block;
-        width: min(100%, 240px);
-        max-width: 240px;
-        margin-inline: auto;
-    }
-
     .qe-agent-signin-icon-btn {
         display: grid;
         place-items: center;
@@ -5949,7 +5987,6 @@
 
     .qe-agent-primary-nav a,
     .qe-agent-primary-nav button,
-    .qe-agent-user-btn,
     .qe-agent-signin-icon-btn {
         grid-template-columns: 22px minmax(0, 1fr);
         justify-items: stretch;
@@ -5963,19 +6000,26 @@
     }
 
     .qe-agent-user-btn {
+        grid-template-columns: 28px minmax(0, 1fr) 18px;
         width: 100%;
         border-radius: 9px;
         color: var(--qe-agent-ink);
     }
 
-    .qe-agent-user-btn span:not(.qe-agent-user-avatar) {
+    .qe-agent-user-copy strong {
         font-size: 14px;
+        line-height: 1.2;
+    }
+
+    .qe-agent-user-copy small {
+        font-size: 12px;
         line-height: 1.2;
     }
 
     .qe-agent-primary-nav a span,
     .qe-agent-primary-nav button span,
-    .qe-agent-user-btn span:not(.qe-agent-user-avatar),
+    .qe-agent-user-copy strong,
+    .qe-agent-user-copy small,
     .qe-agent-signin-icon-btn span {
         max-width: 100%;
         overflow: hidden;

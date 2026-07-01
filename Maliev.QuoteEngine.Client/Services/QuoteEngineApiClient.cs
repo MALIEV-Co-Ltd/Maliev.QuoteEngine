@@ -46,6 +46,15 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public async Task SignOutAsync(CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsync("quote/v1/auth/sign-out", content: null, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync("quote/v1/auth/sign-out", response, cancellationToken);
+        }
+    }
+
     public Task<InitiateQuoteUploadResponse> InitiateUploadAsync(string quoteSessionId, IBrowserFile file, CancellationToken cancellationToken = default)
     {
         return InitiateUploadAsync(
