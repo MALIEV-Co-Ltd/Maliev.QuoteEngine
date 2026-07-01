@@ -59,6 +59,7 @@
   let runtimeReady = false;
   let canSkipStory = false;
   let firstWasmStoryPending = false;
+  let workspaceHandoffPending = false;
 
   function clamp(value) {
     return Math.max(0, Math.min(100, value));
@@ -579,7 +580,11 @@
   }
 
   function startBlazor() {
+    // Consumed here (query params stripped, sessionStorage flag cleared) before
+    // Blazor's router ever sees the URL, so C# can't re-derive this signal from
+    // the request — it must read the result back via wasWorkspaceHandoff().
     const isWorkspaceHandoff = consumeWorkspaceHandoff();
+    workspaceHandoffPending = isWorkspaceHandoff;
     const isFirstWasmLoad = shouldPlayFirstWasmStory();
     firstWasmStoryPending = isFirstWasmLoad;
     setProgress(0, true);
@@ -625,7 +630,8 @@
     markFailed,
     setProgress,
     startBlazor,
-    skipStory
+    skipStory,
+    wasWorkspaceHandoff: function () { return workspaceHandoffPending; }
   };
 
   window.quoteEnginePreferences = {

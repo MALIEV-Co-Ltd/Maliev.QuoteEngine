@@ -1,6 +1,6 @@
 :root {
     color-scheme: light;
-    --selection-bg: hsla(0, 0%, 95%, 1);
+    --selection-bg: rgba(10, 114, 239, 0.28);
     --selection-color: var(--ink);
 
     /* ─── Core palette (DESIGN.md §2) ──────────────────────────────────── */
@@ -6159,7 +6159,7 @@
 
 :root[data-maliev-theme="dark"] {
     color-scheme: dark;
-    --selection-bg: rgba(79, 156, 255, 0.42);
+    --selection-bg: rgba(79, 156, 255, 0.55);
     --selection-color: #f5f5f5;
     --ink: #f5f5f5;
     --ink-strong: #ffffff;

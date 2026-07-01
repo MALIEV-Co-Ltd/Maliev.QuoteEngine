@@ -180,6 +180,15 @@
             _profile = null;
             _addresses = [];
         }
+        catch (Exception ex) when (ex is HttpRequestException or QuoteEngineApiException or TaskCanceledException)
+        {
+            // Profile/address service is transiently unavailable (e.g. 503). Keep the
+            // signed-in session and let the rest of OnInitializedAsync run — an
+            // unhandled exception here would leave _routeStateInitialized false
+            // forever, silently disabling the upload input for the whole visit.
+            _profile = null;
+            _addresses = [];
+        }
     }
 
     private static string BuildWorkspaceAuthReturnUrl(string currentUri)
@@ -226,6 +235,14 @@
         if (!string.IsNullOrWhiteSpace(normalizedProjectName))
         {
             _title = normalizedProjectName;
+        }
+
+        // The agent named the project — canonicalize the URL to this session's
+        // GUID (matching QuoteAgentLaunchShell.ProjectHref) so it's bookmarkable
+        // and so returning here later resumes the same conversation.
+        if (AgentSessionId != Guid.Empty && ProjectId != AgentSessionId)
+        {
+            Navigation.NavigateTo($"/quotes?projectId={AgentSessionId:D}", replace: true);
         }
 
         return Task.CompletedTask;
@@ -367,25 +384,34 @@
         var path = CurrentWorkspacePath();
         var pathChanged = !string.Equals(_lastWorkspacePath, path, StringComparison.OrdinalIgnoreCase);
         var handoffChanged = !string.Equals(_lastHandoff, Handoff, StringComparison.Ordinal);
-        var projectChanged = ProjectId != _draftProjectId;
+
+        // ?projectId= on this route names the live agent session (see
+        // QuoteAgentLaunchShell.ProjectHref), not necessarily a persisted draft.
+        // Once the URL already reflects the session we're in, treat it as a no-op —
+        // reloading/resuming here would wipe in-progress parts for nothing.
+        var isCurrentSessionUrl = ProjectId.HasValue && ProjectId.Value == AgentSessionId;
+        var projectChanged = !isCurrentSessionUrl && ProjectId != _draftProjectId;
 
         if (!force && !pathChanged && !handoffChanged && !projectChanged)
         {
             return;
         }
 
-        if (projectChanged)
+        if (!isCurrentSessionUrl)
         {
-            await ResetWorkspaceStateAsync();
-        }
+            if (projectChanged)
+            {
+                await ResetWorkspaceStateAsync();
+            }
 
-        if (ProjectId.HasValue && (force || pathChanged || projectChanged))
-        {
-            await ResumeProjectAsync(ProjectId.Value);
-        }
-        else if (!string.IsNullOrWhiteSpace(Handoff) && (force || pathChanged || handoffChanged))
-        {
-            await ImportHandoffAsync(Handoff);
+            if (ProjectId.HasValue && (force || pathChanged || projectChanged))
+            {
+                await ResumeProjectAsync(ProjectId.Value);
+            }
+            else if (!string.IsNullOrWhiteSpace(Handoff) && (force || pathChanged || handoffChanged))
+            {
+                await ImportHandoffAsync(Handoff);
+            }
         }
 
         _lastWorkspacePath = path;
@@ -394,6 +420,13 @@
 
     private async Task ResumeProjectAsync(Guid projectId)
     {
+        // The id may name either a persisted draft (fetched below for its parts and
+        // title) or a session that was only ever chatted in and never saved. Set the
+        // session id unconditionally first so QuoteAgentLaunchShell can load that
+        // conversation's message history even when no persisted draft exists.
+        _quoteSessionId = projectId.ToString("N");
+        await PersistAgentSessionAsync();
+
         try
         {
             var project = await Api.GetProjectDetailAsync(projectId);
@@ -415,13 +448,15 @@
                 await CalculateAsync();
             }
         }
-        catch (QuoteEngineApiException ex)
+        catch (QuoteEngineApiException)
         {
-            _error = ex.UserMessage;
+            // No persisted draft under this id — it's a session-only project. The
+            // agent shell will still resume the chat from the session id above.
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
-            _error = Text("We could not resume this project. Please try again.", "ไม่สามารถเปิดโปรเจกต์นี้ต่อได้ กรุณาลองใหม่");
+            // Same as above: treat as a session-only project rather than surfacing
+            // an error for what is, from the customer's perspective, a normal resume.
         }
     }
 
@@ -1641,6 +1676,17 @@
     {
         try
         {
+            // Only resume the shared session on a genuine handoff (cross-app widget
+            // continuation, or returning from the same-origin sign-in redirect) —
+            // never on an ordinary visit to "/". quote-engine-loader.js computes and
+            // strips the handoff signal from the URL before Blazor boots, so it has
+            // to be read back here rather than re-derived from the current route.
+            var isWorkspaceHandoff = await Js.InvokeAsync<bool>("quoteEngineLoader.wasWorkspaceHandoff");
+            if (!isWorkspaceHandoff)
+            {
+                return true;
+            }
+
             var storedSessionId = await Js.InvokeAsync<string?>("malievChatbot.readSharedSessionId", MakeStudioSessionStorageKey);
             if (Guid.TryParse(storedSessionId, out var parsed) && parsed != Guid.Empty)
             {
