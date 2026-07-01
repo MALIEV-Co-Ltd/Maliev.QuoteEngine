@@ -10477,11 +10477,6 @@ textarea::placeholder {
     flex: 1 1 auto;
 }
 
-.qe-error-alert {
-    flex-shrink: 0;
-    margin: 8px;
-}
-
 .qe-empty-state {
     flex: 1 1 0;
     display: flex;

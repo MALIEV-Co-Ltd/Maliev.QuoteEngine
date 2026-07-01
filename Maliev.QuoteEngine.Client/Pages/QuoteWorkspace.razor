@@ -31,10 +31,6 @@
 
     <div class="qe-pn-body">
         <main class="qe-pn-center">
-            @if (!string.IsNullOrWhiteSpace(_error))
-            {
-                <MudAlert Severity="Severity.Error" Class="qe-error-alert">@_error</MudAlert>
-            }
             <QuoteAgentLaunchShell @ref="_agentShell"
                                    SessionId="@AgentSessionId"
                                    IsSignedIn="@IsSignedIn"

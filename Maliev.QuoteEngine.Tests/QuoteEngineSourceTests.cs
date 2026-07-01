@@ -636,6 +636,9 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("New project started", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("Resumed {project.ProjectNumber}", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("Analysis complete for", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("MudAlert Severity=\"Severity.Error\"", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-error-alert", workspace, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-error-alert", styles, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-live-notifications", styles, StringComparison.Ordinal);
     }
 
