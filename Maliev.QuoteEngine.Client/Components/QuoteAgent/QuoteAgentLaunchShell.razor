@@ -567,23 +567,93 @@
                             <p>@Text("Manage Studio preferences and account actions.", "จัดการการตั้งค่า Studio และการทำงานของบัญชี")</p>
                         </div>
                     </header>
+                    <div class="qe-agent-management-tabs" role="tablist" aria-label="@Text("Settings sections", "หมวดการตั้งค่า")">
+                        <button type="button"
+                                class="@SettingsTabClass("general")"
+                                role="tab"
+                                aria-selected="@(_settingsTab == "general")"
+                                @onclick='@(() => SetSettingsTab("general"))'>
+                            @Text("General", "ทั่วไป")
+                        </button>
+                        <button type="button"
+                                class="@SettingsTabClass("appearance")"
+                                role="tab"
+                                aria-selected="@(_settingsTab == "appearance")"
+                                @onclick='@(() => SetSettingsTab("appearance"))'>
+                            @Text("Appearance", "รูปลักษณ์")
+                        </button>
+                        <button type="button"
+                                class="@SettingsTabClass("language")"
+                                role="tab"
+                                aria-selected="@(_settingsTab == "language")"
+                                @onclick='@(() => SetSettingsTab("language"))'>
+                            @Text("Language", "ภาษา")
+                        </button>
+                        <a class="qe-agent-management-tab" href="/profile">
+                            @Text("Profile", "โปรไฟล์")
+                        </a>
+                    </div>
                     <section class="qe-agent-management-section">
                         <header>
-                            <strong>@Text("Studio preferences", "การตั้งค่า Studio")</strong>
-                            <small>@Text("More controls will appear as account services are connected.", "ตัวเลือกเพิ่มเติมจะแสดงเมื่อเชื่อมต่อบริการบัญชีแล้ว")</small>
+                            <strong>@SettingsSectionHeading</strong>
+                            <small>@SettingsSectionSubheading</small>
                         </header>
-                        <div class="qe-agent-settings-grid">
-                            <button type="button" @onclick="ToggleThemeAsync">
-                                <MudIcon Icon="@ThemeIcon" Size="Size.Small" />
-                                <span>@Text("Theme", "ธีม")</span>
-                                <strong>@(IsDarkMode ? Text("Dark", "มืด") : Text("Light", "สว่าง"))</strong>
-                            </button>
-                            <button type="button" @onclick='@(() => OpenAuthDialog("sign-in"))'>
-                                <MudIcon Icon="@Icons.Material.Outlined.ManageAccounts" Size="Size.Small" />
-                                <span>@Text("Account", "บัญชี")</span>
-                                <strong>@Text("Manage sign in", "จัดการการเข้าสู่ระบบ")</strong>
-                            </button>
-                        </div>
+                        @if (_settingsTab == "general")
+                        {
+                            <div class="qe-agent-settings-grid">
+                                <button type="button" @onclick='@(() => OpenAuthDialog("sign-in"))'>
+                                    <MudIcon Icon="@Icons.Material.Outlined.ManageAccounts" Size="Size.Small" />
+                                    <span>@Text("Account", "บัญชี")</span>
+                                    <strong>@Text("Manage sign in", "จัดการการเข้าสู่ระบบ")</strong>
+                                </button>
+                                <button type="button" @onclick="ToggleMotionReducedAsync">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Vibration" Size="Size.Small" />
+                                    <span>@Text("Motion", "การเคลื่อนไหว")</span>
+                                    <strong>@(Preferences.IsMotionReduced ? Text("Reduced", "ลดการเคลื่อนไหว") : Text("Normal", "ปกติ"))</strong>
+                                </button>
+                                <a href="/preferences">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
+                                    <span>@Text("Manufacturing defaults", "ค่าเริ่มต้นการผลิต")</span>
+                                    <strong>@Text("Process, tolerance, inspection", "กระบวนการ ค่าคลาดเคลื่อน การตรวจสอบ")</strong>
+                                </a>
+                            </div>
+                        }
+                        else if (_settingsTab == "appearance")
+                        {
+                            <div class="qe-agent-theme-grid">
+                                <button type="button" class="@ThemePreviewClass(false)" @onclick='@(() => SetThemeAsync(false))'>
+                                    <span class="qe-agent-theme-swatch qe-agent-theme-swatch--light" aria-hidden="true">
+                                        <span></span>
+                                        <span></span>
+                                    </span>
+                                    <strong>@Text("Light", "สว่าง")</strong>
+                                </button>
+                                <button type="button" class="@ThemePreviewClass(true)" @onclick='@(() => SetThemeAsync(true))'>
+                                    <span class="qe-agent-theme-swatch qe-agent-theme-swatch--dark" aria-hidden="true">
+                                        <span></span>
+                                        <span></span>
+                                    </span>
+                                    <strong>@Text("Dark", "มืด")</strong>
+                                </button>
+                            </div>
+                        }
+                        else if (_settingsTab == "language")
+                        {
+                            <div class="qe-agent-theme-grid">
+                                <button type="button" class="@LanguageOptionClass(true, string.Empty)" @onclick="Preferences.SetCultureAutoAsync">
+                                    <strong>@Text("Auto-detect", "ตรวจจับอัตโนมัติ")</strong>
+                                    <span>@Text("Match browser language", "ตามภาษาเบราว์เซอร์")</span>
+                                </button>
+                                <button type="button" class="@LanguageOptionClass(false, SupportedCultures.DefaultCulture)" @onclick='@(() => Preferences.SetCultureAsync(SupportedCultures.DefaultCulture))'>
+                                    <strong>English</strong>
+                                    <span>en-US</span>
+                                </button>
+                                <button type="button" class="@LanguageOptionClass(false, SupportedCultures.ThaiCulture)" @onclick='@(() => Preferences.SetCultureAsync(SupportedCultures.ThaiCulture))'>
+                                    <strong>ไทย</strong>
+                                    <span>th-TH</span>
+                                </button>
+                            </div>
+                        }
                     </section>
                 }
             </section>
@@ -2157,6 +2227,7 @@
     private QuoteAgentAuthHandoffResponse? _authHandoff;
     private List<QuoteAgentConnectorDto> _connectors = [];
     private string _pluginsTab = "all";
+    private string _settingsTab = "general";
     private Guid _loadedSessionId;
     private bool _loadedSessionWasSignedIn;
     private Task? _projectNavigationLoadTask;
@@ -4396,6 +4467,53 @@
     private Task ToggleThemeAsync()
     {
         return Preferences.SetThemeAsync(IsDarkMode ? PreferenceService.LightTheme : PreferenceService.DarkTheme);
+    }
+
+    private Task SetThemeAsync(bool dark)
+    {
+        return Preferences.SetThemeAsync(dark ? PreferenceService.DarkTheme : PreferenceService.LightTheme);
+    }
+
+    private Task ToggleMotionReducedAsync()
+    {
+        return Preferences.SetMotionReducedAsync(!Preferences.IsMotionReduced);
+    }
+
+    private void SetSettingsTab(string tab)
+    {
+        _settingsTab = tab is "appearance" or "language" ? tab : "general";
+    }
+
+    private string SettingsTabClass(string tab)
+    {
+        return _settingsTab == tab ? "qe-agent-management-tab is-active" : "qe-agent-management-tab";
+    }
+
+    private string SettingsSectionHeading => _settingsTab switch
+    {
+        "appearance" => Text("Appearance", "รูปลักษณ์"),
+        "language" => Text("Language", "ภาษา"),
+        _ => Text("Studio preferences", "การตั้งค่า Studio")
+    };
+
+    private string SettingsSectionSubheading => _settingsTab switch
+    {
+        "appearance" => Text("Choose how Make Studio looks on this device.", "เลือกรูปลักษณ์ของ Make Studio บนอุปกรณ์นี้"),
+        "language" => Text("Auto-detect matches your browser language until you pick one.", "ตรวจจับอัตโนมัติจะใช้ภาษาของเบราว์เซอร์จนกว่าคุณจะเลือกเอง"),
+        _ => Text("More controls will appear as account services are connected.", "ตัวเลือกเพิ่มเติมจะแสดงเมื่อเชื่อมต่อบริการบัญชีแล้ว")
+    };
+
+    private string ThemePreviewClass(bool dark)
+    {
+        return IsDarkMode == dark ? "qe-agent-theme-option is-active" : "qe-agent-theme-option";
+    }
+
+    private string LanguageOptionClass(bool auto, string culture)
+    {
+        var isActive = auto
+            ? Preferences.IsCultureAuto
+            : !Preferences.IsCultureAuto && SupportedCultures.Normalize(Culture) == SupportedCultures.Normalize(culture);
+        return isActive ? "qe-agent-theme-option is-active" : "qe-agent-theme-option";
     }
 
     private async Task ExportChatPdfAsync()
