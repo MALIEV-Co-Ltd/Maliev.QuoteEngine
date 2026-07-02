@@ -1159,6 +1159,54 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_stream_forwards_markdown_documents_to_chatbot_service()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        const string documentUrl = "https://files.example.test/customer-requirements.md";
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Summarize these requirements for quoting.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "customer-requirements.md",
+                        ContentType = "text/markdown",
+                        FileSizeBytes = 12_000,
+                        Kind = "requirements",
+                        Url = documentUrl
+                    }
+                ]
+            }, options: JsonOptions)
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
+        Assert.Equal("document", attachment.Type);
+        Assert.Equal("text/markdown", attachment.MimeType);
+        Assert.Equal("customer-requirements.md", attachment.Filename);
+        Assert.Equal(documentUrl, attachment.Url);
+        Assert.Equal(12_000, attachment.SizeBytes);
+    }
+
+    [Fact]
     public async Task Agent_message_stream_reattaches_recent_workbench_artifact_for_follow_up_turns()
     {
         var chatbot = new RecordingChatbotServiceClient();
