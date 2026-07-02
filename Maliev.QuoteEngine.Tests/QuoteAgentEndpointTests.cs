@@ -1033,6 +1033,56 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_stream_with_stored_pdf_uses_signed_url_for_chatbot_document()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(new RecordingUploadServiceClient());
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        const string storagePath = "quotes/temp/session/customer-drawing.pdf";
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Use this drawing to quote the bracket.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "customer-drawing.pdf",
+                        ContentType = "application/pdf",
+                        FileSizeBytes = 2_400_000,
+                        Kind = "drawing",
+                        StoragePath = storagePath
+                    }
+                ]
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
+        Assert.Equal("pdf", attachment.Type);
+        Assert.Equal("application/pdf", attachment.MimeType);
+        Assert.Equal("customer-drawing.pdf", attachment.Filename);
+        Assert.Equal(
+            $"https://upload.example.test/download/{Uri.EscapeDataString(storagePath)}",
+            attachment.Url);
+    }
+
+    [Fact]
     public async Task Agent_message_stream_skips_storage_media_when_inline_download_fails()
     {
         var chatbot = new RecordingChatbotServiceClient();

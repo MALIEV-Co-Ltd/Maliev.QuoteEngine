@@ -6137,7 +6137,9 @@ Customer message:
 
     private static bool ShouldUseSignedUrlForChatbotAttachment(string attachmentType) =>
         attachmentType.Equals("video", StringComparison.OrdinalIgnoreCase) ||
-        attachmentType.Equals("audio", StringComparison.OrdinalIgnoreCase);
+        attachmentType.Equals("audio", StringComparison.OrdinalIgnoreCase) ||
+        attachmentType.Equals("pdf", StringComparison.OrdinalIgnoreCase) ||
+        attachmentType.Equals("document", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<QuoteAgentAttachmentDto> BuildWorkbenchAttachmentCandidates(
         IReadOnlyCollection<QuoteAgentAttachmentDto> attachments,
