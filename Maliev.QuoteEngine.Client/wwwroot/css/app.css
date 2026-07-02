@@ -9785,13 +9785,18 @@ textarea::placeholder {
     box-shadow: var(--maliev-shadow-ring-light);
 }
 
+/* Preferences follows the studio settings language: grouped rows inside one
+   rounded container, quiet 400-weight labels, and segmented pickers with a
+   raised active pill — never a solid ink fill, and hover must stay distinct
+   from selected. */
 .preferences-panel {
     display: grid;
-    gap: 12px;
-    padding: 20px;
-    border-radius: var(--maliev-radius-md);
+    gap: 0;
+    padding: 4px 0;
+    border: 1px solid var(--line);
+    border-radius: 12px;
     background: var(--panel);
-    box-shadow: var(--maliev-shadow-card);
+    box-shadow: none;
 }
 
 .preferences-panel-heading {
@@ -9799,18 +9804,31 @@ textarea::placeholder {
     gap: 16px;
     align-items: end;
     justify-content: space-between;
+    padding: 16px 18px 6px;
+}
+
+.preferences-panel-heading .eyebrow {
+    font-family: inherit;
+    color: var(--muted-2);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
 }
 
 .preferences-panel-heading h2 {
-    margin: 0;
-    font-size: var(--maliev-font-section);
+    margin: 2px 0 0;
+    font-size: 16px;
+    font-weight: 600;
 }
 
 .preferences-panel-heading p {
-    max-width: 560px;
+    max-width: 460px;
     margin: 0;
-    color: var(--muted);
+    color: var(--muted-2);
     font-size: var(--maliev-font-small);
+    font-weight: 400;
+    text-align: right;
 }
 
 .preferences-row {
@@ -9818,41 +9836,70 @@ textarea::placeholder {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 16px;
     align-items: center;
-    padding: 12px;
-    border-radius: var(--maliev-radius-sm);
-    background: var(--panel-tint);
+    min-height: 64px;
+    padding: 12px 18px;
+    border-radius: 0;
+    background: transparent;
+}
+
+.preferences-row + .preferences-row {
+    border-top: 1px solid var(--line);
 }
 
 .preferences-row > div:first-child {
     display: grid;
-    gap: 4px;
+    gap: 3px;
+}
+
+.preferences-row .eyebrow {
+    font-family: inherit;
+    color: var(--muted-2);
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.preferences-row > div:first-child strong {
+    font-size: 14px;
+    font-weight: 500;
 }
 
 .preferences-segmented {
     display: inline-flex;
-    gap: 4px;
-    padding: 4px;
-    border-radius: var(--maliev-radius-sm);
-    background: var(--panel);
-    box-shadow: var(--maliev-shadow-ring-light);
+    gap: 2px;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel-tint);
+    box-shadow: none;
 }
 
 .preferences-segment {
-    min-height: 32px;
-    min-width: 70px;
+    min-height: 28px;
+    min-width: 0;
+    padding: 3px 14px;
     border: 0;
-    border-radius: var(--maliev-radius-sm);
+    border-radius: 999px;
     color: var(--muted);
     background: transparent;
     font-size: var(--maliev-font-small);
-    font-weight: 500;
+    font-weight: 400;
     cursor: pointer;
+    white-space: nowrap;
+    transition: background-color 120ms ease, color 120ms ease;
 }
 
-.preferences-segment.is-active,
 .preferences-segment:hover {
-    color: var(--paper);
-    background: var(--ink);
+    color: var(--ink);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+}
+
+.preferences-segment.is-active {
+    color: var(--ink);
+    background: var(--panel);
+    font-weight: 500;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14), 0 0 0 1px var(--line);
 }
 
 .preferences-currency-select {
@@ -9862,18 +9909,20 @@ textarea::placeholder {
 .preferences-default-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 12px;
+    gap: 10px;
+    padding: 10px 18px 14px;
 }
 
 .preferences-field {
     display: grid;
-    gap: 8px;
-    padding: 12px;
-    border-radius: var(--maliev-radius-sm);
+    gap: 7px;
+    padding: 12px 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
     background: var(--panel-tint);
-    color: var(--muted);
-    font-size: var(--maliev-font-small);
-    font-weight: 700;
+    color: var(--muted-2);
+    font-size: 12px;
+    font-weight: 400;
 }
 
 .preferences-select {
@@ -10346,6 +10395,10 @@ textarea::placeholder {
     .preferences-panel-heading {
         display: grid;
         align-items: start;
+    }
+
+    .preferences-panel-heading p {
+        text-align: left;
     }
 
     .preferences-default-grid {
