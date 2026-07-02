@@ -7,6 +7,9 @@ using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authentication.OAuth.Claims;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
@@ -38,7 +41,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 builder.Services.AddSingleton<BffMetrics>();
-builder.AddMalievIdentityCookie(options =>
+var authentication = builder.AddMalievIdentityCookie(options =>
 {
     // Unauthenticated requests redirect cross-domain to the Web sign-in page,
     // passing the original QuoteEngine URL as an absolute returnUrl.
@@ -51,6 +54,30 @@ builder.AddMalievIdentityCookie(options =>
         return Task.CompletedTask;
     };
 });
+// Google OAuth runs in this BFF and completes against AuthService — customer
+// sign-in never depends on the Maliev.Web frontend.
+var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
+var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
+if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
+{
+    authentication.AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
+    {
+        options.SignInScheme = IdentityCookieExtensions.ExternalSchemeName;
+        options.ClientId = googleClientId;
+        options.ClientSecret = googleClientSecret;
+        options.CallbackPath = "/auth/google/signin";
+        options.Scope.Add("profile");
+        options.Scope.Add("email");
+        options.ClaimActions.MapJsonKey("picture", "picture");
+        options.SaveTokens = true;
+        options.Events.OnRedirectToAuthorizationEndpoint = context =>
+        {
+            context.Response.Redirect(context.RedirectUri + "&prompt=select_account");
+            return Task.CompletedTask;
+        };
+    });
+}
+
 // Persist Data Protection keys to Redis so Web and QuoteEngine share the same key ring.
 builder.Services.AddSingleton<IPostConfigureOptions<KeyManagementOptions>>(sp =>
     new PostConfigureOptions<KeyManagementOptions>(Microsoft.Extensions.Options.Options.DefaultName, opts =>
@@ -135,6 +162,8 @@ builder.AddAuthenticatedServiceClient<IPdfServiceClient, PdfServiceClient>("PdfS
     .ConfigureHttpClient(client => client.Timeout = TimeSpan.FromMinutes(2));
 
 // ── Real downstream service clients ──────────────────────────────────────────
+builder.AddAuthenticatedServiceClient<IAuthServiceClient, AuthServiceClient>("AuthService");
+builder.AddAuthenticatedServiceClient<ICustomerRegistrationClient, CustomerRegistrationClient>("CustomerService");
 builder.AddAuthenticatedServiceClient<IMaterialCatalogClient, MaterialCatalogClient>("MaterialService");
 builder.AddAuthenticatedServiceClient<IQuotationServiceClient, QuotationServiceClient>("QuotationService");
 builder.AddAuthenticatedServiceClient<IOrderServiceClient, OrderServiceClient>("OrderService");
@@ -222,9 +251,10 @@ app.Use(async (context, next) =>
 app.UseRateLimiter();
 
 app.MapGet("/", RenderClientAppAsync).ExcludeFromDescription();
-// Auth pages redirect to Maliev.Web — QuoteEngine has no own sign-in surface.
-app.MapGet("/auth/sign-in", (HttpContext context) => RedirectToWebAuth(context, "sign-in")).ExcludeFromDescription();
-app.MapGet("/auth/sign-up", (HttpContext context) => RedirectToWebAuth(context, "sign-up")).ExcludeFromDescription();
+// Auth pages open the studio sign-in dialog; Google and email flows complete
+// against AuthService inside this BFF, never via the Maliev.Web frontend.
+app.MapGet("/auth/sign-in", (HttpContext context) => RedirectToStudioAuth(context, "sign-in")).ExcludeFromDescription();
+app.MapGet("/auth/sign-up", (HttpContext context) => RedirectToStudioAuth(context, "sign-up")).ExcludeFromDescription();
 // Account hub redirect: Blazor client links here instead of embedding the Web URL.
 app.MapGet("/account-hub", (IConfiguration config) =>
 {
@@ -251,10 +281,8 @@ app.MapFallback(async context =>
         context.Request.Path.StartsWithSegments("/projects/new");
     if (!isAuthenticated && !isPublicQuoteStartRoute)
     {
-        var config = context.RequestServices.GetRequiredService<IConfiguration>();
-        var webBaseUrl = config["Web:BaseUrl"]?.TrimEnd('/') ?? "https://www.maliev.com";
-        var returnUrl = $"{context.Request.Scheme}://{context.Request.Host}{context.Request.Path}{context.Request.QueryString}";
-        context.Response.Redirect($"{webBaseUrl}/auth/sign-in?returnUrl={Uri.EscapeDataString(returnUrl)}");
+        var returnUrl = $"{context.Request.Path}{context.Request.QueryString}";
+        context.Response.Redirect($"/quotes?auth=sign-in&returnUrl={Uri.EscapeDataString(returnUrl)}");
         return;
     }
 
@@ -263,35 +291,35 @@ app.MapFallback(async context =>
 
 app.Run();
 
-static IResult RedirectToWebAuth(HttpContext context, string page)
+static IResult RedirectToStudioAuth(HttpContext context, string page)
 {
-    var webBaseUrl = context.RequestServices
-        .GetRequiredService<IConfiguration>()["Web:BaseUrl"]?.TrimEnd('/') ?? "https://www.maliev.com";
+    var mode = page == "sign-up" ? "sign-up" : "sign-in";
     var returnUrl = context.Request.Query["returnUrl"].ToString();
-    string absReturnUrl;
+    string relativeReturnUrl;
     if (string.IsNullOrWhiteSpace(returnUrl))
     {
-        absReturnUrl = string.Empty;
+        relativeReturnUrl = string.Empty;
     }
     else if (Uri.TryCreate(returnUrl, UriKind.Absolute, out var absoluteReturnUrl))
     {
-        absReturnUrl = IsSameOriginReturnUrl(context, absoluteReturnUrl)
-            ? absoluteReturnUrl.ToString()
+        relativeReturnUrl = IsSameOriginReturnUrl(context, absoluteReturnUrl)
+            ? absoluteReturnUrl.PathAndQuery
             : string.Empty;
     }
     else if (returnUrl.StartsWith("/", StringComparison.Ordinal)
              && !returnUrl.StartsWith("//", StringComparison.Ordinal)
              && !returnUrl.StartsWith("/\\", StringComparison.Ordinal))
     {
-        absReturnUrl = $"{context.Request.Scheme}://{context.Request.Host}{returnUrl}";
+        relativeReturnUrl = returnUrl;
     }
     else
     {
-        absReturnUrl = string.Empty;
+        relativeReturnUrl = string.Empty;
     }
-    var destination = string.IsNullOrWhiteSpace(absReturnUrl)
-        ? $"{webBaseUrl}/auth/{page}"
-        : $"{webBaseUrl}/auth/{page}?returnUrl={Uri.EscapeDataString(absReturnUrl)}";
+
+    var destination = string.IsNullOrWhiteSpace(relativeReturnUrl)
+        ? $"/quotes?auth={mode}"
+        : $"/quotes?auth={mode}&returnUrl={Uri.EscapeDataString(relativeReturnUrl)}";
     return Results.Redirect(destination);
 }
 

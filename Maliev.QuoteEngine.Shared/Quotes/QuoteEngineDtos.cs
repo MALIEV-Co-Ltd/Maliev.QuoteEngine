@@ -61,6 +61,9 @@ public sealed record QuoteEngineDemoProjectResponse(
 
 public sealed record QuoteAuthStatusResponse(bool IsSignedIn, Guid? CustomerId, string? DisplayName);
 
+/// <summary>Email credential sign-in/sign-up request handled by the QuoteEngine BFF against AuthService.</summary>
+public sealed record QuoteEmailAuthRequest(string Email, string Password, string? FullName = null, string? Language = null);
+
 public sealed class InitiateQuoteUploadRequest
 {
     [Required]

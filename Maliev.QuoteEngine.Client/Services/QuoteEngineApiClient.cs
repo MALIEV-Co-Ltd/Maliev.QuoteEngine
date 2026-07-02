@@ -46,6 +46,36 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    /// <summary>Signs in with email/password via the BFF (AuthService-backed). Returns null when credentials are rejected.</summary>
+    public async Task<QuoteAuthStatusResponse?> SignInWithEmailAsync(string email, string password, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            "quote/v1/auth/sign-in",
+            new QuoteEmailAuthRequest(email, password),
+            cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<QuoteAuthStatusResponse>(cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Registers a customer account and signs them in. Returns null when registration is rejected.</summary>
+    public async Task<QuoteAuthStatusResponse?> SignUpWithEmailAsync(string email, string password, string? fullName, string? language, CancellationToken cancellationToken = default)
+    {
+        using var response = await httpClient.PostAsJsonAsync(
+            "quote/v1/auth/sign-up",
+            new QuoteEmailAuthRequest(email, password, fullName, language),
+            cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        return await response.Content.ReadFromJsonAsync<QuoteAuthStatusResponse>(cancellationToken: cancellationToken);
+    }
+
     public async Task SignOutAsync(CancellationToken cancellationToken = default)
     {
         using var response = await httpClient.PostAsync("quote/v1/auth/sign-out", content: null, cancellationToken);

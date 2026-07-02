@@ -1784,26 +1784,27 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
-        Assert.Contains("/auth/sign-in", response.Headers.Location.OriginalString, StringComparison.Ordinal);
+        Assert.StartsWith("/quotes?auth=sign-in", response.Headers.Location.OriginalString, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Auth_pages_redirect_to_web_sign_in_without_loading_wasm_bundle()
+    public async Task Auth_pages_redirect_to_studio_dialog_without_loading_wasm_bundle()
     {
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         var signIn = await client.GetAsync("/auth/sign-in?returnUrl=/quote/new");
         var signUp = await client.GetAsync("/auth/sign-up?returnUrl=/quote/new");
 
-        // Auth pages redirect to Maliev.Web — QuoteEngine has no own sign-in surface.
+        // Auth pages open the studio sign-in dialog; sign-in completes against
+        // AuthService inside this BFF, never via the Maliev.Web frontend.
         Assert.Equal(HttpStatusCode.Redirect, signIn.StatusCode);
         Assert.NotNull(signIn.Headers.Location);
-        Assert.Contains("/auth/sign-in", signIn.Headers.Location.OriginalString, StringComparison.Ordinal);
+        Assert.StartsWith("/quotes?auth=sign-in", signIn.Headers.Location.OriginalString, StringComparison.Ordinal);
         Assert.Contains("returnUrl=", signIn.Headers.Location.OriginalString, StringComparison.Ordinal);
 
         Assert.Equal(HttpStatusCode.Redirect, signUp.StatusCode);
         Assert.NotNull(signUp.Headers.Location);
-        Assert.Contains("/auth/sign-up", signUp.Headers.Location.OriginalString, StringComparison.Ordinal);
+        Assert.StartsWith("/quotes?auth=sign-up", signUp.Headers.Location.OriginalString, StringComparison.Ordinal);
     }
 
     [Fact]

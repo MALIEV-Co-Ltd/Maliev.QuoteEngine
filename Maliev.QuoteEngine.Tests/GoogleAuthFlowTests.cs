@@ -6,8 +6,10 @@ using Microsoft.Extensions.Logging;
 namespace Maliev.QuoteEngine.Tests;
 
 /// <summary>
-/// Verifies that QuoteEngine delegates all authentication to Maliev.Web.
-/// With the shared-cookie SSO approach, QuoteEngine has no own sign-in surface.
+/// Verifies the studio-owned authentication contract: sign-in happens against
+/// AuthService via this BFF (Google browser flow + email credentials), the
+/// dialog lives in the workspace, and no route depends on the Maliev.Web
+/// frontend. The shared identity cookie still provides cross-app SSO.
 /// </summary>
 public sealed class GoogleAuthFlowTests
 {
@@ -22,7 +24,7 @@ public sealed class GoogleAuthFlowTests
     }
 
     [Fact]
-    public async Task Sign_in_route_redirects_to_web_sign_in_page()
+    public async Task Sign_in_route_opens_studio_dialog()
     {
         await using var factory = CreateFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -32,7 +34,7 @@ public sealed class GoogleAuthFlowTests
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
         var location = response.Headers.Location.OriginalString;
-        Assert.Contains("/auth/sign-in", location, StringComparison.Ordinal);
+        Assert.StartsWith("/quotes?auth=sign-in", location, StringComparison.Ordinal);
         Assert.Contains("returnUrl=", location, StringComparison.Ordinal);
     }
 
@@ -47,12 +49,12 @@ public sealed class GoogleAuthFlowTests
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
         var location = response.Headers.Location.OriginalString;
-        Assert.Contains("/auth/sign-in", location, StringComparison.Ordinal);
+        Assert.StartsWith("/quotes?auth=sign-in", location, StringComparison.Ordinal);
         Assert.DoesNotContain("evil.example", location, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
-    public async Task Sign_up_route_redirects_to_web_sign_up_page()
+    public async Task Sign_up_route_opens_studio_dialog_in_sign_up_mode()
     {
         await using var factory = CreateFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -61,24 +63,27 @@ public sealed class GoogleAuthFlowTests
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.NotNull(response.Headers.Location);
-        Assert.Contains("/auth/sign-up", response.Headers.Location.OriginalString, StringComparison.Ordinal);
+        Assert.StartsWith("/quotes?auth=sign-up", response.Headers.Location.OriginalString, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Google_auth_route_redirects_to_web_sign_in_not_google_oauth()
+    public async Task Google_auth_route_degrades_gracefully_when_google_is_not_configured()
     {
         await using var factory = CreateFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
         var response = await client.GetAsync("/auth/google");
 
+        // Testing environment has no Google client credentials: the route sends
+        // the customer back to the studio with an error instead of challenging.
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.DoesNotContain("accounts.google.com", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("/auth/sign-in", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("/quotes", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("authError=", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task Web_handoff_route_redirects_to_web_sign_in_and_sets_no_customer_cookie()
+    public async Task Web_handoff_route_opens_studio_dialog_and_sets_no_customer_cookie()
     {
         await using var factory = CreateFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -86,7 +91,7 @@ public sealed class GoogleAuthFlowTests
         var response = await client.GetAsync("/auth/web-handoff?token=anything");
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Contains("/auth/sign-in", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("/quotes?auth=sign-in", response.Headers.Location?.OriginalString ?? string.Empty, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(
             response.Headers.TryGetValues("Set-Cookie", out var cookies) ? cookies : [],
             value => value.Contains("maliev_quote_customer=", StringComparison.OrdinalIgnoreCase));

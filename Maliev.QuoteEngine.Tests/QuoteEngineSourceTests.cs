@@ -1292,7 +1292,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("DistinctBy(attachment => attachment.FileName, StringComparer.OrdinalIgnoreCase)", component, StringComparison.Ordinal);
         Assert.Contains("Run a DFM review on {name}:", component, StringComparison.Ordinal);
         Assert.Contains("Extract quote requirements from {name}", component, StringComparison.Ordinal);
-        Assert.Contains("var contextual = BuildContextualUseCases();", component, StringComparison.Ordinal);
+        Assert.Contains("return BuildContextualUseCases();", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-search-kbd\"", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-global-search:focus-within .qe-agent-search-kbd,", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);", agentStyles, StringComparison.Ordinal);
@@ -1334,13 +1334,17 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-message--user .qe-agent-bubble p", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-radius: 999px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("private string ThemeIcon => IsDarkMode ? Icons.Material.Outlined.DarkMode : Icons.Material.Outlined.LightMode;", component, StringComparison.Ordinal);
-        Assert.Contains("Quote ideas", component, StringComparison.Ordinal);
+        Assert.Contains("Quick actions", component, StringComparison.Ordinal);
         Assert.DoesNotContain(">Sample use cases<", component, StringComparison.Ordinal);
-        Assert.Contains("SampleUseCases", component, StringComparison.Ordinal);
+        // The generic sample deck is gone; quick actions render only from
+        // attached-file context.
+        Assert.DoesNotContain("SampleUseCases", component, StringComparison.Ordinal);
         Assert.Contains("VisibleUseCases", component, StringComparison.Ordinal);
+        Assert.Contains("@if (_messages.Count == 0 && VisibleUseCases.Count > 0)", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-use-case-card\"", component, StringComparison.Ordinal);
         Assert.Contains("aria-label=\"@Text(useCase.TitleEn, useCase.TitleTh)\"", component, StringComparison.Ordinal);
-        Assert.Contains("Random.Shared.Next()", component, StringComparison.Ordinal);
+        // The shuffled sample deck is gone with the generic cards.
+        Assert.DoesNotContain("Random.Shared.Next()", component, StringComparison.Ordinal);
         Assert.Contains("ApplyUseCaseAsync", component, StringComparison.Ordinal);
         // Use case ideas scroll natively now; the transform-based fake rotation was removed.
         Assert.DoesNotContain("HandleUseCaseWheelAsync", component, StringComparison.Ordinal);
@@ -1348,10 +1352,11 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("RenderedUseCaseSlots", component, StringComparison.Ordinal);
         Assert.Contains("typeComposerText", component, StringComparison.Ordinal);
         Assert.Contains("UseCaseOption", component, StringComparison.Ordinal);
-        Assert.Contains("Quote a 3D printed enclosure", component, StringComparison.Ordinal);
-        Assert.Contains("Turn a sketch into requirements", component, StringComparison.Ordinal);
-        Assert.Contains("Compare material and finish options", component, StringComparison.Ordinal);
-        Assert.Contains("Quote production-ready revision", component, StringComparison.Ordinal);
+        // Quick actions derive from attached files; the hardcoded sample prompts
+        // are gone.
+        Assert.DoesNotContain("Quote a 3D printed enclosure", component, StringComparison.Ordinal);
+        Assert.Contains("Quote {name}", component, StringComparison.Ordinal);
+        Assert.Contains("Turn this into a part plan", component, StringComparison.Ordinal);
         Assert.Contains("AgentStatusClass", component, StringComparison.Ordinal);
         Assert.Contains("AgentStatusTooltip", component, StringComparison.Ordinal);
         Assert.Contains("is-connected", component, StringComparison.Ordinal);
@@ -2299,7 +2304,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("listenForAuthComplete", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("%2Fauth%2Fchatbot-complete", shell, StringComparison.Ordinal);
         var continueWithGoogle = ExtractSourceBlock(shell, "private void ContinueWithGoogle()", "public void OnAuthPopupCompleted()");
-        Assert.Contains("NavigateToMalievAccount();", continueWithGoogle, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo($\"/auth/google?returnUrl={Uri.EscapeDataString(AuthReturnUrl)}\", forceLoad: true);", continueWithGoogle, StringComparison.Ordinal);
         Assert.Contains("public void OnAuthPopupCompleted()", shell, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(Navigation.Uri, forceLoad: true);", shell, StringComparison.Ordinal);
         Assert.Contains("if (SessionId == _loadedSessionId)", shell, StringComparison.Ordinal);
@@ -2365,10 +2370,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@page \"/\"", workspace, StringComparison.Ordinal);
         Assert.Contains("@page \"/quote/new\"", workspace, StringComparison.Ordinal);
         Assert.Contains("<QuoteAgentLaunchShell", workspace, StringComparison.Ordinal);
-        // Auth routes redirect to Maliev.Web — QuoteEngine has no own sign-in surface.
+        // Auth routes open the studio dialog; Google + email complete against
+        // AuthService inside this BFF — never via the Maliev.Web frontend.
         Assert.Contains("app.MapGet(\"/auth/sign-in\"", program, StringComparison.Ordinal);
         Assert.Contains("app.MapGet(\"/auth/sign-up\"", program, StringComparison.Ordinal);
-        Assert.Contains("RedirectToWebAuth", program, StringComparison.Ordinal);
+        Assert.Contains("RedirectToStudioAuth", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("RedirectToWebAuth", program, StringComparison.Ordinal);
+        Assert.Contains("authentication.AddGoogle(GoogleDefaults.AuthenticationScheme", program, StringComparison.Ordinal);
+        Assert.Contains("AddAuthenticatedServiceClient<IAuthServiceClient, AuthServiceClient>(\"AuthService\")", program, StringComparison.Ordinal);
         Assert.True(File.Exists(authPath), "The BFF should own server-rendered auth pages before the WASM fallback.");
 
         var auth = File.ReadAllText(authPath);
@@ -2459,20 +2468,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Navigation.NavigateTo(\"/quotes?auth=sign-up\"", signUp, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"auth-shell\"", signUp, StringComparison.Ordinal);
 
-        // Identity stays centralized in the MALIEV account: the modal shows the real
-        // multicolor Google mark, hands every method off to the secure account page,
-        // and never collects a password inside Make Studio.
+        // Sign-in completes against AuthService via this BFF: Google as a same-tab
+        // browser flow, email + password collected in the studio dialog.
         Assert.Contains("class=\"qe-agent-auth-modal\"", shell, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-auth-google\"", shell, StringComparison.Ordinal);
         Assert.Contains("fill=\"#4285F4\"", shell, StringComparison.Ordinal);
         Assert.Contains("ContinueWithGoogle", shell, StringComparison.Ordinal);
-        Assert.Contains("private void NavigateToMalievAccount()", shell, StringComparison.Ordinal);
+        Assert.Contains("/auth/google?returnUrl=", shell, StringComparison.Ordinal);
         Assert.Contains("public string AuthReturnUrl { get; set; } = \"/quote/new\";", shell, StringComparison.Ordinal);
-        Assert.Contains("\"/auth/sign-in\"", shell, StringComparison.Ordinal);
-        Assert.Contains("\"/auth/sign-up\"", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("private string AuthReturnUrl => \"/quotes\"", shell, StringComparison.Ordinal);
-        Assert.DoesNotContain("type=\"password\"", shell, StringComparison.Ordinal);
-        Assert.DoesNotContain("SubmitEmailAuth", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("NavigateToMalievAccount", shell, StringComparison.Ordinal);
+        Assert.Contains("type=\"password\"", shell, StringComparison.Ordinal);
+        Assert.Contains("ContinueWithEmailAsync", shell, StringComparison.Ordinal);
+        Assert.Contains("Api.SignInWithEmailAsync(_authEmail, _authPassword)", shell, StringComparison.Ordinal);
     }
 
     [Fact]
