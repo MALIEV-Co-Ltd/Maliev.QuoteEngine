@@ -256,8 +256,7 @@
         </div>
     </aside>
 
-    <main class="@MainClass">
-        <div class="qe-agent-topline">
+    <div class="qe-agent-topline">
             <button type="button"
                     class="qe-agent-menu-trigger"
                     aria-expanded="@AriaExpanded(_navigationDrawerOpen)"
@@ -302,8 +301,9 @@
                     @onclick="ToggleThemeAsync">
                 <MudIcon Icon="@ThemeIcon" Size="Size.Small" />
             </button>
-        </div>
+    </div>
 
+    <main class="@MainClass">
         @if (!IsWorkspacePage(WorkspacePage.Chat))
         {
             <section class="qe-agent-management-page" aria-label="@ActiveWorkspaceTitle">

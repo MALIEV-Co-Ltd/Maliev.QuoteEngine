@@ -1539,8 +1539,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-main--empty {\n    display: flex;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-thread {\n    position: static;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-composer-wrap {\n    position: static;", agentStyles, StringComparison.Ordinal);
-        // Mobile shell forces a single full-height row so main fills the viewport instead of collapsing.
+        // The shell reserves a topline row above main/workbench (desktop and mobile),
+        // so the panel toggles never shift the topline buttons; main fills the rest.
+        Assert.Contains("grid-template-rows: auto minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("grid-template-rows: minmax(0, 1fr);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-column: 2 / -1;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-row: 1 / -1;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("top: 40.5%;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("top: 45%;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("user-select: none;", agentStyles, StringComparison.Ordinal);
