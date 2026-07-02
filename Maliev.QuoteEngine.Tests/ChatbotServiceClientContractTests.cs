@@ -85,6 +85,45 @@ public sealed class ChatbotServiceClientContractTests
     }
 
     [Fact]
+    public async Task SendMessageStreamAsync_MapsUsageCostBudgetFields()
+    {
+        var responseJson = """
+            {"type":"final","message":{"message_id":"d127db4e-1106-4106-8f6b-32c6b467e8ad","content":"Assistant response.","role":"assistant","language":"en","created_at":"2026-07-02T04:00:00Z","suggested_actions":[],"thinking_steps":[],"usage_snapshot":{"is_enabled":true,"used_tokens":850000,"daily_token_budget":2000000,"remaining_tokens":1150000,"used_ratio":0.425,"used_cost_micro_usd":7250,"daily_cost_budget_micro_usd":5000000,"remaining_cost_micro_usd":4992750,"cost_used_ratio":0.00145,"is_token_exceeded":false,"is_cost_exceeded":true,"is_exceeded":true}}}
+            """;
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responseJson, Encoding.UTF8, "application/x-ndjson")
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://chatbot-service.test")
+        };
+        var client = new ChatbotServiceClient(http, NullLogger<ChatbotServiceClient>.Instance);
+
+        var events = new List<ChatbotMessageStreamEvent>();
+        await foreach (var streamEvent in client.SendMessageStreamAsync(new ChatbotSendMessageRequest
+        {
+            SessionId = Guid.Parse("6f9b89db-4e96-4c4b-ace5-908d2bb172b6"),
+            Content = "Quote this PLA bracket.",
+            Language = "en"
+        }, CancellationToken.None))
+        {
+            events.Add(streamEvent);
+        }
+
+        var final = Assert.Single(events);
+        Assert.NotNull(final.Message?.UsageSnapshot);
+        var usage = final.Message.UsageSnapshot;
+        Assert.Equal(7_250, ReadRequiredProperty<long>(usage, "UsedCostMicroUsd"));
+        Assert.Equal(5_000_000, ReadRequiredProperty<long>(usage, "DailyCostBudgetMicroUsd"));
+        Assert.Equal(4_992_750, ReadRequiredProperty<long>(usage, "RemainingCostMicroUsd"));
+        Assert.Equal(0.00145, ReadRequiredProperty<double>(usage, "CostUsedRatio"));
+        Assert.False(ReadRequiredProperty<bool>(usage, "IsTokenExceeded"));
+        Assert.True(ReadRequiredProperty<bool>(usage, "IsCostExceeded"));
+        Assert.True(usage.IsExceeded);
+    }
+
+    [Fact]
     public async Task SendMessageStreamAsync_ForwardsStructuredOutputSchema()
     {
         using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
@@ -199,6 +238,14 @@ public sealed class ChatbotServiceClientContractTests
 
         Assert.Null(result);
         Assert.Equal("/chatbot/v1/extraction/clean-speech", handler.Request?.RequestUri?.AbsolutePath);
+    }
+
+    private static T ReadRequiredProperty<T>(object target, string propertyName)
+    {
+        var property = target.GetType().GetProperty(propertyName);
+        Assert.NotNull(property);
+        var value = property.GetValue(target);
+        return Assert.IsType<T>(value);
     }
 
     private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler

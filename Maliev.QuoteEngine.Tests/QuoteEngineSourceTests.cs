@@ -2130,6 +2130,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_editingLastUserMessage = message;", component, StringComparison.Ordinal);
         Assert.Contains("private QuoteAgentUsageSnapshotDto? _usageSnapshot;", component, StringComparison.Ordinal);
         Assert.Contains("ShowUsageRing", component, StringComparison.Ordinal);
+        Assert.Contains("Math.Max(_usageSnapshot?.UsedRatio ?? 0, _usageSnapshot?.CostUsedRatio ?? 0)", component, StringComparison.Ordinal);
+        Assert.Contains("FormatCompactMicroUsdCost(_usageSnapshot.UsedCostMicroUsd)", component, StringComparison.Ordinal);
+        Assert.Contains("FormatCompactMicroUsdCost(_usageSnapshot.DailyCostBudgetMicroUsd)", component, StringComparison.Ordinal);
         Assert.Contains("streamEvent.Response.UsageSnapshot", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-usage-ring\"", component, StringComparison.Ordinal);
         Assert.Contains("public DateTimeOffset CreatedAt", component, StringComparison.Ordinal);

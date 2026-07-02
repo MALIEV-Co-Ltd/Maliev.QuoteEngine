@@ -249,6 +249,24 @@ public sealed class QuoteAgentUsageSnapshotDto
     /// <summary>Gets or sets the usage ratio from 0 to 1.</summary>
     public double UsedRatio { get; set; }
 
+    /// <summary>Gets or sets estimated cost used in the rolling daily window, in micro-USD.</summary>
+    public long UsedCostMicroUsd { get; set; }
+
+    /// <summary>Gets or sets the configured daily estimated cost budget, in micro-USD.</summary>
+    public long DailyCostBudgetMicroUsd { get; set; }
+
+    /// <summary>Gets or sets estimated cost remaining in the rolling daily window, in micro-USD.</summary>
+    public long RemainingCostMicroUsd { get; set; }
+
+    /// <summary>Gets or sets the estimated cost usage ratio from 0 to 1.</summary>
+    public double CostUsedRatio { get; set; }
+
+    /// <summary>Gets or sets whether the token budget has been reached.</summary>
+    public bool IsTokenExceeded { get; set; }
+
+    /// <summary>Gets or sets whether the estimated cost budget has been reached.</summary>
+    public bool IsCostExceeded { get; set; }
+
     /// <summary>Gets or sets whether the budget has been reached.</summary>
     public bool IsExceeded { get; set; }
 }

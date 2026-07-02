@@ -2589,7 +2589,7 @@
     private bool ShowSummaryStrip => QuoteReadyPartCount > 0;
     private string SummaryStripTotal => LatestWorkbench?.TotalPrice ?? Text("Not priced", "ยังไม่มีราคา");
     private bool ShowUsageRing => _usageSnapshot?.IsEnabled == true;
-    private double UsageRingRatio => Math.Clamp(_usageSnapshot?.UsedRatio ?? 0, 0, 1);
+    private double UsageRingRatio => Math.Clamp(Math.Max(_usageSnapshot?.UsedRatio ?? 0, _usageSnapshot?.CostUsedRatio ?? 0), 0, 1);
     private string UsageRingPercent => FormattableString.Invariant($"{Math.Round(UsageRingRatio * 100):0}%");
     private string UsageRingClass
     {
@@ -2610,8 +2610,8 @@
     private string UsageRingTitle => _usageSnapshot is null
         ? string.Empty
         : Text(
-            $"{FormatCompactTokenCount(_usageSnapshot.UsedTokens)} of {FormatCompactTokenCount(_usageSnapshot.DailyTokenBudget)} chatbot tokens used today.",
-            $"ใช้โทเคนแชตบอตวันนี้ {FormatCompactTokenCount(_usageSnapshot.UsedTokens)} จาก {FormatCompactTokenCount(_usageSnapshot.DailyTokenBudget)}");
+            $"{FormatCompactTokenCount(_usageSnapshot.UsedTokens)} of {FormatCompactTokenCount(_usageSnapshot.DailyTokenBudget)} chatbot tokens and {FormatCompactMicroUsdCost(_usageSnapshot.UsedCostMicroUsd)} of {FormatCompactMicroUsdCost(_usageSnapshot.DailyCostBudgetMicroUsd)} estimated Gemini cost used today.",
+            $"ใช้โทเคนแชตบอตวันนี้ {FormatCompactTokenCount(_usageSnapshot.UsedTokens)} จาก {FormatCompactTokenCount(_usageSnapshot.DailyTokenBudget)} และค่า Gemini ประมาณ {FormatCompactMicroUsdCost(_usageSnapshot.UsedCostMicroUsd)} จาก {FormatCompactMicroUsdCost(_usageSnapshot.DailyCostBudgetMicroUsd)}");
 
     private bool IsQuoteReadyPart(QuotePartViewModel part)
     {
@@ -5514,6 +5514,24 @@
         if (absolute >= 1_000)
             return FormattableString.Invariant($"{tokens / 1_000d:0.#}K");
         return tokens.ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string FormatCompactMicroUsdCost(long microUsd)
+    {
+        if (microUsd <= 0)
+            return "$0";
+
+        var usd = microUsd / 1_000_000d;
+        if (usd < 0.01)
+            return "<$0.01";
+
+        if (usd < 10)
+            return FormattableString.Invariant($"${usd:0.00}");
+
+        if (usd < 1_000)
+            return FormattableString.Invariant($"${usd:0.##}");
+
+        return FormattableString.Invariant($"${usd / 1_000:0.#}K");
     }
 
     private static string FormatMessageTime(DateTimeOffset timestamp)

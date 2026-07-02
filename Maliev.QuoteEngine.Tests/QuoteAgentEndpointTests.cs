@@ -126,6 +126,8 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
         Assert.NotNull(body.UsageSnapshot);
         Assert.Equal(850_000, body.UsageSnapshot!.UsedTokens);
         Assert.Equal(2_000_000, body.UsageSnapshot.DailyTokenBudget);
+        Assert.Equal(7_250, body.UsageSnapshot.UsedCostMicroUsd);
+        Assert.Equal(5_000_000, body.UsageSnapshot.DailyCostBudgetMicroUsd);
         Assert.Equal("quote-engine", chatbot.LastInitiateRequest?.Channel);
         Assert.False(string.IsNullOrWhiteSpace(chatbot.LastSendRequest?.QuoteAgentContextToken));
     }
@@ -759,6 +761,7 @@ Customer message:
         Assert.Contains("bracket", final.Response.AssistantText, StringComparison.OrdinalIgnoreCase);
         Assert.NotNull(final.Response.UsageSnapshot);
         Assert.Equal(850_000, final.Response.UsageSnapshot!.UsedTokens);
+        Assert.Equal(7_250, final.Response.UsageSnapshot.UsedCostMicroUsd);
         Assert.Contains(final.Response.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
         Assert.False(string.IsNullOrWhiteSpace(chatbot.LastStreamRequest?.QuoteAgentContextToken));
     }
@@ -9840,6 +9843,12 @@ Customer message:
             DailyTokenBudget = 2_000_000,
             RemainingTokens = 1_150_000,
             UsedRatio = 0.425,
+            UsedCostMicroUsd = 7_250,
+            DailyCostBudgetMicroUsd = 5_000_000,
+            RemainingCostMicroUsd = 4_992_750,
+            CostUsedRatio = 0.00145,
+            IsTokenExceeded = false,
+            IsCostExceeded = false,
             IsExceeded = false
         };
 
