@@ -159,6 +159,48 @@ public sealed class ChatbotServiceClientContractTests
         Assert.False(result);
     }
 
+    [Fact]
+    public async Task CleanSpeechAsync_UsesExtractionCleanSpeechEndpointAndSnakeCaseContract()
+    {
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"cleaned_text":"Please quote the bracket."}""", Encoding.UTF8, "application/json")
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://chatbot-service.test")
+        };
+        var client = new ChatbotServiceClient(http, NullLogger<ChatbotServiceClient>.Instance);
+
+        var result = await client.CleanSpeechAsync("um please quote the bracket", "en", CancellationToken.None);
+
+        Assert.Equal("Please quote the bracket.", result);
+        Assert.Equal(HttpMethod.Post, handler.Request?.Method);
+        Assert.Equal("/chatbot/v1/extraction/clean-speech", handler.Request?.RequestUri?.AbsolutePath);
+        Assert.Contains("\"speech\":\"um please quote the bracket\"", handler.RequestBody);
+        Assert.Contains("\"language\":\"en\"", handler.RequestBody);
+        Assert.DoesNotContain("cleanedText", handler.RequestBody);
+    }
+
+    [Fact]
+    public async Task CleanSpeechAsync_WhenServiceRejects_ReturnsNull()
+    {
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.TooManyRequests)
+        {
+            Content = new StringContent("""{"error":"Daily Gemini token budget exceeded."}""", Encoding.UTF8, "application/json")
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://chatbot-service.test")
+        };
+        var client = new ChatbotServiceClient(http, NullLogger<ChatbotServiceClient>.Instance);
+
+        var result = await client.CleanSpeechAsync("please clean this", "en", CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Equal("/chatbot/v1/extraction/clean-speech", handler.Request?.RequestUri?.AbsolutePath);
+    }
+
     private sealed class RecordingHandler(HttpResponseMessage response) : HttpMessageHandler
     {
         public HttpRequestMessage? Request { get; private set; }
