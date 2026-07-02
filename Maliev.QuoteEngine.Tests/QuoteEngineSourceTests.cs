@@ -44,10 +44,10 @@ public sealed class QuoteEngineSourceTests
         var service = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "PreferenceService.cs");
         var loader = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
 
+        // Language controls live in the workspace settings, not a layout topbar.
         Assert.Contains("SupportedCultures.DefaultCulture", layout, StringComparison.Ordinal);
-        Assert.Contains("SupportedCultures.ThaiCulture", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"quote-language-toggle\"", layout, StringComparison.Ordinal);
-        Assert.Contains("Text(\"Orders\", \"คำสั่งซื้อ\")", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"quote-language-toggle\"", layout, StringComparison.Ordinal);
+        Assert.Contains("SupportedCultures.ThaiCulture", preferences, StringComparison.Ordinal);
         Assert.Contains("Platform language", preferences, StringComparison.Ordinal);
 
         Assert.Contains("resolveCulture", service, StringComparison.Ordinal);
@@ -2487,92 +2487,38 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void Customer_layout_uses_top_navigation_without_left_rail()
+    public void Customer_layout_has_no_legacy_topbar_and_not_found_is_studio_styled()
     {
         var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");
+        var notFound = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "NotFound.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
-        Assert.Contains("class=\"quote-topbar\"", layout, StringComparison.Ordinal);
-        Assert.Contains("aria-label=\"@Text(\"Customer quote navigation\"", layout, StringComparison.Ordinal);
-        // Brand logo links to the landing page ("/"), not the workspace.
-        Assert.Contains("class=\"quote-brand\" href=\"/\"", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("class=\"quote-brand\" href=\"/quote/new\"", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"quote-brand-logo\"", layout, StringComparison.Ordinal);
-        Assert.Contains("src=\"/images/logo.svg\"", layout, StringComparison.Ordinal);
-        Assert.Contains("alt=\"MALIEV\"", layout, StringComparison.Ordinal);
+        // The legacy customer topbar is retired: navigation, account, theme,
+        // language, and currency live inside the Make Studio workspace.
+        Assert.DoesNotContain("class=\"quote-topbar\"", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote-topbar-inner", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote-topnav", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote-signin-btn", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("billing-account-menu", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote-language-toggle", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote-theme-toggle", layout, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote-currency-autocomplete", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("https://www.maliev.com", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("quote-brand-mark", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("Quote Engine", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("class=\"web-link\"", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain(".web-link", styles, StringComparison.Ordinal);
-        Assert.DoesNotContain(".quote-brand-mark", styles, StringComparison.Ordinal);
-        // Topbar uses a max-width inner container; top-actions pushed right via margin-left: auto.
-        Assert.Contains(".quote-topbar-inner", styles, StringComparison.Ordinal);
-        Assert.Contains("margin-left: auto;", styles, StringComparison.Ordinal);
-        Assert.Contains("class=\"quote-topbar-inner\"", layout, StringComparison.Ordinal);
-        Assert.Contains("border-radius: var(--maliev-radius-tab);", styles, StringComparison.Ordinal);
-        Assert.Contains(".quote-topnav a.active", styles, StringComparison.Ordinal);
-        Assert.Contains("background: var(--primary);", styles, StringComparison.Ordinal);
-        Assert.Contains(".quote-topnav a:focus-visible", styles, StringComparison.Ordinal);
+
+        // The layout still provides the app shell and cascading state.
         Assert.Contains("IsQuoteWorkspacePath", layout, StringComparison.Ordinal);
-        Assert.Contains("\"/projects/new\"", layout, StringComparison.Ordinal);
-        Assert.Contains("\"/quotes\"", layout, StringComparison.Ordinal);
-        Assert.Contains("\"/quotes/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("@inject QuoteEngineApiClient Api", layout, StringComparison.Ordinal);
-        Assert.Contains("@if (_authStatus.IsSignedIn)", layout, StringComparison.Ordinal);
-        Assert.Contains("<NavLink href=\"/quotes/new\"", layout, StringComparison.Ordinal);
-        Assert.Contains("Text(\"New quote\", \"ใบเสนอราคาใหม่\")", layout, StringComparison.Ordinal);
-        Assert.Contains("<NavLink href=\"/orders\"", layout, StringComparison.Ordinal);
-        Assert.Contains("Text(\"Orders\", \"คำสั่งซื้อ\")", layout, StringComparison.Ordinal);
-        Assert.Contains("<NavLink href=\"/documents\"", layout, StringComparison.Ordinal);
-        Assert.Contains("Text(\"Documents\", \"เอกสาร\")", layout, StringComparison.Ordinal);
-        Assert.Contains("<NavLink href=\"/profile\"", layout, StringComparison.Ordinal);
-        Assert.Contains("Text(\"Account\", \"บัญชี\")", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("<NavLink href=\"/ndas\"", layout, StringComparison.Ordinal);
-        Assert.Contains("<a class=\"quote-signin-btn\" href=\"/auth/sign-in\">@Text(\"Sign in\"", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"billing-account-menu\"", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"billing-account-trigger\" aria-label=\"@Text(\"Customer account and billing\"", layout, StringComparison.Ordinal);
-        Assert.Contains("CustomerAvatarMarkup", layout, StringComparison.Ordinal);
-        Assert.Contains("ProfileImageUrl", layout, StringComparison.Ordinal);
-        Assert.Contains("AvatarInitials", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"customer-data-section\"", layout, StringComparison.Ordinal);
-        Assert.Contains("href=\"/profile\"", layout, StringComparison.Ordinal);
-        Assert.Contains("href=\"/ndas\"", layout, StringComparison.Ordinal);
-        Assert.Contains("href=\"/documents\"", layout, StringComparison.Ordinal);
-        Assert.Contains("href=\"/preferences\"", layout, StringComparison.Ordinal);
-        Assert.Contains("ToggleThemeAsync", layout, StringComparison.Ordinal);
-        Assert.Contains("aria-label=\"@Text(\"Toggle light or dark mode\"", layout, StringComparison.Ordinal);
-        Assert.Contains("<CascadingValue Value=\"new Func<Task>(() => Task.CompletedTask)\" Name=\"OpenAssistant\">", layout, StringComparison.Ordinal);
-        Assert.Contains("Class=\"quote-currency-autocomplete\"", layout, StringComparison.Ordinal);
-        Assert.Contains("PersistCurrencyAsync", layout, StringComparison.Ordinal);
         Assert.Contains("<CascadingValue Value=\"_isDarkMode\" Name=\"IsDarkMode\">", layout, StringComparison.Ordinal);
-        Assert.Contains("class=\"billing-account-options\" role=\"listbox\" aria-label=\"@Text(\"Billing account\"", layout, StringComparison.Ordinal);
-        Assert.Contains("Personal account", layout, StringComparison.Ordinal);
-        Assert.Contains("Company account", layout, StringComparison.Ordinal);
-        Assert.Contains("Manage account", layout, StringComparison.Ordinal);
-        Assert.Contains("_profile = await Api.GetProfileAsync();", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("Start quote", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain("class=\"primary-button\" href=\"/projects/new\"", layout, StringComparison.Ordinal);
         Assert.Contains("_authStatus = await Api.GetAuthStatusAsync();", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"app-rail\"", layout, StringComparison.Ordinal);
-        Assert.DoesNotContain(".app-rail", styles, StringComparison.Ordinal);
-        Assert.Contains(".customer-avatar", styles, StringComparison.Ordinal);
-        Assert.Contains(".customer-data-section", styles, StringComparison.Ordinal);
-        Assert.Contains(".quote-theme-toggle", styles, StringComparison.Ordinal);
-        Assert.Contains(".quote-currency-autocomplete", styles, StringComparison.Ordinal);
-        Assert.Contains(":root[data-maliev-theme=\"dark\"]", styles, StringComparison.Ordinal);
-        Assert.Contains("--primary-contrast: #111111;", styles, StringComparison.Ordinal);
-        Assert.Contains(":root[data-maliev-theme=\"dark\"] .quote-brand-logo", styles, StringComparison.Ordinal);
-        Assert.Contains("filter: invert(1) brightness(1.08) contrast(0.96);", styles, StringComparison.Ordinal);
-        Assert.Contains("color: var(--primary-contrast);", styles, StringComparison.Ordinal);
-        Assert.Contains("--topbar-icon-ring: none;", styles, StringComparison.Ordinal);
-        Assert.Contains("box-shadow: var(--topbar-icon-ring);", styles, StringComparison.Ordinal);
-        Assert.Contains("flex: 0 0 40px;", styles, StringComparison.Ordinal);
-        Assert.Contains("min-width: 40px;", styles, StringComparison.Ordinal);
-        Assert.Contains("height: 40px;", styles, StringComparison.Ordinal);
-        Assert.Contains("flex: 0 0 104px;", styles, StringComparison.Ordinal);
-        Assert.Contains("max-width: 104px;", styles, StringComparison.Ordinal);
         Assert.Contains(".workspace--quote", styles, StringComparison.Ordinal);
+
+        // Not-found renders as a designed studio page with routes back in.
+        Assert.Contains("class=\"qe-not-found\"", notFound, StringComparison.Ordinal);
+        Assert.Contains("href=\"/quotes\"", notFound, StringComparison.Ordinal);
+        Assert.Contains("href=\"/quotes/new\"", notFound, StringComparison.Ordinal);
+        Assert.Contains(".qe-not-found {", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-not-found-primary,", styles, StringComparison.Ordinal);
     }
 
     [Fact]

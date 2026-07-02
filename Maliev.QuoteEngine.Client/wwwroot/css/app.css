@@ -12262,6 +12262,74 @@ textarea::placeholder {
     }
 }
 
+/* ─── Not-found page: calm, centered, studio-toned in both themes ─────── */
+.qe-not-found {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    max-width: 480px;
+    margin: clamp(80px, 22vh, 180px) auto 0;
+    padding: 0 20px;
+    text-align: center;
+}
+
+.qe-not-found-code {
+    color: var(--muted-2);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+}
+
+.qe-not-found h1 {
+    margin: 0;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: 0;
+}
+
+.qe-not-found p {
+    margin: 0 0 12px;
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.55;
+}
+
+.qe-not-found-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+.qe-not-found-primary,
+.qe-not-found-secondary {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 8px 18px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.qe-not-found-primary {
+    background: var(--ink);
+    color: var(--paper);
+}
+
+.qe-not-found-primary:hover {
+    opacity: 0.88;
+}
+
+.qe-not-found-secondary {
+    border: 1px solid var(--line);
+    color: var(--ink);
+}
+
+.qe-not-found-secondary:hover {
+    background: var(--panel-tint);
+}
+
 /* ─── Home landing page ──────────────────────────────────────────────── */
 
 .home-host {
