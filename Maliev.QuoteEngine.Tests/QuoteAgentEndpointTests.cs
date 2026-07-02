@@ -5075,7 +5075,7 @@ Customer message:
     }
 
     [Fact]
-    public async Task Agent_message_context_includes_inference_and_naming_guidance()
+    public async Task Agent_message_context_sends_compact_dynamic_context_without_repeating_core_prompt()
     {
         var chatbot = new RecordingChatbotServiceClient();
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
@@ -5096,18 +5096,19 @@ Customer message:
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(chatbot.LastSendRequest);
-        Assert.Contains("Guidance:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("FDM", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("Project naming:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("quote_set_project_name", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("quote_ask_customer", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("only for genuinely blocking ambiguity", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("Do not use quote_ask_customer for quantity, lead time, finish, tolerance", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("state the default assumption in normal text", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("Unlabeled sketches need dimension confirmation", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("For PDF/technical drawings, inspect the attached document as drawing context", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("Do not claim you cannot read the PDF", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
-        Assert.Contains("must not trigger a 3D preview", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Surface: QuoteEngine chat-based custom manufacturing platform.", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Current gates:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Current settings:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Customer message:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("How much for 3D printing in PLA?", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Guidance:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Project naming:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote_set_project_name", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("quote_ask_customer", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Do not use quote_ask_customer for quantity, lead time, finish, tolerance", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("Generated 3D preview iterations are revisions of one active quote workbench artifact", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("DFM truthfulness:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.True(chatbot.LastSendRequest.Content.Length < 1600);
     }
 
     [Fact]

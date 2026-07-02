@@ -5716,52 +5716,6 @@ internal sealed class QuoteAgentService(
         };
         contextLines.Add(ResponseLanguageInstruction(state.Language));
 
-        // Order matters for TrimChatbotContent: it keeps the head of the composed content and
-        // drops the tail. Durable manufacturing guidance is added here, ahead of the dynamic
-        // (and potentially large) state dump below, so an oversized turn sheds recoverable
-        // state — re-fetchable via quote_get_state / quote_get_project_summary — instead of
-        // the behavioral instructions that make this a competent manufacturing agent.
-        contextLines.Add(
-            "Guidance: Infer useful manufacturing parameters from the customer message, file names, and context before asking. " +
-            "Process hints: PLA/ABS/PETG/TPU/filament → FDM, resin/photopolymer/SLA → SLA, nylon/PA/PP/SLS → SLS, aluminum/steel/titanium/brass/CNC → CNC. " +
-            "Default to qty=1, standard tolerance, and standard lead time when not stated. " +
-            "State your inferred assumptions first, then ask only for genuinely missing critical information. " +
-            "For UI language changes, call quote_set_ui_language only. " +
-            "For customer follow-up questions, call quote_ask_customer only for genuinely blocking ambiguity that cannot be safely inferred or defaulted, with 2-4 discrete mutually exclusive options. " +
-            "Project naming: call quote_set_project_name with a short part/process/material title, not the customer's literal question. " +
-            "Unlabeled sketches need dimension confirmation and must not trigger a 3D preview by themselves. " +
-            "For PDF/technical drawings, inspect the attached document as drawing context; summarize visible/readable shape, dimensions, tolerances, material, finish, and blockers before asking for missing facts. " +
-            "Do not claim you cannot read the PDF before summarizing what the PDF provides. " +
-            "Never ask for a CAD file as your first or only response, and never make CAD upload a gate. " +
-            "Grounding rule: only quote prices, volumes, surface areas, dimensions, materials, processes, or lead times that are present in Current parts, Current estimate, or a tool result in this turn; otherwise state what is missing and ask for the exact measurement needed. " +
-            "UI action rule: never say that you opened, displayed, loaded, or showed a viewer/panel/model unless you called quote_focus_ui and received a UI directive for that target; if a viewer artifact is merely available, say it is available in the Artifacts panel. " +
-            "Generate 3D previews only from explicit, readable, CAD-derived, or confirmed dimensions. " +
-            "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, intersect, fillet, chamfer, extrude, revolve, translate, rotate, loft. " +
-            "For golf tees, never model the head as a sphere; use tapered cone/revolve geometry with a flared head/cup so the preview does not look like a candy or lollipop. " +
-            "Prefer canonical params arrays for CAD commands; accepted named shorthands include width/depth/height, diameter/radius, x/y/z or translation object offsets, axisX/axisY/axisZ or rotationAxis object axes, and sketch segment x/y/dx/dy. " +
-            "The command array may also be wrapped under commands/cadCommands or split into shapes/objects/parts plus operations/actions/steps. " +
-            "Profiles may use params, size, radius/diameter, points/polyline/vertices, or sketch/profile2D aliases. " +
-            "Use angle in radians or angleDegrees/degrees for rotate/revolve. " +
-            "Build primitives first, translate/rotate them, combine/cut/intersect or loft explicit targets, then apply edge operations. " +
-            "Generated 3D preview iterations are revisions of one active quote workbench artifact: when the customer asks for changes such as moving holes or correcting dimensions, call quote_generate_3d_preview with the full revised cad_commands for the current design, not a separate replacement asset. " +
-            "After a preview, describe the assumptions and ask the customer to verify shape and dimensions.");
-        contextLines.Add(
-            "DFM truthfulness: DFM runs locally in the customer's browser and is reported back per part. Only state DFM results — issues found or a clean result — for parts whose status is DfmAnalysisReady. " +
-            "If a part has no DFM yet (status not DfmAnalysisReady and no DFM report in Current parts), say the design check is still running or needs the manufacturing process chosen; never claim there are no DFM issues for a part that has not been analyzed. " +
-            "Report the specific issues listed in Current parts rather than inventing or omitting them.");
-        contextLines.Add(
-            "Structured presentation: Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables " +
-            "instead of bullet-only prose when there are 3 or more comparable fields. Prefer columns like Feature | Value | Source, " +
-            "Line | Qty | Unit price | Total, or Requirement | Selection | Basis. Keep explanatory text short around the table.");
-        contextLines.Add(
-            "Project naming: When calling quote_set_project_name, derive a short descriptive title from the part file name and inferred process/material " +
-            "(e.g. 'Flower Oval – FDM PLA', 'L-Bracket – SLA Resin'). Never set the project name to the customer's literal question.");
-        contextLines.Add(
-            "Customer questions: Use quote_ask_customer only when a customer decision is required and the options are truly mutually exclusive, such as choosing between processes when material, use case, and file context do not imply one. " +
-            "Do not use quote_ask_customer for quantity, lead time, finish, tolerance, or other quote details that can be defaulted or inferred; state the default assumption in normal text instead. " +
-            "When multiple non-defaultable details are missing, ask one focused question with quote_ask_customer, wait for the customer response, then ask the next missing detail in the following turn. " +
-            "Never use quote_ask_customer as a checklist of missing requirements. At most once per turn.");
-
         if (!string.IsNullOrWhiteSpace(replyToPreview))
         {
             contextLines.Add(

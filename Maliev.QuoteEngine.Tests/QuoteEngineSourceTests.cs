@@ -2015,17 +2015,20 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentPrompt_routes_choice_questions_and_requirements_to_structured_ui()
+    public void QuoteAgentQuestionTool_routes_choice_questions_to_structured_ui()
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var dtos = ReadRepoFile("Maliev.QuoteEngine.Shared", "Agent", "QuoteAgentDtos.cs");
 
-        Assert.Contains("Use quote_ask_customer only when a customer decision is required", service, StringComparison.Ordinal);
-        Assert.Contains("Do not use quote_ask_customer for quantity, lead time, finish, tolerance", service, StringComparison.Ordinal);
-        Assert.Contains("When multiple non-defaultable details are missing, ask one focused question with quote_ask_customer", service, StringComparison.Ordinal);
-        Assert.Contains("Never use quote_ask_customer as a checklist of missing requirements", service, StringComparison.Ordinal);
-        Assert.Contains("Present manufacturing assumptions, extracted dimensions, quote options, and order summaries as markdown tables", service, StringComparison.Ordinal);
-        Assert.Contains("Feature | Value | Source", service, StringComparison.Ordinal);
-        Assert.DoesNotContain("Use quote_ask_customer ONLY when", service, StringComparison.Ordinal);
+        Assert.Contains("\"quote_ask_customer\" => AskCustomer(state, request.Arguments)", service, StringComparison.Ordinal);
+        Assert.Contains("private static object AskCustomer", service, StringComparison.Ordinal);
+        Assert.Contains("options.Count < 2 || options.Count > 4", service, StringComparison.Ordinal);
+        Assert.Contains("state.PendingCustomerQuestion = dto;", service, StringComparison.Ordinal);
+        Assert.Contains("public QuoteAgentCustomerQuestionDto? CustomerQuestion { get; set; }", dtos, StringComparison.Ordinal);
+        Assert.Contains("message.CustomerQuestion is not null", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-question-options", component, StringComparison.Ordinal);
+        Assert.Contains("SubmitQuestionOptionAsync(option, message)", component, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -4602,15 +4605,11 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentPrompt_advertises_the_validated_3d_preview_operation_contract()
+    public void QuoteAgentPreviewValidator_enforces_the_supported_3d_preview_operation_contract()
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs")
             .ReplaceLineEndings("\n");
 
-        const string supportedOps =
-            "Use cad_commands with supported ops only: box, cylinder, sphere, cone, cut, fuse, intersect, fillet, chamfer, extrude, revolve, translate, rotate, loft.";
-
-        Assert.Contains(supportedOps, service, StringComparison.Ordinal);
         Assert.Contains("\"fuse\" or \"cut\" or \"intersect\" => ValidateBinaryCommand", service, StringComparison.Ordinal);
         Assert.Contains("\"loft\" => ValidateLoftCommand", service, StringComparison.Ordinal);
         Assert.Contains("\"fillet\" or \"chamfer\" => ValidateTargetedCommand", service, StringComparison.Ordinal);
@@ -4618,20 +4617,11 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentPrompt_advertises_the_generated_preview_parameter_contract()
+    public void QuoteAgentPreviewNormalizer_accepts_generated_preview_parameter_aliases()
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs")
             .ReplaceLineEndings("\n");
 
-        const string parameterContract =
-            "Prefer canonical params arrays for CAD commands; accepted named shorthands include width/depth/height, diameter/radius, x/y/z or translation object offsets, axisX/axisY/axisZ or rotationAxis object axes, and sketch segment x/y/dx/dy.";
-
-        Assert.Contains(parameterContract, service, StringComparison.Ordinal);
-        Assert.Contains("The command array may also be wrapped under commands/cadCommands or split into shapes/objects/parts plus operations/actions/steps.", service, StringComparison.Ordinal);
-        Assert.Contains("Profiles may use params, size, radius/diameter, points/polyline/vertices, or sketch/profile2D aliases.", service, StringComparison.Ordinal);
-        Assert.Contains("For golf tees, never model the head as a sphere", service, StringComparison.Ordinal);
-        Assert.Contains("Use angle in radians or angleDegrees/degrees for rotate/revolve.", service, StringComparison.Ordinal);
-        Assert.Contains("Generated 3D preview iterations are revisions of one active quote workbench artifact", service, StringComparison.Ordinal);
         Assert.Contains("\"extrude\" => BuildParams(command.Height ?? command.Thickness)", service, StringComparison.Ordinal);
         Assert.Contains("command.Offset = command.Translation;", service, StringComparison.Ordinal);
         Assert.Contains("command.Offset = BuildParams(command.X, command.Y, command.Z);", service, StringComparison.Ordinal);
