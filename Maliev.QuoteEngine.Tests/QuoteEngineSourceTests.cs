@@ -1266,6 +1266,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("border-radius: 8px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("background: var(--qe-agent-raised);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("box-shadow: 0 0 0 3px color-mix(in srgb, var(--qe-agent-primary) 12%, transparent);", agentStyles, StringComparison.Ordinal);
+
+        // Ctrl/Cmd+K focuses the global search; the field shows a key hint until active.
+        var loaderForSearch = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
+        Assert.Contains("document.getElementById(\"qe-agent-search-input\")", loaderForSearch, StringComparison.Ordinal);
+        Assert.Contains("event.key !== \"k\" && event.key !== \"K\"", loaderForSearch, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-search-kbd\"", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-global-search:focus-within .qe-agent-search-kbd,", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-results", agentStyles, StringComparison.Ordinal);
         Assert.Contains("SearchCustomerDataAsync", apiClient, StringComparison.Ordinal);

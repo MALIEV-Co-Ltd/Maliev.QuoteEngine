@@ -647,6 +647,24 @@
     });
   }
 
+  // Ctrl/Cmd+K jumps to the Make Studio global search from anywhere in the
+  // studio, matching the desktop command-palette convention.
+  window.addEventListener("keydown", function (event) {
+    if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) {
+      return;
+    }
+    if (event.key !== "k" && event.key !== "K") {
+      return;
+    }
+    const searchInput = document.getElementById("qe-agent-search-input");
+    if (!searchInput) {
+      return;
+    }
+    event.preventDefault();
+    searchInput.focus();
+    searchInput.select();
+  });
+
   setProgress(0, true);
   setCulture(resolveCulture("en-US"));
   setStatus(currentStrings.status.preparing);

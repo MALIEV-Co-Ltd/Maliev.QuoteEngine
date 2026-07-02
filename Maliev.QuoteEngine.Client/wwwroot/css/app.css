@@ -960,7 +960,7 @@
 .qe-agent-search-prompt-hover {
     position: absolute;
     inset-block: 0;
-    inset-inline: 34px 4px;
+    inset-inline: 34px 50px;
     z-index: 1;
     display: block;
     overflow: hidden;
@@ -1014,6 +1014,33 @@
 .qe-agent-global-search input::placeholder {
     color: var(--qe-agent-muted);
     opacity: 1;
+}
+
+/* Keyboard hint for the global search — hidden once the field is active. */
+.qe-agent-search-kbd {
+    position: absolute;
+    right: 7px;
+    top: 50%;
+    z-index: 2;
+    transform: translateY(-50%);
+    padding: 2px 6px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 5px;
+    background: var(--qe-agent-bg);
+    color: var(--qe-agent-muted);
+    font-family: inherit;
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    line-height: 1.3;
+    white-space: nowrap;
+    pointer-events: none;
+    user-select: none;
+}
+
+.qe-agent-global-search:focus-within .qe-agent-search-kbd,
+.qe-agent-global-search.active .qe-agent-search-kbd {
+    display: none;
 }
 
 .qe-agent-primary-nav a,
@@ -6084,6 +6111,10 @@
     .qe-agent-rail-search {
         display: grid;
         width: 100%;
+    }
+
+    .qe-agent-search-kbd {
+        display: none;
     }
 
     .qe-agent-rail-head,
