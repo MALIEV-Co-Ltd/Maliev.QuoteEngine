@@ -2056,6 +2056,54 @@
                 @onclick="CloseSidePanels"></button>
     }
 
+    @if (_commandPaletteOpen)
+    {
+        <div class="qe-agent-palette-modal" role="dialog" aria-modal="true" aria-label="@Text("Command palette", "แผงคำสั่ง")">
+            <button type="button"
+                    class="qe-agent-palette-backdrop"
+                    aria-label="@Text("Close command palette", "ปิดแผงคำสั่ง")"
+                    @onclick="CloseCommandPalette"></button>
+            <section class="qe-agent-palette">
+                <div class="qe-agent-palette-input">
+                    <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+                    <input @ref="_paletteInput"
+                           value="@_paletteQuery"
+                           @oninput="OnPaletteInput"
+                           @onkeydown="OnPaletteKeyDown"
+                           placeholder="@Text("Search projects or run a command", "ค้นหาโปรเจกต์หรือเรียกใช้คำสั่ง")"
+                           aria-label="@Text("Search projects or run a command", "ค้นหาโปรเจกต์หรือเรียกใช้คำสั่ง")" />
+                    <kbd>Esc</kbd>
+                </div>
+                <div class="qe-agent-palette-results">
+                    @if (PaletteProjects.Any())
+                    {
+                        <span class="qe-agent-palette-section">@Text("Projects", "โปรเจกต์")</span>
+                        @foreach (var project in PaletteProjects)
+                        {
+                            <a class="qe-agent-palette-row" href="@ProjectHref(project)" @onclick="CloseCommandPalette">
+                                <MudIcon Icon="@(project.IsPinned ? Icons.Material.Outlined.PushPin : Icons.Material.Outlined.Folder)" Size="Size.Small" />
+                                <span>@ProjectName(project)</span>
+                                <small>@project.ProjectNumber</small>
+                            </a>
+                        }
+                    }
+                    <span class="qe-agent-palette-section">@Text("Commands", "คำสั่ง")</span>
+                    @foreach (var command in PaletteCommands)
+                    {
+                        <button type="button" class="qe-agent-palette-row" @onclick="@(() => RunPaletteCommandAsync(command))">
+                            <MudIcon Icon="@command.Icon" Size="Size.Small" />
+                            <span>@Text(command.LabelEn, command.LabelTh)</span>
+                        </button>
+                    }
+                    @if (!PaletteProjects.Any() && !PaletteCommands.Any())
+                    {
+                        <p class="qe-agent-palette-empty">@Text("No matching projects or commands.", "ไม่พบโปรเจกต์หรือคำสั่งที่ตรงกัน")</p>
+                    }
+                </div>
+            </section>
+        </div>
+    }
+
     @if (_authDialogOpen && !IsSignedIn)
     {
         <div class="qe-agent-auth-modal" role="dialog" aria-modal="true" aria-labelledby="qe-agent-auth-title">
@@ -2263,6 +2311,10 @@
     private HubConnection? _notificationConnection;
     private Guid? _joinedQuoteSessionId;
     private bool _authDialogOpen;
+    private bool _commandPaletteOpen;
+    private string _paletteQuery = string.Empty;
+    private bool _paletteFocusPending;
+    private ElementReference _paletteInput;
     private string _authDialogMode = "sign-in";
     private string _lastInitialAuthMode = string.Empty;
     private bool _initialWorkspacePageApplied;
@@ -2868,6 +2920,115 @@
                     : string.Empty;
     }
 
+    private sealed record PaletteCommand(string Key, string Icon, string LabelEn, string LabelTh);
+
+    private static readonly PaletteCommand[] AllPaletteCommands =
+    [
+        new("new-project", Icons.Material.Outlined.Edit, "New project", "โปรเจกต์ใหม่"),
+        new("plugins", Icons.Material.Outlined.Extension, "Open plugins", "เปิดปลั๊กอิน"),
+        new("projects", Icons.Material.Outlined.FolderOpen, "Open projects", "เปิดโปรเจกต์"),
+        new("settings", Icons.Material.Outlined.Settings, "Open settings", "เปิดการตั้งค่า"),
+        new("profile", Icons.Material.Outlined.Person, "Open profile", "เปิดโปรไฟล์"),
+        new("artifacts", Icons.Material.Outlined.Inventory2, "Toggle workbench artifacts", "เปิด/ปิดไฟล์งาน"),
+        new("summary", Icons.Material.Outlined.Summarize, "Toggle project summary", "เปิด/ปิดสรุปโปรเจกต์"),
+        new("theme", Icons.Material.Outlined.Contrast, "Toggle light or dark mode", "สลับโหมดสว่างหรือมืด")
+    ];
+
+    private IEnumerable<ProjectNavItem> PaletteProjects
+    {
+        get
+        {
+            if (!IsSignedIn)
+            {
+                return [];
+            }
+
+            var query = _paletteQuery.Trim();
+            var source = _projects.Where(project => !project.IsArchived);
+            if (query.Length > 0)
+            {
+                source = source.Where(project =>
+                    project.NameEn.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    project.NameTh.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    project.ProjectNumber.Contains(query, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return source.OrderByDescending(project => project.IsPinned).Take(6);
+        }
+    }
+
+    private IEnumerable<PaletteCommand> PaletteCommands
+    {
+        get
+        {
+            var query = _paletteQuery.Trim();
+            return query.Length == 0
+                ? AllPaletteCommands
+                : AllPaletteCommands.Where(command =>
+                    command.LabelEn.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+                    command.LabelTh.Contains(query, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [JSInvokable]
+    public Task OpenCommandPaletteAsync()
+    {
+        _commandPaletteOpen = true;
+        _paletteQuery = string.Empty;
+        _paletteFocusPending = true;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private void CloseCommandPalette()
+    {
+        _commandPaletteOpen = false;
+    }
+
+    private void OnPaletteInput(ChangeEventArgs args)
+    {
+        _paletteQuery = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void OnPaletteKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape")
+        {
+            CloseCommandPalette();
+        }
+    }
+
+    private async Task RunPaletteCommandAsync(PaletteCommand command)
+    {
+        CloseCommandPalette();
+        switch (command.Key)
+        {
+            case "new-project":
+                await StartNewProjectAsync();
+                break;
+            case "plugins":
+                await OpenPluginsPageAsync();
+                break;
+            case "projects":
+                await OpenProjectsPage();
+                break;
+            case "settings":
+                OpenSettingsPage();
+                break;
+            case "profile":
+                OpenPersonalAccountPage();
+                break;
+            case "artifacts":
+                ToggleArtifactPanel();
+                break;
+            case "summary":
+                ToggleSummaryPanel();
+                break;
+            case "theme":
+                await ToggleThemeAsync();
+                break;
+        }
+    }
+
     private void OpenAuthDialog(string mode)
     {
         _authDialogMode = NormalizeAuthMode(mode);
@@ -2970,6 +3131,12 @@
                 await _searchInput.FocusAsync();
             }
 
+            if (_paletteFocusPending && _commandPaletteOpen)
+            {
+                _paletteFocusPending = false;
+                await _paletteInput.FocusAsync();
+            }
+
             return;
         }
 
@@ -2982,6 +3149,12 @@
         {
             _focusSearchPending = false;
             await _searchInput.FocusAsync();
+        }
+
+        if (_paletteFocusPending && _commandPaletteOpen)
+        {
+            _paletteFocusPending = false;
+            await _paletteInput.FocusAsync();
         }
     }
 

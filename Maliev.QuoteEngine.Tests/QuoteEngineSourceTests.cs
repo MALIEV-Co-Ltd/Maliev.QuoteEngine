@@ -1270,10 +1270,20 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("background: var(--qe-agent-raised);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("box-shadow: 0 0 0 3px color-mix(in srgb, var(--qe-agent-primary) 12%, transparent);", agentStyles, StringComparison.Ordinal);
 
-        // Ctrl/Cmd+K focuses the global search; the field shows a key hint until active.
+        // Ctrl/Cmd+K opens the command palette (composer module, capture phase);
+        // the loader's focus-the-search handler stays as a fallback for pages
+        // without the shell. The search field shows a key hint until active.
         var loaderForSearch = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
+        var composerJsForPalette = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-agent-composer.js");
         Assert.Contains("document.getElementById(\"qe-agent-search-input\")", loaderForSearch, StringComparison.Ordinal);
         Assert.Contains("event.key !== \"k\" && event.key !== \"K\"", loaderForSearch, StringComparison.Ordinal);
+        Assert.Contains("const commandPaletteKeydown = event =>", composerJsForPalette, StringComparison.Ordinal);
+        Assert.Contains("dotNetRef.invokeMethodAsync(\"OpenCommandPaletteAsync\")", composerJsForPalette, StringComparison.Ordinal);
+        Assert.Contains("document.removeEventListener(\"keydown\", handlers.commandPaletteKeydown, true);", composerJsForPalette, StringComparison.Ordinal);
+        Assert.Contains("public Task OpenCommandPaletteAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-palette-modal\"", component, StringComparison.Ordinal);
+        Assert.Contains("RunPaletteCommandAsync", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-palette-row:hover,", agentStyles, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-search-kbd\"", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-global-search:focus-within .qe-agent-search-kbd,", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);", agentStyles, StringComparison.Ordinal);

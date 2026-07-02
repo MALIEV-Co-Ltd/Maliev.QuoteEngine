@@ -2117,6 +2117,133 @@
     color: var(--qe-agent-muted);
 }
 
+/* Command palette (Ctrl/Cmd+K): centered overlay near the top, matching the
+   reference search — input row, then grouped project and command rows. */
+.qe-agent-palette-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    display: grid;
+    justify-items: center;
+    align-items: start;
+    padding: clamp(48px, 14vh, 140px) 16px 24px;
+}
+
+.qe-agent-palette-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: color-mix(in srgb, var(--qe-agent-inverse) 26%, transparent);
+    cursor: pointer;
+}
+
+.qe-agent-palette {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    width: min(560px, calc(100vw - 32px));
+    max-height: min(58dvh, 480px);
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 14px;
+    background: var(--qe-agent-bg);
+    color: var(--qe-agent-ink);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+}
+
+.qe-agent-palette-input {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--qe-agent-line);
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-palette-input input {
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--qe-agent-ink);
+    font: inherit;
+    font-size: 14px;
+}
+
+.qe-agent-palette-input kbd {
+    padding: 2px 7px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 5px;
+    background: var(--qe-agent-surface);
+    color: var(--qe-agent-muted);
+    font: inherit;
+    font-size: 10.5px;
+    font-weight: 500;
+}
+
+.qe-agent-palette-results {
+    display: grid;
+    align-content: start;
+    gap: 1px;
+    padding: 6px;
+    overflow-y: auto;
+}
+
+.qe-agent-palette-section {
+    padding: 8px 10px 4px;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.qe-agent-palette-row {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px;
+    min-height: 36px;
+    padding: 7px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--qe-agent-ink);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+    text-decoration: none;
+}
+
+.qe-agent-palette-row:hover,
+.qe-agent-palette-row:focus-visible {
+    background: var(--qe-agent-hover);
+    outline: none;
+}
+
+.qe-agent-palette-row .mud-icon-root {
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-palette-row span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-palette-row small {
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+}
+
+.qe-agent-palette-empty {
+    margin: 0;
+    padding: 14px 10px;
+    color: var(--qe-agent-muted);
+    font-size: 13px;
+}
+
 .qe-agent-auth-modal {
     position: fixed;
     inset: 0;

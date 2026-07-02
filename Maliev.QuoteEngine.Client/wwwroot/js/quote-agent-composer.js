@@ -189,9 +189,23 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
 
     dotNetRef.invokeMethodAsync("CloseQuickActionsMenuFromOutsideAsync");
   };
+  // Ctrl/Cmd+K opens the command palette. Capture phase so the loader's
+  // focus-the-search fallback (a window bubble listener) never also fires.
+  const commandPaletteKeydown = event => {
+    if (!(event.ctrlKey || event.metaKey) || event.shiftKey || event.altKey) {
+      return;
+    }
+    if (event.key !== "k" && event.key !== "K") {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    dotNetRef.invokeMethodAsync("OpenCommandPaletteAsync");
+  };
 
   textarea.addEventListener("keydown", keydown);
   textarea.addEventListener("input", input);
+  document.addEventListener("keydown", commandPaletteKeydown, true);
   document.addEventListener("keydown", documentKeydown, true);
   document.addEventListener("keyup", documentKeyup, true);
   document.addEventListener("pointerdown", outsideQuickActionsPointerDown, true);
@@ -238,6 +252,7 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
   composerHandlers.set(textarea, {
     keydown,
     input,
+    commandPaletteKeydown,
     documentKeydown,
     documentKeyup,
     outsideQuickActionsPointerDown,
@@ -263,6 +278,7 @@ export function disposeComposer(textarea) {
 
   textarea.removeEventListener("keydown", handlers.keydown);
   textarea.removeEventListener("input", handlers.input);
+  document.removeEventListener("keydown", handlers.commandPaletteKeydown, true);
   document.removeEventListener("keydown", handlers.documentKeydown, true);
   document.removeEventListener("keyup", handlers.documentKeyup, true);
   document.removeEventListener("pointerdown", handlers.outsideQuickActionsPointerDown, true);
