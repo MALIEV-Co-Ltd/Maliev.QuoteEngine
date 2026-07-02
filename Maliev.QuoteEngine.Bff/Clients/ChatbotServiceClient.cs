@@ -100,54 +100,27 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
         ChatbotSendMessageRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        using var message = new HttpRequestMessage(HttpMethod.Post, "/chatbot/v1/messages/stream")
-        {
-            Content = JsonContent.Create(request, options: SnakeCaseJson)
-        };
-        using var response = await httpClient.SendAsync(
-            message,
-            HttpCompletionOption.ResponseHeadersRead,
+        var response = await SendAsync<ChatbotSendMessageRequest, ChatbotMessageResponse>(
+            HttpMethod.Post,
+            "/chatbot/v1/messages",
+            request,
+            "sending chatbot message for streamed quote agent turn",
             cancellationToken);
-
-        if (!response.IsSuccessStatusCode)
+        if (response is null)
         {
-            logger.LogWarning(
-                "ChatbotService returned {StatusCode} while streaming chatbot message.",
-                response.StatusCode);
             yield return new ChatbotMessageStreamEvent
             {
                 Type = "error",
-                Error = $"ChatbotService stream failed with status {(int)response.StatusCode}."
+                Error = "ChatbotService message request failed."
             };
             yield break;
         }
 
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var reader = new StreamReader(stream);
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        yield return new ChatbotMessageStreamEvent
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            ChatbotMessageStreamEvent? streamEvent;
-            try
-            {
-                streamEvent = JsonSerializer.Deserialize<ChatbotMessageStreamEvent>(line, SnakeCaseJson);
-            }
-            catch (JsonException ex)
-            {
-                logger.LogWarning(ex, "ChatbotService returned an invalid stream event.");
-                continue;
-            }
-
-            if (streamEvent is not null)
-            {
-                yield return streamEvent;
-            }
-        }
+            Type = "final",
+            Message = response
+        };
     }
 
     public async Task<ChatbotConversationMessagesResponse?> GetConversationMessagesAsync(Guid sessionId, CancellationToken cancellationToken)
