@@ -462,6 +462,9 @@ public sealed class ChatbotSendMessageRequest
     /// <summary>Gets or sets the optional requested response MIME type.</summary>
     public string? ResponseMimeType { get; set; }
 
+    /// <summary>Gets or sets an optional structured-output response schema.</summary>
+    public object? ResponseSchema { get; set; }
+
     /// <summary>Gets or sets an optional thinking-step callback URL.</summary>
     public string? CallbackUrl { get; set; }
 

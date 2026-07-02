@@ -85,6 +85,46 @@ public sealed class ChatbotServiceClientContractTests
     }
 
     [Fact]
+    public async Task SendMessageStreamAsync_ForwardsStructuredOutputSchema()
+    {
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"type":"started"}""", Encoding.UTF8, "application/x-ndjson")
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://chatbot-service.test")
+        };
+        var client = new ChatbotServiceClient(http, NullLogger<ChatbotServiceClient>.Instance);
+
+        await foreach (var _ in client.SendMessageStreamAsync(new ChatbotSendMessageRequest
+        {
+            SessionId = Guid.Parse("6f9b89db-4e96-4c4b-ace5-908d2bb172b6"),
+            Content = "Extract quote requirements from this message.",
+            Language = "en",
+            ResponseMimeType = "application/json",
+            ResponseSchema = new Dictionary<string, object?>
+            {
+                ["type"] = "object",
+                ["required"] = new[] { "quoteSummary" },
+                ["properties"] = new Dictionary<string, object?>
+                {
+                    ["quoteSummary"] = new Dictionary<string, object?>
+                    {
+                        ["type"] = "string"
+                    }
+                }
+            }
+        }, CancellationToken.None))
+        {
+        }
+
+        Assert.Contains("\"response_mime_type\":\"application/json\"", handler.RequestBody);
+        Assert.Contains("\"response_schema\":", handler.RequestBody);
+        Assert.Contains("\"quoteSummary\"", handler.RequestBody);
+    }
+
+    [Fact]
     public async Task TruncateLastTurnAsync_SendsInternalDeleteRequest()
     {
         var sessionId = Guid.Parse("6f9b89db-4e96-4c4b-ace5-908d2bb172b6");
