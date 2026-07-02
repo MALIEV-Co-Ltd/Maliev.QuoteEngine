@@ -590,9 +590,13 @@
                                 @onclick='@(() => SetSettingsTab("language"))'>
                             @Text("Language", "ภาษา")
                         </button>
-                        <a class="qe-agent-management-tab" href="/profile">
+                        <button type="button"
+                                class="@SettingsTabClass("profile")"
+                                role="tab"
+                                aria-selected="@(_settingsTab == "profile")"
+                                @onclick='@(() => SetSettingsTab("profile"))'>
                             @Text("Profile", "โปรไฟล์")
-                        </a>
+                        </button>
                     </div>
                     <section class="qe-agent-management-section">
                         <header>
@@ -601,23 +605,11 @@
                         </header>
                         @if (_settingsTab == "general")
                         {
-                            <div class="qe-agent-settings-grid">
-                                <button type="button" @onclick='@(() => OpenAuthDialog("sign-in"))'>
-                                    <MudIcon Icon="@Icons.Material.Outlined.ManageAccounts" Size="Size.Small" />
-                                    <span>@Text("Account", "บัญชี")</span>
-                                    <strong>@Text("Manage sign in", "จัดการการเข้าสู่ระบบ")</strong>
-                                </button>
-                                <button type="button" @onclick="ToggleMotionReducedAsync">
-                                    <MudIcon Icon="@Icons.Material.Outlined.Vibration" Size="Size.Small" />
-                                    <span>@Text("Motion", "การเคลื่อนไหว")</span>
-                                    <strong>@(Preferences.IsMotionReduced ? Text("Reduced", "ลดการเคลื่อนไหว") : Text("Normal", "ปกติ"))</strong>
-                                </button>
-                                <a href="/preferences">
-                                    <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
-                                    <span>@Text("Manufacturing defaults", "ค่าเริ่มต้นการผลิต")</span>
-                                    <strong>@Text("Process, tolerance, inspection", "กระบวนการ ค่าคลาดเคลื่อน การตรวจสอบ")</strong>
-                                </a>
-                            </div>
+                            <QeAccountPreferences />
+                        }
+                        else if (_settingsTab == "profile")
+                        {
+                            <QeAccountProfile />
                         }
                         else if (_settingsTab == "appearance")
                         {
@@ -2273,6 +2265,7 @@
     private bool _authDialogOpen;
     private string _authDialogMode = "sign-in";
     private string _lastInitialAuthMode = string.Empty;
+    private bool _initialWorkspacePageApplied;
     private string _authEmail = string.Empty;
     private bool _driveConnectorModalOpen;
     private string _driveConnectorModalMode = "connect";
@@ -2422,6 +2415,12 @@
 
     [Parameter]
     public string? InitialAuthMode { get; set; }
+
+    [Parameter]
+    public string? InitialWorkspacePage { get; set; }
+
+    [Parameter]
+    public string? InitialSettingsTab { get; set; }
 
     [Parameter]
     public string AuthReturnUrl { get; set; } = "/quote/new";
@@ -2759,6 +2758,17 @@
 
     protected override Task OnParametersSetAsync()
     {
+        // Deep links like /profile and /preferences land here via
+        // /quotes?ws=settings&tab=... so account pages always render inside
+        // the workspace instead of the retired standalone layout.
+        if (!_initialWorkspacePageApplied &&
+            string.Equals(InitialWorkspacePage, "settings", StringComparison.OrdinalIgnoreCase))
+        {
+            _initialWorkspacePageApplied = true;
+            SetSettingsTab(InitialSettingsTab ?? "general");
+            _activeWorkspacePage = WorkspacePage.Settings;
+        }
+
         var requestedAuthMode = NormalizeAuthMode(InitialAuthMode);
         if (!IsSignedIn &&
             !string.IsNullOrWhiteSpace(requestedAuthMode) &&
@@ -4365,6 +4375,7 @@
     {
         // Profile and account live inside the workspace settings page — never the
         // legacy standalone layout.
+        _settingsTab = "profile";
         OpenSettingsPage();
     }
 
@@ -4481,7 +4492,7 @@
 
     private void SetSettingsTab(string tab)
     {
-        _settingsTab = tab is "appearance" or "language" ? tab : "general";
+        _settingsTab = tab is "appearance" or "language" or "profile" ? tab : "general";
     }
 
     private string SettingsTabClass(string tab)
@@ -4493,6 +4504,7 @@
     {
         "appearance" => Text("Appearance", "รูปลักษณ์"),
         "language" => Text("Language", "ภาษา"),
+        "profile" => Text("Profile", "โปรไฟล์"),
         _ => Text("Studio preferences", "การตั้งค่า Studio")
     };
 
@@ -4500,7 +4512,8 @@
     {
         "appearance" => Text("Choose how Make Studio looks on this device.", "เลือกรูปลักษณ์ของ Make Studio บนอุปกรณ์นี้"),
         "language" => Text("Auto-detect matches your browser language until you pick one.", "ตรวจจับอัตโนมัติจะใช้ภาษาของเบราว์เซอร์จนกว่าคุณจะเลือกเอง"),
-        _ => Text("More controls will appear as account services are connected.", "ตัวเลือกเพิ่มเติมจะแสดงเมื่อเชื่อมต่อบริการบัญชีแล้ว")
+        "profile" => Text("Your account, activity, and address book.", "บัญชี กิจกรรม และสมุดที่อยู่ของคุณ"),
+        _ => Text("Display, quoting, and manufacturing defaults apply immediately.", "การตั้งค่าการแสดงผล การขอราคา และค่าเริ่มต้นการผลิตจะมีผลทันที")
     };
 
     private string ThemePreviewClass(bool dark)

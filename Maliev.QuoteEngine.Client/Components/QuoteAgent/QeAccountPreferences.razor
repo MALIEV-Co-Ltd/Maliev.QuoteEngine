@@ -1,0 +1,365 @@
+@using Maliev.QuoteEngine.Shared.ReferenceData
+@inject QuoteEngineApiClient Api
+@inject PreferenceService PreferenceState
+@implements IDisposable
+
+<section class="preferences-panel">
+    <div class="preferences-row">
+        <div>
+            <span class="eyebrow">@Text("Language", "ภาษา")</span>
+            <strong>@Text("Platform language", "ภาษาของแพลตฟอร์ม")</strong>
+        </div>
+        <div class="preferences-segmented" role="group" aria-label="@Text("Platform language", "ภาษาของแพลตฟอร์ม")">
+            <button type="button"
+                    class="@AutoLanguageButtonClass()"
+                    @onclick="SetCultureAutoAsync">
+                @Text("Auto-detect", "ตรวจจับอัตโนมัติ")
+            </button>
+            <button type="button"
+                    class="@LanguageButtonClass(SupportedCultures.DefaultCulture)"
+                    @onclick="() => SetCultureAsync(SupportedCultures.DefaultCulture)">
+                English
+            </button>
+            <button type="button"
+                    class="@LanguageButtonClass(SupportedCultures.ThaiCulture)"
+                    @onclick="() => SetCultureAsync(SupportedCultures.ThaiCulture)">
+                ไทย
+            </button>
+        </div>
+    </div>
+
+    <div class="preferences-row">
+        <div>
+            <span class="eyebrow">@Text("Theme", "ธีม")</span>
+            <strong>@Text("Interface appearance", "รูปลักษณ์อินเทอร์เฟซ")</strong>
+        </div>
+        <div class="preferences-segmented" role="group" aria-label="@Text("Display theme", "ธีมการแสดงผล")">
+            <button type="button" class="@ThemeButtonClass(false)" @onclick="() => SetThemeAsync(false)">@Text("Light", "สว่าง")</button>
+            <button type="button" class="@ThemeButtonClass(true)" @onclick="() => SetThemeAsync(true)">@Text("Dark", "มืด")</button>
+        </div>
+    </div>
+
+    <div class="preferences-row">
+        <div>
+            <span class="eyebrow">@Text("Motion", "การเคลื่อนไหว")</span>
+            <strong>@Text("Animation preference", "การตั้งค่าการเคลื่อนไหว")</strong>
+        </div>
+        <div class="preferences-segmented" role="group" aria-label="@Text("Animation preference", "การตั้งค่าการเคลื่อนไหว")">
+            <button type="button" class="@MotionButtonClass(false)" @onclick="() => SetMotionReducedAsync(false)">@Text("Normal", "ปกติ")</button>
+            <button type="button" class="@MotionButtonClass(true)" @onclick="() => SetMotionReducedAsync(true)">@Text("Reduced", "ลดการเคลื่อนไหว")</button>
+        </div>
+    </div>
+
+    <div class="preferences-row">
+        <div>
+            <span class="eyebrow">@Text("Currency", "สกุลเงิน")</span>
+            <strong>@Text("Quote display currency", "สกุลเงินสำหรับแสดงราคา")</strong>
+        </div>
+        <select class="quote-currency-select preferences-currency-select"
+                value="@_selectedCurrency"
+                @onchange="HandleCurrencyChanged"
+                aria-label="@Text("Quote currency", "สกุลเงินใบเสนอราคา")">
+            @foreach (var currency in _currencyOptions)
+            {
+                <option value="@currency.Code">@CurrencyOptionLabel(currency)</option>
+            }
+        </select>
+    </div>
+</section>
+
+<section class="preferences-panel" data-preferences-section="quote-defaults">
+    <div class="preferences-panel-heading">
+        <div>
+            <span class="eyebrow">@Text("Quote defaults", "ค่าเริ่มต้นใบเสนอราคา")</span>
+            <h2>@Text("Manufacturing defaults", "ค่าเริ่มต้นการผลิต")</h2>
+        </div>
+        <p>@Text("New uploaded parts use these defaults when the selected process supports the file type.", "ชิ้นงานที่อัปโหลดใหม่จะใช้ค่าเริ่มต้นเหล่านี้เมื่อกระบวนการที่เลือกเข้ากับชนิดไฟล์")</p>
+    </div>
+
+    <div class="preferences-default-grid">
+        <label class="preferences-field">
+            <span>@Text("Default manufacturing process", "กระบวนการผลิตเริ่มต้น")</span>
+            <select class="preferences-select"
+                    value="@_defaultProcessId"
+                    @onchange="HandleDefaultProcessChanged"
+                    aria-label="@Text("Default manufacturing process", "กระบวนการผลิตเริ่มต้น")">
+                @foreach (var process in _referenceData?.Processes ?? [])
+                {
+                    <option value="@process.Id">@process.Name</option>
+                }
+            </select>
+        </label>
+
+        <label class="preferences-field">
+            <span>@Text("Default tolerance", "ค่าคลาดเคลื่อนเริ่มต้น")</span>
+            <select class="preferences-select"
+                    value="@_defaultToleranceId"
+                    @onchange="HandleDefaultToleranceChanged"
+                    aria-label="@Text("Default tolerance", "ค่าคลาดเคลื่อนเริ่มต้น")">
+                @foreach (var tolerance in TolerancesForDefaultProcess)
+                {
+                    <option value="@tolerance.Id">@tolerance.Name</option>
+                }
+            </select>
+        </label>
+
+        <label class="preferences-field">
+            <span>@Text("Default inspection", "การตรวจสอบเริ่มต้น")</span>
+            <select class="preferences-select"
+                    value="@_defaultInspectionCode"
+                    @onchange="HandleDefaultInspectionChanged"
+                    aria-label="@Text("Default inspection", "การตรวจสอบเริ่มต้น")">
+                @foreach (var inspection in _referenceData?.InspectionLevels ?? [])
+                {
+                    <option value="@inspection.Code">@inspection.Name</option>
+                }
+            </select>
+        </label>
+
+        <label class="preferences-field">
+            <span>@Text("Default delivery speed", "ความเร็วการจัดส่งเริ่มต้น")</span>
+            <select class="preferences-select"
+                    value="@_defaultLeadTimeCode"
+                    @onchange="HandleDefaultLeadTimeChanged"
+                    aria-label="@Text("Default delivery speed", "ความเร็วการจัดส่งเริ่มต้น")">
+                @foreach (var leadTime in _referenceData?.LeadTimes ?? [])
+                {
+                    <option value="@leadTime.Code">@leadTime.Name</option>
+                }
+            </select>
+        </label>
+    </div>
+</section>
+
+@code {
+    private const string QuoteDefaultProcessKey = "maliev.quote.default.process";
+    private const string QuoteDefaultToleranceKey = "maliev.quote.default.tolerance";
+    private const string QuoteDefaultInspectionKey = "maliev.quote.default.inspection";
+    private const string QuoteDefaultLeadTimeKey = "maliev.quote.default.leadTime";
+    private static readonly CurrencyOptionDto FallbackCurrency = new("THB", "฿", "Thai Baht", true, true);
+    private bool _isDarkMode;
+    private bool _isMotionReduced;
+    private List<CurrencyOptionDto> _currencyOptions = [FallbackCurrency];
+    private QuoteReferenceDataResponse? _referenceData;
+    private string _selectedCurrency = "THB";
+    private string _selectedCulture = SupportedCultures.DefaultCulture;
+    private bool _isCultureAuto = true;
+    private string _defaultProcessId = "fdm";
+    private string? _defaultToleranceId;
+    private string _defaultInspectionCode = "STANDARD";
+    private string _defaultLeadTimeCode = "STANDARD";
+
+    private IEnumerable<ToleranceOptionDto> TolerancesForDefaultProcess =>
+        (_referenceData?.Tolerances ?? []).Where(tolerance => string.Equals(tolerance.ProcessId, _defaultProcessId, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        PreferenceState.Changed += OnPreferencesChanged;
+        await LoadQuoteReferenceDataAsync();
+        await LoadCurrencyOptionsAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await PreferenceState.InitializeAsync();
+        _isDarkMode = PreferenceState.IsDarkMode;
+        _isMotionReduced = PreferenceState.IsMotionReduced;
+        _selectedCulture = PreferenceState.Culture;
+        _isCultureAuto = PreferenceState.IsCultureAuto;
+        _selectedCurrency = NormalizeCurrency(PreferenceState.Currency);
+        await LoadQuoteDefaultsAsync();
+        StateHasChanged();
+    }
+
+    private async Task SetThemeAsync(bool dark)
+    {
+        await PreferenceState.SetThemeAsync(dark ? PreferenceService.DarkTheme : PreferenceService.LightTheme);
+    }
+
+    private async Task SetCultureAsync(string culture)
+    {
+        await PreferenceState.SetCultureAsync(culture);
+    }
+
+    private async Task SetCultureAutoAsync()
+    {
+        await PreferenceState.SetCultureAutoAsync();
+    }
+
+    private async Task SetMotionReducedAsync(bool reduced)
+    {
+        await PreferenceState.SetMotionReducedAsync(reduced);
+    }
+
+    private async Task HandleCurrencyChanged(ChangeEventArgs args)
+    {
+        _selectedCurrency = NormalizeCurrency(args.Value?.ToString());
+        await PreferenceState.SetCurrencyAsync(_selectedCurrency);
+    }
+
+    private async Task HandleDefaultProcessChanged(ChangeEventArgs args)
+    {
+        _defaultProcessId = NormalizeDefaultProcess(args.Value?.ToString());
+        _defaultToleranceId = NormalizeDefaultTolerance(null);
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultProcessKey, _defaultProcessId);
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultToleranceKey, _defaultToleranceId);
+    }
+
+    private async Task HandleDefaultToleranceChanged(ChangeEventArgs args)
+    {
+        _defaultToleranceId = NormalizeDefaultTolerance(args.Value?.ToString());
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultToleranceKey, _defaultToleranceId);
+    }
+
+    private async Task HandleDefaultInspectionChanged(ChangeEventArgs args)
+    {
+        _defaultInspectionCode = NormalizeDefaultInspection(args.Value?.ToString());
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultInspectionKey, _defaultInspectionCode);
+    }
+
+    private async Task HandleDefaultLeadTimeChanged(ChangeEventArgs args)
+    {
+        _defaultLeadTimeCode = NormalizeDefaultLeadTime(args.Value?.ToString());
+        await PreferenceState.SetPreferenceAsync(QuoteDefaultLeadTimeKey, _defaultLeadTimeCode);
+    }
+
+    private async Task LoadQuoteReferenceDataAsync()
+    {
+        try
+        {
+            _referenceData = await Api.GetReferenceDataAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _referenceData = null;
+        }
+
+        _defaultProcessId = NormalizeDefaultProcess(_defaultProcessId);
+        _defaultToleranceId = NormalizeDefaultTolerance(_defaultToleranceId);
+        _defaultInspectionCode = NormalizeDefaultInspection(_defaultInspectionCode);
+        _defaultLeadTimeCode = NormalizeDefaultLeadTime(_defaultLeadTimeCode);
+    }
+
+    private async Task LoadQuoteDefaultsAsync()
+    {
+        _defaultProcessId = NormalizeDefaultProcess(await PreferenceState.GetPreferenceAsync(QuoteDefaultProcessKey));
+        _defaultToleranceId = NormalizeDefaultTolerance(await PreferenceState.GetPreferenceAsync(QuoteDefaultToleranceKey));
+        _defaultInspectionCode = NormalizeDefaultInspection(await PreferenceState.GetPreferenceAsync(QuoteDefaultInspectionKey));
+        _defaultLeadTimeCode = NormalizeDefaultLeadTime(await PreferenceState.GetPreferenceAsync(QuoteDefaultLeadTimeKey));
+    }
+
+    private async Task LoadCurrencyOptionsAsync()
+    {
+        try
+        {
+            var currencies = await Api.GetCurrenciesAsync();
+            _currencyOptions = currencies
+                .Where(currency => currency.IsActive && !string.IsNullOrWhiteSpace(currency.Code))
+                .OrderByDescending(currency => currency.IsPrimary)
+                .ThenBy(currency => currency.Code, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (_currencyOptions.Count == 0)
+            {
+                _currencyOptions = [FallbackCurrency];
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _currencyOptions = [FallbackCurrency];
+        }
+
+        _selectedCurrency = NormalizeCurrency(_selectedCurrency);
+    }
+
+    private string ThemeButtonClass(bool dark)
+    {
+        return _isDarkMode == dark ? "preferences-segment is-active" : "preferences-segment";
+    }
+
+    private string LanguageButtonClass(string culture)
+    {
+        return !_isCultureAuto && string.Equals(SupportedCultures.Normalize(_selectedCulture), SupportedCultures.Normalize(culture), StringComparison.Ordinal)
+            ? "preferences-segment is-active"
+            : "preferences-segment";
+    }
+
+    private string AutoLanguageButtonClass()
+    {
+        return _isCultureAuto ? "preferences-segment is-active" : "preferences-segment";
+    }
+
+    private string MotionButtonClass(bool reduced)
+    {
+        return _isMotionReduced == reduced ? "preferences-segment is-active" : "preferences-segment";
+    }
+
+    private string Text(string en, string th)
+    {
+        return PreferenceState.Text(en, th);
+    }
+
+    private void OnPreferencesChanged()
+    {
+        _isDarkMode = PreferenceState.IsDarkMode;
+        _isMotionReduced = PreferenceState.IsMotionReduced;
+        _selectedCulture = PreferenceState.Culture;
+        _isCultureAuto = PreferenceState.IsCultureAuto;
+        _selectedCurrency = NormalizeCurrency(PreferenceState.Currency);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private string NormalizeCurrency(string? currency)
+    {
+        return _currencyOptions.FirstOrDefault(candidate => candidate.Code.Equals(currency, StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _currencyOptions.FirstOrDefault(candidate => candidate.IsPrimary)?.Code
+            ?? _currencyOptions.FirstOrDefault(candidate => candidate.Code.Equals("THB", StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _currencyOptions.FirstOrDefault()?.Code
+            ?? "THB";
+    }
+
+    private string NormalizeDefaultProcess(string? processId)
+    {
+        return _referenceData?.Processes.FirstOrDefault(candidate => string.Equals(candidate.Id, processId, StringComparison.OrdinalIgnoreCase))?.Id
+            ?? _referenceData?.Processes.FirstOrDefault()?.Id
+            ?? "fdm";
+    }
+
+    private string? NormalizeDefaultTolerance(string? toleranceId)
+    {
+        return TolerancesForDefaultProcess.FirstOrDefault(candidate => string.Equals(candidate.Id, toleranceId, StringComparison.OrdinalIgnoreCase))?.Id
+            ?? TolerancesForDefaultProcess.FirstOrDefault()?.Id;
+    }
+
+    private string NormalizeDefaultInspection(string? inspectionCode)
+    {
+        return _referenceData?.InspectionLevels.FirstOrDefault(candidate => string.Equals(candidate.Code, inspectionCode, StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _referenceData?.InspectionLevels.FirstOrDefault()?.Code
+            ?? "STANDARD";
+    }
+
+    private string NormalizeDefaultLeadTime(string? leadTimeCode)
+    {
+        return _referenceData?.LeadTimes.FirstOrDefault(candidate => string.Equals(candidate.Code, leadTimeCode, StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _referenceData?.LeadTimes.FirstOrDefault(candidate => string.Equals(candidate.Code, "STANDARD", StringComparison.OrdinalIgnoreCase))?.Code
+            ?? _referenceData?.LeadTimes.FirstOrDefault()?.Code
+            ?? "STANDARD";
+    }
+
+    private static string CurrencyOptionLabel(CurrencyOptionDto currency)
+    {
+        return string.IsNullOrWhiteSpace(currency.Name)
+            ? currency.Code
+            : $"{currency.Code} - {currency.Name}";
+    }
+
+    public void Dispose()
+    {
+        PreferenceState.Changed -= OnPreferencesChanged;
+    }
+}

@@ -5,7 +5,7 @@ public sealed class QuoteEngineAddressSourceTests
     [Fact]
     public void Profile_page_shows_read_only_addresses_with_manage_link_to_web()
     {
-        var profile = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Profile.razor");
+        var profile = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountProfile.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
 
         // Address list is rendered read-only; editing is delegated to the Web account hub.

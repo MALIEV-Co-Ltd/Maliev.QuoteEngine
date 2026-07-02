@@ -39,6 +39,8 @@
                                    ProfileImageUrl="@ProfileImageUrl"
                                    ProfileTier="@ProfileTier"
                                    InitialAuthMode="@AuthMode"
+                                   InitialWorkspacePage="@WorkspacePageQuery"
+                                   InitialSettingsTab="@WorkspaceTabQuery"
                                    AuthReturnUrl="@WorkspaceAuthReturnUrl"
                                    Culture="@Culture"
                                    UploadedParts="@_parts"
@@ -142,6 +144,12 @@
 
     [SupplyParameterFromQuery(Name = "auth")]
     public string? AuthMode { get; set; }
+
+    [SupplyParameterFromQuery(Name = "ws")]
+    public string? WorkspacePageQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? WorkspaceTabQuery { get; set; }
 
     private string? BillingCompanyName => string.IsNullOrWhiteSpace(_profile?.CompanyName) ? null : _profile.CompanyName;
     private string? BillingVatNumber => string.IsNullOrWhiteSpace(_profile?.VatNumber) ? null : _profile.VatNumber;

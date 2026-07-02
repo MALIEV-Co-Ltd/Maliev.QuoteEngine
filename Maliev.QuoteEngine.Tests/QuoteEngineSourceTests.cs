@@ -40,7 +40,7 @@ public sealed class QuoteEngineSourceTests
     public void QuoteEngine_customer_shell_has_multilingual_preference_contract()
     {
         var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");
-        var preferences = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Preferences.razor");
+        var preferences = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountPreferences.razor");
         var service = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "PreferenceService.cs");
         var loader = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
 
@@ -1002,7 +1002,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OpenSettingsPage", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-management-page\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-management-row\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-settings-grid\"", component, StringComparison.Ordinal);
+        // Settings general/profile tabs embed the account components instead of
+        // the old shortcut grid.
+        Assert.Contains("<QeAccountPreferences />", component, StringComparison.Ordinal);
+        Assert.Contains("<QeAccountProfile />", component, StringComparison.Ordinal);
         Assert.Contains("@if (PinnedProjects.Any())", component, StringComparison.Ordinal);
         Assert.Contains("private readonly List<ProjectNavItem> _projects = [];", component, StringComparison.Ordinal);
         Assert.Contains("GetProjectNavigationAsync", component, StringComparison.Ordinal);
@@ -2546,7 +2549,7 @@ public sealed class QuoteEngineSourceTests
     public void Currency_selectors_load_options_from_currency_service()
     {
         var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");
-        var preferences = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Preferences.razor");
+        var preferences = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountPreferences.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
         var program = ReadRepoFile("Maliev.QuoteEngine.Bff", "Program.cs");
         var currencyClient = ReadRepoFile("Maliev.QuoteEngine.Bff", "Clients", "CurrencyServiceClient.cs");
@@ -2570,7 +2573,7 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Preferences_page_persists_customer_quote_defaults_for_new_workspace_parts()
     {
-        var preferences = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Preferences.razor");
+        var preferences = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountPreferences.razor");
         var service = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "PreferenceService.cs");
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
@@ -2607,11 +2610,20 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Profile_page_requires_signed_in_customer_session()
     {
-        var profile = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Profile.razor");
+        var profile = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountProfile.razor");
 
+        // Account pages render inside the workspace shell; the legacy standalone
+        // routes are thin redirects into /quotes?ws=settings.
+        var profilePage = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Profile.razor");
+        var preferencesPage = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Preferences.razor");
+        var shellForAccount = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        Assert.Contains("Navigation.NavigateTo(\"/quotes?ws=settings&tab=profile\", replace: true);", profilePage, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/quotes?ws=settings&tab=general\", replace: true);", preferencesPage, StringComparison.Ordinal);
+        Assert.Contains("<QeAccountProfile />", shellForAccount, StringComparison.Ordinal);
+        Assert.Contains("<QeAccountPreferences />", shellForAccount, StringComparison.Ordinal);
         Assert.Contains("_authStatus = await Api.GetAuthStatusAsync();", profile, StringComparison.Ordinal);
         Assert.Contains("if (!_authStatus.IsSignedIn)", profile, StringComparison.Ordinal);
-        Assert.Contains("Navigation.NavigateTo(\"/auth/sign-in?returnUrl=/profile\"", profile, StringComparison.Ordinal);
+        Assert.Contains("_requiresSignIn = true;", profile, StringComparison.Ordinal);
         Assert.Contains("_profile = await Api.GetProfileAsync();", profile, StringComparison.Ordinal);
         Assert.Contains("_ndas = [.. await Api.GetNdasAsync()];", profile, StringComparison.Ordinal);
         Assert.Contains("_quotes = [.. await Api.GetQuotesAsync()];", profile, StringComparison.Ordinal);

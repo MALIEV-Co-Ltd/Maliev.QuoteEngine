@@ -1,0 +1,347 @@
+@inject QuoteEngineApiClient Api
+@inject NavigationManager Navigation
+
+@if (_requiresSignIn)
+{
+    <div class="empty-state">
+        <strong>@Text("Sign in to see your profile", "เข้าสู่ระบบเพื่อดูโปรไฟล์ของคุณ")</strong>
+        <p>@Text("Your MALIEV account keeps quotes, orders, addresses, and NDAs in one place.", "บัญชี MALIEV ของคุณรวมใบเสนอราคา คำสั่งซื้อ ที่อยู่ และ NDA ไว้ในที่เดียว")</p>
+    </div>
+}
+else if (_profile is null)
+{
+    <MudSkeleton Height="120px" />
+}
+else
+{
+    <section class="account-overview-card">
+        <article class="account-profile-card">
+            @if (!string.IsNullOrWhiteSpace(_profile.ProfileImageUrl))
+            {
+                <img class="account-profile-avatar account-profile-avatar--image" src="@_profile.ProfileImageUrl" alt="" />
+            }
+            else
+            {
+                <span class="account-profile-avatar" aria-hidden="true">@ProfileInitials</span>
+            }
+
+            <div class="account-profile-main">
+                <span class="eyebrow">@_profile.Tier</span>
+                <h2>@_profile.DisplayName</h2>
+                <p>@_profile.Email</p>
+                <div class="account-profile-meta">
+                    <span>@DisplayOrDash(_profile.Phone)</span>
+                    <span>@DisplayOrDash(_profile.CompanyName)</span>
+                    <span>@_profile.PreferredLanguage</span>
+                    <span>@_profile.Timezone</span>
+                </div>
+            </div>
+
+            <div class="account-nda-card">
+                <span class="eyebrow">NDA</span>
+                <strong>@NdaStatus</strong>
+                <small>@NdaExpiryNotice</small>
+            </div>
+        </article>
+
+        <div class="account-stats-grid" aria-label="@Text("Account activity", "กิจกรรมบัญชี")">
+            <div class="account-stat">
+                <strong>@_quotes.Count</strong>
+                <span>@Text("Quotes", "ใบเสนอราคา")</span>
+            </div>
+            <div class="account-stat">
+                <strong>@_orders.Count</strong>
+                <span>@Text("Orders", "คำสั่งซื้อ")</span>
+            </div>
+            <div class="account-stat">
+                <strong>@_addresses.Count</strong>
+                <span>@Text("Addresses", "ที่อยู่")</span>
+            </div>
+            <div class="account-stat">
+                <strong>@ActiveNdaCount</strong>
+                <span>@Text("Active NDAs", "NDA ที่ใช้งานอยู่")</span>
+            </div>
+        </div>
+
+        <div class="account-action-grid" aria-label="@Text("Customer data", "ข้อมูลลูกค้า")">
+            <a href="/quotes/new">
+                <MudIcon Icon="@Icons.Material.Outlined.RequestQuote" Size="Size.Small" />
+                <span>@Text("New quote", "ใบเสนอราคาใหม่")</span>
+            </a>
+            <a href="/account-hub">
+                <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
+                <span>@Text("Profile", "โปรไฟล์")</span>
+            </a>
+            <a href="/account-hub">
+                <MudIcon Icon="@Icons.Material.Outlined.LocationOn" Size="Size.Small" />
+                <span>@Text("Addresses", "ที่อยู่")</span>
+            </a>
+            <a href="/orders">
+                <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Small" />
+                <span>@Text("Orders", "คำสั่งซื้อ")</span>
+            </a>
+            <a href="/ndas">
+                <MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" />
+                <span>NDAs</span>
+            </a>
+            <a href="/documents">
+                <MudIcon Icon="@Icons.Material.Outlined.Folder" Size="Size.Small" />
+                <span>@Text("Documents", "เอกสาร")</span>
+            </a>
+            <a href="/preferences">
+                <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
+                <span>@Text("Preferences", "การตั้งค่า")</span>
+            </a>
+        </div>
+
+        <section class="profile-quote-history" aria-label="@Text("Recent quotes", "ใบเสนอราคาล่าสุด")">
+            <div class="profile-quote-heading">
+                <div>
+                    <span class="eyebrow">@Text("Quotes", "ใบเสนอราคา")</span>
+                    <h2>@Text("Recent quote history", "ประวัติใบเสนอราคาล่าสุด")</h2>
+                </div>
+                <a class="secondary-button" href="/quotes/new">@Text("Start quote", "เริ่มขอราคา")</a>
+            </div>
+
+            @if (_quotes.Count == 0)
+            {
+                <div class="empty-state">
+                    <strong>@Text("No formal quotes yet", "ยังไม่มีใบเสนอราคาอย่างเป็นทางการ")</strong>
+                    <p>@Text("Upload and configure parts to generate your first customer quote.", "อัปโหลดและตั้งค่าชิ้นงานเพื่อสร้างใบเสนอราคาแรกของคุณ")</p>
+                </div>
+            }
+            else
+            {
+                <div class="profile-quote-list">
+                    @foreach (var quote in _quotes.Take(5))
+                    {
+                        <article class="profile-quote-row">
+                            <a href="/quotes/@quote.QuoteId">
+                                <span>@quote.QuoteNumber</span>
+                                <strong>@FormatMoney(quote.Total, quote.Currency)</strong>
+                                <small>@quote.Status · @FormatDate(quote.UpdatedAt)</small>
+                            </a>
+                            @if (!string.IsNullOrWhiteSpace(quote.PdfUrl))
+                            {
+                                <a class="profile-quote-pdf" href="@quote.PdfUrl" target="_blank" rel="noopener">PDF</a>
+                            }
+                        </article>
+                    }
+                </div>
+            }
+        </section>
+    </section>
+
+    <section id="addresses" class="profile-address-book">
+        <div class="profile-address-heading">
+            <div>
+                <span class="eyebrow">@Text("Address book", "สมุดที่อยู่")</span>
+                <h2>@Text("Billing and shipping addresses", "ที่อยู่เรียกเก็บเงินและจัดส่ง")</h2>
+            </div>
+            <a href="/account-hub" class="secondary-button">@Text("Manage addresses", "จัดการที่อยู่")</a>
+        </div>
+
+        <div class="profile-address-list">
+            @if (_addressesLoading)
+            {
+                <MudSkeleton Height="96px" />
+                <MudSkeleton Height="96px" />
+            }
+            else if (_addresses.Count == 0)
+            {
+                <div class="empty-state">
+                    <strong>@Text("No addresses yet", "ยังไม่มีที่อยู่")</strong>
+                    <p>@Text("Add addresses on your MALIEV account page.", "เพิ่มที่อยู่ในหน้าบัญชี MALIEV ของคุณ")</p>
+                    <a href="/account-hub" class="secondary-button">@Text("Go to account", "ไปยังบัญชี")</a>
+                </div>
+            }
+            else
+            {
+                @foreach (var address in _addresses)
+                {
+                    <article class="profile-address-card">
+                        <div>
+                            <span>@AddressTitle(address)</span>
+                            <strong>@DisplayAddressType(address.Type)</strong>
+                        </div>
+                        <p>@AddressLines(address)</p>
+                        <small>@ContactLine(address)</small>
+                        @if (address.IsDefault)
+                        {
+                            <div class="profile-address-card-actions">
+                                <span class="profile-address-default">@Text("Default", "ค่าเริ่มต้น") @DisplayAddressType(address.Type)</span>
+                            </div>
+                        }
+                    </article>
+                }
+                <p class="profile-address-manage-hint">
+                    <a href="/account-hub">@Text("Edit or add addresses on your MALIEV account page", "แก้ไขหรือเพิ่มที่อยู่ในหน้าบัญชี MALIEV")</a>
+                </p>
+            }
+        </div>
+    </section>
+}
+
+@code {
+    private CustomerProfileResponse? _profile;
+    private QuoteAuthStatusResponse _authStatus = new(false, null, null);
+    private List<CustomerAddressDto> _addresses = [];
+    private List<CustomerNdaDto> _ndas = [];
+    private List<CustomerQuoteSummaryDto> _quotes = [];
+    private List<CustomerOrderSummaryDto> _orders = [];
+    private bool _addressesLoading;
+    private bool _requiresSignIn;
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
+    private bool IsThai => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture;
+
+    private string ProfileInitials => GetInitials(_profile?.DisplayName ?? Text("Customer", "ลูกค้า"));
+    private int ActiveNdaCount => _ndas.Count(nda => nda.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
+    private CustomerNdaDto? ActiveNda => _ndas.FirstOrDefault(nda => nda.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
+    private string NdaStatus => DisplayNdaStatus(ActiveNda?.Status ?? _profile?.NdaStatus);
+    private string NdaExpiryNotice
+    {
+        get
+        {
+            var expiry = ActiveNda?.ExpiresAt ?? _profile?.NdaExpiresAt;
+            if (!expiry.HasValue)
+            {
+                return Text("No expiry date on file.", "ไม่มีวันหมดอายุในระบบ");
+            }
+
+            var days = (expiry.Value.Date - DateTimeOffset.UtcNow.Date).Days;
+            return days switch
+            {
+                < 0 => $"{Text("Expired", "หมดอายุแล้ว")} {Math.Abs(days)} {Text("days ago.", "วันที่ผ่านมา")}",
+                0 => Text("Expires today.", "หมดอายุวันนี้"),
+                <= 30 => $"{Text("Expires in", "หมดอายุใน")} {days} {Text("days.", "วัน")}",
+                _ => $"{Text("Expires", "หมดอายุ")} {expiry.Value.ToString("dd MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)))}."
+            };
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _authStatus = await Api.GetAuthStatusAsync();
+        if (!_authStatus.IsSignedIn)
+        {
+            _requiresSignIn = true;
+            return;
+        }
+
+        _profile = await Api.GetProfileAsync();
+        _ndas = [.. await Api.GetNdasAsync()];
+        _quotes = [.. await Api.GetQuotesAsync()];
+        _orders = [.. await Api.GetOrdersAsync()];
+        await LoadAddressesAsync();
+    }
+
+    private async Task LoadAddressesAsync()
+    {
+        _addressesLoading = true;
+        try
+        {
+            _addresses = [.. await Api.GetAddressesAsync()];
+        }
+        catch
+        {
+            _addresses = [];
+        }
+        finally
+        {
+            _addressesLoading = false;
+        }
+    }
+
+    private static string DisplayOrDash(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
+    private string FormatMoney(decimal amount, string currency)
+    {
+        return $"{amount.ToString("N2", System.Globalization.CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)))} {currency}";
+    }
+
+    private string FormatDate(DateTimeOffset value)
+    {
+        return value.ToLocalTime().ToString("dd MMM yyyy", System.Globalization.CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)));
+    }
+
+    private static string GetInitials(string value)
+    {
+        var parts = value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return "C";
+        }
+
+        var initials = string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+        return string.IsNullOrWhiteSpace(initials) ? "C" : initials;
+    }
+
+    private string AddressTitle(CustomerAddressDto address)
+    {
+        if (string.Equals(address.PlaceLabel, "Other", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(address.PlaceLabelOther))
+        {
+            return address.PlaceLabelOther;
+        }
+
+        if (string.IsNullOrWhiteSpace(address.PlaceLabel))
+        {
+            return Text("Address", "ที่อยู่");
+        }
+
+        return DisplayPlaceLabel(address.PlaceLabel);
+    }
+
+    private static string AddressLines(CustomerAddressDto address)
+    {
+        var parts = new[]
+        {
+            address.AddressLine1,
+            address.District,
+            address.City,
+            address.StateProvince,
+            address.PostalCode
+        };
+        return string.Join(", ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private static string ContactLine(CustomerAddressDto address)
+    {
+        var parts = new[] { address.RecipientName, address.RecipientPhone };
+        return string.Join(" · ", parts.Where(part => !string.IsNullOrWhiteSpace(part)));
+    }
+
+    private string DisplayAddressType(string? type) => type switch
+    {
+        "Billing" => Text("Billing", "เรียกเก็บเงิน"),
+        "Shipping" => Text("Shipping", "จัดส่ง"),
+        _ => DisplayOrDash(type)
+    };
+
+    private string DisplayPlaceLabel(string? label) => label switch
+    {
+        "Home" => Text("Home", "บ้าน"),
+        "Work" => Text("Work", "ที่ทำงาน"),
+        "Other" => Text("Other", "อื่นๆ"),
+        _ => DisplayOrDash(label)
+    };
+
+    private string DisplayNdaStatus(string? status) => status switch
+    {
+        "Active" => Text("Active", "ใช้งานอยู่"),
+        "Expired" => Text("Expired", "หมดอายุ"),
+        "Pending" => Text("Pending", "รอดำเนินการ"),
+        _ => Text("Not active", "ยังไม่เปิดใช้งาน")
+    };
+
+    private string Text(string en, string th)
+    {
+        return IsThai ? th : en;
+    }
+}
