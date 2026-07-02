@@ -6436,11 +6436,14 @@ b {
     --ms-bg2: #fbfbfc;
     --ms-soft: rgba(0, 0, 0, 0.46);
     --ms-track: rgba(0, 0, 0, 0.12);
+    --ms-grid-line: rgba(26, 26, 26, 0.045);
+    --ms-grid-line-strong: rgba(26, 26, 26, 0.085);
     position: fixed;
     inset: 0;
     z-index: 1000;
     display: grid;
     place-items: center;
+    overflow: hidden;
     background: radial-gradient(120% 90% at 50% 32%, var(--ms-bg2), var(--paper) 78%);
     color: var(--ink);
     transition: opacity 320ms ease, visibility 320ms ease;
@@ -6448,10 +6451,64 @@ b {
     -webkit-user-select: none;
 }
 
+/* Engineering graph-paper backdrop: fine 32px cells with a strong line every
+   fifth cell, drifting one major cell per minute, faded out radially so the
+   story text stays on a calm center. */
+.startup-screen::before {
+    content: "";
+    position: absolute;
+    inset: -180px;
+    z-index: 0;
+    background-image:
+        linear-gradient(var(--ms-grid-line) 1px, transparent 1px),
+        linear-gradient(90deg, var(--ms-grid-line) 1px, transparent 1px),
+        linear-gradient(var(--ms-grid-line-strong) 1px, transparent 1px),
+        linear-gradient(90deg, var(--ms-grid-line-strong) 1px, transparent 1px);
+    background-size: 32px 32px, 32px 32px, 160px 160px, 160px 160px;
+    -webkit-mask-image: radial-gradient(78% 68% at 50% 42%, rgba(0, 0, 0, 0.9), transparent 78%);
+    mask-image: radial-gradient(78% 68% at 50% 42%, rgba(0, 0, 0, 0.9), transparent 78%);
+    animation: ms-grid-drift 60s linear infinite;
+    pointer-events: none;
+}
+
+/* A slow accent bloom breathing behind the stage. */
+.startup-screen::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 34%;
+    z-index: 0;
+    width: 58vmax;
+    height: 58vmax;
+    margin: -29vmax 0 0 -29vmax;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 10%, transparent), transparent 72%);
+    animation: ms-glow-breathe 12s ease-in-out infinite alternate;
+    pointer-events: none;
+}
+
+@keyframes ms-grid-drift {
+    to {
+        transform: translate3d(160px, 160px, 0);
+    }
+}
+
+@keyframes ms-glow-breathe {
+    from {
+        transform: translate3d(-3%, -2%, 0) scale(0.94);
+        opacity: 0.8;
+    }
+    to {
+        transform: translate3d(3%, 2%, 0) scale(1.06);
+        opacity: 1;
+    }
+}
+
 :root[data-maliev-theme="dark"] .startup-screen {
     --ms-bg2: #101218;
     --ms-soft: rgba(255, 255, 255, 0.5);
     --ms-track: rgba(255, 255, 255, 0.16);
+    --ms-grid-line: rgba(255, 255, 255, 0.045);
+    --ms-grid-line-strong: rgba(255, 255, 255, 0.085);
     background: radial-gradient(120% 90% at 50% 32%, #101218, #0a0b0e 78%);
     color: #e6e8ec;
 }
@@ -6488,7 +6545,8 @@ body.quote-ready .startup-screen {
     max-width: 24ch;
     opacity: 0;
     transform: translateY(14px);
-    transition: opacity 0.6s ease, transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1);
+    filter: blur(10px);
+    transition: opacity 0.6s ease, transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1), filter 0.7s ease;
     /* inherit the startup-screen ink so every beat matches; otherwise the global
        `p { color: var(--muted) }` rule leaks in and greys out the plain beats. */
     color: inherit;
@@ -6502,6 +6560,7 @@ body.quote-ready .startup-screen {
 .ms-beat--on {
     opacity: 1;
     transform: none;
+    filter: blur(0);
 }
 
 .ms-beat--dim {
@@ -6515,11 +6574,73 @@ body.quote-ready .startup-screen {
 }
 
 .ms-beat--finale {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 14px;
     max-width: none;
+}
+
+/* Machining-circle motif behind the finale wordmark: a dashed toolpath ring
+   turning slowly, with a soft solid ring inside it. Both are decorative and
+   sit behind the text. */
+.ms-beat--finale::before,
+.ms-beat--finale::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    z-index: -1;
+    border-radius: 50%;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1s ease 0.35s;
+}
+
+.ms-beat--finale::before {
+    width: clamp(240px, 44vmin, 400px);
+    height: clamp(240px, 44vmin, 400px);
+    margin: calc(clamp(240px, 44vmin, 400px) / -2) 0 0 calc(clamp(240px, 44vmin, 400px) / -2);
+    border: 1px dashed color-mix(in srgb, currentColor 32%, transparent);
+}
+
+.ms-beat--finale::after {
+    width: clamp(190px, 34vmin, 310px);
+    height: clamp(190px, 34vmin, 310px);
+    margin: calc(clamp(190px, 34vmin, 310px) / -2) 0 0 calc(clamp(190px, 34vmin, 310px) / -2);
+    border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+}
+
+.ms-beat--finale.ms-beat--on::before {
+    opacity: 1;
+    animation: ms-ring-turn 40s linear infinite;
+}
+
+.ms-beat--finale.ms-beat--on::after {
+    opacity: 1;
+    animation: ms-ring-turn 64s linear infinite reverse;
+}
+
+@keyframes ms-ring-turn {
+    to {
+        rotate: 360deg;
+    }
+}
+
+.ms-beat--finale.ms-beat--on .ms-tagline {
+    animation: ms-tagline-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) 220ms both;
+}
+
+@keyframes ms-tagline-rise {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: none;
+    }
 }
 
 .ms-wordmark {
@@ -6652,7 +6773,7 @@ body.quote-skip-ready:not(.quote-ready) .ms-skip {
     display: block;
     width: var(--ms-progress, 0%);
     height: 100%;
-    background: currentColor;
+    background: linear-gradient(90deg, var(--accent), var(--accent-strong));
     transition: width 0.18s ease;
 }
 
@@ -6663,11 +6784,20 @@ body.quote-loading-failed .ms-stage {
 :root[data-motion-reduced="true"] .ms-beat {
     transition: opacity 0.2s ease;
     transform: none;
+    filter: none;
 }
 
 :root[data-motion-reduced="true"] .ms-wordmark::after {
     animation: none;
     background-position: 200% 0;
+}
+
+:root[data-motion-reduced="true"] .startup-screen::before,
+:root[data-motion-reduced="true"] .startup-screen::after,
+:root[data-motion-reduced="true"] .ms-beat--finale.ms-beat--on::before,
+:root[data-motion-reduced="true"] .ms-beat--finale.ms-beat--on::after,
+:root[data-motion-reduced="true"] .ms-beat--finale.ms-beat--on .ms-tagline {
+    animation: none;
 }
 
 #components-reconnect-modal.maliev-reconnect-modal {

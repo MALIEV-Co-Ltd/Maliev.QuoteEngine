@@ -3023,6 +3023,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(":root[data-culture=\"th-TH\"] .ms-beat", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".maliev-logo-loader", styles, StringComparison.Ordinal);
 
+        // Story cinematics: engineering-grid backdrop, blur-to-sharp beat reveal,
+        // machining-ring finale, staggered tagline — all disabled under reduced motion.
+        Assert.Contains("@keyframes ms-grid-drift", styles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes ms-glow-breathe", styles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes ms-ring-turn", styles, StringComparison.Ordinal);
+        Assert.Contains("@keyframes ms-tagline-rise", styles, StringComparison.Ordinal);
+        Assert.Contains("filter: blur(10px);", styles, StringComparison.Ordinal);
+        Assert.Contains(".ms-beat--finale.ms-beat--on::before", styles, StringComparison.Ordinal);
+        Assert.Contains(":root[data-motion-reduced=\"true\"] .startup-screen::before,", styles, StringComparison.Ordinal);
+
         // Loader: real WASM progress contract + story timeline + dismissal gate.
         Assert.Contains("startBlazor", loaderScript, StringComparison.Ordinal);
         Assert.Contains("loadBootResource", loaderScript, StringComparison.Ordinal);
