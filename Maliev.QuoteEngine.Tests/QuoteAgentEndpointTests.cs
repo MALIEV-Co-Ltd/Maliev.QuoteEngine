@@ -77,6 +77,24 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_stream_allows_configured_cors_preflight()
+    {
+        using var client = factory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/quote/v1/agent/messages/stream");
+        request.Headers.Add("Origin", "http://localhost:5037");
+        request.Headers.Add("Access-Control-Request-Method", "POST");
+        request.Headers.Add("Access-Control-Request-Headers", "content-type");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.True(response.Headers.TryGetValues("Access-Control-Allow-Origin", out var origins));
+        Assert.Contains("http://localhost:5037", origins);
+        Assert.True(response.Headers.TryGetValues("Access-Control-Allow-Methods", out var methods));
+        Assert.Contains(methods, value => value.Contains("POST", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Agent_message_starts_anonymous_quote_engine_session_with_gate_state()
     {
         var chatbot = new RecordingChatbotServiceClient();
@@ -9985,4 +10003,3 @@ Customer message:
         return new Guid(idBytes);
     }
 }
-

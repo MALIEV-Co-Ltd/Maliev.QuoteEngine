@@ -64,6 +64,7 @@ builder.Services.AddSingleton<IPostConfigureOptions<KeyManagementOptions>>(sp =>
         }
     }));
 builder.Services.AddAuthorization();
+builder.AddStandardCors();
 builder.Services.AddSingleton<QuoteEnginePrototypeStore>();
 builder.Services.AddScoped<CustomerSessionResolver>();
 builder.Services.AddScoped<AnonymousVisitorCookie>();
@@ -201,6 +202,8 @@ app.Use(async (context, next) =>
 app.UseStaticFiles();
 app.MapStaticAssets().ShortCircuit();
 
+app.UseRouting();
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
