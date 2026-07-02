@@ -6634,12 +6634,24 @@ Customer message:
         var callbackBaseUrl = configuration["QuoteAgent:ThinkingCallbackBaseUrl"]?.Trim();
         if (string.IsNullOrWhiteSpace(callbackBaseUrl) ||
             !Uri.TryCreate(callbackBaseUrl.TrimEnd('/'), UriKind.Absolute, out var baseUri) ||
-            (baseUri.Scheme != Uri.UriSchemeHttps && baseUri.Scheme != Uri.UriSchemeHttp))
+            !IsSafeThinkingCallbackBaseUri(baseUri))
         {
             return null;
         }
 
         return new Uri(baseUri, $"/quote/v1/agent/sessions/{sessionId:D}/thinking").ToString();
+    }
+
+    private bool IsSafeThinkingCallbackBaseUri(Uri baseUri)
+    {
+        if (baseUri.Scheme == Uri.UriSchemeHttps)
+        {
+            return true;
+        }
+
+        return baseUri.Scheme == Uri.UriSchemeHttp &&
+            baseUri.IsLoopback &&
+            !environment.IsProduction();
     }
 
     private static string? ReadString(

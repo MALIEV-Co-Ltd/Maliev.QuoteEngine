@@ -928,6 +928,51 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_stream_with_production_http_callback_base_url_suppresses_callback_url()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        var sessionId = Guid.Parse("3ea413d7-14c1-4125-8b38-2054a3f6a629");
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AnonymousVisitor:SigningKey"] = "quote-agent-production-callback-test-signing-key",
+                    ["QuoteAgent:EnableThinkingCallbacks"] = "true",
+                    ["QuoteAgent:ContextSigningKey"] = "maliev-local-development-quote-agent-context-key",
+                    ["QuoteAgent:ThinkingCallbackBaseUrl"] = "http://quoteengine-bff"
+                });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(
+                    new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                SessionId = sessionId,
+                Message = "Show the reasoning steps for this production quote.",
+                Language = "en"
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        Assert.Null(chatbot.LastStreamRequest!.CallbackUrl);
+    }
+
+    [Fact]
     public async Task Agent_message_stream_with_uploaded_sketch_inlines_storage_media_for_chatbot()
     {
         var chatbot = new RecordingChatbotServiceClient();
