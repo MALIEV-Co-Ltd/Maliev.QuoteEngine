@@ -270,7 +270,7 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
                     response.StatusCode,
                     failureBody);
                 response.Dispose();
-                return StreamOpenResult.Failed("ChatbotService stream request failed.");
+                return StreamOpenResult.Failed(BuildStreamFailureError(failureBody));
             }
 
             return StreamOpenResult.Success(response);
@@ -347,6 +347,59 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
         return body.Length <= MaxFailureBodyLogCharacters
             ? body
             : string.Concat(body.AsSpan(0, MaxFailureBodyLogCharacters), "...");
+    }
+
+    private static string BuildStreamFailureError(string failureBody)
+    {
+        const string prefix = "ChatbotService stream request failed.";
+        if (string.IsNullOrWhiteSpace(failureBody) ||
+            failureBody.Equals("<empty>", StringComparison.Ordinal))
+        {
+            return prefix;
+        }
+
+        var detail = ExtractFailureDetail(failureBody);
+        return string.IsNullOrWhiteSpace(detail)
+            ? prefix
+            : $"{prefix.TrimEnd('.')}: {detail}";
+    }
+
+    private static string? ExtractFailureDetail(string failureBody)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(failureBody);
+            var root = document.RootElement;
+            if (root.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var propertyName in new[] { "error", "detail", "message", "title" })
+                {
+                    if (root.TryGetProperty(propertyName, out var property) &&
+                        property.ValueKind == JsonValueKind.String)
+                    {
+                        return NormalizeFailureDetail(property.GetString());
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return NormalizeFailureDetail(failureBody);
+    }
+
+    private static string? NormalizeFailureDetail(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var normalized = value.ReplaceLineEndings(" ").Trim();
+        return normalized.Length <= MaxFailureBodyLogCharacters
+            ? normalized
+            : string.Concat(normalized.AsSpan(0, MaxFailureBodyLogCharacters), "...");
     }
 
     private static ChatbotMessageStreamEvent CreateErrorEvent(string error)

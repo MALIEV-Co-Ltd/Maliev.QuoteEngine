@@ -81,7 +81,7 @@ public sealed class ChatbotServiceClientContractTests
         Assert.Equal("/chatbot/v1/messages/stream", handler.Request?.RequestUri?.AbsolutePath);
         var error = Assert.Single(events);
         Assert.Equal("error", error.Type);
-        Assert.False(string.IsNullOrWhiteSpace(error.Error));
+        Assert.Equal("ChatbotService stream request failed: CallbackUrl must be same-origin.", error.Error);
     }
 
     [Fact]
