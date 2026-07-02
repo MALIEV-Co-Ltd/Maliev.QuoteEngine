@@ -2270,9 +2270,14 @@ public sealed class QuoteEngineSourceTests
         var chatbotJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "maliev-chatbot.js");
         var composerJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-agent-composer.js");
 
-        Assert.Contains("var authPath = \"/auth/sign-in?returnUrl=%2Fauth%2Fchatbot-complete\";", shell, StringComparison.Ordinal);
-        Assert.Contains("malievChatbot.openSignInPopup", shell, StringComparison.Ordinal);
-        Assert.Contains("listenForAuthComplete", shell, StringComparison.Ordinal);
+        // Sign-in is a same-tab handoff to the MALIEV account page with a returnUrl
+        // back to the current conversation — never a popup, which re-rendered the
+        // same shell in a second window.
+        Assert.DoesNotContain("malievChatbot.openSignInPopup", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("listenForAuthComplete", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("%2Fauth%2Fchatbot-complete", shell, StringComparison.Ordinal);
+        var continueWithGoogle = ExtractSourceBlock(shell, "private void ContinueWithGoogle()", "public void OnAuthPopupCompleted()");
+        Assert.Contains("NavigateToMalievAccount();", continueWithGoogle, StringComparison.Ordinal);
         Assert.Contains("public void OnAuthPopupCompleted()", shell, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(Navigation.Uri, forceLoad: true);", shell, StringComparison.Ordinal);
         Assert.Contains("if (SessionId == _loadedSessionId)", shell, StringComparison.Ordinal);

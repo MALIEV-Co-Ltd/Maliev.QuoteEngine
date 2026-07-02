@@ -2892,16 +2892,13 @@
         }
     }
 
-    private async Task ContinueWithGoogle()
+    private void ContinueWithGoogle()
     {
-        var authPath = "/auth/sign-in?returnUrl=%2Fauth%2Fchatbot-complete";
-        var opened = await Js.InvokeAsync<bool>("malievChatbot.openSignInPopup", authPath);
-        if (!opened)
-        {
-            NavigateToMalievAccount();
-            return;
-        }
-        await _composerModule!.InvokeVoidAsync("listenForAuthComplete", _composerDotNetRef);
+        // Same-tab handoff: the secure MALIEV account page signs the customer in
+        // and returnUrl brings them straight back to this conversation. No popup —
+        // a popup re-renders this same shell and strands the customer in a second
+        // window.
+        NavigateToMalievAccount();
     }
 
     [JSInvokable]

@@ -12810,12 +12810,16 @@ body.mud-blazor {
     box-shadow: var(--maliev-shadow-ring-light);
 }
 
-/* Tooltip styled as a compact app pill. */
+/* Tooltip styled as a compact app pill. Tooltips invert against the active
+   theme (dark pill on light, light pill on dark) and use a plain drop shadow —
+   the multi-layer card shadow's inset ring reads as a stray light border on an
+   inverted surface. */
 .mud-tooltip {
     background-color: var(--ink) !important;
     color: var(--paper);
-    border-radius: var(--maliev-radius-sm);
-    box-shadow: var(--maliev-shadow-card);
+    border-radius: var(--maliev-radius-md);
+    border: 0;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
     font-family: inherit;
     font-size: var(--maliev-font-micro);
     font-weight: 500;
@@ -12831,10 +12835,11 @@ body.mud-blazor {
     display: block;
     max-width: min(260px, calc(100vw - 32px));
     padding: 6px 10px;
-    border-radius: var(--maliev-radius-sm);
-    background: var(--ink);
-    color: var(--paper);
-    box-shadow: var(--maliev-shadow-card);
+    border: 0;
+    border-radius: var(--maliev-radius-md);
+    background: var(--qe-agent-inverse, var(--ink));
+    color: var(--qe-agent-inverse-text, var(--paper));
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
     font-size: var(--maliev-font-micro);
     font-weight: 500;
     opacity: 0;
@@ -12851,7 +12856,7 @@ body.mud-blazor {
     bottom: 100%;
     width: 8px;
     height: 8px;
-    background: var(--ink);
+    background: var(--qe-agent-inverse, var(--ink));
     transform: translate(-50%, 4px) rotate(45deg);
 }
 
@@ -12886,8 +12891,8 @@ body.mud-blazor {
     min-height: 18px;
     padding: 1px 6px;
     border-radius: 5px;
-    background: color-mix(in srgb, var(--paper) 14%, transparent);
-    color: var(--paper);
+    background: color-mix(in srgb, currentColor 16%, transparent);
+    color: inherit;
     font-size: 11px;
     line-height: 1;
 }
