@@ -6067,6 +6067,11 @@ Customer message:
     {
         if (!string.IsNullOrWhiteSpace(attachment.StoragePath))
         {
+            if (ShouldUseSignedUrlForChatbotAttachment(attachmentType))
+            {
+                return await ResolveSketchUrlAsync(attachment.StoragePath);
+            }
+
             var inlineData = await TryBuildInlineAttachmentDataUrlAsync(
                 attachment.StoragePath,
                 attachment.ContentType,
@@ -6129,6 +6134,10 @@ Customer message:
         attachmentType.Equals("pdf", StringComparison.OrdinalIgnoreCase)
             ? ChatbotInlinePdfMaxBytes
             : ChatbotInlineImageMaxBytes;
+
+    private static bool ShouldUseSignedUrlForChatbotAttachment(string attachmentType) =>
+        attachmentType.Equals("video", StringComparison.OrdinalIgnoreCase) ||
+        attachmentType.Equals("audio", StringComparison.OrdinalIgnoreCase);
 
     private static IEnumerable<QuoteAgentAttachmentDto> BuildWorkbenchAttachmentCandidates(
         IReadOnlyCollection<QuoteAgentAttachmentDto> attachments,
@@ -6325,6 +6334,16 @@ Customer message:
         if (contentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
         {
             return "pdf";
+        }
+
+        if (contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase))
+        {
+            return "video";
+        }
+
+        if (contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase))
+        {
+            return "audio";
         }
 
         if (contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase))

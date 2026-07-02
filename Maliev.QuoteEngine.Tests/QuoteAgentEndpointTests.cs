@@ -980,6 +980,56 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_stream_with_stored_video_uses_signed_url_for_chatbot_media()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(new RecordingUploadServiceClient());
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        const string storagePath = "quotes/temp/session/customer-walkaround.mp4";
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Use this video to quote the part.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "customer-walkaround.mp4",
+                        ContentType = "video/mp4",
+                        FileSizeBytes = 4_200_000,
+                        Kind = "video",
+                        StoragePath = storagePath
+                    }
+                ]
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
+        Assert.Equal("video", attachment.Type);
+        Assert.Equal("video/mp4", attachment.MimeType);
+        Assert.Equal("customer-walkaround.mp4", attachment.Filename);
+        Assert.Equal(
+            $"https://upload.example.test/download/{Uri.EscapeDataString(storagePath)}",
+            attachment.Url);
+    }
+
+    [Fact]
     public async Task Agent_message_stream_skips_storage_media_when_inline_download_fails()
     {
         var chatbot = new RecordingChatbotServiceClient();
@@ -1026,7 +1076,7 @@ Customer message:
     }
 
     [Fact]
-    public async Task Agent_message_stream_skips_unsupported_chatbot_media_attachments()
+    public async Task Agent_message_stream_forwards_gemini_supported_media_and_skips_unsupported_attachments()
     {
         var chatbot = new RecordingChatbotServiceClient();
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
@@ -1062,6 +1112,22 @@ Customer message:
                         FileSizeBytes = 120_000,
                         Kind = "sketch",
                         Url = "https://files.example.test/manufacturing-sketch.png"
+                    },
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "walkaround.mp4",
+                        ContentType = "video/mp4",
+                        FileSizeBytes = 4_200_000,
+                        Kind = "video",
+                        Url = "https://files.example.test/walkaround.mp4"
+                    },
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "spoken-requirements.mp3",
+                        ContentType = "audio/mpeg",
+                        FileSizeBytes = 420_000,
+                        Kind = "audio",
+                        Url = "https://files.example.test/spoken-requirements.mp3"
                     }
                 ]
             }, options: JsonOptions)
@@ -1072,11 +1138,24 @@ Customer message:
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(chatbot.LastStreamRequest);
-        var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
-        Assert.Equal("image", attachment.Type);
-        Assert.Equal("image/png", attachment.MimeType);
-        Assert.Equal("manufacturing-sketch.png", attachment.Filename);
-        Assert.Equal("https://files.example.test/manufacturing-sketch.png", attachment.Url);
+        Assert.NotNull(chatbot.LastStreamRequest!.Attachments);
+        Assert.Equal(3, chatbot.LastStreamRequest.Attachments!.Count);
+        Assert.DoesNotContain(chatbot.LastStreamRequest.Attachments, attachment => attachment.Filename == "bracket.glb");
+
+        var image = Assert.Single(chatbot.LastStreamRequest.Attachments, attachment => attachment.Filename == "manufacturing-sketch.png");
+        Assert.Equal("image", image.Type);
+        Assert.Equal("image/png", image.MimeType);
+        Assert.Equal("https://files.example.test/manufacturing-sketch.png", image.Url);
+
+        var video = Assert.Single(chatbot.LastStreamRequest.Attachments, attachment => attachment.Filename == "walkaround.mp4");
+        Assert.Equal("video", video.Type);
+        Assert.Equal("video/mp4", video.MimeType);
+        Assert.Equal(4_200_000, video.SizeBytes);
+
+        var audio = Assert.Single(chatbot.LastStreamRequest.Attachments, attachment => attachment.Filename == "spoken-requirements.mp3");
+        Assert.Equal("audio", audio.Type);
+        Assert.Equal("audio/mpeg", audio.MimeType);
+        Assert.Equal(420_000, audio.SizeBytes);
     }
 
     [Fact]
