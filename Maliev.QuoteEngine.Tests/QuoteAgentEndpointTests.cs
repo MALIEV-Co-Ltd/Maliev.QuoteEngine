@@ -1425,6 +1425,55 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_with_uploaded_part_uses_part_aware_fallback_when_chatbot_returns_generic_apology()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "I apologize for the inconvenience. Something unexpected occurred. Please try again, or contact our support team at info@maliev.com."
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "แบบนี้เท่าไหร่",
+            Language = "th",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "PA6 sample.stl",
+                    ContentType = "model/stl",
+                    FileSizeBytes = 240_000,
+                    Kind = "cad",
+                    StoragePath = "quotes/temp/pa6-sample.stl"
+                }
+            ]
+        });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(body.Artifacts, artifact =>
+            artifact.ArtifactType == "viewer" &&
+            artifact.Title.Contains("PA6 sample.stl", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain("Describe the part you need", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("I apologize for the inconvenience", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("PA6 sample.stl", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("quantity", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("lead time", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(body.Gates, gate => gate.Code == "configuration_complete" && gate.Status == "pending");
+        Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status == "pending");
+    }
+
+    [Fact]
     public async Task Agent_message_with_cad_attachment_materializes_analysis_without_premature_price()
     {
         var chatbot = new RecordingChatbotServiceClient();

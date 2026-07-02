@@ -8269,10 +8269,41 @@ Customer message:
             return "I created a fallback 3D preview draft you can inspect, rate, and comment on while the assistant backend reconnects.";
         }
 
-        var hasParts = state.Parts.Count > 0;
-        return hasParts
-            ? "Tell me the material, finish, tolerance, quantity, or lead time you want, or describe the part for a 3D preview."
-            : "Describe the part you need — shape, size, material, and quantity — and I can create a 3D preview and estimate for you.";
+        if (state.Parts.Count > 0)
+        {
+            return BuildPartAwareFallbackAnswer(state);
+        }
+
+        return "Describe the part you need - shape, size, material, and quantity - and I can create a 3D preview and estimate for you.";
+    }
+
+    private static string BuildPartAwareFallbackAnswer(QuoteAgentStateResponse state)
+    {
+        var partNames = string.Join(
+            ", ",
+            state.Parts
+                .Select(part => string.IsNullOrWhiteSpace(part.FileName) ? "uploaded part" : part.FileName.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(3));
+        if (string.IsNullOrWhiteSpace(partNames))
+        {
+            partNames = "the uploaded part";
+        }
+
+        if (state.Estimate is not null)
+        {
+            return $"I have {partNames} and the current estimate is {state.Estimate.Total:0.##} {state.Estimate.Currency}.";
+        }
+
+        var configurationGate = state.Gates.FirstOrDefault(gate =>
+            gate.Code.Equals("configuration_complete", StringComparison.OrdinalIgnoreCase));
+        if (configurationGate is not null &&
+            !configurationGate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"I have {partNames} ready for quoting, but pricing still needs confirmed process/material, finish/tolerance, quantity, and lead time.";
+        }
+
+        return $"I have {partNames} ready for quoting. Pricing is not available yet, so I will need to calculate the estimate before formal quote or order steps.";
     }
 
     private sealed record AgentCheckoutAddressValidationResult(
