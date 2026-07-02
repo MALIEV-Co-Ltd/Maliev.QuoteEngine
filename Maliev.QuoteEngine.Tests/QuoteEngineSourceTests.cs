@@ -70,10 +70,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("family=Noto+Sans:wght@400..700&family=Noto+Sans+Thai:wght@100..900", index, StringComparison.Ordinal);
         Assert.DoesNotContain("family=Albert", index, StringComparison.Ordinal);
         Assert.DoesNotContain("family=Geist", index, StringComparison.Ordinal);
-        Assert.Contains("FontFamily = [\"Noto Sans\", \"Noto Sans Thai\", \"sans-serif\"]", layout, StringComparison.Ordinal);
+        Assert.Contains("FontFamily = [\"-apple-system\", \"BlinkMacSystemFont\", \"Segoe UI Variable Text\", \"Segoe UI\", \"Noto Sans\", \"Noto Sans Thai\", \"sans-serif\"]", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("FontFamily = [\"Geist\"", layout, StringComparison.Ordinal);
-        Assert.Contains("--maliev-font-sans-en: \"Noto Sans\", sans-serif;", styles, StringComparison.Ordinal);
-        Assert.Contains("--maliev-font-sans-th: \"Noto Sans Thai\", sans-serif;", styles, StringComparison.Ordinal);
+        Assert.Contains("--maliev-font-sans-en: -apple-system, BlinkMacSystemFont, \"Segoe UI Variable Text\", \"Segoe UI\", \"Noto Sans\", \"Noto Sans Thai\", sans-serif;", styles, StringComparison.Ordinal);
+        Assert.Contains("--maliev-font-sans-th: \"Noto Sans Thai\", -apple-system, BlinkMacSystemFont, \"Segoe UI Variable Text\", \"Segoe UI\", \"Noto Sans\", sans-serif;", styles, StringComparison.Ordinal);
         Assert.Contains(":root[data-culture=\"th-TH\"]", styles, StringComparison.Ordinal);
         Assert.Contains("--maliev-font-mono: var(--maliev-font-sans);", styles, StringComparison.Ordinal);
         Assert.DoesNotContain("font-family:'JetBrains Mono'", viewer, StringComparison.Ordinal);
@@ -1488,7 +1488,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("event.preventDefault();", uploadScript, StringComparison.Ordinal);
 
         Assert.Contains(":root[data-maliev-theme=\"dark\"] .qe-agent-shell", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("grid-template-columns: 284px minmax(0, 1fr) 0;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: 272px minmax(0, 1fr) 0;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-right: 1px solid var(--qe-agent-line);", ExtractSourceBlock(agentStyles, ".qe-agent-rail {", ".qe-agent-rail-head"), StringComparison.Ordinal);
@@ -1497,7 +1497,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-summary-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-grid", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-section", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("grid-template-columns: 284px minmax(0, 1fr) minmax(320px, 380px);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: 272px minmax(0, 1fr) minmax(340px, 420px);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("transition: grid-template-columns 260ms cubic-bezier(.2, .8, .2, 1);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("@keyframes qe-agent-artifact-drawer-enter", agentStyles, StringComparison.Ordinal);
         Assert.Contains("animation: qe-agent-artifact-drawer-enter 260ms cubic-bezier(.2, .8, .2, 1) both;", agentStyles, StringComparison.Ordinal);
@@ -1552,7 +1552,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("\"add tools dictate send\";", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer.qe-agent-composer--has-attachments", agentStyles, StringComparison.Ordinal);
         Assert.Contains("align-items: start;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("padding: 9px 10px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("padding: 10px 12px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-composer-collapsed-height: 94px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-composer-expansion-offset: 0px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("margin-top: calc(-1 * var(--qe-composer-expansion-offset));", agentStyles, StringComparison.Ordinal);
@@ -1651,7 +1651,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("align-items: start;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("font-size: 14px !important;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("line-height: 1.5 !important;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("--qe-agent-primary: #0a72ef;", agentStyles, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--qe-agent-primary: #339cff;", agentStyles, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("background: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-dialog", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-tools", agentStyles, StringComparison.Ordinal);

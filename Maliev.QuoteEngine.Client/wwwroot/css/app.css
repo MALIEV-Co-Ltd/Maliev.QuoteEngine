@@ -33,8 +33,8 @@
 
     /* Interactive */
     --link: #0072f5;                /* Link Blue */
-    --accent: #0a72ef;              /* Develop Blue used as generic accent */
-    --accent-strong: #0858c4;       /* Hover/press for accent CTA */
+    --accent: #339cff;              /* Studio Blue — reference accent */
+    --accent-strong: #1e8aff;       /* Hover/press for accent CTA */
     --focus-blue: hsla(212, 100%, 48%, 1);
     --ring-blue: rgba(147, 197, 253, 0.5);
 
@@ -85,8 +85,8 @@
     --maliev-reconnect-button-focus: rgba(10, 114, 239, 0.24);
 
     /* ─── Typography scale (DESIGN.md §3) ──────────────────────────────── */
-    --maliev-font-sans-en: "Noto Sans", sans-serif;
-    --maliev-font-sans-th: "Noto Sans Thai", sans-serif;
+    --maliev-font-sans-en: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Noto Sans", "Noto Sans Thai", sans-serif;
+    --maliev-font-sans-th: "Noto Sans Thai", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Noto Sans", sans-serif;
     --maliev-font-sans: var(--maliev-font-sans-en);
     --maliev-font-mono: var(--maliev-font-sans);
     --maliev-font-nano: 10px;       /* Tiny chips */
@@ -670,17 +670,17 @@
 .qe-agent-shell {
     --qe-agent-bg: #ffffff;
     --qe-agent-surface: #f4f4f4;
-    --qe-agent-raised: #eeeeee;
-    --qe-agent-line: #dedede;
-    --qe-agent-ink: #0d0d0d;
-    --qe-agent-muted: #6f6f6f;
-    --qe-agent-soft: #e5e5e5;
-    --qe-agent-hover: #e9e9e9;
-    --qe-agent-inverse: #0d0d0d;
+    --qe-agent-raised: #ececec;
+    --qe-agent-line: #e5e5e5;
+    --qe-agent-ink: #1a1a1a;
+    --qe-agent-muted: #666666;
+    --qe-agent-soft: rgba(0, 0, 0, 0.075);
+    --qe-agent-hover: rgba(0, 0, 0, 0.045);
+    --qe-agent-inverse: #1a1a1a;
     --qe-agent-inverse-text: #ffffff;
-    --qe-agent-primary: #0a72ef;
+    --qe-agent-primary: #339cff;
     display: grid;
-    grid-template-columns: 284px minmax(0, 1fr) 0;
+    grid-template-columns: 272px minmax(0, 1fr) 0;
     min-height: 100dvh;
     height: 100dvh;
     border-top: 0;
@@ -689,21 +689,21 @@
 }
 
 .qe-agent-shell--artifacts-open {
-    grid-template-columns: 284px minmax(0, 1fr) minmax(320px, 380px);
+    grid-template-columns: 272px minmax(0, 1fr) minmax(340px, 420px);
 }
 
 :root[data-maliev-theme="dark"] .qe-agent-shell {
-    --qe-agent-bg: #000000;
-    --qe-agent-surface: #0f0f0f;
-    --qe-agent-raised: #1f1f1f;
-    --qe-agent-line: #242424;
-    --qe-agent-ink: #f7f7f7;
-    --qe-agent-muted: #b4b4b4;
-    --qe-agent-soft: #2f2f2f;
-    --qe-agent-hover: #191919;
-    --qe-agent-inverse: #f7f7f7;
-    --qe-agent-inverse-text: #111111;
-    --qe-agent-primary: #0a72ef;
+    --qe-agent-bg: #181818;
+    --qe-agent-surface: #1c1c1c;
+    --qe-agent-raised: #2a2a2a;
+    --qe-agent-line: rgba(255, 255, 255, 0.10);
+    --qe-agent-ink: #f5f5f5;
+    --qe-agent-muted: #b8b8b8;
+    --qe-agent-soft: rgba(255, 255, 255, 0.10);
+    --qe-agent-hover: rgba(255, 255, 255, 0.06);
+    --qe-agent-inverse: #f5f5f5;
+    --qe-agent-inverse-text: #181818;
+    --qe-agent-primary: #339cff;
 }
 
 .qe-agent-rail {
@@ -1037,13 +1037,17 @@
     width: 100%;
 }
 
-.qe-agent-primary-nav a.active,
-.qe-agent-primary-nav button.active,
 .qe-agent-primary-nav a:hover,
 .qe-agent-primary-nav button:hover,
 .qe-agent-rail-group a:hover,
 .qe-agent-project-row:hover {
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-primary-nav a.active,
+.qe-agent-primary-nav button.active {
     background: var(--qe-agent-soft);
+    font-weight: 500;
 }
 
 .qe-agent-rail-scroll {
@@ -1282,7 +1286,7 @@
 }
 
 .qe-agent-rail-group {
-    margin-top: 12px;
+    margin-top: 16px;
 }
 
 .qe-agent-rail-group-toggle {
@@ -1290,15 +1294,15 @@
     grid-template-columns: minmax(0, 1fr) 18px;
     align-items: center;
     width: 100%;
-    min-height: 28px;
-    padding: 5px 8px;
+    min-height: 26px;
+    padding: 4px 8px;
     border: 0;
     border-radius: 8px;
     background: transparent;
     color: var(--qe-agent-muted);
     cursor: pointer;
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 500;
     text-align: left;
 }
 
@@ -2627,7 +2631,7 @@
     max-width: 100%;
     margin-bottom: 6px;
     padding: 4px 10px;
-    border-left: 2px solid var(--qe-agent-accent, #0a72ef);
+    border-left: 2px solid var(--qe-agent-primary);
     border-radius: 6px;
     background: var(--qe-agent-hover);
     color: var(--qe-agent-muted);
@@ -3778,9 +3782,9 @@
     width: 100%;
     margin-top: calc(-1 * var(--qe-composer-expansion-offset));
     min-height: 94px;
-    padding: 9px 10px;
-    border-radius: 16px;
-    background: #ffffff;
+    padding: 10px 12px;
+    border-radius: 24px;
+    background: var(--qe-agent-bg);
     box-shadow:
         0 12px 34px rgba(16, 24, 40, .08),
         0 1px 4px rgba(16, 24, 40, .05),
@@ -4391,12 +4395,12 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    background: var(--qe-agent-primary);
-    color: #ffffff;
+    background: var(--qe-agent-inverse);
+    color: var(--qe-agent-inverse-text);
 }
 
 .qe-agent-send-btn:hover {
-    background: color-mix(in srgb, var(--qe-agent-primary) 88%, #000000);
+    background: color-mix(in srgb, var(--qe-agent-inverse) 82%, var(--qe-agent-bg));
 }
 
 .qe-agent-send-btn:disabled {
@@ -4407,8 +4411,8 @@
 .qe-agent-send-spinner {
     width: 16px;
     height: 16px;
-    border: 2px solid rgba(255, 255, 255, .45);
-    border-top-color: #ffffff;
+    border: 2px solid color-mix(in srgb, currentColor 45%, transparent);
+    border-top-color: currentColor;
     border-radius: 999px;
     animation: qe-agent-spin 700ms linear infinite;
 }
@@ -4769,9 +4773,9 @@
 
 .qe-agent-management-head {
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 16px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 18px;
 }
 
 .qe-agent-management-back {
@@ -4808,7 +4812,7 @@
 .qe-agent-management-head h1 {
     margin: 0;
     font-size: clamp(26px, 3vw, 32px);
-    font-weight: 500;
+    font-weight: 600;
     line-height: 1.18;
     letter-spacing: 0;
 }
@@ -4853,34 +4857,34 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    min-height: 32px;
-    padding: 6px 14px;
-    border: 1px solid var(--qe-agent-line);
+    min-height: 30px;
+    padding: 5px 13px;
+    border: 0;
     border-radius: 999px;
-    background: var(--qe-agent-surface);
+    background: transparent;
     color: var(--qe-agent-muted);
     cursor: pointer;
     font: inherit;
     font-size: 13px;
-    font-weight: 600;
+    font-weight: 500;
 }
 
 .qe-agent-management-tab:hover {
     background: var(--qe-agent-hover);
+    color: var(--qe-agent-ink);
 }
 
 .qe-agent-management-tab.is-active {
-    border-color: var(--qe-agent-primary);
-    background: color-mix(in srgb, var(--qe-agent-primary) 14%, var(--qe-agent-hover));
-    color: var(--qe-agent-primary);
+    background: var(--qe-agent-inverse);
+    color: var(--qe-agent-inverse-text);
 }
 
 .qe-agent-management-tab b {
     min-width: 18px;
     padding: 0 5px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--qe-agent-primary) 18%, transparent);
-    color: var(--qe-agent-primary);
+    background: color-mix(in srgb, currentColor 16%, transparent);
+    color: inherit;
     font-size: 11px;
     line-height: 18px;
     text-align: center;
@@ -5131,11 +5135,11 @@
 }
 
 .qe-agent-theme-swatch--dark span:first-child {
-    background: #171717;
+    background: #181818;
 }
 
 .qe-agent-theme-swatch--dark span:last-child {
-    background: #0f0f0f;
+    background: #202020;
 }
 
 .qe-agent-artifact-drawer,
@@ -6322,13 +6326,13 @@
     --selection-color: #f5f5f5;
     --ink: #f5f5f5;
     --ink-strong: #ffffff;
-    --muted: #c7c7c7;
-    --muted-2: #a6a6a6;
-    --muted-3: #7a7a7a;
-    --line: #2d2d30;
-    --paper: #0f0f10;
-    --panel: #161616;
-    --panel-tint: #1f1f22;
+    --muted: #b8b8b8;
+    --muted-2: #8f8f8f;
+    --muted-3: #757575;
+    --line: #2e2e2e;
+    --paper: #181818;
+    --panel: #202020;
+    --panel-tint: #252525;
     --primary: #f5f5f5;
     --primary-strong: #ffffff;
     --primary-contrast: #111111;
@@ -6336,8 +6340,8 @@
     --topbar-icon-ring: none;
     --topbar-icon-hover-bg: #242428;
     --link: #6fb1ff;
-    --accent: #4f9cff;
-    --accent-strong: #86c4ff;
+    --accent: #339cff;
+    --accent-strong: #66b5ff;
     --badge-blue-bg: #0d2b4a;
     --badge-blue-text: #8fc5ff;
     --maliev-shadow-ring: rgba(255, 255, 255, 0.12) 0 0 0 1px;
