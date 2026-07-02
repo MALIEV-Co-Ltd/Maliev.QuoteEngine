@@ -37,6 +37,7 @@ public interface IChatbotServiceClient
 
 internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<ChatbotServiceClient> logger) : IChatbotServiceClient
 {
+    private const int MaxFailureBodyLogCharacters = 2048;
     private static readonly TimeSpan ChatbotReadinessTimeout = TimeSpan.FromSeconds(1);
     private static readonly JsonSerializerOptions SnakeCaseJson = new(JsonSerializerDefaults.Web)
     {
@@ -100,27 +101,35 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
         ChatbotSendMessageRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var response = await SendAsync<ChatbotSendMessageRequest, ChatbotMessageResponse>(
-            HttpMethod.Post,
-            "/chatbot/v1/messages",
-            request,
-            "sending chatbot message for streamed quote agent turn",
-            cancellationToken);
-        if (response is null)
+        var openResult = await OpenMessageStreamAsync(request, cancellationToken);
+        if (openResult.ErrorEvent is not null)
         {
-            yield return new ChatbotMessageStreamEvent
-            {
-                Type = "error",
-                Error = "ChatbotService message request failed."
-            };
+            yield return openResult.ErrorEvent;
             yield break;
         }
 
-        yield return new ChatbotMessageStreamEvent
+        using var response = openResult.Response!;
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using var reader = new StreamReader(stream);
+        while (true)
         {
-            Type = "final",
-            Message = response
-        };
+            var readResult = await ReadMessageStreamEventAsync(reader, cancellationToken);
+            if (readResult.ErrorEvent is not null)
+            {
+                yield return readResult.ErrorEvent;
+                yield break;
+            }
+
+            if (readResult.EndOfStream)
+            {
+                yield break;
+            }
+
+            if (readResult.StreamEvent is not null)
+            {
+                yield return readResult.StreamEvent;
+            }
+        }
     }
 
     public async Task<ChatbotConversationMessagesResponse?> GetConversationMessagesAsync(Guid sessionId, CancellationToken cancellationToken)
@@ -236,6 +245,172 @@ internal sealed class ChatbotServiceClient(HttpClient httpClient, ILogger<Chatbo
         {
             logger.LogWarning(ex, "ChatbotService failed while {Operation}.", operation);
             return default;
+        }
+    }
+
+    private async Task<StreamOpenResult> OpenMessageStreamAsync(
+        ChatbotSendMessageRequest request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Post, "/chatbot/v1/messages/stream")
+            {
+                Content = JsonContent.Create(request, options: SnakeCaseJson)
+            };
+            var response = await httpClient.SendAsync(
+                message,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                var failureBody = await ReadFailureBodyAsync(response, cancellationToken);
+                logger.LogWarning(
+                    "ChatbotService returned {StatusCode} while streaming chatbot message. Response body: {ResponseBody}",
+                    response.StatusCode,
+                    failureBody);
+                response.Dispose();
+                return StreamOpenResult.Failed("ChatbotService stream request failed.");
+            }
+
+            return StreamOpenResult.Success(response);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "ChatbotService failed while streaming chatbot message.");
+            return StreamOpenResult.Failed("ChatbotService stream request failed.");
+        }
+    }
+
+    private async Task<StreamReadResult> ReadMessageStreamEventAsync(
+        StreamReader reader,
+        CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            string? line;
+            try
+            {
+                line = await reader.ReadLineAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "ChatbotService stream failed while reading an event.");
+                return StreamReadResult.Failed("ChatbotService stream response failed.");
+            }
+
+            if (line is null)
+            {
+                return StreamReadResult.End();
+            }
+
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            try
+            {
+                var streamEvent = JsonSerializer.Deserialize<ChatbotMessageStreamEvent>(line, SnakeCaseJson);
+                if (streamEvent is not null)
+                {
+                    return StreamReadResult.Event(streamEvent);
+                }
+            }
+            catch (JsonException ex)
+            {
+                logger.LogWarning(ex, "ChatbotService stream emitted an invalid event payload.");
+                return StreamReadResult.Failed("ChatbotService stream response was invalid.");
+            }
+        }
+    }
+
+    private static async Task<string> ReadFailureBodyAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        var body = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return "<empty>";
+        }
+
+        body = body.ReplaceLineEndings(" ");
+        return body.Length <= MaxFailureBodyLogCharacters
+            ? body
+            : string.Concat(body.AsSpan(0, MaxFailureBodyLogCharacters), "...");
+    }
+
+    private static ChatbotMessageStreamEvent CreateErrorEvent(string error)
+    {
+        return new ChatbotMessageStreamEvent
+        {
+            Type = "error",
+            Error = error
+        };
+    }
+
+    private sealed class StreamOpenResult
+    {
+        public HttpResponseMessage? Response { get; private init; }
+
+        public ChatbotMessageStreamEvent? ErrorEvent { get; private init; }
+
+        public static StreamOpenResult Success(HttpResponseMessage response)
+        {
+            return new StreamOpenResult
+            {
+                Response = response
+            };
+        }
+
+        public static StreamOpenResult Failed(string error)
+        {
+            return new StreamOpenResult
+            {
+                ErrorEvent = CreateErrorEvent(error)
+            };
+        }
+    }
+
+    private sealed class StreamReadResult
+    {
+        public bool EndOfStream { get; private init; }
+
+        public ChatbotMessageStreamEvent? StreamEvent { get; private init; }
+
+        public ChatbotMessageStreamEvent? ErrorEvent { get; private init; }
+
+        public static StreamReadResult End()
+        {
+            return new StreamReadResult
+            {
+                EndOfStream = true
+            };
+        }
+
+        public static StreamReadResult Event(ChatbotMessageStreamEvent streamEvent)
+        {
+            return new StreamReadResult
+            {
+                StreamEvent = streamEvent
+            };
+        }
+
+        public static StreamReadResult Failed(string error)
+        {
+            return new StreamReadResult
+            {
+                ErrorEvent = CreateErrorEvent(error)
+            };
         }
     }
 }
