@@ -213,10 +213,10 @@
                             <MudIcon Icon="@Icons.Material.Outlined.AccountCircle" Size="Size.Small" />
                             <span>@Text("Personal account", "บัญชีส่วนตัว")</span>
                         </button>
-                        <a href="/profile" role="menuitem">
+                        <button type="button" role="menuitem" @onclick="OpenPersonalAccountPage">
                             <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
                             <span>@Text("Profile", "โปรไฟล์")</span>
-                        </a>
+                        </button>
                         <button type="button" role="menuitem" @onclick="OpenSettingsPage">
                             <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
                             <span>@Text("Settings", "ตั้งค่า")</span>
@@ -4363,7 +4363,9 @@
 
     private void OpenPersonalAccountPage()
     {
-        Navigation.NavigateTo("/profile");
+        // Profile and account live inside the workspace settings page — never the
+        // legacy standalone layout.
+        OpenSettingsPage();
     }
 
     private async Task SignOutAsync()

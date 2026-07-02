@@ -1552,15 +1552,16 @@
     grid-template-columns: 18px minmax(0, 1fr) auto;
     align-items: center;
     gap: 9px;
-    min-height: 30px;
+    min-height: 32px;
     width: 100%;
-    padding: 5px 8px;
+    padding: 6px 8px;
     border: 0;
     border-radius: 7px;
     background: transparent;
     color: var(--qe-agent-ink);
     font: inherit;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 400;
     line-height: 1.2;
     text-align: left;
     cursor: pointer;
@@ -1570,7 +1571,7 @@
 .qe-agent-account-panel button:hover,
 .qe-agent-account-panel a:focus-visible,
 .qe-agent-account-panel button:focus-visible {
-    background: var(--qe-agent-soft);
+    background: var(--qe-agent-hover);
     outline: none;
 }
 
@@ -9797,6 +9798,10 @@ textarea::placeholder {
     border-radius: 12px;
     background: var(--panel);
     box-shadow: none;
+}
+
+.preferences-panel + .preferences-panel {
+    margin-top: 24px;
 }
 
 .preferences-panel-heading {
