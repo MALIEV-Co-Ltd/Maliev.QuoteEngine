@@ -1284,6 +1284,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-palette-modal\"", component, StringComparison.Ordinal);
         Assert.Contains("RunPaletteCommandAsync", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-palette-row:hover,", agentStyles, StringComparison.Ordinal);
+
+        // Suggestion cards adapt to attached files: quote/DFM actions for CAD,
+        // requirement extraction for drawings, interpretation for images.
+        Assert.Contains("private IReadOnlyList<UseCaseOption> BuildContextualUseCases()", component, StringComparison.Ordinal);
+        Assert.Contains("private static string ClassifyAttachmentKind(string? kind, string fileName)", component, StringComparison.Ordinal);
+        Assert.Contains("DistinctBy(attachment => attachment.FileName, StringComparer.OrdinalIgnoreCase)", component, StringComparison.Ordinal);
+        Assert.Contains("Run a DFM review on {name}:", component, StringComparison.Ordinal);
+        Assert.Contains("Extract quote requirements from {name}", component, StringComparison.Ordinal);
+        Assert.Contains("var contextual = BuildContextualUseCases();", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-search-kbd\"", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-global-search:focus-within .qe-agent-search-kbd,", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain("box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--qe-agent-ink) 28%, transparent);", agentStyles, StringComparison.Ordinal);

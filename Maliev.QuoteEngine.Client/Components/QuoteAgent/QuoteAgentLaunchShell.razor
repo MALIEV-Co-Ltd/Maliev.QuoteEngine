@@ -2750,7 +2750,104 @@
 
     private IReadOnlyList<UseCaseOption> BuildVisibleUseCases()
     {
+        var contextual = BuildContextualUseCases();
+        if (contextual.Count > 0)
+        {
+            return contextual;
+        }
+
         return _useCaseDeck.Count == 0 ? SampleUseCases : _useCaseDeck;
+    }
+
+    // Quick actions follow what the customer just attached — quote and DFM
+    // review for CAD, requirement extraction for drawings, interpretation for
+    // photos and sketches — so they never have to type the obvious next step.
+    private IReadOnlyList<UseCaseOption> BuildContextualUseCases()
+    {
+        var attachments = _pendingComposerAttachments
+            .Select(attachment => (attachment.FileName, Kind: ClassifyAttachmentKind(attachment.Kind, attachment.FileName)))
+            .Concat(UploadedParts.Select(part => (part.FileName, Kind: ClassifyAttachmentKind("cad", part.FileName))))
+            .Where(attachment => !string.IsNullOrWhiteSpace(attachment.FileName))
+            .DistinctBy(attachment => attachment.FileName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        if (attachments.Count == 0)
+        {
+            return [];
+        }
+
+        var cadFiles = attachments.Where(attachment => attachment.Kind == "cad").ToList();
+        var drawings = attachments.Where(attachment => attachment.Kind == "drawing").ToList();
+        var images = attachments.Where(attachment => attachment.Kind == "image").ToList();
+        var options = new List<UseCaseOption>();
+
+        if (cadFiles.Count > 0)
+        {
+            var name = cadFiles[0].FileName;
+            options.Add(new UseCaseOption(
+                $"Quote {name}",
+                $"ขอราคา {name}",
+                $"Quote {name}. Confirm process, material, finish, tolerance, quantity, and lead time — use sensible manufacturing defaults for anything I have not specified and tell me what you assumed.",
+                $"ขอราคา {name} ยืนยันกระบวนการ วัสดุ ผิวงาน ค่าคลาดเคลื่อน จำนวน และเวลานำส่ง — ใช้ค่าเริ่มต้นที่เหมาะสมสำหรับสิ่งที่ยังไม่ได้ระบุ และบอกด้วยว่าสมมติอะไรไว้"));
+            options.Add(new UseCaseOption(
+                $"Check {name} for manufacturability",
+                $"ตรวจ {name} ว่าผลิตได้หรือไม่",
+                $"Run a DFM review on {name}: flag thin walls, tight internal corners, unreachable features, and tolerance risks, show where each issue sits on the 3D preview, and suggest fixes.",
+                $"ตรวจ DFM ของ {name}: ชี้ผนังบาง มุมในแคบ ฟีเจอร์ที่เข้าถึงไม่ได้ และความเสี่ยงด้านค่าคลาดเคลื่อน แสดงตำแหน่งปัญหาบนพรีวิว 3D พร้อมแนะวิธีแก้"));
+        }
+
+        if (cadFiles.Count > 1)
+        {
+            options.Add(new UseCaseOption(
+                $"Review assembly fit of {cadFiles.Count} parts",
+                $"ตรวจการประกอบของ {cadFiles.Count} ชิ้น",
+                $"Treat the {cadFiles.Count} uploaded parts as one assembly. Check clearance, fastener access, and tolerance stack-up, then recommend the best process for a working prototype.",
+                $"ให้ถือว่าชิ้นงาน {cadFiles.Count} ชิ้นที่อัปโหลดเป็นชุดประกอบเดียวกัน ตรวจระยะเผื่อ การเข้าถึงตัวยึด และการสะสมค่าคลาดเคลื่อน แล้วแนะนำกระบวนการที่เหมาะกับต้นแบบใช้งานจริง"));
+        }
+
+        if (drawings.Count > 0)
+        {
+            var name = drawings[0].FileName;
+            options.Add(new UseCaseOption(
+                $"Extract quote requirements from {name}",
+                $"ดึงข้อกำหนดใบเสนอราคาจาก {name}",
+                $"Read {name} as an engineering drawing: summarize the shape, dimensions, tolerances, material, and finish callouts, flag anything unreadable, and list exactly what still needs my confirmation before quoting.",
+                $"อ่าน {name} เป็นแบบวิศวกรรม: สรุปรูปทรง ขนาด ค่าคลาดเคลื่อน วัสดุ และผิวงาน ชี้ส่วนที่อ่านไม่ออก และไล่รายการที่ต้องยืนยันก่อนเสนอราคา"));
+            options.Add(new UseCaseOption(
+                "Quote from this drawing",
+                "ขอราคาจากแบบนี้",
+                $"Quote the part in {name} using the drawing callouts. Where a callout is missing, propose a manufacturing default and mark it as an assumption I can change.",
+                $"เสนอราคาชิ้นงานใน {name} ตามที่ระบุในแบบ หากข้อมูลไม่ครบให้เสนอค่าเริ่มต้นการผลิตและทำเครื่องหมายว่าเป็นสมมติฐานที่แก้ได้"));
+        }
+
+        if (images.Count > 0)
+        {
+            var name = images[0].FileName;
+            options.Add(new UseCaseOption(
+                "Turn this into a part plan",
+                "แปลงภาพนี้เป็นแผนชิ้นงาน",
+                $"Interpret {name} as a part concept: describe the geometry you see, propose a CAD plan with the dimensions I need to confirm, the likely manufacturing process, and the quote path.",
+                $"ตีความ {name} เป็นแนวคิดชิ้นงาน: อธิบายรูปทรงที่เห็น เสนอแผน CAD พร้อมขนาดที่ต้องยืนยัน กระบวนการผลิตที่น่าจะใช้ และขั้นตอนสู่ใบเสนอราคา"));
+        }
+
+        return options.Take(4).ToList();
+    }
+
+    private static string ClassifyAttachmentKind(string? kind, string fileName)
+    {
+        var normalized = kind?.Trim().ToLowerInvariant();
+        if (normalized is "cad" or "drawing" or "image")
+        {
+            return normalized;
+        }
+
+        var extension = System.IO.Path.GetExtension(fileName).ToLowerInvariant();
+        return extension switch
+        {
+            ".stl" or ".step" or ".stp" or ".iges" or ".igs" or ".3mf" or ".obj" or ".x_t" or ".sldprt" => "cad",
+            ".pdf" or ".dxf" or ".dwg" => "drawing",
+            ".png" or ".jpg" or ".jpeg" or ".webp" or ".heic" or ".gif" or ".bmp" => "image",
+            _ => "file"
+        };
     }
 
     protected override void OnInitialized()
