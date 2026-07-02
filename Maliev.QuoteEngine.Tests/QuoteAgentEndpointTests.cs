@@ -1350,6 +1350,81 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_uses_quote_engine_fallback_when_chatbot_returns_generic_apology()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "I apologize for the inconvenience. Something unexpected occurred. Please try again, or contact our support team at info@maliev.com."
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Can you help me quote a simple PLA bracket?",
+            Language = "en"
+        });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.DoesNotContain("I apologize for the inconvenience", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("info@maliev.com", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Describe the part you need", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.False(string.IsNullOrWhiteSpace(chatbot.LastSendRequest?.QuoteAgentContextToken));
+    }
+
+    [Fact]
+    public async Task Agent_message_stream_uses_quote_engine_fallback_when_chatbot_returns_generic_apology()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "I apologize for the inconvenience. Something unexpected occurred. Please try again, or contact our support team at info@maliev.com."
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "Can you help me quote a simple PLA bracket?",
+                Language = "en"
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var body = await response.Content.ReadAsStringAsync();
+        var events = body
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonSerializer.Deserialize<QuoteAgentStreamEvent>(line, JsonOptions))
+            .Where(streamEvent => streamEvent is not null)
+            .Select(streamEvent => streamEvent!)
+            .ToList();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var final = Assert.Single(events, streamEvent => streamEvent.Type == "final");
+        Assert.NotNull(final.Response);
+        Assert.DoesNotContain("I apologize for the inconvenience", final.Response.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("info@maliev.com", final.Response.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Describe the part you need", final.Response.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.False(string.IsNullOrWhiteSpace(chatbot.LastStreamRequest?.QuoteAgentContextToken));
+    }
+
+    [Fact]
     public async Task Agent_message_with_cad_attachment_materializes_analysis_without_premature_price()
     {
         var chatbot = new RecordingChatbotServiceClient();

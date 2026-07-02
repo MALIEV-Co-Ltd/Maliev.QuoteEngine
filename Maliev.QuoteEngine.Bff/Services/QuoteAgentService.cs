@@ -218,6 +218,12 @@ internal sealed class QuoteAgentService(
             generatedFallbackPreview = TryGenerateFallbackPreview(state, request.Message);
         }
 
+        var assistantContent = SelectUsableChatbotAssistantContent(chatbotResponse?.Content);
+        if (string.IsNullOrWhiteSpace(assistantContent) && !generatedFallbackPreview)
+        {
+            generatedFallbackPreview = TryGenerateFallbackPreview(state, request.Message);
+        }
+
         var pendingUiCulture = state.UiCulture;
         state.UiCulture = null;
         var currentState = ToStateResponse(state);
@@ -225,9 +231,9 @@ internal sealed class QuoteAgentService(
         {
             SessionId = state.SessionId,
             MessageId = chatbotResponse?.MessageId,
-            AssistantText = string.IsNullOrWhiteSpace(chatbotResponse?.Content)
+            AssistantText = string.IsNullOrWhiteSpace(assistantContent)
                 ? FallbackAgentAnswer(currentState, generatedFallbackPreview)
-                : GroundAssistantText(StripToolTraces(chatbotResponse.Content), currentState),
+                : GroundAssistantText(StripToolTraces(assistantContent), currentState),
             Role = string.IsNullOrWhiteSpace(chatbotResponse?.Role) ? "assistant" : chatbotResponse.Role,
             Language = NormalizeLanguage(chatbotResponse?.Language, request.Message),
             CreatedAt = chatbotResponse?.CreatedAt == default ? DateTimeOffset.UtcNow : chatbotResponse!.CreatedAt,
@@ -393,7 +399,8 @@ internal sealed class QuoteAgentService(
             yield break;
         }
 
-        var generatedFallbackPreview = string.IsNullOrWhiteSpace(finalMessage?.Content) &&
+        var assistantContent = SelectUsableChatbotAssistantContent(finalMessage?.Content);
+        var generatedFallbackPreview = string.IsNullOrWhiteSpace(assistantContent) &&
             TryGenerateFallbackPreview(state, request.Message);
         var pendingUiCulture = state.UiCulture;
         state.UiCulture = null;
@@ -402,9 +409,9 @@ internal sealed class QuoteAgentService(
         {
             SessionId = state.SessionId,
             MessageId = finalMessage?.MessageId,
-            AssistantText = string.IsNullOrWhiteSpace(finalMessage?.Content)
+            AssistantText = string.IsNullOrWhiteSpace(assistantContent)
                 ? FallbackAgentAnswer(currentState, generatedFallbackPreview)
-                : GroundAssistantText(StripToolTraces(finalMessage.Content), currentState),
+                : GroundAssistantText(StripToolTraces(assistantContent), currentState),
             Role = string.IsNullOrWhiteSpace(finalMessage?.Role) ? "assistant" : finalMessage.Role,
             Language = NormalizeLanguage(finalMessage?.Language, request.Message),
             CreatedAt = finalMessage?.CreatedAt == default ? DateTimeOffset.UtcNow : finalMessage!.CreatedAt,
@@ -6486,6 +6493,24 @@ Customer message:
         }
 
         return string.Join('\n', sanitizedLines).Trim();
+    }
+
+    private static string? SelectUsableChatbotAssistantContent(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return null;
+        }
+
+        var trimmed = content.Trim();
+        return IsGenericChatbotFallbackContent(trimmed) ? null : trimmed;
+    }
+
+    private static bool IsGenericChatbotFallbackContent(string content)
+    {
+        return content.Contains("I apologize for the inconvenience", StringComparison.OrdinalIgnoreCase) &&
+            content.Contains("Something unexpected occurred", StringComparison.OrdinalIgnoreCase) &&
+            content.Contains("info@maliev.com", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GroundAuthHandoffText(string content, QuoteAgentStateResponse state)
