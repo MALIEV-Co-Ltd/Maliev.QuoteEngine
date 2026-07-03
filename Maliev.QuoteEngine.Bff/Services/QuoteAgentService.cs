@@ -32,6 +32,9 @@ public interface IQuoteAgentService
     /// <summary>Gets the current agent state.</summary>
     QuoteAgentStateResponse GetState(Guid sessionId);
 
+    /// <summary>Gets the last assistant thinking steps available for restoring a session view.</summary>
+    IReadOnlyList<QuoteAgentThinkingStepDto> GetLastAssistantThinkingSteps(Guid sessionId);
+
     /// <summary>Gets customer-safe connector definitions for the quote agent workspace.</summary>
     QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId);
 
@@ -172,6 +175,7 @@ internal sealed class QuoteAgentService(
         await HydratePartDfmFromAuthoritativeStoreAsync(state, cancellationToken);
         if (TryBuildUiLanguageTurnResponse(state, request.Message, out var localLanguageResponse))
         {
+            StoreLastAssistantThinkingSteps(state, localLanguageResponse.ThinkingSteps);
             return localLanguageResponse;
         }
 
@@ -183,9 +187,12 @@ internal sealed class QuoteAgentService(
         var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
         if (request.EditLastTurn && !await chatbotClient.TruncateLastTurnAsync(chatbotSessionId, cancellationToken))
         {
-            return BuildEditRollbackFailureTurn(state, request.Message, language);
+            var rollbackFailure = BuildEditRollbackFailureTurn(state, request.Message, language);
+            StoreLastAssistantThinkingSteps(state, rollbackFailure.ThinkingSteps);
+            return rollbackFailure;
         }
 
+        StoreLastAssistantThinkingSteps(state, []);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         await RefreshOrderStatusAsync(state, cancellationToken);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts, cancellationToken);
@@ -227,7 +234,7 @@ internal sealed class QuoteAgentService(
         var pendingUiCulture = state.UiCulture;
         state.UiCulture = null;
         var currentState = ToStateResponse(state);
-        return new QuoteAgentTurnResponse
+        var response = new QuoteAgentTurnResponse
         {
             SessionId = state.SessionId,
             MessageId = chatbotResponse?.MessageId,
@@ -248,6 +255,8 @@ internal sealed class QuoteAgentService(
             CustomerQuestion = state.PendingCustomerQuestion,
             UsageSnapshot = chatbotResponse?.UsageSnapshot
         };
+        StoreLastAssistantThinkingSteps(state, response.ThinkingSteps);
+        return response;
     }
 
     public async IAsyncEnumerable<QuoteAgentStreamEvent> StreamAsync(
@@ -268,6 +277,7 @@ internal sealed class QuoteAgentService(
         await HydratePartDfmFromAuthoritativeStoreAsync(state, cancellationToken);
         if (TryBuildUiLanguageTurnResponse(state, request.Message, out var localLanguageResponse))
         {
+            StoreLastAssistantThinkingSteps(state, localLanguageResponse.ThinkingSteps);
             foreach (var delta in ChunkAssistantText(localLanguageResponse.AssistantText))
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -299,6 +309,7 @@ internal sealed class QuoteAgentService(
         if (request.EditLastTurn && !await chatbotClient.TruncateLastTurnAsync(chatbotSessionId, cancellationToken))
         {
             var rollbackFailure = BuildEditRollbackFailureTurn(state, request.Message, language);
+            StoreLastAssistantThinkingSteps(state, rollbackFailure.ThinkingSteps);
             foreach (var delta in ChunkAssistantText(rollbackFailure.AssistantText))
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -318,6 +329,7 @@ internal sealed class QuoteAgentService(
             yield break;
         }
 
+        StoreLastAssistantThinkingSteps(state, []);
         var token = contextToken.Create(state.SessionId, chatbotSessionId, customerId);
         await RefreshOrderStatusAsync(state, cancellationToken);
         var chatbotAttachments = await BuildChatbotAttachmentsAsync(request.Attachments, state.Artifacts, cancellationToken);
@@ -426,6 +438,7 @@ internal sealed class QuoteAgentService(
             CustomerQuestion = state.PendingCustomerQuestion,
             UsageSnapshot = finalMessage?.UsageSnapshot
         };
+        StoreLastAssistantThinkingSteps(state, response.ThinkingSteps);
 
         // Re-chunk the grounded answer so the customer sees the safe, post-processed text type out (never
         // the raw ungrounded model deltas). Model reasoning already streamed live during the turn above.
@@ -450,6 +463,21 @@ internal sealed class QuoteAgentService(
     public QuoteAgentStateResponse GetState(Guid sessionId)
     {
         return ToStateResponse(sessionStore.GetOrCreate(sessionId));
+    }
+
+    public IReadOnlyList<QuoteAgentThinkingStepDto> GetLastAssistantThinkingSteps(Guid sessionId)
+    {
+        if (!sessionStore.TryGet(sessionId, out var state))
+        {
+            return [];
+        }
+
+        lock (state.SyncRoot)
+        {
+            return state.LastAssistantThinkingSteps
+                .Select(CloneThinkingStep)
+                .ToList();
+        }
     }
 
     public async Task<Guid?> ResolveConversationSessionIdAsync(Guid sessionId, CancellationToken cancellationToken)
@@ -1041,9 +1069,66 @@ internal sealed class QuoteAgentService(
         CancellationToken cancellationToken)
     {
         ThinkingStepSummarizer.Summarize(step);
+        if (sessionStore.TryGet(sessionId, out var state))
+        {
+            UpsertLastAssistantThinkingStep(state, step);
+        }
+
         return hubContext.Clients
             .Group(QuoteNotificationsHub.QuoteSessionGroup(sessionId))
             .SendAsync("QuoteAgentThinkingStep", step, cancellationToken);
+    }
+
+    private static void StoreLastAssistantThinkingSteps(
+        QuoteAgentSessionState state,
+        IReadOnlyList<QuoteAgentThinkingStepDto> steps)
+    {
+        lock (state.SyncRoot)
+        {
+            state.LastAssistantThinkingSteps.Clear();
+            foreach (var step in steps)
+            {
+                state.LastAssistantThinkingSteps.Add(CloneThinkingStep(step));
+            }
+
+            state.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+    }
+
+    private static void UpsertLastAssistantThinkingStep(
+        QuoteAgentSessionState state,
+        QuoteAgentThinkingStepDto step)
+    {
+        lock (state.SyncRoot)
+        {
+            var index = step.StepNumber > 0
+                ? state.LastAssistantThinkingSteps.FindIndex(existing => existing.StepNumber == step.StepNumber)
+                : -1;
+            if (index >= 0)
+            {
+                state.LastAssistantThinkingSteps[index] = CloneThinkingStep(step);
+            }
+            else
+            {
+                state.LastAssistantThinkingSteps.Add(CloneThinkingStep(step));
+            }
+
+            state.UpdatedAt = DateTimeOffset.UtcNow;
+        }
+    }
+
+    private static QuoteAgentThinkingStepDto CloneThinkingStep(QuoteAgentThinkingStepDto step)
+    {
+        return new QuoteAgentThinkingStepDto
+        {
+            StepNumber = step.StepNumber,
+            Type = step.Type,
+            Title = step.Title,
+            Detail = step.Detail,
+            Summary = step.Summary,
+            Timestamp = step.Timestamp,
+            DurationMs = step.DurationMs
+        };
     }
 
     private static List<QuoteAgentThinkingStepDto> EnrichSteps(List<QuoteAgentThinkingStepDto>? steps)
@@ -7405,9 +7490,130 @@ Customer message:
         string description,
         IReadOnlyList<CadCommandDto> commands)
     {
+        if (ShouldRewriteBoxLikeHandKeychainCommands(description, commands))
+        {
+            return BuildHandKeychainPreviewCommands(commands);
+        }
+
         return ShouldRewriteCandyLikeGolfTeeCommands(description, commands)
             ? BuildGolfTeePreviewCommands(commands)
             : commands;
+    }
+
+    private static bool ShouldRewriteBoxLikeHandKeychainCommands(string description, IReadOnlyList<CadCommandDto> commands)
+    {
+        if (!IsHandKeychainDescription(description))
+        {
+            return false;
+        }
+
+        var alreadyHasProfile = commands.Any(command =>
+            command.Op.Equals("extrude", StringComparison.OrdinalIgnoreCase) &&
+            command.Profile?.Segments.Count > 0);
+        return !alreadyHasProfile &&
+            commands.Any(command => command.Op.Equals("box", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsHandKeychainDescription(string description)
+    {
+        var normalized = description.Trim().ToLowerInvariant();
+        return normalized.Contains("hand", StringComparison.Ordinal) &&
+            (normalized.Contains("keychain", StringComparison.Ordinal) ||
+             normalized.Contains("key chain", StringComparison.Ordinal) ||
+             normalized.Contains("พวงกุญแจ", StringComparison.Ordinal));
+    }
+
+    private static IReadOnlyList<CadCommandDto> BuildHandKeychainPreviewCommands(IReadOnlyList<CadCommandDto> commands)
+    {
+        var box = commands.FirstOrDefault(command => command.Op.Equals("box", StringComparison.OrdinalIgnoreCase));
+        var hole = commands.FirstOrDefault(command => command.Op.Equals("cylinder", StringComparison.OrdinalIgnoreCase));
+        var width = ClampPositive(FirstCommandParam(box, 0), fallback: 80d, min: 20d, max: 160d);
+        var height = ClampPositive(FirstCommandParam(box, 1), fallback: 40d, min: 16d, max: 120d);
+        var thickness = ClampPositive(FirstCommandParam(box, 2), fallback: 6d, min: 1d, max: 30d);
+        var holeRadius = ClampPositive(
+            FirstCommandParam(hole, 0),
+            fallback: 2.5d,
+            min: 0.8d,
+            max: Math.Min(width, height) / 5d);
+        var sx = width / 80d;
+        var sy = height / 40d;
+
+        double[] Point(double x, double y)
+        {
+            return [Math.Round(x * sx, 3), Math.Round(y * sy, 3)];
+        }
+
+        CadSegmentDto Segment(string type, double x, double y)
+        {
+            return new CadSegmentDto
+            {
+                Type = type,
+                Params = Point(x, y)
+            };
+        }
+
+        return
+        [
+            new CadCommandDto
+            {
+                Op = "extrude",
+                Id = "hand_keychain_body",
+                Params = [thickness],
+                Profile = new CadProfileDto
+                {
+                    Plane = "XY",
+                    Segments =
+                    [
+                        Segment("move", -34d, -10d),
+                        Segment("line", -38d, 3d),
+                        Segment("line", -36d, 15d),
+                        Segment("line", -31d, 18d),
+                        Segment("line", -26d, 11d),
+                        Segment("line", -25d, 20d),
+                        Segment("line", -20d, 24d),
+                        Segment("line", -16d, 18d),
+                        Segment("line", -15d, 12d),
+                        Segment("line", -10d, 24d),
+                        Segment("line", -4d, 25d),
+                        Segment("line", 0d, 18d),
+                        Segment("line", 2d, 12d),
+                        Segment("line", 8d, 23d),
+                        Segment("line", 14d, 24d),
+                        Segment("line", 17d, 17d),
+                        Segment("line", 16d, 11d),
+                        Segment("line", 23d, 19d),
+                        Segment("line", 29d, 17d),
+                        Segment("line", 30d, 9d),
+                        Segment("line", 23d, -8d),
+                        Segment("line", 14d, -16d),
+                        Segment("line", 1d, -19d),
+                        Segment("line", -12d, -18d),
+                        Segment("line", -25d, -15d),
+                        Segment("line", -34d, -10d)
+                    ]
+                }
+            },
+            new CadCommandDto
+            {
+                Op = "cylinder",
+                Id = "keyring_hole",
+                Params = [holeRadius, thickness + 4d]
+            },
+            new CadCommandDto
+            {
+                Op = "translate",
+                TargetId = "keyring_hole",
+                ResultId = "keyring_hole_centered",
+                Offset = [0d, Math.Round(-4d * sy, 3), -2d]
+            },
+            new CadCommandDto
+            {
+                Op = "cut",
+                TargetId = "hand_keychain_body",
+                ToolId = "keyring_hole_centered",
+                ResultId = "hand_keychain_preview"
+            }
+        ];
     }
 
     private static bool ShouldRewriteCandyLikeGolfTeeCommands(string description, IReadOnlyList<CadCommandDto> commands)

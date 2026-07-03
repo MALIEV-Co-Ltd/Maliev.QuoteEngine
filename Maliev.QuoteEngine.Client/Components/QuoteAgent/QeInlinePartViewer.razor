@@ -17,6 +17,8 @@
 
 @code {
     private const string DefaultLoadErrorMessage = "3D preview could not be loaded.";
+    private const string InvalidCommandsLoadErrorMessage =
+        "3D preview could not be built from the generated CAD commands. Please ask the agent to regenerate it.";
     private const int PreviewErrorMessageMaxLength = 180;
     private static int _counter;
 
@@ -82,9 +84,22 @@
         }
 
         var trimmed = message.Trim();
+        if (IsInternalPreviewException(trimmed))
+        {
+            return InvalidCommandsLoadErrorMessage;
+        }
+
         return trimmed.Length > PreviewErrorMessageMaxLength
             ? $"{trimmed[..PreviewErrorMessageMaxLength]}..."
             : trimmed;
+    }
+
+    private static bool IsInternalPreviewException(string message)
+    {
+        return message.Contains("Symbol.iterator", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("is not iterable", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("cannot read property", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("TypeError:", StringComparison.OrdinalIgnoreCase);
     }
 
     private void RetryPreview()

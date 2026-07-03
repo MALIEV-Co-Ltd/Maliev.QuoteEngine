@@ -381,6 +381,12 @@ public sealed class QuoteAgentMessageHistoryItemDto
 
     /// <summary>Gets or sets the message creation timestamp.</summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Gets or sets restored thinking steps associated with this assistant message.</summary>
+    public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
+
+    /// <summary>Gets or sets restored artifacts associated with this assistant message, such as generated inline previews.</summary>
+    public List<QuoteAgentArtifactDto> Artifacts { get; set; } = [];
 }
 
 /// <summary>

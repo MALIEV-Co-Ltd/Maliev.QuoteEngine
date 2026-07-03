@@ -156,21 +156,32 @@ public sealed class AgentController(
         }
 
         var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId.Value, cancellationToken);
+        var messages = conversation?.Messages
+            .Where(message => IsCustomerSafeHistoryRole(message.Role) && !string.IsNullOrWhiteSpace(message.Content))
+            .Select(message => new QuoteAgentMessageHistoryItemDto
+            {
+                Role = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ? "user" : "assistant",
+                Content = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
+                    ? QuoteAgentService.ExtractCustomerFacingText(message.Content)
+                    : message.Content,
+                CreatedAt = message.CreatedAt,
+                ThinkingSteps = CloneThinkingSteps(message.ThinkingSteps).ToList(),
+                Artifacts = message.Artifacts
+                    .Where(IsGeneratedViewerArtifactWithCommands)
+                    .Select(CloneArtifact)
+                    .ToList()
+            })
+            .ToList() ?? [];
+        AttachRestorableAssistantState(
+            messages,
+            agentService.GetState(sessionId).Artifacts,
+            agentService.GetLastAssistantThinkingSteps(sessionId));
+
         return Ok(new QuoteAgentMessageHistoryResponse
         {
             SessionId = sessionId,
             Language = conversation?.Language ?? "en",
-            Messages = conversation?.Messages
-                .Where(message => IsCustomerSafeHistoryRole(message.Role) && !string.IsNullOrWhiteSpace(message.Content))
-                .Select(message => new QuoteAgentMessageHistoryItemDto
-                {
-                    Role = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ? "user" : "assistant",
-                    Content = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
-                        ? QuoteAgentService.ExtractCustomerFacingText(message.Content)
-                        : message.Content,
-                    CreatedAt = message.CreatedAt
-                })
-                .ToList() ?? []
+            Messages = messages
         });
     }
 
@@ -503,5 +514,70 @@ public sealed class AgentController(
         return role is not null &&
             (role.Equals("user", StringComparison.OrdinalIgnoreCase) ||
              role.Equals("assistant", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static void AttachRestorableAssistantState(
+        List<QuoteAgentMessageHistoryItemDto> messages,
+        IReadOnlyList<QuoteAgentArtifactDto> currentArtifacts,
+        IReadOnlyList<QuoteAgentThinkingStepDto> currentThinkingSteps)
+    {
+        var lastAssistant = messages.LastOrDefault(message =>
+            message.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase));
+        if (lastAssistant is null)
+        {
+            return;
+        }
+
+        if (lastAssistant.ThinkingSteps.Count == 0 && currentThinkingSteps.Count > 0)
+        {
+            lastAssistant.ThinkingSteps = CloneThinkingSteps(currentThinkingSteps).ToList();
+        }
+
+        var generatedPreview = currentArtifacts.LastOrDefault(IsGeneratedViewerArtifactWithCommands);
+        if (generatedPreview is null ||
+            lastAssistant.Artifacts.Any(artifact => artifact.ArtifactId == generatedPreview.ArtifactId))
+        {
+            return;
+        }
+
+        lastAssistant.Artifacts.Add(CloneArtifact(generatedPreview));
+    }
+
+    private static bool IsGeneratedViewerArtifactWithCommands(QuoteAgentArtifactDto artifact)
+    {
+        return artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("cad_commands", out var commandsJson) &&
+            !string.IsNullOrWhiteSpace(commandsJson);
+    }
+
+    private static QuoteAgentArtifactDto CloneArtifact(QuoteAgentArtifactDto artifact)
+    {
+        return new QuoteAgentArtifactDto
+        {
+            ArtifactId = artifact.ArtifactId,
+            ArtifactType = artifact.ArtifactType,
+            Title = artifact.Title,
+            Status = artifact.Status,
+            PartId = artifact.PartId,
+            Url = artifact.Url,
+            Metadata = new Dictionary<string, string>(artifact.Metadata, StringComparer.OrdinalIgnoreCase)
+        };
+    }
+
+    private static IEnumerable<QuoteAgentThinkingStepDto> CloneThinkingSteps(
+        IEnumerable<QuoteAgentThinkingStepDto> steps)
+    {
+        return steps.Select(step => new QuoteAgentThinkingStepDto
+        {
+            StepNumber = step.StepNumber,
+            Type = step.Type,
+            Title = step.Title,
+            Detail = step.Detail,
+            Summary = step.Summary,
+            Timestamp = step.Timestamp,
+            DurationMs = step.DurationMs
+        });
     }
 }

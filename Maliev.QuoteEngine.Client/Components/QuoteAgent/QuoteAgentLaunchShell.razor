@@ -1762,8 +1762,27 @@
             }
             else
             {
+                var selectedGeneratedViewer = SelectedGeneratedViewerArtifact;
                 var selectedArtifactPreview = SelectedArtifactPreviewItem;
-                if (selectedArtifactPreview is not null)
+                if (selectedGeneratedViewer is not null &&
+                    TryGetGeneratedViewerCommands(selectedGeneratedViewer, out var selectedGeneratedCommandsJson))
+                {
+                    <div class="qe-agent-artifact-preview-shell">
+                        <section class="@($"qe-agent-artifact-viewer {UiFocusClass("viewer", ArtifactFocusKey(selectedGeneratedViewer))}")" aria-label="@Text("Generated 3D preview", "พรีวิว 3D ที่สร้างขึ้น")">
+                            <header>
+                                <div>
+                                    <span>@Text("Generated 3D preview", "พรีวิว 3D ที่สร้างขึ้น")</span>
+                                    <strong>@selectedGeneratedViewer.Title</strong>
+                                </div>
+                                <small>@selectedGeneratedViewer.Status</small>
+                            </header>
+                            <div class="qe-agent-artifact-viewer-canvas qe-agent-artifact-generated-viewer">
+                                <QeInlinePartViewer CommandsJson="@selectedGeneratedCommandsJson" />
+                            </div>
+                        </section>
+                    </div>
+                }
+                else if (selectedArtifactPreview is not null)
                 {
                     <div class="qe-agent-artifact-preview-shell">
                         <section class="@($"qe-agent-artifact-context {UiFocusClass("artifact", selectedArtifactPreview.Source)}")" aria-label="@Text("Selected artifact preview", "ตัวอย่างไฟล์งานที่เลือก")">
@@ -2613,6 +2632,10 @@
     private PreviewItem? SelectedArtifactPreviewItem => _selectedArtifact is null
         ? null
         : BuildArtifactPreviewItem(_selectedArtifact);
+    private QuoteAgentArtifactDto? SelectedGeneratedViewerArtifact => _selectedArtifact is not null &&
+        IsGeneratedViewerArtifact(_selectedArtifact)
+            ? _selectedArtifact
+            : null;
     private AgentWorkbenchSnapshot? LatestWorkbench => _messages.LastOrDefault(message => message.Workbench is not null)?.Workbench ?? _stateWorkbench;
     private string ProjectSummaryTitle => string.IsNullOrWhiteSpace(_projectName)
         ? Text("Untitled project", "โปรเจกต์ยังไม่มีชื่อ")
@@ -3355,7 +3378,14 @@
 
         foreach (var message in history.Messages)
         {
-            _messages.Add(new AgentMessageRow(message.Role, message.Content, createdAt: message.CreatedAt));
+            var restored = new AgentMessageRow(message.Role, message.Content, createdAt: message.CreatedAt);
+            if (message.Role.Equals("assistant", StringComparison.OrdinalIgnoreCase))
+            {
+                RestoreThinkingSteps(restored, message.ThinkingSteps);
+                restored.InlineViewer = FindInlinePreview(message.Artifacts);
+            }
+
+            _messages.Add(restored);
         }
 
         RequestScrollToLatestMessage();
@@ -4277,6 +4307,42 @@
 
         RequestScrollToLatestMessage();
         StateHasChanged();
+    }
+
+    private void RestoreThinkingSteps(
+        AgentMessageRow assistantMessage,
+        IReadOnlyList<QuoteAgentThinkingStepDto> thinkingSteps)
+    {
+        if (thinkingSteps.Count == 0)
+        {
+            return;
+        }
+
+        assistantMessage.ThinkingSteps = thinkingSteps
+            .OrderBy(step => step.StepNumber <= 0 ? int.MaxValue : step.StepNumber)
+            .ToList();
+
+        foreach (var step in assistantMessage.ThinkingSteps)
+        {
+            if (step.Type.Equals("reasoning", StringComparison.OrdinalIgnoreCase) &&
+                !string.IsNullOrWhiteSpace(step.Detail))
+            {
+                assistantMessage.AppendReasoningThought(step.Detail);
+                continue;
+            }
+
+            var summary = string.IsNullOrWhiteSpace(step.Summary)
+                ? ThinkingStepTitle(step)
+                : step.Summary;
+            assistantMessage.AddReasoningTool(summary);
+        }
+
+        var totalDurationMs = assistantMessage.ThinkingSteps
+            .Where(step => step.DurationMs is > 0)
+            .Sum(step => step.DurationMs!.Value);
+        assistantMessage.ThinkingDurationSeconds = totalDurationMs > 0
+            ? Math.Max(1, (int)Math.Ceiling(totalDurationMs / 1000d))
+            : 1;
     }
 
     private void ApplyStreamingThinkingStep(QuoteAgentThinkingStepDto step)
@@ -5710,8 +5776,7 @@
             return null;
         }
 
-        if (!generated.Metadata.TryGetValue("cad_commands", out var commandsJson) ||
-            string.IsNullOrWhiteSpace(commandsJson))
+        if (!TryGetGeneratedViewerCommands(generated, out var commandsJson))
         {
             return null;
         }
@@ -5724,6 +5789,20 @@
             FeedbackComment = ArtifactMetadata(generated, "customerComment") ?? string.Empty,
             FeedbackStatus = InlineViewerFeedbackStatus(generated)
         };
+    }
+
+    private static bool TryGetGeneratedViewerCommands(QuoteAgentArtifactDto artifact, out string commandsJson)
+    {
+        commandsJson = string.Empty;
+        if (!IsGeneratedViewerArtifact(artifact) ||
+            !artifact.Metadata.TryGetValue("cad_commands", out var value) ||
+            string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        commandsJson = value;
+        return true;
     }
 
     private static string InlineViewerFeedbackStatus(QuoteAgentArtifactDto artifact)

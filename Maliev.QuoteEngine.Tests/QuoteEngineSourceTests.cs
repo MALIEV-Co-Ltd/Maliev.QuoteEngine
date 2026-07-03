@@ -4717,16 +4717,17 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QeInlinePartViewer_preserves_js_preview_error_for_customer_retry()
+    public void QeInlinePartViewer_sanitizes_internal_js_preview_errors_for_customer_retry()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor")
             .ReplaceLineEndings("\n");
 
         Assert.Contains("private string _loadErrorMessage = DefaultLoadErrorMessage;", component, StringComparison.Ordinal);
+        Assert.Contains("InvalidCommandsLoadErrorMessage", component, StringComparison.Ordinal);
         Assert.Contains("<span>@_loadErrorMessage</span>", component, StringComparison.Ordinal);
 
         var catchStart = component.IndexOf("\n        catch (JSException ex)", StringComparison.Ordinal);
-        Assert.True(catchStart >= 0, "preview creation must preserve JS exception details.");
+        Assert.True(catchStart >= 0, "preview creation must sanitize JS exception details.");
 
         var catchEnd = component.IndexOf("StateHasChanged();", catchStart, StringComparison.Ordinal);
         Assert.True(catchEnd > catchStart, "preview creation catch block must call StateHasChanged.");
@@ -4743,7 +4744,44 @@ public sealed class QuoteEngineSourceTests
 
         var helper = component[helperStart..helperEnd];
         Assert.Contains("DefaultLoadErrorMessage", helper, StringComparison.Ordinal);
+        Assert.Contains("IsInternalPreviewException(trimmed)", helper, StringComparison.Ordinal);
         Assert.Contains("PreviewErrorMessageMaxLength", helper, StringComparison.Ordinal);
+        Assert.Contains("Symbol.iterator", component, StringComparison.Ordinal);
+        Assert.Contains("is not iterable", component, StringComparison.Ordinal);
+        Assert.Contains("cannot read property", component, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_restores_history_thinking_steps_and_generated_inline_preview()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
+            .ReplaceLineEndings("\n");
+
+        var loadStart = shell.IndexOf("private async Task LoadMessageHistoryAsync", StringComparison.Ordinal);
+        Assert.True(loadStart >= 0, "LoadMessageHistoryAsync must exist.");
+
+        var loadEnd = shell.IndexOf("\n    private async Task LoadProjectNavigationAsync", loadStart, StringComparison.Ordinal);
+        Assert.True(loadEnd > loadStart, "LoadMessageHistoryAsync must end before LoadProjectNavigationAsync.");
+
+        var loadBlock = shell[loadStart..loadEnd];
+        Assert.Contains("RestoreThinkingSteps(restored, message.ThinkingSteps);", loadBlock, StringComparison.Ordinal);
+        Assert.Contains("restored.InlineViewer = FindInlinePreview(message.Artifacts);", loadBlock, StringComparison.Ordinal);
+
+        var restoreStart = shell.IndexOf("private void RestoreThinkingSteps(", StringComparison.Ordinal);
+        Assert.True(restoreStart >= 0, "RestoreThinkingSteps must exist.");
+
+        var restoreEnd = shell.IndexOf("\n    private void ApplyStreamingThinkingStep", restoreStart, StringComparison.Ordinal);
+        Assert.True(restoreEnd > restoreStart, "RestoreThinkingSteps must end before ApplyStreamingThinkingStep.");
+
+        var restoreBlock = shell[restoreStart..restoreEnd];
+        Assert.Contains("assistantMessage.ThinkingSteps = thinkingSteps", restoreBlock, StringComparison.Ordinal);
+        Assert.Contains("assistantMessage.AppendReasoningThought(step.Detail);", restoreBlock, StringComparison.Ordinal);
+        Assert.Contains("assistantMessage.AddReasoningTool(summary);", restoreBlock, StringComparison.Ordinal);
+
+        Assert.Contains("private QuoteAgentArtifactDto? SelectedGeneratedViewerArtifact", shell, StringComparison.Ordinal);
+        Assert.Contains("TryGetGeneratedViewerCommands(selectedGeneratedViewer, out var selectedGeneratedCommandsJson)", shell, StringComparison.Ordinal);
+        Assert.Contains("<QeInlinePartViewer CommandsJson=\"@selectedGeneratedCommandsJson\" />", shell, StringComparison.Ordinal);
+        Assert.Contains("private static bool TryGetGeneratedViewerCommands", shell, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -442,6 +442,8 @@ internal sealed class QuoteAgentSessionState
 
     public List<QuoteAgentArtifactDto> Artifacts { get; } = [];
 
+    public List<QuoteAgentThinkingStepDto> LastAssistantThinkingSteps { get; } = [];
+
     public List<QuoteAgentProposedActionDto> ProposedActions { get; } = [];
 
     public List<QuoteAgentUiDirectiveDto> UiDirectives { get; } = [];

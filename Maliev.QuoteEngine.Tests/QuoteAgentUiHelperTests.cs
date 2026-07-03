@@ -7,19 +7,36 @@ namespace Maliev.QuoteEngine.Tests;
 public sealed class QuoteAgentUiHelperTests
 {
     [Fact]
-    public void Visible_artifacts_exclude_redundant_viewer_entries()
+    public void Visible_artifacts_exclude_uploaded_viewers_but_keep_generated_previews()
     {
         var artifacts = new[]
         {
             new QuoteAgentArtifactDto { ArtifactType = "viewer", Title = "3D viewer - Ring1.stl", Status = "Ready" },
+            new QuoteAgentArtifactDto
+            {
+                ArtifactType = "viewer",
+                Title = "Generated hand keychain preview",
+                Status = "Ready",
+                Metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["generated"] = "true",
+                    ["cad_commands"] = "[]"
+                }
+            },
             new QuoteAgentArtifactDto { ArtifactType = "dfm", Title = "DFM analysis - Ring1.stl", Status = "Ready" },
             new QuoteAgentArtifactDto { ArtifactType = "summary", Title = "Project summary", Status = "Ready" }
         };
 
         var visible = artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact).ToList();
 
-        Assert.Equal(2, visible.Count);
-        Assert.DoesNotContain(visible, artifact => string.Equals(artifact.ArtifactType, "viewer", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(3, visible.Count);
+        Assert.DoesNotContain(visible, artifact =>
+            string.Equals(artifact.ArtifactType, "viewer", StringComparison.OrdinalIgnoreCase) &&
+            !artifact.Metadata.TryGetValue("generated", out _));
+        Assert.Contains(visible, artifact =>
+            string.Equals(artifact.ArtifactType, "viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(visible, artifact => artifact.ArtifactType == "dfm");
         Assert.Contains(visible, artifact => artifact.ArtifactType == "summary");
     }

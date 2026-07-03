@@ -8,7 +8,9 @@ public static class QuoteAgentUiHelpers
 {
     public static bool IsVisibleArtifact(QuoteAgentArtifactDto artifact)
     {
-        return !string.Equals(artifact.ArtifactType, "viewer", StringComparison.OrdinalIgnoreCase);
+        return !string.Equals(artifact.ArtifactType, "viewer", StringComparison.OrdinalIgnoreCase) ||
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsAtScrollBottom(double scrollTop, double scrollHeight, double clientHeight)

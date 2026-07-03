@@ -615,4 +615,10 @@ public sealed class ChatbotConversationMessageResponse
 
     /// <summary>Gets or sets the message creation timestamp.</summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+
+    /// <summary>Gets or sets persisted thinking steps, when ChatbotService includes them.</summary>
+    public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
+
+    /// <summary>Gets or sets persisted visible artifacts, when ChatbotService includes them.</summary>
+    public List<QuoteAgentArtifactDto> Artifacts { get; set; } = [];
 }

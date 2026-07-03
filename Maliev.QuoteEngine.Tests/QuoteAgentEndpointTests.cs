@@ -325,6 +325,109 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_history_restores_generated_preview_and_thinking_steps()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var downstreamChatbotSessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f");
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ConversationMessages = new ChatbotConversationMessagesResponse
+            {
+                SessionId = downstreamChatbotSessionId,
+                Language = "en",
+                Messages =
+                [
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "user",
+                        Content = "Make a hand keychain from my sketch.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:00Z")
+                    },
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "assistant",
+                        Content = "I created a generated 3D preview for the hand keychain.",
+                        CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:01Z"),
+                        ThinkingSteps =
+                        [
+                            new QuoteAgentThinkingStepDto
+                            {
+                                StepNumber = 1,
+                                Type = "function_call",
+                                Title = "quote_generate_3d_preview",
+                                Summary = "Generated a 3D preview from the sketch."
+                            }
+                        ]
+                    }
+                ]
+            }
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var turn = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = quoteSessionId,
+            Message = "Make a hand keychain from my sketch.",
+            Language = "en"
+        });
+        Assert.Equal(HttpStatusCode.OK, turn.StatusCode);
+
+        object[] commands =
+        [
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 80.0, 40.0, 6.0 }
+            },
+            new
+            {
+                op = "cylinder",
+                id = "hole",
+                Params = new[] { 2.5, 10.0 }
+            },
+            new
+            {
+                op = "cut",
+                targetId = "base",
+                toolId = "hole",
+                resultId = "keychain"
+            }
+        ];
+
+        await ExecuteToolAsync(client, quoteSessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Hand keychain 80x40x6mm with 5mm hole", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        var history = await client.GetFromJsonAsync<QuoteAgentMessageHistoryResponse>(
+            $"/quote/v1/agent/sessions/{quoteSessionId:D}/messages",
+            JsonOptions);
+
+        Assert.NotNull(history);
+        Assert.Equal(2, history.Messages.Count);
+        var assistant = history.Messages[1];
+        Assert.Single(assistant.ThinkingSteps);
+        Assert.Equal("quote_generate_3d_preview", assistant.ThinkingSteps[0].Title);
+        var artifact = Assert.Single(assistant.Artifacts);
+        Assert.Equal("viewer", artifact.ArtifactType);
+        Assert.True(artifact.Metadata.TryGetValue("generated", out var generated));
+        Assert.Equal("true", generated);
+        Assert.True(artifact.Metadata.TryGetValue("cad_commands", out var commandsJson));
+        Assert.False(string.IsNullOrWhiteSpace(commandsJson));
+    }
+
+    [Fact]
     public async Task Agent_message_history_uses_persisted_mapping_when_session_store_is_cold()
     {
         var quoteSessionId = Guid.NewGuid();
@@ -5958,6 +6061,69 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_rewrites_box_like_hand_keychain_to_profile_outline()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 80.0, 40.0, 6.0 }
+            },
+            new
+            {
+                op = "cylinder",
+                id = "hole",
+                Params = new[] { 2.5, 10.0 }
+            },
+            new
+            {
+                op = "cut",
+                targetId = "base",
+                toolId = "hole",
+                resultId = "keychain"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Hand keychain 80x40x6mm with 5mm keyring hole", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.Equal(4, toolDoc.RootElement.GetProperty("command_count").GetInt32());
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommands = commandDoc.RootElement.EnumerateArray().ToArray();
+        var ops = normalizedCommands
+            .Select(command => command.GetProperty("op").GetString() ?? string.Empty)
+            .ToArray();
+
+        Assert.Equal("extrude", ops[0]);
+        Assert.DoesNotContain("box", ops);
+        Assert.Contains("cylinder", ops);
+        Assert.Contains("translate", ops);
+        Assert.Contains("cut", ops);
+
+        var profile = normalizedCommands[0].GetProperty("profile");
+        Assert.Equal("XY", profile.GetProperty("plane").GetString());
+        Assert.True(profile.GetProperty("segments").GetArrayLength() >= 20);
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_operation_and_type_command_aliases()
     {
         using var client = factory.CreateClient();
@@ -9063,6 +9229,50 @@ Customer message:
         using var toolDoc = JsonDocument.Parse(toolJson);
         Assert.True(toolDoc.RootElement.TryGetProperty("error", out var error));
         Assert.Contains("unsupported profile segment", error.GetString(), StringComparison.OrdinalIgnoreCase);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.DoesNotContain(state.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(state.Parts, part => part.Status == "ModelGenerated");
+    }
+
+    [Fact]
+    public async Task Generate_3d_preview_tool_rejects_scalar_profile_segment_params_before_creating_ready_artifact()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var commands = new[]
+        {
+            new
+            {
+                op = "extrude",
+                id = "part",
+                Params = new[] { 6.0 },
+                profile = new
+                {
+                    segments = new object[]
+                    {
+                        new { type = "move", Params = 25.0 },
+                        new { type = "line", Params = new[] { 10.0, 0.0 } },
+                        new { type = "line", Params = new[] { 10.0, 10.0 } }
+                    }
+                }
+            }
+        };
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Malformed scalar profile point", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("error", out var error));
+        Assert.Contains("profile segment 1 requires 2 finite parameter", error.GetString(), StringComparison.OrdinalIgnoreCase);
 
         var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
         Assert.DoesNotContain(state.Artifacts, artifact =>
