@@ -5650,6 +5650,40 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_adds_extrude_silhouette_guidance_only_for_preview_requests()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var pricing = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "How much for 3D printing in PLA?",
+            Language = "en"
+        }, JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, pricing.StatusCode);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.DoesNotContain("3D preview policy:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+
+        var previewRequest = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Create a 3D preview design of a hand keychain from my sketch.",
+            Language = "en"
+        }, JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, previewRequest.StatusCode);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains("3D preview policy:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("extrude", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Quote_ask_customer_sets_pending_question_on_session()
     {
         using var client = factory.CreateClient();

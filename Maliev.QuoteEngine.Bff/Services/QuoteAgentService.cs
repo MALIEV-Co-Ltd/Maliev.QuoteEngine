@@ -5960,6 +5960,16 @@ internal sealed class QuoteAgentService(
                 "Treat their message as a direct response to that referenced content.");
         }
 
+        if (IsGeneratedPreviewRequest(message))
+        {
+            contextLines.Add(
+                "3D preview policy: When you call quote_generate_3d_preview for a recognizable or organic shape " +
+                "(a hand, letter, logo, animal, star, heart, or a silhouette from a sketch), emit an 'extrude' command " +
+                "whose profile traces the object's 2D outline with move/line/arc segments - do not approximate it with " +
+                "a plain box or cylinder. Reserve bare box/cylinder primitives for parts that are genuinely box- or " +
+                "cylinder-shaped. Match the customer's sketch or description as closely as the primitives allow.");
+        }
+
         // Dynamic state follows the durable guidance so it is trimmed first when a turn
         // exceeds the limit. Each block below is authoritative-by-tool, not by this snapshot.
         if (state.Parts.Count > 0)
