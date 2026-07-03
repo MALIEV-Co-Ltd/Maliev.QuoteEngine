@@ -2091,7 +2091,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-reasoning-thought", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-reasoning-tool\"", component, StringComparison.Ordinal);
         Assert.Contains("AppendReasoningThought(streamEvent.Thought)", component, StringComparison.Ordinal);
-        Assert.Contains("AddReasoningTool(ThinkingStepTitle(step))", component, StringComparison.Ordinal);
+        Assert.Contains("AddReasoningTool(ThinkingStepSummary(step))", component, StringComparison.Ordinal);
+        Assert.Contains("private static string ThinkingStepSummary(QuoteAgentThinkingStepDto step)", component, StringComparison.Ordinal);
+        Assert.Contains("string.IsNullOrWhiteSpace(step.Summary)", component, StringComparison.Ordinal);
 
         // The bottom tool-call summary timeline is gone from the response.
         Assert.DoesNotContain("class=\"qe-agent-thinking-shell\"", component, StringComparison.Ordinal);

@@ -4452,10 +4452,7 @@
                 continue;
             }
 
-            var summary = string.IsNullOrWhiteSpace(step.Summary)
-                ? ThinkingStepTitle(step)
-                : step.Summary;
-            assistantMessage.AddReasoningTool(summary);
+            assistantMessage.AddReasoningTool(ThinkingStepSummary(step));
         }
 
         var totalDurationMs = assistantMessage.ThinkingSteps
@@ -4488,7 +4485,7 @@
         {
             assistantMessage.ThinkingStartedAt ??= DateTimeOffset.UtcNow;
             assistantMessage.IsThinking = true;
-            assistantMessage.AddReasoningTool(ThinkingStepTitle(step));
+            assistantMessage.AddReasoningTool(ThinkingStepSummary(step));
         }
 
         RequestScrollToLatestMessage();
@@ -5933,6 +5930,13 @@
     {
         var title = string.IsNullOrWhiteSpace(step.Title) ? step.Type : step.Title;
         return HumanizeAgentActivity(title);
+    }
+
+    private static string ThinkingStepSummary(QuoteAgentThinkingStepDto step)
+    {
+        return string.IsNullOrWhiteSpace(step.Summary)
+            ? ThinkingStepTitle(step)
+            : step.Summary;
     }
 
     private static string HumanizeAgentActivity(string value)
