@@ -4081,6 +4081,39 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_draft_project_confirmation_promotes_session_project_name_to_visible_state()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-thai-draft-title@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        var setNameJson = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_set_project_name",
+            new Dictionary<string, JsonElement>
+            {
+                ["name"] = JsonSerializer.SerializeToElement("หวีพลาสติก", JsonOptions)
+            });
+        using (var setNameDocument = JsonDocument.Parse(setNameJson))
+        {
+            Assert.Equal("หวีพลาสติก", setNameDocument.RootElement.GetProperty("project_name").GetString());
+        }
+
+        var draftState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_draft_project");
+        var draftAction = Assert.Single(draftState.ProposedActions);
+        Assert.Equal("draft_project", draftAction.ActionType);
+
+        var draftResult = await ConfirmActionAsync(client, draftAction.ActionId);
+
+        Assert.NotNull(draftResult.State);
+        Assert.Equal("หวีพลาสติก", draftResult.State.ProjectName);
+        var draftArtifact = Assert.Single(draftResult.State.Artifacts, artifact => artifact.ArtifactType == "draft_project");
+        Assert.Equal("หวีพลาสติก", draftArtifact.Title);
+        Assert.Equal("หวีพลาสติก", factory.LastProjectDraftCreate?.Title);
+    }
+
+    [Fact]
     public async Task Agent_duplicate_project_blocks_until_draft_project_exists()
     {
         await using var scopedFactory = CreateAgentFactory();
@@ -5537,6 +5570,42 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_turn_adds_auth_instruction_when_auth_handoff_is_present_without_model_auth_text()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "เตรียมโปรเจกต์ชั่วคราวสำหรับหวีพลาสติกไว้แล้ว ส่งไฟล์ 3D เพื่อประเมินราคาได้เลย"
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "สอบถามราคาพิมพ์ 3D ครับ อยากทำหวีพลาสติก",
+            Language = "th"
+        });
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.NotNull(body);
+        Assert.NotNull(body.AuthHandoff);
+        Assert.Equal("authentication_required", body.AuthHandoff.Status);
+        Assert.Contains("เข้าสู่ระบบ", body.AssistantText, StringComparison.Ordinal);
+        Assert.Contains("สมัครบัญชี", body.AssistantText, StringComparison.Ordinal);
+        Assert.Contains("Make Studio", body.AssistantText, StringComparison.Ordinal);
+        Assert.DoesNotContain("/auth/sign-in", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Auth policy: When customer_authenticated is blocked", chatbot.LastSendRequest!.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Agent_turn_removes_model_written_google_drive_authorization_urls()
     {
         var chatbot = new RecordingChatbotServiceClient
@@ -5700,6 +5769,7 @@ Customer message:
         Assert.Contains("Surface: QuoteEngine chat-based custom manufacturing platform.", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("Current gates:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("Current settings:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
+        Assert.Contains("Auth policy: When customer_authenticated is blocked", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("Customer message:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.Contains("How much for 3D printing in PLA?", chatbot.LastSendRequest.Content, StringComparison.Ordinal);
         Assert.DoesNotContain("Guidance:", chatbot.LastSendRequest.Content, StringComparison.Ordinal);

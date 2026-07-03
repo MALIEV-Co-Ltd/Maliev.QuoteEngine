@@ -721,7 +721,7 @@
     border-right: 1px solid var(--qe-agent-line);
     min-width: 0;
     min-height: 0;
-    overflow: hidden;
+    overflow: visible;
     box-shadow: none;
     animation: none;
     transition: padding 260ms cubic-bezier(.2, .8, .2, 1);
@@ -1320,6 +1320,32 @@
     margin-top: 16px;
 }
 
+.qe-agent-rail-group-label {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 26px;
+    padding: 4px 8px;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.qe-agent-rail-group-label span,
+.qe-agent-rail-group-label small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-rail-group-label small {
+    font-size: 10px;
+    font-weight: 500;
+}
+
 .qe-agent-rail-group-toggle {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 18px;
@@ -1368,8 +1394,27 @@
     background: transparent;
 }
 
+.qe-agent-project-row--temporary {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.qe-agent-project-row--temporary a {
+    display: grid;
+    gap: 1px;
+}
+
 .qe-agent-project-row span {
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-project-row small {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--qe-agent-muted);
+    font-size: 10px;
+    line-height: 1.15;
     text-overflow: ellipsis;
     white-space: nowrap;
 }

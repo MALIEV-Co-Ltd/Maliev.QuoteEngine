@@ -2877,8 +2877,9 @@
         : Text("New to MALIEV? Create account", "ยังไม่มีบัญชี? สร้างบัญชี");
     private bool AuthEmailLooksValid => !string.IsNullOrWhiteSpace(_authEmail) &&
         Regex.IsMatch(_authEmail.Trim(), "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", RegexOptions.CultureInvariant);
-    private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPinned && !project.IsArchived);
-    private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
+    private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPersisted && project.IsPinned && !project.IsArchived);
+    private IEnumerable<ProjectNavItem> TemporaryProjects => _projects.Where(project => !project.IsPersisted && !project.IsArchived);
+    private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => project.IsPersisted && !project.IsPinned && !project.IsArchived);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
     private bool SearchHasMinimumQuery => _searchQuery.Trim().Length >= SearchMinimumCharacters;
     private bool CanAnimateSearchPrompt => string.IsNullOrEmpty(_searchQuery) && !_searchPromptHovered && !_searchPromptFocused;
@@ -3097,7 +3098,7 @@
         }
         else
         {
-            _projects.Clear();
+            _projects.RemoveAll(project => project.IsPersisted);
             _customerSearchResults.Clear();
             _customerSearchUnavailable = true;
             _projectNavigationLoaded = false;
@@ -3501,8 +3502,16 @@
         try
         {
             var projects = await Api.GetProjectNavigationAsync();
+            var temporaryProjects = _projects
+                .Where(project => !project.IsPersisted)
+                .ToList();
+            var persistedProjects = projects
+                .Select(ProjectNavItem.FromDto)
+                .ToList();
             _projects.Clear();
-            _projects.AddRange(projects.Select(ProjectNavItem.FromDto));
+            _projects.AddRange(temporaryProjects.Where(temporary =>
+                persistedProjects.All(project => project.ProjectId != temporary.ProjectId)));
+            _projects.AddRange(persistedProjects);
             _projectNavigationLoaded = true;
         }
         catch (QuoteEngineApiException ex)

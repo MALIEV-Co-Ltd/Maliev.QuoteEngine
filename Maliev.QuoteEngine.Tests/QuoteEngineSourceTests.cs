@@ -1086,7 +1086,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private readonly List<ProjectNavItem> _projects = [];", component, StringComparison.Ordinal);
         Assert.Contains("GetProjectNavigationAsync", component, StringComparison.Ordinal);
         Assert.Contains("ProjectNavItem.FromDto", component, StringComparison.Ordinal);
-        Assert.Contains("private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);", component, StringComparison.Ordinal);
+        Assert.Contains("private IEnumerable<ProjectNavItem> TemporaryProjects => _projects.Where(project => !project.IsPersisted && !project.IsArchived);", component, StringComparison.Ordinal);
+        Assert.Contains("private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => project.IsPersisted && !project.IsPinned && !project.IsArchived);", component, StringComparison.Ordinal);
+        Assert.Contains("_projects.RemoveAll(project => project.IsPersisted);", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-rail-group qe-agent-rail-group--temporary\"", component, StringComparison.Ordinal);
+        Assert.Contains("Saved after sign-in", component, StringComparison.Ordinal);
         Assert.Contains("@foreach (var project in RegularProjects)", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-row\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-management-row\"", component, StringComparison.Ordinal);
@@ -2417,6 +2421,8 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("AuthMethodIcon(method)", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-row.is-auth-required", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-signin-tooltip", styles, StringComparison.Ordinal);
+        var railBlock = ExtractSourceBlock(styles, ".qe-agent-rail {\n    position: relative;", ".qe-agent-rail-head {");
+        Assert.Contains("overflow: visible;", railBlock, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-agent-auth-handoff", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-agent-auth-methods", styles, StringComparison.Ordinal);
     }
@@ -2470,6 +2476,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("await LoadStateAsync(forceReloadExistingMessages);", shell, StringComparison.Ordinal);
         Assert.Contains("await InvokeAsync(StateHasChanged);", shell, StringComparison.Ordinal);
         Assert.Contains("await LoadMessageHistoryAsync(forceReloadExistingMessages);", shell, StringComparison.Ordinal);
+        Assert.Contains("await ApplyAgentProjectNameAsync(state.ProjectName);", shell, StringComparison.Ordinal);
+        Assert.Contains("_stateWorkbench = BuildRestoredWorkbench(state);", shell, StringComparison.Ordinal);
+        Assert.Contains("restored.InlineViewer = FindInlinePreview(message.Artifacts);", shell, StringComparison.Ordinal);
         Assert.Contains("if (SessionId == Guid.Empty || (_messages.Count > 0 && !forceReloadExistingMessages))", shell, StringComparison.Ordinal);
         Assert.Contains("if (history.Messages.Count == 0)", shell, StringComparison.Ordinal);
         Assert.Contains("_messages.Clear();", shell, StringComparison.Ordinal);
