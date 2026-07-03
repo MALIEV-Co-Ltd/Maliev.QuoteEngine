@@ -7768,9 +7768,20 @@ Customer message:
             state.Parts.Add(part);
         }
 
+        var processId = InferProcessFromMessage(description) ?? process;
         part.FileName = $"[Preview] {description}";
-        part.ProcessId = InferProcessFromMessage(description) ?? process;
-        part.MaterialId = InferMaterial(process, description);
+        part.ProcessId = processId;
+        part.MaterialId = InferMaterial(processId, description);
+        part.FinishId = InferFinish(processId, description);
+        part.FinishCode = part.FinishId;
+        part.ToleranceId = InferTolerance(processId, description);
+        part.ToleranceCode = part.ToleranceId;
+        var color = InferColor(description);
+        if (!color.Equals("unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            part.Color = color;
+        }
+
         part.Quantity = InferQuantity(description);
         part.VolumeCc = EstimateCommandsVolume(commands);
         part.SurfaceAreaCm2 = EstimateCommandsArea(commands);
@@ -7779,6 +7790,12 @@ Customer message:
         part.BodyCount = commands.Count;
         part.SelectedBodyIndex = 0;
         part.PartNotes = "Generated 3D preview from inferred description.";
+        if (string.IsNullOrWhiteSpace(state.LeadTimeCode))
+        {
+            state.LeadTimeCode = "STANDARD";
+        }
+
+        state.ConfigurationConfirmed = true;
     }
 
     private static IReadOnlyList<CadCommandDto> ReadCommands(IReadOnlyDictionary<string, JsonElement> arguments)
@@ -8006,6 +8023,11 @@ Customer message:
         string description,
         IReadOnlyList<CadCommandDto> commands)
     {
+        if (ShouldRewriteBoxLikeCombKeychainCommands(description, commands))
+        {
+            return BuildCombKeychainPreviewCommands(commands);
+        }
+
         if (ShouldRewriteBoxLikeHandKeychainCommands(description, commands))
         {
             return BuildHandKeychainPreviewCommands(commands);
@@ -8014,6 +8036,122 @@ Customer message:
         return ShouldRewriteCandyLikeGolfTeeCommands(description, commands)
             ? BuildGolfTeePreviewCommands(commands)
             : commands;
+    }
+
+    private static bool ShouldRewriteBoxLikeCombKeychainCommands(string description, IReadOnlyList<CadCommandDto> commands)
+    {
+        if (!IsCombKeychainDescription(description))
+        {
+            return false;
+        }
+
+        var alreadyHasProfile = commands.Any(command =>
+            command.Op.Equals("extrude", StringComparison.OrdinalIgnoreCase) &&
+            command.Profile?.Segments.Count > 0);
+        return !alreadyHasProfile &&
+            commands.Any(command => command.Op.Equals("box", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool IsCombKeychainDescription(string description)
+    {
+        var normalized = description.Trim().ToLowerInvariant();
+        return normalized.Contains("comb", StringComparison.Ordinal) &&
+            (normalized.Contains("keychain", StringComparison.Ordinal) ||
+             normalized.Contains("key chain", StringComparison.Ordinal) ||
+             normalized.Contains("พวงกุญแจ", StringComparison.Ordinal));
+    }
+
+    private static IReadOnlyList<CadCommandDto> BuildCombKeychainPreviewCommands(IReadOnlyList<CadCommandDto> commands)
+    {
+        var box = commands.FirstOrDefault(command => command.Op.Equals("box", StringComparison.OrdinalIgnoreCase));
+        var hole = commands.FirstOrDefault(command => command.Op.Equals("cylinder", StringComparison.OrdinalIgnoreCase));
+        var rawWidth = ClampPositive(FirstCommandParam(box, 0), fallback: 40d, min: 15d, max: 160d);
+        var rawHeight = ClampPositive(FirstCommandParam(box, 1), fallback: 30d, min: 12d, max: 120d);
+        var width = Math.Max(rawWidth, rawHeight);
+        var height = Math.Min(rawWidth, rawHeight);
+        var thickness = ClampPositive(FirstCommandParam(box, 2), fallback: 6d, min: 1d, max: 30d);
+        var holeRadius = ClampPositive(
+            FirstCommandParam(hole, 0),
+            fallback: 2d,
+            min: 0.8d,
+            max: Math.Min(width, height) / 5d);
+        var sx = width / 40d;
+        var sy = height / 30d;
+
+        double[] Point(double x, double y)
+        {
+            return [Math.Round(x * sx, 3), Math.Round(y * sy, 3)];
+        }
+
+        CadSegmentDto Segment(string type, double x, double y)
+        {
+            return new CadSegmentDto
+            {
+                Type = type,
+                Params = Point(x, y)
+            };
+        }
+
+        return
+        [
+            new CadCommandDto
+            {
+                Op = "extrude",
+                Id = "comb_keychain_body",
+                Params = [thickness],
+                Profile = new CadProfileDto
+                {
+                    Plane = "XY",
+                    Segments =
+                    [
+                        Segment("move", -18d, 2d),
+                        Segment("line", -17d, 6d),
+                        Segment("line", -14d, 10d),
+                        Segment("line", -10d, 13d),
+                        Segment("line", -4d, 15d),
+                        Segment("line", -2d, 9d),
+                        Segment("line", 1d, 13d),
+                        Segment("line", 4d, 9d),
+                        Segment("line", 7d, 14d),
+                        Segment("line", 10d, 10d),
+                        Segment("line", 13d, 12d),
+                        Segment("line", 15d, 7d),
+                        Segment("line", 19d, 8d),
+                        Segment("line", 20d, 5d),
+                        Segment("line", 18d, 0d),
+                        Segment("line", 14d, -5d),
+                        Segment("line", 11d, -11d),
+                        Segment("line", 7d, -14d),
+                        Segment("line", 1d, -15d),
+                        Segment("line", -6d, -15d),
+                        Segment("line", -12d, -13d),
+                        Segment("line", -16d, -9d),
+                        Segment("line", -19d, -3d),
+                        Segment("line", -18d, 2d)
+                    ]
+                }
+            },
+            new CadCommandDto
+            {
+                Op = "cylinder",
+                Id = "comb_keyring_hole",
+                Params = [holeRadius, thickness + 4d]
+            },
+            new CadCommandDto
+            {
+                Op = "translate",
+                TargetId = "comb_keyring_hole",
+                ResultId = "comb_keyring_hole_centered",
+                Offset = [0d, Math.Round(-8d * sy, 3), -2d]
+            },
+            new CadCommandDto
+            {
+                Op = "cut",
+                TargetId = "comb_keychain_body",
+                ToolId = "comb_keyring_hole_centered",
+                ResultId = "comb_keychain_preview"
+            }
+        ];
     }
 
     private static bool ShouldRewriteBoxLikeHandKeychainCommands(string description, IReadOnlyList<CadCommandDto> commands)

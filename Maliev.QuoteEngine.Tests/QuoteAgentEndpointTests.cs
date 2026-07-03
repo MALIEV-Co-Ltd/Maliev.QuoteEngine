@@ -6768,6 +6768,83 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_tool_rewrites_comb_keychain_and_allows_estimate_from_defaults()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 30.0, 40.0, 6.0 }
+            },
+            new
+            {
+                op = "cylinder",
+                id = "hole",
+                Params = new[] { 2.0, 10.0 }
+            },
+            new
+            {
+                op = "cut",
+                targetId = "base",
+                toolId = "hole",
+                resultId = "comb_keychain"
+            }
+        ];
+
+        var toolJson = await ExecuteToolAsync(client, sessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Comb keychain FDM PLA white, 30x40x6mm, one 4mm keyring hole, quantity 1, standard lead time", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        using var toolDoc = JsonDocument.Parse(toolJson);
+        Assert.True(toolDoc.RootElement.TryGetProperty("success", out var success) && success.GetBoolean());
+        Assert.Equal(4, toolDoc.RootElement.GetProperty("command_count").GetInt32());
+
+        var previewState = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var viewerArtifact = Assert.Single(previewState.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            artifact.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        using var commandDoc = JsonDocument.Parse(viewerArtifact.Metadata["cad_commands"]);
+        var normalizedCommands = commandDoc.RootElement.EnumerateArray().ToArray();
+        var ops = normalizedCommands
+            .Select(command => command.GetProperty("op").GetString() ?? string.Empty)
+            .ToArray();
+
+        Assert.Equal("extrude", ops[0]);
+        Assert.DoesNotContain("box", ops);
+        Assert.Contains("cylinder", ops);
+        Assert.Contains("translate", ops);
+        Assert.Contains("cut", ops);
+
+        var profile = normalizedCommands[0].GetProperty("profile");
+        Assert.Equal("XY", profile.GetProperty("plane").GetString());
+        Assert.True(profile.GetProperty("segments").GetArrayLength() >= 20);
+        Assert.Contains(previewState.Gates, gate =>
+            gate.Code == "configuration_complete" &&
+            gate.Status == "passed");
+
+        var part = Assert.Single(previewState.Parts);
+        Assert.Equal("fdm", part.ProcessId);
+        Assert.Equal("white", part.Color);
+        Assert.True(part.Quantity > 0);
+
+        var pricedState = await ExecuteToolForStateAsync(client, sessionId, "quote_calculate_estimate");
+
+        Assert.NotNull(pricedState.Estimate);
+        Assert.True(pricedState.Estimate.Total > 0);
+        Assert.Contains(pricedState.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_accepts_operation_and_type_command_aliases()
     {
         using var client = factory.CreateClient();

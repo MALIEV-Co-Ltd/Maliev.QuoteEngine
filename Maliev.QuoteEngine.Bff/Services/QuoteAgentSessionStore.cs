@@ -269,6 +269,7 @@ internal sealed class QuoteAgentSessionStore
             (status.Equals("Analyzed", StringComparison.OrdinalIgnoreCase) ||
              status.Equals("DfmAnalysisReady", StringComparison.OrdinalIgnoreCase) ||
              status.Equals("GlbReady", StringComparison.OrdinalIgnoreCase) ||
+             status.Equals("ModelGenerated", StringComparison.OrdinalIgnoreCase) ||
              status.Equals("Failed", StringComparison.OrdinalIgnoreCase));
     }
 
