@@ -279,4 +279,102 @@ public sealed class BffMetricsTests
         Assert.Equal("server_completed", tags["decision"]);
         Assert.Equal("consumed", tags["server_cpu"]);
     }
+
+    [Fact]
+    public void RecordPreviewGeneration_EmitsOutcomeTag()
+    {
+        var measurements = CaptureCounterMeasurements(
+            "quote_agent_preview_generations",
+            metrics => metrics.RecordPreviewGeneration("validation_rejected"));
+
+        var tags = Assert.Single(measurements);
+        Assert.Equal("validation_rejected", tags["outcome"]);
+    }
+
+    [Fact]
+    public void RecordPreviewGeneration_NormalizesUnknownOutcomeToOther()
+    {
+        var measurements = CaptureCounterMeasurements(
+            "quote_agent_preview_generations",
+            metrics => metrics.RecordPreviewGeneration("something-else"));
+
+        var tags = Assert.Single(measurements);
+        Assert.Equal("other", tags["outcome"]);
+    }
+
+    [Fact]
+    public void RecordPreviewBuildOutcome_FailureCarriesNormalizedErrorClass()
+    {
+        var measurements = CaptureCounterMeasurements(
+            "quote_agent_preview_build_outcomes",
+            metrics =>
+            {
+                metrics.RecordPreviewBuildOutcome(false, "invalid_geometry");
+                metrics.RecordPreviewBuildOutcome(false, "totally-unknown-class");
+            });
+
+        Assert.Equal(2, measurements.Count);
+        Assert.Equal("build_failed", measurements[0]["outcome"]);
+        Assert.Equal("invalid_geometry", measurements[0]["error_class"]);
+        Assert.Equal("other", measurements[1]["error_class"]);
+    }
+
+    [Fact]
+    public void RecordPreviewBuildOutcome_SuccessUsesNoneErrorClass()
+    {
+        var measurements = CaptureCounterMeasurements(
+            "quote_agent_preview_build_outcomes",
+            metrics => metrics.RecordPreviewBuildOutcome(true, null));
+
+        var tags = Assert.Single(measurements);
+        Assert.Equal("success", tags["outcome"]);
+        Assert.Equal("none", tags["error_class"]);
+    }
+
+    [Fact]
+    public void RecordPreviewFeedback_EmitsSentimentTag()
+    {
+        var measurements = CaptureCounterMeasurements(
+            "quote_agent_preview_feedback",
+            metrics => metrics.RecordPreviewFeedback("up"));
+
+        var tags = Assert.Single(measurements);
+        Assert.Equal("up", tags["sentiment"]);
+    }
+
+    private static List<Dictionary<string, object?>> CaptureCounterMeasurements(
+        string instrumentName,
+        Action<BffMetrics> record)
+    {
+        var services = new ServiceCollection();
+        services.AddMetrics();
+
+        var measurements = new List<Dictionary<string, object?>>();
+        using var listener = new MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Name == instrumentName)
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var snapshot = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var tag in tags)
+            {
+                snapshot[tag.Key] = tag.Value;
+            }
+
+            measurements.Add(snapshot);
+        });
+        listener.Start();
+
+        using var provider = services.BuildServiceProvider();
+        record(new BffMetrics(provider.GetRequiredService<IMeterFactory>()));
+
+        return measurements;
+    }
 }

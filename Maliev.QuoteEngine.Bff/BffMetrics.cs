@@ -16,6 +16,9 @@ public sealed class BffMetrics
     private readonly Counter<long> _dfmExecutionDecisions;
     private readonly Histogram<long> _dfmServerAvoidedInputBytes;
     private readonly Histogram<long> _dfmServerAvoidedInputTriangles;
+    private readonly Counter<long> _previewGenerations;
+    private readonly Counter<long> _previewBuildOutcomes;
+    private readonly Counter<long> _previewFeedback;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="BffMetrics"/> class.
@@ -56,6 +59,90 @@ public sealed class BffMetrics
             "quote_dfm_server_avoided_input_triangles",
             unit: "{triangle}",
             description: "Records accepted browser-local DFM triangle workloads that avoided GeometryService server processing.");
+        _previewGenerations = meter.CreateCounter<long>(
+            "quote_agent_preview_generations",
+            unit: "{generation}",
+            description: "Counts agent 3D preview generation outcomes (generated, validation_rejected, fallback_used).");
+        _previewBuildOutcomes = meter.CreateCounter<long>(
+            "quote_agent_preview_build_outcomes",
+            unit: "{build}",
+            description: "Counts client-side 3D preview build outcomes (success, build_failed) by error class.");
+        _previewFeedback = meter.CreateCounter<long>(
+            "quote_agent_preview_feedback",
+            unit: "{feedback}",
+            description: "Counts customer thumbs feedback recorded for generated 3D previews.");
+    }
+
+    /// <summary>
+    /// Records the outcome of an agent 3D preview generation attempt.
+    /// </summary>
+    /// <param name="outcome">The generation outcome: generated, validation_rejected, or fallback_used.</param>
+    public void RecordPreviewGeneration(string? outcome)
+    {
+        _previewGenerations.Add(1, new TagList
+        {
+            { "outcome", NormalizePreviewGenerationOutcome(outcome) },
+        });
+    }
+
+    /// <summary>
+    /// Records the outcome of a client-side 3D preview build reported by the inline viewer.
+    /// </summary>
+    /// <param name="success">Whether the browser worker built the preview mesh.</param>
+    /// <param name="errorClass">The low-cardinality failure class when <paramref name="success"/> is false.</param>
+    public void RecordPreviewBuildOutcome(bool success, string? errorClass)
+    {
+        _previewBuildOutcomes.Add(1, new TagList
+        {
+            { "outcome", success ? "success" : "build_failed" },
+            { "error_class", success ? "none" : NormalizePreviewErrorClass(errorClass) },
+        });
+    }
+
+    /// <summary>
+    /// Records customer thumbs feedback recorded for a generated 3D preview.
+    /// </summary>
+    /// <param name="sentiment">The feedback sentiment: up or down.</param>
+    public void RecordPreviewFeedback(string? sentiment)
+    {
+        _previewFeedback.Add(1, new TagList
+        {
+            { "sentiment", NormalizePreviewSentiment(sentiment) },
+        });
+    }
+
+    private static string NormalizePreviewGenerationOutcome(string? outcome)
+    {
+        return NormalizeMarker(outcome, "other").ToLowerInvariant() switch
+        {
+            "generated" => "generated",
+            "validation_rejected" => "validation_rejected",
+            "fallback_used" => "fallback_used",
+            _ => "other"
+        };
+    }
+
+    private static string NormalizePreviewErrorClass(string? errorClass)
+    {
+        return NormalizeMarker(errorClass, "other").ToLowerInvariant() switch
+        {
+            "worker_unavailable" => "worker_unavailable",
+            "build_timeout" => "build_timeout",
+            "invalid_geometry" => "invalid_geometry",
+            "empty_mesh" => "empty_mesh",
+            "parse_error" => "parse_error",
+            _ => "other"
+        };
+    }
+
+    private static string NormalizePreviewSentiment(string? sentiment)
+    {
+        return NormalizeMarker(sentiment, "other").ToLowerInvariant() switch
+        {
+            "up" => "up",
+            "down" => "down",
+            _ => "other"
+        };
     }
 
     /// <summary>

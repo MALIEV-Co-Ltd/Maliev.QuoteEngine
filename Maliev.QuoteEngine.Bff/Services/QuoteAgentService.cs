@@ -99,6 +99,7 @@ internal sealed class QuoteAgentService(
     IHubContext<QuoteNotificationsHub> hubContext,
     IConfiguration configuration,
     ILogger<QuoteAgentService> logger,
+    BffMetrics metrics,
     QuoteUploadServiceClient uploadClient,
     IQuotationServiceClient quotationClient,
     IMaterialCatalogClient materialCatalog,
@@ -756,6 +757,8 @@ internal sealed class QuoteAgentService(
             state.UpdatedAt = DateTimeOffset.UtcNow;
         }
 
+        metrics.RecordPreviewFeedback(sentiment);
+
         var memoryObserved = false;
         if (customerId.HasValue)
         {
@@ -954,10 +957,14 @@ internal sealed class QuoteAgentService(
 
         // Stream the generated 3D preview to the client at creation time (typed artifact event) so the inline
         // preview appears as soon as it exists, instead of only when the whole turn completes.
-        if (toolName.Equals("quote_generate_3d_preview", StringComparison.OrdinalIgnoreCase) &&
-            IsSuccessfulToolResult(result))
+        if (toolName.Equals("quote_generate_3d_preview", StringComparison.OrdinalIgnoreCase))
         {
-            await PublishGeneratedPreviewArtifactAsync(state, context.QuoteSessionId, cancellationToken);
+            var previewGenerated = IsSuccessfulToolResult(result);
+            metrics.RecordPreviewGeneration(previewGenerated ? "generated" : "validation_rejected");
+            if (previewGenerated)
+            {
+                await PublishGeneratedPreviewArtifactAsync(state, context.QuoteSessionId, cancellationToken);
+            }
         }
 
         return result;
@@ -8311,7 +8318,7 @@ Customer message:
         return value.Length > 500 ? value[..500] : value;
     }
 
-    private static bool TryGenerateFallbackPreview(QuoteAgentSessionState state, string? message)
+    private bool TryGenerateFallbackPreview(QuoteAgentSessionState state, string? message)
     {
         if (!IsGeneratedPreviewRequest(message))
         {
@@ -8386,7 +8393,13 @@ Customer message:
             ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
         };
         var result = Generate3DPreview(state, arguments);
-        return result.GetType().GetProperty("success")?.GetValue(result) is true;
+        var succeeded = result.GetType().GetProperty("success")?.GetValue(result) is true;
+        if (succeeded)
+        {
+            metrics.RecordPreviewGeneration("fallback_used");
+        }
+
+        return succeeded;
     }
 
     private static bool IsGeneratedPreviewRequest(string? message)
