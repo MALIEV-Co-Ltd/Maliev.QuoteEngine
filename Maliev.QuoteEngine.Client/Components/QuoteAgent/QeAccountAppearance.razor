@@ -26,39 +26,37 @@
         </button>
     </div>
 
-    <div class="appearance-code-preview" aria-hidden="true">
-        <div class="appearance-code-pane is-light">
-            <div class="appearance-code-line-numbers">
-                <span>1</span>
-                <span>2</span>
-                <span>3</span>
-                <span>4</span>
-                <span>5</span>
-            </div>
-            <div class="appearance-code-lines">
-                <span>const themePreview: ThemeConfig = {</span>
-                <span>@($"surface: \"{ThemeSurface(LightProfile)}\",")</span>
-                <span>@($"accent: \"{LightProfile.Accent}\",")</span>
-                <span>@($"contrast: {LightProfile.Contrast},")</span>
-                <span>};</span>
-            </div>
-        </div>
-        <div class="appearance-code-pane is-dark">
-            <div class="appearance-code-line-numbers">
-                <span>1</span>
-                <span>2</span>
-                <span>3</span>
-                <span>4</span>
-                <span>5</span>
-            </div>
-            <div class="appearance-code-lines">
-                <span>const themePreview: ThemeConfig = {</span>
-                <span>@($"surface: \"{ThemeSurface(DarkProfile)}\",")</span>
-                <span>@($"accent: \"{DarkProfile.Accent}\",")</span>
-                <span>@($"contrast: {DarkProfile.Contrast},")</span>
-                <span>};</span>
-            </div>
-        </div>
+    <div class="appearance-studio-preview" aria-label="@Text("Make Studio theme preview", "ตัวอย่างธีม Make Studio")">
+        @foreach (var previewTheme in ProfileThemes)
+        {
+            var previewProfile = ThemeProfile(previewTheme);
+            <section class="@StudioPreviewClass(previewTheme)" style="@StudioPreviewStyle(previewProfile)">
+                <aside class="appearance-preview-rail" aria-hidden="true">
+                    <strong>MALIEV</strong>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </aside>
+                <div class="appearance-preview-workspace">
+                    <header>
+                        <div>
+                            <strong>Make Studio</strong>
+                            <span>@ThemeProfileTitle(previewTheme)</span>
+                        </div>
+                        <i aria-hidden="true"></i>
+                    </header>
+                    <div class="appearance-preview-board" aria-hidden="true">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                    <footer aria-hidden="true">
+                        <span></span>
+                        <strong>@Text("Quote", "ใบเสนอราคา")</strong>
+                    </footer>
+                </div>
+            </section>
+        }
     </div>
 
     @foreach (var themeName in ProfileThemes)
@@ -113,16 +111,36 @@
 
             <label class="appearance-profile-row">
                 <span>@Text("UI font", "ฟอนต์ UI")</span>
-                <input class="appearance-text-input"
-                       value="@profile.UiFont"
-                       @onchange="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { UiFont = args.Value?.ToString() ?? string.Empty }))" />
+                <select class="appearance-font-select"
+                        value="@profile.UiFont"
+                        aria-label="@Text("UI font", "ฟอนต์ UI")"
+                        @onchange="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { UiFont = args.Value?.ToString() ?? PreferenceService.DefaultUiFont }))">
+                    @foreach (var choice in UiFontChoices)
+                    {
+                        <option value="@choice.Stack">@FontChoiceLabel(choice)</option>
+                    }
+                    @if (!IsKnownFont(profile.UiFont, UiFontChoices))
+                    {
+                        <option value="@profile.UiFont">@Text("Saved Studio font", "ฟอนต์ Studio ที่บันทึกไว้")</option>
+                    }
+                </select>
             </label>
 
             <label class="appearance-profile-row">
                 <span>@Text("Code font", "ฟอนต์โค้ด")</span>
-                <input class="appearance-text-input"
-                       value="@profile.CodeFont"
-                       @onchange="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { CodeFont = args.Value?.ToString() ?? string.Empty }))" />
+                <select class="appearance-font-select"
+                        value="@profile.CodeFont"
+                        aria-label="@Text("Code font", "ฟอนต์โค้ด")"
+                        @onchange="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { CodeFont = args.Value?.ToString() ?? PreferenceService.DefaultCodeFont }))">
+                    @foreach (var choice in CodeFontChoices)
+                    {
+                        <option value="@choice.Stack">@FontChoiceLabel(choice)</option>
+                    }
+                    @if (!IsKnownFont(profile.CodeFont, CodeFontChoices))
+                    {
+                        <option value="@profile.CodeFont">@Text("Saved Studio font", "ฟอนต์ Studio ที่บันทึกไว้")</option>
+                    }
+                </select>
             </label>
 
             <label class="appearance-profile-row">
@@ -151,6 +169,20 @@
 
 @code {
     private static readonly string[] ProfileThemes = [PreferenceService.LightTheme, PreferenceService.DarkTheme];
+
+    private static readonly FontChoice[] UiFontChoices =
+    [
+        new("MALIEV system", "MALIEV system", PreferenceService.DefaultUiFont),
+        new("Noto Sans Thai", "Noto Sans Thai", "\"Noto Sans Thai\", \"Noto Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif"),
+        new("Segoe UI", "Segoe UI", "\"Segoe UI Variable Text\", \"Segoe UI\", \"Noto Sans\", \"Noto Sans Thai\", sans-serif")
+    ];
+
+    private static readonly FontChoice[] CodeFontChoices =
+    [
+        new("MALIEV mono", "MALIEV mono", PreferenceService.DefaultCodeFont),
+        new("SF Mono", "SF Mono", "\"SFMono-Regular\", \"SF Mono\", ui-monospace, Menlo, Consolas, monospace"),
+        new("Consolas", "Consolas", "Consolas, \"Liberation Mono\", Menlo, monospace")
+    ];
 
     private ThemeProfilePreference LightProfile => Preferences.LightThemeProfile;
 
@@ -195,9 +227,26 @@
             : Text("Light theme", "ธีมสว่าง");
     }
 
-    private static string ThemeSurface(ThemeProfilePreference profile)
+    private static bool IsKnownFont(string font, IReadOnlyList<FontChoice> choices)
     {
-        return profile.TranslucentSidebar ? "sidebar-elevated" : "sidebar";
+        return choices.Any(choice => string.Equals(choice.Stack, font, StringComparison.Ordinal));
+    }
+
+    private string FontChoiceLabel(FontChoice choice)
+    {
+        return Text(choice.LabelEn, choice.LabelTh);
+    }
+
+    private static string StudioPreviewClass(string theme)
+    {
+        return theme == PreferenceService.DarkTheme
+            ? "appearance-preview-card is-dark"
+            : "appearance-preview-card is-light";
+    }
+
+    private static string StudioPreviewStyle(ThemeProfilePreference profile)
+    {
+        return $"--appearance-preview-accent: {profile.Accent}; --appearance-preview-bg: {profile.Background}; --appearance-preview-fg: {profile.Foreground}; --appearance-preview-contrast: {profile.Contrast};";
     }
 
     private static int NormalizeContrast(string? value, int fallback)
@@ -219,4 +268,6 @@
     {
         Preferences.Changed -= OnPreferencesChanged;
     }
+
+    private sealed record FontChoice(string LabelEn, string LabelTh, string Stack);
 }
