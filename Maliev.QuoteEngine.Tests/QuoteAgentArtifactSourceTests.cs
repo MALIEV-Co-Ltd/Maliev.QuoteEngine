@@ -103,6 +103,28 @@ public sealed class QuoteAgentArtifactSourceTests
     }
 
     [Fact]
+    public void Preview_worker_clones_shapes_before_consuming_transforms_to_survive_reuse()
+    {
+        // replicad's translate/rotate/fillet/chamfer/loft DELETE their input shape and return a new
+        // one. The worker keeps shapes in a reusable map keyed by id, so an agent that references a
+        // shape id more than once (e.g. a comb whose teeth reuse one cutter template) would hand
+        // replicad an already-deleted object -> "This object has been deleted". Clone before every
+        // consuming op so the stored shape survives reuse.
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js");
+
+        Assert.Contains("function cloneShape(shape)", worker, StringComparison.Ordinal);
+        Assert.Contains("const moved = cloneShape(target);", worker, StringComparison.Ordinal);
+        Assert.Contains("cloneShape(target).rotate(axis, angle)", worker, StringComparison.Ordinal);
+        Assert.Contains("cloneShape(a).loftWith(cloneShape(b))", worker, StringComparison.Ordinal);
+        Assert.Contains("tryApplyEdgeOperation(cloneShape(target), 'fillet'", worker, StringComparison.Ordinal);
+        Assert.Contains("tryApplyEdgeOperation(cloneShape(target), 'chamfer'", worker, StringComparison.Ordinal);
+
+        // Regression: consuming ops must not run directly on the stored shape.
+        Assert.DoesNotContain("shape = target.rotate(axis, angle);", worker, StringComparison.Ordinal);
+        Assert.DoesNotContain("shape = a.loftWith(b);", worker, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Uploaded_stl_viewer_keeps_source_orientation_while_converted_gltf_gets_axis_rotation()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer-three.js");

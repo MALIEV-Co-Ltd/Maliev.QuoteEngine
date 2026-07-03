@@ -47,6 +47,16 @@ function resolveOperationTarget(cmd, fallback) {
   return target;
 }
 
+// replicad's transform/modifier ops (translate, rotate, fillet, chamfer, loft) CONSUME their
+// input: they call `this.delete()` and return a new shape. Because we keep shapes in a reusable
+// `shapes` map keyed by id, an agent that references a shape id more than once (e.g. one tooth
+// template placed at several positions, or repeated translate-then-cut) would otherwise hand
+// replicad an already-deleted object and throw "This object has been deleted". Cloning the input
+// before a consuming op keeps the stored shape valid for later references.
+function cloneShape(shape) {
+  return shape && typeof shape.clone === 'function' ? shape.clone() : shape;
+}
+
 function tryApplyEdgeOperation(target, operation, radius) {
   const value = Number(radius);
   if (!Number.isFinite(value) || value <= 0 || typeof target[operation] !== 'function') {
@@ -315,33 +325,34 @@ function processCommands(commands) {
       }
       case 'fillet': {
         const target = resolveOperationTarget(cmd, result);
-        shape = tryApplyEdgeOperation(target, 'fillet', cmd.radius || p[0]);
+        shape = tryApplyEdgeOperation(cloneShape(target), 'fillet', cmd.radius || p[0]);
         break;
       }
       case 'chamfer': {
         const target = resolveOperationTarget(cmd, result);
-        shape = tryApplyEdgeOperation(target, 'chamfer', cmd.radius || p[0]);
+        shape = tryApplyEdgeOperation(cloneShape(target), 'chamfer', cmd.radius || p[0]);
         break;
       }
       case 'loft': {
         const a = resolve(cmd.targetId);
         const b = resolve(cmd.toolId);
-        shape = a.loftWith(b);
+        shape = cloneShape(a).loftWith(cloneShape(b));
         break;
       }
       case 'translate': {
-        shape = resolveOperationTarget(cmd, result);
+        const target = resolveOperationTarget(cmd, result);
         const translation = offset == null
           ? (p.length > 0 ? requireOptionalFiniteVector(cmd, p, 'params') : null)
           : requireOptionalFiniteVector(cmd, offset, 'offset');
-        if (translation) shape = shape.translate(translation[0], translation[1], translation[2]);
+        const moved = cloneShape(target);
+        shape = translation ? moved.translate(translation[0], translation[1], translation[2]) : moved;
         break;
       }
       case 'rotate': {
         const target = resolveOperationTarget(cmd, result);
         const axis = requireOptionalNonZeroVector(cmd, cmd.axis, 'axis') || [0, 0, 1];
         const angle = requireOptionalFiniteNumber(cmd, cmd.angle ?? (p.length > 0 ? p[0] : 0), 'angle') ?? 0;
-        shape = target.rotate(axis, angle);
+        shape = cloneShape(target).rotate(axis, angle);
         break;
       }
       default:

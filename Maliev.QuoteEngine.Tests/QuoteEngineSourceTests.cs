@@ -4469,8 +4469,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("function resolveOperationTarget(cmd, fallback)", worker, StringComparison.Ordinal);
         Assert.Contains("const target = resolveOperationTarget(cmd, result);", worker, StringComparison.Ordinal);
         Assert.Contains("if (!target) throw new Error(`CAD operation ${cmd.op} requires a target shape`);", worker, StringComparison.Ordinal);
-        Assert.Contains("shape = tryApplyEdgeOperation(target, 'fillet', cmd.radius || p[0]);", worker, StringComparison.Ordinal);
-        Assert.Contains("shape = tryApplyEdgeOperation(target, 'chamfer', cmd.radius || p[0]);", worker, StringComparison.Ordinal);
+        Assert.Contains("shape = tryApplyEdgeOperation(cloneShape(target), 'fillet', cmd.radius || p[0]);", worker, StringComparison.Ordinal);
+        Assert.Contains("shape = tryApplyEdgeOperation(cloneShape(target), 'chamfer', cmd.radius || p[0]);", worker, StringComparison.Ordinal);
         Assert.DoesNotContain("resolve(cmd.targetId).fillet", worker, StringComparison.Ordinal);
         Assert.DoesNotContain("resolve(cmd.targetId).chamfer", worker, StringComparison.Ordinal);
     }
@@ -4582,13 +4582,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("const translation = offset == null", translateCase, StringComparison.Ordinal);
         Assert.Contains("requireOptionalFiniteVector(cmd, offset, 'offset')", translateCase, StringComparison.Ordinal);
         Assert.Contains("requireOptionalFiniteVector(cmd, p, 'params')", translateCase, StringComparison.Ordinal);
-        Assert.Contains("shape = shape.translate(translation[0], translation[1], translation[2]);", translateCase, StringComparison.Ordinal);
+        Assert.Contains("const moved = cloneShape(target);", translateCase, StringComparison.Ordinal);
+        Assert.Contains("shape = translation ? moved.translate(translation[0], translation[1], translation[2]) : moved;", translateCase, StringComparison.Ordinal);
         Assert.DoesNotContain("shape.translate(offset[0], offset[1], offset[2])", translateCase, StringComparison.Ordinal);
 
         var rotateCase = processCommands[rotateStart..defaultStart];
         Assert.Contains("const axis = requireOptionalNonZeroVector(cmd, cmd.axis, 'axis') || [0, 0, 1];", rotateCase, StringComparison.Ordinal);
         Assert.Contains("const angle = requireOptionalFiniteNumber(cmd, cmd.angle ?? (p.length > 0 ? p[0] : 0), 'angle') ?? 0;", rotateCase, StringComparison.Ordinal);
-        Assert.Contains("shape = target.rotate(axis, angle);", rotateCase, StringComparison.Ordinal);
+        Assert.Contains("shape = cloneShape(target).rotate(axis, angle);", rotateCase, StringComparison.Ordinal);
         Assert.DoesNotContain("target.rotate(cmd.axis || [0, 0, 1], cmd.angle || p[0] || 0)", rotateCase, StringComparison.Ordinal);
     }
 

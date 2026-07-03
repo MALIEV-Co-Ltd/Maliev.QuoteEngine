@@ -23727,6 +23727,9 @@
     if (!target) throw new Error(`CAD operation ${cmd.op} requires a target shape`);
     return target;
   }
+  function cloneShape(shape) {
+    return shape && typeof shape.clone === "function" ? shape.clone() : shape;
+  }
   function tryApplyEdgeOperation(target, operation, radius) {
     const value = Number(radius);
     if (!Number.isFinite(value) || value <= 0 || typeof target[operation] !== "function") {
@@ -23942,31 +23945,32 @@
         }
         case "fillet": {
           const target = resolveOperationTarget(cmd, result);
-          shape = tryApplyEdgeOperation(target, "fillet", cmd.radius || p[0]);
+          shape = tryApplyEdgeOperation(cloneShape(target), "fillet", cmd.radius || p[0]);
           break;
         }
         case "chamfer": {
           const target = resolveOperationTarget(cmd, result);
-          shape = tryApplyEdgeOperation(target, "chamfer", cmd.radius || p[0]);
+          shape = tryApplyEdgeOperation(cloneShape(target), "chamfer", cmd.radius || p[0]);
           break;
         }
         case "loft": {
           const a = resolve(cmd.targetId);
           const b = resolve(cmd.toolId);
-          shape = a.loftWith(b);
+          shape = cloneShape(a).loftWith(cloneShape(b));
           break;
         }
         case "translate": {
-          shape = resolveOperationTarget(cmd, result);
+          const target = resolveOperationTarget(cmd, result);
           const translation = offset2 == null ? p.length > 0 ? requireOptionalFiniteVector(cmd, p, "params") : null : requireOptionalFiniteVector(cmd, offset2, "offset");
-          if (translation) shape = shape.translate(translation[0], translation[1], translation[2]);
+          const moved = cloneShape(target);
+          shape = translation ? moved.translate(translation[0], translation[1], translation[2]) : moved;
           break;
         }
         case "rotate": {
           const target = resolveOperationTarget(cmd, result);
           const axis = requireOptionalNonZeroVector(cmd, cmd.axis, "axis") || [0, 0, 1];
           const angle = requireOptionalFiniteNumber(cmd, cmd.angle ?? (p.length > 0 ? p[0] : 0), "angle") ?? 0;
-          shape = target.rotate(axis, angle);
+          shape = cloneShape(target).rotate(axis, angle);
           break;
         }
         default:
