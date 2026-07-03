@@ -40,15 +40,15 @@ public sealed class QuoteEngineSourceTests
     public void QuoteEngine_customer_shell_has_multilingual_preference_contract()
     {
         var layout = ReadRepoFile("Maliev.QuoteEngine.Client", "Layout", "MainLayout.razor");
-        var preferences = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountPreferences.razor");
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var service = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "PreferenceService.cs");
         var loader = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
 
         // Language controls live in the workspace settings, not a layout topbar.
         Assert.Contains("SupportedCultures.DefaultCulture", layout, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"quote-language-toggle\"", layout, StringComparison.Ordinal);
-        Assert.Contains("SupportedCultures.ThaiCulture", preferences, StringComparison.Ordinal);
-        Assert.Contains("Platform language", preferences, StringComparison.Ordinal);
+        Assert.Contains("SupportedCultures.ThaiCulture", shell, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Language\", \"ภาษา\")", shell, StringComparison.Ordinal);
 
         Assert.Contains("resolveCulture", service, StringComparison.Ordinal);
         Assert.Contains("quoteEnginePreferences.setCulture", service, StringComparison.Ordinal);
@@ -57,6 +57,61 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("maliev.quote.culture", loader, StringComparison.Ordinal);
         Assert.Contains("maliev.culture", loader, StringComparison.Ordinal);
         Assert.Contains("setCookie(\"maliev.culture\"", loader, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Appearance_settings_persist_full_theme_profile_contract()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var appearance = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountAppearance.razor");
+        var service = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "PreferenceService.cs");
+        var loader = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-engine-loader.js");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("<QeAccountAppearance />", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("ThemePreviewClass", shell, StringComparison.Ordinal);
+        Assert.Contains("Theme mode and per-profile colors, fonts, sidebar, and contrast.", shell, StringComparison.Ordinal);
+
+        Assert.Contains("PreferenceService.SystemTheme", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Auto\", \"อัตโนมัติ\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Light\", \"สว่าง\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Dark\", \"มืด\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Accent\", \"สีเน้น\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Background\", \"พื้นหลัง\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Foreground\", \"ตัวอักษร\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"UI font\", \"ฟอนต์ UI\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Code font\", \"ฟอนต์โค้ด\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Translucent sidebar\", \"แถบด้านข้างโปร่งแสง\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Contrast\", \"คอนทราสต์\")", appearance, StringComparison.Ordinal);
+        Assert.Contains("Preferences.SetThemeProfileAsync", appearance, StringComparison.Ordinal);
+        Assert.Contains("Preferences.ResetThemeProfileAsync", appearance, StringComparison.Ordinal);
+
+        Assert.Contains("public const string SystemTheme = \"system\";", service, StringComparison.Ordinal);
+        Assert.Contains("LightThemeProfileKey = \"maliev.quote.theme.light\"", service, StringComparison.Ordinal);
+        Assert.Contains("DarkThemeProfileKey = \"maliev.quote.theme.dark\"", service, StringComparison.Ordinal);
+        Assert.Contains("DefaultLightThemeProfile", service, StringComparison.Ordinal);
+        Assert.Contains("DefaultDarkThemeProfile", service, StringComparison.Ordinal);
+        Assert.Contains("Accent = \"#339CFF\"", service, StringComparison.Ordinal);
+        Assert.Contains("Background = \"#FFFFFF\"", service, StringComparison.Ordinal);
+        Assert.Contains("Foreground = \"#1A1C1F\"", service, StringComparison.Ordinal);
+        Assert.Contains("Background = \"#181818\"", service, StringComparison.Ordinal);
+        Assert.Contains("Foreground = \"#FFFFFF\"", service, StringComparison.Ordinal);
+        Assert.Contains("Contrast = 45", service, StringComparison.Ordinal);
+        Assert.Contains("Contrast = 68", service, StringComparison.Ordinal);
+        Assert.Contains("SetThemeProfileAsync", service, StringComparison.Ordinal);
+        Assert.Contains("quoteEnginePreferences.applyThemeProfile", service, StringComparison.Ordinal);
+
+        Assert.Contains("const systemTheme = \"system\";", loader, StringComparison.Ordinal);
+        Assert.Contains("maliev.quote.theme.light", loader, StringComparison.Ordinal);
+        Assert.Contains("maliev.quote.theme.dark", loader, StringComparison.Ordinal);
+        Assert.Contains("function resolveResolvedTheme", loader, StringComparison.Ordinal);
+        Assert.Contains("function applyThemeProfile", loader, StringComparison.Ordinal);
+        Assert.Contains("data-maliev-sidebar-translucent", loader, StringComparison.Ordinal);
+
+        Assert.Contains(".appearance-theme-modes", styles, StringComparison.Ordinal);
+        Assert.Contains(".appearance-code-preview", styles, StringComparison.Ordinal);
+        Assert.Contains(".appearance-profile-card", styles, StringComparison.Ordinal);
+        Assert.Contains(":root[data-maliev-sidebar-translucent=\"true\"] .qe-agent-rail", styles, StringComparison.Ordinal);
     }
 
     [Fact]

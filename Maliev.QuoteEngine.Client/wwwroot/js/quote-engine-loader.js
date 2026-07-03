@@ -598,16 +598,174 @@
     return normalizedCulture;
   }
 
+  const systemTheme = "system";
+  const lightTheme = "light";
+  const darkTheme = "dark";
+  const lightThemeProfilePreferenceKey = "maliev.quote.theme.light";
+  const darkThemeProfilePreferenceKey = "maliev.quote.theme.dark";
+  const defaultUiFont = "-apple-system, BlinkMacSystemFont, \"Segoe UI Variable Text\", \"Segoe UI\", \"Noto Sans\", \"Noto Sans Thai\", sans-serif";
+  const defaultCodeFont = "ui-monospace, \"SFMono-Regular\", \"SF Mono\", Consolas, \"Liberation Mono\", Menlo, monospace";
+  const defaultThemeProfiles = {
+    light: {
+      accent: "#339CFF",
+      background: "#FFFFFF",
+      foreground: "#1A1C1F",
+      uiFont: defaultUiFont,
+      codeFont: defaultCodeFont,
+      translucentSidebar: true,
+      contrast: 45
+    },
+    dark: {
+      accent: "#339CFF",
+      background: "#181818",
+      foreground: "#FFFFFF",
+      uiFont: defaultUiFont,
+      codeFont: defaultCodeFont,
+      translucentSidebar: true,
+      contrast: 68
+    }
+  };
+
+  function prefersDarkTheme() {
+    return Boolean(window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  }
+
+  function normalizeTheme(theme) {
+    if (theme === darkTheme) {
+      return darkTheme;
+    }
+
+    if (theme === lightTheme) {
+      return lightTheme;
+    }
+
+    return systemTheme;
+  }
+
   function resolveTheme(fallback) {
-    return getPreference("maliev.quote.theme") || getPreference("maliev.theme") || fallback || "light";
+    return normalizeTheme(getPreference("maliev.quote.theme") || getPreference("maliev.theme") || fallback || systemTheme);
+  }
+
+  function resolveResolvedTheme(theme) {
+    const normalizedTheme = normalizeTheme(theme);
+    return normalizedTheme === darkTheme || (normalizedTheme === systemTheme && prefersDarkTheme()) ? darkTheme : lightTheme;
+  }
+
+  function themeProfilePreferenceKey(theme) {
+    return theme === darkTheme ? darkThemeProfilePreferenceKey : lightThemeProfilePreferenceKey;
+  }
+
+  function readJsonPreference(key) {
+    const value = getPreference(key);
+    if (!value) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null;
+    }
+  }
+
+  function normalizeHex(value, fallback) {
+    if (typeof value !== "string") {
+      return fallback;
+    }
+
+    const trimmed = value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+      return trimmed.toUpperCase();
+    }
+
+    if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+      return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`.toUpperCase();
+    }
+
+    return fallback;
+  }
+
+  function normalizeFontStack(value, fallback) {
+    if (typeof value !== "string") {
+      return fallback;
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 180 || /[<>{}]/.test(trimmed)) {
+      return fallback;
+    }
+
+    return trimmed;
+  }
+
+  function normalizeThemeProfile(profile, fallback) {
+    const source = profile || {};
+    const contrastValue = source.contrast ?? source.Contrast;
+    return {
+      accent: normalizeHex(source.accent || source.Accent, fallback.accent),
+      background: normalizeHex(source.background || source.Background, fallback.background),
+      foreground: normalizeHex(source.foreground || source.Foreground, fallback.foreground),
+      uiFont: normalizeFontStack(source.uiFont || source.UiFont, fallback.uiFont),
+      codeFont: normalizeFontStack(source.codeFont || source.CodeFont, fallback.codeFont),
+      translucentSidebar: typeof source.translucentSidebar === "boolean"
+        ? source.translucentSidebar
+        : typeof source.TranslucentSidebar === "boolean"
+          ? source.TranslucentSidebar
+          : fallback.translucentSidebar,
+      contrast: Number.isFinite(Number(contrastValue))
+        ? Math.max(0, Math.min(100, Number(contrastValue)))
+        : fallback.contrast
+    };
+  }
+
+  function resolveThemeProfile(theme) {
+    const normalizedTheme = theme === darkTheme ? darkTheme : lightTheme;
+    return normalizeThemeProfile(
+      readJsonPreference(themeProfilePreferenceKey(normalizedTheme)),
+      defaultThemeProfiles[normalizedTheme]);
+  }
+
+  function setThemeProfile(theme, profile) {
+    const normalizedTheme = theme === darkTheme ? darkTheme : lightTheme;
+    const normalizedProfile = normalizeThemeProfile(profile, defaultThemeProfiles[normalizedTheme]);
+    setPreference(themeProfilePreferenceKey(normalizedTheme), JSON.stringify(normalizedProfile));
+    if (resolveResolvedTheme(resolveTheme(systemTheme)) === normalizedTheme) {
+      applyThemeProfile(normalizedProfile);
+    }
+  }
+
+  function applyThemeProfile(profile) {
+    const resolvedTheme = root.getAttribute("data-maliev-theme") === darkTheme ? darkTheme : lightTheme;
+    const normalizedProfile = normalizeThemeProfile(profile, defaultThemeProfiles[resolvedTheme]);
+    root.style.setProperty("--maliev-theme-accent", normalizedProfile.accent);
+    root.style.setProperty("--maliev-theme-background", normalizedProfile.background);
+    root.style.setProperty("--maliev-theme-foreground", normalizedProfile.foreground);
+    root.style.setProperty("--maliev-theme-ui-font", normalizedProfile.uiFont);
+    root.style.setProperty("--maliev-theme-code-font", normalizedProfile.codeFont);
+    root.style.setProperty("--maliev-theme-contrast", String(normalizedProfile.contrast));
+    root.style.setProperty("--accent", normalizedProfile.accent);
+    root.style.setProperty("--accent-strong", normalizedProfile.accent);
+    root.style.setProperty("--paper", normalizedProfile.background);
+    root.style.setProperty("--panel", normalizedProfile.background);
+    root.style.setProperty("--ink", normalizedProfile.foreground);
+    root.style.setProperty("--primary", normalizedProfile.foreground);
+    root.style.setProperty("--primary-contrast", normalizedProfile.background);
+    root.style.setProperty("--maliev-font-sans-en", normalizedProfile.uiFont);
+    root.style.setProperty("--maliev-font-sans", normalizedProfile.uiFont);
+    root.style.setProperty("--maliev-font-mono", normalizedProfile.codeFont);
+    root.setAttribute("data-maliev-sidebar-translucent", normalizedProfile.translucentSidebar ? "true" : "false");
   }
 
   function setTheme(theme) {
-    const normalizedTheme = theme === "dark" ? "dark" : "light";
-    root.setAttribute("data-maliev-theme", normalizedTheme);
-    root.style.colorScheme = normalizedTheme;
+    const normalizedTheme = normalizeTheme(theme);
+    const resolvedTheme = resolveResolvedTheme(normalizedTheme);
+    root.setAttribute("data-maliev-theme-mode", normalizedTheme);
+    root.setAttribute("data-maliev-theme", resolvedTheme);
+    root.style.colorScheme = resolvedTheme;
     setPreference("maliev.quote.theme", normalizedTheme);
     setPreference("maliev.theme", normalizedTheme);
+    applyThemeProfile(resolveThemeProfile(resolvedTheme));
+    return resolvedTheme;
   }
 
   function startBlazor() {
@@ -668,7 +826,7 @@
   setProgress(0, true);
   setCulture(resolveCulture("en-US"));
   setStatus(currentStrings.status.preparing);
-  setTheme(resolveTheme("light"));
+  setTheme(resolveTheme(systemTheme));
   setMotion(resolveMotion(false));
 
   window.quoteEngineLoader = {
@@ -692,6 +850,10 @@
     setCultureAuto,
     resolveTheme,
     setTheme,
+    resolveResolvedTheme,
+    getThemeProfile: resolveThemeProfile,
+    setThemeProfile,
+    applyThemeProfile,
     resolveMotion,
     setMotion
   };

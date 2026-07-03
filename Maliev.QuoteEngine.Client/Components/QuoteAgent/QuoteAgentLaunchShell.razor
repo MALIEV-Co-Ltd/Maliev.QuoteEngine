@@ -653,22 +653,7 @@
                         }
                         else if (_settingsTab == "appearance")
                         {
-                            <div class="qe-agent-theme-grid">
-                                <button type="button" class="@ThemePreviewClass(false)" @onclick='@(() => SetThemeAsync(false))'>
-                                    <span class="qe-agent-theme-swatch qe-agent-theme-swatch--light" aria-hidden="true">
-                                        <span></span>
-                                        <span></span>
-                                    </span>
-                                    <strong>@Text("Light", "สว่าง")</strong>
-                                </button>
-                                <button type="button" class="@ThemePreviewClass(true)" @onclick='@(() => SetThemeAsync(true))'>
-                                    <span class="qe-agent-theme-swatch qe-agent-theme-swatch--dark" aria-hidden="true">
-                                        <span></span>
-                                        <span></span>
-                                    </span>
-                                    <strong>@Text("Dark", "มืด")</strong>
-                                </button>
-                            </div>
+                            <QeAccountAppearance />
                         }
                         else if (_settingsTab == "language")
                         {
@@ -5010,11 +4995,6 @@
         return Preferences.SetThemeAsync(IsDarkMode ? PreferenceService.LightTheme : PreferenceService.DarkTheme);
     }
 
-    private Task SetThemeAsync(bool dark)
-    {
-        return Preferences.SetThemeAsync(dark ? PreferenceService.DarkTheme : PreferenceService.LightTheme);
-    }
-
     private Task ToggleMotionReducedAsync()
     {
         return Preferences.SetMotionReducedAsync(!Preferences.IsMotionReduced);
@@ -5040,16 +5020,11 @@
 
     private string SettingsSectionSubheading => _settingsTab switch
     {
-        "appearance" => Text("Choose how Make Studio looks on this device.", "เลือกรูปลักษณ์ของ Make Studio บนอุปกรณ์นี้"),
+        "appearance" => Text("Theme mode and per-profile colors, fonts, sidebar, and contrast.", "โหมดธีม สี ฟอนต์ แถบด้านข้าง และคอนทราสต์แยกตามโปรไฟล์"),
         "language" => Text("Auto-detect matches your browser language until you pick one.", "ตรวจจับอัตโนมัติจะใช้ภาษาของเบราว์เซอร์จนกว่าคุณจะเลือกเอง"),
         "profile" => Text("Your account, activity, and address book.", "บัญชี กิจกรรม และสมุดที่อยู่ของคุณ"),
         _ => Text("Motion, quote currency, and manufacturing defaults apply immediately.", "การเคลื่อนไหว สกุลเงินใบเสนอราคา และค่าเริ่มต้นการผลิตจะมีผลทันที")
     };
-
-    private string ThemePreviewClass(bool dark)
-    {
-        return IsDarkMode == dark ? "qe-agent-theme-option is-active" : "qe-agent-theme-option";
-    }
 
     private string LanguageOptionClass(bool auto, string culture)
     {

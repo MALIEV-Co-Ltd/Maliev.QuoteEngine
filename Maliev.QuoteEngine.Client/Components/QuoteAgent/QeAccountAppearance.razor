@@ -1,0 +1,222 @@
+@inject PreferenceService Preferences
+@implements IDisposable
+
+<div class="appearance-panel">
+    <div class="appearance-theme-modes" role="group" aria-label="@Text("Appearance mode", "โหมดรูปลักษณ์")">
+        <button type="button"
+                class="@ThemeModeClass(PreferenceService.SystemTheme)"
+                @onclick='@(() => SetThemeModeAsync(PreferenceService.SystemTheme))'>
+            <span class="appearance-mode-preview appearance-mode-preview--system" aria-hidden="true"></span>
+            <strong>@Text("Auto", "อัตโนมัติ")</strong>
+            <small>@Text("System", "ระบบ")</small>
+        </button>
+        <button type="button"
+                class="@ThemeModeClass(PreferenceService.LightTheme)"
+                @onclick='@(() => SetThemeModeAsync(PreferenceService.LightTheme))'>
+            <span class="appearance-mode-preview appearance-mode-preview--light" aria-hidden="true"></span>
+            <strong>@Text("Light", "สว่าง")</strong>
+            <small>@Text("Light profile", "โปรไฟล์สว่าง")</small>
+        </button>
+        <button type="button"
+                class="@ThemeModeClass(PreferenceService.DarkTheme)"
+                @onclick='@(() => SetThemeModeAsync(PreferenceService.DarkTheme))'>
+            <span class="appearance-mode-preview appearance-mode-preview--dark" aria-hidden="true"></span>
+            <strong>@Text("Dark", "มืด")</strong>
+            <small>@Text("Dark profile", "โปรไฟล์มืด")</small>
+        </button>
+    </div>
+
+    <div class="appearance-code-preview" aria-hidden="true">
+        <div class="appearance-code-pane is-light">
+            <div class="appearance-code-line-numbers">
+                <span>1</span>
+                <span>2</span>
+                <span>3</span>
+                <span>4</span>
+                <span>5</span>
+            </div>
+            <div class="appearance-code-lines">
+                <span>const themePreview: ThemeConfig = {</span>
+                <span>@($"surface: \"{ThemeSurface(LightProfile)}\",")</span>
+                <span>@($"accent: \"{LightProfile.Accent}\",")</span>
+                <span>@($"contrast: {LightProfile.Contrast},")</span>
+                <span>};</span>
+            </div>
+        </div>
+        <div class="appearance-code-pane is-dark">
+            <div class="appearance-code-line-numbers">
+                <span>1</span>
+                <span>2</span>
+                <span>3</span>
+                <span>4</span>
+                <span>5</span>
+            </div>
+            <div class="appearance-code-lines">
+                <span>const themePreview: ThemeConfig = {</span>
+                <span>@($"surface: \"{ThemeSurface(DarkProfile)}\",")</span>
+                <span>@($"accent: \"{DarkProfile.Accent}\",")</span>
+                <span>@($"contrast: {DarkProfile.Contrast},")</span>
+                <span>};</span>
+            </div>
+        </div>
+    </div>
+
+    @foreach (var themeName in ProfileThemes)
+    {
+        var profile = ThemeProfile(themeName);
+        <section class="appearance-profile-card" data-theme-profile="@themeName">
+            <header>
+                <strong>@ThemeProfileTitle(themeName)</strong>
+                <div>
+                    <button type="button"
+                            class="appearance-reset-button"
+                            @onclick="@(() => ResetThemeProfileAsync(themeName))">
+                        @Text("Reset", "รีเซ็ต")
+                    </button>
+                    <select class="appearance-preset-select"
+                            value="codex"
+                            aria-label="@Text("Theme preset", "พรีเซ็ตธีม")">
+                        <option value="codex">Codex</option>
+                    </select>
+                </div>
+            </header>
+
+            <label class="appearance-profile-row">
+                <span>@Text("Accent", "สีเน้น")</span>
+                <span class="appearance-color-input">
+                    <input type="color"
+                           value="@profile.Accent"
+                           @oninput="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { Accent = args.Value?.ToString() ?? string.Empty }))" />
+                    <span>@profile.Accent</span>
+                </span>
+            </label>
+
+            <label class="appearance-profile-row">
+                <span>@Text("Background", "พื้นหลัง")</span>
+                <span class="appearance-color-input">
+                    <input type="color"
+                           value="@profile.Background"
+                           @oninput="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { Background = args.Value?.ToString() ?? string.Empty }))" />
+                    <span>@profile.Background</span>
+                </span>
+            </label>
+
+            <label class="appearance-profile-row">
+                <span>@Text("Foreground", "ตัวอักษร")</span>
+                <span class="appearance-color-input">
+                    <input type="color"
+                           value="@profile.Foreground"
+                           @oninput="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { Foreground = args.Value?.ToString() ?? string.Empty }))" />
+                    <span>@profile.Foreground</span>
+                </span>
+            </label>
+
+            <label class="appearance-profile-row">
+                <span>@Text("UI font", "ฟอนต์ UI")</span>
+                <input class="appearance-text-input"
+                       value="@profile.UiFont"
+                       @onchange="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { UiFont = args.Value?.ToString() ?? string.Empty }))" />
+            </label>
+
+            <label class="appearance-profile-row">
+                <span>@Text("Code font", "ฟอนต์โค้ด")</span>
+                <input class="appearance-text-input"
+                       value="@profile.CodeFont"
+                       @onchange="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { CodeFont = args.Value?.ToString() ?? string.Empty }))" />
+            </label>
+
+            <label class="appearance-profile-row">
+                <span>@Text("Translucent sidebar", "แถบด้านข้างโปร่งแสง")</span>
+                <span class="appearance-toggle">
+                    <input type="checkbox"
+                           checked="@profile.TranslucentSidebar"
+                           @onchange="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { TranslucentSidebar = args.Value is true }))" />
+                </span>
+            </label>
+
+            <label class="appearance-profile-row">
+                <span>@Text("Contrast", "คอนทราสต์")</span>
+                <span class="appearance-range">
+                    <input type="range"
+                           min="0"
+                           max="100"
+                           value="@profile.Contrast"
+                           @oninput="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { Contrast = NormalizeContrast(args.Value?.ToString(), current.Contrast) }))" />
+                    <output>@profile.Contrast</output>
+                </span>
+            </label>
+        </section>
+    }
+</div>
+
+@code {
+    private static readonly string[] ProfileThemes = [PreferenceService.LightTheme, PreferenceService.DarkTheme];
+
+    private ThemeProfilePreference LightProfile => Preferences.LightThemeProfile;
+
+    private ThemeProfilePreference DarkProfile => Preferences.DarkThemeProfile;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Preferences.Changed += OnPreferencesChanged;
+        await Preferences.InitializeAsync();
+    }
+
+    private Task SetThemeModeAsync(string mode)
+    {
+        return Preferences.SetThemeAsync(mode);
+    }
+
+    private Task ResetThemeProfileAsync(string theme)
+    {
+        return Preferences.ResetThemeProfileAsync(theme);
+    }
+
+    private Task UpdateThemeProfileAsync(string theme, Func<ThemeProfilePreference, ThemeProfilePreference> update)
+    {
+        var current = ThemeProfile(theme);
+        return Preferences.SetThemeProfileAsync(theme, update(current));
+    }
+
+    private ThemeProfilePreference ThemeProfile(string theme)
+    {
+        return Preferences.GetThemeProfile(theme);
+    }
+
+    private string ThemeModeClass(string theme)
+    {
+        return Preferences.Theme == theme ? "appearance-mode-option is-active" : "appearance-mode-option";
+    }
+
+    private string ThemeProfileTitle(string theme)
+    {
+        return theme == PreferenceService.DarkTheme
+            ? Text("Dark theme", "ธีมมืด")
+            : Text("Light theme", "ธีมสว่าง");
+    }
+
+    private static string ThemeSurface(ThemeProfilePreference profile)
+    {
+        return profile.TranslucentSidebar ? "sidebar-elevated" : "sidebar";
+    }
+
+    private static int NormalizeContrast(string? value, int fallback)
+    {
+        return int.TryParse(value, out var contrast) ? Math.Clamp(contrast, 0, 100) : fallback;
+    }
+
+    private string Text(string en, string th)
+    {
+        return Preferences.Text(en, th);
+    }
+
+    private void OnPreferencesChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        Preferences.Changed -= OnPreferencesChanged;
+    }
+}
