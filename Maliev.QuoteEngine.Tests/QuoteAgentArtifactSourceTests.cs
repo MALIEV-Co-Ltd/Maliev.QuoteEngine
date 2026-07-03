@@ -76,8 +76,15 @@ public sealed class QuoteAgentArtifactSourceTests
 
         // Shell reports the outcome for telemetry and offers a non-dead-end recovery.
         Assert.Contains("OnBuildOutcome=\"@(outcome => HandleInlineViewerBuildOutcomeAsync(message.InlineViewer, outcome))\"", shell, StringComparison.Ordinal);
+        Assert.Contains("OnBuildOutcome=\"@(outcome => HandleGeneratedArtifactViewerBuildOutcomeAsync(selectedGeneratedViewer, outcome))\"", shell, StringComparison.Ordinal);
         Assert.Contains("private async Task HandleInlineViewerBuildOutcomeAsync(InlineViewerInfo? viewer, QeInlinePartViewer.PreviewBuildOutcome outcome)", shell, StringComparison.Ordinal);
-        Assert.Contains("/quote/v1/agent/sessions/{SessionId:D}/artifacts/{viewer.ArtifactId:D}/preview-build", shell, StringComparison.Ordinal);
+        Assert.Contains("private async Task HandleGeneratedArtifactViewerBuildOutcomeAsync(QuoteAgentArtifactDto? artifact, QeInlinePartViewer.PreviewBuildOutcome outcome)", shell, StringComparison.Ordinal);
+        Assert.Contains("private async Task ReportPreviewBuildOutcomeAsync(Guid artifactId, QeInlinePartViewer.PreviewBuildOutcome outcome)", shell, StringComparison.Ordinal);
+        Assert.Contains("/quote/v1/agent/sessions/{SessionId:D}/artifacts/{artifactId:D}/preview-build", shell, StringComparison.Ordinal);
+        Assert.Contains("var generatedViewerArtifactsBeforeTurn = GeneratedViewerArtifactSnapshots(_artifacts);", shell, StringComparison.Ordinal);
+        Assert.Contains("private static string GeneratedViewerArtifactSignature(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
+        Assert.Contains("private void SyncSelectedArtifactWithArtifacts()", shell, StringComparison.Ordinal);
+        Assert.Contains("result?.State is not null", shell, StringComparison.Ordinal);
         Assert.Contains("private async Task RequestPreviewRebuildAsync(InlineViewerInfo? viewer)", shell, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-inline-viewer-rebuild-button\"", shell, StringComparison.Ordinal);
 
@@ -122,6 +129,19 @@ public sealed class QuoteAgentArtifactSourceTests
         // Regression: consuming ops must not run directly on the stored shape.
         Assert.DoesNotContain("shape = target.rotate(axis, angle);", worker, StringComparison.Ordinal);
         Assert.DoesNotContain("shape = a.loftWith(b);", worker, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Generated_preview_claim_grounding_ignores_failed_browser_build_artifacts()
+    {
+        var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
+
+        Assert.Contains("private static bool HasRenderableGeneratedViewerArtifact(QuoteAgentStateResponse state)", service, StringComparison.Ordinal);
+        Assert.Contains("private static bool HasFailedGeneratedViewerArtifact(QuoteAgentStateResponse state)", service, StringComparison.Ordinal);
+        Assert.Contains("artifact.Status.Equals(\"build_failed\", StringComparison.OrdinalIgnoreCase)", service, StringComparison.Ordinal);
+        Assert.Contains("artifact.Metadata.TryGetValue(\"previewBuildStatus\", out var status)", service, StringComparison.Ordinal);
+        Assert.Contains("The current 3D preview failed to load in the browser.", service, StringComparison.Ordinal);
+        Assert.Contains("artifact.Metadata.Remove(\"previewBuildStatus\");", service, StringComparison.Ordinal);
     }
 
     [Fact]

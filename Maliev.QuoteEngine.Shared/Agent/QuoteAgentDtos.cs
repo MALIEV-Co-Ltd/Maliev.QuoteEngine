@@ -589,6 +589,9 @@ public sealed class QuoteAgentPreviewBuildResponse
 
     /// <summary>Gets or sets the recording status.</summary>
     public string Status { get; set; } = "recorded";
+
+    /// <summary>Gets or sets updated agent state when a generated preview artifact was changed.</summary>
+    public QuoteAgentStateResponse? State { get; set; }
 }
 
 /// <summary>

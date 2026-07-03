@@ -1838,8 +1838,18 @@
                                 <small>@selectedGeneratedViewer.Status</small>
                             </header>
                             <div class="qe-agent-artifact-viewer-canvas qe-agent-artifact-generated-viewer">
-                                <QeInlinePartViewer CommandsJson="@selectedGeneratedCommandsJson" />
+                                <QeInlinePartViewer CommandsJson="@selectedGeneratedCommandsJson"
+                                                    OnBuildOutcome="@(outcome => HandleGeneratedArtifactViewerBuildOutcomeAsync(selectedGeneratedViewer, outcome))" />
                             </div>
+                            @if (GeneratedViewerBuildFailed(selectedGeneratedViewer))
+                            {
+                                <button type="button"
+                                        class="qe-inline-viewer-rebuild-button"
+                                        @onclick="@(() => RequestPreviewRebuildAsync(BuildInlineViewerInfo(selectedGeneratedViewer, selectedGeneratedCommandsJson)))">
+                                    <MudIcon Icon="@Icons.Material.Outlined.AutoFixHigh" Size="Size.Small" />
+                                    <span>@Text("Ask agent to rebuild this preview", "ขอให้เอเจนต์สร้างพรีวิวนี้ใหม่")</span>
+                                </button>
+                            }
                         </section>
                     </div>
                 }
@@ -3620,7 +3630,7 @@
         _messages.Add(userMessage);
         var assistantMessage = new AgentMessageRow("assistant", string.Empty);
         _messages.Add(assistantMessage);
-        var generatedViewerArtifactIdsBeforeTurn = GeneratedViewerArtifactIds(_artifacts);
+        var generatedViewerArtifactsBeforeTurn = GeneratedViewerArtifactSnapshots(_artifacts);
         RequestScrollToLatestMessage();
 
         try
@@ -3676,14 +3686,15 @@
                     StopReasoningTimer();
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
+                    SyncSelectedArtifactWithArtifacts();
                     _proposedActions = streamEvent.Response.ProposedActions;
                     _usageSnapshot = streamEvent.Response.UsageSnapshot;
-                    // Only overwrite the inline preview when the final state carries a new generated viewer;
+                    // Only overwrite the inline preview when the final state carries a new or revised generated viewer;
                     // never null one already streamed at creation time during this turn (prevents the flicker
-                    // where the preview appears then vanishes when the final snapshot has no new artifact).
+                    // where the preview appears then vanishes when the final snapshot has no updated artifact).
                     var finalInlinePreview = FindInlinePreview(
                         streamEvent.Response.Artifacts,
-                        generatedViewerArtifactIdsBeforeTurn);
+                        generatedViewerArtifactsBeforeTurn);
                     if (finalInlinePreview is not null)
                     {
                         assistantMessage.InlineViewer = finalInlinePreview;
@@ -4220,6 +4231,7 @@
     {
         _gates = state.Gates;
         _artifacts = state.Artifacts;
+        SyncSelectedArtifactWithArtifacts();
         _proposedActions = state.ProposedActions;
         _stateWorkbench = BuildRestoredWorkbench(state);
         await ApplyAgentProjectNameAsync(state.ProjectName);
@@ -4432,6 +4444,8 @@
             _artifacts.Add(artifact);
         }
 
+        SyncSelectedArtifactWithArtifacts();
+
         if (IsGeneratedViewerArtifact(artifact) &&
             artifact.Metadata.TryGetValue("cad_commands", out var commandsJson) &&
             !string.IsNullOrWhiteSpace(commandsJson))
@@ -4441,14 +4455,7 @@
                 message.IsProcessing);
             if (inProgress is not null)
             {
-                inProgress.InlineViewer = new InlineViewerInfo
-                {
-                    ArtifactId = artifact.ArtifactId,
-                    CommandsJson = commandsJson,
-                    FeedbackSentiment = ArtifactMetadata(artifact, "customerSentiment") ?? string.Empty,
-                    FeedbackComment = ArtifactMetadata(artifact, "customerComment") ?? string.Empty,
-                    FeedbackStatus = InlineViewerFeedbackStatus(artifact)
-                };
+                inProgress.InlineViewer = BuildInlineViewerInfo(artifact, commandsJson);
             }
         }
 
@@ -4800,6 +4807,16 @@
     private void SelectArtifact(QuoteAgentArtifactDto artifact)
     {
         _selectedArtifact = _selectedArtifact?.ArtifactId == artifact.ArtifactId ? null : artifact;
+    }
+
+    private void SyncSelectedArtifactWithArtifacts()
+    {
+        if (_selectedArtifact is null)
+        {
+            return;
+        }
+
+        _selectedArtifact = _artifacts.FirstOrDefault(artifact => artifact.ArtifactId == _selectedArtifact.ArtifactId);
     }
 
     private void ClosePreviewDialog()
@@ -6211,12 +6228,27 @@
         };
     }
 
-    private static HashSet<Guid> GeneratedViewerArtifactIds(IReadOnlyList<QuoteAgentArtifactDto> artifacts)
+    private static Dictionary<Guid, string> GeneratedViewerArtifactSnapshots(IReadOnlyList<QuoteAgentArtifactDto> artifacts)
     {
-        return artifacts
-            .Where(IsGeneratedViewerArtifact)
-            .Select(artifact => artifact.ArtifactId)
-            .ToHashSet();
+        var snapshots = new Dictionary<Guid, string>();
+        foreach (var artifact in artifacts.Where(IsGeneratedViewerArtifact))
+        {
+            snapshots[artifact.ArtifactId] = GeneratedViewerArtifactSignature(artifact);
+        }
+
+        return snapshots;
+    }
+
+    private static string GeneratedViewerArtifactSignature(QuoteAgentArtifactDto artifact)
+    {
+        artifact.Metadata.TryGetValue("revision", out var revision);
+        artifact.Metadata.TryGetValue("updatedAt", out var updatedAt);
+        artifact.Metadata.TryGetValue("cad_commands", out var commandsJson);
+        return string.Join(
+            '\n',
+            revision ?? string.Empty,
+            updatedAt ?? string.Empty,
+            commandsJson ?? string.Empty);
     }
 
     private static bool IsGeneratedViewerArtifact(QuoteAgentArtifactDto artifact)
@@ -6228,11 +6260,11 @@
 
     private static InlineViewerInfo? FindInlinePreview(
         IReadOnlyList<QuoteAgentArtifactDto> artifacts,
-        IReadOnlySet<Guid>? generatedViewerArtifactIdsBeforeTurn = null)
+        IReadOnlyDictionary<Guid, string>? generatedViewerArtifactsBeforeTurn = null)
     {
         var generated = artifacts.LastOrDefault(a =>
             IsGeneratedViewerArtifact(a) &&
-            generatedViewerArtifactIdsBeforeTurn?.Contains(a.ArtifactId) != true);
+            IsNewOrRevisedGeneratedViewerArtifact(a, generatedViewerArtifactsBeforeTurn));
         if (generated is null)
         {
             return null;
@@ -6243,13 +6275,33 @@
             return null;
         }
 
+        return BuildInlineViewerInfo(generated, commandsJson);
+    }
+
+    private static bool IsNewOrRevisedGeneratedViewerArtifact(
+        QuoteAgentArtifactDto artifact,
+        IReadOnlyDictionary<Guid, string>? generatedViewerArtifactsBeforeTurn)
+    {
+        if (generatedViewerArtifactsBeforeTurn is null)
+        {
+            return true;
+        }
+
+        return !generatedViewerArtifactsBeforeTurn.TryGetValue(artifact.ArtifactId, out var previousSignature) ||
+            !string.Equals(previousSignature, GeneratedViewerArtifactSignature(artifact), StringComparison.Ordinal);
+    }
+
+    private static InlineViewerInfo BuildInlineViewerInfo(QuoteAgentArtifactDto artifact, string commandsJson)
+    {
         return new InlineViewerInfo
         {
-            ArtifactId = generated.ArtifactId,
+            ArtifactId = artifact.ArtifactId,
             CommandsJson = commandsJson,
-            FeedbackSentiment = ArtifactMetadata(generated, "customerSentiment") ?? string.Empty,
-            FeedbackComment = ArtifactMetadata(generated, "customerComment") ?? string.Empty,
-            FeedbackStatus = InlineViewerFeedbackStatus(generated)
+            FeedbackSentiment = ArtifactMetadata(artifact, "customerSentiment") ?? string.Empty,
+            FeedbackComment = ArtifactMetadata(artifact, "customerComment") ?? string.Empty,
+            FeedbackStatus = InlineViewerFeedbackStatus(artifact),
+            BuildFailed = GeneratedViewerBuildFailed(artifact),
+            BuildErrorClass = ArtifactMetadata(artifact, "previewBuildErrorClass")
         };
     }
 
@@ -6269,6 +6321,11 @@
 
     private static string InlineViewerFeedbackStatus(QuoteAgentArtifactDto artifact)
     {
+        if (GeneratedViewerBuildFailed(artifact))
+        {
+            return "3D preview failed to load";
+        }
+
         if (artifact.Status.Equals("customer_approved", StringComparison.OrdinalIgnoreCase))
         {
             return "Design marked usable for this quote";
@@ -6285,6 +6342,13 @@
         return artifact.Status.Equals("feedback_recorded", StringComparison.OrdinalIgnoreCase)
             ? "Feedback recorded"
             : string.Empty;
+    }
+
+    private static bool GeneratedViewerBuildFailed(QuoteAgentArtifactDto artifact)
+    {
+        return artifact.Status.Equals("build_failed", StringComparison.OrdinalIgnoreCase) ||
+            artifact.Metadata.TryGetValue("previewBuildStatus", out var status) &&
+            status.Equals("failed", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string InlineViewerSentimentClass(InlineViewerInfo viewer, string sentiment)
@@ -6348,6 +6412,7 @@
             if (result?.State is not null)
             {
                 _artifacts = result.State.Artifacts;
+                SyncSelectedArtifactWithArtifacts();
                 _gates = result.State.Gates;
                 _proposedActions = result.State.ProposedActions;
             }
@@ -6378,22 +6443,89 @@
 
         viewer.BuildFailed = !outcome.Success;
         viewer.BuildErrorClass = outcome.Success ? null : outcome.ErrorClass;
+        ApplyPreviewBuildOutcomeToArtifact(viewer.ArtifactId, outcome);
         await InvokeAsync(StateHasChanged);
+
+        await ReportPreviewBuildOutcomeAsync(viewer.ArtifactId, outcome);
+    }
+
+    private async Task HandleGeneratedArtifactViewerBuildOutcomeAsync(QuoteAgentArtifactDto? artifact, QeInlinePartViewer.PreviewBuildOutcome outcome)
+    {
+        if (artifact is null)
+        {
+            return;
+        }
+
+        ApplyPreviewBuildOutcomeToArtifact(artifact.ArtifactId, outcome);
+        await InvokeAsync(StateHasChanged);
+
+        await ReportPreviewBuildOutcomeAsync(artifact.ArtifactId, outcome);
+    }
+
+    private async Task ReportPreviewBuildOutcomeAsync(Guid artifactId, QeInlinePartViewer.PreviewBuildOutcome outcome)
+    {
+        if (artifactId == Guid.Empty)
+        {
+            return;
+        }
 
         try
         {
-            await Http.PostAsJsonAsync(
-                $"/quote/v1/agent/sessions/{SessionId:D}/artifacts/{viewer.ArtifactId:D}/preview-build",
+            var response = await Http.PostAsJsonAsync(
+                $"/quote/v1/agent/sessions/{SessionId:D}/artifacts/{artifactId:D}/preview-build",
                 new QuoteAgentPreviewBuildRequest
                 {
                     Success = outcome.Success,
                     ErrorClass = outcome.Success ? null : outcome.ErrorClass
                 });
+            if (!response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<QuoteAgentPreviewBuildResponse>();
+            if (result?.State is not null)
+            {
+                _artifacts = result.State.Artifacts;
+                SyncSelectedArtifactWithArtifacts();
+                _gates = result.State.Gates;
+                _proposedActions = result.State.ProposedActions;
+                await InvokeAsync(StateHasChanged);
+            }
         }
         catch
         {
             // Telemetry reporting must never disrupt the customer's preview experience.
         }
+    }
+
+    private void ApplyPreviewBuildOutcomeToArtifact(Guid artifactId, QeInlinePartViewer.PreviewBuildOutcome outcome)
+    {
+        var artifact = _artifacts.FirstOrDefault(item => item.ArtifactId == artifactId);
+        if (artifact is null || !IsGeneratedViewerArtifact(artifact))
+        {
+            return;
+        }
+
+        if (outcome.Success)
+        {
+            artifact.Metadata["previewBuildStatus"] = "success";
+            artifact.Metadata.Remove("previewBuildErrorClass");
+            if (artifact.Status.Equals("build_failed", StringComparison.OrdinalIgnoreCase))
+            {
+                artifact.Status = "ready";
+            }
+        }
+        else
+        {
+            artifact.Metadata["previewBuildStatus"] = "failed";
+            artifact.Metadata["previewBuildErrorClass"] = string.IsNullOrWhiteSpace(outcome.ErrorClass)
+                ? "unknown"
+                : outcome.ErrorClass.Trim();
+            artifact.Status = "build_failed";
+        }
+
+        SyncSelectedArtifactWithArtifacts();
     }
 
     private async Task RequestPreviewRebuildAsync(InlineViewerInfo? viewer)
@@ -6607,6 +6739,7 @@
     {
         _messages.Add(new AgentMessageRow("assistant", Text(turn.TextEn, turn.TextTh), turn.Workbench));
         _artifacts = turn.Artifacts;
+        SyncSelectedArtifactWithArtifacts();
         _proposedActions = [];
         RequestScrollToLatestMessage();
     }

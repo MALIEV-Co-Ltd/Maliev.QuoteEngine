@@ -845,6 +845,21 @@ internal sealed class QuoteAgentService(
         Guid artifactId,
         QuoteAgentPreviewBuildRequest request)
     {
+        var state = sessionStore.GetOrCreate(sessionId);
+        var updatedState = false;
+        var errorClass = NormalizePreviewBuildErrorClass(request.ErrorClass);
+
+        lock (state.SyncRoot)
+        {
+            var artifact = state.Artifacts.FirstOrDefault(item => item.ArtifactId == artifactId);
+            if (artifact is not null && IsGeneratedViewerArtifact(artifact))
+            {
+                ApplyPreviewBuildOutcome(artifact, request.Success, errorClass);
+                state.UpdatedAt = DateTimeOffset.UtcNow;
+                updatedState = true;
+            }
+        }
+
         metrics.RecordPreviewBuildOutcome(request.Success, request.ErrorClass);
 
         if (request.Success)
@@ -858,7 +873,7 @@ internal sealed class QuoteAgentService(
         {
             logger.LogWarning(
                 "Recorded failed 3D preview build ({PreviewErrorClass}) for artifact {ArtifactId} in quote agent session {SessionId}.",
-                string.IsNullOrWhiteSpace(request.ErrorClass) ? "unknown" : request.ErrorClass,
+                errorClass,
                 artifactId,
                 sessionId);
         }
@@ -866,8 +881,41 @@ internal sealed class QuoteAgentService(
         return new QuoteAgentPreviewBuildResponse
         {
             ArtifactId = artifactId,
-            Status = "recorded"
+            Status = "recorded",
+            State = updatedState ? ToStateResponse(state) : null
         };
+    }
+
+    private static void ApplyPreviewBuildOutcome(
+        QuoteAgentArtifactDto artifact,
+        bool success,
+        string errorClass)
+    {
+        var timestamp = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+        if (success)
+        {
+            artifact.Metadata["previewBuildStatus"] = "success";
+            artifact.Metadata["previewBuildSucceededAt"] = timestamp;
+            artifact.Metadata.Remove("previewBuildErrorClass");
+            artifact.Metadata.Remove("previewBuildFailedAt");
+            if (artifact.Status.Equals("build_failed", StringComparison.OrdinalIgnoreCase))
+            {
+                artifact.Status = "ready";
+            }
+
+            return;
+        }
+
+        artifact.Metadata["previewBuildStatus"] = "failed";
+        artifact.Metadata["previewBuildErrorClass"] = errorClass;
+        artifact.Metadata["previewBuildFailedAt"] = timestamp;
+        artifact.Status = "build_failed";
+    }
+
+    private static string NormalizePreviewBuildErrorClass(string? errorClass)
+    {
+        var normalized = string.IsNullOrWhiteSpace(errorClass) ? "unknown" : errorClass.Trim();
+        return normalized.Length <= 40 ? normalized : normalized[..40];
     }
 
     private static string NormalizePreviewFeedbackSentiment(string? sentiment)
@@ -6948,14 +6996,19 @@ Customer message:
     private static string GroundGeneratedPreviewText(string content, QuoteAgentStateResponse state)
     {
         if (string.IsNullOrWhiteSpace(content) ||
-            state.Artifacts.Any(IsGeneratedViewerArtifact) ||
             !ContainsGeneratedPreviewClaim(content))
         {
             return content;
         }
 
-        const string groundedLine =
-            "I have not generated a 3D preview for this part yet. Share the confirmed dimensions, or upload a CAD file, and I can prepare one.";
+        if (HasRenderableGeneratedViewerArtifact(state))
+        {
+            return content;
+        }
+
+        var groundedLine = HasFailedGeneratedViewerArtifact(state)
+            ? "The current 3D preview failed to load in the browser. I need to regenerate it with corrected CAD commands before it is available."
+            : "I have not generated a 3D preview for this part yet. Share the confirmed dimensions, or upload a CAD file, and I can prepare one.";
         var lines = content.Replace("\r\n", "\n").Split('\n');
         var sanitizedLines = new List<string>();
         var insertedGroundedLine = false;
@@ -6977,6 +7030,34 @@ Customer message:
         }
 
         return string.Join('\n', sanitizedLines).Trim();
+    }
+
+    private static bool HasRenderableGeneratedViewerArtifact(QuoteAgentStateResponse state)
+    {
+        return state.Artifacts.Any(IsRenderableGeneratedViewerArtifact);
+    }
+
+    private static bool HasFailedGeneratedViewerArtifact(QuoteAgentStateResponse state)
+    {
+        return state.Artifacts.Any(artifact =>
+            IsGeneratedViewerArtifact(artifact) &&
+            (artifact.Status.Equals("build_failed", StringComparison.OrdinalIgnoreCase) ||
+                artifact.Metadata.TryGetValue("previewBuildStatus", out var status) &&
+                status.Equals("failed", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private static bool IsRenderableGeneratedViewerArtifact(QuoteAgentArtifactDto artifact)
+    {
+        if (!IsGeneratedViewerArtifact(artifact) ||
+            artifact.Status.Equals("build_failed", StringComparison.OrdinalIgnoreCase) ||
+            !artifact.Metadata.TryGetValue("cad_commands", out var commandsJson) ||
+            string.IsNullOrWhiteSpace(commandsJson))
+        {
+            return false;
+        }
+
+        return !artifact.Metadata.TryGetValue("previewBuildStatus", out var status) ||
+            !status.Equals("failed", StringComparison.OrdinalIgnoreCase);
     }
 
     private string? BuildThinkingCallbackUrl(Guid sessionId)
@@ -7741,6 +7822,10 @@ Customer message:
             artifact.Metadata.Remove("feedbackObservedAt");
             artifact.Metadata.Remove("feedbackMemoryObserved");
             artifact.Metadata.Remove("customerApproved");
+            artifact.Metadata.Remove("previewBuildStatus");
+            artifact.Metadata.Remove("previewBuildErrorClass");
+            artifact.Metadata.Remove("previewBuildFailedAt");
+            artifact.Metadata.Remove("previewBuildSucceededAt");
 
             if (!isRevision)
             {
