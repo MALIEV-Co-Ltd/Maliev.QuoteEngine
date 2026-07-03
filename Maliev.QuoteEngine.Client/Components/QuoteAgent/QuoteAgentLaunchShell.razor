@@ -882,7 +882,21 @@
                                 @if (message.InlineViewer is not null)
                                 {
                                     <section class="qe-agent-inline-viewer">
-                                        <QeInlinePartViewer CommandsJson="@message.InlineViewer.CommandsJson" />
+                                        <QeInlinePartViewer CommandsJson="@message.InlineViewer.CommandsJson"
+                                                            OnBuildOutcome="@(outcome => HandleInlineViewerBuildOutcomeAsync(message.InlineViewer, outcome))" />
+                                        @if (message.InlineViewer.BuildFailed)
+                                        {
+                                            <div class="qe-inline-viewer-rebuild">
+                                                <span class="qe-inline-viewer-rebuild-text">@Text("This 3D preview could not be built. Ask the agent to rebuild it with a corrected design.", "ไม่สามารถสร้างพรีวิว 3D นี้ได้ ขอให้ผู้ช่วยสร้างใหม่ด้วยแบบที่แก้ไขแล้ว")</span>
+                                                <button type="button"
+                                                        class="qe-inline-viewer-rebuild-button"
+                                                        @onclick:stopPropagation="true"
+                                                        @onclick="@(() => RequestPreviewRebuildAsync(message.InlineViewer))">
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Autorenew" Size="Size.Small" />
+                                                    <span>@Text("Ask agent to rebuild", "ขอให้ผู้ช่วยสร้างใหม่")</span>
+                                                </button>
+                                            </div>
+                                        }
                                         <div class="qe-inline-viewer-feedback" aria-label="@Text("3D preview feedback", "ความคิดเห็นต่อพรีวิว 3D")">
                                             <div class="qe-inline-viewer-rating" role="group" aria-label="@Text("Was this 3D preview useful?", "พรีวิว 3D นี้ใช้ได้หรือไม่")">
                                                 <button type="button"
@@ -6156,6 +6170,57 @@
         }
     }
 
+    private async Task HandleInlineViewerBuildOutcomeAsync(InlineViewerInfo? viewer, QeInlinePartViewer.PreviewBuildOutcome outcome)
+    {
+        if (viewer is null)
+        {
+            return;
+        }
+
+        viewer.BuildFailed = !outcome.Success;
+        viewer.BuildErrorClass = outcome.Success ? null : outcome.ErrorClass;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            await Http.PostAsJsonAsync(
+                $"/quote/v1/agent/sessions/{SessionId:D}/artifacts/{viewer.ArtifactId:D}/preview-build",
+                new QuoteAgentPreviewBuildRequest
+                {
+                    Success = outcome.Success,
+                    ErrorClass = outcome.Success ? null : outcome.ErrorClass
+                });
+        }
+        catch
+        {
+            // Telemetry reporting must never disrupt the customer's preview experience.
+        }
+    }
+
+    private async Task RequestPreviewRebuildAsync(InlineViewerInfo? viewer)
+    {
+        if (viewer is not null)
+        {
+            viewer.BuildFailed = false;
+        }
+
+        var prompt = Text(
+            "The 3D preview failed to render. Please regenerate it with a corrected, buildable design.",
+            "พรีวิว 3D แสดงผลไม่สำเร็จ กรุณาสร้างใหม่ด้วยแบบที่ถูกต้องและสร้างได้");
+        _draftMessage = string.Empty;
+        await InvokeAsync(StateHasChanged);
+
+        if (_composerModule is not null)
+        {
+            await _composerModule.InvokeVoidAsync("typeComposerText", _composerTextarea, prompt);
+            _draftMessage = prompt;
+            return;
+        }
+
+        _draftMessage = prompt;
+        await FocusComposerAsync();
+    }
+
     private PreviewItem? BuildArtifactPreviewItem(QuoteAgentArtifactDto artifact)
     {
         var artifactUrl = ArtifactPreviewUrl(artifact);
@@ -7368,6 +7433,10 @@
         public string FeedbackStatus { get; set; } = string.Empty;
 
         public bool IsFeedbackSubmitting { get; set; }
+
+        public bool BuildFailed { get; set; }
+
+        public string? BuildErrorClass { get; set; }
     }
 
     private sealed record LocalDemoTurn(

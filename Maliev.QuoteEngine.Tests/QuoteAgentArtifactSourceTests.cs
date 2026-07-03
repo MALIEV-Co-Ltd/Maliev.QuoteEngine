@@ -62,6 +62,29 @@ public sealed class QuoteAgentArtifactSourceTests
     }
 
     [Fact]
+    public void Inline_preview_reports_build_outcome_and_offers_agent_rebuild_recovery()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeInlinePartViewer.razor");
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        // Viewer raises a build outcome the host can act on.
+        Assert.Contains("public EventCallback<PreviewBuildOutcome> OnBuildOutcome { get; set; }", component, StringComparison.Ordinal);
+        Assert.Contains("await NotifyBuildOutcomeAsync(new PreviewBuildOutcome(true, \"none\", null));", component, StringComparison.Ordinal);
+        Assert.Contains("await NotifyBuildOutcomeAsync(new PreviewBuildOutcome(false, ClassifyBuildError(ex.Message), ex.Message));", component, StringComparison.Ordinal);
+        Assert.Contains("public sealed record PreviewBuildOutcome(bool Success, string ErrorClass, string? Message);", component, StringComparison.Ordinal);
+
+        // Shell reports the outcome for telemetry and offers a non-dead-end recovery.
+        Assert.Contains("OnBuildOutcome=\"@(outcome => HandleInlineViewerBuildOutcomeAsync(message.InlineViewer, outcome))\"", shell, StringComparison.Ordinal);
+        Assert.Contains("private async Task HandleInlineViewerBuildOutcomeAsync(InlineViewerInfo? viewer, QeInlinePartViewer.PreviewBuildOutcome outcome)", shell, StringComparison.Ordinal);
+        Assert.Contains("/quote/v1/agent/sessions/{SessionId:D}/artifacts/{viewer.ArtifactId:D}/preview-build", shell, StringComparison.Ordinal);
+        Assert.Contains("private async Task RequestPreviewRebuildAsync(InlineViewerInfo? viewer)", shell, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-inline-viewer-rebuild-button\"", shell, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-inline-viewer-rebuild-button", styles, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Preview_worker_passes_point_arrays_to_replicad_lineTo_not_scalars()
     {
         // replicad's Sketcher.lineTo(point: Point2D) destructures a single [x, y] array.

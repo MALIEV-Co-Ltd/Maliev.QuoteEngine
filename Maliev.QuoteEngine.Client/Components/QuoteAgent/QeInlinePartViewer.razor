@@ -31,6 +31,10 @@
     [Parameter]
     public string CommandsJson { get; set; } = string.Empty;
 
+    /// <summary>Raised after each build attempt so the host can report telemetry and offer recovery.</summary>
+    [Parameter]
+    public EventCallback<PreviewBuildOutcome> OnBuildOutcome { get; set; }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (string.IsNullOrWhiteSpace(CommandsJson))
@@ -65,6 +69,7 @@
             _renderedCommandsJson = CommandsJson;
             _loadErrorMessage = DefaultLoadErrorMessage;
             _loadFailed = false;
+            await NotifyBuildOutcomeAsync(new PreviewBuildOutcome(true, "none", null));
         }
         catch (JSException ex)
         {
@@ -73,8 +78,62 @@
             _loadErrorMessage = FormatLoadErrorMessage(ex.Message);
             _loadFailed = true;
             StateHasChanged();
+            await NotifyBuildOutcomeAsync(new PreviewBuildOutcome(false, ClassifyBuildError(ex.Message), ex.Message));
         }
     }
+
+    private async Task NotifyBuildOutcomeAsync(PreviewBuildOutcome outcome)
+    {
+        if (OnBuildOutcome.HasDelegate)
+        {
+            await OnBuildOutcome.InvokeAsync(outcome);
+        }
+    }
+
+    private static string ClassifyBuildError(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return "other";
+        }
+
+        var normalized = message.ToLowerInvariant();
+        if (normalized.Contains("timed out") || normalized.Contains("timeout"))
+        {
+            return "build_timeout";
+        }
+
+        if (normalized.Contains("could not parse") || normalized.Contains("parse"))
+        {
+            return "parse_error";
+        }
+
+        if (normalized.Contains("no shapes") || normalized.Contains("empty"))
+        {
+            return "empty_mesh";
+        }
+
+        if (normalized.Contains("not iterable") ||
+            normalized.Contains("symbol.iterator") ||
+            normalized.Contains("cannot read propert") ||
+            normalized.Contains("typeerror"))
+        {
+            return "invalid_geometry";
+        }
+
+        if (normalized.Contains("not ready") || normalized.Contains("engine not available"))
+        {
+            return "worker_unavailable";
+        }
+
+        return "other";
+    }
+
+    /// <summary>Outcome of a single inline preview build attempt reported to the host.</summary>
+    /// <param name="Success">Whether the browser worker built the preview mesh.</param>
+    /// <param name="ErrorClass">Low-cardinality failure class ("none" on success).</param>
+    /// <param name="Message">Raw error message for diagnostics (null on success).</param>
+    public sealed record PreviewBuildOutcome(bool Success, string ErrorClass, string? Message);
 
     private static string FormatLoadErrorMessage(string? message)
     {

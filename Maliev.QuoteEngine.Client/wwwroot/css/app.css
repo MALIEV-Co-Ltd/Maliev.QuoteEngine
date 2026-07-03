@@ -2961,6 +2961,45 @@
     outline: none;
 }
 
+.qe-inline-viewer-rebuild {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    padding: 8px 10px;
+    border: 1px solid var(--qe-agent-border, #e9ecef);
+    border-radius: 8px;
+    background: rgba(220, 38, 38, .06);
+}
+
+.qe-inline-viewer-rebuild-text {
+    color: var(--qe-agent-muted, #868e96);
+    font-size: 13px;
+}
+
+.qe-inline-viewer-rebuild-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 0;
+    border-radius: 8px;
+    padding: 6px 12px;
+    background: var(--qe-agent-accent, #2563eb);
+    color: #fff;
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.qe-inline-viewer-rebuild-button:hover,
+.qe-inline-viewer-rebuild-button:focus-visible {
+    filter: brightness(1.05);
+    outline: none;
+}
+
 .qe-inline-viewer-feedback {
     display: grid;
     gap: 8px;
