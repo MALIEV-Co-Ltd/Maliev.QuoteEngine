@@ -6349,6 +6349,161 @@ Customer message:
     }
 
     [Fact]
+    public async Task Cad_workbench_tools_start_apply_and_observe_revision_state()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var startJson = await ExecuteToolAsync(client, sessionId, "quote_cad_start_design",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Flat sketch-derived bracket with a center mounting hole", JsonOptions),
+                ["process_hint"] = JsonSerializer.SerializeToElement("cnc", JsonOptions),
+                ["units"] = JsonSerializer.SerializeToElement("mm", JsonOptions)
+            });
+
+        using var startDoc = JsonDocument.Parse(startJson);
+        var startRoot = startDoc.RootElement;
+        Assert.True(startRoot.GetProperty("success").GetBoolean());
+        var designId = startRoot.GetProperty("design_id").GetGuid();
+        Assert.NotEqual(Guid.Empty, designId);
+        Assert.Equal(0, startRoot.GetProperty("revision").GetInt32());
+        Assert.Equal(80, startRoot.GetProperty("operation_budget").GetInt32());
+        Assert.Equal(3, startRoot.GetProperty("iteration_budget").GetInt32());
+        Assert.Equal("requirements", startRoot.GetProperty("stage").GetString());
+
+        object[] operations =
+        [
+            new
+            {
+                op = "extrude",
+                id = "plate",
+                Params = new[] { 6.0 },
+                profile = new
+                {
+                    plane = "XY",
+                    segments = new object[]
+                    {
+                        new { type = "move", Params = new[] { -25.0, -15.0 } },
+                        new { type = "line", Params = new[] { 25.0, -15.0 } },
+                        new { type = "line", Params = new[] { 25.0, 15.0 } },
+                        new { type = "line", Params = new[] { -25.0, 15.0 } },
+                        new { type = "line", Params = new[] { -25.0, -15.0 } }
+                    }
+                }
+            },
+            new
+            {
+                op = "cylinder",
+                id = "center_hole",
+                Params = new[] { 4.0, 8.0 }
+            },
+            new
+            {
+                op = "cut",
+                targetId = "plate",
+                toolId = "center_hole",
+                resultId = "bracket_preview"
+            }
+        ];
+
+        var applyJson = await ExecuteToolAsync(client, sessionId, "quote_cad_apply_operations",
+            new Dictionary<string, JsonElement>
+            {
+                ["design_id"] = JsonSerializer.SerializeToElement(designId, JsonOptions),
+                ["base_revision"] = JsonSerializer.SerializeToElement(0, JsonOptions),
+                ["stage"] = JsonSerializer.SerializeToElement("solid_features", JsonOptions),
+                ["operations"] = JsonSerializer.SerializeToElement(operations, JsonOptions)
+            });
+
+        using var applyDoc = JsonDocument.Parse(applyJson);
+        var applyRoot = applyDoc.RootElement;
+        Assert.True(applyRoot.GetProperty("success").GetBoolean());
+        Assert.Equal(designId, applyRoot.GetProperty("design_id").GetGuid());
+        Assert.Equal(1, applyRoot.GetProperty("revision").GetInt32());
+        Assert.Equal(3, applyRoot.GetProperty("operation_count").GetInt32());
+        Assert.Equal("solid_features", applyRoot.GetProperty("stage").GetString());
+        Assert.Equal(77, applyRoot.GetProperty("operations_remaining").GetInt32());
+
+        var observeJson = await ExecuteToolAsync(client, sessionId, "quote_cad_observe_design",
+            new Dictionary<string, JsonElement>
+            {
+                ["design_id"] = JsonSerializer.SerializeToElement(designId, JsonOptions)
+            });
+
+        using var observeDoc = JsonDocument.Parse(observeJson);
+        var observeRoot = observeDoc.RootElement;
+        Assert.True(observeRoot.GetProperty("success").GetBoolean());
+        Assert.Equal(designId, observeRoot.GetProperty("design_id").GetGuid());
+        Assert.Equal(1, observeRoot.GetProperty("revision").GetInt32());
+        Assert.Equal(3, observeRoot.GetProperty("operation_count").GetInt32());
+        Assert.Equal("solid_features", observeRoot.GetProperty("stage").GetString());
+        Assert.Equal("ready_for_preview", observeRoot.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task Cad_workbench_apply_rejects_stale_revision_and_over_budget_batches()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var startJson = await ExecuteToolAsync(client, sessionId, "quote_cad_start_design",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Simple manufacturing plate", JsonOptions)
+            });
+        using var startDoc = JsonDocument.Parse(startJson);
+        var designId = startDoc.RootElement.GetProperty("design_id").GetGuid();
+
+        object[] firstOperation =
+        [
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 50.0, 30.0, 5.0 }
+            }
+        ];
+
+        await ExecuteToolAsync(client, sessionId, "quote_cad_apply_operations",
+            new Dictionary<string, JsonElement>
+            {
+                ["design_id"] = JsonSerializer.SerializeToElement(designId, JsonOptions),
+                ["base_revision"] = JsonSerializer.SerializeToElement(0, JsonOptions),
+                ["operations"] = JsonSerializer.SerializeToElement(firstOperation, JsonOptions)
+            });
+
+        var staleJson = await ExecuteToolAsync(client, sessionId, "quote_cad_apply_operations",
+            new Dictionary<string, JsonElement>
+            {
+                ["design_id"] = JsonSerializer.SerializeToElement(designId, JsonOptions),
+                ["base_revision"] = JsonSerializer.SerializeToElement(0, JsonOptions),
+                ["operations"] = JsonSerializer.SerializeToElement(firstOperation, JsonOptions)
+            });
+        Assert.Contains("stale", staleJson, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("current revision is 1", staleJson, StringComparison.OrdinalIgnoreCase);
+
+        var overBudget = Enumerable.Range(0, 81)
+            .Select(index => new
+            {
+                op = "box",
+                id = $"box_{index}",
+                Params = new[] { 1.0, 1.0, 1.0 }
+            })
+            .ToArray();
+
+        var overBudgetJson = await ExecuteToolAsync(client, sessionId, "quote_cad_apply_operations",
+            new Dictionary<string, JsonElement>
+            {
+                ["design_id"] = JsonSerializer.SerializeToElement(designId, JsonOptions),
+                ["base_revision"] = JsonSerializer.SerializeToElement(1, JsonOptions),
+                ["operations"] = JsonSerializer.SerializeToElement(overBudget, JsonOptions)
+            });
+        Assert.Contains("too complex", overBudgetJson, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("80 CAD operations", overBudgetJson, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_normalizes_operation_casing_for_browser_worker()
     {
         using var client = factory.CreateClient();

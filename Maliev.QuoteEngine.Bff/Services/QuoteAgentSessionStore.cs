@@ -448,6 +448,8 @@ internal sealed class QuoteAgentSessionState
 
     public List<QuoteAgentUiDirectiveDto> UiDirectives { get; } = [];
 
+    public List<QuoteCadDesignSession> CadDesigns { get; } = [];
+
     public QuoteEstimateResponse? Estimate { get; set; }
 
     public GenerateFormalQuoteResponse? FormalQuote { get; set; }
@@ -475,6 +477,31 @@ internal sealed class QuoteAgentSessionState
     public bool CheckoutConsent { get; set; }
 
     public InitiatePaymentResponse? Payment { get; set; }
+
+    public DateTimeOffset CreatedAt { get; init; }
+
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+
+internal sealed class QuoteCadDesignSession
+{
+    public Guid DesignId { get; init; }
+
+    public string Description { get; set; } = string.Empty;
+
+    public string ProcessHint { get; set; } = "fdm";
+
+    public string Units { get; set; } = "mm";
+
+    public string Stage { get; set; } = "requirements";
+
+    public string Status { get; set; } = "planning";
+
+    public int Revision { get; set; }
+
+    public int ApplyIterations { get; set; }
+
+    public List<CadCommandDto> Operations { get; } = [];
 
     public DateTimeOffset CreatedAt { get; init; }
 

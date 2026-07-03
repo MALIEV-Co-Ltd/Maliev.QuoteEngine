@@ -174,6 +174,8 @@ internal sealed class QuoteAgentService(
     private const int ChatbotServiceMaxContentCharacters = 8000;
     private const long ChatbotInlineImageMaxBytes = 10L * 1024 * 1024;
     private const long ChatbotInlinePdfMaxBytes = 20L * 1024 * 1024;
+    private const int CadWorkbenchOperationBudget = 80;
+    private const int CadWorkbenchIterationBudget = 3;
 
     public async Task<QuoteAgentTurnResponse> SendAsync(
         QuoteAgentMessageRequest request,
@@ -996,6 +998,9 @@ internal sealed class QuoteAgentService(
             "quote_set_ui_language" => SetUiLanguage(state, request.Arguments),
             "quote_set_project_name" => SetProjectName(state, request.Arguments),
             "quote_ask_customer" => AskCustomer(state, request.Arguments),
+            "quote_cad_start_design" => StartCadDesign(state, request.Arguments),
+            "quote_cad_apply_operations" => ApplyCadDesignOperations(state, request.Arguments),
+            "quote_cad_observe_design" => ObserveCadDesign(state, request.Arguments),
             "quote_generate_3d_preview" => Generate3DPreview(state, request.Arguments),
             _ => new { error = $"Unknown QuoteEngine tool: {toolName}" }
         };
@@ -7390,6 +7395,170 @@ Customer message:
         return normalized is "chat" or "chat-and-ui" or "ui"
             ? normalized
             : fallback;
+    }
+
+    private static object StartCadDesign(QuoteAgentSessionState state, IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var cadArguments = UnwrapToolArguments(arguments);
+        var description = ReadString(cadArguments, "description") ??
+            ReadString(cadArguments, "requirements") ??
+            "Iterative CAD design";
+        var processHint = ReadString(cadArguments, "process_hint") ??
+            ReadString(cadArguments, "processHint") ??
+            "fdm";
+        var units = NormalizeCadDesignUnits(ReadString(cadArguments, "units"));
+        var now = DateTimeOffset.UtcNow;
+        var design = new QuoteCadDesignSession
+        {
+            DesignId = Guid.NewGuid(),
+            Description = description.Trim(),
+            ProcessHint = string.IsNullOrWhiteSpace(processHint) ? "fdm" : processHint.Trim().ToLowerInvariant(),
+            Units = units,
+            Stage = "requirements",
+            Status = "planning",
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        lock (state.SyncRoot)
+        {
+            state.CadDesigns.Add(design);
+            state.UpdatedAt = now;
+        }
+
+        return BuildCadDesignResponse(design, "CAD design session started.");
+    }
+
+    private static object ApplyCadDesignOperations(QuoteAgentSessionState state, IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var cadArguments = UnwrapToolArguments(arguments);
+        if (!TryReadCadDesignId(cadArguments, out var designId))
+        {
+            return new { error = "CAD design id is required." };
+        }
+
+        var operations = ReadCadDesignOperations(cadArguments).ToList();
+        if (operations.Count == 0)
+        {
+            return new { error = "At least one CAD operation is required." };
+        }
+
+        NormalizeCadCommandsForBrowserWorker(operations);
+
+        lock (state.SyncRoot)
+        {
+            var design = state.CadDesigns.FirstOrDefault(item => item.DesignId == designId);
+            if (design is null)
+            {
+                return new { error = "CAD design session was not found in this quote session." };
+            }
+
+            var baseRevision = ReadInt(cadArguments, "base_revision", ReadInt(cadArguments, "baseRevision", -1));
+            if (baseRevision < 0)
+            {
+                return new { error = "CAD design base_revision is required." };
+            }
+
+            if (baseRevision != design.Revision)
+            {
+                return new
+                {
+                    error = $"Stale CAD design revision; current revision is {design.Revision}. Observe the design and retry from the latest revision."
+                };
+            }
+
+            if (design.ApplyIterations >= CadWorkbenchIterationBudget)
+            {
+                return new { error = $"CAD design iteration limit reached. Use {CadWorkbenchIterationBudget} operation batches or fewer." };
+            }
+
+            var combined = design.Operations.Concat(operations).ToList();
+            if (combined.Count > CadWorkbenchOperationBudget)
+            {
+                return new { error = $"CAD design is too complex. Use {CadWorkbenchOperationBudget} CAD operations or fewer." };
+            }
+
+            var validationError = ValidateCadCommands(combined);
+            if (!string.IsNullOrWhiteSpace(validationError))
+            {
+                return new { error = validationError };
+            }
+
+            design.Operations.Clear();
+            design.Operations.AddRange(combined);
+            design.Revision++;
+            design.ApplyIterations++;
+            design.Stage = ReadString(cadArguments, "stage") ?? design.Stage;
+            design.Status = design.Operations.Count > 0 ? "ready_for_preview" : "planning";
+            design.UpdatedAt = DateTimeOffset.UtcNow;
+            state.UpdatedAt = design.UpdatedAt;
+
+            return BuildCadDesignResponse(design, $"Accepted {operations.Count} CAD operation(s).");
+        }
+    }
+
+    private static object ObserveCadDesign(QuoteAgentSessionState state, IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var cadArguments = UnwrapToolArguments(arguments);
+
+        lock (state.SyncRoot)
+        {
+            QuoteCadDesignSession? design = null;
+            if (TryReadCadDesignId(cadArguments, out var designId))
+            {
+                design = state.CadDesigns.FirstOrDefault(item => item.DesignId == designId);
+            }
+
+            design ??= state.CadDesigns.LastOrDefault();
+            return design is null
+                ? new { error = "No active CAD design session exists." }
+                : BuildCadDesignResponse(design, "CAD design observed.");
+        }
+    }
+
+    private static object BuildCadDesignResponse(QuoteCadDesignSession design, string message)
+    {
+        return new
+        {
+            success = true,
+            design_id = design.DesignId,
+            description = design.Description,
+            process_hint = design.ProcessHint,
+            units = design.Units,
+            stage = design.Stage,
+            status = design.Status,
+            revision = design.Revision,
+            operation_count = design.Operations.Count,
+            operation_budget = CadWorkbenchOperationBudget,
+            operations_remaining = Math.Max(0, CadWorkbenchOperationBudget - design.Operations.Count),
+            iteration_budget = CadWorkbenchIterationBudget,
+            iterations_remaining = Math.Max(0, CadWorkbenchIterationBudget - design.ApplyIterations),
+            message
+        };
+    }
+
+    private static IReadOnlyList<CadCommandDto> ReadCadDesignOperations(IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        if (arguments.TryGetValue("operations", out var operations) ||
+            arguments.TryGetValue("cad_operations", out operations) ||
+            arguments.TryGetValue("cadOperations", out operations))
+        {
+            return ReadCommands(operations);
+        }
+
+        return ReadCommands(arguments);
+    }
+
+    private static bool TryReadCadDesignId(IReadOnlyDictionary<string, JsonElement> arguments, out Guid designId)
+    {
+        return TryReadGuid(arguments, "design_id", out designId) ||
+            TryReadGuid(arguments, "designId", out designId);
+    }
+
+    private static string NormalizeCadDesignUnits(string? units)
+    {
+        var normalized = units?.Trim().ToLowerInvariant();
+        return normalized is "in" or "inch" or "inches" ? "in" : "mm";
     }
 
     private static object Generate3DPreview(QuoteAgentSessionState state, IReadOnlyDictionary<string, JsonElement> arguments)
