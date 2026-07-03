@@ -478,6 +478,60 @@ Customer message:
     }
 
     [Fact]
+    public async Task Preview_build_endpoint_records_build_outcome_metric()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        var artifactId = Guid.NewGuid();
+
+        var measurements = new List<Dictionary<string, object?>>();
+        using var listener = new System.Diagnostics.Metrics.MeterListener
+        {
+            InstrumentPublished = (instrument, meterListener) =>
+            {
+                if (instrument.Name == "quote_agent_preview_build_outcomes")
+                {
+                    meterListener.EnableMeasurementEvents(instrument);
+                }
+            }
+        };
+        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
+        {
+            var snapshot = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (var tag in tags)
+            {
+                snapshot[tag.Key] = tag.Value;
+            }
+
+            lock (measurements)
+            {
+                measurements.Add(snapshot);
+            }
+        });
+        listener.Start();
+
+        var failure = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{artifactId:D}/preview-build",
+            new QuoteAgentPreviewBuildRequest { Success = false, ErrorClass = "invalid_geometry" });
+        Assert.Equal(HttpStatusCode.OK, failure.StatusCode);
+        var failureBody = await failure.Content.ReadFromJsonAsync<QuoteAgentPreviewBuildResponse>();
+        Assert.NotNull(failureBody);
+        Assert.Equal(artifactId, failureBody.ArtifactId);
+        Assert.Equal("recorded", failureBody.Status);
+
+        var success = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{artifactId:D}/preview-build",
+            new QuoteAgentPreviewBuildRequest { Success = true });
+        Assert.Equal(HttpStatusCode.OK, success.StatusCode);
+
+        Assert.Contains(measurements, tags =>
+            Equals(tags.GetValueOrDefault("outcome"), "build_failed") &&
+            Equals(tags.GetValueOrDefault("error_class"), "invalid_geometry"));
+        Assert.Contains(measurements, tags => Equals(tags.GetValueOrDefault("outcome"), "success"));
+    }
+
+    [Fact]
     public async Task Agent_message_history_uses_persisted_mapping_when_session_store_is_cold()
     {
         var quoteSessionId = Guid.NewGuid();

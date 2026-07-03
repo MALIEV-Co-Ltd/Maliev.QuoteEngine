@@ -277,6 +277,25 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Records a client-side 3D preview build outcome reported by the inline viewer for telemetry.
+    /// </summary>
+    [HttpPost("sessions/{sessionId:guid}/artifacts/{artifactId:guid}/preview-build")]
+    [ProducesResponseType(typeof(QuoteAgentPreviewBuildResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    public ActionResult<QuoteAgentPreviewBuildResponse> RecordPreviewBuild(
+        Guid sessionId,
+        Guid artifactId,
+        [FromBody] QuoteAgentPreviewBuildRequest request)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(agentService.RecordPreviewBuildOutcome(sessionId, artifactId, request));
+    }
+
+    /// <summary>
     /// Searches signed-in customer quote data for the QuoteEngine agent workspace.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}/search")]

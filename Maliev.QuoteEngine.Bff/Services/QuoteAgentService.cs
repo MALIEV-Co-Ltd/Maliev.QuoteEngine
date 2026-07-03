@@ -60,6 +60,12 @@ public interface IQuoteAgentService
         QuoteAgentPreviewFeedbackRequest request,
         CancellationToken cancellationToken);
 
+    /// <summary>Records a client-side 3D preview build outcome reported by the inline viewer.</summary>
+    QuoteAgentPreviewBuildResponse RecordPreviewBuildOutcome(
+        Guid sessionId,
+        Guid artifactId,
+        QuoteAgentPreviewBuildRequest request);
+
     /// <summary>Searches customer-scoped quote data for the quote agent workspace.</summary>
     Task<QuoteAgentSearchResponse> SearchCustomerDataAsync(
         Guid sessionId,
@@ -824,6 +830,36 @@ internal sealed class QuoteAgentService(
             Status = "recorded",
             MemoryObserved = memoryObserved,
             State = ToStateResponse(state)
+        };
+    }
+
+    public QuoteAgentPreviewBuildResponse RecordPreviewBuildOutcome(
+        Guid sessionId,
+        Guid artifactId,
+        QuoteAgentPreviewBuildRequest request)
+    {
+        metrics.RecordPreviewBuildOutcome(request.Success, request.ErrorClass);
+
+        if (request.Success)
+        {
+            logger.LogInformation(
+                "Recorded successful 3D preview build for artifact {ArtifactId} in quote agent session {SessionId}.",
+                artifactId,
+                sessionId);
+        }
+        else
+        {
+            logger.LogWarning(
+                "Recorded failed 3D preview build ({PreviewErrorClass}) for artifact {ArtifactId} in quote agent session {SessionId}.",
+                string.IsNullOrWhiteSpace(request.ErrorClass) ? "unknown" : request.ErrorClass,
+                artifactId,
+                sessionId);
+        }
+
+        return new QuoteAgentPreviewBuildResponse
+        {
+            ArtifactId = artifactId,
+            Status = "recorded"
         };
     }
 

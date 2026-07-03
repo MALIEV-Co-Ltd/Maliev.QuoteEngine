@@ -567,6 +567,31 @@ public sealed class QuoteAgentPreviewFeedbackResponse
 }
 
 /// <summary>
+/// Reports a client-side 3D preview build outcome from the inline viewer for telemetry.
+/// </summary>
+public sealed class QuoteAgentPreviewBuildRequest
+{
+    /// <summary>Gets or sets whether the browser worker built the preview mesh.</summary>
+    public bool Success { get; set; }
+
+    /// <summary>Gets or sets the low-cardinality failure class when the build failed.</summary>
+    [StringLength(40)]
+    public string? ErrorClass { get; set; }
+}
+
+/// <summary>
+/// Result of recording a client-side 3D preview build outcome.
+/// </summary>
+public sealed class QuoteAgentPreviewBuildResponse
+{
+    /// <summary>Gets or sets the artifact ID the build outcome was recorded for.</summary>
+    public Guid ArtifactId { get; set; }
+
+    /// <summary>Gets or sets the recording status.</summary>
+    public string Status { get; set; } = "recorded";
+}
+
+/// <summary>
 /// Customer-scoped search response returned to the QuoteEngine agent.
 /// </summary>
 public sealed class QuoteAgentSearchResponse
