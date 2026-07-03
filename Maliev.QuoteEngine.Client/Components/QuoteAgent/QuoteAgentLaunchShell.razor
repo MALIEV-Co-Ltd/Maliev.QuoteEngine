@@ -2490,6 +2490,7 @@
     private string _dictationAfter = string.Empty;
     private string _dictationTimeLabel = string.Empty;
     private CancellationTokenSource? _dictationTimerCts;
+    private CancellationTokenSource? _reasoningTimerCts;
     private CancellationTokenSource? _agentHealthCts;
     private HubConnection? _notificationConnection;
     private Guid? _joinedQuoteSessionId;
@@ -3632,6 +3633,7 @@
                     assistantMessage.ThinkingStartedAt ??= DateTimeOffset.UtcNow;
                     assistantMessage.AppendReasoningThought(streamEvent.Thought);
                     assistantMessage.IsThinking = true;
+                    StartReasoningTimer();
                     RequestScrollToLatestMessage();
                     await InvokeAsync(StateHasChanged);
                 }
@@ -3651,6 +3653,7 @@
                         assistantMessage.ThinkingDurationSeconds =
                             Math.Max(1, (int)Math.Round((DateTimeOffset.UtcNow - startedAt).TotalSeconds));
                     }
+                    StopReasoningTimer();
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
                     _proposedActions = streamEvent.Response.ProposedActions;
@@ -3680,6 +3683,8 @@
                 }
                 else if (streamEvent.Type.Equals("error", StringComparison.OrdinalIgnoreCase))
                 {
+                    assistantMessage.IsThinking = false;
+                    StopReasoningTimer();
                     _error = string.IsNullOrWhiteSpace(streamEvent.Error)
                         ? Text("The agent could not complete this response.", "ผู้ช่วยไม่สามารถตอบกลับได้สำเร็จ")
                         : streamEvent.Error;
@@ -3711,6 +3716,7 @@
         }
         finally
         {
+            StopReasoningTimer();
             _sending = false;
             await InvokeAsync(StateHasChanged);
             await FocusComposerAsync();
@@ -4485,6 +4491,7 @@
         {
             assistantMessage.ThinkingStartedAt ??= DateTimeOffset.UtcNow;
             assistantMessage.IsThinking = true;
+            StartReasoningTimer();
             assistantMessage.AddReasoningTool(ThinkingStepSummary(step));
         }
 
@@ -4516,14 +4523,81 @@
 
     private string ReasoningSummaryLabel(AgentMessageRow message)
     {
+        var seconds = LiveThinkingDurationSeconds(message);
+        var activity = ReasoningActivityLabel(message);
         if (message.IsThinking)
         {
-            return Text("Thinking…", "กำลังคิด…");
+            return string.IsNullOrWhiteSpace(activity)
+                ? Text($"Thinking · {seconds}s", $"กำลังคิด · {seconds} วินาที")
+                : Text($"{activity} · {seconds}s", $"{activity} · {seconds} วินาที");
         }
 
-        return message.ThinkingDurationSeconds > 0
-            ? Text($"Thought for {message.ThinkingDurationSeconds}s", $"คิดอยู่ {message.ThinkingDurationSeconds} วินาที")
+        if (!string.IsNullOrWhiteSpace(activity) && seconds > 0)
+        {
+            return Text($"{activity} · {seconds}s", $"{activity} · {seconds} วินาที");
+        }
+
+        return seconds > 0
+            ? Text($"Thought for {seconds}s", $"คิดอยู่ {seconds} วินาที")
             : Text("Thought process", "กระบวนการคิด");
+    }
+
+    private static string? ReasoningActivityLabel(AgentMessageRow message)
+    {
+        var reasoning = string.Join(
+            "\n",
+            message.ReasoningEntries
+                .Where(entry => !entry.IsTool)
+                .Select(entry => entry.Text));
+
+        return QuoteAgentUiHelpers.ExtractReasoningLabel(reasoning);
+    }
+
+    private static int LiveThinkingDurationSeconds(AgentMessageRow message)
+    {
+        if (message.IsThinking && message.ThinkingStartedAt is { } startedAt)
+        {
+            return Math.Max(1, (int)Math.Round((DateTimeOffset.UtcNow - startedAt).TotalSeconds));
+        }
+
+        return message.ThinkingDurationSeconds;
+    }
+
+    private void StartReasoningTimer()
+    {
+        if (_reasoningTimerCts is not null)
+        {
+            return;
+        }
+
+        _reasoningTimerCts = new CancellationTokenSource();
+        var token = _reasoningTimerCts.Token;
+        _ = Task.Run(async () =>
+        {
+            while (!token.IsCancellationRequested && !_disposed)
+            {
+                try
+                {
+                    await Task.Delay(1000, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+
+                if (!token.IsCancellationRequested && !_disposed)
+                {
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        });
+    }
+
+    private void StopReasoningTimer()
+    {
+        _reasoningTimerCts?.Cancel();
+        _reasoningTimerCts?.Dispose();
+        _reasoningTimerCts = null;
     }
 
     private static string ReasoningDetailsClass(AgentMessageRow message)
@@ -7724,6 +7798,7 @@
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        StopReasoningTimer();
 
         if (_agentHealthCts is not null)
         {

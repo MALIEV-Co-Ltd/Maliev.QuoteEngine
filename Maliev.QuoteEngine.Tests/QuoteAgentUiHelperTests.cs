@@ -50,6 +50,46 @@ public sealed class QuoteAgentUiHelperTests
     }
 
     [Fact]
+    public void Reasoning_label_extracts_bold_reasoning_header()
+    {
+        var label = QuoteAgentUiHelpers.ExtractReasoningLabel("** Understanding the customer intent **\nI need to inspect the sketch.");
+
+        Assert.Equal("Understanding the customer intent", label);
+    }
+
+    [Fact]
+    public void Reasoning_label_uses_latest_bold_reasoning_header()
+    {
+        var label = QuoteAgentUiHelpers.ExtractReasoningLabel(
+            """
+            ** Understanding the customer intent **
+            I need to infer the manufacturing requirements.
+
+            ** Planning CAD operations **
+            I will create construction geometry before extruding.
+            """);
+
+        Assert.Equal("Planning CAD operations", label);
+    }
+
+    [Fact]
+    public void Reasoning_label_falls_back_to_cleaned_first_reasoning_line()
+    {
+        var label = QuoteAgentUiHelpers.ExtractReasoningLabel(
+            "I am checking the uploaded sketch before choosing CAD operations.\nThe drawing has two visible holes.");
+
+        Assert.Equal("I am checking the uploaded sketch before choosing CAD operations.", label);
+    }
+
+    [Fact]
+    public void Reasoning_label_returns_null_for_empty_reasoning()
+    {
+        Assert.Null(QuoteAgentUiHelpers.ExtractReasoningLabel(null));
+        Assert.Null(QuoteAgentUiHelpers.ExtractReasoningLabel(""));
+        Assert.Null(QuoteAgentUiHelpers.ExtractReasoningLabel("  \r\n  "));
+    }
+
+    [Fact]
     public void Uploaded_part_metadata_formats_size_volume_and_bounding_box()
     {
         var part = new QuotePartViewModel

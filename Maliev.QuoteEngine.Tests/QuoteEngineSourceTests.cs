@@ -2124,7 +2124,7 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentReasoning_is_collapsed_by_default_with_thought_for_duration_label()
+    public void QuoteAgentReasoning_is_collapsed_by_default_with_dynamic_header_and_duration_label()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor")
             .ReplaceLineEndings("\n");
@@ -2132,18 +2132,36 @@ public sealed class QuoteEngineSourceTests
             .ReplaceLineEndings("\n");
 
         // Collapsed by default: the reasoning disclosure renders without the `open` attribute, so the
-        // customer sees "Thinking…" / "Thought for Ns" and expands to watch the live stream.
+        // customer sees the latest Gemini reasoning header plus duration and expands to watch the live stream.
         Assert.Contains("<details class=\"@ReasoningDetailsClass(message)\">", component, StringComparison.Ordinal);
         Assert.DoesNotContain("<details class=\"@ReasoningDetailsClass(message)\" open>", component, StringComparison.Ordinal);
-        Assert.Contains("Thinking…", component, StringComparison.Ordinal);
-        Assert.Contains("Thought for ", component, StringComparison.Ordinal);
         Assert.Contains("private string ReasoningSummaryLabel(AgentMessageRow message)", component, StringComparison.Ordinal);
+        Assert.Contains("ReasoningActivityLabel(message)", component, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentUiHelpers.ExtractReasoningLabel", component, StringComparison.Ordinal);
+        Assert.Contains("LiveThinkingDurationSeconds(message)", component, StringComparison.Ordinal);
+        Assert.Contains("Text($\"{activity} · {seconds}s\"", component, StringComparison.Ordinal);
+        Assert.Contains("Text($\"Thinking · {seconds}s\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("return Text(\"Thinking…\"", component, StringComparison.Ordinal);
         Assert.Contains("ApplyStreamingThinkingStep(step)", component, StringComparison.Ordinal);
+        Assert.Contains("private CancellationTokenSource? _reasoningTimerCts;", component, StringComparison.Ordinal);
+        Assert.Contains("private void StartReasoningTimer()", component, StringComparison.Ordinal);
+        Assert.Contains("private void StopReasoningTimer()", component, StringComparison.Ordinal);
+        Assert.Contains("StartReasoningTimer();", component, StringComparison.Ordinal);
+        Assert.Contains("StopReasoningTimer();", component, StringComparison.Ordinal);
 
         // Subtle, self-contained reasoning styles exist.
         var reasoningStart = styles.IndexOf(".qe-agent-reasoning {", StringComparison.Ordinal);
         Assert.True(reasoningStart >= 0, "reasoning disclosure styles must exist.");
         Assert.Contains(".qe-agent-reasoning-stream", styles, StringComparison.Ordinal);
+
+        var reasoningLabelStyleBlock = ExtractSourceBlock(styles, ".qe-agent-reasoning-label {", ".qe-agent-reasoning-stream {");
+        Assert.Contains("min-width: 0;", reasoningLabelStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("overflow: hidden;", reasoningLabelStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("text-overflow: ellipsis;", reasoningLabelStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("white-space: nowrap;", reasoningLabelStyleBlock, StringComparison.Ordinal);
+
+        var disposeBlock = ExtractSourceBlock(component, "public async ValueTask DisposeAsync()", "\n    }\n}");
+        Assert.Contains("StopReasoningTimer();", disposeBlock, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -4945,7 +4963,7 @@ public sealed class QuoteEngineSourceTests
         var restoreBlock = shell[restoreStart..restoreEnd];
         Assert.Contains("assistantMessage.ThinkingSteps = thinkingSteps", restoreBlock, StringComparison.Ordinal);
         Assert.Contains("assistantMessage.AppendReasoningThought(step.Detail);", restoreBlock, StringComparison.Ordinal);
-        Assert.Contains("assistantMessage.AddReasoningTool(summary);", restoreBlock, StringComparison.Ordinal);
+        Assert.Contains("assistantMessage.AddReasoningTool(ThinkingStepSummary(step));", restoreBlock, StringComparison.Ordinal);
 
         Assert.Contains("private QuoteAgentArtifactDto? SelectedGeneratedViewerArtifact", shell, StringComparison.Ordinal);
         Assert.Contains("TryGetGeneratedViewerCommands(selectedGeneratedViewer, out var selectedGeneratedCommandsJson)", shell, StringComparison.Ordinal);

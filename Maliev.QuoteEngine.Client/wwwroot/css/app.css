@@ -3434,6 +3434,13 @@
     transform: rotate(45deg);
 }
 
+.qe-agent-reasoning-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .qe-agent-reasoning-stream {
     display: grid;
     flex-direction: column;
