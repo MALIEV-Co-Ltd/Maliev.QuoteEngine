@@ -5786,8 +5786,8 @@
     gap: 14px;
     min-width: 0;
     width: 100%;
-    height: calc(100% - 16px);
-    margin-block: 8px;
+    height: calc(100% - 8px);
+    margin-top: 8px;
     padding: 18px;
     overflow: auto;
     background: var(--qe-agent-surface);
