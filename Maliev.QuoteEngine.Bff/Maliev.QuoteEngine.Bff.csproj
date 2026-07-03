@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
+    <UserSecretsId>maliev-quoteengine-bff</UserSecretsId>
     <StaticWebAssetEndpointExclusionPattern>$(StaticWebAssetEndpointExclusionPattern);index.html</StaticWebAssetEndpointExclusionPattern>
   </PropertyGroup>
 
