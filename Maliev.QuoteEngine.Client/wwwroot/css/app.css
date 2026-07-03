@@ -2558,7 +2558,7 @@
 
 .qe-agent-connector-dialog header {
     display: grid;
-    grid-template-columns: 1fr auto;
+    grid-template-columns: 1fr;
     align-items: start;
     gap: 12px;
 }
@@ -2600,8 +2600,10 @@
 }
 
 .qe-agent-connector-dialog header .qe-agent-round-btn {
-    justify-self: end;
-    margin-top: -4px;
+    position: absolute;
+    inset-block-start: 14px;
+    inset-inline-end: 14px;
+    z-index: 2;
 }
 
 .qe-agent-connector-dialog p {
