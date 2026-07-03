@@ -2414,6 +2414,27 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void Google_oauth_redirect_uri_manifest_covers_quoteengine_callbacks()
+    {
+        var program = ReadRepoFile("Maliev.QuoteEngine.Bff", "Program.cs");
+        var launchSettings = ReadRepoFile("Maliev.QuoteEngine.Bff", "Properties", "launchSettings.json");
+        var manifest = ReadRepoFile("docs", "google-oauth-redirect-uris.md");
+
+        Assert.Contains("options.CallbackPath = \"/auth/google/signin\";", program, StringComparison.Ordinal);
+        Assert.Contains("\"https://localhost:7297;http://localhost:5012\"", launchSettings, StringComparison.Ordinal);
+
+        Assert.Contains("MALIEV Sign-In - Shared", manifest, StringComparison.Ordinal);
+        Assert.Contains("https://localhost:7297/auth/google/signin", manifest, StringComparison.Ordinal);
+        Assert.Contains("http://localhost:5012/auth/google/signin", manifest, StringComparison.Ordinal);
+        Assert.Contains("https://make.maliev.com/auth/google/signin", manifest, StringComparison.Ordinal);
+
+        Assert.Contains("MALIEV QuoteEngine - Google Drive Connector", manifest, StringComparison.Ordinal);
+        Assert.Contains("https://localhost:7297/auth/google/drive/callback", manifest, StringComparison.Ordinal);
+        Assert.Contains("http://localhost:5012/auth/google/drive/callback", manifest, StringComparison.Ordinal);
+        Assert.Contains("https://make.maliev.com/auth/google/drive/callback", manifest, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteWorkspace_imports_handoff_viewer_fields_for_canvas_rendering()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");

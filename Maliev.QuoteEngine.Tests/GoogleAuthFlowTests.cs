@@ -1,6 +1,12 @@
 using System.Net;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Google;
+using Microsoft.AspNetCore.Authentication.OAuth.Claims;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Maliev.QuoteEngine.Tests;
@@ -13,12 +19,43 @@ namespace Maliev.QuoteEngine.Tests;
 /// </summary>
 public sealed class GoogleAuthFlowTests
 {
-    private static WebApplicationFactory<Program> CreateFactory(bool handleCookies = true)
+    private static WebApplicationFactory<Program> CreateFactory(bool configureGoogle = false)
     {
         return new WebApplicationFactory<Program>()
             .WithWebHostBuilder(builder =>
             {
                 builder.UseEnvironment("Testing");
+                if (configureGoogle)
+                {
+                    builder.ConfigureAppConfiguration((_, config) =>
+                    {
+                        config.AddInMemoryCollection(new Dictionary<string, string?>
+                        {
+                            ["Authentication:Google:ClientId"] = "quoteengine-test-client.apps.googleusercontent.com",
+                            ["Authentication:Google:ClientSecret"] = "quoteengine-test-client-secret"
+                        });
+                    });
+                    builder.ConfigureServices(services =>
+                    {
+                        services.AddAuthentication().AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
+                        {
+                            options.SignInScheme = IdentityCookieExtensions.ExternalSchemeName;
+                            options.ClientId = "quoteengine-test-client.apps.googleusercontent.com";
+                            options.ClientSecret = "quoteengine-test-client-secret";
+                            options.CallbackPath = "/auth/google/signin";
+                            options.Scope.Add("profile");
+                            options.Scope.Add("email");
+                            options.ClaimActions.MapJsonKey("picture", "picture");
+                            options.SaveTokens = true;
+                            options.Events.OnRedirectToAuthorizationEndpoint = context =>
+                            {
+                                context.Response.Redirect(context.RedirectUri + "&prompt=select_account");
+                                return Task.CompletedTask;
+                            };
+                        });
+                    });
+                }
+
                 builder.ConfigureLogging(logging => logging.ClearProviders());
             });
     }
@@ -83,6 +120,29 @@ public sealed class GoogleAuthFlowTests
     }
 
     [Fact]
+    public async Task Google_auth_route_emits_quoteengine_signin_redirect_uri_for_current_host()
+    {
+        await using var factory = CreateFactory(configureGoogle: true);
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost:7297")
+        });
+
+        var response = await client.GetAsync("/auth/google?returnUrl=%2Fquote%2Fnew");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.NotNull(response.Headers.Location);
+        Assert.Equal("accounts.google.com", response.Headers.Location.Host);
+        Assert.Equal(
+            "https://localhost:7297/auth/google/signin",
+            QueryStringValue(response.Headers.Location, "redirect_uri"));
+        Assert.Equal(
+            "quoteengine-test-client.apps.googleusercontent.com",
+            QueryStringValue(response.Headers.Location, "client_id"));
+    }
+
+    [Fact]
     public async Task Web_handoff_route_opens_studio_dialog_and_sets_no_customer_cookie()
     {
         await using var factory = CreateFactory();
@@ -108,5 +168,20 @@ public sealed class GoogleAuthFlowTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
         Assert.Contains("\"isSignedIn\":false", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? QueryStringValue(Uri uri, string key)
+    {
+        var query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var pair in query)
+        {
+            var parts = pair.Split('=', 2);
+            if (parts.Length == 2 && string.Equals(Uri.UnescapeDataString(parts[0]), key, StringComparison.Ordinal))
+            {
+                return Uri.UnescapeDataString(parts[1].Replace("+", "%20", StringComparison.Ordinal));
+            }
+        }
+
+        return null;
     }
 }
