@@ -1113,9 +1113,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-drive-mention is-active\"", component, StringComparison.Ordinal);
         Assert.Contains("DriveMentionActive => ContainsDriveMention(_draftMessage)", component, StringComparison.Ordinal);
         Assert.Contains("private static bool ContainsDriveMention(string? text)", component, StringComparison.Ordinal);
-        Assert.Contains("private static bool IsDriveMentionCommand(string? text)", component, StringComparison.Ordinal);
-        Assert.Contains("if (IsDriveMentionCommand(message) && pendingAttachments.Count == 0)", component, StringComparison.Ordinal);
+        Assert.Contains("if (ContainsDriveMention(message) && pendingAttachments.Count == 0)", component, StringComparison.Ordinal);
+        Assert.Contains("HandleDriveMentionIntentAsync(message)", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsDriveMentionCommand", component, StringComparison.Ordinal);
         Assert.Contains("ApplyDriveMentionAsync", component, StringComparison.Ordinal);
+        Assert.Contains("Google Drive is already connected.", component, StringComparison.Ordinal);
+        Assert.Contains("instead of using a chat link", component, StringComparison.Ordinal);
         Assert.Contains("Google verification is managed in Google Cloud", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-connector-modal\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-connector-dialog\"", component, StringComparison.Ordinal);

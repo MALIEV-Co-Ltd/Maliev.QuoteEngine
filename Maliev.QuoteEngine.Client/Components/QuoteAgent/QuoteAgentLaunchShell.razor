@@ -3530,9 +3530,9 @@
             message = BuildAttachmentOnlyMessage(pendingAttachments);
         }
 
-        if (IsDriveMentionCommand(message) && pendingAttachments.Count == 0)
+        if (ContainsDriveMention(message) && pendingAttachments.Count == 0)
         {
-            await ApplyDriveMentionAsync();
+            await HandleDriveMentionIntentAsync(message);
             await FocusComposerAsync();
             return;
         }
@@ -5549,9 +5549,38 @@
 
     private async Task ApplyDriveMentionAsync()
     {
+        _ = await OpenDriveMentionConnectorAsync();
+    }
+
+    private async Task HandleDriveMentionIntentAsync(string message)
+    {
+        _sending = true;
+        _error = null;
         _quickActionsMenuOpen = false;
         _composerMenuOpen = false;
         _composerPluginsOpen = false;
+        _draftMessage = string.Empty;
+        _pendingComposerAttachments.Clear();
+        EnsureLocalProjectFromMessage(message);
+        _messages.Add(new AgentMessageRow("user", message));
+        RequestScrollToLatestMessage();
+
+        try
+        {
+            var assistantText = await OpenDriveMentionConnectorAsync();
+            _messages.Add(new AgentMessageRow("assistant", assistantText));
+            RequestScrollToLatestMessage();
+        }
+        finally
+        {
+            _sending = false;
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task<string> OpenDriveMentionConnectorAsync()
+    {
         _highlightConnectorId = "google-drive";
         if (!_connectorRegistryLoaded)
         {
@@ -5562,10 +5591,34 @@
         if (connector is null)
         {
             await OpenPluginsPageAsync();
-            return;
+            return _connectorRegistryRequiresAuthentication
+                ? Text(
+                    "Sign in to use Google Drive from Make Studio. After sign-in, @drive opens the connector panel.",
+                    "ลงชื่อเข้าใช้เพื่อใช้ Google Drive จาก Make Studio หลังจากลงชื่อเข้าใช้แล้ว @drive จะเปิดแผงตัวเชื่อมต่อ")
+                : Text(
+                    "Google Drive is not available in this environment yet. Use Plugins after it is configured, or upload files directly.",
+                    "Google Drive ยังไม่พร้อมใช้งานในสภาพแวดล้อมนี้ ใช้ Plugins หลังจากตั้งค่าแล้ว หรืออัปโหลดไฟล์โดยตรง");
         }
 
         await ApplyConnectorAsync(connector);
+
+        if (!connector.IsConfigured)
+        {
+            return Text(
+                "Google Drive is not configured for this environment yet. Upload files directly until it is configured.",
+                "ยังไม่ได้ตั้งค่า Google Drive สำหรับสภาพแวดล้อมนี้ กรุณาอัปโหลดไฟล์โดยตรงจนกว่าจะตั้งค่าแล้ว");
+        }
+
+        if (connector.IsConnected)
+        {
+            return Text(
+                "Google Drive is already connected. I opened the connector panel; you do not need to authorize again unless Google asks you to reconnect the saved access.",
+                "Google Drive เชื่อมต่ออยู่แล้ว ผมเปิดแผงตัวเชื่อมต่อให้แล้ว คุณไม่จำเป็นต้องอนุญาตอีกครั้ง เว้นแต่ Google ขอให้เชื่อมต่อสิทธิ์ที่บันทึกไว้อีกครั้ง");
+        }
+
+        return Text(
+            "I opened the Google Drive connector panel. Continue there to connect Drive from this app instead of using a chat link.",
+            "ผมเปิดแผงตัวเชื่อมต่อ Google Drive ให้แล้ว ดำเนินการต่อจากแผงนั้นเพื่อเชื่อมต่อ Drive จากแอปนี้แทนการใช้ลิงก์ในแชท");
     }
 
     private async Task CloseSketchAsync()
@@ -6425,11 +6478,6 @@
     {
         return !string.IsNullOrWhiteSpace(text) &&
             Regex.IsMatch(text, @"(^|\s)@drive\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-    }
-
-    private static bool IsDriveMentionCommand(string? text)
-    {
-        return string.Equals(text?.Trim(), "@drive", StringComparison.OrdinalIgnoreCase);
     }
 
     private string ProjectName(ProjectNavItem project)

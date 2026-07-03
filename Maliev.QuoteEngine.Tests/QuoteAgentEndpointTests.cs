@@ -5420,6 +5420,43 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_turn_removes_model_written_google_drive_authorization_urls()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "Please click https://makestudio.maliev.com/connect/google-drive?session_id=abc to authorize Google Drive."
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-drive-url@example.com");
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = Guid.NewGuid(),
+            Message = "@drive can you access my files?",
+            Language = "en"
+        }, JsonOptions);
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.NotNull(body);
+        Assert.NotNull(chatbot.LastSendRequest);
+        Assert.Contains("Do not invent, print, or hard-code connector URLs", chatbot.LastSendRequest!.Content, StringComparison.Ordinal);
+        Assert.DoesNotContain("makestudio.maliev.com", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/connect/google-drive", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("session_id=", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Google Drive connector panel", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("existing connector state", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Agent_auth_handoff_reports_existing_authenticated_customer()
     {
         await using var scopedFactory = CreateAgentFactory();
