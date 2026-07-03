@@ -2264,17 +2264,40 @@
 }
 
 .qe-agent-auth-dialog {
+    --qe-auth-panel: #ffffff;
+    --qe-auth-panel-border: #cfcfcf;
+    --qe-auth-muted: #4d4d4d;
+    --qe-auth-eyebrow: #3f3f3f;
+    --qe-auth-field-bg: #f6f6f6;
+    --qe-auth-field-border: #c7c7c7;
+    --qe-auth-field-placeholder: #6b6b6b;
+    --qe-auth-divider: #c9c9c9;
+    --qe-auth-disabled-bg: #d6d6d6;
+    --qe-auth-disabled-text: #4a4a4a;
     position: relative;
     z-index: 1;
     display: grid;
     gap: 18px;
     width: min(460px, calc(100vw - 32px));
     padding: 24px;
-    border: 1px solid var(--qe-agent-line);
+    border: 1px solid var(--qe-auth-panel-border);
     border-radius: 18px;
-    background: var(--qe-agent-bg);
+    background: var(--qe-auth-panel);
     color: var(--qe-agent-ink);
     box-shadow: 0 24px 90px color-mix(in srgb, #000000 22%, transparent);
+}
+
+:root[data-maliev-theme="dark"] .qe-agent-auth-dialog {
+    --qe-auth-panel: #151515;
+    --qe-auth-panel-border: #424242;
+    --qe-auth-muted: #d1d1d1;
+    --qe-auth-eyebrow: #c7c7c7;
+    --qe-auth-field-bg: #262626;
+    --qe-auth-field-border: #5a5a5a;
+    --qe-auth-field-placeholder: #b7b7b7;
+    --qe-auth-divider: #555555;
+    --qe-auth-disabled-bg: #3a3a3a;
+    --qe-auth-disabled-text: #e1e1e1;
 }
 
 .qe-agent-auth-dialog header {
@@ -2287,10 +2310,21 @@
 .qe-agent-auth-dialog header span {
     display: block;
     margin-bottom: 4px;
-    color: var(--qe-agent-muted);
+    color: var(--qe-auth-eyebrow);
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
+}
+
+.qe-agent-auth-dialog header .qe-agent-round-btn {
+    color: var(--qe-auth-muted);
+}
+
+.qe-agent-auth-dialog header .qe-agent-round-btn:hover,
+.qe-agent-auth-dialog header .qe-agent-round-btn:focus-visible {
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-ink);
+    outline: none;
 }
 
 .qe-agent-auth-dialog h2,
@@ -2305,7 +2339,7 @@
 }
 
 .qe-agent-auth-dialog p {
-    color: var(--qe-agent-muted);
+    color: var(--qe-auth-muted);
     font-size: 14px;
     line-height: 1.5;
 }
@@ -2328,17 +2362,24 @@
 }
 
 .qe-agent-auth-google {
-    background: var(--qe-agent-raised);
+    border-color: var(--qe-auth-field-border);
+    background: var(--qe-auth-field-bg);
     color: var(--qe-agent-ink);
 }
 
 .qe-agent-auth-google:hover,
-.qe-agent-auth-form button[type="submit"]:hover:not(:disabled) {
+.qe-agent-auth-form button[type="submit"]:hover:not(:disabled),
+.qe-agent-auth-google:focus-visible,
+.qe-agent-auth-form button[type="submit"]:focus-visible {
     border-color: color-mix(in srgb, var(--qe-agent-primary) 42%, var(--qe-agent-line));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--qe-agent-primary) 18%, transparent);
+    outline: none;
 }
 
 .qe-agent-auth-form button[type="submit"]:disabled {
-    opacity: 0.45;
+    border-color: var(--qe-auth-field-border);
+    background: var(--qe-auth-disabled-bg);
+    color: var(--qe-auth-disabled-text);
     cursor: not-allowed;
 }
 
@@ -2360,7 +2401,7 @@
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
     gap: 12px;
-    color: var(--qe-agent-muted);
+    color: var(--qe-auth-muted);
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
@@ -2370,7 +2411,7 @@
 .qe-agent-auth-divider::after {
     content: "";
     height: 1px;
-    background: var(--qe-agent-line);
+    background: var(--qe-auth-divider);
 }
 
 .qe-agent-auth-form {
@@ -2381,7 +2422,7 @@
 .qe-agent-auth-form label {
     display: grid;
     gap: 7px;
-    color: var(--qe-agent-muted);
+    color: var(--qe-auth-eyebrow);
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
@@ -2390,14 +2431,19 @@
 .qe-agent-auth-form input {
     min-height: 46px;
     padding: 0 13px;
-    border: 1px solid var(--qe-agent-line);
+    border: 1px solid var(--qe-auth-field-border);
     border-radius: 12px;
-    background: var(--qe-agent-raised);
+    background: var(--qe-auth-field-bg);
     color: var(--qe-agent-ink);
     font: inherit;
     font-size: 15px;
     outline: none;
     text-transform: none;
+}
+
+.qe-agent-auth-form input::placeholder {
+    color: var(--qe-auth-field-placeholder);
+    opacity: 1;
 }
 
 .qe-agent-auth-form input:focus {
@@ -2420,6 +2466,12 @@
     font: inherit;
     font-weight: 650;
     cursor: pointer;
+}
+
+.qe-agent-auth-switch:focus-visible {
+    border-radius: 6px;
+    outline: 2px solid color-mix(in srgb, var(--qe-agent-primary) 70%, transparent);
+    outline-offset: 3px;
 }
 
 .qe-agent-connector-modal {
