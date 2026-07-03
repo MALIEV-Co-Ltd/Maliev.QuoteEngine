@@ -29,12 +29,18 @@ else
                 <span class="eyebrow">@_profile.Tier</span>
                 <h2>@_profile.DisplayName</h2>
                 <p>@_profile.Email</p>
-                <div class="account-profile-meta">
-                    <span>@DisplayOrDash(_profile.Phone)</span>
-                    <span>@DisplayOrDash(_profile.CompanyName)</span>
-                    <span>@_profile.PreferredLanguage</span>
-                    <span>@_profile.Timezone</span>
-                </div>
+                @if (ProfileMetaItems.Count > 0)
+                {
+                    <div class="account-profile-meta" aria-label="@Text("Profile details", "รายละเอียดโปรไฟล์")">
+                        @foreach (var item in ProfileMetaItems)
+                        {
+                            <span>
+                                <small>@item.Label</small>
+                                <strong>@item.Value</strong>
+                            </span>
+                        }
+                    </div>
+                }
             </div>
 
             <div class="account-nda-card">
@@ -198,6 +204,7 @@ else
     private bool IsThai => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture;
 
     private string ProfileInitials => GetInitials(_profile?.DisplayName ?? Text("Customer", "ลูกค้า"));
+    private IReadOnlyList<ProfileMetaItem> ProfileMetaItems => BuildProfileMetaItems();
     private int ActiveNdaCount => _ndas.Count(nda => nda.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
     private CustomerNdaDto? ActiveNda => _ndas.FirstOrDefault(nda => nda.Status.Equals("Active", StringComparison.OrdinalIgnoreCase));
     private string NdaStatus => DisplayNdaStatus(ActiveNda?.Status ?? _profile?.NdaStatus);
@@ -254,6 +261,37 @@ else
             _addressesLoading = false;
         }
     }
+
+    private IReadOnlyList<ProfileMetaItem> BuildProfileMetaItems()
+    {
+        if (_profile is null)
+        {
+            return [];
+        }
+
+        var items = new List<ProfileMetaItem>
+        {
+            new(Text("Account", "บัญชี"), string.IsNullOrWhiteSpace(_profile.CompanyName)
+                ? Text("Personal", "ส่วนตัว")
+                : Text("Corporate", "องค์กร"))
+        };
+
+        AddProfileMeta(items, Text("Company", "บริษัท"), _profile.CompanyName);
+        AddProfileMeta(items, Text("Phone", "โทรศัพท์"), _profile.Phone);
+        AddProfileMeta(items, Text("Language", "ภาษา"), _profile.PreferredLanguage);
+        AddProfileMeta(items, Text("Time zone", "เขตเวลา"), _profile.Timezone);
+        return items;
+    }
+
+    private static void AddProfileMeta(List<ProfileMetaItem> items, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            items.Add(new ProfileMetaItem(label, value.Trim()));
+        }
+    }
+
+    private sealed record ProfileMetaItem(string Label, string Value);
 
     private static string DisplayOrDash(string? value)
     {

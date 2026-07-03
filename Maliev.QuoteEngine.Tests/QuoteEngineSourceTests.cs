@@ -932,8 +932,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("MainClass => _messages.Count == 0 ? \"qe-agent-main qe-agent-main--empty\" : \"qe-agent-main qe-agent-main--chat\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-account-menu\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"@AccountMenuClass\"", component, StringComparison.Ordinal);
+        Assert.Contains("private string AccountMenuClass", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-account-backdrop\"", component, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"CloseAccountMenu\"", component, StringComparison.Ordinal);
+        Assert.Contains("ToggleAccountMenu", component, StringComparison.Ordinal);
+        Assert.Contains("_accountMenuOpen", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-account-panel\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-account-kind\"", component, StringComparison.Ordinal);
+        Assert.Contains("role=\"presentation\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-user-copy\"", component, StringComparison.Ordinal);
         Assert.Contains("src=\"@AccountProfileImageUrl\"", component, StringComparison.Ordinal);
         Assert.Contains("AccountInitials", component, StringComparison.Ordinal);
@@ -942,7 +949,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ProfileImageUrl", component, StringComparison.Ordinal);
         Assert.Contains("ProfileTier", component, StringComparison.Ordinal);
         Assert.Contains("Personal account", component, StringComparison.Ordinal);
-        Assert.Contains("Usage remaining", component, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"OpenProfilePage\"", component, StringComparison.Ordinal);
+        Assert.Contains("_settingsTab = \"profile\";", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Usage remaining", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Invite a friend", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("<details class=\"qe-agent-account-menu\"", component, StringComparison.Ordinal);
         Assert.Contains("SignOutAsync", component, StringComparison.Ordinal);
         Assert.Contains("Api.SignOutAsync()", component, StringComparison.Ordinal);
         Assert.Contains("class=\"@SigninRowClass\"", component, StringComparison.Ordinal);
@@ -1026,6 +1037,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Icons.Material.Outlined.ContentCopy", component, StringComparison.Ordinal);
         Assert.Contains("Duplicate project", component, StringComparison.Ordinal);
         Assert.Contains("ToggleProjectPinAsync", component, StringComparison.Ordinal);
+        Assert.Contains("CanManageProject(project)", component, StringComparison.Ordinal);
+        Assert.Contains("private static bool CanManageProject(ProjectNavItem project)", component, StringComparison.Ordinal);
+        Assert.Contains("project.IsPersisted && project.ProjectId != Guid.Empty", component, StringComparison.Ordinal);
+        Assert.Contains("Save this draft project before pinning it.", component, StringComparison.Ordinal);
         Assert.Contains("PinProjectAsync", component, StringComparison.Ordinal);
         Assert.Contains("UnpinProjectAsync", component, StringComparison.Ordinal);
         Assert.Contains("ArchiveProjectAsync", component, StringComparison.Ordinal);
@@ -1095,6 +1110,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("QuoteAgentUiDirectiveDto", component, StringComparison.Ordinal);
         Assert.Contains("ConnectorStatus", component, StringComparison.Ordinal);
         Assert.Contains("ApplyConnector", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-drive-mention is-active\"", component, StringComparison.Ordinal);
+        Assert.Contains("DriveMentionActive => ContainsDriveMention(_draftMessage)", component, StringComparison.Ordinal);
+        Assert.Contains("private static bool ContainsDriveMention(string? text)", component, StringComparison.Ordinal);
+        Assert.Contains("private static bool IsDriveMentionCommand(string? text)", component, StringComparison.Ordinal);
+        Assert.Contains("if (IsDriveMentionCommand(message) && pendingAttachments.Count == 0)", component, StringComparison.Ordinal);
+        Assert.Contains("ApplyDriveMentionAsync", component, StringComparison.Ordinal);
+        Assert.Contains("Google verification is managed in Google Cloud", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-connector-modal\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-connector-dialog\"", component, StringComparison.Ordinal);
         Assert.Contains("_driveConnectorModalOpen", component, StringComparison.Ordinal);
@@ -2593,6 +2615,8 @@ public sealed class QuoteEngineSourceTests
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
         Assert.Contains("data-preferences-section=\"quote-defaults\"", preferences, StringComparison.Ordinal);
+        Assert.DoesNotContain("Platform language", preferences, StringComparison.Ordinal);
+        Assert.DoesNotContain("Interface appearance", preferences, StringComparison.Ordinal);
         Assert.Contains("Default manufacturing process", preferences, StringComparison.Ordinal);
         Assert.Contains("Default tolerance", preferences, StringComparison.Ordinal);
         Assert.Contains("Default inspection", preferences, StringComparison.Ordinal);
@@ -2643,6 +2667,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_quotes = [.. await Api.GetQuotesAsync()];", profile, StringComparison.Ordinal);
         Assert.Contains("class=\"account-overview-card\"", profile, StringComparison.Ordinal);
         Assert.Contains("class=\"account-profile-card\"", profile, StringComparison.Ordinal);
+        Assert.Contains("ProfileMetaItems", profile, StringComparison.Ordinal);
+        Assert.Contains("ProfileMetaItem", profile, StringComparison.Ordinal);
+        Assert.Contains("AddProfileMeta(items, Text(\"Company\"", profile, StringComparison.Ordinal);
+        Assert.Contains("AddProfileMeta(items, Text(\"Phone\"", profile, StringComparison.Ordinal);
+        Assert.DoesNotContain("DisplayOrDash(_profile.Phone)", profile, StringComparison.Ordinal);
         Assert.Contains("class=\"account-action-grid\"", profile, StringComparison.Ordinal);
         Assert.Contains("class=\"profile-quote-history\"", profile, StringComparison.Ordinal);
         Assert.Contains("CustomerQuoteSummaryDto", profile, StringComparison.Ordinal);

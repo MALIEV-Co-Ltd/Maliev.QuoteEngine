@@ -128,13 +128,16 @@
                                     <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
                                         <span>@ProjectName(project)</span>
                                     </a>
-                                    <button type="button"
-                                            class="qe-agent-pin-btn active"
-                                            title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
-                                            aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
-                                            @onclick="@(() => ToggleProjectPinAsync(project))">
-                                        <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
-                                    </button>
+                                    @if (CanManageProject(project))
+                                    {
+                                        <button type="button"
+                                                class="qe-agent-pin-btn active"
+                                                title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
+                                                aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
+                                                @onclick="@(() => ToggleProjectPinAsync(project))">
+                                            <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
+                                        </button>
+                                    }
                                 </div>
                             }
                         }
@@ -159,13 +162,16 @@
                                     <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
                                         <span>@ProjectName(project)</span>
                                     </a>
-                                    <button type="button"
-                                            class="qe-agent-pin-btn"
-                                            title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
-                                            aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
-                                            @onclick="@(() => ToggleProjectPinAsync(project))">
-                                        <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
-                                    </button>
+                                    @if (CanManageProject(project))
+                                    {
+                                        <button type="button"
+                                                class="qe-agent-pin-btn"
+                                                title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
+                                                aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
+                                                @onclick="@(() => ToggleProjectPinAsync(project))">
+                                            <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
+                                        </button>
+                                    }
                                 </div>
                             }
                         }
@@ -185,9 +191,20 @@
         <div class="qe-agent-rail-foot">
             @if (IsSignedIn)
             {
-                <details class="qe-agent-account-menu">
-                    <summary class="qe-agent-user-btn"
-                             aria-label="@Text("Account menu", "เมนูบัญชี")">
+                <div class="@AccountMenuClass">
+                    @if (_accountMenuOpen)
+                    {
+                        <button type="button"
+                                class="qe-agent-account-backdrop"
+                                aria-label="@Text("Close account menu", "ปิดเมนูบัญชี")"
+                                @onclick="CloseAccountMenu"></button>
+                    }
+                    <button type="button"
+                            class="qe-agent-user-btn"
+                            aria-haspopup="menu"
+                            aria-expanded="@_accountMenuOpen"
+                            aria-label="@Text("Account menu", "เมนูบัญชี")"
+                            @onclick="ToggleAccountMenu">
                         <span class="qe-agent-user-avatar" aria-hidden="true">
                             @if (!string.IsNullOrWhiteSpace(AccountProfileImageUrl))
                             {
@@ -203,53 +220,50 @@
                             <small>@AccountTierLabel</small>
                         </span>
                         <MudIcon Class="qe-agent-user-menu-icon" Icon="@Icons.Material.Outlined.MoreVert" Size="Size.Small" />
-                    </summary>
-                    <div class="qe-agent-account-panel" role="menu" aria-label="@Text("Account menu", "เมนูบัญชี")">
-                        @if (!string.IsNullOrWhiteSpace(AccountEmail))
-                        {
-                            <div class="qe-agent-account-email">@AccountEmail</div>
-                        }
-                        <button type="button" role="menuitem" @onclick="OpenPersonalAccountPage">
-                            <MudIcon Icon="@Icons.Material.Outlined.AccountCircle" Size="Size.Small" />
-                            <span>@Text("Personal account", "บัญชีส่วนตัว")</span>
-                        </button>
-                        <button type="button" role="menuitem" @onclick="OpenPersonalAccountPage">
-                            <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
-                            <span>@Text("Profile", "โปรไฟล์")</span>
-                        </button>
-                        <button type="button" role="menuitem" @onclick="OpenSettingsPage">
-                            <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
-                            <span>@Text("Settings", "ตั้งค่า")</span>
-                            <kbd>Ctrl+,</kbd>
-                        </button>
-                        <button type="button" role="menuitem" @onclick="OpenOrdersPage">
-                            <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Small" />
-                            <span>@Text("Orders", "คำสั่งซื้อ")</span>
-                        </button>
-                        <button type="button" role="menuitem" @onclick="OpenDocumentsPage">
-                            <MudIcon Icon="@Icons.Material.Outlined.Folder" Size="Size.Small" />
-                            <span>@Text("Documents", "เอกสาร")</span>
-                        </button>
-                        <button type="button" role="menuitem" @onclick="OpenNdasPage">
-                            <MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" />
-                            <span>NDAs</span>
-                        </button>
-                        <a href="mailto:?subject=Try%20Make%20Studio&body=https%3A%2F%2Fmake.maliev.com" role="menuitem">
-                            <MudIcon Icon="@Icons.Material.Outlined.Send" Size="Size.Small" />
-                            <span>@Text("Invite a friend", "ชวนเพื่อน")</span>
-                        </a>
-                        <button type="button" role="menuitem" @onclick="OpenSettingsPage">
-                            <MudIcon Icon="@Icons.Material.Outlined.DataUsage" Size="Size.Small" />
-                            <span>@Text("Usage remaining", "การใช้งานคงเหลือ")</span>
-                            <MudIcon Class="qe-agent-account-menu-caret" Icon="@Icons.Material.Outlined.ChevronRight" Size="Size.Small" />
-                        </button>
-                        <div class="qe-agent-account-menu-divider" aria-hidden="true"></div>
-                        <button type="button" role="menuitem" class="qe-agent-account-menu-row--danger" @onclick="SignOutAsync">
-                            <MudIcon Icon="@Icons.Material.Outlined.Logout" Size="Size.Small" />
-                            <span>@Text("Log out", "ออกจากระบบ")</span>
-                        </button>
-                    </div>
-                </details>
+                    </button>
+                    @if (_accountMenuOpen)
+                    {
+                        <div class="qe-agent-account-panel" role="menu" aria-label="@Text("Account menu", "เมนูบัญชี")">
+                            @if (!string.IsNullOrWhiteSpace(AccountEmail))
+                            {
+                                <div class="qe-agent-account-email">@AccountEmail</div>
+                            }
+                            <div class="qe-agent-account-kind" role="presentation">
+                                <MudIcon Icon="@Icons.Material.Outlined.AccountCircle" Size="Size.Small" />
+                                <span>
+                                    <strong>@AccountKindLabel</strong>
+                                    <small>@Text("Individual customer workspace", "พื้นที่งานลูกค้าบุคคล")</small>
+                                </span>
+                            </div>
+                            <button type="button" role="menuitem" @onclick="OpenProfilePage">
+                                <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
+                                <span>@Text("Profile", "โปรไฟล์")</span>
+                            </button>
+                            <button type="button" role="menuitem" @onclick="OpenSettingsPage">
+                                <MudIcon Icon="@Icons.Material.Outlined.Settings" Size="Size.Small" />
+                                <span>@Text("Settings", "ตั้งค่า")</span>
+                                <kbd>Ctrl+,</kbd>
+                            </button>
+                            <button type="button" role="menuitem" @onclick="OpenOrdersPage">
+                                <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Small" />
+                                <span>@Text("Orders", "คำสั่งซื้อ")</span>
+                            </button>
+                            <button type="button" role="menuitem" @onclick="OpenDocumentsPage">
+                                <MudIcon Icon="@Icons.Material.Outlined.Folder" Size="Size.Small" />
+                                <span>@Text("Documents", "เอกสาร")</span>
+                            </button>
+                            <button type="button" role="menuitem" @onclick="OpenNdasPage">
+                                <MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" />
+                                <span>NDAs</span>
+                            </button>
+                            <div class="qe-agent-account-menu-divider" aria-hidden="true"></div>
+                            <button type="button" role="menuitem" class="qe-agent-account-menu-row--danger" @onclick="SignOutAsync">
+                                <MudIcon Icon="@Icons.Material.Outlined.Logout" Size="Size.Small" />
+                                <span>@Text("Log out", "ออกจากระบบ")</span>
+                            </button>
+                        </div>
+                    }
+                </div>
             }
             else
             {
@@ -478,30 +492,33 @@
                                                     <p>@project.Status</p>
                                                 </div>
                                                 <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
-                                                <button type="button"
-                                                        title="@Text("Duplicate project", "ทำสำเนาโปรเจกต์")"
-                                                        aria-label="@Text($"Duplicate {project.NameEn}", $"ทำสำเนา{project.NameTh}")"
-                                                        @onclick="@(() => DuplicateProjectAsync(project))">
-                                                    <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
-                                                </button>
-                                                <button type="button"
-                                                        title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
-                                                        aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
-                                                        @onclick="@(() => ToggleProjectPinAsync(project))">
-                                                    <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
-                                                </button>
-                                                <button type="button"
-                                                        title="@Text("Archive project", "เก็บโปรเจกต์")"
-                                                        aria-label="@Text($"Archive {project.NameEn}", $"เก็บโปรเจกต์{project.NameTh}")"
-                                                        @onclick="@(() => ArchiveProjectAsync(project))">
-                                                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
-                                                </button>
-                                                <button type="button"
-                                                        title="@Text("Mark achieved", "ทำเครื่องหมายว่าสำเร็จ")"
-                                                        aria-label="@Text($"Mark {project.NameEn} achieved", $"ทำเครื่องหมาย{project.NameTh}ว่าสำเร็จ")"
-                                                        @onclick="@(() => AchieveProjectAsync(project))">
-                                                    <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
-                                                </button>
+                                                @if (CanManageProject(project))
+                                                {
+                                                    <button type="button"
+                                                            title="@Text("Duplicate project", "ทำสำเนาโปรเจกต์")"
+                                                            aria-label="@Text($"Duplicate {project.NameEn}", $"ทำสำเนา{project.NameTh}")"
+                                                            @onclick="@(() => DuplicateProjectAsync(project))">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                                                    </button>
+                                                    <button type="button"
+                                                            title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
+                                                            aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
+                                                            @onclick="@(() => ToggleProjectPinAsync(project))">
+                                                        <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
+                                                    </button>
+                                                    <button type="button"
+                                                            title="@Text("Archive project", "เก็บโปรเจกต์")"
+                                                            aria-label="@Text($"Archive {project.NameEn}", $"เก็บโปรเจกต์{project.NameTh}")"
+                                                            @onclick="@(() => ArchiveProjectAsync(project))">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                                                    </button>
+                                                    <button type="button"
+                                                            title="@Text("Mark achieved", "ทำเครื่องหมายว่าสำเร็จ")"
+                                                            aria-label="@Text($"Mark {project.NameEn} achieved", $"ทำเครื่องหมาย{project.NameTh}ว่าสำเร็จ")"
+                                                            @onclick="@(() => AchieveProjectAsync(project))">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
+                                                    </button>
+                                                }
                                             </article>
                                         }
                                     </div>
@@ -535,30 +552,33 @@
                                                     <p>@project.Status</p>
                                                 </div>
                                                 <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
-                                                <button type="button"
-                                                        title="@Text("Duplicate project", "ทำสำเนาโปรเจกต์")"
-                                                        aria-label="@Text($"Duplicate {project.NameEn}", $"ทำสำเนา{project.NameTh}")"
-                                                        @onclick="@(() => DuplicateProjectAsync(project))">
-                                                    <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
-                                                </button>
-                                                <button type="button"
-                                                        title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
-                                                        aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
-                                                        @onclick="@(() => ToggleProjectPinAsync(project))">
-                                                    <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
-                                                </button>
-                                                <button type="button"
-                                                        title="@Text("Archive project", "เก็บโปรเจกต์")"
-                                                        aria-label="@Text($"Archive {project.NameEn}", $"เก็บโปรเจกต์{project.NameTh}")"
-                                                        @onclick="@(() => ArchiveProjectAsync(project))">
-                                                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
-                                                </button>
-                                                <button type="button"
-                                                        title="@Text("Mark achieved", "ทำเครื่องหมายว่าสำเร็จ")"
-                                                        aria-label="@Text($"Mark {project.NameEn} achieved", $"ทำเครื่องหมาย{project.NameTh}ว่าสำเร็จ")"
-                                                        @onclick="@(() => AchieveProjectAsync(project))">
-                                                    <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
-                                                </button>
+                                                @if (CanManageProject(project))
+                                                {
+                                                    <button type="button"
+                                                            title="@Text("Duplicate project", "ทำสำเนาโปรเจกต์")"
+                                                            aria-label="@Text($"Duplicate {project.NameEn}", $"ทำสำเนา{project.NameTh}")"
+                                                            @onclick="@(() => DuplicateProjectAsync(project))">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                                                    </button>
+                                                    <button type="button"
+                                                            title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
+                                                            aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
+                                                            @onclick="@(() => ToggleProjectPinAsync(project))">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
+                                                    </button>
+                                                    <button type="button"
+                                                            title="@Text("Archive project", "เก็บโปรเจกต์")"
+                                                            aria-label="@Text($"Archive {project.NameEn}", $"เก็บโปรเจกต์{project.NameTh}")"
+                                                            @onclick="@(() => ArchiveProjectAsync(project))">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                                                    </button>
+                                                    <button type="button"
+                                                            title="@Text("Mark achieved", "ทำเครื่องหมายว่าสำเร็จ")"
+                                                            aria-label="@Text($"Mark {project.NameEn} achieved", $"ทำเครื่องหมาย{project.NameTh}ว่าสำเร็จ")"
+                                                            @onclick="@(() => AchieveProjectAsync(project))">
+                                                        <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
+                                                    </button>
+                                                }
                                             </article>
                                         }
                                     </div>
@@ -1295,6 +1315,24 @@
         }
 
         <section class="@ComposerWrapClass" aria-label="@Text("Message composer", "กล่องข้อความ")">
+            @if (DriveMentionActive)
+            {
+                <button type="button"
+                        class="qe-agent-drive-mention is-active"
+                        aria-label="@Text("Open Google Drive connector", "เปิดตัวเชื่อมต่อ Google Drive")"
+                        @onclick="ApplyDriveMentionAsync">
+                    <span class="qe-agent-drive-mention-token">@DriveMentionToken</span>
+                    <span class="qe-agent-drive-mention-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false">
+                            <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                            <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                            <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                        </svg>
+                    </span>
+                    <strong>Google Drive</strong>
+                    <small>@DriveMentionStatus</small>
+                </button>
+            }
             <form class="@ComposerClass" @onsubmit="HandleSubmitAsync" @onsubmit:preventDefault>
                 @if (_replyTo is not null)
                 {
@@ -2338,6 +2376,10 @@
                             <span>@Text("You'll sign in and confirm access on Google's page.", "คุณจะลงชื่อเข้าใช้และยืนยันสิทธิ์การเข้าถึงบนหน้าของ Google")</span>
                         </li>
                         <li>
+                            <strong>@Text("Google verification is managed in Google Cloud", "การยืนยันแอปจัดการใน Google Cloud")</strong>
+                            <span>@Text("If Google says this app isn't verified, add your account as an OAuth test user or submit the OAuth consent screen for verification before production use.", "หาก Google แจ้งว่าแอปยังไม่ผ่านการยืนยัน ให้เพิ่มบัญชีของคุณเป็นผู้ทดสอบ OAuth หรือส่งหน้าความยินยอม OAuth ให้ Google ตรวจสอบก่อนใช้งานจริง")</span>
+                        </li>
+                        <li>
                             <strong>@Text("Private and secure", "เป็นส่วนตัวและปลอดภัย")</strong>
                             <span>@Text("Make Studio only sees files you open or select, never your whole Drive.", "Make Studio จะเห็นเฉพาะไฟล์ที่คุณเปิดหรือเลือกเท่านั้น ไม่ใช่ทั้ง Drive ของคุณ")</span>
                         </li>
@@ -2406,6 +2448,7 @@
     private int _artifactNotePartIndex = -1;
     private string _artifactNoteDraft = string.Empty;
     private bool _navigationDrawerOpen;
+    private bool _accountMenuOpen;
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
     private bool _quickActionsMenuOpen;
@@ -2568,6 +2611,24 @@
     private bool IsAgentBackendConnected => _agentBackendStatus == AgentBackendStatus.Connected;
     private bool IsComposerSendDisabled => _sending || IsDictationActive || HasPendingComposerUpload;
     private string ComposerWrapClass => $"qe-agent-composer-wrap{(IsDictationActive ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
+    private bool DriveMentionActive => ContainsDriveMention(_draftMessage);
+    private string DriveMentionToken => "@drive";
+    private QuoteAgentConnectorDto? GoogleDriveConnector => _connectors.FirstOrDefault(IsGoogleDriveConnector);
+    private string DriveMentionStatus
+    {
+        get
+        {
+            var connector = GoogleDriveConnector;
+            if (_connectorRegistryRequiresAuthentication && connector is null)
+            {
+                return Text("Sign in to connect", "เข้าสู่ระบบเพื่อเชื่อมต่อ");
+            }
+
+            return connector is null
+                ? Text("Open connector", "เปิดตัวเชื่อมต่อ")
+                : ConnectorStatus(connector);
+        }
+    }
     private string ComposerClass
     {
         get
@@ -2770,6 +2831,8 @@
     private string? AccountProfileImageUrl => CleanAccountText(ProfileImageUrl);
     private string AccountTierLabel => CleanAccountText(ProfileTier) ?? Text("Account", "บัญชี");
     private string AccountInitials => GetAccountInitials(AccountDisplayName);
+    private string AccountMenuClass => _accountMenuOpen ? "qe-agent-account-menu is-open" : "qe-agent-account-menu";
+    private string AccountKindLabel => Text("Personal account", "บัญชีส่วนตัว");
     private const string SigninAttentionId = "qe-agent-signin-attention";
     private bool ShouldPulseSidebarSignIn =>
         _authHandoff is { IsAuthenticated: false } &&
@@ -3465,6 +3528,13 @@
         if (string.IsNullOrWhiteSpace(message))
         {
             message = BuildAttachmentOnlyMessage(pendingAttachments);
+        }
+
+        if (IsDriveMentionCommand(message) && pendingAttachments.Count == 0)
+        {
+            await ApplyDriveMentionAsync();
+            await FocusComposerAsync();
+            return;
         }
 
         if (message.Length > QuoteAgentTextLimits.MaxMessageCharacters)
@@ -4749,6 +4819,7 @@
 
     private async Task OpenPluginsPageAsync()
     {
+        CloseAccountMenu();
         _activeWorkspacePage = WorkspacePage.Plugins;
         _searchOpen = false;
         _navigationDrawerOpen = false;
@@ -4760,6 +4831,7 @@
 
     private async Task OpenProjectsPage()
     {
+        CloseAccountMenu();
         _activeWorkspacePage = WorkspacePage.Projects;
         _searchOpen = false;
         _navigationDrawerOpen = false;
@@ -4771,6 +4843,7 @@
 
     private void OpenSettingsPage()
     {
+        CloseAccountMenu();
         _activeWorkspacePage = WorkspacePage.Settings;
         _searchOpen = false;
         _navigationDrawerOpen = false;
@@ -4778,6 +4851,7 @@
 
     private void OpenOrdersPage()
     {
+        CloseAccountMenu();
         _activeOrderNumber = null;
         _activeWorkspacePage = WorkspacePage.Orders;
         _searchOpen = false;
@@ -4786,6 +4860,7 @@
 
     private void OpenDocumentsPage()
     {
+        CloseAccountMenu();
         _activeWorkspacePage = WorkspacePage.Documents;
         _searchOpen = false;
         _navigationDrawerOpen = false;
@@ -4793,6 +4868,7 @@
 
     private void OpenNdasPage()
     {
+        CloseAccountMenu();
         _activeWorkspacePage = WorkspacePage.Ndas;
         _searchOpen = false;
         _navigationDrawerOpen = false;
@@ -4809,7 +4885,7 @@
         await ReturnToCurrentChatAsync();
     }
 
-    private void OpenPersonalAccountPage()
+    private void OpenProfilePage()
     {
         // Profile and account live inside the workspace settings page — never the
         // legacy standalone layout.
@@ -4817,8 +4893,24 @@
         OpenSettingsPage();
     }
 
+    private void OpenPersonalAccountPage()
+    {
+        OpenProfilePage();
+    }
+
+    private void ToggleAccountMenu()
+    {
+        _accountMenuOpen = !_accountMenuOpen;
+    }
+
+    private void CloseAccountMenu()
+    {
+        _accountMenuOpen = false;
+    }
+
     private async Task SignOutAsync()
     {
+        CloseAccountMenu();
         try
         {
             await Api.SignOutAsync();
@@ -4951,7 +5043,7 @@
         "appearance" => Text("Choose how Make Studio looks on this device.", "เลือกรูปลักษณ์ของ Make Studio บนอุปกรณ์นี้"),
         "language" => Text("Auto-detect matches your browser language until you pick one.", "ตรวจจับอัตโนมัติจะใช้ภาษาของเบราว์เซอร์จนกว่าคุณจะเลือกเอง"),
         "profile" => Text("Your account, activity, and address book.", "บัญชี กิจกรรม และสมุดที่อยู่ของคุณ"),
-        _ => Text("Display, quoting, and manufacturing defaults apply immediately.", "การตั้งค่าการแสดงผล การขอราคา และค่าเริ่มต้นการผลิตจะมีผลทันที")
+        _ => Text("Motion, quote currency, and manufacturing defaults apply immediately.", "การเคลื่อนไหว สกุลเงินใบเสนอราคา และค่าเริ่มต้นการผลิตจะมีผลทันที")
     };
 
     private string ThemePreviewClass(bool dark)
@@ -5453,6 +5545,27 @@
         _quickActionsMenuOpen = false;
         _highlightConnectorId = "google-drive";
         await OpenPluginsPageAsync();
+    }
+
+    private async Task ApplyDriveMentionAsync()
+    {
+        _quickActionsMenuOpen = false;
+        _composerMenuOpen = false;
+        _composerPluginsOpen = false;
+        _highlightConnectorId = "google-drive";
+        if (!_connectorRegistryLoaded)
+        {
+            await LoadConnectorRegistryAsync();
+        }
+
+        var connector = GoogleDriveConnector;
+        if (connector is null)
+        {
+            await OpenPluginsPageAsync();
+            return;
+        }
+
+        await ApplyConnectorAsync(connector);
     }
 
     private async Task CloseSketchAsync()
@@ -6308,6 +6421,17 @@
         return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
     }
 
+    private static bool ContainsDriveMention(string? text)
+    {
+        return !string.IsNullOrWhiteSpace(text) &&
+            Regex.IsMatch(text, @"(^|\s)@drive\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static bool IsDriveMentionCommand(string? text)
+    {
+        return string.Equals(text?.Trim(), "@drive", StringComparison.OrdinalIgnoreCase);
+    }
+
     private string ProjectName(ProjectNavItem project)
     {
         return Text(project.NameEn, project.NameTh);
@@ -6333,7 +6457,7 @@
             return;
         }
 
-        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, projectTitle, projectTitle, "draft", false, false));
+        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, projectTitle, projectTitle, "draft", false, false, false));
     }
 
     private string DefaultProjectTitle => Text("New manufacturing project", "โปรเจกต์ผลิตใหม่");
@@ -6372,7 +6496,7 @@
             return;
         }
 
-        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, normalizedProjectName, normalizedProjectName, "draft", false, false));
+        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, normalizedProjectName, normalizedProjectName, "draft", false, false, false));
     }
 
     private async Task NotifyProjectNameChangedAsync(string? projectName)
@@ -6395,11 +6519,24 @@
         return $"/quotes?projectId={project.ProjectId:D}";
     }
 
+    private static bool CanManageProject(ProjectNavItem project)
+    {
+        return project.IsPersisted && project.ProjectId != Guid.Empty;
+    }
+
     private async Task ToggleProjectPinAsync(ProjectNavItem project)
     {
         if (!IsSignedIn)
         {
             _draftMessage = Text("Sign in to pin or unpin projects.", "เข้าสู่ระบบเพื่อปักหมุดหรือเลิกปักหมุดโปรเจกต์");
+            return;
+        }
+
+        if (!CanManageProject(project))
+        {
+            _error = Text(
+                "Save this draft project before pinning it.",
+                "บันทึกโปรเจกต์ฉบับร่างนี้ก่อนปักหมุด");
             return;
         }
 
@@ -6428,6 +6565,14 @@
             return;
         }
 
+        if (!CanManageProject(project))
+        {
+            _error = Text(
+                "Save this draft project before duplicating it.",
+                "บันทึกโปรเจกต์ฉบับร่างนี้ก่อนทำสำเนา");
+            return;
+        }
+
         try
         {
             var response = await Api.DuplicateProjectAsync(project.ProjectId, new DuplicateDraftProjectRequest(Text($"{project.NameEn} copy", $"สำเนา {project.NameTh}")));
@@ -6451,6 +6596,14 @@
             return;
         }
 
+        if (!CanManageProject(project))
+        {
+            _error = Text(
+                "Save this draft project before archiving it.",
+                "บันทึกโปรเจกต์ฉบับร่างนี้ก่อนเก็บ");
+            return;
+        }
+
         try
         {
             var response = await Api.ArchiveProjectAsync(project.ProjectId);
@@ -6471,6 +6624,14 @@
         if (!IsSignedIn)
         {
             _draftMessage = Text("Sign in to mark projects achieved.", "เข้าสู่ระบบเพื่อทำเครื่องหมายโปรเจกต์ว่าสำเร็จ");
+            return;
+        }
+
+        if (!CanManageProject(project))
+        {
+            _error = Text(
+                "Save this draft project before marking it achieved.",
+                "บันทึกโปรเจกต์ฉบับร่างนี้ก่อนทำเครื่องหมายว่าสำเร็จ");
             return;
         }
 
@@ -7282,7 +7443,8 @@
         string nameTh,
         string status,
         bool isPinned,
-        bool isArchived)
+        bool isArchived,
+        bool isPersisted)
     {
         public Guid ProjectId { get; } = projectId;
 
@@ -7298,6 +7460,8 @@
 
         public bool IsArchived { get; set; } = isArchived;
 
+        public bool IsPersisted { get; } = isPersisted;
+
         public static ProjectNavItem FromDto(CustomerProjectNavItemDto project)
         {
             return new(
@@ -7307,7 +7471,8 @@
                 project.Title,
                 project.Status,
                 project.IsPinned,
-                project.IsArchived);
+                project.IsArchived,
+                true);
         }
 
         public static ProjectNavItem FromManagementResponse(ProjectManagementResponse project)
@@ -7319,7 +7484,8 @@
                 project.Title,
                 project.Status,
                 project.IsPinned,
-                project.IsArchived);
+                project.IsArchived,
+                true);
         }
 
         public static ProjectNavItem FromDuplicateResponse(DuplicateDraftProjectResponse project)
@@ -7331,7 +7497,8 @@
                 project.Title,
                 project.Status,
                 false,
-                false);
+                false,
+                true);
         }
     }
 

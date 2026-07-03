@@ -1425,14 +1425,6 @@
     display: block;
 }
 
-.qe-agent-account-menu > summary {
-    list-style: none;
-}
-
-.qe-agent-account-menu > summary::-webkit-details-marker {
-    display: none;
-}
-
 .qe-agent-user-btn {
     display: inline-grid;
     grid-template-columns: 28px minmax(0, 1fr) 18px;
@@ -1451,10 +1443,19 @@
 
 .qe-agent-user-btn:hover,
 .qe-agent-user-btn:focus-visible,
-.qe-agent-account-menu[open] > .qe-agent-user-btn {
+.qe-agent-account-menu.is-open > .qe-agent-user-btn {
     background: var(--qe-agent-soft);
     color: var(--qe-agent-ink);
     outline: none;
+}
+
+.qe-agent-account-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 140;
+    border: 0;
+    background: transparent;
+    cursor: default;
 }
 
 .qe-agent-user-copy {
@@ -1535,6 +1536,17 @@
     box-shadow: 0 18px 46px rgba(0, 0, 0, .18);
 }
 
+.qe-agent-account-kind {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    min-height: 38px;
+    padding: 6px 8px;
+    border-radius: 7px;
+    color: var(--qe-agent-ink);
+}
+
 .qe-agent-account-email {
     min-width: 0;
     padding: 6px 8px 7px;
@@ -1580,6 +1592,30 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.qe-agent-account-kind span {
+    display: grid;
+    gap: 1px;
+    white-space: normal;
+}
+
+.qe-agent-account-kind strong,
+.qe-agent-account-kind small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-account-kind strong {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.qe-agent-account-kind small {
+    color: var(--qe-agent-muted);
+    font-size: 11px;
 }
 
 .qe-agent-account-panel .mud-icon-size-small {
@@ -3749,6 +3785,60 @@
     margin: 0 auto;
     padding: 0 0 24px;
     transition: transform 220ms ease, width 220ms ease, bottom 220ms ease, top 220ms ease;
+}
+
+.qe-agent-drive-mention {
+    justify-self: start;
+    display: inline-grid;
+    grid-template-columns: auto 18px auto auto;
+    align-items: center;
+    gap: 7px;
+    max-width: 100%;
+    min-height: 34px;
+    padding: 5px 9px 5px 7px;
+    border: 1px solid color-mix(in srgb, var(--qe-agent-primary) 34%, var(--qe-agent-line));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--qe-agent-primary) 9%, var(--qe-agent-bg));
+    color: var(--qe-agent-primary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.2;
+    text-align: left;
+}
+
+.qe-agent-drive-mention:hover,
+.qe-agent-drive-mention:focus-visible {
+    border-color: color-mix(in srgb, var(--qe-agent-primary) 58%, var(--qe-agent-line));
+    background: color-mix(in srgb, var(--qe-agent-primary) 14%, var(--qe-agent-bg));
+    outline: none;
+}
+
+.qe-agent-drive-mention-token {
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: var(--qe-agent-primary);
+    color: #ffffff;
+    font-weight: 650;
+}
+
+.qe-agent-drive-mention-icon,
+.qe-agent-drive-mention-icon svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+}
+
+.qe-agent-drive-mention strong,
+.qe-agent-drive-mention small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-drive-mention small {
+    color: var(--qe-agent-muted);
 }
 
 /* Compact project quick-summary strip above the composer (parts / total / lead time). */
@@ -9844,11 +9934,33 @@ textarea::placeholder {
 }
 
 .account-profile-meta span {
-    padding: 3px 8px;
+    display: grid;
+    gap: 2px;
+    min-width: 96px;
+    padding: 6px 9px;
     border-radius: var(--maliev-radius-sm);
     background: var(--panel-tint);
-    color: var(--muted);
+    color: var(--ink);
     font-size: var(--maliev-font-micro);
+}
+
+.account-profile-meta small {
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.1;
+}
+
+.account-profile-meta strong {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .account-nda-card {
@@ -9888,22 +10000,37 @@ textarea::placeholder {
 
 .account-action-grid {
     display: grid;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
 }
 
 .account-action-grid a {
     display: grid;
-    min-height: 76px;
-    place-items: center;
-    gap: 6px;
-    padding: 10px;
+    grid-template-columns: 28px minmax(0, 1fr);
+    align-items: center;
+    min-height: 48px;
+    gap: 9px;
+    padding: 8px 10px;
     border-radius: var(--maliev-radius-sm);
     background: var(--panel-tint);
     color: var(--ink);
     font-size: var(--maliev-font-small);
     font-weight: 500;
     box-shadow: var(--maliev-shadow-ring-light);
+}
+
+.account-action-grid a .mud-icon-size-small {
+    width: 18px;
+    height: 18px;
+    justify-self: center;
+    color: var(--muted);
+}
+
+.account-action-grid a span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .account-action-grid a:hover {
