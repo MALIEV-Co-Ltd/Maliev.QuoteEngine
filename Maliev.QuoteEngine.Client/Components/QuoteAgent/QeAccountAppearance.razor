@@ -3,59 +3,46 @@
 
 <div class="appearance-panel">
     <div class="appearance-theme-modes" role="group" aria-label="@Text("Appearance mode", "โหมดรูปลักษณ์")">
-        <button type="button"
-                class="@ThemeModeClass(PreferenceService.SystemTheme)"
-                @onclick='@(() => SetThemeModeAsync(PreferenceService.SystemTheme))'>
-            <span class="appearance-mode-preview appearance-mode-preview--system" aria-hidden="true"></span>
-            <strong>@Text("Auto", "อัตโนมัติ")</strong>
-            <small>@Text("System", "ระบบ")</small>
-        </button>
-        <button type="button"
-                class="@ThemeModeClass(PreferenceService.LightTheme)"
-                @onclick='@(() => SetThemeModeAsync(PreferenceService.LightTheme))'>
-            <span class="appearance-mode-preview appearance-mode-preview--light" aria-hidden="true"></span>
-            <strong>@Text("Light", "สว่าง")</strong>
-            <small>@Text("Light profile", "โปรไฟล์สว่าง")</small>
-        </button>
-        <button type="button"
-                class="@ThemeModeClass(PreferenceService.DarkTheme)"
-                @onclick='@(() => SetThemeModeAsync(PreferenceService.DarkTheme))'>
-            <span class="appearance-mode-preview appearance-mode-preview--dark" aria-hidden="true"></span>
-            <strong>@Text("Dark", "มืด")</strong>
-            <small>@Text("Dark profile", "โปรไฟล์มืด")</small>
-        </button>
-    </div>
-
-    <div class="appearance-studio-preview" aria-label="@Text("Make Studio theme preview", "ตัวอย่างธีม Make Studio")">
-        @foreach (var previewTheme in ProfileThemes)
+        @foreach (var mode in ThemeModeOptions)
         {
-            var previewProfile = ThemeProfile(previewTheme);
-            <section class="@StudioPreviewClass(previewTheme)" style="@StudioPreviewStyle(previewProfile)">
-                <aside class="appearance-preview-rail" aria-hidden="true">
-                    <strong>MALIEV</strong>
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </aside>
-                <div class="appearance-preview-workspace">
-                    <header>
-                        <div>
-                            <strong>Make Studio</strong>
-                            <span>@ThemeProfileTitle(previewTheme)</span>
-                        </div>
-                        <i aria-hidden="true"></i>
-                    </header>
-                    <div class="appearance-preview-board" aria-hidden="true">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                    </div>
-                    <footer aria-hidden="true">
-                        <span></span>
-                        <strong>@Text("Quote", "ใบเสนอราคา")</strong>
-                    </footer>
-                </div>
-            </section>
+            <button type="button"
+                    class="@ThemeModeClass(mode.Theme)"
+                    @onclick="@(() => SetThemeModeAsync(mode.Theme))">
+                <span class="@ThemeModePreviewFrameClass(mode.Theme)" aria-hidden="true">
+                    @foreach (var previewTheme in ThemeModePreviewThemes(mode.Theme))
+                    {
+                        var previewProfile = ThemeProfile(previewTheme);
+                        <span class="@StudioPreviewClass(previewTheme)" style="@StudioPreviewStyle(previewProfile)">
+                            <span class="appearance-preview-rail">
+                                <strong>MALIEV</strong>
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </span>
+                            <span class="appearance-preview-workspace">
+                                <span class="appearance-preview-head">
+                                    <span>
+                                        <strong>Make Studio</strong>
+                                        <span>@ThemeProfileTitle(previewTheme)</span>
+                                    </span>
+                                    <i></i>
+                                </span>
+                                <span class="appearance-preview-board">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </span>
+                                <span class="appearance-preview-foot">
+                                    <span></span>
+                                    <strong>@Text("Quote", "ใบเสนอราคา")</strong>
+                                </span>
+                            </span>
+                        </span>
+                    }
+                </span>
+                <strong>@Text(mode.LabelEn, mode.LabelTh)</strong>
+                <small>@Text(mode.DescriptionEn, mode.DescriptionTh)</small>
+            </button>
         }
     </div>
 
@@ -72,9 +59,9 @@
                         @Text("Reset", "รีเซ็ต")
                     </button>
                     <select class="appearance-preset-select"
-                            value="codex"
+                            value="make-studio"
                             aria-label="@Text("Theme preset", "พรีเซ็ตธีม")">
-                        <option value="codex">Codex</option>
+                        <option value="make-studio">Make Studio</option>
                     </select>
                 </div>
             </header>
@@ -170,6 +157,17 @@
 @code {
     private static readonly string[] ProfileThemes = [PreferenceService.LightTheme, PreferenceService.DarkTheme];
 
+    private static readonly ThemeModeOption[] ThemeModeOptions =
+    [
+        new(PreferenceService.SystemTheme, "Auto", "อัตโนมัติ", "System", "ระบบ"),
+        new(PreferenceService.LightTheme, "Light", "สว่าง", "Light profile", "โปรไฟล์สว่าง"),
+        new(PreferenceService.DarkTheme, "Dark", "มืด", "Dark profile", "โปรไฟล์มืด")
+    ];
+
+    private static readonly string[] SystemModePreviewThemes = [PreferenceService.LightTheme, PreferenceService.DarkTheme];
+    private static readonly string[] LightModePreviewThemes = [PreferenceService.LightTheme];
+    private static readonly string[] DarkModePreviewThemes = [PreferenceService.DarkTheme];
+
     private static readonly FontChoice[] UiFontChoices =
     [
         new("MALIEV system", "MALIEV system", PreferenceService.DefaultUiFont),
@@ -218,6 +216,22 @@
     private string ThemeModeClass(string theme)
     {
         return Preferences.Theme == theme ? "appearance-mode-option is-active" : "appearance-mode-option";
+    }
+
+    private static string ThemeModePreviewFrameClass(string theme)
+    {
+        return theme == PreferenceService.SystemTheme
+            ? "appearance-mode-preview-frame appearance-mode-preview-frame--system"
+            : "appearance-mode-preview-frame";
+    }
+
+    private static IReadOnlyList<string> ThemeModePreviewThemes(string theme)
+    {
+        return theme == PreferenceService.SystemTheme
+            ? SystemModePreviewThemes
+            : theme == PreferenceService.DarkTheme
+                ? DarkModePreviewThemes
+                : LightModePreviewThemes;
     }
 
     private string ThemeProfileTitle(string theme)
@@ -270,4 +284,11 @@
     }
 
     private sealed record FontChoice(string LabelEn, string LabelTh, string Stack);
+
+    private sealed record ThemeModeOption(
+        string Theme,
+        string LabelEn,
+        string LabelTh,
+        string DescriptionEn,
+        string DescriptionTh);
 }
