@@ -9335,9 +9335,15 @@ p {
 
 .nda-documents-card {
     display: flex;
+    flex-wrap: wrap;
     gap: 14px;
     align-items: center;
     justify-content: space-between;
+}
+
+.nda-documents-card > div:first-child {
+    flex: 1 1 320px;
+    min-width: 0;
 }
 
 .nda-documents-card h2 {
@@ -12179,6 +12185,7 @@ textarea::placeholder {
     gap: 4px;
     min-height: 34px;
     padding: 0 12px;
+    white-space: nowrap;
     border: 0;
     border-radius: var(--maliev-radius-sm);
     box-shadow: var(--maliev-shadow-ring);
