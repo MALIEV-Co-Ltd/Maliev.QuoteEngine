@@ -88,7 +88,7 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("<QeAccountAppearance />", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("ThemePreviewClass", shell, StringComparison.Ordinal);
-        Assert.Contains("Theme mode and per-profile colors, fonts, sidebar, and contrast.", shell, StringComparison.Ordinal);
+        Assert.Contains("Theme mode, colors, UI font, and contrast.", shell, StringComparison.Ordinal);
 
         Assert.Contains("PreferenceService.SystemTheme", appearance, StringComparison.Ordinal);
         Assert.Contains("new(PreferenceService.SystemTheme, \"Auto\", \"อัตโนมัติ\", \"System\", \"ระบบ\")", appearance, StringComparison.Ordinal);
@@ -98,11 +98,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@Text(\"Background\", \"พื้นหลัง\")", appearance, StringComparison.Ordinal);
         Assert.Contains("@Text(\"Foreground\", \"ตัวอักษร\")", appearance, StringComparison.Ordinal);
         Assert.Contains("@Text(\"UI font\", \"ฟอนต์ UI\")", appearance, StringComparison.Ordinal);
-        Assert.Contains("@Text(\"Code font\", \"ฟอนต์โค้ด\")", appearance, StringComparison.Ordinal);
-        Assert.Contains("@Text(\"Translucent sidebar\", \"แถบด้านข้างโปร่งแสง\")", appearance, StringComparison.Ordinal);
+        Assert.DoesNotContain("@Text(\"Code font\", \"ฟอนต์โค้ด\")", appearance, StringComparison.Ordinal);
+        Assert.DoesNotContain("@Text(\"Translucent sidebar\", \"แถบด้านข้างโปร่งแสง\")", appearance, StringComparison.Ordinal);
         Assert.Contains("@Text(\"Contrast\", \"คอนทราสต์\")", appearance, StringComparison.Ordinal);
         Assert.Contains("appearance-mode-preview-frame", appearance, StringComparison.Ordinal);
         Assert.Contains("appearance-font-select", appearance, StringComparison.Ordinal);
+        Assert.DoesNotContain("CodeFontChoices", appearance, StringComparison.Ordinal);
+        Assert.DoesNotContain("appearance-toggle", appearance, StringComparison.Ordinal);
         Assert.DoesNotContain("themePreview: ThemeConfig", appearance, StringComparison.Ordinal);
         Assert.DoesNotContain("appearance-text-input", appearance, StringComparison.Ordinal);
         Assert.DoesNotContain("appearance-studio-preview", appearance, StringComparison.Ordinal);
@@ -131,14 +133,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("maliev.quote.theme.dark", loader, StringComparison.Ordinal);
         Assert.Contains("function resolveResolvedTheme", loader, StringComparison.Ordinal);
         Assert.Contains("function applyThemeProfile", loader, StringComparison.Ordinal);
-        Assert.Contains("data-maliev-sidebar-translucent", loader, StringComparison.Ordinal);
+        Assert.Contains("function applyContrastVariables", loader, StringComparison.Ordinal);
+        Assert.Contains("root.removeAttribute(\"data-maliev-sidebar-translucent\")", loader, StringComparison.Ordinal);
 
         Assert.Contains(".appearance-theme-modes", styles, StringComparison.Ordinal);
         Assert.Contains(".appearance-mode-preview-frame", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".appearance-studio-preview", styles, StringComparison.Ordinal);
         Assert.Contains(".appearance-font-select", styles, StringComparison.Ordinal);
         Assert.Contains(".appearance-profile-card", styles, StringComparison.Ordinal);
-        Assert.Contains(":root[data-maliev-sidebar-translucent=\"true\"] .qe-agent-rail", styles, StringComparison.Ordinal);
+        Assert.Contains(".appearance-color-input input::-webkit-color-swatch-wrapper", styles, StringComparison.Ordinal);
+        Assert.Contains("--maliev-theme-surface-foreground-mix", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".appearance-toggle", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(":root[data-maliev-sidebar-translucent=\"true\"] .qe-agent-rail", styles, StringComparison.Ordinal);
     }
 
     [Fact]

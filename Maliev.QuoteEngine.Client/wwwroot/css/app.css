@@ -669,11 +669,11 @@
 
 .qe-agent-shell {
     --qe-agent-bg: var(--maliev-theme-background, #ffffff);
-    --qe-agent-surface: color-mix(in srgb, var(--maliev-theme-background, #ffffff) 96%, var(--maliev-theme-foreground, #1a1a1a) 4%);
-    --qe-agent-raised: color-mix(in srgb, var(--maliev-theme-background, #ffffff) 91%, var(--maliev-theme-foreground, #1a1a1a) 9%);
-    --qe-agent-line: color-mix(in srgb, var(--maliev-theme-foreground, #1a1a1a) 10%, transparent);
+    --qe-agent-surface: color-mix(in srgb, var(--maliev-theme-background, #ffffff) var(--maliev-theme-surface-background-mix, 96%), var(--maliev-theme-foreground, #1a1a1a) var(--maliev-theme-surface-foreground-mix, 4%));
+    --qe-agent-raised: color-mix(in srgb, var(--maliev-theme-background, #ffffff) var(--maliev-theme-raised-background-mix, 91%), var(--maliev-theme-foreground, #1a1a1a) var(--maliev-theme-raised-foreground-mix, 9%));
+    --qe-agent-line: color-mix(in srgb, var(--maliev-theme-foreground, #1a1a1a) var(--maliev-theme-line-foreground-mix, 10%), transparent);
     --qe-agent-ink: var(--maliev-theme-foreground, #1a1a1a);
-    --qe-agent-muted: color-mix(in srgb, var(--maliev-theme-foreground, #1a1a1a) 62%, var(--maliev-theme-background, #ffffff) 38%);
+    --qe-agent-muted: color-mix(in srgb, var(--maliev-theme-foreground, #1a1a1a) var(--maliev-theme-muted-foreground-mix, 62%), var(--maliev-theme-background, #ffffff) var(--maliev-theme-muted-background-mix, 38%));
     --qe-agent-soft: rgba(0, 0, 0, 0.075);
     --qe-agent-hover: rgba(0, 0, 0, 0.045);
     --qe-agent-inverse: var(--maliev-theme-foreground, #1a1a1a);
@@ -697,11 +697,11 @@
 
 :root[data-maliev-theme="dark"] .qe-agent-shell {
     --qe-agent-bg: var(--maliev-theme-background, #181818);
-    --qe-agent-surface: color-mix(in srgb, var(--maliev-theme-background, #181818) 92%, var(--maliev-theme-foreground, #ffffff) 8%);
-    --qe-agent-raised: color-mix(in srgb, var(--maliev-theme-background, #181818) 84%, var(--maliev-theme-foreground, #ffffff) 16%);
-    --qe-agent-line: color-mix(in srgb, var(--maliev-theme-foreground, #ffffff) 14%, transparent);
+    --qe-agent-surface: color-mix(in srgb, var(--maliev-theme-background, #181818) var(--maliev-theme-surface-background-mix, 92%), var(--maliev-theme-foreground, #ffffff) var(--maliev-theme-surface-foreground-mix, 8%));
+    --qe-agent-raised: color-mix(in srgb, var(--maliev-theme-background, #181818) var(--maliev-theme-raised-background-mix, 84%), var(--maliev-theme-foreground, #ffffff) var(--maliev-theme-raised-foreground-mix, 16%));
+    --qe-agent-line: color-mix(in srgb, var(--maliev-theme-foreground, #ffffff) var(--maliev-theme-line-foreground-mix, 14%), transparent);
     --qe-agent-ink: var(--maliev-theme-foreground, #ffffff);
-    --qe-agent-muted: color-mix(in srgb, var(--maliev-theme-foreground, #ffffff) 70%, var(--maliev-theme-background, #181818) 30%);
+    --qe-agent-muted: color-mix(in srgb, var(--maliev-theme-foreground, #ffffff) var(--maliev-theme-muted-foreground-mix, 70%), var(--maliev-theme-background, #181818) var(--maliev-theme-muted-background-mix, 30%));
     --qe-agent-soft: rgba(255, 255, 255, 0.10);
     --qe-agent-hover: rgba(255, 255, 255, 0.06);
     --qe-agent-inverse: var(--maliev-theme-foreground, #ffffff);
@@ -5879,41 +5879,54 @@
 
 .appearance-color-input {
     display: grid;
-    grid-template-columns: 28px minmax(0, 1fr);
+    grid-template-columns: 32px minmax(0, 1fr);
     align-items: center;
     min-width: 0;
     min-height: 30px;
+    border: 1px solid var(--qe-agent-line);
     border-radius: 8px;
     background: var(--qe-agent-raised);
     color: var(--qe-agent-ink);
-    padding: 3px 8px 3px 3px;
+    padding: 3px 8px 3px 4px;
     font-size: 12px;
 }
 
 .appearance-color-input input {
-    width: 24px;
-    height: 24px;
+    appearance: none;
+    -webkit-appearance: none;
+    width: 26px;
+    height: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    max-width: 26px;
+    max-height: 26px;
+    box-sizing: border-box;
     padding: 0;
-    border: 0;
-    border-radius: 999px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 4px;
     background: transparent;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.appearance-color-input input::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.appearance-color-input input::-webkit-color-swatch {
+    border: 0;
+    border-radius: 3px;
+}
+
+.appearance-color-input input::-moz-color-swatch {
+    border: 0;
+    border-radius: 3px;
 }
 
 .appearance-color-input span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.appearance-toggle {
-    display: flex;
-    justify-content: flex-end;
-}
-
-.appearance-toggle input {
-    width: 34px;
-    height: 20px;
-    accent-color: var(--qe-agent-primary);
 }
 
 .appearance-range {
@@ -8106,11 +8119,6 @@ body.quote-loading-failed .ms-stage {
     color: var(--ink);
     background: transparent;
     box-shadow: none;
-}
-
-:root[data-maliev-sidebar-translucent="true"] .qe-agent-rail {
-    background: color-mix(in srgb, var(--qe-agent-surface) 84%, transparent);
-    backdrop-filter: blur(18px);
 }
 
 .quote-theme-toggle {

@@ -114,32 +114,6 @@
             </label>
 
             <label class="appearance-profile-row">
-                <span>@Text("Code font", "ฟอนต์โค้ด")</span>
-                <select class="appearance-font-select"
-                        value="@profile.CodeFont"
-                        aria-label="@Text("Code font", "ฟอนต์โค้ด")"
-                        @onchange="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { CodeFont = args.Value?.ToString() ?? PreferenceService.DefaultCodeFont }))">
-                    @foreach (var choice in CodeFontChoices)
-                    {
-                        <option value="@choice.Stack">@FontChoiceLabel(choice)</option>
-                    }
-                    @if (!IsKnownFont(profile.CodeFont, CodeFontChoices))
-                    {
-                        <option value="@profile.CodeFont">@Text("Saved Studio font", "ฟอนต์ Studio ที่บันทึกไว้")</option>
-                    }
-                </select>
-            </label>
-
-            <label class="appearance-profile-row">
-                <span>@Text("Translucent sidebar", "แถบด้านข้างโปร่งแสง")</span>
-                <span class="appearance-toggle">
-                    <input type="checkbox"
-                           checked="@profile.TranslucentSidebar"
-                           @onchange="@((ChangeEventArgs args) => UpdateThemeProfileAsync(themeName, current => current with { TranslucentSidebar = args.Value is true }))" />
-                </span>
-            </label>
-
-            <label class="appearance-profile-row">
                 <span>@Text("Contrast", "คอนทราสต์")</span>
                 <span class="appearance-range">
                     <input type="range"
@@ -173,13 +147,6 @@
         new("MALIEV system", "MALIEV system", PreferenceService.DefaultUiFont),
         new("Noto Sans Thai", "Noto Sans Thai", "\"Noto Sans Thai\", \"Noto Sans\", -apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif"),
         new("Segoe UI", "Segoe UI", "\"Segoe UI Variable Text\", \"Segoe UI\", \"Noto Sans\", \"Noto Sans Thai\", sans-serif")
-    ];
-
-    private static readonly FontChoice[] CodeFontChoices =
-    [
-        new("MALIEV mono", "MALIEV mono", PreferenceService.DefaultCodeFont),
-        new("SF Mono", "SF Mono", "\"SFMono-Regular\", \"SF Mono\", ui-monospace, Menlo, Consolas, monospace"),
-        new("Consolas", "Consolas", "Consolas, \"Liberation Mono\", Menlo, monospace")
     ];
 
     private ThemeProfilePreference LightProfile => Preferences.LightThemeProfile;

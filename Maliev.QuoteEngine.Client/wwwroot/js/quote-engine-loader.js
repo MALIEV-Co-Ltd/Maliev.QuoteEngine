@@ -718,6 +718,25 @@
     };
   }
 
+  function setMixVariables(name, foregroundPercent) {
+    const foreground = Math.max(0, Math.min(100, Math.round(foregroundPercent)));
+    root.style.setProperty(`--maliev-theme-${name}-foreground-mix`, `${foreground}%`);
+    root.style.setProperty(`--maliev-theme-${name}-background-mix`, `${100 - foreground}%`);
+  }
+
+  function applyContrastVariables(theme, contrast) {
+    const numericContrast = Number(contrast);
+    const value = Number.isFinite(numericContrast)
+      ? Math.max(0, Math.min(100, numericContrast))
+      : 0;
+    const isDark = theme === darkTheme;
+    setMixVariables("surface", isDark ? 4 + value * 0.06 : 1 + value * 0.07);
+    setMixVariables("raised", isDark ? 6 + value * 0.15 : 4 + value * 0.11);
+    const line = Math.max(0, Math.min(100, Math.round(isDark ? 5 + value * 0.13 : 4 + value * 0.13)));
+    root.style.setProperty("--maliev-theme-line-foreground-mix", `${line}%`);
+    setMixVariables("muted", isDark ? 53 + value * 0.25 : 50 + value * 0.27);
+  }
+
   function resolveThemeProfile(theme) {
     const normalizedTheme = theme === darkTheme ? darkTheme : lightTheme;
     return normalizeThemeProfile(
@@ -743,6 +762,7 @@
     root.style.setProperty("--maliev-theme-ui-font", normalizedProfile.uiFont);
     root.style.setProperty("--maliev-theme-code-font", normalizedProfile.codeFont);
     root.style.setProperty("--maliev-theme-contrast", String(normalizedProfile.contrast));
+    applyContrastVariables(resolvedTheme, normalizedProfile.contrast);
     root.style.setProperty("--accent", normalizedProfile.accent);
     root.style.setProperty("--accent-strong", normalizedProfile.accent);
     root.style.setProperty("--paper", normalizedProfile.background);
@@ -753,7 +773,7 @@
     root.style.setProperty("--maliev-font-sans-en", normalizedProfile.uiFont);
     root.style.setProperty("--maliev-font-sans", normalizedProfile.uiFont);
     root.style.setProperty("--maliev-font-mono", normalizedProfile.codeFont);
-    root.setAttribute("data-maliev-sidebar-translucent", normalizedProfile.translucentSidebar ? "true" : "false");
+    root.removeAttribute("data-maliev-sidebar-translucent");
   }
 
   function setTheme(theme) {
