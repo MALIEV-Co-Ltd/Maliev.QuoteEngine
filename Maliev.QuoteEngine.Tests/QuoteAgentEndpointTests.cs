@@ -428,6 +428,55 @@ Customer message:
     }
 
     [Fact]
+    public async Task Generate_3d_preview_rejects_malformed_profile_segments()
+    {
+        // Defense-in-depth: a profile segment with too few params must be rejected with a
+        // clear agent-facing error so the agent regenerates in-turn, rather than shipping
+        // geometry the replicad worker would fail to build.
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = scopedFactory.CreateClient();
+        var quoteSessionId = Guid.NewGuid();
+
+        object[] commands =
+        [
+            new
+            {
+                op = "extrude",
+                id = "body",
+                Params = new[] { 4.0 },
+                profile = new
+                {
+                    plane = "XY",
+                    segments = new object[]
+                    {
+                        new { type = "move", Params = new[] { 0.0, 0.0 } },
+                        new { type = "line", Params = new[] { 10.0 } }
+                    }
+                }
+            }
+        ];
+
+        var result = await ExecuteToolAsync(client, quoteSessionId, "quote_generate_3d_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("Malformed silhouette", JsonOptions),
+                ["cad_commands"] = JsonSerializer.SerializeToElement(commands, JsonOptions)
+            });
+
+        Assert.Contains("profile segment", result, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("requires 2 finite parameter", result, StringComparison.OrdinalIgnoreCase);
+
+        // No generated viewer artifact should have been created for the rejected command set.
+        var history = await client.GetFromJsonAsync<QuoteAgentMessageHistoryResponse>(
+            $"/quote/v1/agent/sessions/{quoteSessionId:D}/messages",
+            JsonOptions);
+        Assert.NotNull(history);
+        Assert.DoesNotContain(
+            history.Messages.SelectMany(message => message.Artifacts),
+            artifact => artifact.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public async Task Agent_message_history_uses_persisted_mapping_when_session_store_is_cold()
     {
         var quoteSessionId = Guid.NewGuid();
