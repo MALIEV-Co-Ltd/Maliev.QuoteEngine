@@ -429,6 +429,95 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_with_tool_only_thinking_steps_adds_customer_safe_reasoning_step()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "Here are the live shipping options.",
+            ThinkingSteps =
+            [
+                new QuoteAgentThinkingStepDto
+                {
+                    StepNumber = 1,
+                    Type = "function_call",
+                    Title = "quote_get_shipping_rates",
+                    Summary = "Fetched live courier rates from DeliveryService."
+                }
+            ]
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = Guid.NewGuid(),
+            Message = "How much is shipping to Maptaphut Industrial Estate?",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(body.ThinkingSteps, step =>
+            step.Type.Equals("function_call", StringComparison.OrdinalIgnoreCase) &&
+            step.Title.Equals("quote_get_shipping_rates", StringComparison.OrdinalIgnoreCase));
+        var reasoning = Assert.Single(body.ThinkingSteps, step =>
+            step.Type.Equals("reasoning", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("tool", reasoning.Detail ?? reasoning.Summary ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("quote_get_shipping_rates", reasoning.Detail ?? reasoning.Summary ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_message_stream_with_tool_only_thinking_steps_adds_customer_safe_reasoning_step()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "Here are the live shipping options.",
+            ThinkingSteps =
+            [
+                new QuoteAgentThinkingStepDto
+                {
+                    StepNumber = 1,
+                    Type = "function_call",
+                    Title = "quote_get_shipping_rates",
+                    Summary = "Fetched live courier rates from DeliveryService."
+                }
+            ]
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var events = await SendStreamMessageAsync(
+            client,
+            Guid.NewGuid(),
+            "How much is shipping to Maptaphut Industrial Estate?");
+
+        var final = Assert.Single(events, streamEvent => streamEvent.Type == "final").Response;
+        Assert.NotNull(final);
+        Assert.Contains(final.ThinkingSteps, step =>
+            step.Type.Equals("function_call", StringComparison.OrdinalIgnoreCase) &&
+            step.Title.Equals("quote_get_shipping_rates", StringComparison.OrdinalIgnoreCase));
+        var reasoning = Assert.Single(final.ThinkingSteps, step =>
+            step.Type.Equals("reasoning", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("tool", reasoning.Detail ?? reasoning.Summary ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("quote_get_shipping_rates", reasoning.Detail ?? reasoning.Summary ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_rejects_malformed_profile_segments()
     {
         // Defense-in-depth: a profile segment with too few params must be rejected with a
@@ -4074,6 +4163,102 @@ Customer message:
         Assert.Equal("TH1234567890", checkout.Metadata["vatNumber"]);
         Assert.Equal("true", checkout.Metadata["acceptedTerms"]);
         Assert.Equal("true", checkout.Metadata["consent"]);
+    }
+
+    [Fact]
+    public async Task Agent_shipping_rates_tool_returns_table_and_clickable_courier_actions()
+    {
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto
+            {
+                Rates =
+                [
+                    new ShippingRateOptionDto
+                    {
+                        CourierCode = "FLE",
+                        ProductName = "Flash Express",
+                        Provider = "Shippop",
+                        ServiceLevel = "Standard pickup",
+                        EstimatedDeliveryDate = "1-2 business days",
+                        TotalPrice = 82.25m,
+                        CurrencyCode = "THB",
+                        PackageCount = 1,
+                        TotalWeight = 1250m
+                    },
+                    new ShippingRateOptionDto
+                    {
+                        CourierCode = "KRY",
+                        ProductName = "Kerry Express",
+                        Provider = "Shippop",
+                        ServiceLevel = "Express",
+                        EstimatedDeliveryDate = "next business day",
+                        TotalPrice = 118.50m,
+                        CurrencyCode = "THB",
+                        PackageCount = 1,
+                        TotalWeight = 1250m
+                    }
+                ]
+            }
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IDeliveryServiceClient>();
+                services.AddSingleton<IDeliveryServiceClient>(delivery);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_get_shipping_rates",
+            new Dictionary<string, JsonElement>
+            {
+                ["name"] = JsonSerializer.SerializeToElement("Map Ta Phut Industrial Estate", JsonOptions),
+                ["address"] = JsonSerializer.SerializeToElement("1 I-1 Road", JsonOptions),
+                ["district"] = JsonSerializer.SerializeToElement("Map Ta Phut", JsonOptions),
+                ["state"] = JsonSerializer.SerializeToElement("Mueang Rayong", JsonOptions),
+                ["province"] = JsonSerializer.SerializeToElement("Rayong", JsonOptions),
+                ["postcode"] = JsonSerializer.SerializeToElement("21150", JsonOptions),
+                ["tel"] = JsonSerializer.SerializeToElement("038683930", JsonOptions),
+                ["weight"] = JsonSerializer.SerializeToElement(1250m, JsonOptions),
+                ["length"] = JsonSerializer.SerializeToElement(25m, JsonOptions),
+                ["width"] = JsonSerializer.SerializeToElement(20m, JsonOptions),
+                ["height"] = JsonSerializer.SerializeToElement(8m, JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal("21150", delivery.LastRateRequest?.To.Postcode);
+        Assert.Equal("10400", delivery.LastRateRequest?.From.Postcode);
+        Assert.Equal(1250m, delivery.LastRateRequest?.Parcel.Weight);
+        var markdownTable = document.RootElement.GetProperty("markdownTable").GetString();
+        Assert.Contains("| Option | Courier | Description | Lead time | Price | Select |", markdownTable, StringComparison.Ordinal);
+        Assert.Contains("Flash Express", markdownTable, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("82.25 THB", markdownTable, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Kerry Express", markdownTable, StringComparison.OrdinalIgnoreCase);
+
+        var state = document.RootElement.GetProperty("state").Deserialize<QuoteAgentStateResponse>(JsonOptions);
+        Assert.NotNull(state);
+        Assert.Equal(2, state.ProposedActions.Count);
+        Assert.All(state.ProposedActions, action =>
+            Assert.StartsWith("select_shipping_rate:", action.ActionType, StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(state.ProposedActions, action =>
+            action.Title.Contains("Flash Express", StringComparison.OrdinalIgnoreCase) &&
+            action.Summary.Contains("82.25 THB", StringComparison.OrdinalIgnoreCase));
+
+        var flashAction = Assert.Single(state.ProposedActions, action =>
+            action.ActionType.Equals("select_shipping_rate:fle", StringComparison.OrdinalIgnoreCase));
+        var result = await ConfirmActionAsync(client, flashAction.ActionId);
+
+        Assert.Contains("Flash Express", result.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(result.State);
+        Assert.DoesNotContain(result.State.ProposedActions, action =>
+            action.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -10908,6 +11093,8 @@ Customer message:
 
         public string ResponseContent { get; init; } = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.";
 
+        public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; init; } = [];
+
         public QuoteAgentUsageSnapshotDto UsageSnapshot { get; init; } = new()
         {
             IsEnabled = true,
@@ -10962,6 +11149,7 @@ Customer message:
                 Role = "assistant",
                 Language = "en",
                 CreatedAt = DateTimeOffset.UtcNow,
+                ThinkingSteps = ThinkingSteps.Select(CloneThinkingStep).ToList(),
                 UsageSnapshot = UsageSnapshot
             });
         }
@@ -10999,6 +11187,7 @@ Customer message:
                     Role = "assistant",
                     Language = "en",
                     CreatedAt = DateTimeOffset.UtcNow,
+                    ThinkingSteps = ThinkingSteps.Select(CloneThinkingStep).ToList(),
                     UsageSnapshot = UsageSnapshot
                 }
             };
@@ -11023,6 +11212,20 @@ Customer message:
         {
             return Task.FromResult<string?>(speech);
         }
+
+        private static QuoteAgentThinkingStepDto CloneThinkingStep(QuoteAgentThinkingStepDto step)
+        {
+            return new QuoteAgentThinkingStepDto
+            {
+                StepNumber = step.StepNumber,
+                Type = step.Type,
+                Title = step.Title,
+                Detail = step.Detail,
+                Summary = step.Summary,
+                Timestamp = step.Timestamp,
+                DurationMs = step.DurationMs
+            };
+        }
     }
 
     private sealed class RecordingQuoteAgentConversationMap : IQuoteAgentConversationMap
@@ -11044,6 +11247,34 @@ Customer message:
             cancellationToken.ThrowIfCancellationRequested();
             _mappings[quoteSessionId] = new QuoteAgentConversationMapping(chatbotSessionId, customerId);
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingDeliveryServiceClient : IDeliveryServiceClient
+    {
+        public IReadOnlyList<ShippingCourierDto> Couriers { get; init; } = [];
+
+        public ShippingRateResponseDto Rates { get; init; } = new();
+
+        public ShippingRateRequestDto? LastRateRequest { get; private set; }
+
+        public string? LastTrackingCode { get; private set; }
+
+        public Task<IReadOnlyList<ShippingCourierDto>> GetShippingCouriersAsync(CancellationToken ct = default)
+        {
+            return Task.FromResult(Couriers);
+        }
+
+        public Task<ShippingRateResponseDto> GetShippingRatesAsync(ShippingRateRequestDto request, CancellationToken ct = default)
+        {
+            LastRateRequest = request;
+            return Task.FromResult(Rates);
+        }
+
+        public Task<ShippingTrackingDto?> GetShippingTrackingAsync(string trackingCode, CancellationToken ct = default)
+        {
+            LastTrackingCode = trackingCode;
+            return Task.FromResult<ShippingTrackingDto?>(null);
         }
     }
 

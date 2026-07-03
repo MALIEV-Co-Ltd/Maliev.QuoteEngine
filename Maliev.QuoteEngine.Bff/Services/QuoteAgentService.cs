@@ -115,6 +115,7 @@ internal sealed class QuoteAgentService(
     IProjectServiceClient projectClient,
     IQePricingServiceClient pricingClient,
     IQuoteFileAnalysisStatusService fileAnalysisStatus,
+    IDeliveryServiceClient deliveryClient,
     IHostEnvironment environment) : IQuoteAgentService
 {
     private const string DefaultAuthReturnUrl = "/auth/chatbot-complete";
@@ -270,7 +271,7 @@ internal sealed class QuoteAgentService(
             Gates = currentState.Gates,
             ProposedActions = currentState.ProposedActions,
             AuthHandoff = BuildTurnAuthHandoff(state, currentState),
-            ThinkingSteps = EnrichSteps(chatbotResponse?.ThinkingSteps),
+            ThinkingSteps = BuildThinkingStepsWithSafeReasoning(chatbotResponse?.ThinkingSteps),
             UiDirectives = currentState.UiDirectives,
             UiCulture = pendingUiCulture,
             ProjectName = state.ProjectName,
@@ -982,6 +983,9 @@ internal sealed class QuoteAgentService(
             "quote_resume_project" => await ResumeProjectOrGateErrorAsync(state, request.Arguments, cancellationToken),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
             "quote_calculate_estimate" => await CalculateEstimateOrGateErrorAsync(state, cancellationToken),
+            "quote_get_shipping_couriers" => await BuildShippingCourierOptionsAsync(cancellationToken),
+            "quote_get_shipping_rates" => await GetShippingRatesOrGateErrorAsync(state, request.Arguments, cancellationToken),
+            "quote_select_shipping_rate" => SelectShippingRateOrGateError(state, request.Arguments),
             "quote_update_checkout_details" => UpdateCheckoutDetailsOrGateError(state, request.Arguments),
             "quote_prepare_draft_project" => PrepareActionOrGateError(
                 state,
@@ -1154,6 +1158,8 @@ internal sealed class QuoteAgentService(
                 "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state, action),
                 "create_order" => await ExecuteCreateOrderAsync(state, customerId!.Value, action, cancellationToken),
                 "start_payment" => await ExecuteStartPaymentAsync(state, customerId!.Value, action, cancellationToken),
+                _ when action.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase) =>
+                    ExecuteShippingRateSelection(state, action),
                 _ => $"Action {action.ActionType} completed."
             };
 
@@ -1255,7 +1261,7 @@ internal sealed class QuoteAgentService(
         List<QuoteAgentThinkingStepDto>? steps,
         StringBuilder accumulatedThought)
     {
-        var result = EnrichSteps(steps);
+        var result = BuildThinkingStepsWithSafeReasoning(steps);
         if (accumulatedThought.Length > 0)
         {
             var maxStep = result.Count > 0 ? result.Max(s => s.StepNumber) : 0;
@@ -1269,6 +1275,47 @@ internal sealed class QuoteAgentService(
             });
         }
         return result;
+    }
+
+    private static List<QuoteAgentThinkingStepDto> BuildThinkingStepsWithSafeReasoning(
+        List<QuoteAgentThinkingStepDto>? steps)
+    {
+        var result = EnrichSteps(steps);
+        if (result.Count == 0 ||
+            result.Any(step => step.Type.Equals("reasoning", StringComparison.OrdinalIgnoreCase)) ||
+            !result.Any(IsToolThinkingStep))
+        {
+            return result;
+        }
+
+        var toolNames = result
+            .Where(IsToolThinkingStep)
+            .Select(step => string.IsNullOrWhiteSpace(step.Title) ? step.Summary : step.Title)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(4)
+            .ToArray();
+        var maxStep = result.Max(step => step.StepNumber);
+        result.Add(new QuoteAgentThinkingStepDto
+        {
+            StepNumber = maxStep + 1,
+            Type = "reasoning",
+            Title = "Tool-backed reasoning",
+            Summary = "Checked tool results before answering.",
+            Detail = toolNames.Length == 0
+                ? "I checked the available tool results before answering so I did not guess."
+                : $"I checked the tool results before answering so I did not guess. Tools used: {string.Join(", ", toolNames)}.",
+            Timestamp = DateTimeOffset.UtcNow
+        });
+        return result;
+    }
+
+    private static bool IsToolThinkingStep(QuoteAgentThinkingStepDto step)
+    {
+        return step.Type.Equals("function_call", StringComparison.OrdinalIgnoreCase) ||
+            step.Type.Equals("tool_call", StringComparison.OrdinalIgnoreCase) ||
+            step.Type.Equals("tool", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<UploadSketchResponse> UploadSketchAsync(
@@ -2351,6 +2398,586 @@ internal sealed class QuoteAgentService(
         !string.IsNullOrWhiteSpace(left) &&
         !string.IsNullOrWhiteSpace(right) &&
         left.Trim().Equals(right.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private async Task<object> BuildShippingCourierOptionsAsync(CancellationToken cancellationToken)
+    {
+        var couriers = await deliveryClient.GetShippingCouriersAsync(cancellationToken);
+        var rows = couriers
+            .Select(BuildShippingCourierRow)
+            .OrderBy(row => row.CourierName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new
+        {
+            success = true,
+            couriers = rows,
+            markdownTable = BuildShippingCourierMarkdownTable(rows),
+            selectionInstructions = "Use quote_get_shipping_rates with the destination address to get live prices and lead times."
+        };
+    }
+
+    private async Task<object> GetShippingRatesOrGateErrorAsync(
+        QuoteAgentSessionState state,
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        CancellationToken cancellationToken)
+    {
+        var normalizedArguments = UnwrapToolArguments(arguments);
+        var destinationArguments = ReadNestedObject(normalizedArguments, "destination", "to", "shipping_address", "shippingAddress")
+            ?? normalizedArguments;
+        var destination = ReadShippingDestination(destinationArguments);
+        var missingFields = MissingRequiredShippingFields(destination).ToArray();
+        if (missingFields.Length > 0)
+        {
+            return new
+            {
+                success = false,
+                error = "A complete destination address is required before fetching shipping rates.",
+                missingFields,
+                state = ToStateResponse(state)
+            };
+        }
+
+        var parts = BuildShippingPackageParts(state);
+        var parcel = BuildShippingParcel(state, normalizedArguments, parts);
+        var request = new ShippingRateRequestDto
+        {
+            From = BuildShippingOriginAddress(),
+            To = destination,
+            Parcel = parcel,
+            CourierCodes = ReadStringArray(normalizedArguments, "courier_codes", "courierCodes", "courier_code", "courierCode")
+                .Select(code => code.Trim())
+                .Where(code => code.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList(),
+            Parts = parts,
+            UsePublicRates = ReadBool(normalizedArguments, "use_public_rates") || ReadBool(normalizedArguments, "usePublicRates")
+        };
+
+        var response = await deliveryClient.GetShippingRatesAsync(request, cancellationToken);
+        var rates = response.Rates
+            .Where(rate => !string.IsNullOrWhiteSpace(rate.CourierCode) || !string.IsNullOrWhiteSpace(rate.ProductName))
+            .OrderBy(rate => rate.TotalPrice)
+            .ToList();
+
+        lock (state.SyncRoot)
+        {
+            state.LastShippingDestination = destination;
+            state.ShippingRateOptions.Clear();
+            state.ShippingRateOptions.AddRange(rates.Select(CloneShippingRate));
+            state.SelectedShippingRate = null;
+        }
+
+        sessionStore.RemovePendingActions(
+            state,
+            action => action.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase));
+        AddShippingRateSelectionActions(state, rates);
+
+        return new
+        {
+            success = true,
+            destination,
+            parcel,
+            rates = rates.Select(BuildShippingRateRow).ToList(),
+            markdownTable = BuildShippingRateMarkdownTable(rates),
+            selectionInstructions = "Reply with the courier code/name or click a Select courier action to choose a shipping option.",
+            state = ToStateResponse(state)
+        };
+    }
+
+    private object SelectShippingRateOrGateError(
+        QuoteAgentSessionState state,
+        IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var normalizedArguments = UnwrapToolArguments(arguments);
+        var courierCode = ReadString(normalizedArguments, "courier_code") ??
+            ReadString(normalizedArguments, "courierCode") ??
+            ReadString(normalizedArguments, "code") ??
+            ReadString(normalizedArguments, "courier");
+        var selectedRate = FindShippingRate(state, courierCode);
+        if (selectedRate is null)
+        {
+            return new
+            {
+                success = false,
+                error = "Fetch shipping rates first, then select one of the returned courier codes.",
+                state = ToStateResponse(state)
+            };
+        }
+
+        lock (state.SyncRoot)
+        {
+            state.SelectedShippingRate = CloneShippingRate(selectedRate);
+        }
+
+        sessionStore.RemovePendingActions(
+            state,
+            action => action.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase));
+
+        return new
+        {
+            success = true,
+            selectedRate = BuildShippingRateRow(selectedRate),
+            message = BuildSelectedShippingRateMessage(selectedRate),
+            state = ToStateResponse(state)
+        };
+    }
+
+    private string ExecuteShippingRateSelection(
+        QuoteAgentSessionState state,
+        QuoteAgentPendingAction action)
+    {
+        var selectedRate = FindShippingRate(
+            state,
+            ReadString(action.Arguments, "courier_code") ?? ReadString(action.Arguments, "courierCode"));
+        if (selectedRate is null)
+        {
+            return "That shipping option is no longer available. Fetch shipping rates again before selecting a courier.";
+        }
+
+        lock (state.SyncRoot)
+        {
+            state.SelectedShippingRate = CloneShippingRate(selectedRate);
+        }
+
+        sessionStore.RemovePendingActions(
+            state,
+            otherAction =>
+                otherAction.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase));
+        return BuildSelectedShippingRateMessage(selectedRate);
+    }
+
+    private void AddShippingRateSelectionActions(
+        QuoteAgentSessionState state,
+        IReadOnlyList<ShippingRateOptionDto> rates)
+    {
+        foreach (var rate in rates)
+        {
+            var courierName = FirstNonEmpty(rate.ProductName, rate.CourierCode, "Courier");
+            var actionType = $"select_shipping_rate:{NormalizeShippingActionCode(rate)}";
+            var summary = string.Join(
+                " · ",
+                new[]
+                {
+                    FormatMoney(rate.TotalPrice, rate.CurrencyCode),
+                    rate.EstimatedDeliveryDate,
+                    rate.Provider
+                }.Where(value => !string.IsNullOrWhiteSpace(value)));
+            var actionArguments = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["courier_code"] = JsonSerializer.SerializeToElement(rate.CourierCode, JsonOptions),
+                ["product_name"] = JsonSerializer.SerializeToElement(rate.ProductName, JsonOptions),
+                ["total_price"] = JsonSerializer.SerializeToElement(rate.TotalPrice, JsonOptions),
+                ["currency_code"] = JsonSerializer.SerializeToElement(rate.CurrencyCode, JsonOptions),
+                ["estimated_delivery"] = JsonSerializer.SerializeToElement(rate.EstimatedDeliveryDate, JsonOptions),
+                ["provider"] = JsonSerializer.SerializeToElement(rate.Provider, JsonOptions)
+            };
+            sessionStore.AddAction(
+                state,
+                actionType,
+                $"Select {courierName}",
+                summary,
+                requiresAuthentication: false,
+                actionArguments);
+        }
+    }
+
+    private ShippingRateOptionDto? FindShippingRate(
+        QuoteAgentSessionState state,
+        string? courierCodeOrName)
+    {
+        if (string.IsNullOrWhiteSpace(courierCodeOrName))
+        {
+            return null;
+        }
+
+        var normalized = courierCodeOrName.Trim();
+        lock (state.SyncRoot)
+        {
+            var rate = state.ShippingRateOptions.FirstOrDefault(option =>
+                option.CourierCode.Equals(normalized, StringComparison.OrdinalIgnoreCase) ||
+                option.ProductName.Equals(normalized, StringComparison.OrdinalIgnoreCase));
+            return rate is null ? null : CloneShippingRate(rate);
+        }
+    }
+
+    private ShippingAddressDto BuildShippingOriginAddress()
+    {
+        return new ShippingAddressDto
+        {
+            Name = FirstNonEmpty(configuration["QuoteEngine:ShippingOrigin:Name"], "MALIEV"),
+            Address = FirstNonEmpty(configuration["QuoteEngine:ShippingOrigin:Address"], "MALIEV"),
+            District = FirstNonEmpty(configuration["QuoteEngine:ShippingOrigin:District"], "Pathum Wan"),
+            State = FirstNonEmpty(configuration["QuoteEngine:ShippingOrigin:State"], "Pathum Wan"),
+            Province = FirstNonEmpty(configuration["QuoteEngine:ShippingOrigin:Province"], "Bangkok"),
+            Postcode = FirstNonEmpty(configuration["QuoteEngine:ShippingOrigin:Postcode"], "10400"),
+            CountryCode = FirstNonEmpty(configuration["QuoteEngine:ShippingOrigin:CountryCode"], "TH"),
+            Tel = FirstNonEmpty(configuration["QuoteEngine:ShippingOrigin:Tel"], "020000000"),
+            Email = configuration["QuoteEngine:ShippingOrigin:Email"]
+        };
+    }
+
+    private static ShippingAddressDto ReadShippingDestination(IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        return new ShippingAddressDto
+        {
+            Name = FirstNonEmpty(
+                ReadString(arguments, "name"),
+                ReadString(arguments, "recipient_name"),
+                ReadString(arguments, "recipientName"),
+                ReadString(arguments, "contact_name"),
+                "Customer"),
+            Address = FirstNonEmpty(
+                ReadString(arguments, "address"),
+                ReadString(arguments, "address_line_1"),
+                ReadString(arguments, "addressLine1"),
+                ReadString(arguments, "street"),
+                ReadString(arguments, "street_address")),
+            District = FirstNonEmpty(
+                ReadString(arguments, "district"),
+                ReadString(arguments, "sub_district"),
+                ReadString(arguments, "subDistrict"),
+                ReadString(arguments, "tambon"),
+                ReadString(arguments, "subdistrict")),
+            State = FirstNonEmpty(
+                ReadString(arguments, "state"),
+                ReadString(arguments, "city"),
+                ReadString(arguments, "amphoe"),
+                ReadString(arguments, "amphur"),
+                ReadString(arguments, "district_city")),
+            Province = FirstNonEmpty(
+                ReadString(arguments, "province"),
+                ReadString(arguments, "state_province"),
+                ReadString(arguments, "stateProvince")),
+            Postcode = FirstNonEmpty(
+                ReadString(arguments, "postcode"),
+                ReadString(arguments, "postal_code"),
+                ReadString(arguments, "postalCode"),
+                ReadString(arguments, "zip")),
+            CountryCode = FirstNonEmpty(ReadString(arguments, "country_code"), ReadString(arguments, "countryCode"), "TH"),
+            Tel = FirstNonEmpty(
+                ReadString(arguments, "tel"),
+                ReadString(arguments, "phone"),
+                ReadString(arguments, "recipient_phone"),
+                ReadString(arguments, "recipientPhone")),
+            Email = ReadString(arguments, "email")
+        };
+    }
+
+    private static IEnumerable<string> MissingRequiredShippingFields(ShippingAddressDto address)
+    {
+        if (string.IsNullOrWhiteSpace(address.Address))
+            yield return "address";
+        if (string.IsNullOrWhiteSpace(address.District))
+            yield return "district";
+        if (string.IsNullOrWhiteSpace(address.State))
+            yield return "state";
+        if (string.IsNullOrWhiteSpace(address.Province))
+            yield return "province";
+        if (string.IsNullOrWhiteSpace(address.Postcode))
+            yield return "postcode";
+        if (string.IsNullOrWhiteSpace(address.Tel))
+            yield return "tel";
+    }
+
+    private static ShippingParcelDto BuildShippingParcel(
+        QuoteAgentSessionState state,
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        IReadOnlyList<ShippingPackagePartDto> parts)
+    {
+        var fallback = EstimateShippingParcelFromParts(parts);
+        return new ShippingParcelDto
+        {
+            Name = FirstNonEmpty(
+                ReadString(arguments, "parcel_name"),
+                ReadString(arguments, "parcelName"),
+                state.ProjectName,
+                "MALIEV shipment"),
+            Weight = ReadDecimal(arguments, fallback.Weight, "weight", "weight_grams", "weightGrams", "parcel_weight_grams", "parcelWeightGrams"),
+            Length = ReadDecimal(arguments, fallback.Length, "length", "length_cm", "lengthCm", "parcel_length_cm", "parcelLengthCm"),
+            Width = ReadDecimal(arguments, fallback.Width, "width", "width_cm", "widthCm", "parcel_width_cm", "parcelWidthCm"),
+            Height = ReadDecimal(arguments, fallback.Height, "height", "height_cm", "heightCm", "parcel_height_cm", "parcelHeightCm")
+        };
+    }
+
+    private static ShippingParcelDto EstimateShippingParcelFromParts(IReadOnlyList<ShippingPackagePartDto> parts)
+    {
+        if (parts.Count == 0)
+        {
+            return new ShippingParcelDto
+            {
+                Name = "MALIEV shipment",
+                Weight = 1000m,
+                Length = 20m,
+                Width = 15m,
+                Height = 10m
+            };
+        }
+
+        return new ShippingParcelDto
+        {
+            Name = "MALIEV shipment",
+            Weight = Math.Max(1m, Math.Round(parts.Sum(part => Math.Max(1, part.Quantity) * Math.Max(1m, part.Weight)) + 250m, 0)),
+            Length = Math.Max(1m, Math.Round(parts.Max(part => part.Length) + 6m, 1)),
+            Width = Math.Max(1m, Math.Round(parts.Max(part => part.Width) + 6m, 1)),
+            Height = Math.Max(1m, Math.Round(parts.Max(part => part.Height) + 6m, 1))
+        };
+    }
+
+    private static List<ShippingPackagePartDto> BuildShippingPackageParts(QuoteAgentSessionState state)
+    {
+        lock (state.SyncRoot)
+        {
+            return state.Parts
+                .Where(part => part.BoundingBoxMm is { X: > 0, Y: > 0, Z: > 0 })
+                .Select(part =>
+                {
+                    var box = part.BoundingBoxMm!;
+                    return new ShippingPackagePartDto
+                    {
+                        Name = string.IsNullOrWhiteSpace(part.FileName) ? "MALIEV part" : part.FileName,
+                        Quantity = Math.Max(1, part.Quantity),
+                        Weight = EstimatePartWeightGrams(part),
+                        Width = Math.Max(0.1m, Math.Round(box.X / 10m, 1)),
+                        Length = Math.Max(0.1m, Math.Round(box.Y / 10m, 1)),
+                        Height = Math.Max(0.1m, Math.Round(box.Z / 10m, 1))
+                    };
+                })
+                .ToList();
+        }
+    }
+
+    private static decimal EstimatePartWeightGrams(QuotePartDraftDto part)
+    {
+        return part.VolumeCc > 0
+            ? Math.Max(1m, Math.Round(part.VolumeCc * 1.25m, 0))
+            : 250m;
+    }
+
+    private static ShippingCourierToolRow BuildShippingCourierRow(ShippingCourierDto courier)
+    {
+        return new ShippingCourierToolRow(
+            courier.CourierCode,
+            FirstNonEmpty(courier.CourierName, courier.CourierCode),
+            FirstNonEmpty(courier.Note, courier.Scope, courier.Provider),
+            courier.Scope,
+            courier.Provider,
+            courier.LogoUrl);
+    }
+
+    private static ShippingRateToolRow BuildShippingRateRow(ShippingRateOptionDto rate)
+    {
+        return new ShippingRateToolRow(
+            rate.CourierCode,
+            FirstNonEmpty(rate.ProductName, rate.CourierCode),
+            FirstNonEmpty(rate.ServiceLevel, rate.Provider),
+            FirstNonEmpty(rate.EstimatedDeliveryDate, "Ask courier"),
+            rate.TotalPrice,
+            FirstNonEmpty(rate.CurrencyCode, "THB"),
+            rate.PackageCount,
+            rate.TotalWeight,
+            rate.Provider);
+    }
+
+    private static string BuildShippingCourierMarkdownTable(IReadOnlyList<ShippingCourierToolRow> rows)
+    {
+        if (rows.Count == 0)
+        {
+            return "No courier options are available yet.";
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("| Courier | Description | Scope | Provider |");
+        builder.AppendLine("| --- | --- | --- | --- |");
+        foreach (var row in rows)
+        {
+            builder.AppendLine(
+                $"| {EscapeMarkdownTableCell(row.CourierName)} (`{EscapeMarkdownTableCell(row.CourierCode)}`) | {EscapeMarkdownTableCell(row.Description)} | {EscapeMarkdownTableCell(row.Scope)} | {EscapeMarkdownTableCell(row.Provider)} |");
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string BuildShippingRateMarkdownTable(IReadOnlyList<ShippingRateOptionDto> rates)
+    {
+        if (rates.Count == 0)
+        {
+            return "No courier rates are available for this destination yet.";
+        }
+
+        var builder = new StringBuilder();
+        builder.AppendLine("| Option | Courier | Description | Lead time | Price | Select |");
+        builder.AppendLine("| --- | --- | --- | --- | ---: | --- |");
+        for (var index = 0; index < rates.Count; index++)
+        {
+            var rate = rates[index];
+            var courierName = FirstNonEmpty(rate.ProductName, rate.CourierCode);
+            var courierCode = FirstNonEmpty(rate.CourierCode, courierName);
+            builder.AppendLine(
+                $"| {index + 1} | {EscapeMarkdownTableCell(courierName)} (`{EscapeMarkdownTableCell(courierCode)}`) | {EscapeMarkdownTableCell(FirstNonEmpty(rate.ServiceLevel, rate.Provider))} | {EscapeMarkdownTableCell(FirstNonEmpty(rate.EstimatedDeliveryDate, "Ask courier"))} | {EscapeMarkdownTableCell(FormatMoney(rate.TotalPrice, rate.CurrencyCode))} | Say `{EscapeMarkdownTableCell(courierCode)}` or click Select {EscapeMarkdownTableCell(courierName)} |");
+        }
+
+        return builder.ToString().Trim();
+    }
+
+    private static string BuildSelectedShippingRateMessage(ShippingRateOptionDto rate)
+    {
+        var courierName = FirstNonEmpty(rate.ProductName, rate.CourierCode, "the selected courier");
+        var leadTime = string.IsNullOrWhiteSpace(rate.EstimatedDeliveryDate)
+            ? string.Empty
+            : $", lead time {rate.EstimatedDeliveryDate}";
+        return $"Selected {courierName} ({rate.CourierCode}) for shipping: {FormatMoney(rate.TotalPrice, rate.CurrencyCode)}{leadTime}.";
+    }
+
+    private static ShippingRateOptionDto CloneShippingRate(ShippingRateOptionDto source)
+    {
+        return new ShippingRateOptionDto
+        {
+            CourierCode = source.CourierCode,
+            ProductName = source.ProductName,
+            TotalPrice = source.TotalPrice,
+            CurrencyCode = source.CurrencyCode,
+            EstimatedDeliveryDate = source.EstimatedDeliveryDate,
+            ServiceLevel = source.ServiceLevel,
+            CourierLogoUrl = source.CourierLogoUrl,
+            PackageCount = source.PackageCount,
+            TotalWeight = source.TotalWeight,
+            Provider = source.Provider,
+            Packages = source.Packages.Select(CloneShippingPackageQuote).ToList()
+        };
+    }
+
+    private static ShippingPackageQuoteDto CloneShippingPackageQuote(ShippingPackageQuoteDto source)
+    {
+        return new ShippingPackageQuoteDto
+        {
+            PackageNumber = source.PackageNumber,
+            Name = source.Name,
+            Weight = source.Weight,
+            Width = source.Width,
+            Length = source.Length,
+            Height = source.Height,
+            IsOversized = source.IsOversized,
+            Price = source.Price,
+            Currency = source.Currency,
+            EstimatedDelivery = source.EstimatedDelivery,
+            Items = source.Items.Select(item => new ShippingPackageItemDto
+            {
+                Name = item.Name,
+                Quantity = item.Quantity,
+                UnitWidth = item.UnitWidth,
+                UnitLength = item.UnitLength,
+                UnitHeight = item.UnitHeight,
+                UnitWeight = item.UnitWeight
+            }).ToList()
+        };
+    }
+
+    private static IReadOnlyDictionary<string, JsonElement>? ReadNestedObject(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (!arguments.TryGetValue(key, out var value))
+            {
+                continue;
+            }
+
+            if (value.ValueKind == JsonValueKind.Object)
+            {
+                return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(value.GetRawText(), JsonOptions);
+            }
+
+            if (value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString()))
+            {
+                try
+                {
+                    using var document = JsonDocument.Parse(value.GetString()!);
+                    if (document.RootElement.ValueKind == JsonValueKind.Object)
+                    {
+                        return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(
+                            document.RootElement.GetRawText(),
+                            JsonOptions);
+                    }
+                }
+                catch (JsonException)
+                {
+                    return null;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static decimal ReadDecimal(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        decimal fallback,
+        params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            if (TryReadDecimal(arguments, key, out var value) && value > 0)
+            {
+                return value;
+            }
+        }
+
+        return fallback;
+    }
+
+    private static string NormalizeShippingActionCode(ShippingRateOptionDto rate)
+    {
+        var raw = FirstNonEmpty(rate.CourierCode, rate.ProductName, "courier");
+        var builder = new StringBuilder(raw.Length);
+        foreach (var ch in raw.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(ch))
+            {
+                builder.Append(ch);
+            }
+            else if (ch is '-' or '_' && builder.Length > 0)
+            {
+                builder.Append(ch);
+            }
+        }
+
+        return builder.Length == 0 ? "courier" : builder.ToString();
+    }
+
+    private static string FormatMoney(decimal amount, string? currency)
+    {
+        return $"{amount:0.##} {FirstNonEmpty(currency, "THB")}";
+    }
+
+    private static string EscapeMarkdownTableCell(string? value)
+    {
+        return FirstNonEmpty(value, "-").Replace("|", "\\|", StringComparison.Ordinal);
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+    {
+        return values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim() ?? string.Empty;
+    }
+
+    private sealed record ShippingCourierToolRow(
+        string CourierCode,
+        string CourierName,
+        string Description,
+        string Scope,
+        string Provider,
+        string? LogoUrl);
+
+    private sealed record ShippingRateToolRow(
+        string CourierCode,
+        string CourierName,
+        string Description,
+        string LeadTime,
+        decimal TotalPrice,
+        string CurrencyCode,
+        int PackageCount,
+        decimal TotalWeight,
+        string Provider);
 
     private object UpdateCheckoutDetailsOrGateError(
         QuoteAgentSessionState state,

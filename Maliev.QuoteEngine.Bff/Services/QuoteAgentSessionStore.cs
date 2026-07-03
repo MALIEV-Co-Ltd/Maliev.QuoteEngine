@@ -154,6 +154,31 @@ internal sealed class QuoteAgentSessionStore
         }
     }
 
+    public void RemovePendingActions(
+        QuoteAgentSessionState state,
+        Func<QuoteAgentProposedActionDto, bool> predicate)
+    {
+        lock (state.SyncRoot)
+        {
+            var removed = false;
+            foreach (var action in state.ProposedActions
+                .Where(item =>
+                    item.Status.Equals("pending_confirmation", StringComparison.OrdinalIgnoreCase) &&
+                    predicate(item))
+                .ToList())
+            {
+                state.ProposedActions.Remove(action);
+                _actions.TryRemove(action.ActionId, out _);
+                removed = true;
+            }
+
+            if (removed)
+            {
+                Touch(state);
+            }
+        }
+    }
+
     public static bool CanAccessAction(Guid? actionCustomerId, Guid? customerId)
     {
         if (!actionCustomerId.HasValue)
@@ -450,6 +475,12 @@ internal sealed class QuoteAgentSessionState
     public List<QuoteAgentUiDirectiveDto> UiDirectives { get; } = [];
 
     public List<QuoteCadDesignSession> CadDesigns { get; } = [];
+
+    public ShippingAddressDto? LastShippingDestination { get; set; }
+
+    public List<ShippingRateOptionDto> ShippingRateOptions { get; } = [];
+
+    public ShippingRateOptionDto? SelectedShippingRate { get; set; }
 
     public QuoteEstimateResponse? Estimate { get; set; }
 
