@@ -5202,11 +5202,20 @@
 
 .qe-agent-management-search input {
     min-width: 0;
+    min-height: 0;
+    padding: 0;
     border: 0;
+    border-radius: 0;
     outline: 0;
     background: transparent;
+    box-shadow: none;
     color: var(--qe-agent-ink);
     font: inherit;
+}
+
+.qe-agent-management-search input:hover,
+.qe-agent-management-search input:focus {
+    box-shadow: none;
 }
 
 .qe-agent-management-tabs {
