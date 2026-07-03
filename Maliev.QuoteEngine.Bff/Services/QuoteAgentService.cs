@@ -1001,6 +1001,7 @@ internal sealed class QuoteAgentService(
             "quote_cad_start_design" => StartCadDesign(state, request.Arguments),
             "quote_cad_apply_operations" => ApplyCadDesignOperations(state, request.Arguments),
             "quote_cad_observe_design" => ObserveCadDesign(state, request.Arguments),
+            "quote_cad_finalize_preview" => FinalizeCadDesignPreview(state, request.Arguments),
             "quote_generate_3d_preview" => Generate3DPreview(state, request.Arguments),
             _ => new { error = $"Unknown QuoteEngine tool: {toolName}" }
         };
@@ -7516,6 +7517,104 @@ Customer message:
         }
     }
 
+    private static object FinalizeCadDesignPreview(QuoteAgentSessionState state, IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var cadArguments = UnwrapToolArguments(arguments);
+        Guid designId;
+        int revision;
+        string description;
+        string processHint;
+        IReadOnlyList<CadCommandDto> operations;
+
+        lock (state.SyncRoot)
+        {
+            QuoteCadDesignSession? design = null;
+            if (TryReadCadDesignId(cadArguments, out var requestedDesignId))
+            {
+                design = state.CadDesigns.FirstOrDefault(item => item.DesignId == requestedDesignId);
+            }
+
+            design ??= state.CadDesigns.LastOrDefault();
+            if (design is null)
+            {
+                return new { error = "No active CAD design session exists." };
+            }
+
+            var baseRevision = ReadInt(cadArguments, "base_revision", ReadInt(cadArguments, "baseRevision", -1));
+            if (baseRevision < 0)
+            {
+                return new { error = "CAD design base_revision is required." };
+            }
+
+            if (baseRevision != design.Revision)
+            {
+                return new
+                {
+                    error = $"Stale CAD design revision; current revision is {design.Revision}. Observe the design and retry from the latest revision."
+                };
+            }
+
+            if (design.Operations.Count == 0)
+            {
+                return new { error = "CAD design has no operations to finalize." };
+            }
+
+            designId = design.DesignId;
+            revision = design.Revision;
+            description = design.Description;
+            processHint = design.ProcessHint;
+            operations = CloneCadCommands(design.Operations);
+        }
+
+        var result = Generate3DPreview(state, new Dictionary<string, JsonElement>
+        {
+            ["description"] = JsonSerializer.SerializeToElement(description, JsonOptions),
+            ["process_hint"] = JsonSerializer.SerializeToElement(processHint, JsonOptions),
+            ["cad_commands"] = JsonSerializer.SerializeToElement(operations, JsonOptions)
+        });
+
+        if (!IsSuccessfulToolResult(result))
+        {
+            return result;
+        }
+
+        Guid? artifactId = null;
+        Guid? partId = null;
+        lock (state.SyncRoot)
+        {
+            var design = state.CadDesigns.FirstOrDefault(item => item.DesignId == designId);
+            if (design is not null)
+            {
+                design.Status = "finalized";
+                design.Stage = "preview_finalized";
+                design.UpdatedAt = DateTimeOffset.UtcNow;
+                state.UpdatedAt = design.UpdatedAt;
+            }
+
+            var artifact = state.Artifacts.LastOrDefault(IsGeneratedViewerArtifact);
+            if (artifact is not null)
+            {
+                artifactId = artifact.ArtifactId;
+                partId = artifact.PartId;
+                artifact.Metadata["cadWorkbench"] = "true";
+                artifact.Metadata["cadDesignId"] = designId.ToString("D");
+                artifact.Metadata["cadDesignRevision"] = revision.ToString(CultureInfo.InvariantCulture);
+            }
+        }
+
+        return new
+        {
+            success = true,
+            design_id = designId,
+            revision,
+            artifact_id = artifactId,
+            part_id = partId,
+            description,
+            command_count = operations.Count,
+            message = $"Finalized CAD design into 3D preview with {operations.Count} command(s): {description}"
+        };
+    }
+
     private static object BuildCadDesignResponse(QuoteCadDesignSession design, string message)
     {
         return new
@@ -7547,6 +7646,12 @@ Customer message:
         }
 
         return ReadCommands(arguments);
+    }
+
+    private static IReadOnlyList<CadCommandDto> CloneCadCommands(IReadOnlyList<CadCommandDto> commands)
+    {
+        var json = JsonSerializer.Serialize(commands, JsonOptions);
+        return JsonSerializer.Deserialize<List<CadCommandDto>>(json, JsonOptions) ?? [];
     }
 
     private static bool TryReadCadDesignId(IReadOnlyDictionary<string, JsonElement> arguments, out Guid designId)

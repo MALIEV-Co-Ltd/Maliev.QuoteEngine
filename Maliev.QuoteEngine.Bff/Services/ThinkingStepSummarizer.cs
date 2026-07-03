@@ -24,6 +24,12 @@ internal static class ThinkingStepSummarizer
         if (string.IsNullOrWhiteSpace(tool))
             return null;
 
+        if (IsCadWorkbenchTool(tool))
+        {
+            if (TryBuildCadWorkbenchSummary(tool, args) is { } cadSummary)
+                return cadSummary;
+        }
+
         if (IsGeneratePreviewTool(tool))
         {
             if (TryBuild3dPreviewSummary(args) is { } generatedPreviewSummary)
@@ -90,6 +96,59 @@ internal static class ThinkingStepSummarizer
             _ when tool.Contains("language") => "Switched interface language",
             _ => null
         };
+    }
+
+    private static bool IsCadWorkbenchTool(string tool) =>
+        tool.StartsWith("quote_cad_", StringComparison.Ordinal) ||
+        tool.StartsWith("cad_", StringComparison.Ordinal);
+
+    private static string? TryBuildCadWorkbenchSummary(string tool, Dictionary<string, string>? args)
+    {
+        var revision = args is null ? null : GetArgValue(args, "revision", "base_revision", "baseRevision");
+        var operationCountText = args is null ? null : GetArgValue(args, "operation_count", "command_count", "operationCount", "commandCount");
+        var stage = args is null ? null : GetArgValue(args, "stage");
+        var status = args is null ? null : GetArgValue(args, "status");
+        var description = args is null ? null : GetArgValue(args, "description");
+        var operationCount = int.TryParse(operationCountText, out var parsedCount) ? parsedCount : (int?)null;
+        var revisionLabel = string.IsNullOrWhiteSpace(revision) ? string.Empty : $" · revision {revision}";
+
+        if (tool.Contains("start_design", StringComparison.Ordinal))
+        {
+            return string.IsNullOrWhiteSpace(description)
+                ? $"Started CAD design{revisionLabel}"
+                : $"Started CAD design · {description}{revisionLabel}";
+        }
+
+        if (tool.Contains("apply_operations", StringComparison.Ordinal))
+        {
+            var operationLabel = operationCount is { } count
+                ? $"Applied {count} CAD operation(s)"
+                : "Applied CAD operations";
+            return string.IsNullOrWhiteSpace(stage)
+                ? $"{operationLabel}{revisionLabel}"
+                : $"{operationLabel} · {stage}{revisionLabel}";
+        }
+
+        if (tool.Contains("observe_design", StringComparison.Ordinal))
+        {
+            var operationLabel = operationCount is { } count
+                ? $" · {count} operation(s)"
+                : string.Empty;
+            var statusLabel = string.IsNullOrWhiteSpace(status) ? string.Empty : $" · {status}";
+            return $"Observed CAD design{statusLabel}{operationLabel}{revisionLabel}";
+        }
+
+        if (tool.Contains("finalize_preview", StringComparison.Ordinal))
+        {
+            var operationLabel = operationCount is { } count
+                ? $" ({count} command(s))"
+                : string.Empty;
+            return string.IsNullOrWhiteSpace(description)
+                ? $"Finalized CAD preview{operationLabel}{revisionLabel}"
+                : $"Finalized CAD preview{operationLabel}: {description}{revisionLabel}";
+        }
+
+        return null;
     }
 
     private static bool IsGeneratePreviewTool(string tool)

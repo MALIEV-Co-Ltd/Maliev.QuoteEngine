@@ -115,4 +115,23 @@ public sealed class ThinkingStepSummarizerTests
         Assert.DoesNotContain("ebe20307-b475-40f9-ab95-8da14c6f928c", step.Summary);
         Assert.DoesNotContain("564e818e-0480-48ef-bef1-60d49561beb9", step.Summary);
     }
+
+    [Theory]
+    [InlineData("quote_cad_start_design", """Arguments: {"description":"flat bracket sketch","revision":0}""", "Started CAD design")]
+    [InlineData("quote_cad_apply_operations", """Arguments: {"operation_count":5,"revision":1,"stage":"solid_features"}""", "Applied 5 CAD operation")]
+    [InlineData("quote_cad_observe_design", """Arguments: {"operation_count":5,"revision":1,"status":"ready_for_preview"}""", "Observed CAD design")]
+    [InlineData("quote_cad_finalize_preview", """Arguments: {"success":true,"command_count":5,"revision":1,"description":"flat bracket sketch"}""", "Finalized CAD preview")]
+    public void Summarize_cad_workbench_tools_reports_progress(string tool, string detail, string expected)
+    {
+        var step = new QuoteAgentThinkingStepDto
+        {
+            Type = tool,
+            Detail = detail
+        };
+
+        ThinkingStepSummarizer.Summarize(step);
+
+        Assert.NotNull(step.Summary);
+        Assert.Contains(expected, step.Summary, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -6504,6 +6504,88 @@ Customer message:
     }
 
     [Fact]
+    public async Task Cad_workbench_finalize_creates_generated_preview_from_current_design()
+    {
+        using var client = factory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var startJson = await ExecuteToolAsync(client, sessionId, "quote_cad_start_design",
+            new Dictionary<string, JsonElement>
+            {
+                ["description"] = JsonSerializer.SerializeToElement("CAD workbench bracket with one mounting hole", JsonOptions),
+                ["process_hint"] = JsonSerializer.SerializeToElement("cnc", JsonOptions)
+            });
+        using var startDoc = JsonDocument.Parse(startJson);
+        var designId = startDoc.RootElement.GetProperty("design_id").GetGuid();
+
+        object[] operations =
+        [
+            new
+            {
+                op = "box",
+                id = "base",
+                Params = new[] { 60.0, 30.0, 6.0 }
+            },
+            new
+            {
+                op = "cylinder",
+                id = "mount_hole",
+                Params = new[] { 4.0, 8.0 }
+            },
+            new
+            {
+                op = "cut",
+                targetId = "base",
+                toolId = "mount_hole",
+                resultId = "preview_body"
+            }
+        ];
+
+        await ExecuteToolAsync(client, sessionId, "quote_cad_apply_operations",
+            new Dictionary<string, JsonElement>
+            {
+                ["design_id"] = JsonSerializer.SerializeToElement(designId, JsonOptions),
+                ["base_revision"] = JsonSerializer.SerializeToElement(0, JsonOptions),
+                ["operations"] = JsonSerializer.SerializeToElement(operations, JsonOptions)
+            });
+
+        var finalizeJson = await ExecuteToolAsync(client, sessionId, "quote_cad_finalize_preview",
+            new Dictionary<string, JsonElement>
+            {
+                ["design_id"] = JsonSerializer.SerializeToElement(designId, JsonOptions),
+                ["base_revision"] = JsonSerializer.SerializeToElement(1, JsonOptions)
+            });
+
+        using var finalizeDoc = JsonDocument.Parse(finalizeJson);
+        var finalizeRoot = finalizeDoc.RootElement;
+        Assert.True(finalizeRoot.GetProperty("success").GetBoolean());
+        Assert.Equal(designId, finalizeRoot.GetProperty("design_id").GetGuid());
+        Assert.Equal(1, finalizeRoot.GetProperty("revision").GetInt32());
+        Assert.Equal(3, finalizeRoot.GetProperty("command_count").GetInt32());
+        Assert.True(finalizeRoot.TryGetProperty("artifact_id", out var artifactId) && artifactId.ValueKind == JsonValueKind.String);
+        Assert.True(finalizeRoot.TryGetProperty("part_id", out var partId) && partId.ValueKind == JsonValueKind.String);
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        var artifact = Assert.Single(state.Artifacts, item =>
+            item.ArtifactType.Equals("viewer", StringComparison.OrdinalIgnoreCase) &&
+            item.Metadata.TryGetValue("generated", out var generated) &&
+            generated.Equals("true", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(designId.ToString("D"), artifact.Metadata["cadDesignId"]);
+        Assert.Equal("1", artifact.Metadata["cadDesignRevision"]);
+        Assert.Equal("true", artifact.Metadata["cadWorkbench"]);
+        Assert.True(artifact.Metadata.ContainsKey("cad_commands"));
+
+        var observeJson = await ExecuteToolAsync(client, sessionId, "quote_cad_observe_design",
+            new Dictionary<string, JsonElement>
+            {
+                ["design_id"] = JsonSerializer.SerializeToElement(designId, JsonOptions)
+            });
+        using var observeDoc = JsonDocument.Parse(observeJson);
+        Assert.Equal("finalized", observeDoc.RootElement.GetProperty("status").GetString());
+    }
+
+    [Fact]
     public async Task Generate_3d_preview_tool_normalizes_operation_casing_for_browser_worker()
     {
         using var client = factory.CreateClient();
