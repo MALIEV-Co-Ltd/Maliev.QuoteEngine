@@ -1906,6 +1906,22 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_consumes_drive_mention_when_drive_attachments_are_already_queued()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var submitBlock = ExtractSourceBlock(
+            component,
+            "private async Task HandleSubmitAsync()",
+            "private List<AgentMessageRow> RemoveLocalLastTurn");
+
+        Assert.Contains("if (ContainsDriveMention(message) && pendingAttachments.Count > 0)", submitBlock, StringComparison.Ordinal);
+        Assert.Contains("message = RemoveDriveMention(message);", submitBlock, StringComparison.Ordinal);
+        Assert.Contains("message = BuildAttachmentOnlyMessage(pendingAttachments);", submitBlock, StringComparison.Ordinal);
+        Assert.Contains("if (ContainsDriveMention(message))", submitBlock, StringComparison.Ordinal);
+        Assert.Contains("await HandleDriveMentionIntentAsync(message);", submitBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Legacy_auth_pages_redirect_into_make_studio_auth_dialog()
     {
         var signIn = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignIn.razor");

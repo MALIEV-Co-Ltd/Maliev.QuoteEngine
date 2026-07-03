@@ -3571,7 +3571,15 @@
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(message))
+        if (ContainsDriveMention(message) && pendingAttachments.Count > 0)
+        {
+            message = RemoveDriveMention(message);
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                message = BuildAttachmentOnlyMessage(pendingAttachments);
+            }
+        }
+        else if (string.IsNullOrWhiteSpace(message))
         {
             message = BuildAttachmentOnlyMessage(pendingAttachments);
         }

@@ -165,6 +165,9 @@ internal sealed class QuoteAgentService(
     private static readonly Regex GoogleDriveConnectorUrlRegex = new(
         @"(?:https?://[^\s)]+)?/(?:connect/google-drive|quote/v1/connectors/google-drive/start|auth/google/drive/callback)[^\s)]*",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex DriveMentionRegex = new(
+        @"(^|\s)@drive(?=$|\s|[.,;:!?])",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     // Mirrors the downstream ChatbotService request limit: SendMessageRequest.Content
     // [StringLength] and MessagePipelinePolicy.MaxContentCharacters are both 8000. Keeping
@@ -181,6 +184,7 @@ internal sealed class QuoteAgentService(
         QuoteAgentMessageRequest request,
         CancellationToken cancellationToken)
     {
+        request.Message = RemoveDriveMentionWhenAttachmentsAreQueued(request.Message, request.Attachments);
         var language = NormalizeLanguage(request.Language, request.Message);
         var sessionId = request.SessionId.GetValueOrDefault(Guid.NewGuid());
         var state = sessionStore.GetOrCreate(sessionId, language);
@@ -283,6 +287,7 @@ internal sealed class QuoteAgentService(
     {
         yield return new QuoteAgentStreamEvent { Type = "started" };
 
+        request.Message = RemoveDriveMentionWhenAttachmentsAreQueued(request.Message, request.Attachments);
         var language = NormalizeLanguage(request.Language, request.Message);
         var sessionId = request.SessionId.GetValueOrDefault(Guid.NewGuid());
         var state = sessionStore.GetOrCreate(sessionId, language);
@@ -6038,6 +6043,23 @@ Customer message:
 {message.Trim()}
 """;
         return TrimChatbotContent(content, message);
+    }
+
+    private static string RemoveDriveMentionWhenAttachmentsAreQueued(
+        string message,
+        IReadOnlyCollection<QuoteAgentAttachmentDto> attachments)
+    {
+        if (attachments.Count == 0 ||
+            string.IsNullOrWhiteSpace(message) ||
+            !DriveMentionRegex.IsMatch(message))
+        {
+            return message;
+        }
+
+        var sanitized = DriveMentionRegex.Replace(message, " ").Trim();
+        return string.IsNullOrWhiteSpace(sanitized)
+            ? "Please analyze the attached files."
+            : sanitized;
     }
 
     private static string ResponseLanguageInstruction(string language)

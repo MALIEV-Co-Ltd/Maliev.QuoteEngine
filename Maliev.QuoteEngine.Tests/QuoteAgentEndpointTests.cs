@@ -1235,6 +1235,52 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_stream_with_drive_trigger_and_queued_attachment_sends_sanitized_customer_message()
+    {
+        var chatbot = new RecordingChatbotServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                Message = "@drive please analyze this attached bracket.",
+                Language = "en",
+                Attachments =
+                [
+                    new QuoteAgentAttachmentDto
+                    {
+                        FileName = "drive-bracket.step",
+                        ContentType = "model/step",
+                        FileSizeBytes = 42_000,
+                        Kind = "cad",
+                        UploadId = "drive-upload-1",
+                        StoragePath = "quotes/temp/session/drive-bracket.step",
+                        SatisfiesGeometryGate = true
+                    }
+                ]
+            })
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        _ = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(chatbot.LastStreamRequest);
+        var customerMessage = QuoteAgentService.ExtractCustomerFacingText(chatbot.LastStreamRequest!.Content);
+        Assert.DoesNotContain("@drive", customerMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("please analyze this attached bracket.", customerMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(chatbot.LastStreamRequest.Attachments);
+    }
+
+    [Fact]
     public async Task Agent_message_stream_with_stored_video_uses_signed_url_for_chatbot_media()
     {
         var chatbot = new RecordingChatbotServiceClient();
