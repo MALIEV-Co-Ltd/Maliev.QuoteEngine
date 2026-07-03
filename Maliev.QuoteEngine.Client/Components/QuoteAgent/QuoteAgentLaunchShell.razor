@@ -254,7 +254,9 @@
             else
             {
                 <button type="button"
-                        class="qe-agent-user-btn qe-agent-signin-row"
+                        class="@SigninRowClass"
+                        aria-describedby="@(ShouldPulseSidebarSignIn ? SigninAttentionId : null)"
+                        title="@SigninAttentionText"
                         @onclick='@(() => OpenAuthDialog("sign-in"))'>
                     <span class="qe-agent-user-avatar" aria-hidden="true">
                         <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" />
@@ -265,6 +267,12 @@
                     </span>
                     <MudIcon Class="qe-agent-user-menu-icon" Icon="@Icons.Material.Outlined.Login" Size="Size.Small" />
                 </button>
+                @if (ShouldPulseSidebarSignIn)
+                {
+                    <span id="@SigninAttentionId" class="qe-agent-signin-tooltip" role="status">
+                        @SigninAttentionText
+                    </span>
+                }
             }
         </div>
     </aside>
@@ -1239,34 +1247,6 @@
                 }
             </section>
         }
-
-        @if (ShouldShowAuthHandoff)
-        {
-            <section class="qe-agent-auth-handoff" aria-label="@Text("Trusted sign in options", "ตัวเลือกเข้าสู่ระบบที่เชื่อถือได้")">
-                <header>
-                    <div>
-                        <span>@Text("Sign in required", "ต้องเข้าสู่ระบบ")</span>
-                        <strong>@Text("Continue with MALIEV before quote, order, or payment actions", "เข้าสู่ MALIEV ก่อนทำใบเสนอราคา คำสั่งซื้อ หรือชำระเงิน")</strong>
-                    </div>
-                </header>
-                <div class="qe-agent-auth-methods">
-                    @foreach (var method in _authHandoff!.Methods)
-                    {
-                        <button type="button" @onclick="@(() => OpenAuthMethod(method))">
-                            <MudIcon Icon="@AuthMethodIcon(method)" Size="Size.Small" />
-                            <span>
-                                <strong>
-                                    @method.DisplayName
-                                    <em class="@AuthMethodStatusClass(method)">@AuthMethodStatusLabel(method)</em>
-                                </strong>
-                                <small>@AuthMethodDescription(method)</small>
-                            </span>
-                        </button>
-                    }
-                </div>
-            </section>
-        }
-
 
         @if (ShowSummaryStrip)
         {
@@ -2749,6 +2729,18 @@
     private string? AccountProfileImageUrl => CleanAccountText(ProfileImageUrl);
     private string AccountTierLabel => CleanAccountText(ProfileTier) ?? Text("Account", "บัญชี");
     private string AccountInitials => GetAccountInitials(AccountDisplayName);
+    private const string SigninAttentionId = "qe-agent-signin-attention";
+    private bool ShouldPulseSidebarSignIn =>
+        _authHandoff is { IsAuthenticated: false } &&
+        _authHandoff.Methods.Count > 0 &&
+        !IsSignedIn &&
+        !_authDialogOpen;
+    private string SigninRowClass => ShouldPulseSidebarSignIn
+        ? "qe-agent-user-btn qe-agent-signin-row is-auth-required"
+        : "qe-agent-user-btn qe-agent-signin-row";
+    private string SigninAttentionText => Text(
+        "Sign in here to keep your quote, order, and payment steps moving.",
+        "เข้าสู่ระบบตรงนี้เพื่อดำเนินใบเสนอราคา คำสั่งซื้อ และการชำระเงินต่อ");
     private string AuthDialogTitle => _authDialogMode.Equals("sign-up", StringComparison.OrdinalIgnoreCase)
         ? Text("Create your MALIEV account", "สร้างบัญชี MALIEV")
         : Text("Sign in to continue", "เข้าสู่ระบบเพื่อดำเนินการต่อ");
@@ -3258,17 +3250,6 @@
     {
         CloseAuthDialog();
         Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
-    }
-
-    private void OpenAuthMethod(QuoteAgentAuthMethodDto method)
-    {
-        if (string.IsNullOrWhiteSpace(method.Url))
-        {
-            OpenAuthDialog("sign-in");
-            return;
-        }
-
-        Navigation.NavigateTo(method.Url, forceLoad: true);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -4466,12 +4447,6 @@
         _uiFocusDirectives = [];
         await InvokeAsync(StateHasChanged);
     }
-
-    private bool ShouldShowAuthHandoff =>
-        _authHandoff is not null &&
-        !_authHandoff.IsAuthenticated &&
-        _authHandoff.Methods.Count > 0 &&
-        !IsSignedIn;
 
     private void ApplyAuthHandoff(QuoteAgentAuthHandoffResponse? authHandoff)
     {
@@ -5981,44 +5956,6 @@
         var queryIndex = value.IndexOf('?', StringComparison.Ordinal);
         var probe = queryIndex >= 0 ? value[..queryIndex] : value;
         return Path.GetExtension(probe).TrimStart('.');
-    }
-
-    private static string AuthMethodIcon(QuoteAgentAuthMethodDto method)
-    {
-        return method.MethodId.Equals("passkey", StringComparison.OrdinalIgnoreCase)
-            ? Icons.Material.Outlined.Key
-            : method.MethodId.Equals("email-password", StringComparison.OrdinalIgnoreCase)
-                ? Icons.Material.Outlined.Mail
-                : Icons.Material.Outlined.Login;
-    }
-
-    private string AuthMethodDescription(QuoteAgentAuthMethodDto method)
-    {
-        return method.RequiresBrowserSupport
-            ? Text($"{method.Description} Browser support required.", $"{method.Description} ต้องใช้เบราว์เซอร์ที่รองรับ")
-            : method.Description;
-    }
-
-    private string AuthMethodStatusLabel(QuoteAgentAuthMethodDto method)
-    {
-        return method.Status.ToLowerInvariant() switch
-        {
-            "preferred" => Text("Recommended", "แนะนำ"),
-            "available_when_supported" => Text("When available", "เมื่อรองรับ"),
-            "fallback" => Text("Fallback", "สำรอง"),
-            _ => method.Status
-        };
-    }
-
-    private static string AuthMethodStatusClass(QuoteAgentAuthMethodDto method)
-    {
-        return method.Status.ToLowerInvariant() switch
-        {
-            "preferred" => "qe-agent-auth-method-status is-preferred",
-            "available_when_supported" => "qe-agent-auth-method-status is-conditional",
-            "fallback" => "qe-agent-auth-method-status is-fallback",
-            _ => "qe-agent-auth-method-status"
-        };
     }
 
     private static string StepIcon(string status)

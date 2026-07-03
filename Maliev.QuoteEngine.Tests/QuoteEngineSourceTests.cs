@@ -945,7 +945,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Usage remaining", component, StringComparison.Ordinal);
         Assert.Contains("SignOutAsync", component, StringComparison.Ordinal);
         Assert.Contains("Api.SignOutAsync()", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-user-btn qe-agent-signin-row\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"@SigninRowClass\"", component, StringComparison.Ordinal);
+        Assert.Contains("private string SigninRowClass", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-signin-card\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-signin-panel\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("Sign in to save projects", component, StringComparison.Ordinal);
@@ -2253,7 +2254,7 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_RendersTrustedAuthHandoffMethodsFromAgentTurns()
+    public void QuoteAgentLaunchShell_UsesSidebarSigninAttentionForAuthHandoff()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
@@ -2261,16 +2262,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_authHandoff", component, StringComparison.Ordinal);
         Assert.Contains("streamEvent.Response.AuthHandoff", component, StringComparison.Ordinal);
         Assert.Contains("ApplyAuthHandoff", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-auth-handoff\"", component, StringComparison.Ordinal);
-        Assert.Contains("@foreach (var method in _authHandoff!.Methods)", component, StringComparison.Ordinal);
-        Assert.Contains("method.DisplayName", component, StringComparison.Ordinal);
-        Assert.Contains("AuthMethodIcon(method)", component, StringComparison.Ordinal);
-        Assert.Contains("AuthMethodDescription(method)", component, StringComparison.Ordinal);
-        Assert.Contains("AuthMethodStatusLabel(method)", component, StringComparison.Ordinal);
-        Assert.Contains("AuthMethodStatusClass(method)", component, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-auth-handoff", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-auth-methods", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-auth-method-status", styles, StringComparison.Ordinal);
+        Assert.Contains("ShouldPulseSidebarSignIn", component, StringComparison.Ordinal);
+        Assert.Contains("SigninRowClass", component, StringComparison.Ordinal);
+        Assert.Contains("aria-describedby=\"@(ShouldPulseSidebarSignIn ? SigninAttentionId : null)\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-signin-tooltip\"", component, StringComparison.Ordinal);
+        Assert.Contains("role=\"status\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-auth-handoff\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("@foreach (var method in _authHandoff!.Methods)", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("AuthMethodIcon(method)", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-signin-row.is-auth-required", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-signin-tooltip", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".qe-agent-auth-handoff", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain(".qe-agent-auth-methods", styles, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -1616,6 +1616,84 @@
     color: var(--qe-agent-muted);
 }
 
+.qe-agent-signin-row.is-auth-required {
+    position: relative;
+    background: color-mix(in srgb, var(--qe-agent-primary) 13%, var(--qe-agent-soft));
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--qe-agent-primary) 36%, transparent);
+    color: var(--qe-agent-ink);
+    animation: qe-agent-signin-pulse 1.6s ease-out infinite;
+}
+
+.qe-agent-signin-row.is-auth-required .qe-agent-user-avatar {
+    border-color: color-mix(in srgb, var(--qe-agent-primary) 42%, var(--qe-agent-line));
+    background: color-mix(in srgb, var(--qe-agent-primary) 18%, var(--qe-agent-soft));
+    color: var(--qe-agent-primary);
+}
+
+.qe-agent-signin-tooltip {
+    position: absolute;
+    left: calc(100% + 10px);
+    bottom: 8px;
+    z-index: 220;
+    width: max-content;
+    max-width: min(280px, calc(100vw - 320px));
+    padding: 8px 10px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 8px;
+    background: var(--qe-agent-ink);
+    color: var(--qe-agent-bg);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, .18);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.35;
+    pointer-events: none;
+}
+
+.qe-agent-signin-tooltip::before {
+    content: "";
+    position: absolute;
+    left: -5px;
+    bottom: 17px;
+    width: 9px;
+    height: 9px;
+    border-left: 1px solid var(--qe-agent-line);
+    border-bottom: 1px solid var(--qe-agent-line);
+    background: var(--qe-agent-ink);
+    transform: rotate(45deg);
+}
+
+@media (max-width: 760px) {
+    .qe-agent-signin-tooltip {
+        left: 8px;
+        right: 8px;
+        bottom: calc(100% + 8px);
+        width: auto;
+        max-width: none;
+    }
+
+    .qe-agent-signin-tooltip::before {
+        left: 17px;
+        bottom: -5px;
+        border: 0;
+        border-right: 1px solid var(--qe-agent-line);
+        border-bottom: 1px solid var(--qe-agent-line);
+    }
+}
+
+@keyframes qe-agent-signin-pulse {
+    0% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--qe-agent-primary) 36%, transparent);
+    }
+
+    72% {
+        box-shadow: 0 0 0 11px color-mix(in srgb, var(--qe-agent-primary) 0%, transparent);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--qe-agent-primary) 0%, transparent);
+    }
+}
+
 .qe-agent-signin-icon-btn {
     display: none;
 }
@@ -2005,116 +2083,6 @@
     color: var(--qe-agent-muted);
     font-size: 13px;
     line-height: 1.4;
-}
-
-.qe-agent-auth-handoff {
-    display: grid;
-    gap: 12px;
-    width: min(780px, calc(100% - 32px));
-    margin: 0 auto 14px;
-    padding: 12px;
-    border: 1px solid var(--qe-agent-line);
-    border-radius: 12px;
-    background: var(--qe-agent-surface);
-}
-
-.qe-agent-auth-handoff > header div {
-    display: grid;
-    gap: 3px;
-}
-
-.qe-agent-auth-handoff > header span {
-    color: var(--qe-agent-muted);
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
-}
-
-.qe-agent-auth-handoff > header strong {
-    font-size: 15px;
-    line-height: 1.3;
-}
-
-.qe-agent-auth-methods {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-}
-
-.qe-agent-auth-methods a,
-.qe-agent-auth-methods button {
-    display: grid;
-    grid-template-columns: 22px minmax(0, 1fr);
-    gap: 10px;
-    min-width: 0;
-    width: 100%;
-    padding: 11px;
-    border: 1px solid var(--qe-agent-line);
-    border-radius: 10px;
-    background: var(--qe-agent-raised);
-    color: var(--qe-agent-ink);
-    font: inherit;
-    text-align: left;
-    text-decoration: none;
-    cursor: pointer;
-}
-
-.qe-agent-auth-methods a:hover,
-.qe-agent-auth-methods a:focus-visible,
-.qe-agent-auth-methods button:hover,
-.qe-agent-auth-methods button:focus-visible {
-    border-color: color-mix(in srgb, var(--qe-agent-primary) 45%, var(--qe-agent-line));
-    background: var(--qe-agent-hover);
-}
-
-.qe-agent-auth-methods strong,
-.qe-agent-auth-methods small {
-    display: block;
-    min-width: 0;
-}
-
-.qe-agent-auth-methods strong {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 14px;
-}
-
-.qe-agent-auth-methods small {
-    margin-top: 3px;
-    color: var(--qe-agent-muted);
-    font-size: 12px;
-    line-height: 1.35;
-}
-
-.qe-agent-auth-method-status {
-    display: inline-flex;
-    align-items: center;
-    min-height: 18px;
-    padding: 0 6px;
-    border-radius: 999px;
-    background: var(--qe-agent-hover);
-    color: var(--qe-agent-muted);
-    font-size: 10px;
-    font-style: normal;
-    font-weight: 700;
-    line-height: 1;
-    white-space: nowrap;
-}
-
-.qe-agent-auth-method-status.is-preferred {
-    background: color-mix(in srgb, var(--qe-agent-primary) 15%, transparent);
-    color: var(--qe-agent-primary);
-}
-
-.qe-agent-auth-method-status.is-conditional {
-    background: color-mix(in srgb, var(--qe-agent-warning) 18%, transparent);
-    color: var(--qe-agent-warning);
-}
-
-.qe-agent-auth-method-status.is-fallback {
-    background: var(--qe-agent-hover);
-    color: var(--qe-agent-muted);
 }
 
 /* Command palette (Ctrl/Cmd+K): centered overlay near the top, matching the
@@ -6548,6 +6516,7 @@
 :root[data-motion-reduced="true"] .qe-agent-shell,
 :root[data-motion-reduced="true"] .qe-agent-rail,
 :root[data-motion-reduced="true"] .qe-agent-rail-scroll,
+:root[data-motion-reduced="true"] .qe-agent-signin-row.is-auth-required,
 :root[data-motion-reduced="true"] .qe-agent-artifact-drawer {
     animation: none !important;
     transition: none !important;
