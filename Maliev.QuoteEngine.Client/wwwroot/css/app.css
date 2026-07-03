@@ -8013,7 +8013,7 @@ body.quote-loading-failed .ms-stage {
 }
 
 .customer-chatbot-message.assistant .customer-chatbot-message-body {
-    background: #fafafa;
+    background: var(--panel-tint);
 }
 
 .customer-chatbot-message-body p {
@@ -8035,7 +8035,7 @@ body.quote-loading-failed .ms-stage {
     gap: 6px;
     align-items: center;
     padding: 12px 14px;
-    background: #fafafa;
+    background: var(--panel-tint);
     border-radius: var(--maliev-radius-md);
     box-shadow: var(--maliev-shadow-ring);
 }
@@ -8072,7 +8072,7 @@ body.quote-loading-failed .ms-stage {
     padding: 0 10px;
     color: var(--ink);
     text-decoration: none;
-    background: #ffffff;
+    background: var(--panel);
     border: 0;
     border-radius: var(--maliev-radius-sm);
     box-shadow: var(--maliev-shadow-ring);
@@ -8529,7 +8529,7 @@ p {
 
 .hero-media {
     min-height: 420px;
-    background: #fafafa;
+    background: var(--panel-tint);
     box-shadow: var(--maliev-shadow-card);
 }
 
@@ -8550,7 +8550,7 @@ p {
     align-content: center;
     border: 0;
     border-radius: var(--maliev-radius-md);
-    background: #ffffff;
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
     cursor: pointer;
 }
@@ -8584,13 +8584,13 @@ p {
     grid-template-columns: 180px minmax(0, 1fr);
     gap: 16px;
     padding: 14px;
-    background: #ffffff;
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
 }
 
 .viewer-tile {
     min-height: 150px;
-    background: #fafafa;
+    background: var(--panel-tint);
 }
 
 .part-title,
@@ -8613,7 +8613,7 @@ p {
 .order-detail-header,
 .order-progress-card,
 .order-detail-card {
-    background: #ffffff;
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
     border-radius: var(--maliev-radius-md);
 }
@@ -8705,7 +8705,7 @@ p {
     padding: 10px;
     border: 1px solid var(--line);
     border-radius: var(--maliev-radius-sm);
-    background: #ffffff;
+    background: var(--panel);
 }
 
 .order-milestone-marker {
@@ -8714,7 +8714,7 @@ p {
     margin-top: 3px;
     border-radius: var(--maliev-radius-pill);
     border: 2px solid var(--line-strong);
-    background: #ffffff;
+    background: var(--panel);
 }
 
 .order-milestone-complete .order-milestone-marker,
@@ -8805,7 +8805,7 @@ p {
 
 .order-payment-error {
     margin: 10px 0 0;
-    color: #b42318;
+    color: var(--maliev-danger);
     font-size: var(--maliev-font-small);
     line-height: 1.4;
 }
@@ -9141,7 +9141,7 @@ p {
 .quote-detail-card {
     padding: 16px;
     border-radius: var(--maliev-radius-md);
-    background: #ffffff;
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
 }
 
@@ -9174,7 +9174,7 @@ p {
 
 .quote-conversion-card {
     border: 1px solid rgba(203, 161, 53, 0.36);
-    background: linear-gradient(180deg, #fffdf7 0%, #ffffff 100%);
+    background: linear-gradient(180deg, color-mix(in srgb, #cba135 6%, var(--panel)) 0%, var(--panel) 100%);
 }
 
 .quote-conversion-card p {
@@ -9256,7 +9256,7 @@ p {
 .orders-section {
     padding: 14px;
     border-radius: var(--maliev-radius-md);
-    background: #ffffff;
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
 }
 
@@ -9315,7 +9315,7 @@ p {
 .nda-row {
     padding: 14px;
     border-radius: var(--maliev-radius-md);
-    background: #ffffff;
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
 }
 
@@ -9441,7 +9441,7 @@ p {
     width: min(100%, 980px);
     margin: 0 auto 18px;
     padding: 16px;
-    background: #ffffff;
+    background: var(--panel);
     border-radius: var(--maliev-radius-md);
     box-shadow: var(--maliev-shadow-card);
 }
@@ -9606,7 +9606,7 @@ p {
 }
 
 .documents-row {
-    background: #ffffff;
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
     border-radius: var(--maliev-radius-sm);
     padding: 12px;
@@ -9641,7 +9641,7 @@ textarea {
     min-height: 40px;
     padding: 8px 12px;
     color: var(--ink);
-    background: #ffffff;
+    background: var(--panel);
     border: 0;
     border-radius: var(--maliev-radius-sm);
     box-shadow: var(--maliev-shadow-ring);
@@ -9713,7 +9713,7 @@ textarea::placeholder {
     display: grid;
     gap: 10px;
     padding: 14px;
-    background: #ffffff;
+    background: var(--panel);
     box-shadow: var(--maliev-shadow-card);
 }
 
@@ -10193,7 +10193,7 @@ textarea::placeholder {
 .profile-address-warning,
 .quote-google-address-status {
     padding: 10px 12px;
-    background: #fff7ed;
+    background: color-mix(in srgb, #f97316 10%, var(--panel));
     border-radius: var(--maliev-radius-sm);
     color: var(--ink);
     font-size: var(--maliev-font-small);
