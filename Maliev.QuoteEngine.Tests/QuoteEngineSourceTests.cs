@@ -1177,11 +1177,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("class=\"qe-agent-drive-mention is-active\"", component, StringComparison.Ordinal);
         Assert.Contains("DriveMentionActive => ContainsDriveMention(_draftMessage)", component, StringComparison.Ordinal);
         Assert.Contains("private static bool ContainsDriveMention(string? text)", component, StringComparison.Ordinal);
-        Assert.Contains("if (ContainsDriveMention(message) && pendingAttachments.Count == 0)", component, StringComparison.Ordinal);
+        Assert.Contains("if (ContainsDriveMention(message))", component, StringComparison.Ordinal);
         Assert.Contains("HandleDriveMentionIntentAsync(message)", component, StringComparison.Ordinal);
         Assert.DoesNotContain("IsDriveMentionCommand", component, StringComparison.Ordinal);
         Assert.Contains("ApplyDriveMentionAsync", component, StringComparison.Ordinal);
-        Assert.Contains("Google Drive is already connected.", component, StringComparison.Ordinal);
+        Assert.Contains("Google Drive selection was canceled.", component, StringComparison.Ordinal);
         Assert.Contains("instead of using a chat link", component, StringComparison.Ordinal);
         Assert.Contains("Google verification is managed in Google Cloud", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-connector-modal\"", component, StringComparison.Ordinal);
@@ -1276,7 +1276,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-dictation-spinner", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-meter", component, StringComparison.Ordinal);
         Assert.Contains("DictationMeterBarCount = 320", component, StringComparison.Ordinal);
-        Assert.Contains("IsComposerSendDisabled => _sending || IsDictationActive || HasPendingComposerUpload", component, StringComparison.Ordinal);
+        Assert.Contains("IsComposerSendDisabled => _sending || _drivePickerOpening || IsDictationActive || HasPendingComposerUpload", component, StringComparison.Ordinal);
         Assert.DoesNotContain("|| !IsAgentBackendConnected", component, StringComparison.Ordinal);
         Assert.Contains("ComposerWrapClass", component, StringComparison.Ordinal);
         Assert.Contains("lang=\"@SpeechRecognitionLanguage\"", component, StringComparison.Ordinal);
@@ -1827,6 +1827,45 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("Attached hand sketch:", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message-attachments", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message-sketch-preview", agentStyles, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_routes_connected_google_drive_to_picker_import_and_composer_attachment()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
+        var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
+        var pickerScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-google-drive-picker.js");
+        var applyConnectorBlock = ExtractSourceBlock(
+            component,
+            "private async Task ApplyConnectorAsync(QuoteAgentConnectorDto connector)",
+            "private IEnumerable<SearchNavItem> BuildSearchResults()");
+        var driveMentionBlock = ExtractSourceBlock(
+            component,
+            "private async Task<string> OpenDriveMentionConnectorAsync()",
+            "private async Task CloseSketchAsync()");
+
+        Assert.Contains("private bool _drivePickerOpening;", component, StringComparison.Ordinal);
+        Assert.Contains("private async Task<int> OpenGoogleDrivePickerAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("Js.InvokeAsync<IReadOnlyList<GoogleDriveSelectedFileDto>>(\"quoteGoogleDrivePicker.openPicker\"", component, StringComparison.Ordinal);
+        Assert.Contains("Api.GetGoogleDrivePickerConfigAsync()", component, StringComparison.Ordinal);
+        Assert.Contains("Api.ImportGoogleDriveFilesAsync(new GoogleDriveImportRequest", component, StringComparison.Ordinal);
+        Assert.Contains("QueueComposerAttachment(ComposerAttachmentPreview.FromAgentAttachment(attachment));", component, StringComparison.Ordinal);
+        Assert.Contains("var selectedCount = await OpenGoogleDrivePickerAsync();", driveMentionBlock, StringComparison.Ordinal);
+        Assert.Contains("await OpenGoogleDrivePickerAsync();", applyConnectorBlock, StringComparison.Ordinal);
+        Assert.Contains("OpenDriveConnectorModal(!connector.IsConfigured ? \"unavailable\" : \"connect\")", applyConnectorBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("connector.IsConnected ? \"manage\" : \"connect\"", applyConnectorBlock, StringComparison.Ordinal);
+
+        Assert.Contains("GetGoogleDrivePickerConfigAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("ImportGoogleDriveFilesAsync", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/connectors/google-drive/picker-config", apiClient, StringComparison.Ordinal);
+        Assert.Contains("quote/v1/connectors/google-drive/imports", apiClient, StringComparison.Ordinal);
+        Assert.Contains("js/quote-google-drive-picker.js", index, StringComparison.Ordinal);
+
+        Assert.Contains("window.quoteGoogleDrivePicker", pickerScript, StringComparison.Ordinal);
+        Assert.Contains("google.accounts.oauth2.initTokenClient", pickerScript, StringComparison.Ordinal);
+        Assert.Contains("google.picker.PickerBuilder", pickerScript, StringComparison.Ordinal);
+        Assert.Contains("google.picker.Feature.MULTISELECT_ENABLED", pickerScript, StringComparison.Ordinal);
     }
 
     [Fact]

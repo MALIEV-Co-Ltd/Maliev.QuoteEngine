@@ -7,6 +7,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject QuoteEngineApiClient Api
 @inject PreferenceService Preferences
@@ -108,6 +109,25 @@
                 </section>
             }
 
+            @if (TemporaryProjects.Any())
+            {
+                <section class="qe-agent-rail-group qe-agent-rail-group--temporary" aria-label="@Text("Temporary projects", "โปรเจกต์ชั่วคราว")">
+                    <div class="qe-agent-rail-group-label">
+                        <span>@Text("Temporary", "ชั่วคราว")</span>
+                        <small>@Text("Saved after sign-in", "บันทึกหลังเข้าสู่ระบบ")</small>
+                    </div>
+                    @foreach (var project in TemporaryProjects)
+                    {
+                        <div class="qe-agent-project-row qe-agent-project-row--temporary">
+                            <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
+                                <span>@ProjectName(project)</span>
+                                <small>@Text("This browser session", "เซสชันเบราว์เซอร์นี้")</small>
+                            </a>
+                        </div>
+                    }
+                </section>
+            }
+
             @if (IsSignedIn)
             {
                 @if (PinnedProjects.Any())
@@ -184,7 +204,11 @@
             }
             else
             {
-                <p class="qe-agent-empty-projects">@Text("Sign in to see pinned projects and saved projects.", "เข้าสู่ระบบเพื่อดูโปรเจกต์ที่ปักหมุดและโปรเจกต์ที่บันทึกไว้")</p>
+                <p class="qe-agent-empty-projects">
+                    @(TemporaryProjects.Any()
+                        ? Text("Sign in to save this temporary project and restore it across devices.", "เข้าสู่ระบบเพื่อบันทึกโปรเจกต์ชั่วคราวนี้และกู้คืนข้ามอุปกรณ์")
+                        : Text("Sign in to see pinned projects and saved projects.", "เข้าสู่ระบบเพื่อดูโปรเจกต์ที่ปักหมุดและโปรเจกต์ที่บันทึกไว้"))
+                </p>
             }
         </div>
 
@@ -2487,6 +2511,7 @@
     private string _driveConnectorModalMode = "connect";
     private bool _driveConnectorContinuing;
     private bool _driveConnectorDisconnecting;
+    private bool _drivePickerOpening;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
     private bool _searchPromptHovered;
@@ -2608,7 +2633,7 @@
     private bool IsDictationActive => _dictating || _dictationProcessing;
     private bool HasPendingComposerUpload => _pendingComposerAttachments.Any(IsComposerUploadPending);
     private bool IsAgentBackendConnected => _agentBackendStatus == AgentBackendStatus.Connected;
-    private bool IsComposerSendDisabled => _sending || IsDictationActive || HasPendingComposerUpload;
+    private bool IsComposerSendDisabled => _sending || _drivePickerOpening || IsDictationActive || HasPendingComposerUpload;
     private string ComposerWrapClass => $"qe-agent-composer-wrap{(IsDictationActive ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
     private bool DriveMentionActive => ContainsDriveMention(_draftMessage);
     private string DriveMentionToken => "@drive";
@@ -3529,7 +3554,7 @@
             message = BuildAttachmentOnlyMessage(pendingAttachments);
         }
 
-        if (ContainsDriveMention(message) && pendingAttachments.Count == 0)
+        if (ContainsDriveMention(message))
         {
             await HandleDriveMentionIntentAsync(message);
             await FocusComposerAsync();
@@ -5244,7 +5269,11 @@
 
     private void QueueComposerAttachment(QuotePartViewModel part)
     {
-        var attachment = ComposerAttachmentPreview.FromPart(part);
+        QueueComposerAttachment(ComposerAttachmentPreview.FromPart(part));
+    }
+
+    private void QueueComposerAttachment(ComposerAttachmentPreview attachment)
+    {
         var existingIndex = _pendingComposerAttachments.FindIndex(item => item.Matches(attachment));
         if (existingIndex >= 0)
         {
@@ -5550,17 +5579,12 @@
         _quickActionsMenuOpen = false;
         _composerMenuOpen = false;
         _composerPluginsOpen = false;
-        _draftMessage = string.Empty;
-        _pendingComposerAttachments.Clear();
+        _draftMessage = RemoveDriveMention(message);
         EnsureLocalProjectFromMessage(message);
-        _messages.Add(new AgentMessageRow("user", message));
-        RequestScrollToLatestMessage();
 
         try
         {
-            var assistantText = await OpenDriveMentionConnectorAsync();
-            _messages.Add(new AgentMessageRow("assistant", assistantText));
-            RequestScrollToLatestMessage();
+            _ = await OpenDriveMentionConnectorAsync();
         }
         finally
         {
@@ -5584,17 +5608,16 @@
             await OpenPluginsPageAsync();
             return _connectorRegistryRequiresAuthentication
                 ? Text(
-                    "Sign in to use Google Drive from Make Studio. After sign-in, @drive opens the connector panel.",
-                    "ลงชื่อเข้าใช้เพื่อใช้ Google Drive จาก Make Studio หลังจากลงชื่อเข้าใช้แล้ว @drive จะเปิดแผงตัวเชื่อมต่อ")
+                    "Sign in to use Google Drive from Make Studio. After sign-in, @drive opens Drive file selection.",
+                    "ลงชื่อเข้าใช้เพื่อใช้ Google Drive จาก Make Studio หลังจากลงชื่อเข้าใช้แล้ว @drive จะเปิดการเลือกไฟล์จาก Drive")
                 : Text(
                     "Google Drive is not available in this environment yet. Use Plugins after it is configured, or upload files directly.",
                     "Google Drive ยังไม่พร้อมใช้งานในสภาพแวดล้อมนี้ ใช้ Plugins หลังจากตั้งค่าแล้ว หรืออัปโหลดไฟล์โดยตรง");
         }
 
-        await ApplyConnectorAsync(connector);
-
         if (!connector.IsConfigured)
         {
+            await ApplyConnectorAsync(connector);
             return Text(
                 "Google Drive is not configured for this environment yet. Upload files directly until it is configured.",
                 "ยังไม่ได้ตั้งค่า Google Drive สำหรับสภาพแวดล้อมนี้ กรุณาอัปโหลดไฟล์โดยตรงจนกว่าจะตั้งค่าแล้ว");
@@ -5602,14 +5625,81 @@
 
         if (connector.IsConnected)
         {
+            var selectedCount = await OpenGoogleDrivePickerAsync();
+            if (selectedCount > 0)
+            {
+                return Text(
+                    $"Selected {selectedCount:N0} file{(selectedCount == 1 ? string.Empty : "s")} from Google Drive. Review the attachment card in the composer, then send it when ready.",
+                    $"เลือกไฟล์จาก Google Drive แล้ว {selectedCount:N0} ไฟล์ ตรวจสอบการ์ดไฟล์แนบในกล่องข้อความ แล้วส่งเมื่อพร้อม");
+            }
+
             return Text(
-                "Google Drive is already connected. I opened the connector panel; you do not need to authorize again unless Google asks you to reconnect the saved access.",
-                "Google Drive เชื่อมต่ออยู่แล้ว ผมเปิดแผงตัวเชื่อมต่อให้แล้ว คุณไม่จำเป็นต้องอนุญาตอีกครั้ง เว้นแต่ Google ขอให้เชื่อมต่อสิทธิ์ที่บันทึกไว้อีกครั้ง");
+                "Google Drive selection was canceled. Choose @drive again when you want to attach a Drive file.",
+                "ยกเลิกการเลือกไฟล์จาก Google Drive แล้ว ใช้ @drive อีกครั้งเมื่อต้องการแนบไฟล์จาก Drive");
         }
 
+        await ApplyConnectorAsync(connector);
         return Text(
             "I opened the Google Drive connector panel. Continue there to connect Drive from this app instead of using a chat link.",
             "ผมเปิดแผงตัวเชื่อมต่อ Google Drive ให้แล้ว ดำเนินการต่อจากแผงนั้นเพื่อเชื่อมต่อ Drive จากแอปนี้แทนการใช้ลิงก์ในแชท");
+    }
+
+    private async Task<int> OpenGoogleDrivePickerAsync()
+    {
+        if (_drivePickerOpening)
+        {
+            return 0;
+        }
+
+        _drivePickerOpening = true;
+        _error = null;
+        try
+        {
+            var config = await Api.GetGoogleDrivePickerConfigAsync();
+            var selectedFiles = await Js.InvokeAsync<IReadOnlyList<GoogleDriveSelectedFileDto>>("quoteGoogleDrivePicker.openPicker", config);
+            if (selectedFiles.Count == 0)
+            {
+                return 0;
+            }
+
+            var response = await Api.ImportGoogleDriveFilesAsync(new GoogleDriveImportRequest
+            {
+                QuoteSessionId = SessionId.ToString("N"),
+                SessionId = SessionId,
+                Files = selectedFiles.Take(config.MaxSelectableFiles).ToList()
+            });
+
+            foreach (var attachment in response.Attachments)
+            {
+                QueueComposerAttachment(ComposerAttachmentPreview.FromAgentAttachment(attachment));
+            }
+
+            await RefreshPendingAttachmentPreviewAsync();
+            return response.Attachments.Count;
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            _error = ex.UserMessage;
+            return 0;
+        }
+        catch (Exception ex) when (ex is JSException or HttpRequestException or InvalidOperationException)
+        {
+            _error = Text(
+                "Google Drive selection is temporarily unavailable. Upload the file directly if this continues.",
+                "การเลือกไฟล์จาก Google Drive ยังไม่พร้อมใช้งานชั่วคราว หากยังเกิดขึ้นอีก กรุณาอัปโหลดไฟล์โดยตรง");
+            return 0;
+        }
+        finally
+        {
+            _drivePickerOpening = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string RemoveDriveMention(string message)
+    {
+        return Regex.Replace(message, "(^|\\s)@drive(?=$|\\s|[.,;:!?])", " ", RegexOptions.IgnoreCase)
+            .Trim();
     }
 
     private async Task CloseSketchAsync()
@@ -7072,7 +7162,13 @@
     {
         if (IsGoogleDriveConnector(connector))
         {
-            OpenDriveConnectorModal(!connector.IsConfigured ? "unavailable" : connector.IsConnected ? "manage" : "connect");
+            if (connector.IsConnected)
+            {
+                await OpenGoogleDrivePickerAsync();
+                return;
+            }
+
+            OpenDriveConnectorModal(!connector.IsConfigured ? "unavailable" : "connect");
             return;
         }
 
@@ -7270,6 +7366,22 @@
                 QuoteUploadConstraints.IsSupportedCadFileName(part.FileName),
                 part.Status,
                 part.ClientFileId);
+        }
+
+        public static ComposerAttachmentPreview FromAgentAttachment(QuoteAgentAttachmentDto attachment)
+        {
+            return new ComposerAttachmentPreview(
+                attachment.AttachmentId,
+                attachment.FileName,
+                attachment.ContentType,
+                attachment.FileSizeBytes,
+                attachment.Url,
+                attachment.Kind,
+                attachment.UploadId,
+                attachment.StoragePath,
+                attachment.Url,
+                attachment.SatisfiesGeometryGate,
+                "Ready");
         }
 
         public QuoteAgentAttachmentDto ToAgentAttachment()

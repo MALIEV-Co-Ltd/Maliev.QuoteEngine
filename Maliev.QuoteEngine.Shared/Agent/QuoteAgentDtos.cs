@@ -820,6 +820,92 @@ public sealed class QuoteAgentConnectorHandoffResponse
 }
 
 /// <summary>
+/// Client-safe Google Drive Picker configuration for a signed-in Make Studio customer.
+/// </summary>
+public sealed class GoogleDrivePickerConfigResponse
+{
+    /// <summary>Gets or sets the stable connector ID.</summary>
+    public string ConnectorId { get; set; } = "google-drive";
+
+    /// <summary>Gets or sets the public OAuth web client ID used by Google Identity Services.</summary>
+    public string ClientId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the Google Picker developer key.</summary>
+    public string DeveloperKey { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the Google Cloud project number / Picker app ID.</summary>
+    public string AppId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the OAuth scope requested by the browser token client.</summary>
+    public string Scope { get; set; } = "https://www.googleapis.com/auth/drive.file";
+
+    /// <summary>Gets or sets the maximum number of files a customer can select in one picker action.</summary>
+    public int MaxSelectableFiles { get; set; } = 8;
+
+    /// <summary>Gets or sets accepted file extensions for client-side helper text and post-selection filtering.</summary>
+    public List<string> AcceptedExtensions { get; set; } = [];
+}
+
+/// <summary>
+/// Request to import Google Drive Picker selections into QuoteEngine storage.
+/// </summary>
+public sealed class GoogleDriveImportRequest
+{
+    /// <summary>Gets or sets the QuoteEngine upload/session ID used for storage scoping.</summary>
+    [Required]
+    [StringLength(80)]
+    public string QuoteSessionId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the active QuoteEngine agent session ID.</summary>
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets selected Drive file metadata from Google Picker.</summary>
+    public List<GoogleDriveSelectedFileDto> Files { get; set; } = [];
+}
+
+/// <summary>
+/// Customer-selected Google Drive file metadata returned by Google Picker.
+/// </summary>
+public sealed class GoogleDriveSelectedFileDto
+{
+    /// <summary>Gets or sets the Google Drive file ID.</summary>
+    [Required]
+    [StringLength(256)]
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the picker-provided file name.</summary>
+    [StringLength(260)]
+    public string? Name { get; set; }
+
+    /// <summary>Gets or sets the picker-provided MIME type.</summary>
+    [StringLength(160)]
+    public string? MimeType { get; set; }
+
+    /// <summary>Gets or sets the picker-provided file size, when available.</summary>
+    [Range(0, QuoteUploadConstraints.MaxFileSizeBytes)]
+    public long? SizeBytes { get; set; }
+
+    /// <summary>Gets or sets the picker-provided Drive browser URL, when available.</summary>
+    [StringLength(2000)]
+    public string? WebViewLink { get; set; }
+}
+
+/// <summary>
+/// Response containing QuoteEngine attachments imported from Google Drive.
+/// </summary>
+public sealed class GoogleDriveImportResponse
+{
+    /// <summary>Gets or sets the QuoteEngine upload/session ID used for storage scoping.</summary>
+    public string QuoteSessionId { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the active QuoteEngine agent session ID.</summary>
+    public Guid SessionId { get; set; }
+
+    /// <summary>Gets or sets imported attachments ready for the composer queue.</summary>
+    public List<QuoteAgentAttachmentDto> Attachments { get; set; } = [];
+}
+
+/// <summary>
 /// Customer-safe authentication handoff response for agent-assisted sign-in and sign-up.
 /// </summary>
 public sealed class QuoteAgentAuthHandoffResponse

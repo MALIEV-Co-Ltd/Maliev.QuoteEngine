@@ -1,6 +1,9 @@
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
+using Maliev.QuoteEngine.Shared.Agent;
+using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
@@ -14,11 +17,14 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 public sealed class GoogleDriveConnectorController(
     CustomerSessionResolver sessionResolver,
     IGoogleDriveConnectorStore connectorStore,
+    QuoteEnginePrototypeStore store,
+    QuoteUploadServiceClient uploadClient,
     IDataProtectionProvider dataProtectionProvider,
     IConfiguration configuration,
     IHttpClientFactory httpClientFactory) : ControllerBase
 {
     private const string DriveScope = "https://www.googleapis.com/auth/drive.file";
+    private const int MaxPickerFiles = 8;
     private readonly IDataProtector _stateProtector = dataProtectionProvider.CreateProtector("quote-engine.google-drive.state.v1");
 
     /// <summary>
@@ -131,6 +137,47 @@ public sealed class GoogleDriveConnectorController(
     }
 
     /// <summary>
+    /// Returns client-safe Google Picker configuration for the signed-in customer.
+    /// </summary>
+    [HttpGet("quote/v1/connectors/google-drive/picker-config")]
+    [ProducesResponseType(typeof(GoogleDrivePickerConfigResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
+    public ActionResult<GoogleDrivePickerConfigResponse> PickerConfig()
+    {
+        if (!sessionResolver.TryResolveCustomerId(out _))
+        {
+            return Unauthorized();
+        }
+
+        var clientId = GoogleClientId();
+        var developerKey = GoogleDriveOAuthConfiguration.PickerApiKey(configuration);
+        var appId = GoogleDriveOAuthConfiguration.PickerAppId(configuration);
+        if (string.IsNullOrWhiteSpace(clientId) ||
+            string.IsNullOrWhiteSpace(developerKey) ||
+            string.IsNullOrWhiteSpace(appId))
+        {
+            return Problem(
+                title: "Google Drive Picker is not configured.",
+                detail: "Set GoogleDrive:PickerApiKey and GoogleDrive:PickerAppId for Make Studio.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        return Ok(new GoogleDrivePickerConfigResponse
+        {
+            ConnectorId = "google-drive",
+            ClientId = clientId,
+            DeveloperKey = developerKey,
+            AppId = appId,
+            Scope = DriveScope,
+            MaxSelectableFiles = MaxPickerFiles,
+            AcceptedExtensions = QuoteUploadConstraints.SupportedAttachmentExtensions
+                .Select(extension => $".{extension}")
+                .ToList()
+        });
+    }
+
+    /// <summary>
     /// Disconnects Google Drive for the signed-in customer.
     /// </summary>
     [HttpPost("quote/v1/connectors/google-drive/disconnect")]
@@ -208,6 +255,118 @@ public sealed class GoogleDriveConnectorController(
             .Where(file => !string.IsNullOrWhiteSpace(file.Id) && !string.IsNullOrWhiteSpace(file.Name))
             .ToList();
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Imports Google Picker selections into QuoteEngine storage and returns composer-ready attachments.
+    /// </summary>
+    [HttpPost("quote/v1/connectors/google-drive/imports")]
+    [ProducesResponseType(typeof(GoogleDriveImportResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<GoogleDriveImportResponse>> Import(
+        [FromBody] GoogleDriveImportRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid)
+        {
+            return ValidationProblem(ModelState);
+        }
+
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        if (request.Files.Count == 0)
+        {
+            ModelState.AddModelError(nameof(request.Files), "Select at least one Google Drive file.");
+            return ValidationProblem(ModelState);
+        }
+
+        if (request.Files.Count > MaxPickerFiles)
+        {
+            ModelState.AddModelError(nameof(request.Files), $"Select at most {MaxPickerFiles} Google Drive files.");
+            return ValidationProblem(ModelState);
+        }
+
+        var connection = connectorStore.Get(customerId);
+        if (connection is null)
+        {
+            return DriveConnectionConflict("Google Drive is not connected.", "Connect Google Drive before importing Drive files.");
+        }
+
+        var accessToken = await GetUsableAccessTokenAsync(connection, cancellationToken);
+        if (string.IsNullOrWhiteSpace(accessToken))
+        {
+            connectorStore.Remove(customerId);
+            return DriveConnectionConflict(
+                "Google Drive needs to be reconnected.",
+                "The previous Google Drive authorization expired. Please connect Google Drive again.");
+        }
+
+        var attachments = new List<QuoteAgentAttachmentDto>(request.Files.Count);
+        try
+        {
+            foreach (var selectedFile in request.Files)
+            {
+                var metadata = await GetDriveFileMetadataAsync(accessToken, selectedFile, cancellationToken);
+                if (metadata.Capabilities?.CanDownload == false)
+                {
+                    ModelState.AddModelError(nameof(request.Files), $"{metadata.DisplayName(selectedFile)} cannot be downloaded from Google Drive.");
+                    return ValidationProblem(ModelState);
+                }
+
+                var imported = await DownloadDriveFileAsync(accessToken, metadata, selectedFile, cancellationToken);
+                if (!QuoteUploadConstraints.IsSupportedAttachmentFileName(imported.FileName))
+                {
+                    ModelState.AddModelError(nameof(request.Files), $"{imported.FileName} is not a supported quote attachment.");
+                    return ValidationProblem(ModelState);
+                }
+
+                if (imported.Bytes.Length == 0 ||
+                    imported.Bytes.LongLength > QuoteUploadConstraints.MaxFileSizeBytes)
+                {
+                    ModelState.AddModelError(
+                        nameof(request.Files),
+                        $"{imported.FileName} must be between 1 byte and {QuoteUploadConstraints.MaxFileSizeMegabytes} MB.");
+                    return ValidationProblem(ModelState);
+                }
+
+                var upload = await ImportDriveBytesAsync(request.QuoteSessionId, customerId, imported, metadata, cancellationToken);
+                attachments.Add(new QuoteAgentAttachmentDto
+                {
+                    AttachmentId = upload.FileId,
+                    FileName = upload.FileName,
+                    ContentType = upload.ContentType,
+                    FileSizeBytes = upload.ExpectedSizeBytes,
+                    Kind = InferAgentAttachmentKind(upload.FileName, upload.ContentType),
+                    UploadId = upload.UploadId,
+                    StoragePath = upload.StoragePath,
+                    SatisfiesGeometryGate = QuoteUploadConstraints.IsSupportedCadFileName(upload.FileName)
+                });
+            }
+        }
+        catch (GoogleDriveAuthorizationException)
+        {
+            connectorStore.Remove(customerId);
+            return DriveConnectionConflict(
+                "Google Drive needs to be reconnected.",
+                "Google rejected the stored Drive authorization. Please connect Google Drive again.");
+        }
+        catch (InvalidOperationException ex)
+        {
+            ModelState.AddModelError(nameof(request.Files), ex.Message);
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(new GoogleDriveImportResponse
+        {
+            QuoteSessionId = request.QuoteSessionId,
+            SessionId = request.SessionId,
+            Attachments = attachments
+        });
     }
 
     private async Task<GoogleDriveTokenResponse> ExchangeCodeAsync(string code, CancellationToken cancellationToken)
@@ -291,6 +450,192 @@ public sealed class GoogleDriveConnectorController(
         });
     }
 
+    private async Task<GoogleDriveFileMetadataResponse> GetDriveFileMetadataAsync(
+        string accessToken,
+        GoogleDriveSelectedFileDto selectedFile,
+        CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            QueryHelpers.AddQueryString(
+                $"https://www.googleapis.com/drive/v3/files/{Uri.EscapeDataString(selectedFile.Id)}",
+                new Dictionary<string, string?>
+                {
+                    ["fields"] = "id,name,mimeType,size,capabilities/canDownload,webViewLink"
+                }));
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await httpClientFactory.CreateClient().SendAsync(request, cancellationToken);
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            throw new GoogleDriveAuthorizationException();
+        }
+
+        response.EnsureSuccessStatusCode();
+        var metadata = await response.Content.ReadFromJsonAsync<GoogleDriveFileMetadataResponse>(cancellationToken)
+            ?? new GoogleDriveFileMetadataResponse();
+        metadata.Id = string.IsNullOrWhiteSpace(metadata.Id) ? selectedFile.Id : metadata.Id;
+        metadata.Name = string.IsNullOrWhiteSpace(metadata.Name) ? selectedFile.Name : metadata.Name;
+        metadata.MimeType = string.IsNullOrWhiteSpace(metadata.MimeType) ? selectedFile.MimeType : metadata.MimeType;
+        metadata.WebViewLink = string.IsNullOrWhiteSpace(metadata.WebViewLink) ? selectedFile.WebViewLink : metadata.WebViewLink;
+        return metadata;
+    }
+
+    private async Task<DriveImportedContent> DownloadDriveFileAsync(
+        string accessToken,
+        GoogleDriveFileMetadataResponse metadata,
+        GoogleDriveSelectedFileDto selectedFile,
+        CancellationToken cancellationToken)
+    {
+        var isGoogleWorkspaceFile = metadata.MimeType?.StartsWith("application/vnd.google-apps.", StringComparison.OrdinalIgnoreCase) == true;
+        var fileName = metadata.DisplayName(selectedFile);
+        var contentType = string.IsNullOrWhiteSpace(metadata.MimeType) ? selectedFile.MimeType : metadata.MimeType;
+        string url;
+        if (isGoogleWorkspaceFile)
+        {
+            contentType = "application/pdf";
+            fileName = EnsureExtension(fileName, ".pdf");
+            url = QueryHelpers.AddQueryString(
+                $"https://www.googleapis.com/drive/v3/files/{Uri.EscapeDataString(metadata.Id)}/export",
+                new Dictionary<string, string?> { ["mimeType"] = contentType });
+        }
+        else
+        {
+            contentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType;
+            url = $"https://www.googleapis.com/drive/v3/files/{Uri.EscapeDataString(metadata.Id)}?alt=media";
+        }
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        using var response = await httpClientFactory.CreateClient().SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+        {
+            throw new GoogleDriveAuthorizationException();
+        }
+
+        response.EnsureSuccessStatusCode();
+        var bytes = await ReadContentWithinLimitAsync(response.Content, QuoteUploadConstraints.MaxFileSizeBytes, cancellationToken);
+        return new DriveImportedContent(fileName, contentType!, bytes);
+    }
+
+    private async Task<UploadState> ImportDriveBytesAsync(
+        string quoteSessionId,
+        Guid customerId,
+        DriveImportedContent imported,
+        GoogleDriveFileMetadataResponse metadata,
+        CancellationToken cancellationToken)
+    {
+        var upload = store.InitiateUpload(new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = quoteSessionId,
+            FileName = imported.FileName,
+            ContentType = imported.ContentType,
+            FileSizeBytes = imported.Bytes.LongLength
+        }, customerId);
+
+        var downstreamUploadId = await uploadClient.InitiateResumableUploadAsync(
+            upload.FileName,
+            upload.ContentType,
+            upload.ExpectedSizeBytes,
+            upload.StoragePath,
+            BuildDriveImportMetadata(metadata),
+            cancellationToken);
+        upload = store.AttachDownstreamUpload(upload.UploadId, downstreamUploadId);
+
+        await using var stream = new MemoryStream(imported.Bytes, writable: false);
+        await uploadClient.StreamUploadAsync(
+            stream,
+            upload.ContentType,
+            upload.ExpectedSizeBytes,
+            $"bytes 0-{upload.ExpectedSizeBytes - 1}/{upload.ExpectedSizeBytes}",
+            downstreamUploadId,
+            upload.StoragePath,
+            cancellationToken);
+
+        return store.MarkProcessing(upload.UploadId);
+    }
+
+    private ActionResult DriveConnectionConflict(string title, string detail)
+    {
+        return Conflict(new ProblemDetails
+        {
+            Title = title,
+            Detail = detail,
+            Status = StatusCodes.Status409Conflict
+        });
+    }
+
+    private static async Task<byte[]> ReadContentWithinLimitAsync(
+        HttpContent content,
+        long maxBytes,
+        CancellationToken cancellationToken)
+    {
+        var contentLength = content.Headers.ContentLength;
+        if (contentLength is > 0 && contentLength.Value > maxBytes)
+        {
+            throw new InvalidOperationException("Google Drive file exceeds the QuoteEngine attachment size limit.");
+        }
+
+        await using var stream = await content.ReadAsStreamAsync(cancellationToken);
+        using var memory = new MemoryStream();
+        var buffer = new byte[81920];
+        int read;
+        while ((read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length), cancellationToken)) > 0)
+        {
+            if (memory.Length + read > maxBytes)
+            {
+                throw new InvalidOperationException("Google Drive file exceeds the QuoteEngine attachment size limit.");
+            }
+
+            memory.Write(buffer, 0, read);
+        }
+
+        return memory.ToArray();
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildDriveImportMetadata(GoogleDriveFileMetadataResponse metadata)
+    {
+        var values = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["source"] = "google-drive",
+            ["googleDrive.fileId"] = metadata.Id
+        };
+        if (!string.IsNullOrWhiteSpace(metadata.WebViewLink))
+        {
+            values["googleDrive.webViewLink"] = metadata.WebViewLink!;
+        }
+
+        return values;
+    }
+
+    private static string InferAgentAttachmentKind(string fileName, string contentType)
+    {
+        if (QuoteUploadConstraints.IsSupportedCadFileName(fileName))
+        {
+            return "cad";
+        }
+
+        var extension = Path.GetExtension(fileName).TrimStart('.');
+        if (QuoteUploadConstraints.SupplementalDocumentExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "drawing";
+        }
+
+        if (contentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
+            QuoteUploadConstraints.SupplementalImageExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return fileName.Contains("sketch", StringComparison.OrdinalIgnoreCase) ? "sketch" : "photo";
+        }
+
+        return "supplemental";
+    }
+
+    private static string EnsureExtension(string fileName, string extension)
+    {
+        return Path.HasExtension(fileName) ? fileName : $"{fileName}{extension}";
+    }
+
     private bool TryReadState(string? state, out GoogleDriveOAuthState value)
     {
         value = default;
@@ -355,6 +700,46 @@ public sealed class GoogleDriveConnectorController(
 
         [JsonPropertyName("expires_in")]
         public int ExpiresIn { get; set; }
+    }
+
+    private sealed class GoogleDriveAuthorizationException : Exception;
+
+    private sealed record DriveImportedContent(string FileName, string ContentType, byte[] Bytes);
+
+    private sealed class GoogleDriveFileMetadataResponse
+    {
+        [JsonPropertyName("id")]
+        public string Id { get; set; } = string.Empty;
+
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
+        [JsonPropertyName("mimeType")]
+        public string? MimeType { get; set; }
+
+        [JsonPropertyName("size")]
+        public string? Size { get; set; }
+
+        [JsonPropertyName("capabilities")]
+        public GoogleDriveCapabilitiesResponse? Capabilities { get; set; }
+
+        [JsonPropertyName("webViewLink")]
+        public string? WebViewLink { get; set; }
+
+        public string DisplayName(GoogleDriveSelectedFileDto selectedFile)
+        {
+            return !string.IsNullOrWhiteSpace(Name)
+                ? Name!
+                : !string.IsNullOrWhiteSpace(selectedFile.Name)
+                    ? selectedFile.Name!
+                    : "drive-file";
+        }
+    }
+
+    private sealed class GoogleDriveCapabilitiesResponse
+    {
+        [JsonPropertyName("canDownload")]
+        public bool CanDownload { get; set; } = true;
     }
 }
 

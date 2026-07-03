@@ -4918,6 +4918,69 @@ Customer message:
     }
 
     [Fact]
+    public async Task Google_drive_picker_config_returns_client_safe_picker_values()
+    {
+        await using var scopedFactory = CreateAgentFactoryWithConnectedGoogleDrive();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-picker-config@example.com");
+
+        var response = await client.GetAsync("/quote/v1/connectors/google-drive/picker-config");
+
+        response.EnsureSuccessStatusCode();
+        var raw = await response.Content.ReadAsStringAsync();
+        using var document = JsonDocument.Parse(raw);
+        var root = document.RootElement;
+        Assert.Equal("google-drive", root.GetProperty("connectorId").GetString());
+        Assert.Equal("quote-engine-google-client", root.GetProperty("clientId").GetString());
+        Assert.Equal("quote-engine-picker-api-key", root.GetProperty("developerKey").GetString());
+        Assert.Equal("1234567890", root.GetProperty("appId").GetString());
+        Assert.Equal("https://www.googleapis.com/auth/drive.file", root.GetProperty("scope").GetString());
+        Assert.True(root.GetProperty("maxSelectableFiles").GetInt32() >= 1);
+        Assert.Contains(".step", root.GetProperty("acceptedExtensions").EnumerateArray().Select(item => item.GetString()));
+        Assert.DoesNotContain("quote-engine-google-secret", raw, StringComparison.Ordinal);
+        Assert.DoesNotContain("refresh-token", raw, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Google_drive_imports_selected_blob_file_into_quote_attachment_storage()
+    {
+        var google = new RecordingGoogleDriveHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithConnectedGoogleDrive(google);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-import@example.com");
+        var quoteSessionId = Guid.NewGuid().ToString("N");
+
+        var response = await client.PostAsJsonAsync("/quote/v1/connectors/google-drive/imports", new
+        {
+            quoteSessionId,
+            sessionId = Guid.Parse(quoteSessionId),
+            files = new[]
+            {
+                new
+                {
+                    id = "drive-file-1",
+                    name = "bracket.step",
+                    mimeType = "model/step",
+                    sizeBytes = 12,
+                    webViewLink = "https://drive.google.com/file/d/drive-file-1/view"
+                }
+            }
+        });
+
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var root = document.RootElement;
+        Assert.Equal(quoteSessionId, root.GetProperty("quoteSessionId").GetString());
+        var attachment = Assert.Single(root.GetProperty("attachments").EnumerateArray());
+        Assert.Equal("bracket.step", attachment.GetProperty("fileName").GetString());
+        Assert.Equal("model/step", attachment.GetProperty("contentType").GetString());
+        Assert.Equal("cad", attachment.GetProperty("kind").GetString());
+        Assert.True(attachment.GetProperty("satisfiesGeometryGate").GetBoolean());
+        Assert.False(string.IsNullOrWhiteSpace(attachment.GetProperty("uploadId").GetString()));
+        Assert.Contains($"quotes/{quoteSessionId}", attachment.GetProperty("storagePath").GetString(), StringComparison.Ordinal);
+        Assert.NotNull(google.LastRequest);
+        Assert.Contains("drive/v3/files/drive-file-1?alt=media", google.LastRequest!.RequestUri!.OriginalString, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task Google_drive_connector_registry_reports_not_configured_without_oauth_credentials()
     {
         await using var scopedFactory = CreateAgentFactory();
@@ -5983,7 +6046,9 @@ Customer message:
                 {
                     ["Authentication:Google:ClientId"] = "quote-engine-google-client",
                     ["Authentication:Google:ClientSecret"] = "quote-engine-google-secret",
-                    ["GoogleDrive:RedirectUri"] = "https://make.maliev.com/auth/google/drive/callback"
+                    ["GoogleDrive:RedirectUri"] = "https://make.maliev.com/auth/google/drive/callback",
+                    ["GoogleDrive:PickerApiKey"] = "quote-engine-picker-api-key",
+                    ["GoogleDrive:PickerAppId"] = "1234567890"
                 });
             });
             builder.ConfigureTestServices(services =>
@@ -6009,7 +6074,9 @@ Customer message:
                 {
                     ["Authentication:Google:ClientId"] = "quote-engine-google-client",
                     ["Authentication:Google:ClientSecret"] = "quote-engine-google-secret",
-                    ["GoogleDrive:RedirectUri"] = "https://make.maliev.com/auth/google/drive/callback"
+                    ["GoogleDrive:RedirectUri"] = "https://make.maliev.com/auth/google/drive/callback",
+                    ["GoogleDrive:PickerApiKey"] = "quote-engine-picker-api-key",
+                    ["GoogleDrive:PickerAppId"] = "1234567890"
                 });
             });
             builder.ConfigureTestServices(services =>
@@ -6097,6 +6164,32 @@ Customer message:
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             LastRequest = request;
+            if (request.RequestUri?.OriginalString.Contains("drive/v3/files/drive-file-1?alt=media", StringComparison.Ordinal) == true)
+            {
+                var media = new ByteArrayContent("drive-content"u8.ToArray());
+                media.Headers.ContentType = new MediaTypeHeaderValue("model/step");
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = media
+                });
+            }
+
+            if (request.RequestUri?.OriginalString.Contains("drive/v3/files/drive-file-1", StringComparison.Ordinal) == true)
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(new
+                    {
+                        id = "drive-file-1",
+                        name = "bracket.step",
+                        mimeType = "model/step",
+                        size = "12",
+                        capabilities = new { canDownload = true },
+                        webViewLink = "https://drive.google.com/file/d/drive-file-1/view"
+                    })
+                });
+            }
+
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = JsonContent.Create(new

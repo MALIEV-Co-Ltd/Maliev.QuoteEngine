@@ -446,6 +446,29 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public async Task<GoogleDrivePickerConfigResponse> GetGoogleDrivePickerConfigAsync(CancellationToken cancellationToken = default)
+    {
+        const string uri = "quote/v1/connectors/google-drive/picker-config";
+        using var response = await httpClient.GetAsync(uri, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(uri, response, cancellationToken);
+        }
+
+        return await response.Content.ReadFromJsonAsync<GoogleDrivePickerConfigResponse>(cancellationToken: cancellationToken)
+            ?? throw new InvalidOperationException($"The QuoteEngine API returned an empty response for {uri}.");
+    }
+
+    public Task<GoogleDriveImportResponse> ImportGoogleDriveFilesAsync(
+        GoogleDriveImportRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        return PostAsync<GoogleDriveImportRequest, GoogleDriveImportResponse>(
+            "quote/v1/connectors/google-drive/imports",
+            request,
+            cancellationToken);
+    }
+
     public async Task<bool> DisconnectGoogleDriveAsync(CancellationToken cancellationToken = default)
     {
         using var response = await httpClient.PostAsync("quote/v1/connectors/google-drive/disconnect", content: null, cancellationToken);
