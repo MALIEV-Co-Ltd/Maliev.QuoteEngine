@@ -121,6 +121,9 @@ internal sealed class QuoteAgentService(
         "quantity",
         "amount",
         "currency",
+        "summary",
+        "issueCount",
+        "lineCount",
         "quoteNumber",
         "orderId",
         "orderNumber",
@@ -2032,6 +2035,16 @@ internal sealed class QuoteAgentService(
             leadTimeCode,
             parts,
             cancellationToken);
+        if (estimate is not null && !IsPositiveEstimate(estimate))
+        {
+            logger.LogWarning(
+                "Ignoring non-positive PricingService estimate for quote session {QuoteSessionId}: total={Total}, lines={LineCount}.",
+                sessionId,
+                estimate.Total,
+                estimate.Lines.Count);
+            estimate = null;
+        }
+
         if (estimate is null && CanUsePrototypeFallback())
         {
             estimate = prototypeStore.Estimate(new QuoteEstimateRequest
@@ -2040,6 +2053,15 @@ internal sealed class QuoteAgentService(
                 LeadTimeCode = leadTimeCode,
                 Parts = parts
             });
+            if (!IsPositiveEstimate(estimate))
+            {
+                logger.LogWarning(
+                    "Ignoring non-positive prototype estimate for quote session {QuoteSessionId}: total={Total}, lines={LineCount}.",
+                    sessionId,
+                    estimate.Total,
+                    estimate.Lines.Count);
+                estimate = null;
+            }
         }
 
         lock (state.SyncRoot)
@@ -2047,11 +2069,39 @@ internal sealed class QuoteAgentService(
             state.Estimate = estimate;
             if (estimate is not null)
             {
-                UpsertArtifact(state, "pricing", "Pricing estimate", "ready", null, null);
+                UpsertArtifact(state, "pricing", "Pricing estimate", FormatEstimateStatus(estimate), null, null);
+                SetArtifactMetadata(state, "pricing", BuildPricingArtifactMetadata(estimate));
+            }
+            else
+            {
+                state.Artifacts.RemoveAll(IsPricingArtifact);
             }
         }
 
         return estimate;
+    }
+
+    private static bool IsPositiveEstimate(QuoteEstimateResponse estimate)
+    {
+        return estimate.Total > 0m &&
+            estimate.Lines.Count > 0 &&
+            estimate.Lines.All(line => line.UnitPrice > 0m && line.LineTotal > 0m);
+    }
+
+    private static string FormatEstimateStatus(QuoteEstimateResponse estimate)
+    {
+        return $"{estimate.Total.ToString("0.##", CultureInfo.InvariantCulture)} {estimate.Currency}";
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildPricingArtifactMetadata(QuoteEstimateResponse estimate)
+    {
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["summary"] = $"Validated pricing estimate with {estimate.Lines.Count.ToString(CultureInfo.InvariantCulture)} line item(s).",
+            ["total"] = estimate.Total.ToString("0.##", CultureInfo.InvariantCulture),
+            ["currency"] = estimate.Currency,
+            ["lineCount"] = estimate.Lines.Count.ToString(CultureInfo.InvariantCulture)
+        };
     }
 
     private async Task<QuoteEstimateResponse?> TryCalculatePricingServiceEstimateAsync(
@@ -3272,10 +3322,10 @@ internal sealed class QuoteAgentService(
                 NormalizeResumedProjectPart(part);
                 state.Parts.Add(part);
                 UpsertArtifact(state, "viewer", $"3D viewer - {part.FileName}", "ready", part.PartId, part.ViewerGlbUrl);
-                UpsertArtifact(state, "dfm", $"DFM analysis - {part.FileName}", "ready", part.PartId, null);
+                UpsertDfmArtifact(state, part);
             }
 
-            UpsertArtifact(state, "requirements_summary", "Project summary", "ready", null, null);
+            UpsertProjectSummaryArtifact(state, project.Parts.FirstOrDefault(), "ready");
             RestoreSupplementalAttachmentsFromParts(state, string.Empty);
             UpsertArtifact(state, "resumed_project", project.Title, project.Status, null, null);
             state.ConfigurationConfirmed = true;
@@ -4875,8 +4925,8 @@ internal sealed class QuoteAgentService(
                 AttachSupplementalFiles(part, state.Attachments);
                 state.Parts.Add(part);
                 UpsertArtifact(state, "viewer", $"3D viewer - {part.FileName}", "ready", part.PartId, part.ViewerGlbUrl);
-                UpsertArtifact(state, "dfm", $"DFM analysis - {part.FileName}", "ready", part.PartId, null);
-                UpsertArtifact(state, "requirements_summary", "Project summary", "ready", part.PartId, null);
+                UpsertDfmArtifact(state, part);
+                UpsertProjectSummaryArtifact(state, part, "configuration pending");
                 MarkSupplementalAnalysisGeometrySatisfied(state);
             }
 
@@ -4941,11 +4991,63 @@ internal sealed class QuoteAgentService(
         state.Artifacts.RemoveAll(IsCommercialArtifact);
     }
 
+    private static bool IsPricingArtifact(QuoteAgentArtifactDto artifact) =>
+        artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase);
+
     private static bool IsCommercialArtifact(QuoteAgentArtifactDto artifact) =>
-        artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase) ||
+        IsPricingArtifact(artifact) ||
         artifact.ArtifactType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase) ||
         artifact.ArtifactType.Equals("order", StringComparison.OrdinalIgnoreCase) ||
         artifact.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase);
+
+    private static void UpsertDfmArtifact(QuoteAgentSessionState state, QuotePartDraftDto part)
+    {
+        var issueCount = CountDfmFindings(part);
+        var status = issueCount > 0 ? "needs review" : "ready";
+        UpsertArtifact(state, "dfm", $"DFM analysis - {part.FileName}", status, part.PartId, null);
+        SetArtifactMetadata(state, "dfm", new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["summary"] = issueCount > 0
+                ? $"{issueCount.ToString(CultureInfo.InvariantCulture)} DFM finding(s) need review before pricing and formal quote actions."
+                : "No DFM findings are currently recorded for this uploaded geometry.",
+            ["issueCount"] = issueCount.ToString(CultureInfo.InvariantCulture),
+            ["status"] = string.IsNullOrWhiteSpace(part.Status) ? "analysis_unknown" : part.Status,
+            ["partName"] = part.FileName
+        });
+    }
+
+    private static int CountDfmFindings(QuotePartDraftDto part)
+    {
+        var count = part.Findings.Count +
+            (part.FdmReport?.Issues.Count ?? 0) +
+            (part.SlaReport?.Issues.Count ?? 0) +
+            (part.CncReport?.Issues.Count ?? 0);
+        if (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason))
+        {
+            count++;
+        }
+
+        return count;
+    }
+
+    private static void UpsertProjectSummaryArtifact(QuoteAgentSessionState state, QuotePartDraftDto? part, string status)
+    {
+        UpsertArtifact(state, "requirements_summary", "Project summary", status, part?.PartId, null);
+        var metadata = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["summary"] = part is null
+                ? "Project summary is ready for the restored quote session."
+                : $"Captured {part.FileName}: process {part.ProcessId}, material {part.MaterialId}, quantity {part.Quantity.ToString(CultureInfo.InvariantCulture)}.",
+            ["parts"] = state.Parts.Count.ToString(CultureInfo.InvariantCulture),
+            ["status"] = status
+        };
+        if (part is not null)
+        {
+            metadata["quantity"] = part.Quantity.ToString(CultureInfo.InvariantCulture);
+        }
+
+        SetArtifactMetadata(state, "requirements_summary", metadata);
+    }
 
     private static bool MatchesOptionalValue(string? left, string? right)
     {

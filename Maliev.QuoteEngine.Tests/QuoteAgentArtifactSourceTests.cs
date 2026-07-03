@@ -79,6 +79,17 @@ public sealed class QuoteAgentArtifactSourceTests
         Assert.DoesNotContain(".lineTo(radiusBottom, 0)", worker, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Uploaded_stl_viewer_keeps_source_orientation_while_converted_gltf_gets_axis_rotation()
+    {
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer-three.js");
+
+        Assert.Contains("Native mesh uploads such as STL/OBJ/3MF keep their source orientation.", viewer, StringComparison.Ordinal);
+        Assert.Contains("function shouldApplyGltfUpAxisRotation(loadableExt)", viewer, StringComparison.Ordinal);
+        Assert.Contains("return loadableExt === '.glb' || loadableExt === '.gltf';", viewer, StringComparison.Ordinal);
+        Assert.Contains("if (shouldApplyGltfUpAxisRotation(loadableExt))", viewer, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(params string[] relativePathParts)
     {
         var repoRoot = Directory.GetParent(GetSourceDirectory())!.FullName;

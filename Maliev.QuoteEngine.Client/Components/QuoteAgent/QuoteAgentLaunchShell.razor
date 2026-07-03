@@ -1782,33 +1782,37 @@
                         </section>
                     </div>
                 }
-                else if (selectedArtifactPreview is not null)
+                else if (_selectedArtifact is not null)
                 {
+                    var selectedArtifact = _selectedArtifact;
                     <div class="qe-agent-artifact-preview-shell">
-                        <section class="@($"qe-agent-artifact-context {UiFocusClass("artifact", selectedArtifactPreview.Source)}")" aria-label="@Text("Selected artifact preview", "ตัวอย่างไฟล์งานที่เลือก")">
+                        <section class="@($"qe-agent-artifact-context {UiFocusClass("artifact", selectedArtifactPreview?.Source ?? ArtifactFocusKey(selectedArtifact), ArtifactTypeFocusKey(selectedArtifact.ArtifactType))}")" aria-label="@Text("Selected artifact details", "รายละเอียดไฟล์งานที่เลือก")">
                             <header>
                                 <div>
-                                    <span>@selectedArtifactPreview.KindLabel</span>
-                                    <strong>@selectedArtifactPreview.Title</strong>
+                                    <span>@ArtifactKindLabel(selectedArtifact)</span>
+                                    <strong>@selectedArtifact.Title</strong>
                                 </div>
                                 <div class="qe-agent-artifact-preview-actions">
-                                    <small>@selectedArtifactPreview.Status</small>
-                                    <a href="@selectedArtifactPreview.Url"
-                                       target="_blank"
-                                       rel="noopener noreferrer"
-                                       class="qe-agent-artifact-link qe-agent-artifact-open-link"
-                                       title="@Text("Open in new tab", "เปิดในแท็บใหม่")"
-                                       aria-label="@Text("Open selected artifact in a new tab", "เปิดไฟล์งานที่เลือกในแท็บใหม่")">
-                                        <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
-                                    </a>
+                                    <small>@ArtifactStatusLabel(selectedArtifact)</small>
+                                    @if (selectedArtifactPreview is not null)
+                                    {
+                                        <a href="@selectedArtifactPreview.Url"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="qe-agent-artifact-link qe-agent-artifact-open-link"
+                                           title="@Text("Open in new tab", "เปิดในแท็บใหม่")"
+                                           aria-label="@Text("Open selected artifact in a new tab", "เปิดไฟล์งานที่เลือกในแท็บใหม่")">
+                                            <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                                        </a>
+                                    }
                                 </div>
                             </header>
                             <div class="qe-agent-artifact-context-body">
-                                @if (IsImagePreview(selectedArtifactPreview))
+                                @if (selectedArtifactPreview is not null && IsImagePreview(selectedArtifactPreview))
                                 {
                                     <img class="qe-agent-artifact-preview-media" src="@selectedArtifactPreview.Url" alt="" loading="lazy" onerror="this.style.display='none'" />
                                 }
-                                else if (IsPdfPreview(selectedArtifactPreview))
+                                else if (selectedArtifactPreview is not null && IsPdfPreview(selectedArtifactPreview))
                                 {
                                     <iframe src="@selectedArtifactPreview.Url"
                                             class="qe-agent-artifact-frame"
@@ -1819,9 +1823,18 @@
                                 else
                                 {
                                     <div class="qe-agent-artifact-preview-fallback">
-                                        <MudIcon Icon="@selectedArtifactPreview.Icon" Size="Size.Large" />
+                                        <MudIcon Icon="@ArtifactIcon(selectedArtifact.ArtifactType)" Size="Size.Large" />
                                     </div>
                                 }
+                                <dl class="qe-agent-artifact-details">
+                                    @foreach (var detail in ArtifactDetailItems(selectedArtifact))
+                                    {
+                                        <div>
+                                            <dt>@detail.Label</dt>
+                                            <dd>@detail.Value</dd>
+                                        </div>
+                                    }
+                                </dl>
                             </div>
                         </section>
                     </div>
@@ -1991,13 +2004,18 @@
                     @foreach (var artifact in _artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact))
                     {
                         var isSelected = _selectedArtifact?.ArtifactId == artifact.ArtifactId;
+                        var artifactSummary = ArtifactSummary(artifact);
                         <button type="button"
                                 class="@($"qe-agent-artifact qe-agent-artifact--button {(isSelected ? "active" : string.Empty)} {UiFocusClass(ArtifactFocusKey(artifact), ArtifactTypeFocusKey(artifact.ArtifactType))}")"
                                 @onclick="@(() => SelectArtifact(artifact))">
                             <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
                             <div>
                                 <strong>@artifact.Title</strong>
-                                <small>@artifact.Status</small>
+                                <small>@ArtifactStatusLabel(artifact)</small>
+                                @if (!string.IsNullOrWhiteSpace(artifactSummary))
+                                {
+                                    <small class="qe-agent-artifact-metadata">@artifactSummary</small>
+                                }
                             </div>
                         </button>
                     }
@@ -5744,8 +5762,98 @@
             "formal_quote" => Text("Quote PDF", "PDF ใบเสนอราคา"),
             "quote_approval" => Text("Quote approval", "การอนุมัติใบเสนอราคา"),
             "payment" => Text("Payment handoff", "การชำระเงิน"),
+            "dfm" => Text("DFM analysis", "ผลวิเคราะห์ DFM"),
+            "pricing" => Text("Pricing estimate", "ราคาประเมิน"),
+            "requirements_summary" => Text("Project summary", "สรุปโปรเจกต์"),
             "viewer" => Text("3D viewer artifact", "ไฟล์ตัวแสดงผล 3D"),
             _ => Text("Quote artifact", "ไฟล์งานใบเสนอราคา")
+        };
+    }
+
+    private string ArtifactStatusLabel(QuoteAgentArtifactDto artifact)
+    {
+        if (artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(ArtifactMetadata(artifact, "total")) &&
+            !string.IsNullOrWhiteSpace(ArtifactMetadata(artifact, "currency")))
+        {
+            return $"{ArtifactMetadata(artifact, "total")} {ArtifactMetadata(artifact, "currency")}";
+        }
+
+        if (artifact.ArtifactType.Equals("dfm", StringComparison.OrdinalIgnoreCase) &&
+            int.TryParse(ArtifactMetadata(artifact, "issueCount"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var issueCount))
+        {
+            return issueCount == 0
+                ? Text("No findings recorded", "ยังไม่มีรายการ DFM")
+                : Text($"{issueCount} finding(s)", $"{issueCount} รายการ");
+        }
+
+        return HumanizeArtifactStatus(artifact.Status);
+    }
+
+    private string? ArtifactSummary(QuoteAgentArtifactDto artifact)
+    {
+        var summary = ArtifactMetadata(artifact, "summary");
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            return summary;
+        }
+
+        return artifact.ArtifactType.ToLowerInvariant() switch
+        {
+            "dfm" => Text("Manufacturability checks for the selected geometry.", "ผลตรวจความสามารถในการผลิตสำหรับไฟล์ที่เลือก"),
+            "pricing" => Text("Pricing waits for a positive validated estimate.", "ราคาจะพร้อมเมื่อมีผลประเมินที่ถูกต้องและมากกว่าศูนย์"),
+            "requirements_summary" => Text("Captured project requirements and configuration.", "สรุปข้อกำหนดและการตั้งค่าโปรเจกต์"),
+            _ => null
+        };
+    }
+
+    private IReadOnlyList<ArtifactDetail> ArtifactDetailItems(QuoteAgentArtifactDto artifact)
+    {
+        var details = new List<ArtifactDetail>
+        {
+            new(Text("Status", "สถานะ"), ArtifactStatusLabel(artifact))
+        };
+
+        AddArtifactDetail(details, Text("Summary", "สรุป"), ArtifactSummary(artifact));
+        AddArtifactDetail(details, Text("Part", "ชิ้นงาน"), ArtifactMetadata(artifact, "partName"));
+        AddArtifactDetail(details, Text("DFM findings", "รายการ DFM"), ArtifactMetadata(artifact, "issueCount"));
+        if (artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase))
+        {
+            AddArtifactDetail(details, Text("Total", "ยอดรวม"), ArtifactStatusLabel(artifact));
+        }
+
+        AddArtifactDetail(details, Text("Line items", "รายการราคา"), ArtifactMetadata(artifact, "lineCount"));
+        AddArtifactDetail(details, Text("Project parts", "ชิ้นงานในโปรเจกต์"), ArtifactMetadata(artifact, "parts"));
+
+        return details
+            .Where(detail => !string.IsNullOrWhiteSpace(detail.Value))
+            .GroupBy(detail => detail.Label, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+    }
+
+    private static void AddArtifactDetail(List<ArtifactDetail> details, string label, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            details.Add(new ArtifactDetail(label, value.Trim()));
+        }
+    }
+
+    private string HumanizeArtifactStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return Text("Pending", "รอดำเนินการ");
+        }
+
+        var trimmed = status.Trim();
+        return trimmed.ToLowerInvariant() switch
+        {
+            "ready" => Text("Ready", "พร้อม"),
+            "needs review" => Text("Needs review", "ต้องตรวจสอบ"),
+            "configuration pending" => Text("Configuration pending", "รอการตั้งค่า"),
+            _ => trimmed.Replace('_', ' ')
         };
     }
 
@@ -6871,6 +6979,8 @@
         string KindLabel,
         string Icon,
         string? ContentType);
+
+    private sealed record ArtifactDetail(string Label, string Value);
 
     private sealed record SearchPromptOption(
         string TextEn,

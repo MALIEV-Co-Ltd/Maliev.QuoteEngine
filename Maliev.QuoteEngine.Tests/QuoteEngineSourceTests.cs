@@ -1527,7 +1527,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-artifact-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-right: 1px solid var(--qe-agent-line);", ExtractSourceBlock(agentStyles, ".qe-agent-rail {", ".qe-agent-rail-head"), StringComparison.Ordinal);
-        Assert.Contains("border-left: 1px solid var(--qe-agent-line);", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-drawer,", ".qe-agent-artifact-backdrop"), StringComparison.Ordinal);
+        var artifactDrawerBlock = ExtractSourceBlock(agentStyles, ".qe-agent-artifact-drawer,", ".qe-agent-artifact-backdrop");
+        Assert.Contains("height: calc(100% - 16px);", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains("margin-block: 8px;", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains("border-left: 1px solid var(--qe-agent-line);", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 14px 0 0 14px;", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-toggle", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-grid", agentStyles, StringComparison.Ordinal);
@@ -2243,13 +2247,20 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_selectedArtifact", drawer, StringComparison.Ordinal);
         Assert.Contains("SelectedArtifactPreviewItem", drawer, StringComparison.Ordinal);
         Assert.Contains("qe-agent-artifact-open-link", drawer, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-artifact-details", drawer, StringComparison.Ordinal);
+        Assert.Contains("ArtifactDetailItems(selectedArtifact)", drawer, StringComparison.Ordinal);
+        Assert.Contains("ArtifactStatusLabel(artifact)", drawer, StringComparison.Ordinal);
+        Assert.Contains("ArtifactSummary(artifact)", drawer, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-agent-artifact-inline-preview", drawer, StringComparison.Ordinal);
         Assert.DoesNotContain("ArtifactActionLabel(_selectedArtifact)", drawer, StringComparison.Ordinal);
         Assert.Contains("target=\"_blank\"", drawer, StringComparison.Ordinal);
         Assert.Contains("private void SelectArtifact(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
+        Assert.Contains("private IReadOnlyList<ArtifactDetail> ArtifactDetailItems(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
+        Assert.Contains("private sealed record ArtifactDetail(string Label, string Value);", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("private string ArtifactActionLabel(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-link", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-open-link", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifact-details", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-agent-artifact-inline-preview", styles, StringComparison.Ordinal);
     }
 

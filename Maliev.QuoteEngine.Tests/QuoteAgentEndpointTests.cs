@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -2843,7 +2844,11 @@ Customer message:
         Assert.True(state.Estimate.Total > 0);
         Assert.Equal("THB", state.Estimate.Currency);
         Assert.Contains(state.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
-        Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "pricing" && artifact.Status == "ready");
+        Assert.Contains(state.Artifacts, artifact =>
+            artifact.ArtifactType == "pricing" &&
+            artifact.Status == $"{state.Estimate.Total:0.##} THB" &&
+            artifact.Metadata["total"] == state.Estimate.Total.ToString("0.##", CultureInfo.InvariantCulture) &&
+            artifact.Metadata["currency"] == "THB");
     }
 
     [Fact]
@@ -2902,6 +2907,71 @@ Customer message:
         Assert.Equal("calculate_estimate", estimate.RootElement.GetProperty("actionType").GetString());
         Assert.True(estimate.RootElement.GetProperty("state").TryGetProperty("estimate", out var estimateElement));
         Assert.Equal(JsonValueKind.Null, estimateElement.ValueKind);
+    }
+
+    [Fact]
+    public async Task Agent_estimate_rejects_zero_pricing_service_estimate_in_production()
+    {
+        await using var productionFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AnonymousVisitor:SigningKey"] = "quote-agent-production-zero-pricing-test-signing-key",
+                    ["QuoteAgent:ContextSigningKey"] = "maliev-local-development-quote-agent-context-key"
+                });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new QuoteEngineWebApplicationFactory.ZeroPricingServiceClient());
+            });
+        });
+        using var client = productionFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement(
+                    "Quote this STEP as 10 aluminum pieces with standard lead time.",
+                    JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "zero-priced-housing.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "zero-estimate-upload-cad",
+                        storage_path = "quotes/temp/session/zero-estimate-upload-cad/zero-priced-housing.step"
+                    }
+                }, JsonOptions)
+            });
+        await ConfigureFirstPartForEstimateAsync(client, sessionId);
+
+        var estimateJson = await ExecuteToolAsync(client, sessionId, "quote_calculate_estimate");
+
+        using var estimate = JsonDocument.Parse(estimateJson);
+        var state = estimate.RootElement.GetProperty("state");
+        Assert.Equal("pricing_available", estimate.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal("calculate_estimate", estimate.RootElement.GetProperty("actionType").GetString());
+        Assert.Equal(JsonValueKind.Null, state.GetProperty("estimate").ValueKind);
+        Assert.Contains(
+            state.GetProperty("gates").EnumerateArray(),
+            gate => gate.GetProperty("code").GetString() == "priced" &&
+                gate.GetProperty("status").GetString() == "pending");
+        Assert.DoesNotContain(
+            state.GetProperty("artifacts").EnumerateArray(),
+            artifact => artifact.GetProperty("artifactType").GetString() == "pricing");
     }
 
     [Fact]

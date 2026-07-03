@@ -19,9 +19,10 @@
  * to GLB server-side before reaching this script.
  *
  * COORDINATE SYSTEM CONTRACT:
- *   All GLBs served to this viewer follow the glTF spec: Y-up, mm.
- *   The viewer applies a +90° X rotation at load time to display in Z-up (CAD standard):
- *     X = right, Y = depth (into screen from front), Z = up
+ *   Converted GLB/GLTF models follow the glTF spec: Y-up, mm.
+ *   The viewer applies a +90deg X rotation only to GLB/GLTF at load time to display
+ *   converted geometry in Z-up (CAD standard): X = right, Y = depth, Z = up.
+ *   Native mesh uploads such as STL/OBJ/3MF keep their source orientation.
  *
  * EDGE RENDERING CONTRACT:
  *   Edge overlay defaults to ON for native CAD formats (.step/.stp/.iges/.igs —
@@ -249,6 +250,10 @@ function resolveLoadableExtension(fileUrl, fileExt) {
     if (LOADABLE_EXTENSIONS.includes(lower)) return lower;
     const path = (fileUrl || '').split('?')[0].toLowerCase();
     return LOADABLE_EXTENSIONS.find((e) => path.endsWith(e)) ?? '.glb';
+}
+
+function shouldApplyGltfUpAxisRotation(loadableExt) {
+    return loadableExt === '.glb' || loadableExt === '.gltf';
 }
 
 function defaultEdgesForExtension(fileExt) {
@@ -1026,7 +1031,9 @@ export async function initialize(canvasId, fileUrl, fileExt, isDark, knownDimsMm
             }
         }
 
-        loaded.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+        if (shouldApplyGltfUpAxisRotation(loadableExt)) {
+            loaded.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.PI / 2));
+        }
         root.updateMatrixWorld(true);
 
         const upBox = computeBounds(loaded);

@@ -1648,6 +1648,30 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             Task.FromResult<PricingCalculationResult?>(null);
     }
 
+    public sealed class ZeroPricingServiceClient : IQePricingServiceClient
+    {
+        public Task<PricingCalculationResult?> CalculateAsync(
+            QuotePartDraftDto part,
+            Guid customerId,
+            Guid materialId,
+            Guid manufacturingProcessId,
+            string leadTimeCode,
+            decimal? toleranceAdditionalCostPercent,
+            CancellationToken ct = default) =>
+            Task.FromResult<PricingCalculationResult?>(new PricingCalculationResult
+            {
+                UnitPrice = 0m,
+                TotalAmount = 0m,
+                UnitPriceBeforeVolumeDiscount = 0m,
+                VolumeDiscountUnitAmount = 0m,
+                VolumeDiscountPercent = 0m,
+                ConfidenceScore = 0m,
+                EngineName = "zero-pricing",
+                AuditId = Guid.Parse("00000000-0000-0000-0000-000000000001"),
+                EstimatedLeadTimeDays = 0
+            });
+    }
+
     private sealed class FakePricingServiceClient : IQePricingServiceClient
     {
         public Task<PricingCalculationResult?> CalculateAsync(
