@@ -111,17 +111,17 @@
 
             @if (TemporaryProjects.Any())
             {
-                <section class="qe-agent-rail-group qe-agent-rail-group--temporary" aria-label="@Text("Temporary projects", "โปรเจกต์ชั่วคราว")">
+                <section class="qe-agent-rail-group qe-agent-rail-group--temporary" aria-label="@TemporaryProjectsAriaLabel">
                     <div class="qe-agent-rail-group-label">
-                        <span>@Text("Temporary", "ชั่วคราว")</span>
-                        <small>@Text("Saved after sign-in", "บันทึกหลังเข้าสู่ระบบ")</small>
+                        <span>@TemporaryProjectsHeading</span>
+                        <small>@TemporaryProjectsCaption</small>
                     </div>
                     @foreach (var project in TemporaryProjects)
                     {
                         <div class="qe-agent-project-row qe-agent-project-row--temporary">
                             <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
                                 <span>@ProjectName(project)</span>
-                                <small>@Text("This browser session", "เซสชันเบราว์เซอร์นี้")</small>
+                                <small>@TemporaryProjectStatusText</small>
                             </a>
                         </div>
                     }
@@ -2881,6 +2881,18 @@
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPersisted && project.IsPinned && !project.IsArchived);
     private IEnumerable<ProjectNavItem> TemporaryProjects => _projects.Where(project => !project.IsPersisted && !project.IsArchived);
     private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => project.IsPersisted && !project.IsPinned && !project.IsArchived);
+    private string TemporaryProjectsAriaLabel => IsSignedIn
+        ? Text("Active draft projects", "โปรเจกต์ฉบับร่างที่กำลังทำ")
+        : Text("Temporary projects", "โปรเจกต์ชั่วคราว");
+    private string TemporaryProjectsHeading => IsSignedIn
+        ? Text("Active draft", "ฉบับร่างที่กำลังทำ")
+        : Text("Temporary", "ชั่วคราว");
+    private string TemporaryProjectsCaption => IsSignedIn
+        ? Text("Signed-in workspace", "พื้นที่ทำงานที่เข้าสู่ระบบแล้ว")
+        : Text("Saved after sign-in", "บันทึกหลังเข้าสู่ระบบ");
+    private string TemporaryProjectStatusText => IsSignedIn
+        ? Text("In progress", "กำลังดำเนินการ")
+        : Text("This browser session", "เซสชันเบราว์เซอร์นี้");
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
     private bool SearchHasMinimumQuery => _searchQuery.Trim().Length >= SearchMinimumCharacters;
     private bool CanAnimateSearchPrompt => string.IsNullOrEmpty(_searchQuery) && !_searchPromptHovered && !_searchPromptFocused;

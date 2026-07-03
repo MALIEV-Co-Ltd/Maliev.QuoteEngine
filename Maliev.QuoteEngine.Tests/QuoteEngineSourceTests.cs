@@ -60,6 +60,24 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_uses_signed_in_draft_copy_for_local_projects()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+
+        Assert.Contains("@TemporaryProjectsAriaLabel", shell, StringComparison.Ordinal);
+        Assert.Contains("@TemporaryProjectsHeading", shell, StringComparison.Ordinal);
+        Assert.Contains("@TemporaryProjectsCaption", shell, StringComparison.Ordinal);
+        Assert.Contains("@TemporaryProjectStatusText", shell, StringComparison.Ordinal);
+        Assert.Contains("IsSignedIn", shell, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Active draft\",", shell, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Signed-in workspace\",", shell, StringComparison.Ordinal);
+        Assert.Contains("Text(\"In progress\",", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("<span>@Text(\"Temporary\",", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("<small>@Text(\"Saved after sign-in\",", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("<small>@Text(\"This browser session\",", shell, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Appearance_settings_persist_full_theme_profile_contract()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
