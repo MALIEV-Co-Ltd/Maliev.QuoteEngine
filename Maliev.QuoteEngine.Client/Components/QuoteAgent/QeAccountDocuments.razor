@@ -1,0 +1,250 @@
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Forms
+@inject QuoteEngineApiClient Api
+@inject NavigationManager Navigation
+
+<section class="documents-upload-panel">
+    <div>
+        <span class="eyebrow">@Text("Upload document", "อัปโหลดเอกสาร")</span>
+        <h2>@Text("Add purchase order, invoice, or receipt", "เพิ่มใบสั่งซื้อ ใบแจ้งหนี้ หรือใบเสร็จ")</h2>
+    </div>
+
+    <div class="documents-kind-grid" role="radiogroup" aria-label="@Text("Document type", "ประเภทเอกสาร")">
+        @foreach (var kind in DocumentKinds)
+        {
+            var active = string.Equals(_selectedKind, kind.Code, StringComparison.OrdinalIgnoreCase);
+            <button type="button"
+                    class="documents-kind-card @(active ? "documents-kind-card--active" : "")"
+                    aria-pressed="@active"
+                    @onclick="@(() => SelectUploadKind(kind.Code))">
+                <strong>@kind.Label</strong>
+                <small>@kind.Hint</small>
+            </button>
+        }
+    </div>
+
+    <label class="documents-order-field">
+        <span>@Text("Order number", "เลขที่คำสั่งซื้อ")</span>
+        <input value="@_orderNumber"
+               @oninput="OnOrderNumberChanged"
+               placeholder="@Text("Optional order reference", "เลขที่คำสั่งซื้อถ้ามี")" />
+    </label>
+
+    <label class="documents-upload-dropzone">
+        <InputFile OnChange="UploadDocumentAsync" accept=".pdf,.png,.jpg,.jpeg,.webp,.doc,.docx,.xls,.xlsx" />
+        <span>@Text("Choose file", "เลือกไฟล์")</span>
+        <small>@Text("PDF, image, Word, or Excel documents up to 50 MB.", "รองรับ PDF, รูปภาพ, Word หรือ Excel สูงสุด 50 MB")</small>
+    </label>
+
+    @if (!string.IsNullOrWhiteSpace(_status))
+    {
+        <p class="documents-upload-status">@_status</p>
+    }
+</section>
+
+<section class="documents-filter-bar" data-documents-section="library-filters" aria-label="@Text("Document library filters", "ตัวกรองคลังเอกสาร")">
+    @foreach (var filter in LibraryKindFilters)
+    {
+        var active = string.Equals(_libraryKindFilter, filter.Code, StringComparison.OrdinalIgnoreCase);
+        <button type="button"
+                class="documents-filter-chip @(active ? "documents-filter-chip--active" : "")"
+                aria-pressed="@active"
+                @onclick="@(() => SetLibraryKindFilter(filter.Code))">
+            @filter.Label
+        </button>
+    }
+</section>
+
+@if (HasOrderContext)
+{
+    <section class="documents-order-context" data-documents-section="order-context">
+        <div>
+            <span class="eyebrow">@Text("Order context", "บริบทคำสั่งซื้อ")</span>
+            <strong>@_orderNumber</strong>
+            <small>@Text("Showing documents linked to this order. New uploads will be attached to the same order number.", "กำลังแสดงเอกสารที่ผูกกับคำสั่งซื้อนี้ เอกสารใหม่จะถูกผูกกับเลขคำสั่งซื้อนี้เช่นกัน")</small>
+        </div>
+        <button type="button" class="qe-secondary-btn" @onclick="ClearOrderContext">@Text("Show all documents", "แสดงเอกสารทั้งหมด")</button>
+    </section>
+}
+
+<div class="documents-library data-list">
+    @foreach (var document in VisibleDocuments)
+    {
+        <div class="data-row documents-row">
+            <span>@document.FileName</span>
+            <strong>@document.Kind</strong>
+            <small>@DocumentMeta(document)</small>
+            <button type="button"
+                    class="qe-secondary-btn"
+                    disabled="@_openingDocumentIds.Contains(document.DocumentId)"
+                    @onclick="@(() => OpenDocumentAsync(document))">
+                @(_openingDocumentIds.Contains(document.DocumentId) ? Text("Opening...", "กำลังเปิด...") : Text("Open", "เปิด"))
+            </button>
+        </div>
+    }
+</div>
+
+@if (!VisibleDocuments.Any())
+{
+    <div class="empty-state">
+        <p>@EmptyLibraryMessage</p>
+    </div>
+}
+
+@code {
+    private const string AllDocumentKinds = "All";
+    private static readonly DocumentKind[] DocumentKinds =
+    [
+        new("PurchaseOrder", "Purchase order", "Customer PO for order approval."),
+        new("Invoice", "Invoice", "Accounting invoice copy."),
+        new("Receipt", "Receipt", "Payment receipt or tax receipt."),
+        new("Requirement", "Requirement", "Specification, drawing note, or manufacturing requirement.")
+    ];
+
+    private static readonly DocumentKind[] LibraryKindFilters =
+    [
+        new(AllDocumentKinds, "All documents", "Every customer document."),
+        .. DocumentKinds
+    ];
+
+    private IReadOnlyList<CustomerDocumentDto> _documents = [];
+    private string _selectedKind = "PurchaseOrder";
+    private string _libraryKindFilter = AllDocumentKinds;
+    private string _orderNumber = string.Empty;
+    private string? _status;
+    private readonly HashSet<Guid> _openingDocumentIds = [];
+
+    [CascadingParameter(Name = "Culture")]
+    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
+
+    protected override async Task OnInitializedAsync()
+    {
+        ApplyDocumentRouteContext();
+        _documents = await Api.GetDocumentsAsync();
+    }
+
+    private bool HasOrderContext => !string.IsNullOrWhiteSpace(_orderNumber);
+
+    private bool HasKindFilter => !string.Equals(_libraryKindFilter, AllDocumentKinds, StringComparison.OrdinalIgnoreCase);
+
+    private IReadOnlyList<CustomerDocumentDto> VisibleDocuments => _documents
+        .Where(MatchesDocumentContext)
+        .Where(MatchesDocumentKindFilter)
+        .ToArray();
+
+    private string EmptyLibraryMessage => HasOrderContext
+        ? Text("No matching documents are attached to this order yet.", "ยังไม่มีเอกสารที่ตรงกับตัวกรองนี้ในคำสั่งซื้อนี้")
+        : HasKindFilter
+            ? Text("No matching customer documents yet.", "ยังไม่มีเอกสารลูกค้าที่ตรงกับตัวกรองนี้")
+            : Text("No customer documents yet.", "ยังไม่มีเอกสารลูกค้า");
+
+    private async Task UploadDocumentAsync(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        var uploaded = await Api.UploadDocumentFileAsync(file, _selectedKind, NormalizeOrderNumber(_orderNumber));
+        _documents = [uploaded, .. _documents];
+        _status = Text("Document uploaded.", "อัปโหลดเอกสารแล้ว");
+    }
+
+    private void ApplyDocumentRouteContext()
+    {
+        var parameters = ParseQuery(Navigation.Uri);
+        if (parameters.TryGetValue("kind", out var kind) &&
+            DocumentKinds.Any(option => string.Equals(option.Code, kind, StringComparison.OrdinalIgnoreCase)))
+        {
+            _selectedKind = kind;
+            _libraryKindFilter = kind;
+        }
+
+        if (parameters.TryGetValue("orderNumber", out var orderNumber))
+        {
+            _orderNumber = orderNumber;
+        }
+    }
+
+    private static Dictionary<string, string> ParseQuery(string uri)
+    {
+        var query = new Uri(uri).Query.TrimStart('?');
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = pair.Split('=', 2);
+            var key = Uri.UnescapeDataString(parts[0].Replace('+', ' '));
+            var value = parts.Length == 2 ? Uri.UnescapeDataString(parts[1].Replace('+', ' ')) : string.Empty;
+            values[key] = value;
+        }
+
+        return values;
+    }
+
+    private void SelectUploadKind(string kind)
+    {
+        _selectedKind = kind;
+    }
+
+    private void SetLibraryKindFilter(string kind)
+    {
+        _libraryKindFilter = LibraryKindFilters.Any(option => string.Equals(option.Code, kind, StringComparison.OrdinalIgnoreCase))
+            ? kind
+            : AllDocumentKinds;
+    }
+
+    private bool MatchesDocumentContext(CustomerDocumentDto document)
+    {
+        return !HasOrderContext || string.Equals(document.OrderNumber, _orderNumber, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool MatchesDocumentKindFilter(CustomerDocumentDto document)
+    {
+        return !HasKindFilter || string.Equals(document.Kind, _libraryKindFilter, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void OnOrderNumberChanged(ChangeEventArgs args)
+    {
+        _orderNumber = args.Value?.ToString() ?? string.Empty;
+    }
+
+    private void ClearOrderContext()
+    {
+        _orderNumber = string.Empty;
+    }
+
+    private async Task OpenDocumentAsync(CustomerDocumentDto document)
+    {
+        _openingDocumentIds.Add(document.DocumentId);
+        try
+        {
+            var download = await Api.GetDocumentDownloadAsync(document.DocumentId);
+            Navigation.NavigateTo(download.DownloadUrl, forceLoad: true);
+        }
+        finally
+        {
+            _openingDocumentIds.Remove(document.DocumentId);
+        }
+    }
+
+    private static string? NormalizeOrderNumber(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private string DocumentMeta(CustomerDocumentDto document)
+    {
+        var uploadedAt = FormatDate(document.UploadedAt);
+        return string.IsNullOrWhiteSpace(document.OrderNumber)
+            ? uploadedAt
+            : $"{document.OrderNumber} · {uploadedAt}";
+    }
+
+    private string FormatDate(DateTimeOffset value)
+    {
+        return value.ToLocalTime().ToString("d MMM yyyy", CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture)));
+    }
+
+    private string Text(string en, string th)
+    {
+        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+    }
+
+    private sealed record DocumentKind(string Code, string Label, string Hint);
+}

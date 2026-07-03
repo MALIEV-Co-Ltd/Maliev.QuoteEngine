@@ -9,7 +9,7 @@ public sealed class QuotePartViewModelShippingTests
     [Fact]
     public void OrderDetail_ShippingRequestSendsPackageParts()
     {
-        var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "OrderDetail.razor");
+        var source = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeOrderDetail.razor");
 
         Assert.Contains("Parts = BuildShippingPackageParts()", source, StringComparison.Ordinal);
         Assert.Contains("private List<ShippingPackagePartDto> BuildShippingPackageParts()", source, StringComparison.Ordinal);

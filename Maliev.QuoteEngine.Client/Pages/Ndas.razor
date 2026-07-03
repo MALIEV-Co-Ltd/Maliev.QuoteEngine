@@ -1,103 +1,11 @@
 @page "/ndas"
-@inject QuoteEngineApiClient Api
-
-<PageTitle>@Text("NDAs - MALIEV Quote Engine", "NDA - MALIEV Quote Engine")</PageTitle>
-
-<main class="nda-dashboard">
-    <div class="section-heading">
-        <span class="eyebrow">@Text("Confidentiality", "การรักษาความลับ")</span>
-        <h1>NDAs</h1>
-        <p>@Text("Track confidentiality coverage for quote files, drawings, and manufacturing documents.", "ติดตามความคุ้มครองด้านการรักษาความลับสำหรับไฟล์ใบเสนอราคา แบบ และเอกสารการผลิต")</p>
-    </div>
-
-    <section class="nda-summary-grid" data-nda-section="summary" aria-label="@Text("NDA summary", "สรุป NDA")">
-        <article>
-            <span>@Text("Active", "ใช้งานอยู่")</span>
-            <strong>@ActiveNdas.Count</strong>
-        </article>
-        <article>
-            <span>@Text("Expiring soon", "ใกล้หมดอายุ")</span>
-            <strong>@ExpiringNdas.Count</strong>
-        </article>
-        <article>
-            <span>@Text("Total", "ทั้งหมด")</span>
-            <strong>@_ndas.Count</strong>
-        </article>
-    </section>
-
-    <section class="nda-documents-card" data-nda-section="documents">
-        <div>
-            <span class="eyebrow">@Text("Protected files", "ไฟล์ที่ได้รับการคุ้มครอง")</span>
-            <h2>@Text("Attach drawings and requirements under NDA", "แนบแบบและข้อกำหนดภายใต้ NDA")</h2>
-            <p>@Text("Use customer documents for drawings, requirements, receipts, and quote files tied to confidential manufacturing work.", "ใช้เอกสารลูกค้าสำหรับแบบ ข้อกำหนด ใบเสร็จ และไฟล์ใบเสนอราคาที่เกี่ยวข้องกับงานผลิตที่เป็นความลับ")</p>
-        </div>
-        <div class="nda-actions">
-            <a class="qe-primary-btn" href="/documents?kind=Requirement">@Text("Upload requirement", "อัปโหลดข้อกำหนด")</a>
-            <a class="qe-secondary-btn" href="/quotes/new">@Text("Start protected quote", "เริ่มใบเสนอราคาที่คุ้มครอง")</a>
-        </div>
-    </section>
-
-    @if (_ndas.Count == 0)
-    {
-        <div class="empty-state">
-            <p>@Text("No NDAs are linked to this customer account yet.", "ยังไม่มี NDA ที่ผูกกับบัญชีลูกค้านี้")</p>
-        </div>
-    }
-    else
-    {
-        <section class="nda-list" aria-label="@Text("NDA documents", "เอกสาร NDA")">
-            @foreach (var nda in _ndas)
-            {
-                <article class="nda-row">
-                    <div>
-                        <span>@nda.Title</span>
-                        <small>@NdaDateLine(nda)</small>
-                    </div>
-                    <strong class="@NdaStatusClass(nda)">@nda.Status</strong>
-                </article>
-            }
-        </section>
-    }
-</main>
+@inject NavigationManager Navigation
 
 @code {
-    private IReadOnlyList<CustomerNdaDto> _ndas = [];
-
-    [CascadingParameter(Name = "Culture")]
-    private string Culture { get; set; } = SupportedCultures.DefaultCulture;
-
-    private IReadOnlyList<CustomerNdaDto> ActiveNdas => _ndas
-        .Where(nda => string.Equals(nda.Status, "Active", StringComparison.OrdinalIgnoreCase))
-        .ToArray();
-
-    private IReadOnlyList<CustomerNdaDto> ExpiringNdas => _ndas
-        .Where(nda => string.Equals(nda.Status, "Active", StringComparison.OrdinalIgnoreCase) &&
-            nda.ExpiresAt.HasValue &&
-            (nda.ExpiresAt.Value.Date - DateTimeOffset.UtcNow.Date).Days is >= 0 and <= 30)
-        .ToArray();
-
-    protected override async Task OnInitializedAsync()
+    // NDAs live inside the Make Studio workspace — the legacy standalone
+    // layout is retired.
+    protected override void OnInitialized()
     {
-        _ndas = await Api.GetNdasAsync();
-    }
-
-    private string NdaStatusClass(CustomerNdaDto nda)
-    {
-        return string.Equals(nda.Status, "Active", StringComparison.OrdinalIgnoreCase)
-            ? "nda-status-pill nda-status-pill--active"
-            : "nda-status-pill";
-    }
-
-    private string NdaDateLine(CustomerNdaDto nda)
-    {
-        var culture = System.Globalization.CultureInfo.GetCultureInfo(SupportedCultures.Normalize(Culture));
-        return nda.ExpiresAt.HasValue
-            ? $"{Text("Expires", "หมดอายุ")} {nda.ExpiresAt.Value.ToLocalTime().ToString("d MMM yyyy", culture)}"
-            : $"{Text("Updated", "อัปเดต")} {nda.UpdatedAt.ToLocalTime().ToString("d MMM yyyy", culture)}";
-    }
-
-    private string Text(string en, string th)
-    {
-        return SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture ? th : en;
+        Navigation.NavigateTo("/quotes?ws=ndas", replace: true);
     }
 }

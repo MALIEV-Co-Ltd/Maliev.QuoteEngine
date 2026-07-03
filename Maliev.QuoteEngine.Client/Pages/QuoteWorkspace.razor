@@ -41,6 +41,7 @@
                                    InitialAuthMode="@AuthMode"
                                    InitialWorkspacePage="@WorkspacePageQuery"
                                    InitialSettingsTab="@WorkspaceTabQuery"
+                                   InitialOrderNumber="@WorkspaceOrderQuery"
                                    AuthReturnUrl="@WorkspaceAuthReturnUrl"
                                    Culture="@Culture"
                                    UploadedParts="@_parts"
@@ -150,6 +151,9 @@
 
     [SupplyParameterFromQuery(Name = "tab")]
     public string? WorkspaceTabQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "order")]
+    public string? WorkspaceOrderQuery { get; set; }
 
     private string? BillingCompanyName => string.IsNullOrWhiteSpace(_profile?.CompanyName) ? null : _profile.CompanyName;
     private string? BillingVatNumber => string.IsNullOrWhiteSpace(_profile?.VatNumber) ? null : _profile.VatNumber;

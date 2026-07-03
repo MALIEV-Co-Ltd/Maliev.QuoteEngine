@@ -222,6 +222,18 @@
                             <span>@Text("Settings", "ตั้งค่า")</span>
                             <kbd>Ctrl+,</kbd>
                         </button>
+                        <button type="button" role="menuitem" @onclick="OpenOrdersPage">
+                            <MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Small" />
+                            <span>@Text("Orders", "คำสั่งซื้อ")</span>
+                        </button>
+                        <button type="button" role="menuitem" @onclick="OpenDocumentsPage">
+                            <MudIcon Icon="@Icons.Material.Outlined.Folder" Size="Size.Small" />
+                            <span>@Text("Documents", "เอกสาร")</span>
+                        </button>
+                        <button type="button" role="menuitem" @onclick="OpenNdasPage">
+                            <MudIcon Icon="@Icons.Material.Outlined.VerifiedUser" Size="Size.Small" />
+                            <span>NDAs</span>
+                        </button>
                         <a href="mailto:?subject=Try%20Make%20Studio&body=https%3A%2F%2Fmake.maliev.com" role="menuitem">
                             <MudIcon Icon="@Icons.Material.Outlined.Send" Size="Size.Small" />
                             <span>@Text("Invite a friend", "ชวนเพื่อน")</span>
@@ -648,6 +660,69 @@
                             </div>
                         }
                     </section>
+                }
+                else if (IsWorkspacePage(WorkspacePage.Orders))
+                {
+                    <header class="qe-agent-management-head">
+                        <button type="button"
+                                class="qe-agent-management-back"
+                                title="@(_activeOrderNumber is null ? Text("Back to chat", "กลับไปที่แชท") : Text("Back to orders", "กลับไปที่คำสั่งซื้อ"))"
+                                @onclick="OrdersBackAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.ArrowBack" Size="Size.Small" />
+                            <span>@Text("Back", "กลับ")</span>
+                        </button>
+                        <div>
+                            <span>@Text("Account", "บัญชี")</span>
+                            <h1>@(_activeOrderNumber is null ? Text("Orders", "คำสั่งซื้อ") : _activeOrderNumber)</h1>
+                            <p>@(_activeOrderNumber is null
+                                ? Text("Active manufacturing, delivery progress, and completed order history.", "งานผลิตที่กำลังดำเนินการ ความคืบหน้าการจัดส่ง และประวัติคำสั่งซื้อ")
+                                : Text("Order detail, payment, and delivery tracking.", "รายละเอียดคำสั่งซื้อ การชำระเงิน และการติดตามการจัดส่ง"))</p>
+                        </div>
+                    </header>
+                    @if (_activeOrderNumber is null)
+                    {
+                        <QeAccountOrders />
+                    }
+                    else
+                    {
+                        <QeOrderDetail OrderNumber="@_activeOrderNumber" />
+                    }
+                }
+                else if (IsWorkspacePage(WorkspacePage.Documents))
+                {
+                    <header class="qe-agent-management-head">
+                        <button type="button"
+                                class="qe-agent-management-back"
+                                title="@Text("Back to chat", "กลับไปที่แชท")"
+                                @onclick="ReturnToCurrentChatAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.ArrowBack" Size="Size.Small" />
+                            <span>@Text("Back", "กลับ")</span>
+                        </button>
+                        <div>
+                            <span>@Text("Account", "บัญชี")</span>
+                            <h1>@Text("Documents", "เอกสาร")</h1>
+                            <p>@Text("Purchase orders, receipts, invoices, and manufacturing documents in one place.", "ใบสั่งซื้อ ใบเสร็จ ใบแจ้งหนี้ และเอกสารการผลิตในที่เดียว")</p>
+                        </div>
+                    </header>
+                    <QeAccountDocuments />
+                }
+                else if (IsWorkspacePage(WorkspacePage.Ndas))
+                {
+                    <header class="qe-agent-management-head">
+                        <button type="button"
+                                class="qe-agent-management-back"
+                                title="@Text("Back to chat", "กลับไปที่แชท")"
+                                @onclick="ReturnToCurrentChatAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.ArrowBack" Size="Size.Small" />
+                            <span>@Text("Back", "กลับ")</span>
+                        </button>
+                        <div>
+                            <span>@Text("Confidentiality", "การรักษาความลับ")</span>
+                            <h1>NDAs</h1>
+                            <p>@Text("Confidentiality coverage for quote files, drawings, and manufacturing documents.", "ความคุ้มครองการรักษาความลับสำหรับไฟล์ใบเสนอราคา แบบ และเอกสารการผลิต")</p>
+                        </div>
+                    </header>
+                    <QeAccountNdas />
                 }
             </section>
         }
@@ -2343,6 +2418,7 @@
     private string _authDialogMode = "sign-in";
     private string _lastInitialAuthMode = string.Empty;
     private bool _initialWorkspacePageApplied;
+    private string? _activeOrderNumber;
     private string _authEmail = string.Empty;
     private string _authPassword = string.Empty;
     private string _authFullName = string.Empty;
@@ -2430,6 +2506,9 @@
 
     [Parameter]
     public string? InitialSettingsTab { get; set; }
+
+    [Parameter]
+    public string? InitialOrderNumber { get; set; }
 
     [Parameter]
     public string AuthReturnUrl { get; set; } = "/quote/new";
@@ -2860,12 +2939,26 @@
         // Deep links like /profile and /preferences land here via
         // /quotes?ws=settings&tab=... so account pages always render inside
         // the workspace instead of the retired standalone layout.
-        if (!_initialWorkspacePageApplied &&
-            string.Equals(InitialWorkspacePage, "settings", StringComparison.OrdinalIgnoreCase))
+        if (!_initialWorkspacePageApplied && !string.IsNullOrWhiteSpace(InitialWorkspacePage))
         {
             _initialWorkspacePageApplied = true;
-            SetSettingsTab(InitialSettingsTab ?? "general");
-            _activeWorkspacePage = WorkspacePage.Settings;
+            switch (InitialWorkspacePage.ToLowerInvariant())
+            {
+                case "settings":
+                    SetSettingsTab(InitialSettingsTab ?? "general");
+                    _activeWorkspacePage = WorkspacePage.Settings;
+                    break;
+                case "orders":
+                    _activeOrderNumber = string.IsNullOrWhiteSpace(InitialOrderNumber) ? null : InitialOrderNumber;
+                    _activeWorkspacePage = WorkspacePage.Orders;
+                    break;
+                case "documents":
+                    _activeWorkspacePage = WorkspacePage.Documents;
+                    break;
+                case "ndas":
+                    _activeWorkspacePage = WorkspacePage.Ndas;
+                    break;
+            }
         }
 
         var requestedAuthMode = NormalizeAuthMode(InitialAuthMode);
@@ -2976,6 +3069,9 @@
         new("projects", Icons.Material.Outlined.FolderOpen, "Open projects", "เปิดโปรเจกต์"),
         new("settings", Icons.Material.Outlined.Settings, "Open settings", "เปิดการตั้งค่า"),
         new("profile", Icons.Material.Outlined.Person, "Open profile", "เปิดโปรไฟล์"),
+        new("orders", Icons.Material.Outlined.ReceiptLong, "Open orders", "เปิดคำสั่งซื้อ"),
+        new("documents", Icons.Material.Outlined.Folder, "Open documents", "เปิดเอกสาร"),
+        new("ndas", Icons.Material.Outlined.VerifiedUser, "Open NDAs", "เปิด NDA"),
         new("artifacts", Icons.Material.Outlined.Inventory2, "Toggle workbench artifacts", "เปิด/ปิดไฟล์งาน"),
         new("summary", Icons.Material.Outlined.Summarize, "Toggle project summary", "เปิด/ปิดสรุปโปรเจกต์"),
         new("theme", Icons.Material.Outlined.Contrast, "Toggle light or dark mode", "สลับโหมดสว่างหรือมืด")
@@ -3063,6 +3159,15 @@
                 break;
             case "profile":
                 OpenPersonalAccountPage();
+                break;
+            case "orders":
+                OpenOrdersPage();
+                break;
+            case "documents":
+                OpenDocumentsPage();
+                break;
+            case "ndas":
+                OpenNdasPage();
                 break;
             case "artifacts":
                 ToggleArtifactPanel();
@@ -4610,6 +4715,39 @@
         _activeWorkspacePage = WorkspacePage.Settings;
         _searchOpen = false;
         _navigationDrawerOpen = false;
+    }
+
+    private void OpenOrdersPage()
+    {
+        _activeOrderNumber = null;
+        _activeWorkspacePage = WorkspacePage.Orders;
+        _searchOpen = false;
+        _navigationDrawerOpen = false;
+    }
+
+    private void OpenDocumentsPage()
+    {
+        _activeWorkspacePage = WorkspacePage.Documents;
+        _searchOpen = false;
+        _navigationDrawerOpen = false;
+    }
+
+    private void OpenNdasPage()
+    {
+        _activeWorkspacePage = WorkspacePage.Ndas;
+        _searchOpen = false;
+        _navigationDrawerOpen = false;
+    }
+
+    private async Task OrdersBackAsync()
+    {
+        if (_activeOrderNumber is not null)
+        {
+            _activeOrderNumber = null;
+            return;
+        }
+
+        await ReturnToCurrentChatAsync();
     }
 
     private void OpenPersonalAccountPage()
@@ -6702,7 +6840,10 @@
         Chat,
         Plugins,
         Projects,
-        Settings
+        Settings,
+        Orders,
+        Documents,
+        Ndas
     }
 
     private sealed record PreviewItem(

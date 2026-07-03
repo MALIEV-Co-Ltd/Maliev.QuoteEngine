@@ -2627,11 +2627,13 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Ndas_page_exposes_customer_confidentiality_status_and_actions()
     {
-        var ndas = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Ndas.razor");
+        var ndas = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountNdas.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
-        Assert.Contains("@page \"/ndas\"", ndas, StringComparison.Ordinal);
+        var ndasPage = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Ndas.razor");
+        Assert.Contains("@page \"/ndas\"", ndasPage, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/quotes?ws=ndas\", replace: true);", ndasPage, StringComparison.Ordinal);
         Assert.Contains("GetNdasAsync", ndas, StringComparison.Ordinal);
         Assert.Contains("CustomerNdaDto", ndas, StringComparison.Ordinal);
         Assert.Contains("ActiveNdas", ndas, StringComparison.Ordinal);
@@ -2652,8 +2654,8 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Order_detail_page_is_customer_manufacturing_progress_surface()
     {
-        var orders = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Orders.razor");
-        var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "OrderDetail.razor");
+        var orders = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountOrders.razor");
+        var detail = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeOrderDetail.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
         var accountController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "AccountController.cs");
         var accountDtos = ReadRepoFile("Maliev.QuoteEngine.Shared", "Account", "AccountDtos.cs");
@@ -2663,7 +2665,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("href=\"/orders/@Uri.EscapeDataString(order.OrderNumber)\"", orders, StringComparison.Ordinal);
         Assert.DoesNotContain("href=\"/orders/@order.OrderId\"", orders, StringComparison.Ordinal);
 
-        Assert.Contains("@page \"/orders/{OrderNumber}\"", detail, StringComparison.Ordinal);
+        var orderDetailPage = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "OrderDetail.razor");
+        Assert.Contains("@page \"/orders/{OrderNumber}\"", orderDetailPage, StringComparison.Ordinal);
+        Assert.Contains("/quotes?ws=orders&order={Uri.EscapeDataString(OrderNumber)}", orderDetailPage, StringComparison.Ordinal);
         Assert.Contains("@inject QuoteEngineApiClient Api", detail, StringComparison.Ordinal);
         Assert.Contains("@inject NavigationManager Navigation", detail, StringComparison.Ordinal);
         Assert.Contains("GetOrderDetailAsync(OrderNumber)", detail, StringComparison.Ordinal);
@@ -2762,10 +2766,12 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Orders_page_groups_active_and_completed_customer_orders()
     {
-        var orders = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Orders.razor");
+        var orders = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountOrders.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
 
-        Assert.Contains("@page \"/orders\"", orders, StringComparison.Ordinal);
+        var ordersPage = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Orders.razor");
+        Assert.Contains("@page \"/orders\"", ordersPage, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/quotes?ws=orders\", replace: true);", ordersPage, StringComparison.Ordinal);
         Assert.Contains("GetOrdersAsync", orders, StringComparison.Ordinal);
         Assert.Contains("ActiveOrders", orders, StringComparison.Ordinal);
         Assert.Contains("CompletedOrders", orders, StringComparison.Ordinal);
@@ -2784,7 +2790,7 @@ public sealed class QuoteEngineSourceTests
     [Fact]
     public void Documents_page_supports_customer_purchase_order_invoice_receipt_uploads()
     {
-        var documents = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "Documents.razor");
+        var documents = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QeAccountDocuments.razor");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
         var accountController = ReadRepoFile("Maliev.QuoteEngine.Bff", "Controllers", "AccountController.cs");
         var accountDtos = ReadRepoFile("Maliev.QuoteEngine.Shared", "Account", "AccountDtos.cs");
