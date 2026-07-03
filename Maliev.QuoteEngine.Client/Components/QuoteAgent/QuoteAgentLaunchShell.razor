@@ -5483,11 +5483,14 @@
         return string.IsNullOrWhiteSpace(extension) ? ".glb" : extension;
     }
 
-    private Task OpenSketchAsync()
+    private async Task OpenSketchAsync()
     {
+        _quickActionsMenuOpen = false;
+        _composerMenuOpen = false;
+        _composerPluginsOpen = false;
         _sketchOpen = true;
         _sketchInitPending = true;
-        return Task.CompletedTask;
+        await InvokeAsync(StateHasChanged);
     }
 
     private async Task OpenSketchFromComposerMenuAsync()
@@ -5515,10 +5518,9 @@
         await RequestUploadAsync();
     }
 
-    private Task OpenSketchFromQuickActionsAsync()
+    private async Task OpenSketchFromQuickActionsAsync()
     {
-        _quickActionsMenuOpen = false;
-        return OpenSketchAsync();
+        await OpenSketchAsync();
     }
 
     private async Task ApplyGoogleDriveConnectorAsync()

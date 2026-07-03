@@ -5747,8 +5747,9 @@
     overflow: auto;
     background: var(--qe-agent-surface);
     color: var(--qe-agent-ink);
+    border-top: 1px solid var(--qe-agent-line);
     border-left: 1px solid var(--qe-agent-line);
-    border-radius: 14px 0 0 14px;
+    border-radius: 14px 0 0 0;
     box-shadow: none;
     opacity: 1;
     transform: translateX(0);
@@ -6028,23 +6029,36 @@
 .qe-agent-artifact-context-body {
     display: grid;
     gap: 10px;
+    min-width: 0;
 }
 
 .qe-agent-artifact-details {
     display: grid;
     gap: 0;
+    min-width: 0;
     margin: 0;
+    overflow: hidden;
+    border-top: 1px solid var(--qe-agent-line);
 }
 
 .qe-agent-artifact-details div {
     display: grid;
-    grid-template-columns: minmax(82px, .42fr) minmax(0, 1fr);
-    gap: 8px;
+    grid-template-columns: minmax(92px, .45fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 10px;
+    min-width: 0;
     padding: 8px 0;
-    border-top: 1px solid var(--qe-agent-line);
+    border-bottom: 1px solid var(--qe-agent-line);
+}
+
+.qe-agent-artifact-details div:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
 }
 
 .qe-agent-artifact-details dt {
+    min-width: 0;
+    overflow-wrap: anywhere;
     color: var(--qe-agent-muted);
     font-size: 12px;
 }
@@ -6475,7 +6489,7 @@
 .qe-agent-sketch-backdrop {
     position: fixed;
     inset: 0;
-    z-index: 70;
+    z-index: 1200;
     border: 0;
     background: rgba(0, 0, 0, .48);
 }
@@ -6483,11 +6497,13 @@
 .qe-agent-sketch-dialog {
     position: fixed;
     inset: 18px;
-    z-index: 71;
+    z-index: 1201;
     display: grid;
     grid-template-rows: auto minmax(0, 1fr) auto;
     gap: 14px;
+    max-height: calc(100dvh - 36px);
     padding: 18px;
+    overflow: hidden;
     border-radius: 18px;
     background: var(--qe-agent-surface);
     color: var(--qe-agent-ink);

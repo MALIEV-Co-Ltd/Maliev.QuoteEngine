@@ -862,8 +862,8 @@ public sealed class QuoteEngineSourceTests
         var projectType = shellType.GetNestedType("ProjectNavItem", BindingFlags.NonPublic)!;
         var projectCtor = projectType.GetConstructor(
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool)])!;
-        var project = projectCtor.Invoke([sessionId, string.Empty, "Original project title", "Original project title", "draft", false, false]);
+            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool), typeof(bool)])!;
+        var project = projectCtor.Invoke([sessionId, string.Empty, "Original project title", "Original project title", "draft", false, false, false]);
         var projects = Activator.CreateInstance(typeof(List<>).MakeGenericType(projectType))!;
         ((IList)projects).Add(project);
         shellType.GetField("_projects", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -888,8 +888,8 @@ public sealed class QuoteEngineSourceTests
         var projectType = shellType.GetNestedType("ProjectNavItem", BindingFlags.NonPublic)!;
         var projectCtor = projectType.GetConstructor(
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool)])!;
-        var project = projectCtor.Invoke([sessionId, string.Empty, "New manufacturing project", "New manufacturing project", "draft", false, false]);
+            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool), typeof(bool)])!;
+        var project = projectCtor.Invoke([sessionId, string.Empty, "New manufacturing project", "New manufacturing project", "draft", false, false, false]);
         var projects = Activator.CreateInstance(typeof(List<>).MakeGenericType(projectType))!;
         ((IList)projects).Add(project);
         shellType.GetField("_projects", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -1029,6 +1029,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OnProjectNameInputAsync", component, StringComparison.Ordinal);
         Assert.Contains("private string _projectName = string.Empty;", component, StringComparison.Ordinal);
         Assert.Contains("OpenSketchAsync", component, StringComparison.Ordinal);
+        var openSketchBlock = ExtractSourceBlock(component, "private async Task OpenSketchAsync()", "private async Task OpenSketchFromComposerMenuAsync()");
+        Assert.Contains("_quickActionsMenuOpen = false;", openSketchBlock, StringComparison.Ordinal);
+        Assert.Contains("_composerMenuOpen = false;", openSketchBlock, StringComparison.Ordinal);
+        Assert.Contains("_composerPluginsOpen = false;", openSketchBlock, StringComparison.Ordinal);
+        Assert.Contains("_sketchOpen = true;", openSketchBlock, StringComparison.Ordinal);
+        Assert.Contains("_sketchInitPending = true;", openSketchBlock, StringComparison.Ordinal);
+        Assert.Contains("await InvokeAsync(StateHasChanged);", openSketchBlock, StringComparison.Ordinal);
+        var quickSketchBlock = ExtractSourceBlock(component, "private async Task OpenSketchFromQuickActionsAsync()", "private async Task ApplyGoogleDriveConnectorAsync()");
+        Assert.Contains("await OpenSketchAsync();", quickSketchBlock, StringComparison.Ordinal);
         Assert.Contains("quote-agent-sketch.js", component, StringComparison.Ordinal);
         Assert.Contains("js/quote-inline-viewer-three.js", index, StringComparison.Ordinal);
         Assert.Contains("initSketchCanvas", component, StringComparison.Ordinal);
@@ -1610,8 +1619,14 @@ public sealed class QuoteEngineSourceTests
         var artifactDrawerBlock = ExtractSourceBlock(agentStyles, ".qe-agent-artifact-drawer,", ".qe-agent-artifact-backdrop");
         Assert.Contains("height: calc(100% - 16px);", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains("margin-block: 8px;", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains("border-top: 1px solid var(--qe-agent-line);", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains("border-left: 1px solid var(--qe-agent-line);", artifactDrawerBlock, StringComparison.Ordinal);
-        Assert.Contains("border-radius: 14px 0 0 14px;", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains("border-radius: 14px 0 0 0;", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("border-radius: 14px 0 0 14px;", artifactDrawerBlock, StringComparison.Ordinal);
+        var artifactDetailsBlock = ExtractSourceBlock(agentStyles, ".qe-agent-artifact-details {", ".qe-agent-artifact-context-preview");
+        Assert.Contains("overflow: hidden;", artifactDetailsBlock, StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: minmax(92px, .45fr) minmax(0, 1fr);", artifactDetailsBlock, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifact-details div:last-child", artifactDetailsBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-toggle", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-card", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-summary-grid", agentStyles, StringComparison.Ordinal);
@@ -1774,7 +1789,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("align-items: start;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("font-size: 14px !important;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("line-height: 1.5 !important;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("--qe-agent-primary: #339cff;", agentStyles, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("--qe-agent-primary: var(--maliev-theme-accent, #339cff);", agentStyles, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("background: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-dialog", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-sketch-tools", agentStyles, StringComparison.Ordinal);
