@@ -23826,10 +23826,10 @@
           if (p.length >= 4) {
             requireSegmentParams(seg, p, 4);
             sketch.movePointerTo([p[0], p[1]]);
-            sketch.lineTo(p[2], p[3]);
+            sketch.lineTo([p[2], p[3]]);
           } else {
             requireSegmentParams(seg, p, 2);
-            sketch.lineTo(p[0], p[1]);
+            sketch.lineTo([p[0], p[1]]);
           }
           break;
         case "hLine":
@@ -23872,7 +23872,7 @@
     return buildProfile(profile);
   }
   function makeCone(radiusBottom, radiusTop, height) {
-    const sketch = new Sketcher("XZ").movePointerTo([0, 0]).vLine(height).hLine(radiusTop).lineTo(radiusBottom, 0).close();
+    const sketch = new Sketcher("XZ").movePointerTo([0, 0]).vLine(height).hLine(radiusTop).lineTo([radiusBottom, 0]).close();
     return sketch.revolve([0, 0, 1]);
   }
   function packedMeshData(meshResult) {

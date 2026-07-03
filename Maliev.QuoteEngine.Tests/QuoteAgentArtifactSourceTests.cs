@@ -61,6 +61,24 @@ public sealed class QuoteAgentArtifactSourceTests
         Assert.Contains(".qe-agent-artifact-note-input", styles, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Preview_worker_passes_point_arrays_to_replicad_lineTo_not_scalars()
+    {
+        // replicad's Sketcher.lineTo(point: Point2D) destructures a single [x, y] array.
+        // Passing two scalars makes replicad try to iterate the first scalar and throw
+        // "number <n> is not iterable", dead-ending every line-based silhouette and every cone.
+        var worker = ReadRepoFile("Maliev.QuoteEngine.Client", "js-src", "replicad-worker.js");
+
+        Assert.Contains("sketch.lineTo([p[2], p[3]]);", worker, StringComparison.Ordinal);
+        Assert.Contains("sketch.lineTo([p[0], p[1]]);", worker, StringComparison.Ordinal);
+        Assert.Contains(".lineTo([radiusBottom, 0])", worker, StringComparison.Ordinal);
+
+        // Regression guard: the scalar forms must never come back.
+        Assert.DoesNotContain("sketch.lineTo(p[0], p[1])", worker, StringComparison.Ordinal);
+        Assert.DoesNotContain("sketch.lineTo(p[2], p[3])", worker, StringComparison.Ordinal);
+        Assert.DoesNotContain(".lineTo(radiusBottom, 0)", worker, StringComparison.Ordinal);
+    }
+
     private static string ReadRepoFile(params string[] relativePathParts)
     {
         var repoRoot = Directory.GetParent(GetSourceDirectory())!.FullName;
