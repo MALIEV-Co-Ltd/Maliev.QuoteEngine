@@ -35,21 +35,21 @@
                     class="@PageNavClass(WorkspacePage.Chat)"
                     aria-current="@(IsWorkspacePage(WorkspacePage.Chat) ? "page" : null)"
                     @onclick="StartNewProjectAsync">
-                <MudIcon Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" />
+                <MudIcon Icon="@Icons.Material.Outlined.PostAdd" Size="Size.Small" />
                 <span>@Text("New project", "โปรเจกต์ใหม่")</span>
             </button>
             <button type="button"
                     class="@PageNavClass(WorkspacePage.Plugins)"
                     aria-current="@(IsWorkspacePage(WorkspacePage.Plugins) ? "page" : null)"
                     @onclick="OpenPluginsPageAsync">
-                <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
+                <MudIcon Icon="@Icons.Material.Outlined.Widgets" Size="Size.Small" />
                 <span>@Text("Plugins", "ปลั๊กอิน")</span>
             </button>
             <button type="button"
                     class="@PageNavClass(WorkspacePage.Projects)"
                     aria-current="@(IsWorkspacePage(WorkspacePage.Projects) ? "page" : null)"
                     @onclick="OpenProjectsPage">
-                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
+                <MudIcon Icon="@Icons.Material.Outlined.LibraryBooks" Size="Size.Small" />
                 <span>@Text("Projects", "โปรเจกต์")</span>
             </button>
             <div class="qe-agent-rail-search" aria-label="@Text("Search customer data", "ค้นหาข้อมูลลูกค้า")">
