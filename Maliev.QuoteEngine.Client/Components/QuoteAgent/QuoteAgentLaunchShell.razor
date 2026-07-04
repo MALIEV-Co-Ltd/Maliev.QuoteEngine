@@ -2701,13 +2701,14 @@
                 ? Text("Stop dictation", "หยุดพูดตามคำบอก")
                 : Text("Click to dictate or hold", "คลิกเพื่อพูดหรือกดค้าง");
 
-    private string SpeechRecognitionLanguage => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture
-        ? "th-TH"
-        : "en-US";
+    // Dictation must accept Thai, English, and freely code-switched speech ("สวัสดีครับ How much
+    // to get this made in PLA? Ship to เขตปทุมวัน") regardless of the UI language. The Web Speech API
+    // recognizes one BCP-47 language per utterance, and Google's Thai (th-TH) model transcribes Thai
+    // plus embedded English far better than en-US handles Thai (en-US cannot read Thai script at all).
+    // So Thai leads regardless of Culture, with en-US kept as the cycle fallback for pure-English speech.
+    private const string SpeechRecognitionLanguage = "th-TH";
 
-    private string SpeechRecognitionLanguages => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture
-        ? "th-TH,en-US"
-        : "en-US,th-TH";
+    private const string SpeechRecognitionLanguages = "th-TH,en-US";
 
     private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
     private int ArtifactCount => _artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact) + UploadedParts.Count + MessageSketches.Count;

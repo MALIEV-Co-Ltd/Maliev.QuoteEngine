@@ -1318,6 +1318,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ComposerWrapClass", component, StringComparison.Ordinal);
         Assert.Contains("lang=\"@SpeechRecognitionLanguage\"", component, StringComparison.Ordinal);
         Assert.Contains("data-speech-languages=\"@SpeechRecognitionLanguages\"", component, StringComparison.Ordinal);
+        // Dictation is Thai-first and independent of the UI language so mixed Thai/English speech
+        // ("สวัสดีครับ How much...") works without switching the UI to Thai first.
+        Assert.Contains("private const string SpeechRecognitionLanguage = \"th-TH\";", component, StringComparison.Ordinal);
+        Assert.Contains("private const string SpeechRecognitionLanguages = \"th-TH,en-US\";", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"en-US,th-TH\"", component, StringComparison.Ordinal);
         Assert.Contains("@ref=\"_dictationButton\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("I did not hear speech", component, StringComparison.Ordinal);
         Assert.Contains("_composerMenuOpen", component, StringComparison.Ordinal);
