@@ -117,10 +117,12 @@ internal sealed class QuoteAgentService(
     IQuoteFileAnalysisStatusService fileAnalysisStatus,
     IDeliveryServiceClient deliveryClient,
     IRegistryServiceClient registryClient,
+    ICountryServiceClient countryClient,
     IHostEnvironment environment) : IQuoteAgentService
 {
     private const string DefaultAuthReturnUrl = "/auth/chatbot-complete";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly Guid PrototypeThailandCountryId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly string[] ArtifactContextMetadataKeys =
     [
         "paymentStatus",
@@ -990,6 +992,7 @@ internal sealed class QuoteAgentService(
             "quote_update_checkout_details" => UpdateCheckoutDetailsOrGateError(state, request.Arguments),
             "quote_list_addresses" => await ListCustomerAddressesOrGateErrorAsync(state, request.Arguments, cancellationToken),
             "quote_search_addresses" => await SearchAddressSuggestionsAsync(request.Arguments, cancellationToken),
+            "quote_prepare_address" => PrepareAddressActionOrGateError(state, request.Arguments),
             "quote_prepare_draft_project" => PrepareActionOrGateError(
                 state,
                 "draft_project",
@@ -1156,6 +1159,7 @@ internal sealed class QuoteAgentService(
                 "archive_project" => await ExecuteArchiveProjectAsync(state, customerId!.Value, action, cancellationToken),
                 "request_employee_review" => await ExecuteRequestEmployeeReviewAsync(state, customerId!.Value, action, cancellationToken),
                 "account_profile_update" => await ExecuteAccountProfileUpdateAsync(state, customerId!.Value, action, cancellationToken),
+                "save_address" => await ExecuteSaveAddressAsync(state, customerId!.Value, action, cancellationToken),
                 "formal_quote" => await ExecuteFormalQuoteAsync(state, customerId!.Value, action, cancellationToken),
                 "quote_approval" => ExecuteQuoteApproval(state),
                 "dfm_acknowledgement" => ExecuteDfmAcknowledgement(state, action),
@@ -3494,6 +3498,189 @@ internal sealed class QuoteAgentService(
             "shipping" => "Shipping",
             _ => null
         };
+    }
+
+    private object PrepareAddressActionOrGateError(
+        QuoteAgentSessionState state,
+        Dictionary<string, JsonElement> arguments)
+    {
+        var addressType = NormalizeAddressType(ReadString(arguments, "type")) ?? "Shipping";
+        var line1 = FirstNonWhiteSpace(
+            ReadString(arguments, "address_line_1"),
+            ReadString(arguments, "addressLine1"),
+            ReadString(arguments, "address"),
+            ReadString(arguments, "street"));
+        var city = FirstNonWhiteSpace(
+            ReadString(arguments, "city"),
+            ReadString(arguments, "amphoe"));
+        var province = FirstNonWhiteSpace(
+            ReadString(arguments, "province"),
+            ReadString(arguments, "state_province"),
+            ReadString(arguments, "stateProvince"),
+            ReadString(arguments, "state"));
+        var postalCode = FirstNonWhiteSpace(
+            ReadString(arguments, "postal_code"),
+            ReadString(arguments, "postalCode"),
+            ReadString(arguments, "postcode"));
+
+        var missingFields = new List<string>();
+        if (string.IsNullOrWhiteSpace(line1)) missingFields.Add("address_line_1");
+        if (string.IsNullOrWhiteSpace(city)) missingFields.Add("city");
+        if (string.IsNullOrWhiteSpace(province)) missingFields.Add("province");
+        if (string.IsNullOrWhiteSpace(postalCode)) missingFields.Add("postal_code");
+        if (missingFields.Count > 0)
+        {
+            return new
+            {
+                error = "A complete address is required before saving.",
+                missingFields,
+                note = "Ground the missing parts (use quote_search_addresses for Thai district/province/postal), then call quote_prepare_address again.",
+                state = ToStateResponse(state)
+            };
+        }
+
+        var recipient = FirstNonWhiteSpace(ReadString(arguments, "recipient_name"), ReadString(arguments, "recipientName"));
+        var descriptor = string.Join(", ", new[] { line1, city, province, postalCode }.Where(part => !string.IsNullOrWhiteSpace(part)));
+        var summary = string.IsNullOrWhiteSpace(recipient)
+            ? $"Save {addressType.ToLowerInvariant()} address: {descriptor}."
+            : $"Save {addressType.ToLowerInvariant()} address for {recipient}: {descriptor}.";
+
+        return PrepareActionOrGateError(
+            state,
+            "save_address",
+            $"Save {addressType.ToLowerInvariant()} address",
+            summary,
+            requiresAuthentication: true,
+            arguments);
+    }
+
+    private async Task<string> ExecuteSaveAddressAsync(
+        QuoteAgentSessionState state,
+        Guid customerId,
+        QuoteAgentPendingAction action,
+        CancellationToken cancellationToken)
+    {
+        var upsert = new CustomerAddressUpsertRequest
+        {
+            Type = NormalizeAddressType(ReadString(action.Arguments, "type")) ?? "Shipping",
+            IsDefault = ReadBool(action.Arguments, "is_default") || ReadBool(action.Arguments, "isDefault"),
+            AddressLine1 = FirstNonWhiteSpace(ReadString(action.Arguments, "address_line_1"), ReadString(action.Arguments, "addressLine1"), ReadString(action.Arguments, "address")) ?? string.Empty,
+            AddressLine2 = FirstNonWhiteSpace(ReadString(action.Arguments, "address_line_2"), ReadString(action.Arguments, "addressLine2")),
+            District = FirstNonWhiteSpace(ReadString(action.Arguments, "district"), ReadString(action.Arguments, "sub_district"), ReadString(action.Arguments, "subDistrict")),
+            City = FirstNonWhiteSpace(ReadString(action.Arguments, "city"), ReadString(action.Arguments, "amphoe")) ?? string.Empty,
+            StateProvince = FirstNonWhiteSpace(ReadString(action.Arguments, "province"), ReadString(action.Arguments, "state_province"), ReadString(action.Arguments, "stateProvince"), ReadString(action.Arguments, "state")) ?? string.Empty,
+            PostalCode = FirstNonWhiteSpace(ReadString(action.Arguments, "postal_code"), ReadString(action.Arguments, "postalCode"), ReadString(action.Arguments, "postcode")) ?? string.Empty,
+            RecipientName = FirstNonWhiteSpace(ReadString(action.Arguments, "recipient_name"), ReadString(action.Arguments, "recipientName")),
+            RecipientPhone = FirstNonWhiteSpace(ReadString(action.Arguments, "recipient_phone"), ReadString(action.Arguments, "recipientPhone"), ReadString(action.Arguments, "phone")),
+            AddressSource = "Manual"
+        };
+
+        var iso2 = FirstNonWhiteSpace(ReadString(action.Arguments, "country_iso2"), ReadString(action.Arguments, "countryIso2"), ReadString(action.Arguments, "country")) ?? "TH";
+        var countryId = await ResolveCountryIdAsync(iso2, cancellationToken);
+        upsert.CountryId = countryId;
+
+        var created = await CreateCustomerAddressForCustomerAsync(customerId, upsert, cancellationToken);
+        if (created is null && CanUsePrototypeAccountContextFallback())
+        {
+            created = prototypeStore.CreateAddress(customerId, upsert, countryId);
+        }
+
+        if (created is null)
+        {
+            throw new InvalidOperationException("CustomerService did not save the address.");
+        }
+
+        state.CustomerId = customerId;
+        var descriptor = string.Join(", ", new[] { created.AddressLine1, created.City, created.StateProvince, created.PostalCode }.Where(part => !string.IsNullOrWhiteSpace(part)));
+        return $"Saved {created.Type.ToLowerInvariant()} address: {descriptor}.";
+    }
+
+    private async Task<CustomerAddressDto?> CreateCustomerAddressForCustomerAsync(
+        Guid customerId,
+        CustomerAddressUpsertRequest upsert,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // ownerId is always the server-resolved customer - never a value from tool arguments.
+            var request = new
+            {
+                ownerType = "Customer",
+                ownerId = customerId,
+                type = upsert.Type,
+                isDefault = upsert.IsDefault,
+                addressLine1 = upsert.AddressLine1,
+                addressLine2 = upsert.AddressLine2,
+                district = upsert.District,
+                city = upsert.City,
+                stateProvince = upsert.StateProvince,
+                postalCode = upsert.PostalCode,
+                countryId = upsert.CountryId,
+                recipientName = upsert.RecipientName,
+                recipientPhone = upsert.RecipientPhone,
+                addressSource = upsert.AddressSource
+            };
+
+            using var response = await customerClient.CreateCustomerAddressAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "CustomerService returned {Status} while creating an address for customer {CustomerId}.",
+                    response.StatusCode,
+                    customerId);
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<CustomerAddressDto>(JsonOptions, cancellationToken);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            logger.LogWarning(ex, "CustomerService address creation failed for customer {CustomerId}.", customerId);
+            return null;
+        }
+    }
+
+    private async Task<Guid> ResolveCountryIdAsync(string iso2, CancellationToken cancellationToken)
+    {
+        var normalized = string.IsNullOrWhiteSpace(iso2) ? "TH" : iso2.Trim().ToUpperInvariant();
+        if (normalized.Length > 2)
+        {
+            normalized = normalized[..2];
+        }
+
+        try
+        {
+            using var response = await countryClient.GetCountryByIso2Async(normalized, cancellationToken);
+            if (response.IsSuccessStatusCode)
+            {
+                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+                var root = document.RootElement.TryGetProperty("data", out var dataElement)
+                    ? dataElement
+                    : document.RootElement;
+                var id = ReadJsonGuid(root, "id") ?? ReadJsonGuid(root, "countryId");
+                if (id is { } value && value != Guid.Empty)
+                {
+                    return value;
+                }
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            logger.LogWarning(ex, "CountryService lookup failed for ISO2 {Iso2}.", normalized);
+        }
+
+        if (CanUsePrototypeFallback())
+        {
+            return PrototypeThailandCountryId;
+        }
+
+        throw new InvalidOperationException($"Could not resolve country '{normalized}'. A valid country is required to save the address.");
+    }
+
+    private static Guid? ReadJsonGuid(JsonElement element, string propertyName)
+    {
+        return Guid.TryParse(ReadJsonString(element, propertyName), out var value) ? value : null;
     }
 
     private bool CanUsePrototypeAccountContextFallback()

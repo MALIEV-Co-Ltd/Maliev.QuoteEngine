@@ -5424,6 +5424,51 @@ Customer message:
     }
 
     [Fact]
+    public async Task Quote_prepare_address_reports_missing_required_fields()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-address-missing@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_prepare_address",
+            new Dictionary<string, JsonElement>
+            {
+                ["address_line_1"] = JsonSerializer.SerializeToElement("1 I-1 Road", JsonOptions)
+            });
+
+        Assert.Contains("complete address is required", json, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("postal_code", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Quote_prepare_address_confirmation_saves_address_for_signed_in_customer()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-save-address@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_address",
+            new Dictionary<string, JsonElement>
+            {
+                ["type"] = JsonSerializer.SerializeToElement("shipping", JsonOptions),
+                ["address_line_1"] = JsonSerializer.SerializeToElement("1 I-1 Road", JsonOptions),
+                ["district"] = JsonSerializer.SerializeToElement("Map Ta Phut", JsonOptions),
+                ["city"] = JsonSerializer.SerializeToElement("Mueang Rayong", JsonOptions),
+                ["province"] = JsonSerializer.SerializeToElement("Rayong", JsonOptions),
+                ["postal_code"] = JsonSerializer.SerializeToElement("21150", JsonOptions),
+                ["recipient_name"] = JsonSerializer.SerializeToElement("Somchai", JsonOptions),
+                ["recipient_phone"] = JsonSerializer.SerializeToElement("038683930", JsonOptions)
+            });
+
+        var action = Assert.Single(state.ProposedActions);
+        Assert.Equal("save_address", action.ActionType);
+        Assert.Equal("Save shipping address", action.Title);
+
+        var result = await ConfirmActionAsync(client, action.ActionId);
+        Assert.Contains("Saved shipping address", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Agent_account_context_returns_signed_in_profile_and_default_checkout_addresses()
     {
         await using var scopedFactory = CreateAgentFactory();
