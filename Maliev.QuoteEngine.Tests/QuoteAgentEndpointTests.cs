@@ -5375,6 +5375,55 @@ Customer message:
     }
 
     [Fact]
+    public async Task Quote_list_addresses_requires_sign_in_when_anonymous()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_list_addresses");
+
+        Assert.Contains("Sign in to view saved addresses", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Quote_list_addresses_returns_saved_address_structure_for_signed_in_customer()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(scopedFactory, "agent-list-addresses@example.com");
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_list_addresses");
+        using var document = JsonDocument.Parse(json);
+
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal(JsonValueKind.Array, document.RootElement.GetProperty("addresses").ValueKind);
+        Assert.True(document.RootElement.TryGetProperty("defaultShippingAddressId", out _));
+    }
+
+    [Fact]
+    public async Task Quote_search_addresses_short_query_returns_guidance_note_and_no_suggestions()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(client, sessionId, "quote_search_addresses",
+            new Dictionary<string, JsonElement>
+            {
+                ["query"] = JsonSerializer.SerializeToElement("a", JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal(0, document.RootElement.GetProperty("suggestions").GetArrayLength());
+        Assert.Contains(
+            "at least two characters",
+            document.RootElement.GetProperty("note").GetString()!,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Agent_account_context_returns_signed_in_profile_and_default_checkout_addresses()
     {
         await using var scopedFactory = CreateAgentFactory();

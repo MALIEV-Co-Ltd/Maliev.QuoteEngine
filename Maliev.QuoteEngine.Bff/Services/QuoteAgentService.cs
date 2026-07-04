@@ -116,6 +116,7 @@ internal sealed class QuoteAgentService(
     IQePricingServiceClient pricingClient,
     IQuoteFileAnalysisStatusService fileAnalysisStatus,
     IDeliveryServiceClient deliveryClient,
+    IRegistryServiceClient registryClient,
     IHostEnvironment environment) : IQuoteAgentService
 {
     private const string DefaultAuthReturnUrl = "/auth/chatbot-complete";
@@ -987,6 +988,8 @@ internal sealed class QuoteAgentService(
             "quote_get_shipping_rates" => await GetShippingRatesOrGateErrorAsync(state, request.Arguments, cancellationToken),
             "quote_select_shipping_rate" => SelectShippingRateOrGateError(state, request.Arguments),
             "quote_update_checkout_details" => UpdateCheckoutDetailsOrGateError(state, request.Arguments),
+            "quote_list_addresses" => await ListCustomerAddressesOrGateErrorAsync(state, request.Arguments, cancellationToken),
+            "quote_search_addresses" => await SearchAddressSuggestionsAsync(request.Arguments, cancellationToken),
             "quote_prepare_draft_project" => PrepareActionOrGateError(
                 state,
                 "draft_project",
@@ -3302,6 +3305,195 @@ internal sealed class QuoteAgentService(
             logger.LogWarning(ex, "CustomerService account context addresses failed for customer {CustomerId}.", customerId);
             return null;
         }
+    }
+
+    private async Task<object> ListCustomerAddressesOrGateErrorAsync(
+        QuoteAgentSessionState state,
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        CancellationToken cancellationToken)
+    {
+        var customerId = ResolveCustomerId() ?? state.CustomerId;
+        if (!customerId.HasValue)
+        {
+            return new
+            {
+                error = "Sign in to view saved addresses.",
+                requiredGateCode = "customer_authenticated",
+                actionType = "get_auth_handoff",
+                state = ToStateResponse(state)
+            };
+        }
+
+        state.CustomerId = customerId;
+        var addresses = await GetCustomerAddressesForContextAsync(customerId.Value, cancellationToken);
+        if (addresses is null && CanUsePrototypeAccountContextFallback())
+        {
+            addresses = prototypeStore.GetAddresses(customerId.Value);
+        }
+
+        if (addresses is null)
+        {
+            return new
+            {
+                error = "Saved addresses are temporarily unavailable. Please try again in a moment.",
+                state = ToStateResponse(state)
+            };
+        }
+
+        var requestedType = NormalizeAddressType(ReadString(arguments, "type"));
+        var visible = requestedType is null
+            ? addresses
+            : addresses.Where(address => address.Type.Equals(requestedType, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        return new
+        {
+            success = true,
+            addresses = visible.Select(BuildAgentAddressRow).ToList(),
+            defaultBillingAddressId = SelectDefaultAddress(addresses, "Billing")?.Id,
+            defaultShippingAddressId = SelectDefaultAddress(addresses, "Shipping")?.Id,
+            note = "These are the signed-in customer's own saved addresses. Use an id with quote_update_checkout_details; you can only ever see this customer's addresses."
+        };
+    }
+
+    private async Task<object> SearchAddressSuggestionsAsync(
+        IReadOnlyDictionary<string, JsonElement> arguments,
+        CancellationToken cancellationToken)
+    {
+        var query = (ReadString(arguments, "query") ?? ReadString(arguments, "q") ?? string.Empty).Trim();
+        if (query.Length < 2)
+        {
+            return new
+            {
+                success = true,
+                query,
+                suggestions = Array.Empty<object>(),
+                note = "Provide at least two characters of a Thai subdistrict, district, province, or postal code to search."
+            };
+        }
+
+        var limit = Math.Clamp(ReadInt(arguments, "limit", 8), 1, 20);
+        var suggestions = await SearchThaiAddressSuggestionsAsync(query, limit, cancellationToken);
+        return new
+        {
+            success = true,
+            query,
+            suggestions,
+            note = "Validated Thai subdistrict/district/province/postal options from the address registry. Ground the district/state/province/postcode fields on one of these, then confirm the full address with the customer before saving."
+        };
+    }
+
+    private async Task<IReadOnlyList<object>> SearchThaiAddressSuggestionsAsync(
+        string query,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var response = await registryClient.SearchThaiLocationsAsync(query, limit, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return [];
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+            var data = document.RootElement.TryGetProperty("data", out var dataElement)
+                ? dataElement
+                : document.RootElement;
+            if (data.ValueKind != JsonValueKind.Array)
+            {
+                return [];
+            }
+
+            var results = new List<object>();
+            foreach (var item in data.EnumerateArray())
+            {
+                var suggestion = MapAddressSuggestion(item);
+                if (suggestion is not null)
+                {
+                    results.Add(suggestion);
+                }
+            }
+
+            return results;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            logger.LogWarning(ex, "Thai address suggestion search failed for query {Query}.", query);
+            return [];
+        }
+    }
+
+    private static object? MapAddressSuggestion(JsonElement root)
+    {
+        var postalCode = ReadJsonString(root, "postalCode") ?? ReadJsonString(root, "PostalCode");
+        var subDistrictTh = ReadJsonString(root, "subDistrictTh") ?? ReadJsonString(root, "SubDistrictTh");
+        var districtTh = ReadJsonString(root, "districtTh") ?? ReadJsonString(root, "DistrictTh");
+        var provinceTh = ReadJsonString(root, "provinceTh") ?? ReadJsonString(root, "ProvinceTh");
+        var subDistrictEn = ReadJsonString(root, "subDistrictEn") ?? ReadJsonString(root, "SubDistrictEn");
+        var districtEn = ReadJsonString(root, "districtEn") ?? ReadJsonString(root, "DistrictEn");
+        var provinceEn = ReadJsonString(root, "provinceEn") ?? ReadJsonString(root, "ProvinceEn");
+
+        if (string.IsNullOrWhiteSpace(postalCode) &&
+            string.IsNullOrWhiteSpace(subDistrictTh) && string.IsNullOrWhiteSpace(subDistrictEn) &&
+            string.IsNullOrWhiteSpace(districtTh) && string.IsNullOrWhiteSpace(districtEn) &&
+            string.IsNullOrWhiteSpace(provinceTh) && string.IsNullOrWhiteSpace(provinceEn))
+        {
+            return null;
+        }
+
+        var subDistrict = FirstNonWhiteSpace(subDistrictEn, subDistrictTh);
+        var district = FirstNonWhiteSpace(districtEn, districtTh);
+        var province = FirstNonWhiteSpace(provinceEn, provinceTh);
+
+        return new
+        {
+            postalCode,
+            subDistrict,
+            district,
+            province,
+            subDistrictTh,
+            districtTh,
+            provinceTh,
+            label = string.Join(", ", new[] { subDistrict, district, province, postalCode }
+                .Where(part => !string.IsNullOrWhiteSpace(part)))
+        };
+    }
+
+    private static object BuildAgentAddressRow(CustomerAddressDto address)
+    {
+        var line = string.Join(", ", new[]
+        {
+            address.AddressLine1,
+            address.AddressLine2,
+            address.District,
+            address.City,
+            address.StateProvince,
+            address.PostalCode
+        }.Where(part => !string.IsNullOrWhiteSpace(part)));
+
+        return new
+        {
+            id = address.Id,
+            type = address.Type,
+            isDefault = address.IsDefault,
+            recipientName = address.RecipientName,
+            recipientPhone = address.RecipientPhone,
+            summary = string.IsNullOrWhiteSpace(address.FormattedAddress) ? line : address.FormattedAddress,
+            city = address.City,
+            stateProvince = address.StateProvince,
+            postalCode = address.PostalCode
+        };
+    }
+
+    private static string? NormalizeAddressType(string? type)
+    {
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "billing" => "Billing",
+            "shipping" => "Shipping",
+            _ => null
+        };
     }
 
     private bool CanUsePrototypeAccountContextFallback()
