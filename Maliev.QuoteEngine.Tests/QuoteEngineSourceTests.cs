@@ -1659,8 +1659,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-summary-drawer", agentStyles, StringComparison.Ordinal);
         Assert.Contains("border-right: 1px solid var(--qe-agent-line);", ExtractSourceBlock(agentStyles, ".qe-agent-rail {", ".qe-agent-rail-head"), StringComparison.Ordinal);
         var artifactDrawerBlock = ExtractSourceBlock(agentStyles, ".qe-agent-artifact-drawer,", ".qe-agent-artifact-backdrop");
-        Assert.Contains("height: calc(100% - 16px);", artifactDrawerBlock, StringComparison.Ordinal);
-        Assert.Contains("margin-block: 8px;", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains("height: calc(100% - 8px);", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains("margin-top: 8px;", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains("border-top: 1px solid var(--qe-agent-line);", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains("border-left: 1px solid var(--qe-agent-line);", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains("border-radius: 14px 0 0 0;", artifactDrawerBlock, StringComparison.Ordinal);
@@ -5016,7 +5016,7 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("private QuoteAgentArtifactDto? SelectedGeneratedViewerArtifact", shell, StringComparison.Ordinal);
         Assert.Contains("TryGetGeneratedViewerCommands(selectedGeneratedViewer, out var selectedGeneratedCommandsJson)", shell, StringComparison.Ordinal);
-        Assert.Contains("<QeInlinePartViewer CommandsJson=\"@selectedGeneratedCommandsJson\" />", shell, StringComparison.Ordinal);
+        Assert.Contains("<QeInlinePartViewer CommandsJson=\"@selectedGeneratedCommandsJson\"", shell, StringComparison.Ordinal);
         Assert.Contains("private static bool TryGetGeneratedViewerCommands", shell, StringComparison.Ordinal);
     }
 
@@ -5046,7 +5046,7 @@ public sealed class QuoteEngineSourceTests
 
         var build = shell[buildStart..buildEnd];
         Assert.Contains("feedbackMemoryObserved", build, StringComparison.Ordinal);
-        Assert.Contains("InlineViewerFeedbackStatus(generated)", build, StringComparison.Ordinal);
+        Assert.Contains("InlineViewerFeedbackStatus(artifact)", build, StringComparison.Ordinal);
         Assert.Contains("Design marked usable for this quote", shell, StringComparison.Ordinal);
     }
 
