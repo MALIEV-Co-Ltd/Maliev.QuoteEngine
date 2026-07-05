@@ -29,6 +29,8 @@ public sealed class AuthController(
     IAuthServiceClient authClient,
     ICustomerRegistrationClient registrationClient,
     IConfiguration configuration,
+    IHostEnvironment environment,
+    QuoteEnginePrototypeStore store,
     ILogger<AuthController> logger) : ControllerBase
 {
     private const string ExternalScheme = "MalievExternal";
@@ -58,6 +60,39 @@ public sealed class AuthController(
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Development/testing convenience: issues a real customer session cookie for the prototype
+    /// "Demo Customer" so local testers and automated agents can reach sign-in-gated surfaces
+    /// without real credentials. Hard-gated to Development/Testing — returns 404 in every other
+    /// environment so it can never be reached in production.
+    /// </summary>
+    [HttpGet("dev-sign-in")]
+    [AllowAnonymous]
+    public async Task<IActionResult> DevSignIn([FromQuery] string? returnUrl = null)
+    {
+        if (!(environment.IsDevelopment() || environment.IsEnvironment("Testing")))
+        {
+            return NotFound();
+        }
+
+        var prototype = store.PrototypeCustomer;
+        var principalId = prototype.CustomerId.ToString();
+        await SignInCustomerAsync(new AuthUser
+        {
+            UserId = principalId,
+            PrincipalId = principalId,
+            CustomerId = principalId,
+            Email = prototype.Email,
+            Name = prototype.DisplayName,
+            ProfileImageUrl = prototype.ProfileImageUrl,
+            EmailVerified = true
+        });
+
+        logger.LogInformation(
+            "Issued development prototype customer session for {CustomerId}", prototype.CustomerId);
+        return Redirect(NormalizeReturnUrl(returnUrl));
     }
 
     /// <summary>Starts customer Google sign-in as a same-tab browser flow.</summary>

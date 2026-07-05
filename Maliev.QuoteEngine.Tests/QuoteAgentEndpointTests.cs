@@ -861,6 +861,46 @@ Customer message:
     }
 
     [Fact]
+    public async Task Dev_sign_in_issues_prototype_customer_session_outside_production()
+    {
+        // Default test host runs as "Testing", so the dev bypass is allowed.
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        using var signIn = await client.GetAsync("/quote/v1/auth/dev-sign-in");
+        Assert.Equal(HttpStatusCode.Redirect, signIn.StatusCode);
+
+        var status = await client.GetFromJsonAsync<QuoteAuthStatusResponse>(
+            "/quote/v1/auth/session", JsonOptions);
+        Assert.NotNull(status);
+        Assert.True(status!.IsSignedIn);
+        Assert.Equal(Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), status.CustomerId);
+    }
+
+    [Fact]
+    public async Task Dev_sign_in_is_not_found_in_production()
+    {
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(
+                    new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+            });
+        });
+        using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        using var response = await client.GetAsync("/quote/v1/auth/dev-sign-in");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Agent_message_history_keeps_legacy_user_content_unmodified_when_no_context_marker_present()
     {
         var quoteSessionId = Guid.NewGuid();
