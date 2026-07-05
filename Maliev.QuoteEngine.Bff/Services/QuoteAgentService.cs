@@ -7157,7 +7157,10 @@ Customer message:
 """;
     }
 
-    private const string CustomerMessageMarker = "Customer message:\n";
+    // Marker is intentionally newline-agnostic: composed content uses the source file's line
+    // endings (CRLF on Windows checkouts), while a "\n" literal is always LF. The extracted
+    // remainder is Trim()'d, so any leading CR/LF after the colon is removed either way.
+    private const string CustomerMessageMarker = "Customer message:";
 
     /// <summary>
     /// Extracts the customer's literal message text from a BFF-composed agent turn (see
