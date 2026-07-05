@@ -846,6 +846,21 @@ Customer message:
     }
 
     [Fact]
+    public void ExtractCustomerFacingText_handles_crlf_and_keeps_customer_text_that_mentions_the_marker_phrase()
+    {
+        // Boundary is the injected wrapper line "Customer message:\n". A customer message that
+        // merely mentions "Customer message:" mid-sentence (no following newline) must survive
+        // intact, and CRLF-composed content must still strip the wrapper.
+        const string customer = "How do I format a Customer message: field in your API?";
+        var wrapped = "Surface: QuoteEngine chat-based custom manufacturing platform.\r\n"
+            + "Current gates: geometry_required: blocked\r\n\r\n"
+            + "Customer message:\r\n"
+            + customer;
+
+        Assert.Equal(customer, QuoteAgentService.ExtractCustomerFacingText(wrapped));
+    }
+
+    [Fact]
     public async Task Agent_message_history_keeps_legacy_user_content_unmodified_when_no_context_marker_present()
     {
         var quoteSessionId = Guid.NewGuid();

@@ -7157,10 +7157,7 @@ Customer message:
 """;
     }
 
-    // Marker is intentionally newline-agnostic: composed content uses the source file's line
-    // endings (CRLF on Windows checkouts), while a "\n" literal is always LF. The extracted
-    // remainder is Trim()'d, so any leading CR/LF after the colon is removed either way.
-    private const string CustomerMessageMarker = "Customer message:";
+    private const string CustomerMessageMarker = "Customer message:\n";
 
     /// <summary>
     /// Extracts the customer's literal message text from a BFF-composed agent turn (see
@@ -7175,10 +7172,16 @@ Customer message:
             return content;
         }
 
-        var markerIndex = content.LastIndexOf(CustomerMessageMarker, StringComparison.Ordinal);
+        // Composed turns use the source file's line endings (CRLF on Windows checkouts) while the
+        // marker is always LF; normalize before matching so the injected wrapper boundary is found
+        // for both LF and CRLF content. The trailing newline keeps the marker anchored to the
+        // wrapper line, so a customer message that merely mentions "Customer message:" mid-sentence
+        // (no following newline) is not mistaken for the boundary.
+        var normalized = content.Replace("\r\n", "\n");
+        var markerIndex = normalized.LastIndexOf(CustomerMessageMarker, StringComparison.Ordinal);
         return markerIndex < 0
             ? content
-            : content[(markerIndex + CustomerMessageMarker.Length)..].Trim();
+            : normalized[(markerIndex + CustomerMessageMarker.Length)..].Trim();
     }
 
     private async Task<string?> BuildCustomerMemoryContextAsync(Guid? customerId, CancellationToken cancellationToken)
