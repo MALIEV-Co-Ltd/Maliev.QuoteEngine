@@ -319,7 +319,21 @@ public sealed class QuoteEnginePrototypeStore
 
     public bool TryGetProfile(Guid customerId, out CustomerProfileResponse? profile)
     {
-        return _customers.TryGetValue(customerId, out profile);
+        if (_customers.TryGetValue(customerId, out profile))
+        {
+            return true;
+        }
+
+        // The prototype "Demo Customer" is a first-class fallback identity (matches GetProfile),
+        // so account surfaces resolve a profile for it when CustomerService has no record.
+        if (customerId == PrototypeCustomer.CustomerId)
+        {
+            profile = PrototypeCustomer;
+            return true;
+        }
+
+        profile = null;
+        return false;
     }
 
     public IReadOnlyList<CustomerAddressDto> GetAddresses(Guid customerId)
