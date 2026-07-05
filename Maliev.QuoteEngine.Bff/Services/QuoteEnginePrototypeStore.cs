@@ -123,6 +123,59 @@ public sealed class QuoteEnginePrototypeStore
             DateTimeOffset.UtcNow.AddDays(90))
     ];
 
+    public QuoteEnginePrototypeStore()
+    {
+        SeedPrototypeSalesHistory();
+    }
+
+    // Gives the prototype "Demo Customer" a small, realistic sales history so dev/test agents can
+    // exercise the populated Quotes and Orders surfaces (not just empty states). Only surfaces via
+    // the dev/test prototype fallbacks; inert in production.
+    private void SeedPrototypeSalesHistory()
+    {
+        var customerId = PrototypeCustomer.CustomerId;
+        var now = DateTimeOffset.UtcNow;
+        const string pdfUrl = "/quote/v1/account/quotes/sample.pdf";
+
+        var quoteId = Guid.Parse("dddddddd-dddd-dddd-dddd-dddddddddddd");
+        var quote = new CustomerQuoteSummaryDto(
+            quoteId,
+            "MQ-DEMO-0001",
+            "Ready for approval",
+            12_500m,
+            "THB",
+            now.AddDays(-3),
+            pdfUrl,
+            [
+                new CustomerQuoteVersionSummaryDto(
+                    Guid.Parse("d1d1d1d1-dddd-dddd-dddd-dddddddddddd"),
+                    1,
+                    12_500m,
+                    "THB",
+                    "Initial customer quote",
+                    pdfUrl,
+                    null,
+                    "Make Studio",
+                    now.AddDays(-3))
+            ]);
+        _quotes[quoteId] = new CustomerQuoteRecord(customerId, quote);
+
+        var inProduction = new CustomerOrderSummaryDto(
+            Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
+            "MO-DEMO-0001",
+            "In production",
+            now.AddDays(-2),
+            "CNC machining in progress");
+        var paid = new CustomerOrderSummaryDto(
+            Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff"),
+            "MO-DEMO-0002",
+            "Paid",
+            now.AddDays(-1),
+            "Awaiting shipment");
+        _orders[inProduction.OrderId] = new CustomerOrderRecord(customerId, inProduction);
+        _orders[paid.OrderId] = new CustomerOrderRecord(customerId, paid);
+    }
+
     public IReadOnlyList<CustomerDocumentDto> GetDocuments(Guid customerId)
     {
         var documents = new List<CustomerDocumentDto>

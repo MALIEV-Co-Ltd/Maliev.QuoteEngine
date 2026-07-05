@@ -114,6 +114,11 @@ public sealed class AccountController(
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId)) return Unauthorized();
         var quotes = await quotationClient.GetByCustomerAsync(customerId, cancellationToken);
+        if (quotes.Count == 0 && CanUsePrototypeAccountFallback())
+        {
+            return Ok(store.GetQuotes(customerId));
+        }
+
         return Ok(quotes);
     }
 
@@ -122,6 +127,11 @@ public sealed class AccountController(
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId)) return Unauthorized();
         var orders = await orderClient.GetByCustomerAsync(customerId.ToString("D"), cancellationToken);
+        if (orders.Count == 0 && CanUsePrototypeAccountFallback())
+        {
+            return Ok(store.GetOrders(customerId));
+        }
+
         return Ok(orders);
     }
 

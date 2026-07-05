@@ -27,4 +27,19 @@ public sealed class PrototypeStoreTests
         Assert.False(found);
         Assert.Null(profile);
     }
+
+    [Fact]
+    public void Seeds_prototype_sales_history_so_orders_and_quotes_surfaces_are_populated()
+    {
+        var store = new QuoteEnginePrototypeStore();
+        var customerId = store.PrototypeCustomer.CustomerId;
+
+        var orders = store.GetOrders(customerId);
+        var quotes = store.GetQuotes(customerId);
+
+        Assert.NotEmpty(orders);
+        Assert.NotEmpty(quotes);
+        Assert.Contains(orders, o => o.Status == "Paid");
+        Assert.All(quotes, q => Assert.Equal("THB", q.Currency));
+    }
 }
