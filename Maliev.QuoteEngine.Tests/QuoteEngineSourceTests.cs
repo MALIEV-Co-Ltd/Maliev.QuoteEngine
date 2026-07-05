@@ -5178,6 +5178,20 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("part.FdmDfmReport = status.FdmReport", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("part.SlaDfmReport = status.SlaReport", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("part.CncDfmReport = status.CncReport", workspace, StringComparison.Ordinal);
+
+        // The browser-first DFM runtime must stay wired into the viewer JS. Regression guard
+        // against the former no-op stub that stopped local DFM from ever running on parts.
+        var viewerJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer-three.js");
+        Assert.DoesNotContain("not yet ported", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("export async function runLocalAdvisoryGeometry(canvasId, options)", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("/geometry/client-runtime/manifest.json", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("new Worker(blobUrl)", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("operation: 'analyze'", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("NotifyLocalGeometryRuntimeStarted", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("NotifyLocalGeometryRuntimeComplete", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("NotifyLocalGeometryRuntimeUnavailable", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("boundingBoxMm", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("quoteEngineUploads", viewerJs, StringComparison.Ordinal);
     }
 
     [Fact]
