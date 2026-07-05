@@ -1712,12 +1712,22 @@ export function setPartColor(canvasId, cssColor) { /* no visual effect — see s
 // to Blazor via the QePartViewer dotNet callbacks.
 // ============================================================================
 
-const GEOMETRY_RUNTIME_MANIFEST_URL = '/geometry/client-runtime/manifest.json';
+const GEOMETRY_RUNTIME_MANIFEST_URL = '/quote/v1/geometry/runtime/manifest';
+const GEOMETRY_RUNTIME_ASSET_BASE = '/quote/v1/geometry/runtime/assets/';
 let advisoryRuntimePromise = null;
 let advisoryWorker = null;
 let advisoryWorkerKey = null;
 const advisoryPending = new Map();
 let advisoryRequestSeq = 0;
+
+// The manifest may advertise an asset path whose prefix does not match the BFF proxy route
+// (GeometryService returns /geometry/client-runtime/assets/...). Resolve by asset file name
+// against the BFF runtime asset route so the worker/wasm are always fetchable via this origin.
+function resolveRuntimeAssetUrl(assetPath, origin) {
+    const name = String(assetPath || '').split('/').pop();
+    if (!name) return null;
+    return new URL(GEOMETRY_RUNTIME_ASSET_BASE + name, origin).href;
+}
 
 async function loadAdvisoryRuntimeManifest() {
     if (advisoryRuntimePromise) return advisoryRuntimePromise;
@@ -1732,8 +1742,8 @@ async function loadAdvisoryRuntimeManifest() {
         if (!workerAsset) throw new Error('Geometry runtime manifest did not include a worker asset.');
         const origin = (typeof location !== 'undefined' && location.origin) ? location.origin : GEOMETRY_RUNTIME_MANIFEST_URL;
         return {
-            workerUrl: new URL(workerAsset, origin).href,
-            wasmUrl: wasmAsset ? new URL(wasmAsset, origin).href : null
+            workerUrl: resolveRuntimeAssetUrl(workerAsset, origin),
+            wasmUrl: wasmAsset ? resolveRuntimeAssetUrl(wasmAsset, origin) : null
         };
     })().catch((error) => { advisoryRuntimePromise = null; throw error; });
     return advisoryRuntimePromise;

@@ -5184,7 +5184,8 @@ public sealed class QuoteEngineSourceTests
         var viewerJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer-three.js");
         Assert.DoesNotContain("not yet ported", viewerJs, StringComparison.Ordinal);
         Assert.Contains("export async function runLocalAdvisoryGeometry(canvasId, options)", viewerJs, StringComparison.Ordinal);
-        Assert.Contains("/geometry/client-runtime/manifest.json", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("/quote/v1/geometry/runtime/manifest", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("/quote/v1/geometry/runtime/assets/", viewerJs, StringComparison.Ordinal);
         Assert.Contains("new Worker(blobUrl)", viewerJs, StringComparison.Ordinal);
         Assert.Contains("operation: 'analyze'", viewerJs, StringComparison.Ordinal);
         Assert.Contains("NotifyLocalGeometryRuntimeStarted", viewerJs, StringComparison.Ordinal);
