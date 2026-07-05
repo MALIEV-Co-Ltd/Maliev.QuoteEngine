@@ -217,7 +217,10 @@
             _lastMaterialId = MaterialId;
             _lastFinishCode = FinishCode;
             _lastRoughnessCode = RoughnessCode;
-            _pendingLocalDfmProcessCode = null;
+            // Queue a local advisory DFM pass for the freshly loaded model. The viewer JS
+            // waits for the mesh (or reads the original upload bytes), so it is safe to
+            // request the run before InitializeViewerAsync has finished loading geometry.
+            _pendingLocalDfmProcessCode = string.IsNullOrWhiteSpace(ProcessId) ? null : ProcessId;
             _viewerMaterialPushPending = false;
             _loadError = null;
             await InitializeViewerAsync();

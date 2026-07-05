@@ -1702,5 +1702,219 @@ export function setPartMaterial(canvasId, processId, finishCode, roughnessCode, 
     // show the uniform CAD-gray material, matching the former "solid" mode behaviour.
 }
 export function setPartColor(canvasId, cssColor) { /* no visual effect — see setPartMaterial */ }
-export function collectAdvisoryMeshBuffers(canvasId) { warnNotImplemented('collectAdvisoryMeshBuffers'); return null; }
-export async function runLocalAdvisoryGeometry(canvasId, options) { /* no-op: local DFM runtime is a separate WASM-worker subsystem, not yet ported */ }
+// ============================================================================
+// LOCAL ADVISORY GEOMETRY RUNTIME (browser-first DFM)
+// ----------------------------------------------------------------------------
+// Bridges the loaded viewer geometry (or the original uploaded bytes) into the
+// GeometryService-owned browser runtime worker served by the BFF at
+// /geometry/client-runtime/*. The worker computes advisory mesh metrics and DFM
+// issues locally; the server remains authoritative. Results are delivered back
+// to Blazor via the QePartViewer dotNet callbacks.
+// ============================================================================
+
+const GEOMETRY_RUNTIME_MANIFEST_URL = '/geometry/client-runtime/manifest.json';
+let advisoryRuntimePromise = null;
+let advisoryWorker = null;
+let advisoryWorkerKey = null;
+const advisoryPending = new Map();
+let advisoryRequestSeq = 0;
+
+async function loadAdvisoryRuntimeManifest() {
+    if (advisoryRuntimePromise) return advisoryRuntimePromise;
+    advisoryRuntimePromise = (async () => {
+        const response = await fetch(GEOMETRY_RUNTIME_MANIFEST_URL, { headers: { Accept: 'application/json' } });
+        if (!response || !response.ok) {
+            throw new Error(`Geometry runtime manifest request failed (${response ? response.status : 'no response'}).`);
+        }
+        const manifest = await response.json();
+        const workerAsset = manifest?.assets?.worker;
+        const wasmAsset = manifest?.assets?.wasm;
+        if (!workerAsset) throw new Error('Geometry runtime manifest did not include a worker asset.');
+        const origin = (typeof location !== 'undefined' && location.origin) ? location.origin : GEOMETRY_RUNTIME_MANIFEST_URL;
+        return {
+            workerUrl: new URL(workerAsset, origin).href,
+            wasmUrl: wasmAsset ? new URL(wasmAsset, origin).href : null
+        };
+    })().catch((error) => { advisoryRuntimePromise = null; throw error; });
+    return advisoryRuntimePromise;
+}
+
+async function ensureAdvisoryWorker(workerUrl) {
+    if (advisoryWorker && advisoryWorkerKey === workerUrl) return advisoryWorker;
+    if (advisoryWorker) { try { advisoryWorker.terminate(); } catch { /* ignore */ } advisoryWorker = null; }
+
+    // Load through a same-origin blob so the worker constructs even when the
+    // manifest points at a cross-origin GeometryService asset URL.
+    const response = await fetch(workerUrl);
+    if (!response || !response.ok) {
+        throw new Error(`Geometry runtime worker request failed (${response ? response.status : 'no response'}).`);
+    }
+    const source = await response.text();
+    const blobUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
+    let worker;
+    try {
+        worker = new Worker(blobUrl);
+    } finally {
+        URL.revokeObjectURL(blobUrl);
+    }
+
+    const failAll = (error) => {
+        for (const pending of advisoryPending.values()) pending.reject(error);
+        advisoryPending.clear();
+    };
+    worker.onmessage = (event) => {
+        const message = event.data || {};
+        const pending = advisoryPending.get(message.id);
+        if (!pending) return;
+        advisoryPending.delete(message.id);
+        if (message.ok) pending.resolve(message.result);
+        else pending.reject(new Error(message.error || 'Local geometry runtime reported a failure.'));
+    };
+    worker.onerror = (event) => { failAll(new Error(event?.message || 'Local geometry runtime worker crashed.')); };
+    worker.onmessageerror = () => { failAll(new Error('Local geometry runtime returned an unreadable message.')); };
+
+    advisoryWorker = worker;
+    advisoryWorkerKey = workerUrl;
+    return worker;
+}
+
+function runAdvisoryOperation(worker, payload) {
+    const id = `dfm-${advisoryRequestSeq += 1}`;
+    return new Promise((resolve, reject) => {
+        advisoryPending.set(id, { resolve, reject });
+        try { worker.postMessage({ id, ...payload }); }
+        catch (error) { advisoryPending.delete(id); reject(error); }
+    });
+}
+
+async function waitForViewerMesh(canvasId, timeoutMs = 6000) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const meshes = cadMeshes[canvasId];
+        if (Array.isArray(meshes) && meshes.some((mesh) => mesh?.geometry?.attributes?.position)) return true;
+        if (Date.now() >= deadline) return false;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+}
+
+// Collects world-space (millimetre) triangle buffers from the loaded viewer mesh.
+export function collectAdvisoryMeshBuffers(canvasId) {
+    const meshes = cadMeshes[canvasId] || [];
+    const positions = [];
+    const indices = [];
+    for (const mesh of meshes) {
+        const geometry = mesh?.geometry;
+        const positionAttr = geometry?.attributes?.position;
+        if (!positionAttr) continue;
+        mesh.updateWorldMatrix(true, false);
+        const worldGeometry = geometry.clone().applyMatrix4(mesh.matrixWorld);
+        const worldPositions = worldGeometry.attributes.position.array;
+        const baseVertex = positions.length / 3;
+        for (let i = 0; i < worldPositions.length; i += 1) positions.push(worldPositions[i]);
+        const indexAttr = worldGeometry.getIndex();
+        if (indexAttr) {
+            const source = indexAttr.array;
+            for (let i = 0; i < source.length; i += 1) indices.push(baseVertex + source[i]);
+        } else {
+            const vertexCount = worldPositions.length / 3;
+            for (let i = 0; i < vertexCount; i += 1) indices.push(baseVertex + i);
+        }
+        worldGeometry.dispose();
+    }
+    return { positions, indices };
+}
+
+async function buildAdvisoryInput(canvasId, options) {
+    // Prefer the original uploaded bytes (most faithful to the customer file).
+    const uploads = (typeof window !== 'undefined') ? window.quoteEngineUploads : null;
+    if (options.fileBytesProvider === 'quoteEngineUploads' && options.clientUploadId && uploads?.getFileBytes) {
+        try {
+            const bytes = await uploads.getFileBytes(options.clientUploadId);
+            if (bytes && bytes.length > 0) {
+                return { input: { fileBytes: bytes, fileName: options.fileName || '' }, source: 'upload_bytes' };
+            }
+        } catch (error) {
+            console.warn('[ThreeViewer] Upload bytes unavailable; falling back to viewer mesh.', error);
+        }
+    }
+
+    // Fall back to the loaded viewer mesh (always available once rendered).
+    await waitForViewerMesh(canvasId);
+    const meshBuffers = collectAdvisoryMeshBuffers(canvasId);
+    if (meshBuffers.positions.length >= 9 && meshBuffers.indices.length >= 3) {
+        return { input: { meshBuffers }, source: 'viewer_mesh' };
+    }
+    return null;
+}
+
+function mapAdvisoryResult(result, processCode) {
+    const metrics = result?.metrics || {};
+    const box = metrics.boundingBox || null;
+    const issues = Array.isArray(result?.issues) ? result.issues : [];
+    return {
+        processCode: result?.processCode ?? processCode ?? null,
+        runtimeVersion: result?.runtimeVersion ?? null,
+        algorithmVersion: result?.algorithmVersion ?? null,
+        authority: result?.authority ?? null,
+        executionMode: result?.executionMode ?? null,
+        isAuthoritative: result?.isAuthoritative ?? false,
+        inputHash: result?.inputHash ?? null,
+        metrics: {
+            vertexCount: metrics.vertexCount ?? null,
+            faceCount: metrics.faceCount ?? null,
+            volumeMm3: metrics.volumeMm3 ?? null,
+            surfaceAreaMm2: metrics.surfaceAreaMm2 ?? null,
+            boundingBoxMm: box ? { x: box.x, y: box.y, z: box.z } : null,
+            isManifold: metrics.isManifold ?? null,
+            nonManifoldEdgeCount: metrics.nonManifoldEdgeCount ?? null,
+            complexity: metrics.complexity ?? null
+        },
+        issues: issues.map((issue) => ({
+            category: issue?.category ?? null,
+            severity: issue?.severity ?? null,
+            title: issue?.title ?? null,
+            description: issue?.description ?? null,
+            value: issue?.value ?? null,
+            threshold: issue?.threshold ?? null,
+            faceIndices: Array.isArray(issue?.faceIndices) ? issue.faceIndices : [],
+            centroid: Array.isArray(issue?.centroid) ? issue.centroid : []
+        }))
+    };
+}
+
+export async function runLocalAdvisoryGeometry(canvasId, options) {
+    const opts = options || {};
+    const processCode = opts.processCode || null;
+    const dotNetRef = opts.dotNetRef || dotNetRefs[canvasId] || null;
+
+    const notifyUnavailable = async (reason) => {
+        if (!dotNetRef) return;
+        try { await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeUnavailable', { processCode, reason }); }
+        catch (error) { console.warn('[ThreeViewer] Local DFM unavailable callback failed.', error); }
+    };
+
+    try {
+        if (dotNetRef) {
+            try { await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeStarted', { processCode }); }
+            catch { /* non-fatal: proceed with analysis */ }
+        }
+
+        const prepared = await buildAdvisoryInput(canvasId, opts);
+        if (!prepared) { await notifyUnavailable('no_local_geometry_input'); return; }
+
+        const runtime = await loadAdvisoryRuntimeManifest();
+        const worker = await ensureAdvisoryWorker(runtime.workerUrl);
+        const result = await runAdvisoryOperation(worker, {
+            operation: 'analyze',
+            input: prepared.input,
+            processCode: processCode || 'FDM',
+            wasmUrl: runtime.wasmUrl
+        });
+
+        if (!dotNetRef) return;
+        await dotNetRef.invokeMethodAsync('NotifyLocalGeometryRuntimeComplete', mapAdvisoryResult(result, processCode));
+    } catch (error) {
+        console.warn('[ThreeViewer] Local advisory geometry runtime failed.', error);
+        await notifyUnavailable('local_runtime_error');
+    }
+}
