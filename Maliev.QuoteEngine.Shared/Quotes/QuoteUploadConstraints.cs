@@ -89,6 +89,23 @@ public static class QuoteUploadConstraints
     ];
 
     /// <summary>
+    /// Audio and video extensions accepted as supplemental quote context.
+    /// </summary>
+    public static IReadOnlyList<string> SupplementalMediaExtensions { get; } =
+    [
+        "mp4",
+        "mov",
+        "webm",
+        "avi",
+        "mkv",
+        "mp3",
+        "wav",
+        "m4a",
+        "aac",
+        "ogg"
+    ];
+
+    /// <summary>
     /// Archive extensions accepted for bundled quote attachments.
     /// </summary>
     public static IReadOnlyList<string> SupplementalArchiveExtensions { get; } =
@@ -103,6 +120,7 @@ public static class QuoteUploadConstraints
         SupportedCadExtensions
             .Concat(SupplementalDocumentExtensions)
             .Concat(SupplementalImageExtensions)
+            .Concat(SupplementalMediaExtensions)
             .Concat(SupplementalArchiveExtensions)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToArray();
@@ -124,6 +142,30 @@ public static class QuoteUploadConstraints
     /// </summary>
     public static string SupportedCadAccept =>
         string.Join(",", SupportedCadExtensions.Select(extension => $".{extension}"));
+
+    /// <summary>
+    /// Browser file picker accept value for supplemental images.
+    /// </summary>
+    public static string SupportedImageAccept =>
+        string.Join(",", SupplementalImageExtensions.Select(extension => $".{extension}"));
+
+    /// <summary>
+    /// Browser file picker accept value for supplemental drawings and documents.
+    /// </summary>
+    public static string SupportedDocumentAccept =>
+        string.Join(",", SupplementalDocumentExtensions.Select(extension => $".{extension}"));
+
+    /// <summary>
+    /// Browser file picker accept value for supplemental audio and video files.
+    /// </summary>
+    public static string SupportedMediaAccept =>
+        string.Join(",", SupplementalMediaExtensions.Select(extension => $".{extension}"));
+
+    /// <summary>
+    /// Browser file picker accept value for supplemental archive files.
+    /// </summary>
+    public static string SupportedArchiveAccept =>
+        string.Join(",", SupplementalArchiveExtensions.Select(extension => $".{extension}"));
 
     /// <summary>
     /// Browser file picker accept value for all supported quote attachments.

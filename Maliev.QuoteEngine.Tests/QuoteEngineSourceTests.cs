@@ -60,18 +60,28 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_uses_signed_in_draft_copy_for_local_projects()
+    public void QuoteAgentLaunchShell_uses_signed_in_chats_and_projects_sections_for_workspace_items()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
 
-        Assert.Contains("@TemporaryProjectsAriaLabel", shell, StringComparison.Ordinal);
-        Assert.Contains("@TemporaryProjectsHeading", shell, StringComparison.Ordinal);
-        Assert.Contains("@TemporaryProjectsCaption", shell, StringComparison.Ordinal);
-        Assert.Contains("@TemporaryProjectStatusText", shell, StringComparison.Ordinal);
         Assert.Contains("IsSignedIn", shell, StringComparison.Ordinal);
-        Assert.Contains("Text(\"Active draft\",", shell, StringComparison.Ordinal);
-        Assert.Contains("Text(\"Signed-in workspace\",", shell, StringComparison.Ordinal);
-        Assert.Contains("Text(\"In progress\",", shell, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Chats\",", shell, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Projects\",", shell, StringComparison.Ordinal);
+        Assert.Contains("Text(\"New chat\",", shell, StringComparison.Ordinal);
+        Assert.Contains("Text(\"New project\",", shell, StringComparison.Ordinal);
+        Assert.Contains("_chatsCollapsed", shell, StringComparison.Ordinal);
+        Assert.Contains("ToggleChats", shell, StringComparison.Ordinal);
+        Assert.Contains("ChatThreads", shell, StringComparison.Ordinal);
+        Assert.Contains("RailProjects", shell, StringComparison.Ordinal);
+        Assert.Contains("ProjectNavMeta(project)", shell, StringComparison.Ordinal);
+        Assert.Contains("HasMeaningfulProjectState", shell, StringComparison.Ordinal);
+        Assert.Contains("IsProjectRailItem", shell, StringComparison.Ordinal);
+        Assert.Contains("PromoteCurrentSessionToProjectState", shell, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-rail-group-action\"", shell, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-project-row qe-agent-project-row--chat\"", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text(\"Active draft\",", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text(\"Signed-in workspace\",", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("Text(\"In progress\",", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("<span>@Text(\"Temporary\",", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("<small>@Text(\"Saved after sign-in\",", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("<small>@Text(\"This browser session\",", shell, StringComparison.Ordinal);
@@ -705,12 +715,27 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_isOpeningFilePicker = true;", workspace, StringComparison.Ordinal);
         Assert.Contains("_isOpeningFilePicker = false;", workspace, StringComparison.Ordinal);
         Assert.Contains("quoteEngineUploads.openFilePicker", workspace, StringComparison.Ordinal);
+        Assert.Contains("private string _uploadInputAccept = QuoteUploadConstraints.SupportedAttachmentAccept;", workspace, StringComparison.Ordinal);
+        Assert.Contains("private async Task OpenFilePickerAsync(string pickerCategory)", workspace, StringComparison.Ordinal);
+        Assert.Contains("NormalizeUploadPickerCategory(pickerCategory)", workspace, StringComparison.Ordinal);
+        Assert.Contains("UploadAcceptForCategory(normalizedCategory)", workspace, StringComparison.Ordinal);
+        Assert.Contains("BuildUploadPickerInteropOptions(normalizedCategory, accept)", workspace, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedCadAccept", workspace, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedImageAccept", workspace, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedDocumentAccept", workspace, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedMediaAccept", workspace, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedArchiveAccept", workspace, StringComparison.Ordinal);
 
         Assert.Contains("let openPickerPending = false;", uploadScript, StringComparison.Ordinal);
         Assert.Contains("if (openPickerPending)", uploadScript, StringComparison.Ordinal);
         Assert.Contains("if (!input || input.disabled)", uploadScript, StringComparison.Ordinal);
         Assert.Contains("openPickerPending = true;", uploadScript, StringComparison.Ordinal);
         Assert.Contains("openPickerPending = false;", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("window.showOpenFilePicker", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("excludeAcceptAllOption: false", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("types: options.types", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("HandleDroppedFilesAsync", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("input.setAttribute(\"accept\", pickerOptions.accept)", uploadScript, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -875,6 +900,10 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("CustomerBoundaryHint", source, StringComparison.Ordinal);
         Assert.DoesNotContain("<span class=\"qe-zone-label\">Bill To</span>", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadConstraints.SupportedAttachmentAccept", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedImageAccept", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedDocumentAccept", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedMediaAccept", source, StringComparison.Ordinal);
+        Assert.Contains("QuoteUploadConstraints.SupportedArchiveAccept", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadConstraints.SupportedAttachmentExtensionLabel", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadConstraints.MaxFileSizeMegabytes", source, StringComparison.Ordinal);
         Assert.Contains("QuoteUploadHandoffRequest", source, StringComparison.Ordinal);
@@ -896,8 +925,8 @@ public sealed class QuoteEngineSourceTests
         var projectType = shellType.GetNestedType("ProjectNavItem", BindingFlags.NonPublic)!;
         var projectCtor = projectType.GetConstructor(
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool), typeof(bool)])!;
-        var project = projectCtor.Invoke([sessionId, string.Empty, "Original project title", "Original project title", "draft", false, false, false]);
+            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool), typeof(bool), typeof(DateTimeOffset), typeof(bool)])!;
+        var project = projectCtor.Invoke([sessionId, string.Empty, "Original project title", "Original project title", "draft", false, false, false, DateTimeOffset.UtcNow, true]);
         var projects = Activator.CreateInstance(typeof(List<>).MakeGenericType(projectType))!;
         ((IList)projects).Add(project);
         shellType.GetField("_projects", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -922,8 +951,8 @@ public sealed class QuoteEngineSourceTests
         var projectType = shellType.GetNestedType("ProjectNavItem", BindingFlags.NonPublic)!;
         var projectCtor = projectType.GetConstructor(
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
-            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool), typeof(bool)])!;
-        var project = projectCtor.Invoke([sessionId, string.Empty, "New manufacturing project", "New manufacturing project", "draft", false, false, false]);
+            [typeof(Guid), typeof(string), typeof(string), typeof(string), typeof(string), typeof(bool), typeof(bool), typeof(bool), typeof(DateTimeOffset), typeof(bool)])!;
+        var project = projectCtor.Invoke([sessionId, string.Empty, "New manufacturing project", "New manufacturing project", "draft", false, false, false, DateTimeOffset.UtcNow, true]);
         var projects = Activator.CreateInstance(typeof(List<>).MakeGenericType(projectType))!;
         ((IList)projects).Add(project);
         shellType.GetField("_projects", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -1125,18 +1154,28 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private readonly List<ProjectNavItem> _projects = [];", component, StringComparison.Ordinal);
         Assert.Contains("GetProjectNavigationAsync", component, StringComparison.Ordinal);
         Assert.Contains("ProjectNavItem.FromDto", component, StringComparison.Ordinal);
-        Assert.Contains("private IEnumerable<ProjectNavItem> TemporaryProjects => _projects.Where(project => !project.IsPersisted && !project.IsArchived);", component, StringComparison.Ordinal);
-        Assert.Contains("private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => project.IsPersisted && !project.IsPinned && !project.IsArchived);", component, StringComparison.Ordinal);
-        Assert.Contains("private IEnumerable<ProjectNavItem> ProjectManagementProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);", component, StringComparison.Ordinal);
+        Assert.Contains("private IEnumerable<ProjectNavItem> ChatThreads => _projects", component, StringComparison.Ordinal);
+        Assert.Contains("private IEnumerable<ProjectNavItem> RailProjects => _projects", component, StringComparison.Ordinal);
+        Assert.Contains("private IEnumerable<ProjectNavItem> ProjectManagementProjects => RailProjects.Where(project => !project.IsPinned);", component, StringComparison.Ordinal);
+        Assert.Contains("private static bool IsProjectRailItem(ProjectNavItem project)", component, StringComparison.Ordinal);
+        Assert.Contains("private string ProjectNavMeta(ProjectNavItem project)", component, StringComparison.Ordinal);
         Assert.Contains("_projects.RemoveAll(project => project.IsPersisted);", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-rail-group qe-agent-rail-group--temporary\"", component, StringComparison.Ordinal);
-        Assert.Contains("Saved after sign-in", component, StringComparison.Ordinal);
-        Assert.Contains("@foreach (var project in RegularProjects)", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-rail-group-heading\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-rail-group-action\"", component, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var project in ChatThreads)", component, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var project in RailProjects)", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("TemporaryProjects", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("RegularProjects", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-rail-group qe-agent-rail-group--temporary\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("Saved after sign-in", component, StringComparison.Ordinal);
         var managementProjectsPage = ExtractSourceBlock(component, "else if (IsWorkspacePage(WorkspacePage.Projects))", "else if (IsWorkspacePage(WorkspacePage.Settings))");
         Assert.Contains("@if (ProjectManagementProjects.Any())", managementProjectsPage, StringComparison.Ordinal);
         Assert.Contains("@foreach (var project in ProjectManagementProjects)", managementProjectsPage, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-row\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-management-row\"", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-rail-group-heading", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-rail-group-action", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-project-row--chat", styles, StringComparison.Ordinal);
         Assert.Contains("padding: clamp(14px, 2vh, 24px) 0 48px;", styles, StringComparison.Ordinal);
         Assert.Contains("padding-top: 18px;", styles, StringComparison.Ordinal);
         Assert.Contains("href=\"@ProjectHref(project)\"", component, StringComparison.Ordinal);
@@ -1277,6 +1316,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("wrapper.dataset.tooltipPlacement = spaceBelow >= panelHeight + margin ? \"bottom\" : \"top\";", composerScript, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-tooltip:hover .qe-agent-tooltip-panel", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-tooltip[data-tooltip-placement=\"top\"] .qe-agent-tooltip-panel", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-picker-menu", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-picker-menu button", styles, StringComparison.Ordinal);
         Assert.Contains("top: calc(100% + 10px);", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-tooltip-content kbd", styles, StringComparison.Ordinal);
         Assert.Contains("SendAgentMessageStreamAsync", component, StringComparison.Ordinal);
@@ -2123,18 +2164,31 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_uses_native_file_input_label_for_composer_add_button()
+    public void QuoteAgentLaunchShell_uses_categorized_upload_picker_for_composer_add_button()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var addButtonBlock = ExtractSourceBlock(component, "class=\"qe-agent-composer-tooltip qe-agent-add-tooltip\"", "<span id=\"qe-agent-add-tooltip\"");
 
-        Assert.Contains("UploadInputElementId=\"@UploadInputId\"", workspace, StringComparison.Ordinal);
-        Assert.Contains("public string? UploadInputElementId { get; set; }", component, StringComparison.Ordinal);
-        Assert.Contains("<label class=\"qe-agent-round-btn qe-agent-add-btn\"", addButtonBlock, StringComparison.Ordinal);
-        Assert.Contains("for=\"@UploadInputElementId\"", addButtonBlock, StringComparison.Ordinal);
-        Assert.Contains("role=\"button\"", addButtonBlock, StringComparison.Ordinal);
-        Assert.Contains("@onclick=\"RequestUploadAsync\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("OnUploadRequested=\"OpenFilePickerAsync\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("private async Task OpenFilePickerAsync(string pickerCategory)", workspace, StringComparison.Ordinal);
+        Assert.Contains("BuildUploadPickerInteropOptions(normalizedCategory, accept)", workspace, StringComparison.Ordinal);
+        Assert.Contains("public EventCallback<string> OnUploadRequested { get; set; }", component, StringComparison.Ordinal);
+        Assert.Contains("private IReadOnlyList<UploadPickerOption> UploadPickerOptions", component, StringComparison.Ordinal);
+        Assert.Contains("UploadPicker3d", component, StringComparison.Ordinal);
+        Assert.Contains("UploadPickerImages", component, StringComparison.Ordinal);
+        Assert.Contains("UploadPickerDocuments", component, StringComparison.Ordinal);
+        Assert.Contains("UploadPickerMedia", component, StringComparison.Ordinal);
+        Assert.Contains("UploadPickerArchives", component, StringComparison.Ordinal);
+        Assert.Contains("UploadPickerAll", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-upload-picker-menu\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("role=\"menuitem\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("RequestUploadAsync(option)", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("OnUploadRequested.InvokeAsync(pickerCategory)", component, StringComparison.Ordinal);
+        Assert.Contains("RequestUploadFromQuickActionsAsync(UploadPicker3d)", component, StringComparison.Ordinal);
+        Assert.Contains("RequestUploadFromQuickActionsAsync(UploadPickerImages)", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("<label class=\"qe-agent-round-btn qe-agent-add-btn\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("for=\"@UploadInputElementId\"", addButtonBlock, StringComparison.Ordinal);
     }
 
     [Fact]

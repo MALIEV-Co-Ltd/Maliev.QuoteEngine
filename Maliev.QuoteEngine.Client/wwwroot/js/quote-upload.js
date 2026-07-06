@@ -86,7 +86,7 @@ window.quoteEngineUploads = (() => {
     };
   }
 
-  function openFilePicker(inputId) {
+  async function openFilePicker(inputId, options, dotNetRef) {
     if (openPickerPending) {
       return;
     }
@@ -97,10 +97,73 @@ window.quoteEngineUploads = (() => {
     }
 
     openPickerPending = true;
-    input.click();
-    setTimeout(() => {
-      openPickerPending = false;
-    }, 600);
+    const pickerOptions = normalizePickerOptions(options);
+    try {
+      if (pickerOptions?.types?.length && dotNetRef && window.showOpenFilePicker) {
+        const handled = await openNamedFilePicker(pickerOptions, dotNetRef);
+        if (handled) {
+          return;
+        }
+      }
+
+      if (pickerOptions?.accept) {
+        input.setAttribute("accept", pickerOptions.accept);
+      }
+
+      input.click();
+    } finally {
+      setTimeout(() => {
+        openPickerPending = false;
+      }, 600);
+    }
+  }
+
+  function normalizePickerOptions(options) {
+    if (!options || typeof options !== "object") {
+      return null;
+    }
+
+    const types = Array.isArray(options.types)
+      ? options.types
+        .filter(type => type?.description && type?.accept && typeof type.accept === "object")
+        .map(type => ({
+          description: String(type.description),
+          accept: type.accept
+        }))
+      : [];
+
+    return {
+      accept: typeof options.accept === "string" ? options.accept : "",
+      types
+    };
+  }
+
+  async function openNamedFilePicker(options, dotNetRef) {
+    try {
+      const handles = await window.showOpenFilePicker({
+        multiple: true,
+        excludeAcceptAllOption: false,
+        types: options.types
+      });
+      const files = [];
+      for (const handle of handles) {
+        files.push(await handle.getFile());
+      }
+
+      const droppedFiles = files.map(file => storeBrowserFile(file));
+      if (droppedFiles.length > 0) {
+        await dotNetRef.invokeMethodAsync("HandleDroppedFilesAsync", droppedFiles);
+      }
+
+      return true;
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        return true;
+      }
+
+      console.warn("Named file picker failed; falling back to input picker.", error);
+      return false;
+    }
   }
 
   function registerDropzone(dropzoneId, inputId, dotNetRef, options) {

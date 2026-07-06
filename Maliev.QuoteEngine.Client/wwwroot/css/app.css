@@ -1320,6 +1320,32 @@
     margin-top: 16px;
 }
 
+.qe-agent-rail-group-heading {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    align-items: center;
+    gap: 4px;
+}
+
+.qe-agent-rail-group-action {
+    display: inline-grid;
+    place-items: center;
+    width: 26px;
+    min-width: 26px;
+    height: 26px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--qe-agent-muted);
+    cursor: pointer;
+}
+
+.qe-agent-rail-group-action:hover,
+.qe-agent-rail-group-action:focus-visible {
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-ink);
+}
+
 .qe-agent-rail-group-label {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1394,11 +1420,11 @@
     background: transparent;
 }
 
-.qe-agent-project-row--temporary {
+.qe-agent-project-row--chat {
     grid-template-columns: minmax(0, 1fr);
 }
 
-.qe-agent-project-row--temporary a {
+.qe-agent-project-row--chat a {
     display: grid;
     gap: 1px;
 }
@@ -1413,7 +1439,7 @@
     min-width: 0;
     overflow: hidden;
     color: var(--qe-agent-muted);
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.15;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -4609,6 +4635,72 @@
 
 .qe-agent-add-btn.active {
     background: var(--qe-agent-hover);
+}
+
+.qe-agent-upload-picker-menu {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 8px);
+    z-index: 38;
+    display: grid;
+    gap: 2px;
+    width: min(286px, calc(100vw - 32px));
+    padding: 7px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 14px;
+    background: var(--qe-agent-raised);
+    box-shadow: 0 16px 44px rgba(0, 0, 0, .14);
+}
+
+.qe-agent-upload-picker-menu button {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+    align-items: center;
+    gap: 9px;
+    width: 100%;
+    min-height: 46px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--qe-agent-ink);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+}
+
+.qe-agent-upload-picker-menu button:hover,
+.qe-agent-upload-picker-menu button:focus-visible {
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-upload-picker-menu .mud-icon-root {
+    color: color-mix(in srgb, var(--qe-agent-ink) 76%, var(--qe-agent-muted));
+}
+
+.qe-agent-upload-picker-menu span {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.qe-agent-upload-picker-menu strong,
+.qe-agent-upload-picker-menu small {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-upload-picker-menu strong {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.qe-agent-upload-picker-menu small {
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    line-height: 1.2;
 }
 
 .qe-agent-dictation-meter {

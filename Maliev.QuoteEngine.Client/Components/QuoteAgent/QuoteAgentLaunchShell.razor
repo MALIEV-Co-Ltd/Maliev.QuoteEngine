@@ -110,87 +110,82 @@
                 </section>
             }
 
-            @if (TemporaryProjects.Any())
-            {
-                <section class="qe-agent-rail-group qe-agent-rail-group--temporary" aria-label="@TemporaryProjectsAriaLabel">
-                    <div class="qe-agent-rail-group-label">
-                        <span>@TemporaryProjectsHeading</span>
-                        <small>@TemporaryProjectsCaption</small>
-                    </div>
-                    @foreach (var project in TemporaryProjects)
-                    {
-                        <div class="qe-agent-project-row qe-agent-project-row--temporary">
-                            <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
-                                <span>@ProjectName(project)</span>
-                                <small>@TemporaryProjectStatusText</small>
-                            </a>
-                        </div>
-                    }
-                </section>
-            }
-
             @if (IsSignedIn)
             {
-                @if (PinnedProjects.Any())
-                {
-                    <section class="qe-agent-rail-group" aria-label="@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")">
+                <section class="qe-agent-rail-group" aria-label="@Text("Chats", "แชท")">
+                    <div class="qe-agent-rail-group-heading">
+                        <button type="button"
+                                class="qe-agent-rail-group-action"
+                                title="@Text("New chat", "แชทใหม่")"
+                                aria-label="@Text("New chat", "แชทใหม่")"
+                                @onclick="StartNewProjectAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.PostAdd" Size="Size.Small" />
+                        </button>
                         <button type="button"
                                 class="qe-agent-rail-group-toggle"
-                                aria-expanded="@AriaExpanded(!_pinnedProjectsCollapsed)"
-                                @onclick="TogglePinnedProjects">
-                            <span>@Text("Pinned projects", "โปรเจกต์ที่ปักหมุด")</span>
-                            <MudIcon Icon="@(_pinnedProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                                aria-expanded="@AriaExpanded(!_chatsCollapsed)"
+                                @onclick="ToggleChats">
+                            <span>@Text("Chats", "แชท")</span>
+                            <MudIcon Icon="@(_chatsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
                         </button>
-                        @if (!_pinnedProjectsCollapsed)
+                    </div>
+                    @if (!_chatsCollapsed)
+                    {
+                        @if (ChatThreads.Any())
                         {
-                            @foreach (var project in PinnedProjects)
+                            @foreach (var project in ChatThreads)
                             {
-                                <div class="qe-agent-project-row">
+                                <div class="qe-agent-project-row qe-agent-project-row--chat">
                                     <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
                                         <span>@ProjectName(project)</span>
+                                        <small>@ProjectNavMeta(project)</small>
                                     </a>
-                                    @if (CanManageProject(project))
-                                    {
-                                        <button type="button"
-                                                class="qe-agent-pin-btn active"
-                                                title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
-                                                aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
-                                                @onclick="@(() => ToggleProjectPinAsync(project))">
-                                            <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
-                                        </button>
-                                    }
                                 </div>
                             }
                         }
-                    </section>
-                }
+                        else
+                        {
+                            <p class="qe-agent-empty-projects">@Text("No active chats yet.", "ยังไม่มีแชทที่กำลังทำงาน")</p>
+                        }
+                    }
+                </section>
 
                 <section class="qe-agent-rail-group" aria-label="@Text("Projects", "โปรเจกต์")">
-                    <button type="button"
-                            class="qe-agent-rail-group-toggle"
-                            aria-expanded="@AriaExpanded(!_projectsCollapsed)"
-                            @onclick="ToggleProjects">
-                        <span>@Text("Projects", "โปรเจกต์")</span>
-                        <MudIcon Icon="@(_projectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
-                    </button>
+                    <div class="qe-agent-rail-group-heading">
+                        <button type="button"
+                                class="qe-agent-rail-group-action"
+                                title="@Text("New project", "โปรเจกต์ใหม่")"
+                                aria-label="@Text("New project", "โปรเจกต์ใหม่")"
+                                @onclick="StartNewProjectAsync">
+                            <MudIcon Icon="@Icons.Material.Outlined.PostAdd" Size="Size.Small" />
+                        </button>
+                        <button type="button"
+                                class="qe-agent-rail-group-toggle"
+                                aria-expanded="@AriaExpanded(!_projectsCollapsed)"
+                                @onclick="ToggleProjects">
+                            <span>@Text("Projects", "โปรเจกต์")</span>
+                            <MudIcon Icon="@(_projectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                        </button>
+                    </div>
                     @if (!_projectsCollapsed)
                     {
-                        @if (RegularProjects.Any())
+                        @if (RailProjects.Any())
                         {
-                            @foreach (var project in RegularProjects)
+                            @foreach (var project in RailProjects)
                             {
                                 <div class="qe-agent-project-row">
                                     <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
                                         <span>@ProjectName(project)</span>
+                                        <small>@ProjectNavMeta(project)</small>
                                     </a>
                                     @if (CanManageProject(project))
                                     {
                                         <button type="button"
-                                                class="qe-agent-pin-btn"
-                                                title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
-                                                aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
+                                                class="@ProjectPinButtonClass(project)"
+                                                title="@ProjectPinButtonTitle(project)"
+                                                aria-label="@ProjectPinButtonTitle(project)"
                                                 @onclick="@(() => ToggleProjectPinAsync(project))">
-                                            <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
+                                            <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
                                         </button>
                                     }
                                 </div>
@@ -198,7 +193,7 @@
                         }
                         else
                         {
-                            <p class="qe-agent-empty-projects">@Text("No unpinned projects.", "ไม่มีโปรเจกต์ที่ไม่ได้ปักหมุด")</p>
+                            <p class="qe-agent-empty-projects">@Text("No projects with files or artifacts yet.", "ยังไม่มีโปรเจกต์ที่มีไฟล์หรือไฟล์งาน")</p>
                         }
                     }
                 </section>
@@ -206,7 +201,7 @@
             else
             {
                 <p class="qe-agent-empty-projects">
-                    @(TemporaryProjects.Any()
+                    @(ChatThreads.Any()
                         ? Text("Sign in to save this temporary project and restore it across devices.", "เข้าสู่ระบบเพื่อบันทึกโปรเจกต์ชั่วคราวนี้และกู้คืนข้ามอุปกรณ์")
                         : Text("Sign in to see pinned projects and saved projects.", "เข้าสู่ระบบเพื่อดูโปรเจกต์ที่ปักหมุดและโปรเจกต์ที่บันทึกไว้"))
                 </p>
@@ -1427,26 +1422,31 @@
                 @if (!IsDictationActive)
                 {
                     <div class="qe-agent-composer-tooltip qe-agent-add-tooltip">
-                        @if (!string.IsNullOrWhiteSpace(UploadInputElementId))
+                        <button type="button"
+                                class="qe-agent-round-btn qe-agent-add-btn"
+                                aria-describedby="qe-agent-add-tooltip"
+                                aria-label="@Text("Add files", "เพิ่มไฟล์")"
+                                aria-haspopup="menu"
+                                aria-expanded="@_uploadPickerMenuOpen"
+                                @onclick="ToggleUploadPickerMenu">
+                            <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
+                        </button>
+                        @if (_uploadPickerMenuOpen)
                         {
-                            <label class="qe-agent-round-btn qe-agent-add-btn"
-                                   for="@UploadInputElementId"
-                                   role="button"
-                                   tabindex="0"
-                                   aria-describedby="qe-agent-add-tooltip"
-                                   aria-label="@Text("Add files", "เพิ่มไฟล์")">
-                                <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
-                            </label>
-                        }
-                        else
-                        {
-                            <button type="button"
-                                    class="qe-agent-round-btn qe-agent-add-btn"
-                                    aria-describedby="qe-agent-add-tooltip"
-                                    aria-label="@Text("Add files", "เพิ่มไฟล์")"
-                                    @onclick="RequestUploadAsync">
-                                <MudIcon Icon="@Icons.Material.Outlined.Add" Size="Size.Small" />
-                            </button>
+                            <div class="qe-agent-upload-picker-menu" role="menu" aria-label="@Text("Choose file type", "เลือกประเภทไฟล์")">
+                                @foreach (var option in UploadPickerOptions)
+                                {
+                                    <button type="button"
+                                            role="menuitem"
+                                            @onclick="@(() => RequestUploadAsync(option))">
+                                        <MudIcon Icon="@option.Icon" Size="Size.Small" />
+                                        <span>
+                                            <strong>@Text(option.LabelEn, option.LabelTh)</strong>
+                                            <small>@Text(option.DescriptionEn, option.DescriptionTh)</small>
+                                        </span>
+                                    </button>
+                                }
+                            </div>
                         }
                         <span id="qe-agent-add-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
                             <span class="qe-agent-tooltip-content">
@@ -1551,11 +1551,11 @@
                         @if (_quickActionsMenuOpen)
                         {
                             <div class="qe-agent-quick-actions-menu" role="menu" aria-label="@Text("Tools", "เครื่องมือ")">
-                            <button type="button" role="menuitem" @onclick="RequestUploadFromQuickActionsAsync">
+                            <button type="button" role="menuitem" @onclick="@(() => RequestUploadFromQuickActionsAsync(UploadPicker3d))">
                                 <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
                                 <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
                             </button>
-                            <button type="button" role="menuitem" @onclick="RequestUploadFromQuickActionsAsync">
+                            <button type="button" role="menuitem" @onclick="@(() => RequestUploadFromQuickActionsAsync(UploadPickerImages))">
                                 <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" />
                                 <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
                             </button>
@@ -1794,27 +1794,13 @@
                     <strong>@Text("Artifacts", "ไฟล์งาน")</strong>
                 </div>
                 <div class="qe-agent-artifact-header-actions">
-                    @if (!string.IsNullOrWhiteSpace(UploadInputElementId))
-                    {
-                        <label class="qe-agent-round-btn qe-agent-artifact-upload-btn"
-                               for="@UploadInputElementId"
-                               role="button"
-                               tabindex="0"
-                               title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
-                               aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")">
-                            <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
-                        </label>
-                    }
-                    else
-                    {
-                        <button type="button"
-                                class="qe-agent-round-btn qe-agent-artifact-upload-btn"
-                                title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
-                                aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
-                                @onclick="RequestUploadAsync">
-                            <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
-                        </button>
-                    }
+                    <button type="button"
+                            class="qe-agent-round-btn qe-agent-artifact-upload-btn"
+                            title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
+                            aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
+                            @onclick="@(() => RequestUploadAsync(UploadPickerAll))">
+                        <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
+                    </button>
                     <button type="button" class="qe-agent-round-btn" @onclick="ToggleArtifactPanel" title="@Text("Close", "ปิด")">
                         <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
                     </button>
@@ -2573,6 +2559,7 @@
     private string _artifactNoteDraft = string.Empty;
     private bool _navigationDrawerOpen;
     private bool _accountMenuOpen;
+    private bool _chatsCollapsed;
     private bool _pinnedProjectsCollapsed;
     private bool _projectsCollapsed;
     private bool _quickActionsMenuOpen;
@@ -2614,6 +2601,7 @@
     private bool _driveConnectorContinuing;
     private bool _driveConnectorDisconnecting;
     private bool _drivePickerOpening;
+    private bool _uploadPickerMenuOpen;
     private bool _composerMenuOpen;
     private bool _composerPluginsOpen;
     private bool _searchPromptHovered;
@@ -2665,6 +2653,21 @@
         new("Search projects with DFM issues", "ค้นหาโปรเจกต์ที่มีปัญหา DFM"),
         new("Find quotes for 6061-T6 aluminum", "ค้นหาใบเสนอราคาอะลูมิเนียม 6061-T6")
     ];
+    private const string UploadPicker3d = "3d";
+    private const string UploadPickerImages = "images";
+    private const string UploadPickerDocuments = "documents";
+    private const string UploadPickerMedia = "media";
+    private const string UploadPickerArchives = "archives";
+    private const string UploadPickerAll = "all";
+    private IReadOnlyList<UploadPickerOption> UploadPickerOptions =>
+    [
+        new(UploadPicker3d, Icons.Material.Outlined.ViewInAr, "3D files", "ไฟล์ 3D", "STEP, STL, 3MF, OBJ, GLB, CAD", "STEP, STL, 3MF, OBJ, GLB, CAD"),
+        new(UploadPickerImages, Icons.Material.Outlined.PhotoCamera, "Images", "รูปภาพ", "Photos, sketches, screenshots", "รูปถ่าย สเก็ตช์ ภาพหน้าจอ"),
+        new(UploadPickerDocuments, Icons.Material.Outlined.PictureAsPdf, "Documents", "เอกสาร", "PDF, DXF, DWG drawings", "แบบ PDF, DXF, DWG"),
+        new(UploadPickerMedia, Icons.Material.Outlined.Category, "Media", "สื่อ", "Audio and video references", "ไฟล์เสียงและวิดีโออ้างอิง"),
+        new(UploadPickerArchives, Icons.Material.Outlined.Archive, "Archives", "ไฟล์บีบอัด", "ZIP bundles", "ชุดไฟล์ ZIP"),
+        new(UploadPickerAll, Icons.Material.Outlined.FolderOpen, "All files", "ไฟล์ทั้งหมด", "Any supported quote attachment", "ไฟล์แนบใบเสนอราคาที่รองรับทั้งหมด")
+    ];
 
     [Parameter]
     public Guid SessionId { get; set; }
@@ -2706,13 +2709,10 @@
     public int SelectedPartIndex { get; set; }
 
     [Parameter]
-    public string? UploadInputElementId { get; set; }
-
-    [Parameter]
     public string Culture { get; set; } = SupportedCultures.DefaultCulture;
 
     [Parameter]
-    public EventCallback OnUploadRequested { get; set; }
+    public EventCallback<string> OnUploadRequested { get; set; }
 
     [Parameter]
     public EventCallback OnNewProjectRequested { get; set; }
@@ -2998,21 +2998,14 @@
     private bool AuthEmailLooksValid => !string.IsNullOrWhiteSpace(_authEmail) &&
         Regex.IsMatch(_authEmail.Trim(), "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", RegexOptions.CultureInvariant);
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPersisted && project.IsPinned && !project.IsArchived);
-    private IEnumerable<ProjectNavItem> TemporaryProjects => _projects.Where(project => !project.IsPersisted && !project.IsArchived);
-    private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => project.IsPersisted && !project.IsPinned && !project.IsArchived);
-    private IEnumerable<ProjectNavItem> ProjectManagementProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
-    private string TemporaryProjectsAriaLabel => IsSignedIn
-        ? Text("Active draft projects", "โปรเจกต์ฉบับร่างที่กำลังทำ")
-        : Text("Temporary projects", "โปรเจกต์ชั่วคราว");
-    private string TemporaryProjectsHeading => IsSignedIn
-        ? Text("Active draft", "ฉบับร่างที่กำลังทำ")
-        : Text("Temporary", "ชั่วคราว");
-    private string TemporaryProjectsCaption => IsSignedIn
-        ? Text("Signed-in workspace", "พื้นที่ทำงานที่เข้าสู่ระบบแล้ว")
-        : Text("Saved after sign-in", "บันทึกหลังเข้าสู่ระบบ");
-    private string TemporaryProjectStatusText => IsSignedIn
-        ? Text("In progress", "กำลังดำเนินการ")
-        : Text("This browser session", "เซสชันเบราว์เซอร์นี้");
+    private IEnumerable<ProjectNavItem> ChatThreads => _projects
+        .Where(project => !project.IsArchived && !IsProjectRailItem(project))
+        .OrderByDescending(project => project.UpdatedAt);
+    private IEnumerable<ProjectNavItem> RailProjects => _projects
+        .Where(project => !project.IsArchived && IsProjectRailItem(project))
+        .OrderByDescending(project => project.IsPinned)
+        .ThenByDescending(project => project.UpdatedAt);
+    private IEnumerable<ProjectNavItem> ProjectManagementProjects => RailProjects.Where(project => !project.IsPinned);
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
     private bool SearchHasMinimumQuery => _searchQuery.Trim().Length >= SearchMinimumCharacters;
     private bool CanAnimateSearchPrompt => string.IsNullOrEmpty(_searchQuery) && !_searchPromptHovered && !_searchPromptFocused;
@@ -3697,12 +3690,13 @@
     [JSInvokable]
     public Task CloseQuickActionsMenuFromOutsideAsync()
     {
-        if (!_quickActionsMenuOpen)
+        if (!_quickActionsMenuOpen && !_uploadPickerMenuOpen)
         {
             return Task.CompletedTask;
         }
 
         _quickActionsMenuOpen = false;
+        _uploadPickerMenuOpen = false;
         return InvokeAsync(StateHasChanged);
     }
 
@@ -3821,6 +3815,10 @@
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
                     SyncSelectedArtifactWithArtifacts();
+                    if (_artifacts.Any(QuoteAgentUiHelpers.IsVisibleArtifact))
+                    {
+                        PromoteCurrentSessionToProjectState(null);
+                    }
                     _ = EnsurePaymentOrderGroupJoinedAsync();
                     _proposedActions = streamEvent.Response.ProposedActions;
                     _usageSnapshot = streamEvent.Response.UsageSnapshot;
@@ -4371,6 +4369,11 @@
         _proposedActions = state.ProposedActions;
         _stateWorkbench = BuildRestoredWorkbench(state);
         await ApplyAgentProjectNameAsync(state.ProjectName);
+        if (state.Parts.Count > 0 || state.Artifacts.Any(QuoteAgentUiHelpers.IsVisibleArtifact))
+        {
+            PromoteCurrentSessionToProjectState(state.ProjectName);
+        }
+
         await ApplyUiDirectivesAsync(state.UiDirectives, suppressPanelAutoOpen);
         if (!suppressPanelAutoOpen && HasVisiblePaymentArtifact())
         {
@@ -4588,6 +4591,7 @@
         }
 
         SyncSelectedArtifactWithArtifacts();
+        PromoteCurrentSessionToProjectState(null);
 
         if (IsGeneratedViewerArtifact(artifact) &&
             artifact.Metadata.TryGetValue("cad_commands", out var commandsJson) &&
@@ -5224,6 +5228,12 @@
     private async Task ToggleComposerMenuAsync()
     {
         _composerMenuOpen = !_composerMenuOpen;
+        if (_composerMenuOpen)
+        {
+            _uploadPickerMenuOpen = false;
+            _quickActionsMenuOpen = false;
+        }
+
         if (!_composerMenuOpen)
         {
             _composerPluginsOpen = false;
@@ -5236,6 +5246,7 @@
     {
         _composerMenuOpen = false;
         _composerPluginsOpen = false;
+        _uploadPickerMenuOpen = false;
         await FocusComposerAsync();
     }
 
@@ -5389,11 +5400,33 @@
         }
     }
 
-    private async Task RequestUploadAsync()
+    private void ToggleUploadPickerMenu()
     {
+        _uploadPickerMenuOpen = !_uploadPickerMenuOpen;
+        if (_uploadPickerMenuOpen)
+        {
+            _quickActionsMenuOpen = false;
+            _composerMenuOpen = false;
+            _composerPluginsOpen = false;
+        }
+    }
+
+    private Task RequestUploadAsync()
+    {
+        return RequestUploadAsync(UploadPickerAll);
+    }
+
+    private Task RequestUploadAsync(UploadPickerOption option)
+    {
+        return RequestUploadAsync(option.Key);
+    }
+
+    private async Task RequestUploadAsync(string pickerCategory)
+    {
+        _uploadPickerMenuOpen = false;
         if (OnUploadRequested.HasDelegate)
         {
-            await OnUploadRequested.InvokeAsync();
+            await OnUploadRequested.InvokeAsync(pickerCategory);
         }
     }
 
@@ -5401,7 +5434,7 @@
     {
         _composerMenuOpen = false;
         _composerPluginsOpen = false;
-        await RequestUploadAsync();
+        await RequestUploadAsync(UploadPickerAll);
     }
 
     private async Task SelectUploadedPartAsync(int index)
@@ -5532,6 +5565,7 @@
         }
 
         QueueComposerAttachment(part);
+        PromoteCurrentSessionToProjectState(part.FileName);
         await InvokeAsync(StateHasChanged);
     }
 
@@ -5543,6 +5577,7 @@
         }
 
         QueueComposerAttachment(part);
+        PromoteCurrentSessionToProjectState(part.FileName);
         await InvokeAsync(StateHasChanged);
         await RefreshPendingAttachmentPreviewAsync();
     }
@@ -5860,6 +5895,7 @@
     private async Task OpenSketchAsync()
     {
         _quickActionsMenuOpen = false;
+        _uploadPickerMenuOpen = false;
         _composerMenuOpen = false;
         _composerPluginsOpen = false;
         _sketchOpen = true;
@@ -5878,6 +5914,13 @@
     {
         var nextOpen = !_quickActionsMenuOpen;
         _quickActionsMenuOpen = nextOpen;
+        if (nextOpen)
+        {
+            _uploadPickerMenuOpen = false;
+            _composerMenuOpen = false;
+            _composerPluginsOpen = false;
+        }
+
         if (nextOpen && !_connectorRegistryLoaded)
         {
             await LoadConnectorRegistryAsync();
@@ -5891,10 +5934,10 @@
         await ApplyConnectorAsync(connector);
     }
 
-    private async Task RequestUploadFromQuickActionsAsync()
+    private async Task RequestUploadFromQuickActionsAsync(string pickerCategory)
     {
         _quickActionsMenuOpen = false;
-        await RequestUploadAsync();
+        await RequestUploadAsync(pickerCategory);
     }
 
     private async Task OpenSketchFromQuickActionsAsync()
@@ -7300,6 +7343,7 @@
         _messages.Add(new AgentMessageRow("assistant", Text(turn.TextEn, turn.TextTh), turn.Workbench));
         _artifacts = turn.Artifacts;
         SyncSelectedArtifactWithArtifacts();
+        PromoteCurrentSessionToProjectState(null);
         _proposedActions = [];
         RequestScrollToLatestMessage();
     }
@@ -7417,6 +7461,53 @@
         return Text(project.NameEn, project.NameTh);
     }
 
+    private string ProjectNavMeta(ProjectNavItem project)
+    {
+        return Text(
+            $"{ProjectUpdatedLabel(project)} · {ProjectStatusLabel(project)}",
+            $"{ProjectUpdatedLabel(project)} · {ProjectStatusLabel(project)}");
+    }
+
+    private static string ProjectUpdatedLabel(ProjectNavItem project)
+    {
+        var local = project.UpdatedAt.ToLocalTime();
+        var now = DateTimeOffset.Now;
+        return local.Year == now.Year
+            ? local.ToString("MMM d", CultureInfo.InvariantCulture)
+            : local.ToString("MMM d, yyyy", CultureInfo.InvariantCulture);
+    }
+
+    private string ProjectStatusLabel(ProjectNavItem project)
+    {
+        return project.Status.Trim().ToLowerInvariant() switch
+        {
+            "chat" => Text("Chat", "แชท"),
+            "draft" => Text("Draft", "ฉบับร่าง"),
+            "ordered" or "order" => Text("Ordered", "สั่งผลิตแล้ว"),
+            "manufacturing" or "in_production" => Text("Manufacturing", "กำลังผลิต"),
+            "shipping" or "shipped" => Text("Shipping", "กำลังจัดส่ง"),
+            "completed" or "complete" => Text("Completed", "เสร็จสิ้น"),
+            _ => HumanizeArtifactStatus(project.Status)
+        };
+    }
+
+    private static bool IsProjectRailItem(ProjectNavItem project)
+    {
+        return project.IsPersisted || project.HasMeaningfulProjectState;
+    }
+
+    private string ProjectPinButtonClass(ProjectNavItem project)
+    {
+        return project.IsPinned ? "qe-agent-pin-btn active" : "qe-agent-pin-btn";
+    }
+
+    private string ProjectPinButtonTitle(ProjectNavItem project)
+    {
+        return project.IsPinned
+            ? Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")
+            : Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}");
+    }
+
     private void EnsureLocalProjectFromMessage(string message)
     {
         var projectTitle = NormalizeProjectNavTitle(_projectName) ?? DefaultProjectTitle;
@@ -7433,11 +7524,12 @@
                 existingProject.NameTh = projectTitle;
             }
 
-            existingProject.Status = "draft";
+            existingProject.Status = existingProject.HasMeaningfulProjectState ? "draft" : "chat";
+            existingProject.UpdatedAt = DateTimeOffset.UtcNow;
             return;
         }
 
-        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, projectTitle, projectTitle, "draft", false, false, false));
+        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, projectTitle, projectTitle, "chat", false, false, false, DateTimeOffset.UtcNow, false));
     }
 
     private string DefaultProjectTitle => Text("New manufacturing project", "โปรเจกต์ผลิตใหม่");
@@ -7472,11 +7564,44 @@
         {
             existingProject.NameEn = normalizedProjectName;
             existingProject.NameTh = normalizedProjectName;
-            existingProject.Status = "draft";
+            existingProject.Status = existingProject.HasMeaningfulProjectState ? "draft" : "chat";
+            existingProject.UpdatedAt = DateTimeOffset.UtcNow;
             return;
         }
 
-        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, normalizedProjectName, normalizedProjectName, "draft", false, false, false));
+        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, normalizedProjectName, normalizedProjectName, "chat", false, false, false, DateTimeOffset.UtcNow, false));
+    }
+
+    private void PromoteCurrentSessionToProjectState(string? titleHint)
+    {
+        if (SessionId == Guid.Empty)
+        {
+            return;
+        }
+
+        var projectTitle = NormalizeProjectNavTitle(_projectName)
+            ?? NormalizeProjectNavTitle(titleHint)
+            ?? DefaultProjectTitle;
+        var existingProject = _projects.FirstOrDefault(project => project.ProjectId == SessionId);
+        if (existingProject is not null)
+        {
+            if (string.IsNullOrWhiteSpace(existingProject.NameEn) || existingProject.NameEn.Equals(DefaultProjectTitle, StringComparison.OrdinalIgnoreCase))
+            {
+                existingProject.NameEn = projectTitle;
+            }
+
+            if (string.IsNullOrWhiteSpace(existingProject.NameTh) || existingProject.NameTh.Equals(DefaultProjectTitle, StringComparison.OrdinalIgnoreCase))
+            {
+                existingProject.NameTh = projectTitle;
+            }
+
+            existingProject.Status = "draft";
+            existingProject.HasMeaningfulProjectState = true;
+            existingProject.UpdatedAt = DateTimeOffset.UtcNow;
+            return;
+        }
+
+        _projects.Insert(0, new ProjectNavItem(SessionId, string.Empty, projectTitle, projectTitle, "draft", false, false, false, DateTimeOffset.UtcNow, true));
     }
 
     private async Task NotifyProjectNameChangedAsync(string? projectName)
@@ -7635,6 +7760,11 @@
         _pinnedProjectsCollapsed = !_pinnedProjectsCollapsed;
     }
 
+    private void ToggleChats()
+    {
+        _chatsCollapsed = !_chatsCollapsed;
+    }
+
     private void ToggleProjects()
     {
         _projectsCollapsed = !_projectsCollapsed;
@@ -7655,6 +7785,8 @@
         existing.Status = response.Status;
         existing.IsPinned = response.IsPinned;
         existing.IsArchived = response.IsArchived;
+        existing.HasMeaningfulProjectState = true;
+        existing.UpdatedAt = DateTimeOffset.UtcNow;
     }
 
     private void ApplyDuplicatedProject(DuplicateDraftProjectResponse response)
@@ -8160,6 +8292,14 @@
         string TextEn,
         string TextTh);
 
+    private sealed record UploadPickerOption(
+        string Key,
+        string Icon,
+        string LabelEn,
+        string LabelTh,
+        string DescriptionEn,
+        string DescriptionTh);
+
     private sealed record ComposerAttachmentPreview(
         Guid AttachmentId,
         string FileName,
@@ -8477,7 +8617,9 @@
         string status,
         bool isPinned,
         bool isArchived,
-        bool isPersisted)
+        bool isPersisted,
+        DateTimeOffset updatedAt,
+        bool hasMeaningfulProjectState)
     {
         public Guid ProjectId { get; } = projectId;
 
@@ -8495,6 +8637,10 @@
 
         public bool IsPersisted { get; } = isPersisted;
 
+        public DateTimeOffset UpdatedAt { get; set; } = updatedAt;
+
+        public bool HasMeaningfulProjectState { get; set; } = hasMeaningfulProjectState;
+
         public static ProjectNavItem FromDto(CustomerProjectNavItemDto project)
         {
             return new(
@@ -8505,6 +8651,8 @@
                 project.Status,
                 project.IsPinned,
                 project.IsArchived,
+                true,
+                project.UpdatedAt,
                 true);
         }
 
@@ -8518,6 +8666,8 @@
                 project.Status,
                 project.IsPinned,
                 project.IsArchived,
+                true,
+                DateTimeOffset.UtcNow,
                 true);
         }
 
@@ -8531,6 +8681,8 @@
                 project.Status,
                 false,
                 false,
+                true,
+                DateTimeOffset.UtcNow,
                 true);
         }
     }

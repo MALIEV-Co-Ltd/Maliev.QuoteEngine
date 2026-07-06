@@ -46,12 +46,20 @@ public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory 
         Assert.True(QuoteUploadConstraints.IsSupportedAttachmentFileName("requirements.pdf"));
         Assert.True(QuoteUploadConstraints.IsSupportedAttachmentFileName("flat-pattern.dxf"));
         Assert.True(QuoteUploadConstraints.IsSupportedAttachmentFileName("project-bundle.zip"));
+        Assert.True(QuoteUploadConstraints.IsSupportedAttachmentFileName("assembly-reference.mp4"));
+        Assert.True(QuoteUploadConstraints.IsSupportedAttachmentFileName("operator-note.wav"));
 
         Assert.False(QuoteUploadConstraints.IsSupportedCadFileName("bracket-sketch.jpg"));
         Assert.False(QuoteUploadConstraints.IsSupportedCadFileName("requirements.pdf"));
         Assert.False(QuoteUploadConstraints.IsSupportedAttachmentFileName("macro.xlsm"));
         Assert.Contains(".jpg", QuoteUploadConstraints.SupportedAttachmentAccept);
         Assert.Contains(".pdf", QuoteUploadConstraints.SupportedAttachmentAccept);
+        Assert.Contains(".mp4", QuoteUploadConstraints.SupportedAttachmentAccept);
+        Assert.Contains(".stl", QuoteUploadConstraints.SupportedCadAccept);
+        Assert.Contains(".png", QuoteUploadConstraints.SupportedImageAccept);
+        Assert.Contains(".dxf", QuoteUploadConstraints.SupportedDocumentAccept);
+        Assert.Contains(".mp3", QuoteUploadConstraints.SupportedMediaAccept);
+        Assert.Contains(".zip", QuoteUploadConstraints.SupportedArchiveAccept);
     }
 
     [Fact]

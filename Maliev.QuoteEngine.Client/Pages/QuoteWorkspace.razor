@@ -18,7 +18,7 @@
 
 <div id="@PageDropzoneId" class="@WorkspaceRootClass">
     <div id="@UploadContainerId">
-        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@QuoteUploadConstraints.SupportedAttachmentAccept" disabled="@(!_routeStateInitialized)" />
+        <InputFile id="@UploadInputId" OnChange="HandleFilesAsync" multiple accept="@_uploadInputAccept" disabled="@(!_routeStateInitialized)" />
     </div>
 
     <div class="qe-page-drop-overlay" aria-hidden="true">
@@ -46,7 +46,6 @@
                                    Culture="@Culture"
                                    UploadedParts="@_parts"
                                    SelectedPartIndex="@_selectedPartIndex"
-                                   UploadInputElementId="@UploadInputId"
                                    OnUploadedPartSelected="SelectPart"
                                    OnUploadedPartChanged="HandleUploadedPartChangedAsync"
                                    OnUploadRequested="OpenFilePickerAsync"
@@ -60,6 +59,12 @@
     private const string UploadContainerId = "quote-upload-container";
     private const string UploadInputId = "quote-cad-files";
     private const string PageDropzoneId = "quote-page-dropzone";
+    private const string UploadPicker3d = "3d";
+    private const string UploadPickerImages = "images";
+    private const string UploadPickerDocuments = "documents";
+    private const string UploadPickerMedia = "media";
+    private const string UploadPickerArchives = "archives";
+    private const string UploadPickerAll = "all";
     private const string QuoteDefaultProcessKey = "maliev.quote.default.process";
     private const string QuoteDefaultToleranceKey = "maliev.quote.default.tolerance";
     private const string QuoteDefaultInspectionKey = "maliev.quote.default.inspection";
@@ -104,6 +109,7 @@
     private bool _isPartsDrawerOpen;
     private bool _routeStateInitialized;
     private bool _isOpeningFilePicker;
+    private string _uploadInputAccept = QuoteUploadConstraints.SupportedAttachmentAccept;
     private string? _lastWorkspacePath;
     private string? _lastHandoff;
     private string? _error;
@@ -323,22 +329,98 @@
         }
     }
 
-    private async Task OpenFilePickerAsync()
+    private async Task OpenFilePickerAsync(string pickerCategory)
     {
         if (!_routeStateInitialized || _isOpeningFilePicker)
         {
             return;
         }
 
+        var normalizedCategory = NormalizeUploadPickerCategory(pickerCategory);
+        var accept = UploadAcceptForCategory(normalizedCategory);
+        _uploadInputAccept = accept;
         _isOpeningFilePicker = true;
         try
         {
-            await Js.InvokeVoidAsync("quoteEngineUploads.openFilePicker", UploadInputId);
+            await Js.InvokeVoidAsync(
+                "quoteEngineUploads.openFilePicker",
+                UploadInputId,
+                BuildUploadPickerInteropOptions(normalizedCategory, accept),
+                _dotNetRef);
         }
         finally
         {
             _isOpeningFilePicker = false;
         }
+    }
+
+    private static string NormalizeUploadPickerCategory(string? pickerCategory)
+    {
+        return pickerCategory?.Trim().ToLowerInvariant() switch
+        {
+            UploadPicker3d => UploadPicker3d,
+            UploadPickerImages => UploadPickerImages,
+            UploadPickerDocuments => UploadPickerDocuments,
+            UploadPickerMedia => UploadPickerMedia,
+            UploadPickerArchives => UploadPickerArchives,
+            _ => UploadPickerAll
+        };
+    }
+
+    private static string UploadAcceptForCategory(string pickerCategory)
+    {
+        return pickerCategory switch
+        {
+            UploadPicker3d => QuoteUploadConstraints.SupportedCadAccept,
+            UploadPickerImages => QuoteUploadConstraints.SupportedImageAccept,
+            UploadPickerDocuments => QuoteUploadConstraints.SupportedDocumentAccept,
+            UploadPickerMedia => QuoteUploadConstraints.SupportedMediaAccept,
+            UploadPickerArchives => QuoteUploadConstraints.SupportedArchiveAccept,
+            _ => QuoteUploadConstraints.SupportedAttachmentAccept
+        };
+    }
+
+    private static object BuildUploadPickerInteropOptions(string pickerCategory, string accept)
+    {
+        var types = pickerCategory switch
+        {
+            UploadPicker3d => new[] { BuildUploadPickerType("3D files", QuoteUploadConstraints.SupportedCadExtensions, "application/octet-stream") },
+            UploadPickerImages => new[] { BuildUploadPickerType("Images", QuoteUploadConstraints.SupplementalImageExtensions, "image/*") },
+            UploadPickerDocuments => new[] { BuildUploadPickerType("Documents and drawings", QuoteUploadConstraints.SupplementalDocumentExtensions, "application/octet-stream") },
+            UploadPickerMedia => BuildMediaUploadPickerTypes(),
+            UploadPickerArchives => new[] { BuildUploadPickerType("Archives", QuoteUploadConstraints.SupplementalArchiveExtensions, "application/zip") },
+            _ => new object[]
+            {
+                BuildUploadPickerType("3D files", QuoteUploadConstraints.SupportedCadExtensions, "application/octet-stream"),
+                BuildUploadPickerType("Images", QuoteUploadConstraints.SupplementalImageExtensions, "image/*"),
+                BuildUploadPickerType("Documents and drawings", QuoteUploadConstraints.SupplementalDocumentExtensions, "application/octet-stream"),
+                BuildUploadPickerType("Media", QuoteUploadConstraints.SupplementalMediaExtensions, "application/octet-stream"),
+                BuildUploadPickerType("Archives", QuoteUploadConstraints.SupplementalArchiveExtensions, "application/zip")
+            }
+        };
+
+        return new { accept, types };
+    }
+
+    private static object[] BuildMediaUploadPickerTypes()
+    {
+        return
+        [
+            BuildUploadPickerType("Videos", ["mp4", "mov", "webm", "avi", "mkv"], "video/*"),
+            BuildUploadPickerType("Audio", ["mp3", "wav", "m4a", "aac", "ogg"], "audio/*")
+        ];
+    }
+
+    private static object BuildUploadPickerType(string description, IEnumerable<string> extensions, string mimeType)
+    {
+        return new
+        {
+            description,
+            accept = new Dictionary<string, string[]>
+            {
+                [mimeType] = extensions.Select(extension => $".{extension.TrimStart('.')}").ToArray()
+            }
+        };
     }
 
     private async Task StartNewProjectAsync()
@@ -686,6 +768,10 @@
              QuoteUploadConstraints.SupplementalDocumentExtensions.Any(item =>
                  item.Equals(Path.GetExtension(fileName).TrimStart('.'), StringComparison.OrdinalIgnoreCase)) ||
              QuoteUploadConstraints.SupplementalImageExtensions.Any(item =>
+                 item.Equals(Path.GetExtension(fileName).TrimStart('.'), StringComparison.OrdinalIgnoreCase)) ||
+             QuoteUploadConstraints.SupplementalMediaExtensions.Any(item =>
+                 item.Equals(Path.GetExtension(fileName).TrimStart('.'), StringComparison.OrdinalIgnoreCase)) ||
+             QuoteUploadConstraints.SupplementalArchiveExtensions.Any(item =>
                  item.Equals(Path.GetExtension(fileName).TrimStart('.'), StringComparison.OrdinalIgnoreCase)));
     }
 
@@ -715,6 +801,18 @@
                 item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
         {
             return "I have reviewed this document as drawing/manufacturing context. Use this note to capture readable dimensions, tolerances, material, finish, revision, and blockers. CAD/3D geometry is still required for final DFM, viewer, pricing, order, and payment.";
+        }
+
+        if (QuoteUploadConstraints.SupplementalMediaExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "I have reviewed this media file as manufacturing context. Use this note to capture visible or spoken requirements, setup clues, material clues, finish, and blockers. CAD/3D geometry is still required for final DFM, viewer, pricing, order, and payment.";
+        }
+
+        if (QuoteUploadConstraints.SupplementalArchiveExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "I have attached this archive as bundled manufacturing context. Use this note to summarize included drawings, models, images, requirements, and blockers once extracted or reviewed.";
         }
 
         return "I have reviewed this file as supplemental manufacturing context. Use this note to capture the requirements the agent should keep with the project.";
@@ -815,6 +913,14 @@
                 item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
         {
             return "photo";
+        }
+
+        if (contentType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase) ||
+            contentType.StartsWith("video/", StringComparison.OrdinalIgnoreCase) ||
+            QuoteUploadConstraints.SupplementalMediaExtensions.Any(item =>
+                item.Equals(extension, StringComparison.OrdinalIgnoreCase)))
+        {
+            return "media";
         }
 
         return "supplemental";
