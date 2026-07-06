@@ -1509,6 +1509,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("Quote a 3D printed enclosure", component, StringComparison.Ordinal);
         Assert.Contains("Quote {name}", component, StringComparison.Ordinal);
         Assert.Contains("Turn this into a part plan", component, StringComparison.Ordinal);
+        var agentStatusBlock = ExtractSourceBlock(component, "private string AgentStatusClass", "private string AgentStatusTooltip");
         Assert.Contains("AgentStatusClass", component, StringComparison.Ordinal);
         Assert.Contains("AgentStatusTooltip", component, StringComparison.Ordinal);
         Assert.Contains("is-connected", component, StringComparison.Ordinal);
@@ -1521,7 +1522,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ChatbotServiceAvailable", component, StringComparison.Ordinal);
         Assert.Contains("private bool IsAgentBackendConnected => _agentBackendStatus == AgentBackendStatus.Connected", component, StringComparison.Ordinal);
         Assert.DoesNotContain("!IsAgentBackendConnected", component, StringComparison.Ordinal);
-        Assert.DoesNotContain("is-failed", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("is-failed", agentStatusBlock, StringComparison.Ordinal);
         Assert.Contains("Task HandleSubmitAsync()", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-workflow\"", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-flow-card qe-agent-analysis-card", component, StringComparison.Ordinal);
@@ -2512,6 +2513,45 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-dfm-check-status", dfmTab, StringComparison.Ordinal);
         Assert.Contains("Text(\"Failed\", \"ไม่ผ่าน\")", dfmTab, StringComparison.Ordinal);
         Assert.Contains("Text(\"Passed\", \"ผ่าน\")", dfmTab, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_groups_uploaded_files_with_previews_view_toggle_and_linked_dfm()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var uploadedSection = ExtractSourceBlock(
+            shell,
+            "<section class=\"qe-agent-artifact-section qe-agent-artifact-section--uploaded\"",
+            "@if (MessageSketches.Count > 0)");
+        var generatedSection = ExtractSourceBlock(
+            shell,
+            "@if (VisibleDrawerArtifacts.Count > 0)",
+            "else if (UploadedParts.Count == 0 && MessageSketches.Count == 0)");
+
+        Assert.Contains("role=\"switch\"", uploadedSection, StringComparison.Ordinal);
+        Assert.Contains("aria-checked=\"@AriaChecked(_uploadedFilesCardView)\"", uploadedSection, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"ToggleUploadedFilesView\"", uploadedSection, StringComparison.Ordinal);
+        Assert.Contains("class=\"@UploadedFilesGridClass\"", uploadedSection, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-upload-preview\"", uploadedSection, StringComparison.Ordinal);
+        Assert.Contains("part.ThumbnailUrl", uploadedSection, StringComparison.Ordinal);
+        Assert.Contains("UploadedPartIcon(part)", uploadedSection, StringComparison.Ordinal);
+        Assert.Contains("UploadedPartDfmTitle(part)", uploadedSection, StringComparison.Ordinal);
+        Assert.Contains("UploadedPartDfmStatus(part)", uploadedSection, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-artifact-upload-card", shell, StringComparison.Ordinal);
+        Assert.Contains("VisibleDrawerArtifacts", shell, StringComparison.Ordinal);
+        Assert.Contains("ShouldShowStandaloneArtifact", shell, StringComparison.Ordinal);
+        Assert.Contains("LinkedDfmArtifact(part)", shell, StringComparison.Ordinal);
+        Assert.Contains("ResolveDfmArtifactPart(artifact) is null", shell, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var artifact in VisibleDrawerArtifacts)", generatedSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("_artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact)", generatedSection, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifacts--cards", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifacts--list", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifact-upload-card", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-view-switch", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-preview", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-dfm", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-artifact-section-header", styles, StringComparison.Ordinal);
     }
 
     [Fact]
