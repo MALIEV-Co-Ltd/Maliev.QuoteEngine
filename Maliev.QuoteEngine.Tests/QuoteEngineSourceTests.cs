@@ -2009,10 +2009,26 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("action.RequiresAuthentication && !IsSignedIn", threadBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-chat-actions\"", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-chat-actions", styles, StringComparison.Ordinal);
-        Assert.Contains("var previousArtifactCount = _artifacts.Count;", confirmBlock, StringComparison.Ordinal);
-        Assert.Contains("result.State.Artifacts.Count > previousArtifactCount", confirmBlock, StringComparison.Ordinal);
+        Assert.Contains("var previousArtifactCount = _artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact);", confirmBlock, StringComparison.Ordinal);
+        Assert.Contains("result.State.UiDirectives.Count == 0 &&", confirmBlock, StringComparison.Ordinal);
+        Assert.Contains("result.State.Artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact) > previousArtifactCount", confirmBlock, StringComparison.Ordinal);
         Assert.Contains("_artifactPanelOpen = true;", confirmBlock, StringComparison.Ordinal);
         Assert.Contains("_summaryPanelOpen = false;", confirmBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_hides_project_summary_artifacts_from_workbench()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var helper = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentUiHelpers.cs");
+        var syncBlock = ExtractSourceBlock(shell, "private void SyncSelectedArtifactWithArtifacts()", "private void ClosePreviewDialog()");
+
+        Assert.Contains("artifact.ArtifactType, \"requirements_summary\"", helper, StringComparison.Ordinal);
+        Assert.Contains("return false;", helper, StringComparison.Ordinal);
+        Assert.Contains("_artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact)", shell, StringComparison.Ordinal);
+        Assert.Contains("_artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact)", shell, StringComparison.Ordinal);
+        Assert.Contains("!QuoteAgentUiHelpers.IsVisibleArtifact(_selectedArtifact)", syncBlock, StringComparison.Ordinal);
+        Assert.Contains("_selectedArtifact = null;", syncBlock, StringComparison.Ordinal);
     }
 
     [Fact]

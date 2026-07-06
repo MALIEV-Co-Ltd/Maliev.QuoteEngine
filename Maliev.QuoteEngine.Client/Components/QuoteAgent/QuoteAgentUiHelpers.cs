@@ -8,6 +8,11 @@ public static class QuoteAgentUiHelpers
 {
     public static bool IsVisibleArtifact(QuoteAgentArtifactDto artifact)
     {
+        if (string.Equals(artifact.ArtifactType, "requirements_summary", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         return !string.Equals(artifact.ArtifactType, "viewer", StringComparison.OrdinalIgnoreCase) ||
             artifact.Metadata.TryGetValue("generated", out var generated) &&
             generated.Equals("true", StringComparison.OrdinalIgnoreCase);

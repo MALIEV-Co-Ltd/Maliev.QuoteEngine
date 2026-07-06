@@ -4260,13 +4260,14 @@
     {
         try
         {
-            var previousArtifactCount = _artifacts.Count;
+            var previousArtifactCount = _artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact);
             var result = await Api.ConfirmAgentActionAsync(action.ActionId, new QuoteAgentConfirmActionRequest());
             _messages.Add(new AgentMessageRow("assistant", result.Message));
             if (result.State is not null)
             {
                 await ApplyStateAsync(result.State);
-                if (result.State.UiDirectives.Count == 0 && result.State.Artifacts.Count > previousArtifactCount)
+                if (result.State.UiDirectives.Count == 0 &&
+                    result.State.Artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact) > previousArtifactCount)
                 {
                     _artifactPanelOpen = true;
                     _summaryPanelOpen = false;
@@ -4885,6 +4886,10 @@
         }
 
         _selectedArtifact = _artifacts.FirstOrDefault(artifact => artifact.ArtifactId == _selectedArtifact.ArtifactId);
+        if (_selectedArtifact is not null && !QuoteAgentUiHelpers.IsVisibleArtifact(_selectedArtifact))
+        {
+            _selectedArtifact = null;
+        }
     }
 
     private void ClosePreviewDialog()

@@ -7,7 +7,7 @@ namespace Maliev.QuoteEngine.Tests;
 public sealed class QuoteAgentUiHelperTests
 {
     [Fact]
-    public void Visible_artifacts_exclude_uploaded_viewers_but_keep_generated_previews()
+    public void Visible_artifacts_exclude_uploaded_viewers_and_project_summaries_but_keep_generated_previews()
     {
         var artifacts = new[]
         {
@@ -24,21 +24,22 @@ public sealed class QuoteAgentUiHelperTests
                 }
             },
             new QuoteAgentArtifactDto { ArtifactType = "dfm", Title = "DFM analysis - Ring1.stl", Status = "Ready" },
-            new QuoteAgentArtifactDto { ArtifactType = "summary", Title = "Project summary", Status = "Ready" }
+            new QuoteAgentArtifactDto { ArtifactType = "requirements_summary", Title = "Project summary", Status = "Ready" }
         };
 
         var visible = artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact).ToList();
 
-        Assert.Equal(3, visible.Count);
+        Assert.Equal(2, visible.Count);
         Assert.DoesNotContain(visible, artifact =>
             string.Equals(artifact.ArtifactType, "viewer", StringComparison.OrdinalIgnoreCase) &&
             !artifact.Metadata.TryGetValue("generated", out _));
+        Assert.DoesNotContain(visible, artifact =>
+            string.Equals(artifact.ArtifactType, "requirements_summary", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(visible, artifact =>
             string.Equals(artifact.ArtifactType, "viewer", StringComparison.OrdinalIgnoreCase) &&
             artifact.Metadata.TryGetValue("generated", out var generated) &&
             generated.Equals("true", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(visible, artifact => artifact.ArtifactType == "dfm");
-        Assert.Contains(visible, artifact => artifact.ArtifactType == "summary");
     }
 
     [Fact]
