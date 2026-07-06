@@ -496,4 +496,8 @@ public sealed class InitiatePaymentRequest
 public sealed record InitiatePaymentResponse(
     Guid TransactionId,
     string PaymentUrl,
-    string Status);
+    string Status,
+    string? QrImageUrl = null,
+    string? QrRawData = null,
+    DateTimeOffset? QrExpiresAt = null,
+    string? PaymentMethod = null);

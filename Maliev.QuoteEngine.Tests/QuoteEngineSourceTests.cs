@@ -5196,6 +5196,29 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgent_renders_promptpay_qr_and_auto_confirms_receipt()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var agentService = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs");
+
+        // In-chat PromptPay QR card + its helper.
+        Assert.Contains("TryGetPaymentQr(selectedArtifact, out var paymentQr)", shell, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-payment-qr-image", shell, StringComparison.Ordinal);
+        Assert.Contains("private bool TryGetPaymentQr(QuoteAgentArtifactDto artifact, out PaymentQrInfo info)", shell, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-payment-qr-image", styles, StringComparison.Ordinal);
+
+        // Webhook-driven auto-receipt: order-group join, PaymentCompleted handler, receipt message.
+        Assert.Contains("_notificationConnection.On<QePaymentCompletedPayload>(\"PaymentCompleted\"", shell, StringComparison.Ordinal);
+        Assert.Contains("private void ApplyChatPaymentCompleted(QePaymentCompletedPayload payload)", shell, StringComparison.Ordinal);
+        Assert.Contains("InvokeAsync(\"JoinOrderGroup\", orderNumber)", shell, StringComparison.Ordinal);
+        Assert.Contains("Payment received", shell, StringComparison.Ordinal);
+
+        // Agent payment artifact carries the QR metadata for the chat card.
+        Assert.Contains("[\"qrImageUrl\"] = state.Payment?.QrImageUrl", agentService, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuotePartViewer_DefersBrowserLocalDfmUntilJsModuleExists()
     {
         var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor")

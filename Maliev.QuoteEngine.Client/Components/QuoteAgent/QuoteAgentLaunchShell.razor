@@ -1879,7 +1879,18 @@
                                 </div>
                             </header>
                             <div class="qe-agent-artifact-context-body">
-                                @if (selectedArtifactPreview is not null && IsImagePreview(selectedArtifactPreview))
+                                @if (TryGetPaymentQr(selectedArtifact, out var paymentQr))
+                                {
+                                    <div class="qe-agent-payment-qr">
+                                        <img class="qe-agent-payment-qr-image" src="@paymentQr.ImageUrl" alt="@Text("PromptPay QR code", "คิวอาร์โค้ดพร้อมเพย์")" />
+                                        <p class="qe-agent-payment-qr-caption">@Text($"Scan this PromptPay QR to pay {paymentQr.AmountLabel}", $"สแกนคิวอาร์พร้อมเพย์เพื่อชำระ {paymentQr.AmountLabel}")</p>
+                                        @if (!string.IsNullOrWhiteSpace(paymentQr.ExpiryLabel))
+                                        {
+                                            <small class="qe-agent-payment-qr-expiry">@paymentQr.ExpiryLabel</small>
+                                        }
+                                    </div>
+                                }
+                                else if (selectedArtifactPreview is not null && IsImagePreview(selectedArtifactPreview))
                                 {
                                     <img class="qe-agent-artifact-preview-media" src="@selectedArtifactPreview.Url" alt="" loading="lazy" onerror="this.style.display='none'" />
                                 }
@@ -3688,6 +3699,7 @@
                     _gates = streamEvent.Response.Gates;
                     _artifacts = streamEvent.Response.Artifacts;
                     SyncSelectedArtifactWithArtifacts();
+                    _ = EnsurePaymentOrderGroupJoinedAsync();
                     _proposedActions = streamEvent.Response.ProposedActions;
                     _usageSnapshot = streamEvent.Response.UsageSnapshot;
                     // Only overwrite the inline preview when the final state carries a new or revised generated viewer;
@@ -4400,6 +4412,11 @@
                 {
                     _ = InvokeAsync(() => ApplyStreamingArtifact(artifact));
                 });
+
+                _notificationConnection.On<QePaymentCompletedPayload>("PaymentCompleted", payload =>
+                {
+                    _ = InvokeAsync(() => ApplyChatPaymentCompleted(payload));
+                });
             }
 
             if (_notificationConnection.State == HubConnectionState.Disconnected)
@@ -4417,6 +4434,8 @@
                 await _notificationConnection.InvokeAsync("JoinQuoteSessionGroup", SessionId);
                 _joinedQuoteSessionId = SessionId;
             }
+
+            await EnsurePaymentOrderGroupJoinedAsync();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -6649,6 +6668,109 @@
         return artifact.Metadata.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value)
             ? value.Trim()
             : null;
+    }
+
+    private readonly record struct PaymentQrInfo(string ImageUrl, string AmountLabel, string? ExpiryLabel);
+
+    // Surfaces the in-chat PromptPay QR from a payment artifact until the payment is confirmed paid.
+    private bool TryGetPaymentQr(QuoteAgentArtifactDto artifact, out PaymentQrInfo info)
+    {
+        info = default;
+        if (!artifact.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var imageUrl = ArtifactMetadata(artifact, "qrImageUrl");
+        if (string.IsNullOrWhiteSpace(imageUrl) ||
+            string.Equals(ArtifactMetadata(artifact, "paymentStatus"), "Paid", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var amount = ArtifactMetadata(artifact, "amount");
+        var currency = ArtifactMetadata(artifact, "currency");
+        var amountLabel = !string.IsNullOrWhiteSpace(amount)
+            ? $"{amount} {currency}".Trim()
+            : Text("the amount due", "ยอดที่ต้องชำระ");
+
+        string? expiryLabel = null;
+        if (DateTimeOffset.TryParse(
+                ArtifactMetadata(artifact, "qrExpiresAt"),
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out var expiresAt))
+        {
+            expiryLabel = Text($"Expires {expiresAt.ToLocalTime():HH:mm}", $"หมดอายุ {expiresAt.ToLocalTime():HH:mm}");
+        }
+
+        info = new PaymentQrInfo(imageUrl, amountLabel, expiryLabel);
+        return true;
+    }
+
+    private string? _joinedPaymentOrderNumber;
+
+    // Joins the SignalR order group for the active payment artifact so the chat receives the
+    // PaymentCompleted webhook notification and can auto-confirm the receipt.
+    private async Task EnsurePaymentOrderGroupJoinedAsync()
+    {
+        if (_notificationConnection is null || _notificationConnection.State != HubConnectionState.Connected)
+        {
+            return;
+        }
+
+        var orderNumber = _artifacts
+            .Where(a => a.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase))
+            .Select(a => ArtifactMetadata(a, "orderNumber"))
+            .FirstOrDefault(n => !string.IsNullOrWhiteSpace(n));
+
+        if (string.IsNullOrWhiteSpace(orderNumber) ||
+            string.Equals(orderNumber, _joinedPaymentOrderNumber, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(_joinedPaymentOrderNumber))
+            {
+                await _notificationConnection.InvokeAsync("LeaveOrderGroup", _joinedPaymentOrderNumber);
+            }
+
+            await _notificationConnection.InvokeAsync("JoinOrderGroup", orderNumber);
+            _joinedPaymentOrderNumber = orderNumber;
+        }
+        catch (Exception)
+        {
+            // Non-fatal: the order page also receives the completion, and a reload re-joins.
+        }
+    }
+
+    // Webhook-driven receipt: when PaymentService confirms payment, the agent auto-posts a receipt
+    // in the chat and flips the payment artifact to Paid (which hides the QR).
+    private void ApplyChatPaymentCompleted(QePaymentCompletedPayload payload)
+    {
+        if (payload is null || string.IsNullOrWhiteSpace(payload.OrderNumber))
+        {
+            return;
+        }
+
+        foreach (var artifact in _artifacts.Where(a =>
+                     a.ArtifactType.Equals("payment", StringComparison.OrdinalIgnoreCase) &&
+                     string.Equals(ArtifactMetadata(a, "orderNumber"), payload.OrderNumber, StringComparison.OrdinalIgnoreCase)))
+        {
+            artifact.Status = "paid";
+            artifact.Metadata["paymentStatus"] = "Paid";
+        }
+
+        var amountLabel = payload.Amount > 0m
+            ? $"{payload.Amount.ToString("0.##", CultureInfo.InvariantCulture)} {payload.Currency}".Trim()
+            : string.Empty;
+        _messages.Add(new AgentMessageRow("assistant", Text(
+            $"✅ Payment received — receipt {payload.OrderNumber}{(amountLabel.Length > 0 ? $", {amountLabel}" : string.Empty)}. Production tracking continues on your order page.",
+            $"✅ ได้รับการชำระเงินแล้ว — ใบเสร็จ {payload.OrderNumber}{(amountLabel.Length > 0 ? $" จำนวน {amountLabel}" : string.Empty)} ติดตามการผลิตต่อได้ที่หน้าคำสั่งซื้อ")));
+
+        StateHasChanged();
     }
 
     private static string? ArtifactContentType(QuoteAgentArtifactDto artifact)

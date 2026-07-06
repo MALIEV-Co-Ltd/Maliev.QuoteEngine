@@ -41,6 +41,10 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
     {
         public Guid TransactionId { get; set; }
         public string? PaymentUrl { get; set; }
+        public string? QrImageUrl { get; set; }
+        public string? QrRawData { get; set; }
+        public DateTimeOffset? QrExpiresAt { get; set; }
+        public string? PaymentMethod { get; set; }
         public JsonElement Status { get; set; }
     }
 
@@ -78,9 +82,11 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
                     description = $"Manufacturing order {orderNumber}",
                     returnUrl,
                     cancelUrl,
+                    paymentMethod = "promptpay",
                     metadata = new Dictionary<string, string>
                     {
                         ["orderNumber"] = orderNumber,
+                        ["omiseSourceType"] = "promptpay",
                         ["billingAddressId"] = billingAddressId?.ToString("D") ?? string.Empty,
                         ["shippingAddressId"] = shippingAddressId?.ToString("D") ?? string.Empty,
                         ["billingCompanyName"] = billingCompanyName ?? string.Empty,
@@ -109,6 +115,10 @@ internal sealed class PaymentServiceClient(HttpClient http, ILogger<PaymentServi
             {
                 TransactionId = result.TransactionId,
                 PaymentUrl = result.PaymentUrl ?? string.Empty,
+                QrImageUrl = result.QrImageUrl,
+                QrRawData = result.QrRawData,
+                QrExpiresAt = result.QrExpiresAt,
+                PaymentMethod = result.PaymentMethod,
                 Status = ReadStatus(result.Status)
             };
         }
@@ -138,8 +148,20 @@ public sealed class PaymentInitiatedResult
 {
     public Guid TransactionId { get; init; }
 
-    /// <summary>URL to redirect the customer to complete payment (e.g. Omise hosted page).</summary>
+    /// <summary>URL to redirect the customer to complete payment (e.g. Omise hosted page), for redirect-based methods.</summary>
     public string PaymentUrl { get; init; } = string.Empty;
+
+    /// <summary>Scannable QR image URL (e.g. PromptPay) to show in-app, when the method is QR-based.</summary>
+    public string? QrImageUrl { get; init; }
+
+    /// <summary>Raw QR payload, for clients that render the code themselves.</summary>
+    public string? QrRawData { get; init; }
+
+    /// <summary>When the QR expires, if provided.</summary>
+    public DateTimeOffset? QrExpiresAt { get; init; }
+
+    /// <summary>Resolved payment method (e.g. "promptpay", "card").</summary>
+    public string? PaymentMethod { get; init; }
 
     /// <summary>Raw status string from PaymentService (e.g. "1" for Pending).</summary>
     public string Status { get; init; } = string.Empty;

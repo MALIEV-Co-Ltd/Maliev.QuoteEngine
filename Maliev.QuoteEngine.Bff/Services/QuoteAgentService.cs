@@ -5663,6 +5663,27 @@ internal sealed class QuoteAgentService(
             throw new InvalidOperationException("A manufacturing order is required before payment.");
         }
 
+        // Dev/test: the prototype customer's order lives in the local store, not the real
+        // CustomerService/OrderService/InvoiceService/PaymentService (Omise) chain. Present the
+        // in-chat PromptPay QR (dev placeholder) + a prototype-checkout the agent can point to, so
+        // the payment step is drivable by agents end to end without external gateways.
+        if (CanUsePrototypeFallback() && customerId == prototypeStore.PrototypeCustomer.CustomerId)
+        {
+            var devAmount = state.Estimate?.Total ?? 0m;
+            var devCurrency = state.Estimate?.Currency ?? "THB";
+            state.Payment = new InitiatePaymentResponse(
+                Guid.NewGuid(),
+                $"/quote/v1/payments/prototype-checkout?orderId={state.Order.OrderId:D}",
+                "pending",
+                QrImageUrl: DevPromptPayQr.Build(devAmount, devCurrency),
+                QrRawData: $"DEV-PROMPTPAY|{state.Order.OrderNumber}|{devAmount:0.00}{devCurrency}",
+                QrExpiresAt: DateTimeOffset.UtcNow.AddMinutes(15),
+                PaymentMethod: "promptpay");
+            UpsertArtifact(state, "payment", "Payment handoff", state.Payment.Status, null, state.Payment.PaymentUrl);
+            SetArtifactMetadata(state, "payment", BuildPaymentSummaryMetadata(state));
+            return $"Payment handoff is ready for {state.Order.OrderNumber}. Show the customer the PromptPay QR in chat to scan.";
+        }
+
         var addressValidation = await ValidateAgentCheckoutAddressesAsync(state, customerId, cancellationToken);
         if (addressValidation.Error is not null ||
             addressValidation.BillingAddress is null ||
@@ -5727,7 +5748,11 @@ internal sealed class QuoteAgentService(
         state.Payment = new InitiatePaymentResponse(
             result.TransactionId,
             result.PaymentUrl,
-            NormalizeInitiatedPaymentStatus(result.Status));
+            NormalizeInitiatedPaymentStatus(result.Status),
+            QrImageUrl: result.QrImageUrl,
+            QrRawData: result.QrRawData,
+            QrExpiresAt: result.QrExpiresAt,
+            PaymentMethod: result.PaymentMethod);
         UpsertArtifact(state, "payment", "Payment handoff", state.Payment.Status, null, state.Payment.PaymentUrl);
         SetArtifactMetadata(state, "payment", BuildPaymentSummaryMetadata(state));
         return $"Payment handoff is ready for {state.Order.OrderNumber}.";
@@ -5787,6 +5812,10 @@ internal sealed class QuoteAgentService(
         {
             ["transactionId"] = state.Payment?.TransactionId.ToString("D") ?? string.Empty,
             ["paymentUrl"] = state.Payment?.PaymentUrl ?? string.Empty,
+            ["paymentMethod"] = state.Payment?.PaymentMethod ?? string.Empty,
+            ["qrImageUrl"] = state.Payment?.QrImageUrl ?? string.Empty,
+            ["qrRawData"] = state.Payment?.QrRawData ?? string.Empty,
+            ["qrExpiresAt"] = state.Payment?.QrExpiresAt?.ToString("O", CultureInfo.InvariantCulture) ?? string.Empty,
             ["paymentStatus"] = state.Payment?.Status ?? string.Empty,
             ["orderId"] = state.Order?.OrderId.ToString("D") ?? string.Empty,
             ["orderNumber"] = state.Order?.OrderNumber ?? string.Empty,

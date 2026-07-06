@@ -6246,6 +6246,38 @@
     min-width: 0;
 }
 
+.qe-agent-payment-qr {
+    display: grid;
+    place-items: center;
+    gap: 8px;
+    padding: 16px;
+    background: var(--qe-agent-raised);
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 16px;
+}
+
+.qe-agent-payment-qr-image {
+    width: 200px;
+    max-width: 100%;
+    height: auto;
+    padding: 8px;
+    background: #ffffff;
+    border-radius: 12px;
+}
+
+.qe-agent-payment-qr-caption {
+    margin: 0;
+    text-align: center;
+    color: var(--qe-agent-ink);
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.qe-agent-payment-qr-expiry {
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+}
+
 .qe-agent-artifact-details {
     display: grid;
     gap: 0;

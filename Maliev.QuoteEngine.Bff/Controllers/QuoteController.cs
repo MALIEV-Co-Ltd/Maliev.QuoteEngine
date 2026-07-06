@@ -946,7 +946,14 @@ public sealed class QuoteController(
         {
             var prototypeCheckoutUrl =
                 $"{Request.Scheme}://{Request.Host}/quote/v1/payments/prototype-checkout?orderId={request.OrderId:D}";
-            return Ok(new InitiatePaymentResponse(Guid.NewGuid(), prototypeCheckoutUrl, "pending"));
+            return Ok(new InitiatePaymentResponse(
+                Guid.NewGuid(),
+                prototypeCheckoutUrl,
+                "pending",
+                QrImageUrl: DevPromptPayQr.Build(request.Amount, request.Currency),
+                QrRawData: $"DEV-PROMPTPAY|{request.OrderNumber}|{request.Amount:0.00}{request.Currency}",
+                QrExpiresAt: DateTimeOffset.UtcNow.AddMinutes(15),
+                PaymentMethod: "promptpay"));
         }
 
         var addressValidation = await ValidateCheckoutAddressesAsync(customerId, request, cancellationToken);
@@ -1066,7 +1073,14 @@ public sealed class QuoteController(
             return StatusCode(502, new ProblemDetails { Title = "Payment service unavailable. Please try again." });
         }
 
-        return Ok(new InitiatePaymentResponse(result.TransactionId, result.PaymentUrl, result.Status));
+        return Ok(new InitiatePaymentResponse(
+            result.TransactionId,
+            result.PaymentUrl,
+            result.Status,
+            QrImageUrl: result.QrImageUrl,
+            QrRawData: result.QrRawData,
+            QrExpiresAt: result.QrExpiresAt,
+            PaymentMethod: result.PaymentMethod));
     }
 
     /// <summary>
@@ -1075,7 +1089,7 @@ public sealed class QuoteController(
     /// redirects to the payment success page. Hard-gated to Development/Testing — 404 otherwise.
     /// </summary>
     [HttpGet("payments/prototype-checkout")]
-    public IActionResult PrototypeCheckout([FromQuery] Guid orderId)
+    public async Task<IActionResult> PrototypeCheckout([FromQuery] Guid orderId, CancellationToken cancellationToken)
     {
         if (!CanUsePrototypeFallback())
         {
@@ -1089,6 +1103,19 @@ public sealed class QuoteController(
         }
 
         store.MarkOrderPaid(customerId, orderNumber);
+
+        // Stand in for the PaymentService/Omise webhook -> PaymentCompletedEvent -> SignalR push, so
+        // the chat and order UI receive the paid receipt exactly as they would in production.
+        var detail = store.GetOrderDetail(customerId, orderNumber);
+        var payload = new QePaymentCompletedPayload(
+            OrderNumber: orderNumber,
+            PaymentId: Guid.NewGuid(),
+            Amount: detail?.QuotedAmount ?? 0m,
+            Currency: detail?.QuoteCurrency ?? "THB");
+        await hubContext.Clients
+            .Group(QuoteNotificationsHub.OrderGroup(orderNumber))
+            .SendAsync("PaymentCompleted", payload, cancellationToken);
+
         var baseUrl = $"{Request.Scheme}://{Request.Host}";
         return Redirect($"{baseUrl}/payment/success?orderNumber={Uri.EscapeDataString(orderNumber)}");
     }

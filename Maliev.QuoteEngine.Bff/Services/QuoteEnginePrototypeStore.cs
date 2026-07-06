@@ -1018,13 +1018,37 @@ public sealed class QuoteEnginePrototypeStore
             throw new KeyNotFoundException($"Quote '{quoteId}' was not found for the signed-in customer.");
         }
 
+        var now = DateTimeOffset.UtcNow;
         var order = new CustomerOrderSummaryDto(
             Guid.NewGuid(),
             $"MO-{DateTime.UtcNow:yyyyMMdd}-{Random.Shared.Next(1000, 9999)}",
             "Order received",
-            DateTimeOffset.UtcNow,
+            now,
             "Waiting for production review");
         _orders[order.OrderId] = new CustomerOrderRecord(customerId, order);
+
+        // Register an order-detail record so agent-created orders are drill-down-able and can be
+        // marked paid by the dev prototype-checkout (consistent with the seeded demo orders).
+        var detail = new CustomerOrderDetailDto(
+            order.OrderId,
+            order.OrderNumber,
+            order.Status,
+            "Pending",
+            quote.Quote.Total,
+            quote.Quote.Currency,
+            now.AddDays(7),
+            ActualDeliveryDate: null,
+            CustomerPoNumber: null,
+            Requirements: "Manufacturing order created from a Make Studio quote.",
+            now,
+            now,
+            [new OrderStatusEntryDto("Order received", null, now)])
+        {
+            QuoteId = quoteId,
+            QuoteNumber = quote.Quote.QuoteNumber
+        };
+        _orderDetailsByNumber[order.OrderNumber] = new CustomerOrderRecordDetail(customerId, detail);
+
         return new CreateManufacturingOrderResponse(order.OrderId, order.OrderNumber, order.Status);
     }
 
