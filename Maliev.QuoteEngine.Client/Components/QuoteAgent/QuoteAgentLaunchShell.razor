@@ -232,7 +232,7 @@
                         <span class="qe-agent-user-avatar" aria-hidden="true">
                             @if (!string.IsNullOrWhiteSpace(AccountProfileImageUrl))
                             {
-                                <img src="@AccountProfileImageUrl" alt="" />
+                                <img src="@AccountProfileImageUrl" alt="" @onerror="HandleAccountProfileImageError" />
                             }
                             else
                             {
@@ -774,7 +774,7 @@
             @if (_messages.Count == 0)
             {
                 <div class="qe-agent-prompt">
-                    <h1 tabindex="-1">@Text("What do you want to make today?", "วันนี้ต้องการผลิตอะไร?")</h1>
+                    <h1>@Text("What do you want to make today?", "วันนี้ต้องการผลิตอะไร?")</h1>
                 </div>
             }
             else
@@ -1564,6 +1564,7 @@
                             @if (_connectors.Count > 0)
                             {
                                 <hr class="qe-agent-quick-actions-separator" />
+                                <div class="qe-agent-quick-actions-section-label" role="presentation">@Text("Plugins", "ปลั๊กอิน")</div>
                                 @foreach (var connector in _connectors)
                                 {
                                     <button type="button" role="menuitem" @onclick="@(() => ApplyConnectorFromPluginsAsync(connector))">
@@ -1583,7 +1584,7 @@
                                         </span>
                                         <span class="qe-agent-plugin-menu-text">
                                             <strong>@connector.DisplayName</strong>
-                                            <small>@connector.Description</small>
+                                            <small>@ConnectorToolsDescription(connector)</small>
                                         </span>
                                         <span class="qe-agent-plugin-menu-status">@ConnectorStatus(connector)</span>
                                     </button>
@@ -2463,6 +2464,7 @@
     private const int AgentStreamRevealCharacters = 18;
     private const string ThumbUpSentiment = "up";
     private const string ThumbDownSentiment = "down";
+    private const string WorkspaceHandoffKey = "maliev.quote.workspace.handoff";
     private static readonly TimeSpan AgentHealthRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan AgentStreamRevealInterval = TimeSpan.FromMilliseconds(28);
     private List<QuoteAgentGateDto> _gates = [];
@@ -2483,6 +2485,7 @@
     private AgentMessageRow? _replyTo;
     private AgentMessageRow? _editingLastUserMessage;
     private string? _error;
+    private string? _failedAccountProfileImageUrl;
 
     private string? _dictationNotice;
     private bool _sending;
@@ -2878,7 +2881,10 @@
         CleanAccountText(ProfileEmail) ??
         Text("MALIEV customer", "ลูกค้า MALIEV");
     private string? AccountEmail => CleanAccountText(ProfileEmail);
-    private string? AccountProfileImageUrl => CleanAccountText(ProfileImageUrl);
+    private string? RawAccountProfileImageUrl => CleanAccountText(ProfileImageUrl);
+    private string? AccountProfileImageUrl => string.Equals(_failedAccountProfileImageUrl, RawAccountProfileImageUrl, StringComparison.Ordinal)
+        ? null
+        : RawAccountProfileImageUrl;
     private string AccountTierLabel => CleanAccountText(ProfileTier) ?? Text("Account", "บัญชี");
     private string AccountInitials => GetAccountInitials(AccountDisplayName);
     private string AccountMenuClass => _accountMenuOpen ? "qe-agent-account-menu is-open" : "qe-agent-account-menu";
@@ -3387,6 +3393,7 @@
             if (status?.IsSignedIn == true)
             {
                 _authDialogOpen = false;
+                await MarkAuthWorkspaceHandoffAsync();
                 Navigation.NavigateTo(AuthReturnUrl, forceLoad: true);
                 return;
             }
@@ -3405,11 +3412,23 @@
         }
     }
 
-    private void ContinueWithGoogle()
+    private async Task ContinueWithGoogle()
     {
         // Same-tab Google OAuth handled by this BFF; returnUrl brings the
         // customer straight back to this conversation.
+        await MarkAuthWorkspaceHandoffAsync();
         Navigation.NavigateTo($"/auth/google?returnUrl={Uri.EscapeDataString(AuthReturnUrl)}", forceLoad: true);
+    }
+
+    private async Task MarkAuthWorkspaceHandoffAsync()
+    {
+        try
+        {
+            await Js.InvokeVoidAsync("malievChatbot.markWorkspaceHandoff", WorkspaceHandoffKey);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException)
+        {
+        }
     }
 
     [JSInvokable]
@@ -5078,6 +5097,12 @@
         _accountMenuOpen = !_accountMenuOpen;
     }
 
+    private Task HandleAccountProfileImageError()
+    {
+        _failedAccountProfileImageUrl = RawAccountProfileImageUrl;
+        return InvokeAsync(StateHasChanged);
+    }
+
     private void CloseAccountMenu()
     {
         _accountMenuOpen = false;
@@ -5680,9 +5705,14 @@
         await OpenSketchAsync();
     }
 
-    private void ToggleQuickActionsMenu()
+    private async Task ToggleQuickActionsMenu()
     {
-        _quickActionsMenuOpen = !_quickActionsMenuOpen;
+        var nextOpen = !_quickActionsMenuOpen;
+        _quickActionsMenuOpen = nextOpen;
+        if (nextOpen && !_connectorRegistryLoaded)
+        {
+            await LoadConnectorRegistryAsync();
+        }
     }
 
     private async Task ApplyConnectorFromPluginsAsync(QuoteAgentConnectorDto connector)
@@ -7469,6 +7499,24 @@
         return connector.Status.Equals("planned", StringComparison.OrdinalIgnoreCase)
             ? Text("Planned", "วางแผนแล้ว")
             : Text("Future", "อนาคต");
+    }
+
+    private string ConnectorToolsDescription(QuoteAgentConnectorDto connector)
+    {
+        if (IsGoogleDriveConnector(connector))
+        {
+            if (connector.IsConnected)
+            {
+                return Text("Add files from Drive", "เพิ่มไฟล์จาก Drive");
+            }
+
+            if (connector.IsConfigured)
+            {
+                return Text("Connect Google Drive to attach files", "เชื่อมต่อ Google Drive เพื่อแนบไฟล์");
+            }
+        }
+
+        return connector.Description;
     }
 
     private string ConnectorRowClass(QuoteAgentConnectorDto connector)

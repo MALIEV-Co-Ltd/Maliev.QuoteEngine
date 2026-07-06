@@ -2806,6 +2806,22 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Auth_session_returns_profile_image_url_from_session_claim()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        const string profileImageUrl = "https://cdn.example.test/avatar/profile.jpg";
+        var signIn = await client.GetAsync(
+            $"/test/sign-in?email={Uri.EscapeDataString("profile-image@example.com")}&profileImageUrl={Uri.EscapeDataString(profileImageUrl)}");
+        signIn.EnsureSuccessStatusCode();
+
+        var session = await client.GetFromJsonAsync<QuoteAuthStatusResponse>("/quote/v1/auth/session");
+
+        Assert.NotNull(session);
+        Assert.True(session.IsSignedIn);
+        Assert.Equal(profileImageUrl, session.ProfileImageUrl);
+    }
+
+    [Fact]
     public async Task Duplicate_project_preserves_customer_owned_files_settings_drawings_and_viewer_settings()
     {
         using var client = await CreateSignedInClientAsync("duplicate-owner@example.com");
@@ -4616,6 +4632,7 @@ internal sealed class TestSignInStartupFilter : IStartupFilter
                 {
                     var email = context.Request.Query["email"].ToString();
                     if (string.IsNullOrWhiteSpace(email)) email = "customer@example.com";
+                    var profileImageUrl = context.Request.Query["profileImageUrl"].ToString();
                     var normalizedEmail = email.Trim().ToLowerInvariant();
 
                     var idBytes = MD5.HashData(Encoding.UTF8.GetBytes(normalizedEmail));
@@ -4629,7 +4646,7 @@ internal sealed class TestSignInStartupFilter : IStartupFilter
                         await customerClient.EnsureCustomerAsync(normalizedEmail, "Test Customer", ct: context.RequestAborted);
                     }
 
-                    var claims = new[]
+                    var claims = new List<Claim>
                     {
                         new Claim(ClaimTypes.NameIdentifier, customerId.ToString()),
                         new Claim("customer_id", customerId.ToString()),
@@ -4638,6 +4655,11 @@ internal sealed class TestSignInStartupFilter : IStartupFilter
                         new Claim(ClaimTypes.Name, "Test Customer"),
                         new Claim("email_verified", "true")
                     };
+                    if (!string.IsNullOrWhiteSpace(profileImageUrl))
+                    {
+                        claims.Add(new Claim("profile_image_url", profileImageUrl));
+                    }
+
                     await context.SignInAsync(
                         CookieAuthenticationDefaults.AuthenticationScheme,
                         new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)));

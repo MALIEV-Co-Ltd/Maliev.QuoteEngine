@@ -59,7 +59,7 @@ public sealed record QuoteEngineDemoProjectResponse(
     string ThumbnailUrl,
     string Notice);
 
-public sealed record QuoteAuthStatusResponse(bool IsSignedIn, Guid? CustomerId, string? DisplayName);
+public sealed record QuoteAuthStatusResponse(bool IsSignedIn, Guid? CustomerId, string? DisplayName, string? ProfileImageUrl = null);
 
 /// <summary>Email credential sign-in/sign-up request handled by the QuoteEngine BFF against AuthService.</summary>
 public sealed record QuoteEmailAuthRequest(string Email, string Password, string? FullName = null, string? Language = null);

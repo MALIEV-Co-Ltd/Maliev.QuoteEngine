@@ -2306,47 +2306,51 @@
     position: absolute;
     inset: 0;
     border: 0;
-    background: color-mix(in srgb, var(--qe-agent-bg) 72%, transparent);
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
+    background: rgba(255, 255, 255, .82);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
     cursor: pointer;
 }
 
 .qe-agent-auth-dialog {
     --qe-auth-panel: #ffffff;
-    --qe-auth-panel-border: #cfcfcf;
-    --qe-auth-muted: #4d4d4d;
-    --qe-auth-eyebrow: #3f3f3f;
-    --qe-auth-field-bg: #f6f6f6;
-    --qe-auth-field-border: #c7c7c7;
-    --qe-auth-field-placeholder: #6b6b6b;
-    --qe-auth-divider: #c9c9c9;
-    --qe-auth-disabled-bg: #d6d6d6;
-    --qe-auth-disabled-text: #4a4a4a;
+    --qe-auth-panel-border: #333333;
+    --qe-auth-ink: #333333;
+    --qe-auth-muted: #555555;
+    --qe-auth-eyebrow: #333333;
+    --qe-auth-field-bg: #ffffff;
+    --qe-auth-field-border: #333333;
+    --qe-auth-field-placeholder: #6a6a6a;
+    --qe-auth-divider: rgba(51, 51, 51, .24);
+    --qe-auth-disabled-bg: #e7e7e7;
+    --qe-auth-disabled-text: #555555;
+    --qe-auth-focus: rgba(51, 51, 51, .22);
     position: relative;
     z-index: 1;
     display: grid;
-    gap: 18px;
+    gap: 17px;
     width: min(460px, calc(100vw - 32px));
-    padding: 24px;
+    padding: 28px;
     border: 1px solid var(--qe-auth-panel-border);
-    border-radius: 18px;
+    border-radius: 8px;
     background: var(--qe-auth-panel);
-    color: var(--qe-agent-ink);
-    box-shadow: 0 24px 90px color-mix(in srgb, #000000 22%, transparent);
+    color: var(--qe-auth-ink);
+    box-shadow: 0 18px 70px rgba(51, 51, 51, .16);
 }
 
 :root[data-maliev-theme="dark"] .qe-agent-auth-dialog {
-    --qe-auth-panel: #151515;
-    --qe-auth-panel-border: #424242;
-    --qe-auth-muted: #d1d1d1;
-    --qe-auth-eyebrow: #c7c7c7;
-    --qe-auth-field-bg: #262626;
-    --qe-auth-field-border: #5a5a5a;
-    --qe-auth-field-placeholder: #b7b7b7;
-    --qe-auth-divider: #555555;
-    --qe-auth-disabled-bg: #3a3a3a;
-    --qe-auth-disabled-text: #e1e1e1;
+    --qe-auth-panel: #333333;
+    --qe-auth-panel-border: #ffffff;
+    --qe-auth-ink: #ffffff;
+    --qe-auth-muted: #eeeeee;
+    --qe-auth-eyebrow: #ffffff;
+    --qe-auth-field-bg: #333333;
+    --qe-auth-field-border: #ffffff;
+    --qe-auth-field-placeholder: #d9d9d9;
+    --qe-auth-divider: rgba(255, 255, 255, .35);
+    --qe-auth-disabled-bg: #555555;
+    --qe-auth-disabled-text: #eeeeee;
+    --qe-auth-focus: rgba(255, 255, 255, .28);
 }
 
 .qe-agent-auth-dialog header {
@@ -2360,8 +2364,9 @@
     display: block;
     margin-bottom: 4px;
     color: var(--qe-auth-eyebrow);
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0;
     text-transform: uppercase;
 }
 
@@ -2371,8 +2376,8 @@
 
 .qe-agent-auth-dialog header .qe-agent-round-btn:hover,
 .qe-agent-auth-dialog header .qe-agent-round-btn:focus-visible {
-    background: var(--qe-agent-hover);
-    color: var(--qe-agent-ink);
+    background: color-mix(in srgb, var(--qe-auth-ink) 8%, transparent);
+    color: var(--qe-auth-ink);
     outline: none;
 }
 
@@ -2383,8 +2388,9 @@
 
 .qe-agent-auth-dialog h2 {
     font-size: 28px;
-    font-weight: 650;
-    line-height: 1.1;
+    font-weight: 600;
+    line-height: 1.08;
+    letter-spacing: 0;
 }
 
 .qe-agent-auth-dialog p {
@@ -2401,27 +2407,27 @@
     gap: 10px;
     width: 100%;
     min-height: 46px;
-    border: 1px solid var(--qe-agent-line);
-    border-radius: 12px;
-    background: var(--qe-agent-ink);
-    color: var(--qe-agent-bg);
+    border: 1px solid var(--qe-auth-panel-border);
+    border-radius: 8px;
+    background: #333333;
+    color: #ffffff;
     font: inherit;
-    font-weight: 650;
+    font-weight: 600;
     cursor: pointer;
 }
 
 .qe-agent-auth-google {
     border-color: var(--qe-auth-field-border);
     background: var(--qe-auth-field-bg);
-    color: var(--qe-agent-ink);
+    color: var(--qe-auth-ink);
 }
 
 .qe-agent-auth-google:hover,
 .qe-agent-auth-form button[type="submit"]:hover:not(:disabled),
 .qe-agent-auth-google:focus-visible,
 .qe-agent-auth-form button[type="submit"]:focus-visible {
-    border-color: color-mix(in srgb, var(--qe-agent-primary) 42%, var(--qe-agent-line));
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--qe-agent-primary) 18%, transparent);
+    border-color: var(--qe-auth-panel-border);
+    box-shadow: 0 0 0 3px var(--qe-auth-focus);
     outline: none;
 }
 
@@ -2472,8 +2478,9 @@
     display: grid;
     gap: 7px;
     color: var(--qe-auth-eyebrow);
-    font-size: 12px;
-    font-weight: 700;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0;
     text-transform: uppercase;
 }
 
@@ -2481,9 +2488,9 @@
     min-height: 46px;
     padding: 0 13px;
     border: 1px solid var(--qe-auth-field-border);
-    border-radius: 12px;
+    border-radius: 8px;
     background: var(--qe-auth-field-bg);
-    color: var(--qe-agent-ink);
+    color: var(--qe-auth-ink);
     font: inherit;
     font-size: 15px;
     outline: none;
@@ -2496,8 +2503,8 @@
 }
 
 .qe-agent-auth-form input:focus {
-    border-color: color-mix(in srgb, var(--qe-agent-primary) 58%, var(--qe-agent-line));
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--qe-agent-primary) 16%, transparent);
+    border-color: var(--qe-auth-panel-border);
+    box-shadow: 0 0 0 3px var(--qe-auth-focus);
 }
 
 .qe-agent-auth-error {
@@ -2511,15 +2518,15 @@
     justify-self: end;
     border: 0;
     background: transparent;
-    color: var(--qe-agent-primary);
+    color: var(--qe-auth-ink);
     font: inherit;
-    font-weight: 650;
+    font-weight: 600;
     cursor: pointer;
 }
 
 .qe-agent-auth-switch:focus-visible {
     border-radius: 6px;
-    outline: 2px solid color-mix(in srgb, var(--qe-agent-primary) 70%, transparent);
+    outline: 2px solid var(--qe-auth-ink);
     outline-offset: 3px;
 }
 
@@ -4926,6 +4933,14 @@
     border-top: 1px solid var(--qe-agent-line);
 }
 
+.qe-agent-quick-actions-section-label {
+    padding: 5px 10px 2px;
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
 .qe-agent-plugin-menu-icon {
     display: grid;
     place-items: center;
@@ -5136,7 +5151,7 @@
     gap: 20px;
     width: min(730px, calc(100% - 40px));
     margin: 0 auto;
-    padding: clamp(72px, 10vh, 116px) 0 72px;
+    padding: clamp(28px, 4vh, 48px) 0 56px;
     color: var(--qe-agent-ink);
 }
 
@@ -7155,7 +7170,7 @@
 
     .qe-agent-management-page {
         width: min(100% - 24px, 760px);
-        padding-top: 56px;
+        padding-top: 32px;
     }
 
     .qe-agent-management-section > header,

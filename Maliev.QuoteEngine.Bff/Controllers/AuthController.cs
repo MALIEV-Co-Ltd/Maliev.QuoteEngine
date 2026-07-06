@@ -49,7 +49,8 @@ public sealed class AuthController(
         if (sessionResolver.TryResolveCustomerId(out var customerId))
         {
             var displayName = User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email);
-            return Ok(new QuoteAuthStatusResponse(true, customerId, displayName));
+            var profileImageUrl = User.FindFirstValue("profile_image_url") ?? User.FindFirstValue("picture");
+            return Ok(new QuoteAuthStatusResponse(true, customerId, displayName, profileImageUrl));
         }
 
         return Ok(new QuoteAuthStatusResponse(false, null, null));
@@ -231,7 +232,7 @@ public sealed class AuthController(
     private ActionResult<QuoteAuthStatusResponse> SignedInStatus(AuthUser user)
     {
         Guid? customerId = Guid.TryParse(user.CustomerId, out var parsed) ? parsed : null;
-        return Ok(new QuoteAuthStatusResponse(true, customerId, user.Name ?? user.Email));
+        return Ok(new QuoteAuthStatusResponse(true, customerId, user.Name ?? user.Email, user.ProfileImageUrl));
     }
 
     private async Task SignInCustomerAsync(AuthUser user)

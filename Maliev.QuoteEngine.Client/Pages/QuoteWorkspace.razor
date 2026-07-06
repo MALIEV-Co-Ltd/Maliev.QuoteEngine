@@ -135,7 +135,7 @@
         CleanProfileText(_profile?.Email) ??
         Text("MALIEV customer", "ลูกค้า MALIEV");
     private string? ProfileEmail => CleanProfileText(_profile?.Email);
-    private string? ProfileImageUrl => CleanProfileText(_profile?.ProfileImageUrl);
+    private string? ProfileImageUrl => CleanProfileText(_profile?.ProfileImageUrl) ?? CleanProfileText(_authStatus.ProfileImageUrl);
     private string? ProfileTier => CleanProfileText(_profile?.Tier);
     [SupplyParameterFromQuery(Name = "handoff")]
     public string? Handoff { get; set; }
@@ -181,6 +181,7 @@
         await RestoreAgentSessionAsync();
 
         await SynchronizeRouteStateAsync(force: true);
+        await RestoreWorkspacePartsFromAgentStateAsync();
         _routeStateInitialized = true;
     }
 
@@ -277,6 +278,7 @@
                 await PersistAgentSessionAsync();
                 if (!string.Equals(previousSessionId, _quoteSessionId, StringComparison.Ordinal))
                 {
+                    await RestoreWorkspacePartsFromAgentStateAsync();
                     StateHasChanged();
                 }
             }
@@ -1687,6 +1689,43 @@
         _defaultInspectionCode = NormalizeQuoteDefaultInspection(await PreferenceState.GetPreferenceAsync(QuoteDefaultInspectionKey));
         _defaultLeadTimeCode = NormalizeQuoteDefaultLeadTime(await PreferenceState.GetPreferenceAsync(QuoteDefaultLeadTimeKey));
         _leadTimeCode = _defaultLeadTimeCode;
+    }
+
+    private async Task RestoreWorkspacePartsFromAgentStateAsync()
+    {
+        if (AgentSessionId == Guid.Empty || _parts.Count > 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var state = await Api.GetAgentStateAsync(AgentSessionId);
+            if (state.Parts.Count == 0)
+            {
+                return;
+            }
+
+            _parts.Clear();
+            foreach (var part in state.Parts)
+            {
+                _parts.Add(CreatePartViewModel(part));
+            }
+
+            _selectedPartIndex = 0;
+            _estimate = state.Estimate;
+            _formalQuote = null;
+            _order = null;
+            _payment = null;
+            _draftProjectId = null;
+            if (!string.IsNullOrWhiteSpace(state.ProjectName))
+            {
+                _title = state.ProjectName;
+            }
+        }
+        catch (Exception ex) when (ex is QuoteEngineApiException or HttpRequestException or InvalidOperationException or TaskCanceledException)
+        {
+        }
     }
 
     private async Task<bool> RestoreAgentSessionAsync()

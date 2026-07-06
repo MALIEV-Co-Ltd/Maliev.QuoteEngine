@@ -43,6 +43,15 @@ window.malievChatbot = {
     }, 500);
   },
 
+  markWorkspaceHandoff: function (storageKey) {
+    const key = storageKey || 'maliev.quote.workspace.handoff';
+
+    try {
+      sessionStorage.setItem(key, 'true');
+    } catch {
+    }
+  },
+
   readSharedSessionId: function (storageKey) {
     const key = storageKey || 'maliev.customerAssistant.session.v1';
 

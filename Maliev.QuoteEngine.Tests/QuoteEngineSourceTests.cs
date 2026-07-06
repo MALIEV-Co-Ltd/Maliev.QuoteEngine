@@ -795,6 +795,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private string ProfileDisplayName", source, StringComparison.Ordinal);
         Assert.Contains("private string? ProfileEmail", source, StringComparison.Ordinal);
         Assert.Contains("private string? ProfileImageUrl", source, StringComparison.Ordinal);
+        Assert.Contains("_authStatus.ProfileImageUrl", source, StringComparison.Ordinal);
         Assert.Contains("private string? ProfileTier", source, StringComparison.Ordinal);
         Assert.DoesNotContain("ShowLaunchAccountCard", source, StringComparison.Ordinal);
         Assert.Contains("private Guid AgentSessionId", source, StringComparison.Ordinal);
@@ -1018,6 +1019,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@if (!_pinnedProjectsCollapsed)", component, StringComparison.Ordinal);
         Assert.Contains("@if (!_projectsCollapsed)", component, StringComparison.Ordinal);
         Assert.Contains("MainClass => _messages.Count == 0 ? \"qe-agent-main qe-agent-main--empty\" : \"qe-agent-main qe-agent-main--chat\"", component, StringComparison.Ordinal);
+        Assert.Contains("<h1>@Text(\"What do you want to make today?\", \"วันนี้ต้องการผลิตอะไร?\")</h1>", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("<h1 tabindex=\"-1\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-agent-avatar", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-name\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"@AccountMenuClass\"", component, StringComparison.Ordinal);
@@ -1031,6 +1034,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("role=\"presentation\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-user-copy\"", component, StringComparison.Ordinal);
         Assert.Contains("src=\"@AccountProfileImageUrl\"", component, StringComparison.Ordinal);
+        Assert.Contains("@onerror=\"HandleAccountProfileImageError\"", component, StringComparison.Ordinal);
+        Assert.Contains("private string? RawAccountProfileImageUrl", component, StringComparison.Ordinal);
+        Assert.Contains("private string? _failedAccountProfileImageUrl;", component, StringComparison.Ordinal);
         Assert.Contains("AccountInitials", component, StringComparison.Ordinal);
         Assert.Contains("ProfileDisplayName", component, StringComparison.Ordinal);
         Assert.Contains("ProfileEmail", component, StringComparison.Ordinal);
@@ -1211,6 +1217,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("QuoteAgentUiDirectiveDto", component, StringComparison.Ordinal);
         Assert.Contains("ConnectorStatus", component, StringComparison.Ordinal);
         Assert.Contains("ApplyConnector", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-quick-actions-section-label\"", component, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Plugins\", \"ปลั๊กอิน\")", component, StringComparison.Ordinal);
+        Assert.Contains("ConnectorToolsDescription(connector)", component, StringComparison.Ordinal);
+        var toggleQuickActionsBlock = ExtractSourceBlock(component, "private async Task ToggleQuickActionsMenu()", "private async Task ApplyConnectorFromPluginsAsync");
+        Assert.Contains("await LoadConnectorRegistryAsync();", toggleQuickActionsBlock, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-drive-mention is-active\"", component, StringComparison.Ordinal);
         Assert.Contains("DriveMentionActive => ContainsDriveMention(_draftMessage)", component, StringComparison.Ordinal);
         Assert.Contains("private static bool ContainsDriveMention(string? text)", component, StringComparison.Ordinal);
@@ -1292,7 +1303,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@ref=\"_composerTextarea\"", component, StringComparison.Ordinal);
         Assert.Contains("@bind:event=\"oninput\"", component, StringComparison.Ordinal);
         Assert.Contains("autofocus", component, StringComparison.Ordinal);
-        Assert.Contains("<h1 tabindex=\"-1\">@Text(\"What do you want to make today?\"", component, StringComparison.Ordinal);
+        Assert.Contains("<h1>@Text(\"What do you want to make today?\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("<h1 tabindex=\"-1\"", component, StringComparison.Ordinal);
         Assert.Contains("maxlength=\"@QuoteAgentTextLimits.MaxMessageCharacters\"", component, StringComparison.Ordinal);
         Assert.Contains("quote-agent-composer.js", component, StringComparison.Ordinal);
         Assert.Contains("SubmitComposerFromKeyboardAsync", component, StringComparison.Ordinal);
@@ -1441,6 +1453,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-connector-dialog {", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-connector-modal-cta--danger", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-page", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("padding: clamp(28px, 4vh, 48px) 0 56px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-quick-actions-section-label", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-row", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-section-toggle", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-settings-grid", agentStyles, StringComparison.Ordinal);
@@ -1531,6 +1545,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Task<QuoteAgentActionResultResponse> ConfirmAgentActionAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("MakeStudioSessionStorageKey", workspace, StringComparison.Ordinal);
         Assert.Contains("RestoreAgentSessionAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("RestoreWorkspacePartsFromAgentStateAsync", workspace, StringComparison.Ordinal);
+        Assert.Contains("Api.GetAgentStateAsync(AgentSessionId)", workspace, StringComparison.Ordinal);
+        Assert.Contains("_parts.Add(CreatePartViewModel(part));", workspace, StringComparison.Ordinal);
+        Assert.Contains("_estimate = state.Estimate;", workspace, StringComparison.Ordinal);
         Assert.Contains("PersistAgentSessionAsync", workspace, StringComparison.Ordinal);
         Assert.Contains("AuthReturnUrl=\"@WorkspaceAuthReturnUrl\"", workspace, StringComparison.Ordinal);
         Assert.Contains("BuildWorkspaceAuthReturnUrl(Navigation.Uri)", workspace, StringComparison.Ordinal);
@@ -1817,8 +1835,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("max-width: 730px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-auth-modal", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-auth-dialog", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("border-color: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("background: var(--qe-agent-primary);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("--qe-auth-panel-border: #333333;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("--qe-auth-ink: #333333;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border: 1px solid var(--qe-auth-panel-border);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("background: #333333;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("color: var(--qe-agent-ink) !important;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-agent-signup-btn", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-agent-auth-actions", agentStyles, StringComparison.Ordinal);
@@ -2514,6 +2534,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("StripAuthQueryParameter(uri.Query)", workspace, StringComparison.Ordinal);
         Assert.Contains("!part.StartsWith(\"auth=\", StringComparison.OrdinalIgnoreCase)", workspace, StringComparison.Ordinal);
         Assert.Contains("await RestoreAgentSessionAsync();", workspace, StringComparison.Ordinal);
+        Assert.Contains("await RestoreWorkspacePartsFromAgentStateAsync();", workspace, StringComparison.Ordinal);
         Assert.Contains("malievChatbot.readSharedSessionId", workspace, StringComparison.Ordinal);
         Assert.Contains("malievChatbot.writeSharedSession", workspace, StringComparison.Ordinal);
         Assert.Contains("MakeStudioSessionStorageKey,", workspace, StringComparison.Ordinal);
@@ -2522,6 +2543,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("var previousSessionId = _quoteSessionId;", workspace, StringComparison.Ordinal);
         Assert.Contains("await PersistAgentSessionAsync();", workspace, StringComparison.Ordinal);
         Assert.Contains("StateHasChanged();", workspace, StringComparison.Ordinal);
+        Assert.Contains("Api.GetAgentStateAsync(AgentSessionId)", workspace, StringComparison.Ordinal);
+        Assert.Contains("_parts.Add(CreatePartViewModel(part));", workspace, StringComparison.Ordinal);
+        Assert.Contains("_estimate = state.Estimate;", workspace, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2537,8 +2561,12 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("malievChatbot.openSignInPopup", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("listenForAuthComplete", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("%2Fauth%2Fchatbot-complete", shell, StringComparison.Ordinal);
-        var continueWithGoogle = ExtractSourceBlock(shell, "private void ContinueWithGoogle()", "public void OnAuthPopupCompleted()");
+        var continueWithGoogle = ExtractSourceBlock(shell, "private async Task ContinueWithGoogle()", "public void OnAuthPopupCompleted()");
+        Assert.Contains("await MarkAuthWorkspaceHandoffAsync();", continueWithGoogle, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo($\"/auth/google?returnUrl={Uri.EscapeDataString(AuthReturnUrl)}\", forceLoad: true);", continueWithGoogle, StringComparison.Ordinal);
+        Assert.Contains("private async Task MarkAuthWorkspaceHandoffAsync()", shell, StringComparison.Ordinal);
+        Assert.Contains("malievChatbot.markWorkspaceHandoff", shell, StringComparison.Ordinal);
+        Assert.Contains("await MarkAuthWorkspaceHandoffAsync();", ExtractSourceBlock(shell, "private async Task ContinueWithEmailAsync()", "private async Task ContinueWithGoogle()"), StringComparison.Ordinal);
         Assert.Contains("public void OnAuthPopupCompleted()", shell, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(Navigation.Uri, forceLoad: true);", shell, StringComparison.Ordinal);
         Assert.Contains("if (SessionId == _loadedSessionId)", shell, StringComparison.Ordinal);
@@ -2561,6 +2589,8 @@ public sealed class QuoteEngineSourceTests
 
         Assert.Contains("window.opener.postMessage({ type: 'maliev.chatbot.authenticated' }, window.location.origin);", chatbotJs, StringComparison.Ordinal);
         Assert.Contains("localStorage.setItem('maliev.chatbot.auth.completedAt'", chatbotJs, StringComparison.Ordinal);
+        Assert.Contains("markWorkspaceHandoff: function", chatbotJs, StringComparison.Ordinal);
+        Assert.Contains("sessionStorage.setItem(key, 'true');", chatbotJs, StringComparison.Ordinal);
         Assert.Contains("if (event.origin !== location.origin || !event.data || event.data.type !== 'maliev.chatbot.authenticated')", composerJs, StringComparison.Ordinal);
         Assert.Contains("dotNetRef.invokeMethodAsync('OnAuthPopupCompleted');", composerJs, StringComparison.Ordinal);
     }
@@ -2900,8 +2930,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("NdaStatusClass", ndas, StringComparison.Ordinal);
         Assert.Contains("data-nda-section=\"summary\"", ndas, StringComparison.Ordinal);
         Assert.Contains("data-nda-section=\"documents\"", ndas, StringComparison.Ordinal);
-        Assert.Contains("href=\"/documents?kind=Requirement\"", ndas, StringComparison.Ordinal);
-        Assert.Contains("href=\"/quotes/new\"", ndas, StringComparison.Ordinal);
+        Assert.Contains("@inject NavigationManager Navigation", ndas, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"UploadRequirement\"", ndas, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"StartProtectedQuote\"", ndas, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/quotes?ws=documents&kind=Requirement\", forceLoad: true);", ndas, StringComparison.Ordinal);
+        Assert.Contains("Navigation.NavigateTo(\"/projects/new\", forceLoad: true);", ndas, StringComparison.Ordinal);
+        Assert.DoesNotContain("href=\"/quotes/new\"", ndas, StringComparison.Ordinal);
         Assert.Contains("NdaDateLine(nda)", ndas, StringComparison.Ordinal);
 
         Assert.Contains("GetNdasAsync", apiClient, StringComparison.Ordinal);

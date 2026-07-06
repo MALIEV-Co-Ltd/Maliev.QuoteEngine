@@ -1,4 +1,5 @@
 @inject QuoteEngineApiClient Api
+@inject NavigationManager Navigation
 
 <section class="nda-dashboard">
     <section class="nda-summary-grid" data-nda-section="summary" aria-label="@Text("NDA summary", "สรุป NDA")">
@@ -23,8 +24,8 @@
             <p>@Text("Use customer documents for drawings, requirements, receipts, and quote files tied to confidential manufacturing work.", "ใช้เอกสารลูกค้าสำหรับแบบ ข้อกำหนด ใบเสร็จ และไฟล์ใบเสนอราคาที่เกี่ยวข้องกับงานผลิตที่เป็นความลับ")</p>
         </div>
         <div class="nda-actions">
-            <a class="qe-primary-btn" href="/documents?kind=Requirement">@Text("Upload requirement", "อัปโหลดข้อกำหนด")</a>
-            <a class="qe-secondary-btn" href="/quotes/new">@Text("Start protected quote", "เริ่มใบเสนอราคาที่คุ้มครอง")</a>
+            <button type="button" class="qe-primary-btn" @onclick="UploadRequirement">@Text("Upload requirement", "อัปโหลดข้อกำหนด")</button>
+            <button type="button" class="qe-secondary-btn" @onclick="StartProtectedQuote">@Text("Start protected quote", "เริ่มใบเสนอราคาที่คุ้มครอง")</button>
         </div>
     </section>
 
@@ -70,6 +71,16 @@
     protected override async Task OnInitializedAsync()
     {
         _ndas = await Api.GetNdasAsync();
+    }
+
+    private void UploadRequirement()
+    {
+        Navigation.NavigateTo("/quotes?ws=documents&kind=Requirement", forceLoad: true);
+    }
+
+    private void StartProtectedQuote()
+    {
+        Navigation.NavigateTo("/projects/new", forceLoad: true);
     }
 
     private string NdaStatusClass(CustomerNdaDto nda)
