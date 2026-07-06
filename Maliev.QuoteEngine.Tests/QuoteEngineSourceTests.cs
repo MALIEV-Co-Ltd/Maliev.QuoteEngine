@@ -1127,12 +1127,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ProjectNavItem.FromDto", component, StringComparison.Ordinal);
         Assert.Contains("private IEnumerable<ProjectNavItem> TemporaryProjects => _projects.Where(project => !project.IsPersisted && !project.IsArchived);", component, StringComparison.Ordinal);
         Assert.Contains("private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => project.IsPersisted && !project.IsPinned && !project.IsArchived);", component, StringComparison.Ordinal);
+        Assert.Contains("private IEnumerable<ProjectNavItem> ProjectManagementProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);", component, StringComparison.Ordinal);
         Assert.Contains("_projects.RemoveAll(project => project.IsPersisted);", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-rail-group qe-agent-rail-group--temporary\"", component, StringComparison.Ordinal);
         Assert.Contains("Saved after sign-in", component, StringComparison.Ordinal);
         Assert.Contains("@foreach (var project in RegularProjects)", component, StringComparison.Ordinal);
+        var managementProjectsPage = ExtractSourceBlock(component, "else if (IsWorkspacePage(WorkspacePage.Projects))", "else if (IsWorkspacePage(WorkspacePage.Settings))");
+        Assert.Contains("@if (ProjectManagementProjects.Any())", managementProjectsPage, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var project in ProjectManagementProjects)", managementProjectsPage, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-row\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-management-row\"", component, StringComparison.Ordinal);
+        Assert.Contains("padding: clamp(14px, 2vh, 24px) 0 48px;", styles, StringComparison.Ordinal);
+        Assert.Contains("padding-top: 18px;", styles, StringComparison.Ordinal);
         Assert.Contains("href=\"@ProjectHref(project)\"", component, StringComparison.Ordinal);
         Assert.Contains("private static string ProjectHref(ProjectNavItem project)", component, StringComparison.Ordinal);
         Assert.Contains("/quotes?projectId={project.ProjectId:D}", component, StringComparison.Ordinal);
@@ -1453,7 +1459,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-connector-dialog {", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-connector-modal-cta--danger", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-page", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("padding: clamp(28px, 4vh, 48px) 0 56px;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("padding: clamp(14px, 2vh, 24px) 0 48px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-quick-actions-section-label", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-row", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-section-toggle", agentStyles, StringComparison.Ordinal);

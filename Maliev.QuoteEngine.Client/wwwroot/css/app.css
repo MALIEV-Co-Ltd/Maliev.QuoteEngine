@@ -5151,7 +5151,7 @@
     gap: 20px;
     width: min(730px, calc(100% - 40px));
     margin: 0 auto;
-    padding: clamp(28px, 4vh, 48px) 0 56px;
+    padding: clamp(14px, 2vh, 24px) 0 48px;
     color: var(--qe-agent-ink);
 }
 
@@ -7242,7 +7242,7 @@
 
     .qe-agent-management-page {
         width: min(100% - 24px, 760px);
-        padding-top: 32px;
+        padding-top: 18px;
     }
 
     .qe-agent-management-section > header,

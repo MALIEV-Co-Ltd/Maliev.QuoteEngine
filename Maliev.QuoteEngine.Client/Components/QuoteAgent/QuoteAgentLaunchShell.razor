@@ -565,10 +565,10 @@
                             </header>
                             @if (!_projectsCollapsed)
                             {
-                                @if (RegularProjects.Any())
+                                @if (ProjectManagementProjects.Any())
                                 {
                                     <div class="qe-agent-management-list">
-                                        @foreach (var project in RegularProjects)
+                                        @foreach (var project in ProjectManagementProjects)
                                         {
                                             <article class="qe-agent-management-row">
                                                 <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
@@ -2928,6 +2928,7 @@
     private IEnumerable<ProjectNavItem> PinnedProjects => _projects.Where(project => project.IsPersisted && project.IsPinned && !project.IsArchived);
     private IEnumerable<ProjectNavItem> TemporaryProjects => _projects.Where(project => !project.IsPersisted && !project.IsArchived);
     private IEnumerable<ProjectNavItem> RegularProjects => _projects.Where(project => project.IsPersisted && !project.IsPinned && !project.IsArchived);
+    private IEnumerable<ProjectNavItem> ProjectManagementProjects => _projects.Where(project => !project.IsPinned && !project.IsArchived);
     private string TemporaryProjectsAriaLabel => IsSignedIn
         ? Text("Active draft projects", "โปรเจกต์ฉบับร่างที่กำลังทำ")
         : Text("Temporary projects", "โปรเจกต์ชั่วคราว");
