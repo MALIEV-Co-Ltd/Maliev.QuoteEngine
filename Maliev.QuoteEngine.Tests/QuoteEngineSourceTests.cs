@@ -5216,6 +5216,12 @@ public sealed class QuoteEngineSourceTests
 
         // Agent payment artifact carries the QR metadata for the chat card.
         Assert.Contains("[\"qrImageUrl\"] = state.Payment?.QrImageUrl", agentService, StringComparison.Ordinal);
+
+        // Live QR expiry countdown (driven in JS, not a per-second Blazor re-render).
+        Assert.Contains("data-qr-expires-at=\"@paymentQr.ExpiresAtIso\"", shell, StringComparison.Ordinal);
+        Assert.Contains("/js/quote-payment-countdown.js", shell, StringComparison.Ordinal);
+        var countdownJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-payment-countdown.js");
+        Assert.Contains("data-qr-expires-at", countdownJs, StringComparison.Ordinal);
     }
 
     [Fact]

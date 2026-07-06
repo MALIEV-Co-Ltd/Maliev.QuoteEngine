@@ -1884,9 +1884,12 @@
                                     <div class="qe-agent-payment-qr">
                                         <img class="qe-agent-payment-qr-image" src="@paymentQr.ImageUrl" alt="@Text("PromptPay QR code", "คิวอาร์โค้ดพร้อมเพย์")" />
                                         <p class="qe-agent-payment-qr-caption">@Text($"Scan this PromptPay QR to pay {paymentQr.AmountLabel}", $"สแกนคิวอาร์พร้อมเพย์เพื่อชำระ {paymentQr.AmountLabel}")</p>
-                                        @if (!string.IsNullOrWhiteSpace(paymentQr.ExpiryLabel))
+                                        @if (!string.IsNullOrWhiteSpace(paymentQr.ExpiresAtIso))
                                         {
-                                            <small class="qe-agent-payment-qr-expiry">@paymentQr.ExpiryLabel</small>
+                                            <small class="qe-agent-payment-qr-countdown"
+                                                   data-qr-expires-at="@paymentQr.ExpiresAtIso"
+                                                   data-qr-countdown-prefix="@Text("Time left ", "เหลือเวลา ")"
+                                                   data-qr-expired-label="@Text("QR expired — restart payment", "คิวอาร์หมดอายุ — เริ่มชำระใหม่")">@paymentQr.CountdownLabel</small>
                                         }
                                     </div>
                                 }
@@ -3425,6 +3428,17 @@
             await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef, _dictationButton);
             _dictationUnsupported = !await _composerModule.InvokeAsync<bool>("isSpeechRecognitionSupported");
             await _composerModule.InvokeVoidAsync("focusComposer", _composerTextarea);
+
+            try
+            {
+                // Drives the live PromptPay QR countdown in JS (avoids a per-second Blazor re-render).
+                var countdownModule = await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-payment-countdown.js");
+                await countdownModule.InvokeVoidAsync("start");
+            }
+            catch (Exception)
+            {
+                // Non-fatal: the QR still shows its initial remaining-time label without the live tick.
+            }
         }
         else if (_composerModule is not null)
         {
@@ -6670,7 +6684,7 @@
             : null;
     }
 
-    private readonly record struct PaymentQrInfo(string ImageUrl, string AmountLabel, string? ExpiryLabel);
+    private readonly record struct PaymentQrInfo(string ImageUrl, string AmountLabel, string? ExpiresAtIso, string? CountdownLabel);
 
     // Surfaces the in-chat PromptPay QR from a payment artifact until the payment is confirmed paid.
     private bool TryGetPaymentQr(QuoteAgentArtifactDto artifact, out PaymentQrInfo info)
@@ -6694,17 +6708,24 @@
             ? $"{amount} {currency}".Trim()
             : Text("the amount due", "ยอดที่ต้องชำระ");
 
-        string? expiryLabel = null;
+        string? expiresAtIso = null;
+        string? countdownLabel = null;
         if (DateTimeOffset.TryParse(
                 ArtifactMetadata(artifact, "qrExpiresAt"),
                 CultureInfo.InvariantCulture,
                 DateTimeStyles.RoundtripKind,
                 out var expiresAt))
         {
-            expiryLabel = Text($"Expires {expiresAt.ToLocalTime():HH:mm}", $"หมดอายุ {expiresAt.ToLocalTime():HH:mm}");
+            expiresAtIso = expiresAt.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture);
+            var remaining = expiresAt - DateTimeOffset.UtcNow;
+            countdownLabel = remaining > TimeSpan.Zero
+                ? Text(
+                    $"Time left {(int)remaining.TotalMinutes}:{remaining.Seconds:00}",
+                    $"เหลือเวลา {(int)remaining.TotalMinutes}:{remaining.Seconds:00}")
+                : Text("QR expired — restart payment", "คิวอาร์หมดอายุ — เริ่มชำระใหม่");
         }
 
-        info = new PaymentQrInfo(imageUrl, amountLabel, expiryLabel);
+        info = new PaymentQrInfo(imageUrl, amountLabel, expiresAtIso, countdownLabel);
         return true;
     }
 

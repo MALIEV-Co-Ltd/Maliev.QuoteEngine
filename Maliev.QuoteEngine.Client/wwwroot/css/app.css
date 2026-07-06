@@ -6273,9 +6273,15 @@
     font-weight: 600;
 }
 
-.qe-agent-payment-qr-expiry {
+.qe-agent-payment-qr-countdown {
     color: var(--qe-agent-muted);
     font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
+
+.qe-agent-payment-qr-countdown.is-expired {
+    color: #d64545;
+    font-weight: 600;
 }
 
 .qe-agent-artifact-details {
