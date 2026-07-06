@@ -4880,6 +4880,19 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgent_prompt_names_the_assistant_in_thai_instead_of_using_chan()
+    {
+        var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs")
+            .ReplaceLineEndings("\n");
+
+        Assert.Contains("Agent persona: the assistant is named Mali in English and น้องมะลิ in Thai.", service, StringComparison.Ordinal);
+        Assert.Contains("For Thai replies, refer to yourself as น้องมะลิ", service, StringComparison.Ordinal);
+        Assert.Contains("do not refer to yourself as ฉัน", service, StringComparison.Ordinal);
+        Assert.Contains("GroundAssistantPersonaText(content, language)", service, StringComparison.Ordinal);
+        Assert.Contains("content.Replace(\"ฉัน\", \"น้องมะลิ\", StringComparison.Ordinal)", service, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Generate3DPreview_returns_the_artifact_it_created_or_revised()
     {
         var service = ReadRepoFile("Maliev.QuoteEngine.Bff", "Services", "QuoteAgentService.cs")
