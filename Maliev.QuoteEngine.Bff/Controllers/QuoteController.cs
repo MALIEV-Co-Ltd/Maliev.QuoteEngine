@@ -938,6 +938,17 @@ public sealed class QuoteController(
             });
         }
 
+        // Development/testing: the prototype customer's orders live in the local store, not the real
+        // OrderService/CustomerService/PaymentService (Omise) chain. Route checkout to the local
+        // prototype completion endpoint so the quote -> order -> payment -> success loop is fully
+        // drivable by agents without external gateways.
+        if (CanUsePrototypeFallback() && store.TryResolveOrderNumber(customerId, request.OrderId, out _))
+        {
+            var prototypeCheckoutUrl =
+                $"{Request.Scheme}://{Request.Host}/quote/v1/payments/prototype-checkout?orderId={request.OrderId:D}";
+            return Ok(new InitiatePaymentResponse(Guid.NewGuid(), prototypeCheckoutUrl, "pending"));
+        }
+
         var addressValidation = await ValidateCheckoutAddressesAsync(customerId, request, cancellationToken);
         if (addressValidation.Error is not null)
         {
@@ -1056,6 +1067,30 @@ public sealed class QuoteController(
         }
 
         return Ok(new InitiatePaymentResponse(result.TransactionId, result.PaymentUrl, result.Status));
+    }
+
+    /// <summary>
+    /// Development/testing checkout completion for the prototype customer. Stands in for the
+    /// PaymentService/Omise PaymentCompletedEvent by marking the local prototype order paid, then
+    /// redirects to the payment success page. Hard-gated to Development/Testing — 404 otherwise.
+    /// </summary>
+    [HttpGet("payments/prototype-checkout")]
+    public IActionResult PrototypeCheckout([FromQuery] Guid orderId)
+    {
+        if (!CanUsePrototypeFallback())
+        {
+            return NotFound();
+        }
+
+        if (!sessionResolver.TryResolveCustomerId(out var customerId) ||
+            !store.TryResolveOrderNumber(customerId, orderId, out var orderNumber))
+        {
+            return NotFound();
+        }
+
+        store.MarkOrderPaid(customerId, orderNumber);
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        return Redirect($"{baseUrl}/payment/success?orderNumber={Uri.EscapeDataString(orderNumber)}");
     }
 
     private async Task<CheckoutAddressValidationResult> ValidateCheckoutAddressesAsync(

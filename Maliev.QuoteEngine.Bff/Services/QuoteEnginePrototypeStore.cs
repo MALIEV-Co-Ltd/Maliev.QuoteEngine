@@ -19,6 +19,7 @@ public sealed class QuoteEnginePrototypeStore
     private readonly ConcurrentDictionary<Guid, CustomerProjectRecord> _projects = new();
     private readonly ConcurrentDictionary<Guid, List<CustomerAddressDto>> _addressesByCustomer = new();
     private readonly ConcurrentDictionary<Guid, List<CustomerDocumentDto>> _documentsByCustomer = new();
+    private readonly ConcurrentDictionary<string, CustomerOrderRecordDetail> _orderDetailsByNumber = new(StringComparer.OrdinalIgnoreCase);
 
     public CustomerProfileResponse PrototypeCustomer { get; } = new(
         Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
@@ -160,20 +161,147 @@ public sealed class QuoteEnginePrototypeStore
             ]);
         _quotes[quoteId] = new CustomerQuoteRecord(customerId, quote);
 
-        var inProduction = new CustomerOrderSummaryDto(
+        SeedPrototypeOrder(
+            customerId, quoteId,
             Guid.Parse("eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"),
             "MO-DEMO-0001",
-            "In production",
-            now.AddDays(-2),
-            "CNC machining in progress");
-        var paid = new CustomerOrderSummaryDto(
+            currentStatus: "In production",
+            paymentStatus: "Paid",
+            trackingLabel: "CNC machining in progress",
+            createdAt: now.AddDays(-3),
+            updatedAt: now.AddDays(-2),
+            promisedDelivery: now.AddDays(6),
+            requirements: "CNC-machined 6061-T6 bracket, clear anodize, ±0.1 mm, qty 50.",
+            statusHistory:
+            [
+                new OrderStatusEntryDto("Order received", null, now.AddDays(-3)),
+                new OrderStatusEntryDto("Accepted", "Quote accepted by customer.", now.AddDays(-2).AddHours(-2)),
+                new OrderStatusEntryDto("In production", "CNC machining in progress.", now.AddDays(-2))
+            ],
+            milestones:
+            [
+                new CustomerManufacturingMilestoneDto("received", "Order received", "Order confirmed and queued.", "complete", 100, now.AddDays(-3)),
+                new CustomerManufacturingMilestoneDto("production", "In production", "CNC machining in progress.", "active", 60, now.AddDays(-2)),
+                new CustomerManufacturingMilestoneDto("qc", "Quality check", "Dimensional inspection.", "pending", 0, null),
+                new CustomerManufacturingMilestoneDto("shipped", "Shipped", "Handover to carrier.", "pending", 0, null)
+            ]);
+
+        SeedPrototypeOrder(
+            customerId, quoteId,
             Guid.Parse("ffffffff-ffff-ffff-ffff-ffffffffffff"),
             "MO-DEMO-0002",
-            "Paid",
-            now.AddDays(-1),
-            "Awaiting shipment");
-        _orders[inProduction.OrderId] = new CustomerOrderRecord(customerId, inProduction);
-        _orders[paid.OrderId] = new CustomerOrderRecord(customerId, paid);
+            currentStatus: "Paid",
+            paymentStatus: "Paid",
+            trackingLabel: "Awaiting shipment",
+            createdAt: now.AddDays(-1).AddHours(-3),
+            updatedAt: now.AddDays(-1),
+            promisedDelivery: now.AddDays(3),
+            requirements: "SLA resin prototype, standard finish, qty 5.",
+            statusHistory:
+            [
+                new OrderStatusEntryDto("Order received", null, now.AddDays(-1).AddHours(-3)),
+                new OrderStatusEntryDto("Accepted", "Quote accepted by customer.", now.AddDays(-1).AddHours(-2)),
+                new OrderStatusEntryDto("Paid", "Payment completed.", now.AddDays(-1))
+            ],
+            milestones:
+            [
+                new CustomerManufacturingMilestoneDto("received", "Order received", "Order confirmed and queued.", "complete", 100, now.AddDays(-1).AddHours(-3)),
+                new CustomerManufacturingMilestoneDto("paid", "Paid", "Payment completed.", "complete", 100, now.AddDays(-1)),
+                new CustomerManufacturingMilestoneDto("production", "Production", "Awaiting production slot.", "pending", 0, null),
+                new CustomerManufacturingMilestoneDto("shipped", "Shipped", "Handover to carrier.", "pending", 0, null)
+            ]);
+    }
+
+    private void SeedPrototypeOrder(
+        Guid customerId,
+        Guid quoteId,
+        Guid orderId,
+        string orderNumber,
+        string currentStatus,
+        string paymentStatus,
+        string trackingLabel,
+        DateTimeOffset createdAt,
+        DateTimeOffset updatedAt,
+        DateTimeOffset promisedDelivery,
+        string requirements,
+        IReadOnlyList<OrderStatusEntryDto> statusHistory,
+        IReadOnlyList<CustomerManufacturingMilestoneDto> milestones)
+    {
+        var summary = new CustomerOrderSummaryDto(orderId, orderNumber, currentStatus, updatedAt, trackingLabel);
+        _orders[orderId] = new CustomerOrderRecord(customerId, summary);
+
+        var detail = new CustomerOrderDetailDto(
+            orderId,
+            orderNumber,
+            currentStatus,
+            paymentStatus,
+            12_500m,
+            "THB",
+            promisedDelivery,
+            ActualDeliveryDate: null,
+            CustomerPoNumber: "PO-DEMO-0001",
+            Requirements: requirements,
+            createdAt,
+            updatedAt,
+            statusHistory)
+        {
+            QuoteId = quoteId,
+            QuoteNumber = "MQ-DEMO-0001",
+            ManufacturingMilestones = milestones
+        };
+        _orderDetailsByNumber[orderNumber] = new CustomerOrderRecordDetail(customerId, detail);
+    }
+
+    public CustomerOrderDetailDto? GetOrderDetail(Guid customerId, string orderNumber)
+    {
+        return _orderDetailsByNumber.TryGetValue(orderNumber, out var record) && record.CustomerId == customerId
+            ? record.Detail
+            : null;
+    }
+
+    public bool TryResolveOrderNumber(Guid customerId, Guid orderId, out string orderNumber)
+    {
+        if (_orders.TryGetValue(orderId, out var record) && record.CustomerId == customerId)
+        {
+            orderNumber = record.Order.OrderNumber;
+            return true;
+        }
+
+        orderNumber = string.Empty;
+        return false;
+    }
+
+    // Marks a prototype order Paid (dev/test checkout completion) and returns whether it was found.
+    public bool MarkOrderPaid(Guid customerId, string orderNumber)
+    {
+        if (!_orderDetailsByNumber.TryGetValue(orderNumber, out var record) || record.CustomerId != customerId)
+        {
+            return false;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var history = record.Detail.StatusHistory.ToList();
+        if (!history.Any(entry => entry.Status == "Paid"))
+        {
+            history.Add(new OrderStatusEntryDto("Paid", "Payment completed.", now));
+        }
+
+        var paidDetail = record.Detail with
+        {
+            CurrentStatus = "Paid",
+            PaymentStatus = "Paid",
+            UpdatedAt = now,
+            StatusHistory = history
+        };
+        _orderDetailsByNumber[orderNumber] = new CustomerOrderRecordDetail(customerId, paidDetail);
+
+        if (_orders.TryGetValue(record.Detail.OrderId, out var orderRecord))
+        {
+            var paidSummary = orderRecord.Order with { Status = "Paid", TrackingLabel = "Awaiting shipment", UpdatedAt = now };
+            _orders[record.Detail.OrderId] = orderRecord with { Order = paidSummary };
+        }
+
+        return true;
     }
 
     public IReadOnlyList<CustomerDocumentDto> GetDocuments(Guid customerId)
@@ -1239,6 +1367,8 @@ public sealed class QuoteEnginePrototypeStore
 internal sealed record CustomerQuoteRecord(Guid CustomerId, CustomerQuoteSummaryDto Quote);
 
 internal sealed record CustomerOrderRecord(Guid CustomerId, CustomerOrderSummaryDto Order);
+
+internal sealed record CustomerOrderRecordDetail(Guid CustomerId, CustomerOrderDetailDto Detail);
 
 internal sealed record CustomerProjectRecord(
     Guid CustomerId,

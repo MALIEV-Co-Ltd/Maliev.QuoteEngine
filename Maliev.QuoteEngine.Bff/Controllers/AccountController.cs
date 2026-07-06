@@ -141,8 +141,14 @@ public sealed class AccountController(
         if (!sessionResolver.TryResolveCustomerId(out var customerId)) return Unauthorized();
 
         var customerOrders = await orderClient.GetByCustomerAsync(customerId.ToString("D"), cancellationToken);
-        if (!customerOrders.Any(order => string.Equals(order.OrderNumber, orderNumber, StringComparison.OrdinalIgnoreCase)))
+        var ownsOrder = customerOrders.Any(order => string.Equals(order.OrderNumber, orderNumber, StringComparison.OrdinalIgnoreCase));
+        if (!ownsOrder)
         {
+            if (CanUsePrototypeAccountFallback() && store.GetOrderDetail(customerId, orderNumber) is { } prototypeDetail)
+            {
+                return Ok(prototypeDetail);
+            }
+
             return NotFound();
         }
 
