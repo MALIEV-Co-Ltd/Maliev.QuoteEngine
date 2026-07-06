@@ -2157,6 +2157,84 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_message_stream_completes_wait_only_pricing_reply_for_thai_uploaded_part()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "กำลังอัปเดตใบเสนอราคาของคุณเพื่อ FDM PLA Black จำนวน 12 ชิ้น โปรดรอสักครู่..."
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var initialResponse = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "สอบถามราคาพิมพ์ 3D ครับ",
+            Language = "th",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "test-cube.stl",
+                    ContentType = "model/stl",
+                    FileSizeBytes = 1_400,
+                    Kind = "cad",
+                    UploadId = "test-cube-upload",
+                    StoragePath = "quotes/temp/test-cube.stl",
+                    SatisfiesGeometryGate = true
+                }
+            ]
+        });
+        var initialBody = await initialResponse.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
+        Assert.NotNull(initialBody);
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
+        {
+            Content = JsonContent.Create(new QuoteAgentMessageRequest
+            {
+                SessionId = initialBody.SessionId,
+                Message = "เอาเป็นวัสดุตัวอย่างที่ราคาถูกที่สุดครับ ทำจำนวน 12 ชิ้น",
+                Language = "th"
+            }, options: JsonOptions)
+        };
+
+        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+        var body = await response.Content.ReadAsStringAsync();
+        var events = body
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+            .Select(line => JsonSerializer.Deserialize<QuoteAgentStreamEvent>(line, JsonOptions))
+            .Where(streamEvent => streamEvent is not null)
+            .Select(streamEvent => streamEvent!)
+            .ToList();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var final = Assert.Single(events, streamEvent => streamEvent.Type == "final");
+        Assert.NotNull(final.Response);
+        Assert.Contains("น้องมะลิ", final.Response.AssistantText, StringComparison.Ordinal);
+        Assert.DoesNotContain("ฉัน", final.Response.AssistantText, StringComparison.Ordinal);
+        Assert.DoesNotContain("โปรดรอ", final.Response.AssistantText, StringComparison.Ordinal);
+        Assert.Contains(final.Response.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(final.Response.Artifacts, artifact =>
+            artifact.ArtifactType == "pricing" &&
+            artifact.Metadata.TryGetValue("currency", out var currency) &&
+            currency == "THB");
+
+        var state = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
+            $"/quote/v1/agent/sessions/{initialBody.SessionId:D}");
+        Assert.NotNull(state);
+        Assert.NotNull(state.Estimate);
+        Assert.Equal(12, Assert.Single(state.Parts).Quantity);
+        Assert.True(state.Estimate.Total > 0);
+    }
+
+    [Fact]
     public async Task Agent_message_stream_rewrites_ungrounded_viewer_open_claims()
     {
         var chatbot = new RecordingChatbotServiceClient

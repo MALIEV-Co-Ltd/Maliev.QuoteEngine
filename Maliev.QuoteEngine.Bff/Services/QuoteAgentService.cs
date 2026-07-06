@@ -172,6 +172,14 @@ internal sealed class QuoteAgentService(
     private static readonly Regex DriveMentionRegex = new(
         @"(^|\s)@drive(?=$|\s|[.,;:!?])",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly string[] QuantitySignalPatterns =
+    [
+        @"\b(?<quantity>\d{1,5})\s*(?:pcs?|pieces?|parts?|units?)\b",
+        @"\b(?:need|needs|quote|make|order|produce|require|required|want|about|around|as|for)\s+(?:about\s+|around\s+)?(?<quantity>\d{1,5})\b(?!\s*(?:mm|cm|in|inch|inches|°|deg|degree))",
+        @"\b(?<quantity>\d{1,5})\s+(?:brackets?|housings?|enclosures?|fixtures?|inserts?|parts?)\b",
+        @"(?:จำนวน|ทำ|ผลิต|สั่ง|ต้องการ)\s*(?<quantity>\d{1,5})\s*(?:ชิ้น|ตัว|อัน)?",
+        @"(?<quantity>\d{1,5})\s*(?:ชิ้น|ตัว|อัน)"
+    ];
 
     // Mirrors the downstream ChatbotService request limit: SendMessageRequest.Content
     // [StringLength] and MessagePipelinePolicy.MaxContentCharacters are both 8000. Keeping
@@ -255,6 +263,17 @@ internal sealed class QuoteAgentService(
         if (string.IsNullOrWhiteSpace(assistantContent) && !generatedFallbackPreview)
         {
             generatedFallbackPreview = TryGenerateFallbackPreview(state, request.Message);
+        }
+        var completedDeferredEstimate = await TryCompleteDeferredEstimateAsync(
+            state,
+            request.Message,
+            assistantContent,
+            language,
+            cancellationToken);
+        if (!string.IsNullOrWhiteSpace(completedDeferredEstimate))
+        {
+            assistantContent = completedDeferredEstimate;
+            generatedFallbackPreview = false;
         }
 
         var pendingUiCulture = state.UiCulture;
@@ -442,6 +461,17 @@ internal sealed class QuoteAgentService(
         var assistantContent = SelectUsableChatbotAssistantContent(finalMessage?.Content);
         var generatedFallbackPreview = string.IsNullOrWhiteSpace(assistantContent) &&
             TryGenerateFallbackPreview(state, request.Message);
+        var completedDeferredEstimate = await TryCompleteDeferredEstimateAsync(
+            state,
+            request.Message,
+            assistantContent,
+            language,
+            cancellationToken);
+        if (!string.IsNullOrWhiteSpace(completedDeferredEstimate))
+        {
+            assistantContent = completedDeferredEstimate;
+            generatedFallbackPreview = false;
+        }
         var pendingUiCulture = state.UiCulture;
         state.UiCulture = null;
         var currentState = ToStateResponse(state);
@@ -2236,6 +2266,192 @@ internal sealed class QuoteAgentService(
         }
 
         return estimate;
+    }
+
+    private async Task<string?> TryCompleteDeferredEstimateAsync(
+        QuoteAgentSessionState state,
+        string customerMessage,
+        string? assistantContent,
+        string language,
+        CancellationToken cancellationToken)
+    {
+        if (!ShouldCompleteDeferredEstimateTurn(state, customerMessage, assistantContent))
+        {
+            return null;
+        }
+
+        ApplyCustomerEstimateConfiguration(state, customerMessage);
+        var gates = QuoteAgentSessionStore.BuildGates(
+            state,
+            ResolveCustomerId().HasValue || state.CustomerId.HasValue);
+        var blocker = FirstBlockingGate(
+            gates,
+            "geometry_required",
+            "analysis_complete",
+            "dfm_reviewed",
+            "configuration_complete");
+        if (blocker is not null)
+        {
+            return BuildDeferredEstimateBlockedText(ToStateResponse(state), blocker, language);
+        }
+
+        await CalculateEstimateAsync(state, cancellationToken);
+        return BuildDeferredEstimateCompletionText(ToStateResponse(state), language);
+    }
+
+    private static bool ShouldCompleteDeferredEstimateTurn(
+        QuoteAgentSessionState state,
+        string customerMessage,
+        string? assistantContent)
+    {
+        if (string.IsNullOrWhiteSpace(assistantContent) ||
+            !IsDeferredEstimateAssistantContent(assistantContent) ||
+            !HasCustomerEstimateConfigurationSignal(customerMessage))
+        {
+            return false;
+        }
+
+        lock (state.SyncRoot)
+        {
+            return state.Parts.Count > 0 && state.Estimate is null;
+        }
+    }
+
+    private static bool IsDeferredEstimateAssistantContent(string content)
+    {
+        return content.Contains("please wait", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("wait a moment", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("calculating", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("updating your quote", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("กำลังคำนวณ", StringComparison.Ordinal) ||
+            content.Contains("กำลังอัปเดต", StringComparison.Ordinal) ||
+            content.Contains("โปรดรอ", StringComparison.Ordinal) ||
+            content.Contains("รอสักครู่", StringComparison.Ordinal) ||
+            content.Contains("คำนวณราคา", StringComparison.Ordinal) ||
+            content.Contains("อัปเดตใบเสนอราคา", StringComparison.Ordinal);
+    }
+
+    private static bool HasCustomerEstimateConfigurationSignal(string message)
+    {
+        return ContainsQuantitySignal(message) ||
+            ContainsLowCostOrDefaultSignal(message) ||
+            message.Contains("เอาเป็น", StringComparison.Ordinal) ||
+            message.Contains("ตกลง", StringComparison.Ordinal) ||
+            message.Contains("โอเค", StringComparison.Ordinal);
+    }
+
+    private static bool ContainsQuantitySignal(string message)
+    {
+        return QuantitySignalPatterns.Any(pattern => Regex.IsMatch(message, pattern, RegexOptions.IgnoreCase));
+    }
+
+    private static bool ContainsLowCostOrDefaultSignal(string message)
+    {
+        return message.Contains("cheapest", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("lowest cost", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("low cost", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("default", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("sample material", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("ราคาถูก", StringComparison.Ordinal) ||
+            message.Contains("ถูกที่สุด", StringComparison.Ordinal) ||
+            message.Contains("ค่าเริ่มต้น", StringComparison.Ordinal) ||
+            message.Contains("วัสดุตัวอย่าง", StringComparison.Ordinal);
+    }
+
+    private static void ApplyCustomerEstimateConfiguration(
+        QuoteAgentSessionState state,
+        string message)
+    {
+        var hasQuantity = ContainsQuantitySignal(message);
+        var quantity = InferQuantity(message);
+        var explicitProcess = InferProcessFromMessage(message);
+        var shouldUseDefaultMaterial = ContainsLowCostOrDefaultSignal(message);
+        var leadTime = InferLeadTime(message);
+
+        lock (state.SyncRoot)
+        {
+            foreach (var part in state.Parts)
+            {
+                if (hasQuantity)
+                {
+                    part.Quantity = quantity;
+                }
+
+                if (!string.IsNullOrWhiteSpace(explicitProcess))
+                {
+                    part.ProcessId = explicitProcess;
+                }
+                else if (string.IsNullOrWhiteSpace(part.ProcessId))
+                {
+                    part.ProcessId = "fdm";
+                }
+
+                if (shouldUseDefaultMaterial || string.IsNullOrWhiteSpace(part.MaterialId))
+                {
+                    part.MaterialId = InferMaterial(part.ProcessId, message);
+                }
+
+                part.FinishId = string.IsNullOrWhiteSpace(part.FinishId)
+                    ? InferFinish(part.ProcessId, message)
+                    : part.FinishId;
+                part.FinishCode = string.IsNullOrWhiteSpace(part.FinishCode)
+                    ? part.FinishId
+                    : part.FinishCode;
+                part.ToleranceId = string.IsNullOrWhiteSpace(part.ToleranceId)
+                    ? InferTolerance(part.ProcessId, message)
+                    : part.ToleranceId;
+                part.ToleranceCode = string.IsNullOrWhiteSpace(part.ToleranceCode)
+                    ? part.ToleranceId
+                    : part.ToleranceCode;
+            }
+
+            if (!string.IsNullOrWhiteSpace(leadTime))
+            {
+                state.LeadTimeCode = leadTime;
+            }
+
+            state.ConfigurationConfirmed = true;
+            UpsertProjectSummaryArtifact(state, state.Parts.FirstOrDefault(), "configuration ready");
+        }
+    }
+
+    private static string BuildDeferredEstimateCompletionText(QuoteAgentStateResponse state, string language)
+    {
+        if (state.Estimate is null)
+        {
+            return string.Equals(language, "th", StringComparison.OrdinalIgnoreCase)
+                ? "น้องมะลิยังคำนวณราคาให้จบไม่ได้ เพราะ PricingService ยังไม่ส่งราคากลับมาสำหรับการตั้งค่านี้ กรุณาลองอีกครั้งหรือเปลี่ยนวัสดุ/กระบวนการผลิต"
+                : "Mali could not finish the estimate because PricingService did not return a price for this configuration. Try again or adjust the material/process.";
+        }
+
+        var line = state.Estimate.Lines.FirstOrDefault();
+        var part = state.Parts.FirstOrDefault(part => line is not null && part.PartId == line.PartId) ??
+            state.Parts.FirstOrDefault();
+        var fileName = line?.FileName ?? part?.FileName ?? "uploaded part";
+        var quantity = part?.Quantity ?? 1;
+        var unitPrice = line?.UnitPrice ?? 0m;
+        var total = state.Estimate.Total;
+        var currency = state.Estimate.Currency;
+        if (string.Equals(language, "th", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"น้องมะลิคำนวณราคาเบื้องต้นให้แล้ว: {total:0.##} {currency} สำหรับ {fileName} จำนวน {quantity.ToString(CultureInfo.InvariantCulture)} ชิ้น ราคาต่อชิ้นประมาณ {unitPrice:0.##} {currency}. รายละเอียดราคาอยู่ใน Artifacts > Pricing estimate และสามารถไปต่อเป็นใบเสนอราคาอย่างเป็นทางการได้เมื่อพร้อมครับ";
+        }
+
+        return $"Mali calculated the current estimate: {total:0.##} {currency} for {quantity.ToString(CultureInfo.InvariantCulture)} piece(s) of {fileName}. Estimated unit price is {unitPrice:0.##} {currency}. Details are available in Artifacts > Pricing estimate, and you can continue to a formal quote when ready.";
+    }
+
+    private static string BuildDeferredEstimateBlockedText(
+        QuoteAgentStateResponse state,
+        QuoteAgentGateDto blocker,
+        string language)
+    {
+        var partName = state.Parts.FirstOrDefault()?.FileName ?? "the uploaded part";
+        if (string.Equals(language, "th", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"น้องมะลิยังคำนวณราคาให้ {partName} ไม่ได้: {blocker.Detail}";
+        }
+
+        return $"Mali cannot finish pricing {partName} yet: {blocker.Detail}";
     }
 
     private static bool IsPositiveEstimate(QuoteEstimateResponse estimate)
@@ -6848,14 +7064,7 @@ internal sealed class QuoteAgentService(
 
     private static int InferQuantity(string message)
     {
-        var patterns = new[]
-        {
-            @"\b(?<quantity>\d{1,5})\s*(?:pcs?|pieces?|parts?|units?)\b",
-            @"\b(?:need|needs|quote|make|order|produce|require|required|want|about|around|as|for)\s+(?:about\s+|around\s+)?(?<quantity>\d{1,5})\b(?!\s*(?:mm|cm|in|inch|inches|°|deg|degree))",
-            @"\b(?<quantity>\d{1,5})\s+(?:brackets?|housings?|enclosures?|fixtures?|inserts?|parts?)\b"
-        };
-
-        foreach (var pattern in patterns)
+        foreach (var pattern in QuantitySignalPatterns)
         {
             var match = Regex.Match(message, pattern, RegexOptions.IgnoreCase);
             if (match.Success &&
@@ -6997,7 +7206,9 @@ internal sealed class QuoteAgentService(
         }
 
         if (message.Contains("economy", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("cheapest", StringComparison.OrdinalIgnoreCase))
+            message.Contains("cheapest", StringComparison.OrdinalIgnoreCase) ||
+            message.Contains("ราคาถูก", StringComparison.Ordinal) ||
+            message.Contains("ถูกที่สุด", StringComparison.Ordinal))
         {
             return "ECONOMY";
         }
