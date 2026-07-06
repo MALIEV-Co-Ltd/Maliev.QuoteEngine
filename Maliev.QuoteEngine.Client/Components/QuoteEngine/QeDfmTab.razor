@@ -100,6 +100,9 @@
                                     <span class="qe-dfm-expansion-panel-title">@GetLabel(check)</span>
                                     <span class="qe-dfm-expansion-panel-summary">@GetSummary(check)</span>
                                 </div>
+                                <span class="qe-dfm-check-status @(failed ? "qe-dfm-check-status--failed" : "qe-dfm-check-status--passed")">
+                                    @(failed ? Text("Failed", "ไม่ผ่าน") : Text("Passed", "ผ่าน"))
+                                </span>
                             </div>
                         </TitleContent>
                         <ChildContent>

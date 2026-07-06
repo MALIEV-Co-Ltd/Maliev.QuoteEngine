@@ -2440,6 +2440,34 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_RendersSelectedDfmArtifactWithDetailedCheckResults()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var dfmTab = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QeDfmTab.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("var selectedDfmPart = ResolveDfmArtifactPart(selectedArtifact);", shell, StringComparison.Ordinal);
+        Assert.Contains("ArtifactStatusLabel(selectedArtifact, selectedDfmPart)", shell, StringComparison.Ordinal);
+        Assert.Contains("ArtifactDetailItems(selectedArtifact, selectedDfmPart)", shell, StringComparison.Ordinal);
+        Assert.Contains("<QeDfmTab IsManifold=\"@selectedDfmPart.IsManifold\"", shell, StringComparison.Ordinal);
+        Assert.Contains("FdmReport=\"@selectedDfmPart.FdmDfmReport\"", shell, StringComparison.Ordinal);
+        Assert.Contains("SlaReport=\"@selectedDfmPart.SlaDfmReport\"", shell, StringComparison.Ordinal);
+        Assert.Contains("CncReport=\"@selectedDfmPart.CncDfmReport\"", shell, StringComparison.Ordinal);
+        Assert.Contains("private QuotePartViewModel? ResolveDfmArtifactPart(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
+        Assert.Contains("part.PartId == partId", shell, StringComparison.Ordinal);
+        Assert.Contains("BuildDfmCheckSummaries(dfmPart)", shell, StringComparison.Ordinal);
+        Assert.Contains("Geometry checks", shell, StringComparison.Ordinal);
+        Assert.Contains("Process checks", shell, StringComparison.Ordinal);
+        Assert.Contains("Failed checks", shell, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-artifact-dfm-panel", styles, StringComparison.Ordinal);
+        Assert.Contains("qe-dfm-check-status--passed", styles, StringComparison.Ordinal);
+        Assert.Contains("qe-dfm-check-status--failed", styles, StringComparison.Ordinal);
+        Assert.Contains("qe-dfm-check-status", dfmTab, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Failed\", \"ไม่ผ่าน\")", dfmTab, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Passed\", \"ผ่าน\")", dfmTab, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_status_dot_uses_backend_health_not_composer_errors()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
@@ -2494,14 +2522,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("SelectedArtifactPreviewItem", drawer, StringComparison.Ordinal);
         Assert.Contains("qe-agent-artifact-open-link", drawer, StringComparison.Ordinal);
         Assert.Contains("qe-agent-artifact-details", drawer, StringComparison.Ordinal);
-        Assert.Contains("ArtifactDetailItems(selectedArtifact)", drawer, StringComparison.Ordinal);
+        Assert.Contains("ArtifactDetailItems(selectedArtifact, selectedDfmPart)", drawer, StringComparison.Ordinal);
         Assert.Contains("ArtifactStatusLabel(artifact)", drawer, StringComparison.Ordinal);
-        Assert.Contains("ArtifactSummary(artifact)", drawer, StringComparison.Ordinal);
+        Assert.Contains("ArtifactSummary(artifact, dfmPart)", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("qe-agent-artifact-inline-preview", drawer, StringComparison.Ordinal);
         Assert.DoesNotContain("ArtifactActionLabel(_selectedArtifact)", drawer, StringComparison.Ordinal);
         Assert.Contains("target=\"_blank\"", drawer, StringComparison.Ordinal);
         Assert.Contains("private void SelectArtifact(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
-        Assert.Contains("private IReadOnlyList<ArtifactDetail> ArtifactDetailItems(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
+        Assert.Contains("private IReadOnlyList<ArtifactDetail> ArtifactDetailItems(QuoteAgentArtifactDto artifact, QuotePartViewModel? dfmPart = null)", shell, StringComparison.Ordinal);
         Assert.Contains("private sealed record ArtifactDetail(string Label, string Value);", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("private string ArtifactActionLabel(QuoteAgentArtifactDto artifact)", shell, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-link", styles, StringComparison.Ordinal);

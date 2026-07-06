@@ -6290,6 +6290,37 @@
     min-width: 0;
 }
 
+.qe-agent-artifact-dfm-panel {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 14px;
+    background: var(--qe-agent-bg);
+}
+
+.qe-agent-artifact-dfm-panel .qe-dfm-tab {
+    min-height: 0;
+    border: 0;
+    background: transparent;
+}
+
+.qe-agent-artifact-dfm-panel .qe-dfm-tabs {
+    padding-inline: 10px;
+}
+
+.qe-agent-artifact-dfm-panel .qe-dfm-header,
+.qe-agent-artifact-dfm-panel .qe-dfm-panel {
+    background: transparent;
+}
+
+.qe-agent-artifact-dfm-panel .mud-icon-root {
+    width: 1em;
+    height: 1em;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
 .qe-agent-payment-qr {
     display: grid;
     place-items: center;
@@ -14704,6 +14735,26 @@ body.mud-blazor {
     font-size: var(--maliev-font-micro);
     color: var(--maliev-muted);
     line-height: 1.4;
+}
+
+.qe-dfm-check-status {
+    flex: 0 0 auto;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: var(--maliev-font-micro);
+    font-weight: 650;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.qe-dfm-check-status--passed {
+    color: #18794e;
+    background: #e9f9ee;
+}
+
+.qe-dfm-check-status--failed {
+    color: #8a3b12;
+    background: #fff1d6;
 }
 
 .qe-dfm-expansion-detail {

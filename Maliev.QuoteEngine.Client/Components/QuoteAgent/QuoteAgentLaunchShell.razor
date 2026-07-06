@@ -4,6 +4,7 @@
 @using System.Text.Json
 @using System.Text.RegularExpressions
 @using Maliev.QuoteEngine.Client.Components
+@using Maliev.QuoteEngine.Client.Components.QuoteEngine
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Web
 @using Microsoft.AspNetCore.SignalR.Client
@@ -1857,6 +1858,7 @@
                 else if (_selectedArtifact is not null)
                 {
                     var selectedArtifact = _selectedArtifact;
+                    var selectedDfmPart = ResolveDfmArtifactPart(selectedArtifact);
                     <div class="qe-agent-artifact-preview-shell">
                         <section class="@($"qe-agent-artifact-context {UiFocusClass("artifact", selectedArtifactPreview?.Source ?? ArtifactFocusKey(selectedArtifact), ArtifactTypeFocusKey(selectedArtifact.ArtifactType))}")" aria-label="@Text("Selected artifact details", "รายละเอียดไฟล์งานที่เลือก")">
                             <header>
@@ -1865,7 +1867,7 @@
                                     <strong>@selectedArtifact.Title</strong>
                                 </div>
                                 <div class="qe-agent-artifact-preview-actions">
-                                    <small>@ArtifactStatusLabel(selectedArtifact)</small>
+                                    <small>@ArtifactStatusLabel(selectedArtifact, selectedDfmPart)</small>
                                     @if (selectedArtifactPreview is not null)
                                     {
                                         <a href="@selectedArtifactPreview.Url"
@@ -1894,6 +1896,19 @@
                                         }
                                     </div>
                                 }
+                                else if (selectedDfmPart is not null)
+                                {
+                                    <div class="qe-agent-artifact-dfm-panel">
+                                        <QeDfmTab IsManifold="@selectedDfmPart.IsManifold"
+                                                  NonManifoldReason="@selectedDfmPart.NonManifoldReason"
+                                                  FdmReport="@selectedDfmPart.FdmDfmReport"
+                                                  SlaReport="@selectedDfmPart.SlaDfmReport"
+                                                  CncReport="@selectedDfmPart.CncDfmReport"
+                                                  GlbUrl="@selectedDfmPart.GlbUrl"
+                                                  BodyCount="@selectedDfmPart.BodyCount"
+                                                  ProcessId="@selectedDfmPart.ProcessId" />
+                                    </div>
+                                }
                                 else if (selectedArtifactPreview is not null && IsImagePreview(selectedArtifactPreview))
                                 {
                                     <img class="qe-agent-artifact-preview-media" src="@selectedArtifactPreview.Url" alt="" loading="lazy" onerror="this.style.display='none'" />
@@ -1913,7 +1928,7 @@
                                     </div>
                                 }
                                 <dl class="qe-agent-artifact-details">
-                                    @foreach (var detail in ArtifactDetailItems(selectedArtifact))
+                                    @foreach (var detail in ArtifactDetailItems(selectedArtifact, selectedDfmPart))
                                     {
                                         <div>
                                             <dt>@detail.Label</dt>
@@ -6205,8 +6220,13 @@
         };
     }
 
-    private string ArtifactStatusLabel(QuoteAgentArtifactDto artifact)
+    private string ArtifactStatusLabel(QuoteAgentArtifactDto artifact, QuotePartViewModel? dfmPart = null)
     {
+        if (dfmPart is not null)
+        {
+            return DfmChecksStatusLabel(dfmPart);
+        }
+
         if (artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(ArtifactMetadata(artifact, "total")) &&
             !string.IsNullOrWhiteSpace(ArtifactMetadata(artifact, "currency")))
@@ -6225,8 +6245,13 @@
         return HumanizeArtifactStatus(artifact.Status);
     }
 
-    private string? ArtifactSummary(QuoteAgentArtifactDto artifact)
+    private string? ArtifactSummary(QuoteAgentArtifactDto artifact, QuotePartViewModel? dfmPart = null)
     {
+        if (dfmPart is not null)
+        {
+            return DfmChecksSummary(dfmPart);
+        }
+
         var summary = ArtifactMetadata(artifact, "summary");
         if (!string.IsNullOrWhiteSpace(summary))
         {
@@ -6242,16 +6267,30 @@
         };
     }
 
-    private IReadOnlyList<ArtifactDetail> ArtifactDetailItems(QuoteAgentArtifactDto artifact)
+    private IReadOnlyList<ArtifactDetail> ArtifactDetailItems(QuoteAgentArtifactDto artifact, QuotePartViewModel? dfmPart = null)
     {
         var details = new List<ArtifactDetail>
         {
-            new(Text("Status", "สถานะ"), ArtifactStatusLabel(artifact))
+            new(Text("Status", "สถานะ"), ArtifactStatusLabel(artifact, dfmPart))
         };
 
-        AddArtifactDetail(details, Text("Summary", "สรุป"), ArtifactSummary(artifact));
-        AddArtifactDetail(details, Text("Part", "ชิ้นงาน"), ArtifactMetadata(artifact, "partName"));
-        AddArtifactDetail(details, Text("DFM findings", "รายการ DFM"), ArtifactMetadata(artifact, "issueCount"));
+        AddArtifactDetail(details, Text("Summary", "สรุป"), ArtifactSummary(artifact, dfmPart));
+        if (dfmPart is not null)
+        {
+            var checks = BuildDfmCheckSummaries(dfmPart).ToArray();
+            AddArtifactDetail(details, Text("Part", "ชิ้นงาน"), dfmPart.FileName);
+            AddArtifactDetail(details, Text("Process", "กระบวนการ"), DfmProcessLabel(dfmPart));
+            AddArtifactDetail(details, Text("Geometry checks", "การตรวจเรขาคณิต"), FormatDfmCheckGroup(checks, "geometry"));
+            AddArtifactDetail(details, Text("Process checks", "การตรวจกระบวนการ"), FormatDfmCheckGroup(checks, "process"));
+            AddArtifactDetail(details, Text("Failed checks", "รายการไม่ผ่าน"), DfmFailedChecksLabel(checks));
+            AddArtifactDetail(details, Text("Recorded issues", "ปัญหาที่บันทึก"), DfmIssueCount(dfmPart).ToString(CultureInfo.InvariantCulture));
+        }
+        else
+        {
+            AddArtifactDetail(details, Text("Part", "ชิ้นงาน"), ArtifactMetadata(artifact, "partName"));
+            AddArtifactDetail(details, Text("DFM findings", "รายการ DFM"), ArtifactMetadata(artifact, "issueCount"));
+        }
+
         if (artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase))
         {
             AddArtifactDetail(details, Text("Total", "ยอดรวม"), ArtifactStatusLabel(artifact));
@@ -6273,6 +6312,185 @@
         {
             details.Add(new ArtifactDetail(label, value.Trim()));
         }
+    }
+
+    private QuotePartViewModel? ResolveDfmArtifactPart(QuoteAgentArtifactDto artifact)
+    {
+        if (!artifact.ArtifactType.Equals("dfm", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (artifact.PartId is { } partId)
+        {
+            var match = UploadedParts.FirstOrDefault(part => part.PartId == partId);
+            if (match is not null)
+            {
+                return match;
+            }
+        }
+
+        var partName = ArtifactMetadata(artifact, "partName");
+        return string.IsNullOrWhiteSpace(partName)
+            ? null
+            : UploadedParts.FirstOrDefault(part =>
+                part.FileName.Equals(partName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string DfmChecksStatusLabel(QuotePartViewModel part)
+    {
+        var checks = BuildDfmCheckSummaries(part).ToArray();
+        var resolved = checks.Count(check => check.State != ArtifactCheckState.Pending);
+        if (resolved == 0)
+        {
+            return Text("DFM checks pending", "รอผลตรวจ DFM");
+        }
+
+        var failed = checks.Count(check => check.State == ArtifactCheckState.Failed);
+        if (failed > 0)
+        {
+            return Text($"{failed} failed check(s)", $"ไม่ผ่าน {failed} รายการ");
+        }
+
+        return Text($"{resolved}/{checks.Length} checks passed", $"ผ่าน {resolved}/{checks.Length} รายการ");
+    }
+
+    private string DfmChecksSummary(QuotePartViewModel part)
+    {
+        var checks = BuildDfmCheckSummaries(part).ToArray();
+        var resolved = checks.Count(check => check.State != ArtifactCheckState.Pending);
+        if (resolved == 0)
+        {
+            return Text("Geometry and process DFM checks are waiting for analysis results.", "การตรวจ DFM ด้านเรขาคณิตและกระบวนการกำลังรอผลวิเคราะห์");
+        }
+
+        var failed = checks.Count(check => check.State == ArtifactCheckState.Failed);
+        var passed = checks.Count(check => check.State == ArtifactCheckState.Passed);
+        var pending = checks.Length - resolved;
+        if (failed > 0)
+        {
+            return Text(
+                $"{failed} check(s) failed, {passed} passed, {pending} pending for {DfmProcessLabel(part)}.",
+                $"ไม่ผ่าน {failed} รายการ ผ่าน {passed} รายการ รอผล {pending} รายการสำหรับ {DfmProcessLabel(part)}");
+        }
+
+        return Text(
+            $"{passed} check(s) passed for {DfmProcessLabel(part)}.",
+            $"ผ่าน {passed} รายการสำหรับ {DfmProcessLabel(part)}");
+    }
+
+    private string FormatDfmCheckGroup(IReadOnlyCollection<DfmCheckSummary> checks, string scope)
+    {
+        var scoped = checks.Where(check => check.Scope.Equals(scope, StringComparison.OrdinalIgnoreCase)).ToArray();
+        if (scoped.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var passed = scoped.Count(check => check.State == ArtifactCheckState.Passed);
+        var failed = scoped.Count(check => check.State == ArtifactCheckState.Failed);
+        var pending = scoped.Count(check => check.State == ArtifactCheckState.Pending);
+        return Text(
+            $"{passed} passed, {failed} failed, {pending} pending",
+            $"ผ่าน {passed} ไม่ผ่าน {failed} รอผล {pending}");
+    }
+
+    private string DfmFailedChecksLabel(IReadOnlyCollection<DfmCheckSummary> checks)
+    {
+        var failed = checks
+            .Where(check => check.State == ArtifactCheckState.Failed)
+            .Select(check => check.Label)
+            .ToArray();
+
+        return failed.Length == 0
+            ? Text("None", "ไม่มี")
+            : string.Join(", ", failed);
+    }
+
+    private int DfmIssueCount(QuotePartViewModel part) =>
+        part.Findings.Count +
+        (part.FdmDfmReport?.Issues.Count ?? 0) +
+        (part.SlaDfmReport?.Issues.Count ?? 0) +
+        (part.CncDfmReport?.Issues.Count ?? 0) +
+        (!part.IsManifold && !string.IsNullOrWhiteSpace(part.NonManifoldReason) ? 1 : 0);
+
+    private IReadOnlyList<DfmCheckSummary> BuildDfmCheckSummaries(QuotePartViewModel part)
+    {
+        var geometryReady = !string.IsNullOrWhiteSpace(part.GlbUrl)
+            || part.Status.Equals("GlbReady", StringComparison.OrdinalIgnoreCase)
+            || part.Status.Equals("DfmAnalysisReady", StringComparison.OrdinalIgnoreCase);
+        var checks = new List<DfmCheckSummary>
+        {
+            new("geometry", Text("Mesh integrity", "ความสมบูรณ์ของเมช"), !geometryReady ? ArtifactCheckState.Pending : part.IsManifold ? ArtifactCheckState.Passed : ArtifactCheckState.Failed),
+            new("geometry", Text("Single body", "บอดี้เดียว"), !geometryReady ? ArtifactCheckState.Pending : part.BodyCount <= 1 ? ArtifactCheckState.Passed : ArtifactCheckState.Failed)
+        };
+
+        if (IsSlaDfmProcess(part.ProcessId))
+        {
+            AddSlaDfmChecks(checks, part.SlaDfmReport);
+        }
+        else if (IsCncDfmProcess(part.ProcessId))
+        {
+            AddCncDfmChecks(checks, part.CncDfmReport);
+        }
+        else
+        {
+            AddFdmDfmChecks(checks, part.FdmDfmReport);
+        }
+
+        return checks;
+    }
+
+    private void AddFdmDfmChecks(List<DfmCheckSummary> checks, QeFdmDfmReport? report)
+    {
+        checks.Add(new("process", Text("Thin walls", "ผนังบาง"), report is null ? ArtifactCheckState.Pending : report.ThinWallCount > 0 ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+        checks.Add(new("process", Text("Overhangs / supports", "ส่วนยื่น / ซัพพอร์ต"), report is null ? ArtifactCheckState.Pending : report.SupportRequired ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+        checks.Add(new("process", Text("Small features", "รายละเอียดขนาดเล็ก"), report is null ? ArtifactCheckState.Pending : report.SmallDetailCount > 0 ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+    }
+
+    private void AddSlaDfmChecks(List<DfmCheckSummary> checks, QeSlaDfmReport? report)
+    {
+        checks.Add(new("process", Text("Thin walls", "ผนังบาง"), report is null ? ArtifactCheckState.Pending : report.ThinWallCount > 0 ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+        checks.Add(new("process", Text("Resin drainage", "การระบายเรซิน"), report is null ? ArtifactCheckState.Pending : report.ResinTrappingRisk ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+        checks.Add(new("process", Text("Suction risk", "ความเสี่ยงแรงดูด"), report is null ? ArtifactCheckState.Pending : report.SuctionRisk ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+        checks.Add(new("process", Text("Hollow regions", "โพรงภายใน"), report is null ? ArtifactCheckState.Pending : report.HollowRegions ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+    }
+
+    private void AddCncDfmChecks(List<DfmCheckSummary> checks, QeCncDfmReport? report)
+    {
+        checks.Add(new("process", Text("Internal radii", "รัศมีมุมใน"), report is null ? ArtifactCheckState.Pending : report.SharpCornerCount > 0 ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+        checks.Add(new("process", Text("Undercuts", "อันเดอร์คัต"), report is null ? ArtifactCheckState.Pending : report.HasUndercuts ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+        checks.Add(new("process", Text("EDM required", "ต้องใช้ EDM"), report is null ? ArtifactCheckState.Pending : report.RequiresEdm ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+        checks.Add(new("process", Text("Surface grinding", "เจียรผิว"), report is null ? ArtifactCheckState.Pending : report.RequiresGrinding ? ArtifactCheckState.Failed : ArtifactCheckState.Passed));
+    }
+
+    private string DfmProcessLabel(QuotePartViewModel part) =>
+        IsSlaDfmProcess(part.ProcessId)
+            ? "SLA"
+            : IsCncDfmProcess(part.ProcessId)
+                ? "CNC"
+                : "FDM";
+
+    private static bool IsSlaDfmProcess(string? processCode)
+    {
+        if (string.IsNullOrWhiteSpace(processCode))
+        {
+            return false;
+        }
+
+        var normalized = processCode.Trim().Replace("-", "_", StringComparison.Ordinal).ToUpperInvariant();
+        return normalized is "SLA" or "DLP" or "SLA_DLP";
+    }
+
+    private static bool IsCncDfmProcess(string? processCode)
+    {
+        if (string.IsNullOrWhiteSpace(processCode))
+        {
+            return false;
+        }
+
+        var normalized = processCode.Trim().Replace("-", "_", StringComparison.Ordinal).ToUpperInvariant();
+        return normalized == "CNC" || normalized.StartsWith("CNC_", StringComparison.Ordinal) || normalized is "MILLING" or "TURNING" or "LATHE";
     }
 
     private string HumanizeArtifactStatus(string? status)
@@ -7760,6 +7978,15 @@
         string? ContentType);
 
     private sealed record ArtifactDetail(string Label, string Value);
+
+    private enum ArtifactCheckState
+    {
+        Pending,
+        Passed,
+        Failed
+    }
+
+    private sealed record DfmCheckSummary(string Scope, string Label, ArtifactCheckState State);
 
     private sealed record SearchPromptOption(
         string TextEn,
