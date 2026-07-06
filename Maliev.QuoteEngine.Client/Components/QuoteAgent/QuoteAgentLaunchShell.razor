@@ -890,6 +890,7 @@
                                         @QuoteAgentMarkdownRenderer.Render(message.Content)
                                     </div>
                                     <div class="qe-agent-message-footer" aria-label="@Text("Message actions", "ตัวเลือกข้อความ")">
+                                        <time datetime="@FormatMessageTimestamp(message.CreatedAt)">@FormatMessageTime(message.CreatedAt)</time>
                                         <button type="button"
                                                 title="@Text("Reply to message", "ตอบกลับข้อความ")"
                                                 aria-label="@Text("Reply to message", "ตอบกลับข้อความ")"

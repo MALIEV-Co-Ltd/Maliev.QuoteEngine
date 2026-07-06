@@ -2409,6 +2409,31 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_reveals_assistant_message_time_and_actions_on_hover()
+    {
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css").ReplaceLineEndings("\n");
+        var assistantMessageBlock = ExtractSourceBlock(
+            component,
+            "@if (!string.IsNullOrEmpty(message.Content))",
+            "@if (message.InlineViewer is not null)");
+        var footerStyleBlock = ExtractSourceBlock(
+            styles,
+            ".qe-agent-message-footer {",
+            "/* Quote/reply chip shown on a sent bubble and in the composer. */");
+
+        Assert.Contains("class=\"qe-agent-message-footer\"", assistantMessageBlock, StringComparison.Ordinal);
+        Assert.Contains("FormatMessageTimestamp(message.CreatedAt)", assistantMessageBlock, StringComparison.Ordinal);
+        Assert.Contains("FormatMessageTime(message.CreatedAt)", assistantMessageBlock, StringComparison.Ordinal);
+        Assert.Contains("BeginReplyAsync(message)", assistantMessageBlock, StringComparison.Ordinal);
+        Assert.Contains("CopyMessageTextAsync(message)", assistantMessageBlock, StringComparison.Ordinal);
+        Assert.Contains("opacity: 0;", footerStyleBlock, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-bubble:hover .qe-agent-message-footer", footerStyleBlock, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-bubble:focus-within .qe-agent-message-footer", footerStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("visibility: visible;", footerStyleBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteWorkspace_PushesRegisteredUploadAgentStateIntoMakeStudioShell()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
