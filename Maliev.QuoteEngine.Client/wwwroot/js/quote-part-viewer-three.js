@@ -1305,13 +1305,19 @@ function renderAxisGizmo(canvasId) {
     const vw = Math.ceil(vp.width * w * dpr);
     const vh = Math.ceil(vp.height * h * dpr);
 
-    renderer.setViewport(x, y, vw, vh);
-    renderer.setScissor(x, y, vw, vh);
-    renderer.setScissorTest(true);
-    renderer.clearDepth();
-    renderer.render(gizmoScene, gizmoCamera);
-    renderer.setScissorTest(false);
-    renderer.setViewport(0, 0, w * dpr, h * dpr);
+    const previousAutoClear = renderer.autoClear;
+    try {
+        renderer.autoClear = false;
+        renderer.setViewport(x, y, vw, vh);
+        renderer.setScissor(x, y, vw, vh);
+        renderer.setScissorTest(true);
+        renderer.clearDepth();
+        renderer.render(gizmoScene, gizmoCamera);
+    } finally {
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, w * dpr, h * dpr);
+        renderer.autoClear = previousAutoClear;
+    }
 
     const labelDivs = gizmoLabelDivs[canvasId];
     if (labelDivs && canvas) {

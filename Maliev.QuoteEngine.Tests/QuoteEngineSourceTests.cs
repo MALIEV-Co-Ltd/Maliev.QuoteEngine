@@ -1683,6 +1683,13 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("border-left: 1px solid var(--qe-agent-line);", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains("border-radius: 14px 0 0 0;", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("border-radius: 14px 0 0 14px;", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains("grid-template-rows: auto minmax(0, 1fr);", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-preview-shell {", ".qe-agent-artifact-preview-shell > *"), StringComparison.Ordinal);
+        Assert.Contains("grid-template-rows: auto minmax(0, 1fr);", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer {", ".qe-agent-artifact-viewer > header"), StringComparison.Ordinal);
+        Assert.Contains("height: 100%;", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer-canvas {", ".qe-agent-artifact-viewer-canvas .qe-viewer-wrap"), StringComparison.Ordinal);
+        Assert.Contains("height: 100%;", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer-canvas .qe-viewer-wrap {", ".qe-agent-artifact-viewer-canvas .qe-viewer-toolbar"), StringComparison.Ordinal);
+        Assert.Contains("white-space: normal;", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer-metadata {", ".qe-agent-artifact-metadata {"), StringComparison.Ordinal);
+        Assert.Contains("grid-template-columns: minmax(0, 1fr) auto;", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer > header {", ".qe-agent-artifact-viewer > header div"), StringComparison.Ordinal);
+        Assert.Contains("overflow-wrap: anywhere;", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-metadata {", ".qe-agent-artifact-link"), StringComparison.Ordinal);
         var artifactDetailsBlock = ExtractSourceBlock(agentStyles, ".qe-agent-artifact-details {", ".qe-agent-artifact-context-preview");
         Assert.Contains("overflow: hidden;", artifactDetailsBlock, StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: minmax(92px, .45fr) minmax(0, 1fr);", artifactDetailsBlock, StringComparison.Ordinal);
@@ -2414,12 +2421,19 @@ public sealed class QuoteEngineSourceTests
     public void QuoteAgentLaunchShell_RendersUploadedPartViewerInsideArtifactDrawer()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var viewer = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteEngine", "QePartViewer.razor");
+        var viewerJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-part-viewer-three.js");
 
         Assert.Contains("qe-agent-artifact-viewer", shell, StringComparison.Ordinal);
         Assert.Contains("<QePartViewer", shell, StringComparison.Ordinal);
         Assert.Contains("GlbUrl=\"@SelectedUploadedPart.GlbUrl\"", shell, StringComparison.Ordinal);
         Assert.Contains("BrowserFileClientId=\"@SelectedUploadedPart.ClientFileId\"", shell, StringComparison.Ordinal);
         Assert.Contains("ViewerSettings=\"@SelectedUploadedPart.ViewerSettings\"", shell, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-viewer-wrap\"", viewer, StringComparison.Ordinal);
+        Assert.DoesNotContain("min-height:280px", viewer, StringComparison.Ordinal);
+        Assert.Contains("const previousAutoClear = renderer.autoClear;", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("renderer.autoClear = false;", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("renderer.autoClear = previousAutoClear;", viewerJs, StringComparison.Ordinal);
         Assert.DoesNotContain("<QePartDetailCard", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("<QePartsListPanel", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("<QePartConfigSidebar", shell, StringComparison.Ordinal);
