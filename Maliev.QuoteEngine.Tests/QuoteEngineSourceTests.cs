@@ -1309,7 +1309,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("document.addEventListener(\"keyup\", documentKeyup, true)", composerScript, StringComparison.Ordinal);
         Assert.Contains("CloseQuickActionsMenuFromOutsideAsync", component, StringComparison.Ordinal);
         Assert.Contains("dotNetRef.invokeMethodAsync(\"CloseQuickActionsMenuFromOutsideAsync\")", composerScript, StringComparison.Ordinal);
-        Assert.Contains("isInsideComposerMenu", composerScript, StringComparison.Ordinal);
+        // The outside-close decision must be structure/attribute based, not a captured
+        // composer-identity comparison. A stale composer reference (leaked across an
+        // in-place composer re-render) previously made isInsideComposerMenu return false
+        // for in-menu clicks, closing the menu before "+ -> 3D files" could open the
+        // picker. Behavior is covered by ComposerUploadMenuJsTests / composer-upload-menu.test.mjs.
+        Assert.Contains("export function isUploadMenuInteraction", composerScript, StringComparison.Ordinal);
+        Assert.Contains("if (isUploadMenuInteraction(event.target))", composerScript, StringComparison.Ordinal);
+        Assert.Contains("target.closest(\"[data-upload-input-id]\")", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain(".closest(\".qe-agent-composer\") === composer", composerScript, StringComparison.Ordinal);
+        // The re-init path must tear down the previously-registered composer so its
+        // document listeners cannot leak with a stale composer reference.
+        Assert.Contains("if (activeComposerTextarea && activeComposerTextarea !== textarea)", composerScript, StringComparison.Ordinal);
+        Assert.Contains("disposeComposer(activeComposerTextarea)", composerScript, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-picker-menu", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-quick-actions-btn\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-quick-actions-menu\"", component, StringComparison.Ordinal);

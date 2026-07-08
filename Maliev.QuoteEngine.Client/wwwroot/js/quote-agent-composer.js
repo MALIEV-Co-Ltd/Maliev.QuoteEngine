@@ -5,9 +5,43 @@ const dictationButtonHandlers = new WeakMap();
 const composerDotNetRefs = new WeakMap();
 const KeyboardDictationHoldDelayMs = 300;
 
+// The textarea whose document-level listeners are currently attached. Tracked
+// separately from the composerHandlers WeakMap (which is keyed by element) so a
+// re-init on a *recreated* textarea can still tear down the *previous* element's
+// listeners. See isUploadMenuInteraction for why leaking them breaks uploads.
+let activeComposerTextarea = null;
+
+// A pointerdown/click that lands inside the composer upload-picker menu (or on
+// any upload trigger) must NEVER be treated as an "outside" interaction that
+// closes the menu. If it is, the menu -- and the <label> that opens the native
+// file picker -- is removed before the click is delivered, so "+ -> 3D files"
+// closes silently and no picker opens. Deciding by structure/attribute (not by
+// matching a captured composer element) keeps this correct even if a stale
+// composer listener leaks across an in-place composer re-render. Exported for
+// unit testing. See composer-upload-menu.test.mjs.
+export function isUploadMenuInteraction(target) {
+  if (!target || typeof target.closest !== "function") {
+    return false;
+  }
+
+  return Boolean(
+    target.closest(".qe-agent-upload-picker-menu") ||
+    target.closest("[data-upload-input-id]")
+  );
+}
+
 export function initComposer(textarea, dotNetRef, dictationButton) {
   if (!textarea || !dotNetRef) {
     return;
+  }
+
+  // Dispose the previously-registered composer even when the textarea element
+  // was recreated in-place (e.g. returning from the Plugins/Projects/Settings
+  // view). disposeComposer is keyed by the textarea element, so
+  // disposeComposer(textarea) alone would orphan the old element's
+  // document-level listeners with a stale composer reference.
+  if (activeComposerTextarea && activeComposerTextarea !== textarea) {
+    disposeComposer(activeComposerTextarea);
   }
 
   disposeComposer(textarea);
@@ -182,15 +216,8 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     await finishDictationFromUserAction(textarea, dotNetRef);
   };
   const composer = textarea.closest?.(".qe-agent-composer");
-  const isInsideComposerMenu = target => {
-    if (!target?.closest || !composer) {
-      return false;
-    }
-
-    return target.closest(".qe-agent-upload-picker-menu")?.closest(".qe-agent-composer") === composer;
-  };
   const outsideQuickActionsPointerDown = event => {
-    if (isInsideComposerMenu(event.target)) {
+    if (isUploadMenuInteraction(event.target)) {
       return;
     }
 
@@ -269,6 +296,7 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     updateAllTooltipPlacements,
     clearKeyboardHold
   });
+  activeComposerTextarea = textarea;
   updateComposerShape(textarea);
 }
 
@@ -309,6 +337,9 @@ export function disposeComposer(textarea) {
   cancelDictation(textarea);
   composerDotNetRefs.delete(textarea);
   composerHandlers.delete(textarea);
+  if (activeComposerTextarea === textarea) {
+    activeComposerTextarea = null;
+  }
 }
 
 function isSpaceKey(event) {

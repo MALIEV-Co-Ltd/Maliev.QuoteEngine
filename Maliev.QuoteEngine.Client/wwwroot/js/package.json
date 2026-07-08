@@ -1,0 +1,4 @@
+{
+  "//": "Declares the browser ES modules in this folder as ESM for Node.js. quote-agent-composer.js is imported by the composer-upload-menu.test.mjs behavioral test (run under `dotnet test` via ComposerUploadMenuJsTests) and by the browser via dynamic import(). Without this, Node relies on module-syntax auto-detection, which is only unflagged on newer Node versions -- CI does not pin a Node version. This file does not affect the browser or the js-src/ esbuild bundles (those resolve against ../../package.json).",
+  "type": "module"
+}

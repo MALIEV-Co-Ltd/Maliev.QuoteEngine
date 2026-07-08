@@ -4,7 +4,8 @@
   "scripts": {
     "build-js": "esbuild js-src/home-shader.js --bundle --format=iife --global-name=homeShader --outfile=wwwroot/js/home-shader.bundle.js",
     "build-worker": "esbuild js-src/replicad-worker.js --bundle --external:fs --external:path --outfile=wwwroot/js/replicad-worker.bundle.js",
-    "build": "npm run build-js && npm run build-worker"
+    "build": "npm run build-js && npm run build-worker",
+    "test": "node --test js-tests/composer-upload-menu.test.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.28.1"
