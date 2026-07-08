@@ -1104,8 +1104,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("_sketchOpen = true;", openSketchBlock, StringComparison.Ordinal);
         Assert.Contains("_sketchInitPending = true;", openSketchBlock, StringComparison.Ordinal);
         Assert.Contains("await InvokeAsync(StateHasChanged);", openSketchBlock, StringComparison.Ordinal);
-        var quickSketchBlock = ExtractSourceBlock(component, "private async Task OpenSketchFromQuickActionsAsync()", "private async Task ApplyGoogleDriveConnectorAsync()");
-        Assert.Contains("await OpenSketchAsync();", quickSketchBlock, StringComparison.Ordinal);
+        var addButtonBlock = ExtractSourceBlock(component, "class=\"qe-agent-composer-tooltip qe-agent-add-tooltip\"", "<span id=\"qe-agent-add-tooltip\"");
+        Assert.Contains("@onclick=\"OpenSketchAsync\"", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("quote-agent-sketch.js", component, StringComparison.Ordinal);
         Assert.Contains("js/quote-inline-viewer-three.js", index, StringComparison.Ordinal);
         Assert.Contains("initSketchCanvas", component, StringComparison.Ordinal);
@@ -1262,11 +1262,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("QuoteAgentUiDirectiveDto", component, StringComparison.Ordinal);
         Assert.Contains("ConnectorStatus", component, StringComparison.Ordinal);
         Assert.Contains("ApplyConnector", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-quick-actions-section-label\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-upload-picker-section-label\"", component, StringComparison.Ordinal);
         Assert.Contains("@Text(\"Plugins\", \"ปลั๊กอิน\")", component, StringComparison.Ordinal);
         Assert.Contains("ConnectorToolsDescription(connector)", component, StringComparison.Ordinal);
-        var toggleQuickActionsBlock = ExtractSourceBlock(component, "private async Task ToggleQuickActionsMenu()", "private async Task ApplyConnectorFromPluginsAsync");
-        Assert.Contains("await LoadConnectorRegistryAsync();", toggleQuickActionsBlock, StringComparison.Ordinal);
+        var toggleUploadPickerBlock = ExtractSourceBlock(component, "private async Task ToggleUploadPickerMenu()", "private Task RequestUploadAsync()");
+        Assert.Contains("await LoadConnectorRegistryAsync();", toggleUploadPickerBlock, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-drive-mention is-active\"", component, StringComparison.Ordinal);
         Assert.Contains("DriveMentionActive => ContainsDriveMention(_draftMessage)", component, StringComparison.Ordinal);
         Assert.Contains("private static bool ContainsDriveMention(string? text)", component, StringComparison.Ordinal);
@@ -1310,8 +1310,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("CloseQuickActionsMenuFromOutsideAsync", component, StringComparison.Ordinal);
         Assert.Contains("dotNetRef.invokeMethodAsync(\"CloseQuickActionsMenuFromOutsideAsync\")", composerScript, StringComparison.Ordinal);
         Assert.Contains("isInsideComposerMenu", composerScript, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-quick-actions-wrapper", composerScript, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-picker-menu", composerScript, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-quick-actions-btn\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-quick-actions-menu\"", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("@onclick=\"ToggleQuickActionsMenu\"", component, StringComparison.Ordinal);
         Assert.Contains("shouldHandleComposerShortcut(event, textarea)", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("dictationButton.addEventListener(\"keydown\", dictationKeydown);", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("dictationButton.addEventListener(\"keyup\", dictationKeyup);", composerScript, StringComparison.Ordinal);
@@ -1420,7 +1422,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-send-spinner", component, StringComparison.Ordinal);
         Assert.Contains("Text(\"Processing\", \"กำลังประมวลผล\")", component, StringComparison.Ordinal);
         Assert.Contains("class=\"sr-only\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-quick-actions-menu\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-upload-picker-menu\"", component, StringComparison.Ordinal);
         Assert.Contains("Hand sketch", component, StringComparison.Ordinal);
         Assert.Contains("ApplyConnectorFromPluginsAsync", component, StringComparison.Ordinal);
         Assert.Contains("Google Drive is available for signed-in customers.", component, StringComparison.Ordinal);
@@ -1504,7 +1506,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-connector-modal-cta--danger", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-page", agentStyles, StringComparison.Ordinal);
         Assert.Contains("padding: clamp(14px, 2vh, 24px) 0 48px;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-quick-actions-section-label", agentStyles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-picker-section-label", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-row", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-management-section-toggle", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-settings-grid", agentStyles, StringComparison.Ordinal);
@@ -2198,13 +2200,19 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("UploadPickerArchives", component, StringComparison.Ordinal);
         Assert.Contains("UploadPickerAll", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-upload-picker-menu\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-upload-picker-section-label\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Files\", \"ไฟล์\")", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Tools\", \"เครื่องมือ\")", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("@Text(\"Plugins\", \"ปลั๊กอิน\")", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("role=\"menuitem\"", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("for=\"@UploadInputElementId\"", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("data-upload-accept=\"@option.Accept\"", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("RequestUploadAsync(option)", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("OpenSketchAsync", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("ApplyConnectorFromPluginsAsync(connector)", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("OnUploadRequested.InvokeAsync(pickerCategory)", component, StringComparison.Ordinal);
-        Assert.Contains("RequestUploadFromQuickActionsAsync(UploadPicker3d)", component, StringComparison.Ordinal);
-        Assert.Contains("RequestUploadFromQuickActionsAsync(UploadPickerImages)", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequestUploadFromQuickActionsAsync(UploadPicker3d)", component, StringComparison.Ordinal);
+        Assert.DoesNotContain("RequestUploadFromQuickActionsAsync(UploadPickerImages)", component, StringComparison.Ordinal);
         Assert.DoesNotContain("<label class=\"qe-agent-round-btn qe-agent-add-btn\"", addButtonBlock, StringComparison.Ordinal);
     }
 
@@ -2215,8 +2223,7 @@ public sealed class QuoteEngineSourceTests
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
-        var addPickerBlock = ExtractSourceBlock(component, "class=\"qe-agent-upload-picker-menu\"", "</div>");
-        var quickActionsBlock = ExtractSourceBlock(component, "class=\"qe-agent-quick-actions-menu\"", "@if (_connectors.Count > 0)");
+        var addPickerBlock = ExtractSourceBlock(component, "class=\"qe-agent-upload-picker-menu\"", "<span id=\"qe-agent-add-tooltip\"");
 
         Assert.Contains("UploadInputElementId=\"@UploadInputId\"", workspace, StringComparison.Ordinal);
         Assert.Contains("public string? UploadInputElementId { get; set; }", component, StringComparison.Ordinal);
@@ -2227,14 +2234,15 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("<label", addPickerBlock, StringComparison.Ordinal);
         Assert.Contains("for=\"@UploadInputElementId\"", addPickerBlock, StringComparison.Ordinal);
         Assert.Contains("data-upload-accept=\"@option.Accept\"", addPickerBlock, StringComparison.Ordinal);
-        Assert.Contains("<label", quickActionsBlock, StringComparison.Ordinal);
-        Assert.Contains("for=\"@UploadInputElementId\"", quickActionsBlock, StringComparison.Ordinal);
-        Assert.Contains("data-upload-accept=\"@UploadAcceptForCategory(UploadPicker3d)\"", quickActionsBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"qe-agent-quick-actions-menu\"", component, StringComparison.Ordinal);
         Assert.Contains("syncNativeUploadPickerTrigger", uploadScript, StringComparison.Ordinal);
         Assert.Contains("document.addEventListener(\"click\", syncNativeUploadPickerTrigger, true);", uploadScript, StringComparison.Ordinal);
         Assert.Contains("trigger.dataset.uploadAccept", uploadScript, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-picker-menu label", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-quick-actions-menu label", styles, StringComparison.Ordinal);
+        Assert.Contains("bottom: calc(100% + 58px);", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-main--empty .qe-agent-upload-picker-menu", styles, StringComparison.Ordinal);
+        Assert.Contains("top: calc(100% + 16px);", styles, StringComparison.Ordinal);
+        Assert.Contains("max-height: min(42dvh, 360px);", styles, StringComparison.Ordinal);
     }
 
     [Fact]

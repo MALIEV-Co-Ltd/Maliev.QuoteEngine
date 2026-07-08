@@ -187,8 +187,7 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
       return false;
     }
 
-    return target.closest(".qe-agent-quick-actions-wrapper")?.closest(".qe-agent-composer") === composer ||
-      target.closest(".qe-agent-upload-picker-menu")?.closest(".qe-agent-composer") === composer;
+    return target.closest(".qe-agent-upload-picker-menu")?.closest(".qe-agent-composer") === composer;
   };
   const outsideQuickActionsPointerDown = event => {
     if (isInsideComposerMenu(event.target)) {

@@ -1434,6 +1434,7 @@
                         @if (_uploadPickerMenuOpen)
                         {
                             <div class="qe-agent-upload-picker-menu" role="menu" aria-label="@Text("Choose file type", "เลือกประเภทไฟล์")">
+                                <div class="qe-agent-upload-picker-section-label" role="presentation">@Text("Files", "ไฟล์")</div>
                                 @foreach (var option in UploadPickerOptions)
                                 {
                                     if (!string.IsNullOrWhiteSpace(UploadInputElementId))
@@ -1460,6 +1461,54 @@
                                                 <strong>@Text(option.LabelEn, option.LabelTh)</strong>
                                                 <small>@Text(option.DescriptionEn, option.DescriptionTh)</small>
                                             </span>
+                                        </button>
+                                    }
+                                }
+                                <hr class="qe-agent-upload-picker-divider" />
+                                <div class="qe-agent-upload-picker-section-label" role="presentation">@Text("Tools", "เครื่องมือ")</div>
+                                <button type="button" role="menuitem" @onclick="OpenSketchAsync">
+                                    <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
+                                    <span>
+                                        <strong>@Text("Hand sketch", "สเก็ตช์มือ")</strong>
+                                        <small>@Text("Draw directly in Make Studio", "วาดใน Make Studio ได้ทันที")</small>
+                                    </span>
+                                </button>
+                                @if (_messages.Count > 0)
+                                {
+                                    <button type="button" role="menuitem" @onclick="ExportChatPdfAsync" disabled="@_exportingPdf">
+                                        <MudIcon Icon="@Icons.Material.Outlined.PictureAsPdf" Size="Size.Small" />
+                                        <span>
+                                            <strong>@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")</strong>
+                                            <small>@Text("Save this conversation", "บันทึกบทสนทนานี้")</small>
+                                        </span>
+                                    </button>
+                                }
+                                @if (_connectors.Count > 0)
+                                {
+                                    <hr class="qe-agent-upload-picker-divider" />
+                                    <div class="qe-agent-upload-picker-section-label" role="presentation">@Text("Plugins", "ปลั๊กอิน")</div>
+                                    @foreach (var connector in _connectors)
+                                    {
+                                        <button type="button" role="menuitem" @onclick="@(() => ApplyConnectorFromPluginsAsync(connector))">
+                                            <span class="qe-agent-plugin-menu-icon" aria-hidden="true">
+                                                @if (IsGoogleDriveConnector(connector))
+                                                {
+                                                    <svg viewBox="0 0 24 24" focusable="false">
+                                                        <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                                        <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                                        <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                                                    </svg>
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
+                                                }
+                                            </span>
+                                            <span class="qe-agent-plugin-menu-text">
+                                                <strong>@connector.DisplayName</strong>
+                                                <small>@ConnectorToolsDescription(connector)</small>
+                                            </span>
+                                            <span class="qe-agent-plugin-menu-status">@ConnectorStatus(connector)</span>
                                         </button>
                                     }
                                 }
@@ -1546,103 +1595,6 @@
                         </span>
                     </span>
                 </div>
-                @if (!IsDictationActive)
-                {
-                    <div class="qe-agent-quick-actions-wrapper">
-                        <div class="qe-agent-composer-tooltip">
-                            <button type="button"
-                                    class="qe-agent-quick-actions-btn"
-                                    @onclick="ToggleQuickActionsMenu"
-                                    aria-describedby="qe-agent-tools-tooltip"
-                                    aria-label="@Text("Tools", "เครื่องมือ")"
-                                    aria-expanded="@_quickActionsMenuOpen">
-                                <MudIcon Icon="@Icons.Material.Outlined.Tune" Size="Size.Small" />
-                                <span>@Text("Tools", "เครื่องมือ")</span>
-                            </button>
-                            <span id="qe-agent-tools-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
-                                <span class="qe-agent-tooltip-content">
-                                    <span>@Text("Tools", "เครื่องมือ")</span>
-                                </span>
-                            </span>
-                        </div>
-                        @if (_quickActionsMenuOpen)
-                        {
-                            <div class="qe-agent-quick-actions-menu" role="menu" aria-label="@Text("Tools", "เครื่องมือ")">
-                            @if (!string.IsNullOrWhiteSpace(UploadInputElementId))
-                            {
-                                <label for="@UploadInputElementId"
-                                       role="menuitem"
-                                       tabindex="0"
-                                       data-upload-input-id="@UploadInputElementId"
-                                       data-upload-accept="@UploadAcceptForCategory(UploadPicker3d)">
-                                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
-                                    <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
-                                </label>
-                                <label for="@UploadInputElementId"
-                                       role="menuitem"
-                                       tabindex="0"
-                                       data-upload-input-id="@UploadInputElementId"
-                                       data-upload-accept="@UploadAcceptForCategory(UploadPickerImages)">
-                                    <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" />
-                                    <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
-                                </label>
-                            }
-                            else
-                            {
-                                <button type="button" role="menuitem" @onclick="@(() => RequestUploadFromQuickActionsAsync(UploadPicker3d))">
-                                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
-                                    <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
-                                </button>
-                                <button type="button" role="menuitem" @onclick="@(() => RequestUploadFromQuickActionsAsync(UploadPickerImages))">
-                                    <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" />
-                                    <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
-                                </button>
-                            }
-                            <button type="button" role="menuitem" @onclick="OpenSketchFromQuickActionsAsync">
-                                <MudIcon Icon="@Icons.Material.Outlined.Draw" />
-                                <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
-                            </button>
-                            @if (_connectors.Count > 0)
-                            {
-                                <hr class="qe-agent-quick-actions-separator" />
-                                <div class="qe-agent-quick-actions-section-label" role="presentation">@Text("Plugins", "ปลั๊กอิน")</div>
-                                @foreach (var connector in _connectors)
-                                {
-                                    <button type="button" role="menuitem" @onclick="@(() => ApplyConnectorFromPluginsAsync(connector))">
-                                        <span class="qe-agent-plugin-menu-icon" aria-hidden="true">
-                                            @if (IsGoogleDriveConnector(connector))
-                                            {
-                                                <svg viewBox="0 0 24 24" focusable="false">
-                                                    <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
-                                                    <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
-                                                    <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
-                                                </svg>
-                                            }
-                                            else
-                                            {
-                                                <MudIcon Icon="@Icons.Material.Outlined.Extension" Size="Size.Small" />
-                                            }
-                                        </span>
-                                        <span class="qe-agent-plugin-menu-text">
-                                            <strong>@connector.DisplayName</strong>
-                                            <small>@ConnectorToolsDescription(connector)</small>
-                                        </span>
-                                        <span class="qe-agent-plugin-menu-status">@ConnectorStatus(connector)</span>
-                                    </button>
-                                }
-                            }
-                            @if (_messages.Count > 0)
-                            {
-                                <hr class="qe-agent-quick-actions-separator" />
-                                <button type="button" role="menuitem" @onclick="ExportChatPdfAsync" disabled="@_exportingPdf">
-                                    <MudIcon Icon="@Icons.Material.Outlined.PictureAsPdf" />
-                                    <span>@Text("Export chat as PDF", "ส่งออกแชทเป็น PDF")</span>
-                                </button>
-                            }
-                            </div>
-                        }
-                    </div>
-                }
             </form>
             @if (_messages.Count == 0 && VisibleUseCases.Count > 0)
             {
@@ -5425,6 +5377,8 @@
     private async Task ExportChatPdfAsync()
     {
         if (_exportingPdf) return;
+        _uploadPickerMenuOpen = false;
+        _quickActionsMenuOpen = false;
         _exportingPdf = true;
         _error = null;
         try
@@ -5458,14 +5412,20 @@
         }
     }
 
-    private void ToggleUploadPickerMenu()
+    private async Task ToggleUploadPickerMenu()
     {
-        _uploadPickerMenuOpen = !_uploadPickerMenuOpen;
-        if (_uploadPickerMenuOpen)
+        var nextOpen = !_uploadPickerMenuOpen;
+        _uploadPickerMenuOpen = nextOpen;
+        if (nextOpen)
         {
             _quickActionsMenuOpen = false;
             _composerMenuOpen = false;
             _composerPluginsOpen = false;
+        }
+
+        if (nextOpen && !_connectorRegistryLoaded)
+        {
+            await LoadConnectorRegistryAsync();
         }
     }
 
@@ -6003,6 +5963,7 @@
     private async Task ApplyConnectorFromPluginsAsync(QuoteAgentConnectorDto connector)
     {
         _quickActionsMenuOpen = false;
+        _uploadPickerMenuOpen = false;
         _highlightConnectorId = connector.ConnectorId;
         await ApplyConnectorAsync(connector);
     }

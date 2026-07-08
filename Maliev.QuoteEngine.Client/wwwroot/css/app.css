@@ -4644,30 +4644,58 @@
 
 .qe-agent-upload-picker-menu {
     position: absolute;
-    left: 0;
-    bottom: calc(100% + 8px);
+    left: -12px;
+    bottom: calc(100% + 58px);
     z-index: 38;
     display: grid;
-    gap: 2px;
-    width: min(286px, calc(100vw - 32px));
-    padding: 7px;
+    gap: 3px;
+    width: min(730px, calc(100vw - 32px));
+    max-height: min(62dvh, 560px);
+    padding: 8px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
     border: 1px solid var(--qe-agent-line);
     border-radius: 14px;
-    background: var(--qe-agent-raised);
-    box-shadow: 0 16px 44px rgba(0, 0, 0, .14);
+    background: color-mix(in srgb, var(--qe-agent-raised) 96%, transparent);
+    box-shadow:
+        0 24px 70px rgba(0, 0, 0, .24),
+        0 2px 8px rgba(0, 0, 0, .12);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+}
+
+.qe-agent-main--empty .qe-agent-upload-picker-menu {
+    top: calc(100% + 16px);
+    bottom: auto;
+    max-height: min(42dvh, 360px);
+}
+
+.qe-agent-upload-picker-section-label {
+    padding: 5px 6px 3px;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.qe-agent-upload-picker-divider {
+    margin: 4px 4px 2px;
+    border: 0;
+    border-top: 1px solid color-mix(in srgb, var(--qe-agent-line) 82%, transparent);
 }
 
 .qe-agent-upload-picker-menu button,
 .qe-agent-upload-picker-menu label {
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr);
+    grid-template-columns: 24px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
     width: 100%;
-    min-height: 46px;
+    min-height: 42px;
     padding: 8px 10px;
     border: 0;
-    border-radius: 9px;
+    border-radius: 8px;
     background: transparent;
     color: var(--qe-agent-ink);
     cursor: pointer;
@@ -4680,6 +4708,12 @@
 .qe-agent-upload-picker-menu label:hover,
 .qe-agent-upload-picker-menu label:focus-visible {
     background: var(--qe-agent-hover);
+    outline: none;
+}
+
+.qe-agent-upload-picker-menu button:disabled {
+    cursor: not-allowed;
+    opacity: .55;
 }
 
 .qe-agent-upload-picker-menu .mud-icon-root {
@@ -4690,6 +4724,11 @@
     display: grid;
     min-width: 0;
     gap: 2px;
+}
+
+.qe-agent-upload-picker-menu button > span:nth-child(2):last-child,
+.qe-agent-upload-picker-menu label > span:nth-child(2):last-child {
+    grid-column: 2 / 4;
 }
 
 .qe-agent-upload-picker-menu strong,
@@ -4959,89 +4998,6 @@
 .qe-agent-quick-actions button:hover {
     background: var(--qe-agent-hover);
     color: var(--qe-agent-ink);
-}
-
-.qe-agent-quick-actions-wrapper {
-    position: relative;
-    grid-area: tools;
-    align-self: center;
-    justify-self: start;
-}
-
-.qe-agent-quick-actions-btn {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    height: 34px;
-    padding: 0 12px 0 10px;
-    border: 0;
-    border-radius: 999px;
-    background: var(--qe-agent-hover);
-    color: var(--qe-agent-ink);
-    font: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.qe-agent-quick-actions-btn:hover {
-    background: var(--qe-agent-line);
-}
-
-.qe-agent-quick-actions-menu {
-    position: absolute;
-    right: 0;
-    bottom: calc(100% + 8px);
-    z-index: 36;
-    display: grid;
-    gap: 2px;
-    width: 248px;
-    padding: 7px;
-    border: 1px solid var(--qe-agent-line);
-    border-radius: 14px;
-    background: var(--qe-agent-raised);
-    box-shadow: 0 16px 44px rgba(0, 0, 0, .14);
-}
-
-.qe-agent-quick-actions-menu button,
-.qe-agent-quick-actions-menu label {
-    display: grid;
-    grid-template-columns: 22px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 8px;
-    width: 100%;
-    min-height: 42px;
-    padding: 8px 10px;
-    border: 0;
-    border-radius: 9px;
-    background: transparent;
-    color: var(--qe-agent-ink);
-    cursor: pointer;
-    text-align: left;
-    font-size: 13px;
-    line-height: 1.2;
-}
-
-.qe-agent-quick-actions-menu button:hover,
-.qe-agent-quick-actions-menu button:focus-visible,
-.qe-agent-quick-actions-menu label:hover,
-.qe-agent-quick-actions-menu label:focus-visible {
-    background: var(--qe-agent-hover);
-}
-
-.qe-agent-quick-actions-separator {
-    margin: 4px 6px;
-    border: 0;
-    border-top: 1px solid var(--qe-agent-line);
-}
-
-.qe-agent-quick-actions-section-label {
-    padding: 5px 10px 2px;
-    color: var(--qe-agent-muted);
-    font-size: 11px;
-    font-weight: 600;
-    line-height: 1.2;
 }
 
 .qe-agent-plugin-menu-icon {
