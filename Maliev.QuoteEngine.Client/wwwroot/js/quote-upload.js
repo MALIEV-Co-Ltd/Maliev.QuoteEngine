@@ -97,12 +97,15 @@ window.quoteEngineUploads = (() => {
       return;
     }
 
+    event.preventDefault();
     const accept = trigger.dataset.uploadAccept || "";
     if (accept) {
       input.setAttribute("accept", accept);
     } else {
       input.removeAttribute("accept");
     }
+
+    input.click();
   }
 
   document.addEventListener("click", syncNativeUploadPickerTrigger, true);

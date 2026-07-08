@@ -1421,7 +1421,8 @@
                 }
                 @if (!IsDictationActive)
                 {
-                    <div class="qe-agent-composer-tooltip qe-agent-add-tooltip">
+                    <div class="qe-agent-composer-tooltip qe-agent-add-tooltip"
+                         data-tooltip-suppressed="@(_uploadPickerMenuOpen ? "true" : "false")">
                         <button type="button"
                                 class="qe-agent-round-btn qe-agent-add-btn"
                                 aria-describedby="qe-agent-add-tooltip"

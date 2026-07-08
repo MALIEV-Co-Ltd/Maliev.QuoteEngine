@@ -14296,6 +14296,14 @@ body.mud-blazor {
     transform: translate(-50%, 0);
 }
 
+.qe-agent-composer-tooltip[data-tooltip-suppressed="true"] .qe-agent-tooltip-panel,
+.qe-agent-composer-tooltip[data-tooltip-suppressed="true"]:hover .qe-agent-tooltip-panel,
+.qe-agent-composer-tooltip[data-tooltip-suppressed="true"]:focus-within .qe-agent-tooltip-panel {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, 4px);
+}
+
 .qe-agent-tooltip-content {
     display: inline-flex;
     align-items: center;

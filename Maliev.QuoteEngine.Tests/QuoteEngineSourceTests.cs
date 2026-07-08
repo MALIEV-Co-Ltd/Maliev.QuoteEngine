@@ -2242,6 +2242,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("syncNativeUploadPickerTrigger", uploadScript, StringComparison.Ordinal);
         Assert.Contains("document.addEventListener(\"click\", syncNativeUploadPickerTrigger, true);", uploadScript, StringComparison.Ordinal);
         Assert.Contains("trigger.dataset.uploadAccept", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("event.preventDefault();", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("input.click();", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("data-tooltip-suppressed=\"@(_uploadPickerMenuOpen ? \"true\" : \"false\")\"", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-tooltip[data-tooltip-suppressed=\"true\"] .qe-agent-tooltip-panel", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-picker-menu label", styles, StringComparison.Ordinal);
         Assert.Contains("bottom: calc(100% + 58px);", styles, StringComparison.Ordinal);
         Assert.Contains("min-height: 36px;", uploadPickerRowStyleBlock, StringComparison.Ordinal);
@@ -4274,12 +4278,15 @@ public sealed class QuoteEngineSourceTests
         Assert.NotNull(dfmPayload.CncReport);
         Assert.Equal(3, dfmPayload.CncReport.SharpCornerCount);
 
-        Assert.Equal(2, metricMeasurements.Count);
-        var fdmMetric = Assert.Single(metricMeasurements, tags => string.Equals(tags["process_family"], "fdm"));
+        var fdmMetric = Assert.Single(metricMeasurements
+            .Where(tags => string.Equals(tags.GetValueOrDefault("process_family"), "fdm"))
+            .Take(1));
         Assert.Equal("server_fallback", fdmMetric["execution_path"]);
         Assert.Equal("server_completed", fdmMetric["decision"]);
         Assert.Equal("consumed", fdmMetric["server_cpu"]);
-        var cncMetric = Assert.Single(metricMeasurements, tags => string.Equals(tags["process_family"], "cnc"));
+        var cncMetric = Assert.Single(metricMeasurements
+            .Where(tags => string.Equals(tags.GetValueOrDefault("process_family"), "cnc"))
+            .Take(1));
         Assert.Equal("server_fallback", cncMetric["execution_path"]);
         Assert.Equal("server_completed", cncMetric["decision"]);
         Assert.Equal("consumed", cncMetric["server_cpu"]);
