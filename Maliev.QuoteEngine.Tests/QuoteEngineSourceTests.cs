@@ -2224,6 +2224,7 @@ public sealed class QuoteEngineSourceTests
         var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var addPickerBlock = ExtractSourceBlock(component, "class=\"qe-agent-upload-picker-menu\"", "<span id=\"qe-agent-add-tooltip\"");
+        var uploadPickerRowStyleBlock = ExtractSourceBlock(styles, ".qe-agent-upload-picker-menu button,", ".qe-agent-upload-picker-menu button:hover");
 
         Assert.Contains("UploadInputElementId=\"@UploadInputId\"", workspace, StringComparison.Ordinal);
         Assert.Contains("public string? UploadInputElementId { get; set; }", component, StringComparison.Ordinal);
@@ -2240,6 +2241,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("trigger.dataset.uploadAccept", uploadScript, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-picker-menu label", styles, StringComparison.Ordinal);
         Assert.Contains("bottom: calc(100% + 58px);", styles, StringComparison.Ordinal);
+        Assert.Contains("min-height: 36px;", uploadPickerRowStyleBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-upload-picker-menu", styles, StringComparison.Ordinal);
         Assert.Contains("top: calc(100% + 16px);", styles, StringComparison.Ordinal);
         Assert.Contains("max-height: min(42dvh, 360px);", styles, StringComparison.Ordinal);

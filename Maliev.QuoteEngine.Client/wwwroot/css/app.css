@@ -4648,10 +4648,10 @@
     bottom: calc(100% + 58px);
     z-index: 38;
     display: grid;
-    gap: 3px;
+    gap: 1px;
     width: min(730px, calc(100vw - 32px));
     max-height: min(62dvh, 560px);
-    padding: 8px;
+    padding: 6px;
     overflow-x: hidden;
     overflow-y: auto;
     scrollbar-gutter: stable;
@@ -4672,15 +4672,15 @@
 }
 
 .qe-agent-upload-picker-section-label {
-    padding: 5px 6px 3px;
+    padding: 3px 6px 2px;
     color: var(--qe-agent-muted);
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     line-height: 1.2;
 }
 
 .qe-agent-upload-picker-divider {
-    margin: 4px 4px 2px;
+    margin: 3px 4px 2px;
     border: 0;
     border-top: 1px solid color-mix(in srgb, var(--qe-agent-line) 82%, transparent);
 }
@@ -4690,10 +4690,10 @@
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    min-height: 42px;
-    padding: 8px 10px;
+    min-height: 36px;
+    padding: 5px 8px;
     border: 0;
     border-radius: 8px;
     background: transparent;
@@ -4723,7 +4723,7 @@
 .qe-agent-upload-picker-menu span {
     display: grid;
     min-width: 0;
-    gap: 2px;
+    gap: 1px;
 }
 
 .qe-agent-upload-picker-menu button > span:nth-child(2):last-child,
@@ -4740,14 +4740,14 @@
 }
 
 .qe-agent-upload-picker-menu strong {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
 }
 
 .qe-agent-upload-picker-menu small {
     color: var(--qe-agent-muted);
-    font-size: 11px;
-    line-height: 1.2;
+    font-size: 10px;
+    line-height: 1.15;
 }
 
 .qe-agent-dictation-meter {
