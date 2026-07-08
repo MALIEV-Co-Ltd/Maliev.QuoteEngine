@@ -137,8 +137,10 @@
                             {
                                 <div class="qe-agent-project-row qe-agent-project-row--chat">
                                     <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
-                                        <span>@ProjectName(project)</span>
-                                        <small>@ProjectNavMeta(project)</small>
+                                        <span class="qe-agent-project-title-row">
+                                            <span class="qe-agent-project-title">@ProjectName(project)</span>
+                                            <small class="qe-agent-project-date">@ProjectUpdatedLabel(project)</small>
+                                        </span>
                                     </a>
                                 </div>
                             }
@@ -175,8 +177,11 @@
                             {
                                 <div class="qe-agent-project-row">
                                     <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
-                                        <span>@ProjectName(project)</span>
-                                        <small>@ProjectNavMeta(project)</small>
+                                        <span class="qe-agent-project-title-row">
+                                            <span class="qe-agent-project-title">@ProjectName(project)</span>
+                                            <small class="qe-agent-project-date">@ProjectUpdatedLabel(project)</small>
+                                        </span>
+                                        <span class="@ProjectStatusBadgeClass(project)">@ProjectStatusLabel(project)</span>
                                     </a>
                                     @if (CanManageProject(project))
                                     {
@@ -509,7 +514,7 @@
                                                 <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
                                                 <div>
                                                     <strong>@ProjectName(project)</strong>
-                                                    <p>@project.Status</p>
+                                                    <span class="@ProjectStatusBadgeClass(project)">@ProjectStatusLabel(project)</span>
                                                 </div>
                                                 <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
                                                 @if (CanManageProject(project))
@@ -569,7 +574,7 @@
                                                 <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
                                                 <div>
                                                     <strong>@ProjectName(project)</strong>
-                                                    <p>@project.Status</p>
+                                                    <span class="@ProjectStatusBadgeClass(project)">@ProjectStatusLabel(project)</span>
                                                 </div>
                                                 <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
                                                 @if (CanManageProject(project))
@@ -846,7 +851,9 @@
                             {
                                 @if (message.HasReasoning)
                                 {
-                                    <details class="@ReasoningDetailsClass(message)">
+                                    @* Auto-open while the agent is thinking or running tools so background
+                                       work stays visible instead of hiding behind a collapsed summary. *@
+                                    <details class="@ReasoningDetailsClass(message)" open="@message.IsThinking">
                                         <summary class="qe-agent-reasoning-summary">
                                             <span class="qe-agent-reasoning-caret" aria-hidden="true"></span>
                                             <span class="qe-agent-reasoning-label">@ReasoningSummaryLabel(message)</span>
@@ -2090,6 +2097,13 @@
                                             <span>
                                                 <strong>@UploadedPartDfmTitle(part)</strong>
                                                 <small>@UploadedPartDfmStatus(part)</small>
+                                                @foreach (var failedCheck in FailedDfmChecks(part))
+                                                {
+                                                    <small class="qe-agent-upload-dfm-issue">
+                                                        <span class="qe-agent-upload-dfm-issue-scope">@DfmCheckScopeLabel(part, failedCheck)</span>
+                                                        @failedCheck.Label
+                                                    </small>
+                                                }
                                             </span>
                                         </span>
                                     </div>
@@ -6641,6 +6655,23 @@
             $"ผ่าน {passed} ไม่ผ่าน {failed} รอผล {pending}");
     }
 
+    private IReadOnlyList<DfmCheckSummary> FailedDfmChecks(QuotePartViewModel part)
+    {
+        if (!QuoteUploadConstraints.IsSupportedCadFileName(part.FileName))
+        {
+            return [];
+        }
+
+        return BuildDfmCheckSummaries(part)
+            .Where(check => check.State == ArtifactCheckState.Failed)
+            .ToList();
+    }
+
+    private string DfmCheckScopeLabel(QuotePartViewModel part, DfmCheckSummary check) =>
+        check.Scope.Equals("geometry", StringComparison.OrdinalIgnoreCase)
+            ? Text("Geometry", "เรขาคณิต")
+            : DfmProcessLabel(part);
+
     private string DfmFailedChecksLabel(IReadOnlyCollection<DfmCheckSummary> checks)
     {
         var failed = checks
@@ -7496,13 +7527,6 @@
         return Text(project.NameEn, project.NameTh);
     }
 
-    private string ProjectNavMeta(ProjectNavItem project)
-    {
-        return Text(
-            $"{ProjectUpdatedLabel(project)} · {ProjectStatusLabel(project)}",
-            $"{ProjectUpdatedLabel(project)} · {ProjectStatusLabel(project)}");
-    }
-
     private static string ProjectUpdatedLabel(ProjectNavItem project)
     {
         var local = project.UpdatedAt.ToLocalTime();
@@ -7514,16 +7538,46 @@
 
     private string ProjectStatusLabel(ProjectNavItem project)
     {
-        return project.Status.Trim().ToLowerInvariant() switch
+        return ProjectStatusKey(project) switch
         {
             "chat" => Text("Chat", "แชท"),
             "draft" => Text("Draft", "ฉบับร่าง"),
-            "ordered" or "order" => Text("Ordered", "สั่งผลิตแล้ว"),
-            "manufacturing" or "in_production" => Text("Manufacturing", "กำลังผลิต"),
-            "shipping" or "shipped" => Text("Shipping", "กำลังจัดส่ง"),
-            "completed" or "complete" => Text("Completed", "เสร็จสิ้น"),
+            "ordered" => Text("Ordered", "สั่งผลิตแล้ว"),
+            "payment-pending" => Text("Payment pending", "รอชำระเงิน"),
+            "manufacturing" => Text("Manufacturing", "กำลังผลิต"),
+            "shipped" => Text("Shipped", "จัดส่งแล้ว"),
+            "delivered" => Text("Delivered", "ถึงปลายทางแล้ว"),
+            "completed" => Text("Completed", "เสร็จสิ้น"),
+            "archived" => Text("Archived", "เก็บถาวรแล้ว"),
             _ => HumanizeArtifactStatus(project.Status)
         };
+    }
+
+    private static string ProjectStatusKey(ProjectNavItem project)
+    {
+        if (project.IsArchived)
+        {
+            return "archived";
+        }
+
+        return project.Status.Trim().ToLowerInvariant() switch
+        {
+            "chat" => "chat",
+            "draft" => "draft",
+            "ordered" or "order" => "ordered",
+            "payment_pending" or "pending_payment" or "awaiting_payment" or "payment pending" => "payment-pending",
+            "manufacturing" or "in_production" => "manufacturing",
+            "shipping" or "shipped" => "shipped",
+            "delivered" => "delivered",
+            "completed" or "complete" or "achieved" => "completed",
+            "archived" => "archived",
+            _ => "default"
+        };
+    }
+
+    private static string ProjectStatusBadgeClass(ProjectNavItem project)
+    {
+        return $"qe-agent-project-badge qe-agent-project-badge--{ProjectStatusKey(project)}";
     }
 
     private static bool IsProjectRailItem(ProjectNavItem project)

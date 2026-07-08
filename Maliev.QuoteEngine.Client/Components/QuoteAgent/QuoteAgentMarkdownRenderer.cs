@@ -22,7 +22,25 @@ public static partial class QuoteAgentMarkdownRenderer
             return new MarkupString(string.Empty);
         }
 
-        return new MarkupString(RenderBlocks(markdown.Replace("\r\n", "\n", StringComparison.Ordinal)));
+        var normalized = markdown.Replace("\r\n", "\n", StringComparison.Ordinal);
+        return new MarkupString(RenderBlocks(IsolateLeakedToolCode(normalized)));
+    }
+
+    /// <summary>
+    /// Wraps model-leaked textual tool calls ("tool_code print(quote_calculate_estimate())") in a
+    /// code fence so snake_case names render as code instead of being mangled into italics. The
+    /// agent harness recovers and executes such leaks server-side; this is the display safety net.
+    /// Content that already contains fences is left untouched — it renders as code either way.
+    /// </summary>
+    private static string IsolateLeakedToolCode(string markdown)
+    {
+        if (markdown.Contains("```", StringComparison.Ordinal) ||
+            !markdown.Contains("print(", StringComparison.Ordinal))
+        {
+            return markdown;
+        }
+
+        return LeakedToolCodeRegex().Replace(markdown, match => $"\n```\n{match.Value.Trim()}\n```\n");
     }
 
     private static string RenderBlocks(string markdown)
@@ -288,4 +306,7 @@ public static partial class QuoteAgentMarkdownRenderer
 
     [GeneratedRegex(@"(?<!_)_(?!_)(.+?)(?<!_)_(?!_)")]
     private static partial Regex ItalicUnderscoreRegex();
+
+    [GeneratedRegex(@"(?:\btool_code\b[ \t:]*\n?\s*)?print\(\s*[A-Za-z_][A-Za-z0-9_]*\s*\((?:[^()'""]|'[^']*'|""[^""]*""|\([^()]*\))*\)\s*\)(?:\s*print\(\s*[A-Za-z_][A-Za-z0-9_]*\s*\((?:[^()'""]|'[^']*'|""[^""]*""|\([^()]*\))*\)\s*\))*")]
+    private static partial Regex LeakedToolCodeRegex();
 }

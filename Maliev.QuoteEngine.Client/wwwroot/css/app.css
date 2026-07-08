@@ -1446,6 +1446,96 @@
     white-space: nowrap;
 }
 
+.qe-agent-project-row a {
+    gap: 3px;
+    align-content: center;
+}
+
+/* Name on the left, updated date pinned to the right edge of the row. */
+.qe-agent-project-title-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+}
+
+.qe-agent-project-row .qe-agent-project-title {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-project-date {
+    flex-shrink: 0;
+    color: var(--qe-agent-muted);
+    font-size: 10.5px;
+    line-height: 1.2;
+}
+
+/* Project lifecycle badges: Draft, Ordered, Payment pending, Shipped, Delivered, Archived, ... */
+.qe-agent-project-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-self: start;
+    max-width: 100%;
+    padding: 1px 7px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--qe-agent-ink) 7%, transparent);
+    color: var(--qe-agent-muted);
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: .01em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-project-badge--chat,
+.qe-agent-project-badge--default {
+    background: transparent;
+    border-color: var(--qe-agent-line);
+}
+
+.qe-agent-project-badge--ordered {
+    background: color-mix(in srgb, #339cff 15%, transparent);
+    color: color-mix(in srgb, #339cff 72%, var(--qe-agent-ink));
+}
+
+.qe-agent-project-badge--payment-pending {
+    background: color-mix(in srgb, #f0a020 16%, transparent);
+    color: color-mix(in srgb, #f0a020 62%, var(--qe-agent-ink));
+}
+
+.qe-agent-project-badge--manufacturing {
+    background: color-mix(in srgb, #8b7cf6 16%, transparent);
+    color: color-mix(in srgb, #8b7cf6 66%, var(--qe-agent-ink));
+}
+
+.qe-agent-project-badge--shipped {
+    background: color-mix(in srgb, #1fb6cf 15%, transparent);
+    color: color-mix(in srgb, #1fb6cf 62%, var(--qe-agent-ink));
+}
+
+.qe-agent-project-badge--delivered,
+.qe-agent-project-badge--completed {
+    background: color-mix(in srgb, #2fbf71 15%, transparent);
+    color: color-mix(in srgb, #2fbf71 60%, var(--qe-agent-ink));
+}
+
+.qe-agent-project-badge--archived {
+    background: transparent;
+    border-color: var(--qe-agent-line);
+    color: color-mix(in srgb, var(--qe-agent-muted) 80%, transparent);
+}
+
+.qe-agent-management-row .qe-agent-project-badge {
+    margin-top: 3px;
+}
+
 .qe-agent-pin-btn {
     justify-content: center;
     width: 28px;
@@ -4705,6 +4795,9 @@
     color: var(--qe-agent-ink);
     cursor: pointer;
     font: inherit;
+    /* The legacy global `label` rule leaks mono/uppercase styling; keep menu items in the studio voice. */
+    letter-spacing: normal;
+    text-transform: none;
     text-align: left;
 }
 
@@ -4725,10 +4818,12 @@
     color: color-mix(in srgb, var(--qe-agent-ink) 76%, var(--qe-agent-muted));
 }
 
+/* One row per item: bold label left, muted description trailing on the same line. */
 .qe-agent-upload-picker-menu span {
-    display: grid;
+    display: flex;
     min-width: 0;
-    gap: 1px;
+    align-items: baseline;
+    gap: 10px;
 }
 
 .qe-agent-upload-picker-menu button > span:nth-child(2):last-child,
@@ -4745,14 +4840,16 @@
 }
 
 .qe-agent-upload-picker-menu strong {
-    font-size: 12px;
+    flex-shrink: 0;
+    font-size: 13px;
     font-weight: 600;
 }
 
 .qe-agent-upload-picker-menu small {
+    flex: 1;
     color: var(--qe-agent-muted);
-    font-size: 10px;
-    line-height: 1.15;
+    font-size: 12px;
+    line-height: 1.2;
 }
 
 .qe-agent-dictation-meter {
@@ -6267,7 +6364,7 @@
 .qe-agent-artifact-preview-shell {
     display: grid;
     grid-template-rows: auto minmax(0, 1fr);
-    min-height: clamp(360px, 50dvh, 500px);
+    min-height: clamp(300px, 38dvh, 420px);
 }
 
 .qe-agent-artifact-preview-shell > * {
@@ -6368,10 +6465,6 @@
 .qe-agent-artifact-viewer-canvas .qe-viewer-toolbar,
 .qe-agent-artifact-viewer-canvas .qe-viewer-measure-readout {
     display: none;
-}
-
-.qe-agent-artifact-viewer-canvas .axis-gizmo-label {
-    margin-left: -10px;
 }
 
 .qe-agent-canvas-focus {
@@ -6799,6 +6892,27 @@
 .qe-agent-upload-dfm.is-pending > .mud-icon-root,
 .qe-agent-upload-dfm.is-muted > .mud-icon-root {
     color: var(--qe-agent-muted);
+}
+
+/* Named failed checks under the DFM status line — "what failed", not just a count. */
+.qe-agent-upload-dfm-issue {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    margin-top: 2px;
+    color: color-mix(in srgb, #b42318 72%, var(--qe-agent-ink));
+}
+
+.qe-agent-upload-dfm-issue-scope {
+    flex-shrink: 0;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: color-mix(in srgb, #b42318 14%, transparent);
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .02em;
+    text-transform: uppercase;
 }
 
 .qe-agent-artifact-link {

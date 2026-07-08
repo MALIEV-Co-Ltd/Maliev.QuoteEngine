@@ -73,7 +73,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ToggleChats", shell, StringComparison.Ordinal);
         Assert.Contains("ChatThreads", shell, StringComparison.Ordinal);
         Assert.Contains("RailProjects", shell, StringComparison.Ordinal);
-        Assert.Contains("ProjectNavMeta(project)", shell, StringComparison.Ordinal);
+        Assert.Contains("ProjectStatusBadgeClass(project)", shell, StringComparison.Ordinal);
+        Assert.Contains("ProjectUpdatedLabel(project)", shell, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-project-title-row\"", shell, StringComparison.Ordinal);
         Assert.Contains("HasMeaningfulProjectState", shell, StringComparison.Ordinal);
         Assert.Contains("IsProjectRailItem", shell, StringComparison.Ordinal);
         Assert.Contains("PromoteCurrentSessionToProjectState", shell, StringComparison.Ordinal);
@@ -1158,7 +1160,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("private IEnumerable<ProjectNavItem> RailProjects => _projects", component, StringComparison.Ordinal);
         Assert.Contains("private IEnumerable<ProjectNavItem> ProjectManagementProjects => RailProjects.Where(project => !project.IsPinned);", component, StringComparison.Ordinal);
         Assert.Contains("private static bool IsProjectRailItem(ProjectNavItem project)", component, StringComparison.Ordinal);
-        Assert.Contains("private string ProjectNavMeta(ProjectNavItem project)", component, StringComparison.Ordinal);
+        Assert.Contains("private static string ProjectStatusBadgeClass(ProjectNavItem project)", component, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-project-badge--payment-pending", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-project-badge--delivered", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-project-badge--archived", styles, StringComparison.Ordinal);
         Assert.Contains("_projects.RemoveAll(project => project.IsPersisted);", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-rail-group-heading\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-rail-group-action\"", component, StringComparison.Ordinal);
@@ -2267,6 +2272,23 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentLaunchShell_upload_picker_menu_items_render_single_line()
+    {
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var rowStyleBlock = ExtractSourceBlock(styles, ".qe-agent-upload-picker-menu button,", ".qe-agent-upload-picker-menu button:hover");
+        var itemTextBlock = ExtractSourceBlock(styles, "/* One row per item", ".qe-agent-dictation-meter");
+
+        // Items stay one line: label and description share a flex row, description trails muted.
+        Assert.Contains("display: flex;", itemTextBlock, StringComparison.Ordinal);
+        Assert.Contains("align-items: baseline;", itemTextBlock, StringComparison.Ordinal);
+        Assert.Contains("flex-shrink: 0;", itemTextBlock, StringComparison.Ordinal);
+        Assert.Contains("flex: 1;", itemTextBlock, StringComparison.Ordinal);
+        // The legacy global `label` rule must not leak mono/uppercase into menu items.
+        Assert.Contains("text-transform: none;", rowStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("letter-spacing: normal;", rowStyleBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void QuoteAgentLaunchShell_scroll_button_stays_hidden_during_programmatic_scroll()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
@@ -2359,9 +2381,9 @@ public sealed class QuoteEngineSourceTests
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css")
             .ReplaceLineEndings("\n");
 
-        // Collapsed by default: the reasoning disclosure renders without the `open` attribute, so the
-        // customer sees the latest Gemini reasoning header plus duration and expands to watch the live stream.
-        Assert.Contains("<details class=\"@ReasoningDetailsClass(message)\">", component, StringComparison.Ordinal);
+        // Open while live, collapsed after: the disclosure auto-opens while the agent is thinking or
+        // running tools (background work must stay visible), then collapses to the duration summary.
+        Assert.Contains("<details class=\"@ReasoningDetailsClass(message)\" open=\"@message.IsThinking\">", component, StringComparison.Ordinal);
         Assert.DoesNotContain("<details class=\"@ReasoningDetailsClass(message)\" open>", component, StringComparison.Ordinal);
         Assert.Contains("private string ReasoningSummaryLabel(AgentMessageRow message)", component, StringComparison.Ordinal);
         Assert.Contains("ReasoningActivityLabel(message)", component, StringComparison.Ordinal);
@@ -2608,9 +2630,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ViewerSettings=\"@SelectedUploadedPart.ViewerSettings\"", shell, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-viewer-wrap\"", viewer, StringComparison.Ordinal);
         Assert.DoesNotContain("min-height:280px", viewer, StringComparison.Ordinal);
-        Assert.Contains("const previousAutoClear = renderer.autoClear;", viewerJs, StringComparison.Ordinal);
-        Assert.Contains("renderer.autoClear = false;", viewerJs, StringComparison.Ordinal);
-        Assert.Contains("renderer.autoClear = previousAutoClear;", viewerJs, StringComparison.Ordinal);
+        // The corner axis gizmo was removed as unreadable clutter; the viewer must stay gizmo-free
+        // and keep the neutral CAD-style dark studio rig.
+        Assert.DoesNotContain("AXIS_GIZMO", viewerJs, StringComparison.Ordinal);
+        Assert.DoesNotContain("renderAxisGizmo", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("hemisphere: { sky: 0x9fb2cc, ground: 0x2c313a, intensity: 0.9 }", viewerJs, StringComparison.Ordinal);
+        Assert.Contains("background: 0x16181d", viewerJs, StringComparison.Ordinal);
         Assert.DoesNotContain("<QePartDetailCard", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("<QePartsListPanel", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("<QePartConfigSidebar", shell, StringComparison.Ordinal);
@@ -2681,6 +2706,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains(".qe-agent-upload-preview", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-dfm", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-section-header", styles, StringComparison.Ordinal);
+        // Failed DFM checks must be named in the uploaded-files list, not just counted.
+        Assert.Contains("FailedDfmChecks(part)", shell, StringComparison.Ordinal);
+        Assert.Contains("DfmCheckScopeLabel(part, failedCheck)", shell, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-dfm-issue", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-dfm-issue-scope", styles, StringComparison.Ordinal);
     }
 
     [Fact]
