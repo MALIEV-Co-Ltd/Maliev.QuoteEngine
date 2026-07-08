@@ -138,7 +138,7 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             services.RemoveAll<IQePricingServiceClient>();
             services.AddSingleton<IQePricingServiceClient>(new FakePricingServiceClient());
 
-            // Test-only sign-in endpoint: issues the shared identity cookie with customer_id claim.
+            // Test-only sign-in endpoint: issues the shared identity cookie with customer identity claims.
             // Replaces the removed /quote/v1/auth/sign-in endpoint for test authentication.
             services.AddTransient<IStartupFilter, TestSignInStartupFilter>();
         });
@@ -1767,6 +1767,24 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Contains("<div id=\"quote-startup\"", html, StringComparison.Ordinal);
         Assert.Contains("_framework/blazor.webassembly.js", html, StringComparison.Ordinal);
         Assert.Contains("window.getMalievAuth=function(){return {\"isSignedIn\":false", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Quotes_route_prehydrates_signed_in_customer_from_name_identifier_claim()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var signIn = await client.GetAsync("/test/sign-in?email=nameid-only@example.com&omitCustomerId=true");
+        signIn.EnsureSuccessStatusCode();
+        var session = await client.GetFromJsonAsync<QuoteAuthStatusResponse>("/quote/v1/auth/session");
+        var response = await client.GetAsync("/quotes");
+        var html = await response.Content.ReadAsStringAsync();
+
+        Assert.NotNull(session);
+        Assert.True(session!.IsSignedIn);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("window.getMalievAuth=function(){return {\"isSignedIn\":true", html, StringComparison.Ordinal);
+        Assert.Contains(session.CustomerId!.Value.ToString("D"), html, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -4646,15 +4664,23 @@ internal sealed class TestSignInStartupFilter : IStartupFilter
                         await customerClient.EnsureCustomerAsync(normalizedEmail, "Test Customer", ct: context.RequestAborted);
                     }
 
+                    var omitCustomerId = string.Equals(
+                        context.Request.Query["omitCustomerId"].ToString(),
+                        "true",
+                        StringComparison.OrdinalIgnoreCase);
+
                     var claims = new List<Claim>
                     {
                         new Claim(ClaimTypes.NameIdentifier, customerId.ToString()),
-                        new Claim("customer_id", customerId.ToString()),
                         new Claim("user_type", "customer"),
                         new Claim(ClaimTypes.Email, normalizedEmail),
                         new Claim(ClaimTypes.Name, "Test Customer"),
                         new Claim("email_verified", "true")
                     };
+                    if (!omitCustomerId)
+                    {
+                        claims.Add(new Claim("customer_id", customerId.ToString()));
+                    }
                     if (!string.IsNullOrWhiteSpace(profileImageUrl))
                     {
                         claims.Add(new Claim("profile_image_url", profileImageUrl));

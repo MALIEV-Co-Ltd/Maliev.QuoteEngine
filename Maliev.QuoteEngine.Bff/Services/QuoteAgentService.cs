@@ -7427,6 +7427,15 @@ Customer message:
             : normalized[(markerIndex + CustomerMessageMarker.Length)..].Trim();
     }
 
+    /// <summary>
+    /// Removes raw model/tool protocol text from assistant content before restoring it into
+    /// browser history or exporting it to customer documents.
+    /// </summary>
+    internal static string ExtractAssistantFacingText(string content)
+    {
+        return StripToolTraces(content).Trim();
+    }
+
     private async Task<string?> BuildCustomerMemoryContextAsync(Guid? customerId, CancellationToken cancellationToken)
     {
         if (!customerId.HasValue)
@@ -8005,29 +8014,66 @@ Customer message:
             return content;
         }
 
-        var lines = content.Split('\n');
-        var startIndex = 0;
+        var lines = content.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var sanitized = new List<string>(lines.Length);
+        var skippingToolPayload = false;
 
-        while (startIndex < lines.Length)
+        foreach (var line in lines)
         {
-            var trimmed = lines[startIndex].Trim();
+            var trimmed = line.Trim();
 
-            if (string.IsNullOrWhiteSpace(trimmed) ||
-                trimmed.StartsWith("Calling ", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase) ||
-                trimmed.StartsWith("Got Result From ", StringComparison.OrdinalIgnoreCase) ||
-                trimmed is ['{', ..] or ['[', ..])
+            if (IsToolTraceHeader(trimmed) || IsToolTraceResult(trimmed))
             {
-                startIndex++;
+                skippingToolPayload = true;
                 continue;
             }
 
-            break;
+            if (skippingToolPayload)
+            {
+                if (string.IsNullOrWhiteSpace(trimmed) || LooksLikeToolPayloadLine(trimmed))
+                {
+                    continue;
+                }
+
+                skippingToolPayload = false;
+            }
+
+            if (sanitized.Count == 0 &&
+                (string.IsNullOrWhiteSpace(trimmed) || LooksLikeToolPayloadLine(trimmed)))
+            {
+                continue;
+            }
+
+            sanitized.Add(line);
         }
 
-        return startIndex >= lines.Length || startIndex == 0
-            ? content
-            : string.Join('\n', lines[startIndex..]).Trim();
+        return sanitized.Count == 0 ? string.Empty : string.Join('\n', sanitized).Trim();
+    }
+
+    private static bool IsToolTraceHeader(string trimmed)
+    {
+        return trimmed.StartsWith("Tool Call:", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("Calling ", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("Arguments:", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsToolTraceResult(string trimmed)
+    {
+        return trimmed.StartsWith("Tool Result:", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("Got Result From ", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool LooksLikeToolPayloadLine(string trimmed)
+    {
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return true;
+        }
+
+        return trimmed[0] is '{' or '}' or '[' or ']' or '"' ||
+            trimmed.EndsWith("\",", StringComparison.Ordinal) ||
+            trimmed.EndsWith('}') ||
+            trimmed.EndsWith(']');
     }
 
     private static string GroundAssistantText(string content, QuoteAgentStateResponse state, string language)

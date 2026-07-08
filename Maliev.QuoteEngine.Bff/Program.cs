@@ -266,9 +266,8 @@ app.MapHub<QuoteNotificationsHub>("/hubs/quote-notifications");
 app.MapFallback(async context =>
 {
     var user = context.User;
-    var customerId = user.FindFirst("customer_id")?.Value;
-    var isAuthenticated = user.Identity?.IsAuthenticated == true
-        && Guid.TryParse(customerId, out _);
+    var customerId = ResolveCustomerIdClaim(user);
+    var isAuthenticated = customerId is not null;
 
     // Quote-start routes are public so customers can try the chat-based intake before signing in.
     // Redirecting unauthenticated users here (server-side, before WASM loads) avoids the
@@ -344,9 +343,8 @@ static async Task RenderClientAppAsync(HttpContext context)
     }
 
     var user = context.User;
-    var customerId = user.FindFirst("customer_id")?.Value;
-    var isAuthenticated = user.Identity?.IsAuthenticated == true
-        && Guid.TryParse(customerId, out _);
+    var customerId = ResolveCustomerIdClaim(user);
+    var isAuthenticated = customerId is not null;
 
     // Inject auth state into the page so Blazor pre-hydrates on first paint.
     var displayName = user.FindFirst(ClaimTypes.Name)?.Value
@@ -364,6 +362,22 @@ static async Task RenderClientAppAsync(HttpContext context)
 
     context.Response.ContentType = "text/html; charset=utf-8";
     await context.Response.WriteAsync(html, context.RequestAborted);
+}
+
+static string? ResolveCustomerIdClaim(ClaimsPrincipal user)
+{
+    if (user.Identity?.IsAuthenticated != true)
+    {
+        return null;
+    }
+
+    var rawCustomerId = user.FindFirst("customer_id")?.Value
+        ?? user.FindFirst("customerId")?.Value
+        ?? user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+    return Guid.TryParse(rawCustomerId, out var customerId) && customerId != Guid.Empty
+        ? customerId.ToString("D")
+        : null;
 }
 
 public partial class Program

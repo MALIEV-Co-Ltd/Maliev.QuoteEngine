@@ -5,6 +5,7 @@ using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Agent;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Security.Claims;
 using System.Text.Json;
 
 namespace Maliev.QuoteEngine.Bff.Controllers;
@@ -163,7 +164,7 @@ public sealed class AgentController(
                 Role = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ? "user" : "assistant",
                 Content = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
                     ? QuoteAgentService.ExtractCustomerFacingText(message.Content)
-                    : message.Content,
+                    : QuoteAgentService.ExtractAssistantFacingText(message.Content),
                 CreatedAt = message.CreatedAt,
                 ThinkingSteps = CloneThinkingSteps(message.ThinkingSteps).ToList(),
                 Artifacts = message.Artifacts
@@ -499,16 +500,22 @@ public sealed class AgentController(
         var data = new
         {
             sessionId = request.SessionId.ToString("D"),
+            customerName = User.FindFirstValue(ClaimTypes.Name) ?? User.FindFirstValue(ClaimTypes.Email),
+            customerEmail = User.FindFirstValue(ClaimTypes.Email),
             language = request.Language ?? conversation.Language ?? "en",
             generatedAt = DateTimeOffset.UtcNow,
-            messages = conversation.Messages.Select(m => new
-            {
-                role = m.Role,
-                content = m.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
-                    ? QuoteAgentService.ExtractCustomerFacingText(m.Content)
-                    : m.Content,
-                timestamp = m.CreatedAt
-            }).ToList()
+            messages = conversation.Messages
+                .Where(message => IsCustomerSafeHistoryRole(message.Role) && !string.IsNullOrWhiteSpace(message.Content))
+                .Select(message => new
+                {
+                    role = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase) ? "user" : "assistant",
+                    content = message.Role.Equals("user", StringComparison.OrdinalIgnoreCase)
+                        ? QuoteAgentService.ExtractCustomerFacingText(message.Content)
+                        : QuoteAgentService.ExtractAssistantFacingText(message.Content),
+                    timestamp = message.CreatedAt
+                })
+                .Where(message => !string.IsNullOrWhiteSpace(message.content))
+                .ToList()
         };
 
         var result = await pdfServiceClient.GeneratePdfAsync("ChatTranscript", request.SessionId.ToString("D"), data, cancellationToken);

@@ -155,7 +155,15 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
                     new ChatbotConversationMessageResponse
                     {
                         Role = "assistant",
-                        Content = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.",
+                        Content = """
+Tool Call: tools.quote_get_state
+{
+  "sessionId": "internal"
+}
+Tool Result: Success
+
+Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.
+""",
                         CreatedAt = DateTimeOffset.Parse("2026-06-18T01:00:01Z")
                     }
                 ]
@@ -261,6 +269,95 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_export_pdf_filters_tool_messages_sanitizes_assistant_traces_and_includes_customer_actor()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var downstreamChatbotSessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f");
+        var customerEmail = $"agent-export-{Guid.NewGuid():N}@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
+        var conversationMap = new RecordingQuoteAgentConversationMap();
+        await conversationMap.StoreMappingAsync(quoteSessionId, downstreamChatbotSessionId, customerId, CancellationToken.None);
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ConversationMessages = new ChatbotConversationMessagesResponse
+            {
+                SessionId = downstreamChatbotSessionId,
+                Language = "th",
+                Messages =
+                [
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "user",
+                        Content = "ดำเนินการต่อได้เลย",
+                        CreatedAt = DateTimeOffset.Parse("2026-07-08T01:43:20Z")
+                    },
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "tool",
+                        Content = "Tool Result: Success",
+                        CreatedAt = DateTimeOffset.Parse("2026-07-08T01:43:21Z")
+                    },
+                    new ChatbotConversationMessageResponse
+                    {
+                        Role = "assistant",
+                        Content = """
+Tool Call: tools.quote_acknowledge_dfm_findings
+{
+  "findings_acknowledged": "All DFM findings are acknowledged.",
+  "user_note": "ลูกค้า login แล้ว"
+}
+Tool Result: Success
+
+**รับทราบค่ะ**
+- จะดำเนินการต่อ
+- จะจัดทำใบเสนอราคา
+""",
+                        CreatedAt = DateTimeOffset.Parse("2026-07-08T01:43:22Z")
+                    }
+                ]
+            }
+        };
+        var pdf = new RecordingPdfServiceClient();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<IPdfServiceClient>();
+                services.AddSingleton<IPdfServiceClient>(pdf);
+                services.RemoveAll<IQuoteAgentConversationMap>();
+                services.AddSingleton<IQuoteAgentConversationMap>(conversationMap);
+            });
+        });
+        using var client = await CreateSignedInClientAsync(scopedFactory, customerEmail);
+
+        var export = await client.PostAsJsonAsync("/quote/v1/agent/export-pdf", new QuoteAgentExportPdfRequest
+        {
+            SessionId = quoteSessionId,
+            Language = "th"
+        });
+
+        Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+        Assert.NotNull(pdf.LastDataJson);
+        using var data = JsonDocument.Parse(pdf.LastDataJson!);
+        Assert.Equal("Test Customer", data.RootElement.GetProperty("customerName").GetString());
+        var messages = data.RootElement.GetProperty("messages");
+        Assert.Equal(2, messages.GetArrayLength());
+        Assert.Equal("user", messages[0].GetProperty("role").GetString());
+        Assert.Equal("assistant", messages[1].GetProperty("role").GetString());
+
+        var assistant = messages[1].GetProperty("content").GetString();
+        Assert.NotNull(assistant);
+        Assert.Contains("**รับทราบค่ะ**", assistant, StringComparison.Ordinal);
+        Assert.Contains("- จะดำเนินการต่อ", assistant, StringComparison.Ordinal);
+        Assert.DoesNotContain("Tool Call:", assistant, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("tools.quote_acknowledge_dfm_findings", assistant, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Tool Result:", assistant, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("findings_acknowledged", assistant, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Agent_message_history_uses_mapped_chatbot_session_after_auth_return()
     {
         var quoteSessionId = Guid.NewGuid();
@@ -322,6 +419,10 @@ Customer message:
         Assert.Equal(2, history.Messages.Count);
         Assert.Equal("user", history.Messages[0].Role);
         Assert.Equal("assistant", history.Messages[1].Role);
+        Assert.Equal(
+            "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.",
+            history.Messages[1].Content);
+        Assert.DoesNotContain("Tool Call:", history.Messages[1].Content, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(history.Messages, message => message.Role.Equals("tool", StringComparison.OrdinalIgnoreCase));
     }
 
