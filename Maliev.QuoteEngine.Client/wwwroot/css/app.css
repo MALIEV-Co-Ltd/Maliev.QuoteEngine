@@ -2339,6 +2339,10 @@
     cursor: pointer;
 }
 
+:root[data-maliev-theme="dark"] .qe-agent-auth-modal-backdrop {
+    background: rgba(0, 0, 0, .72);
+}
+
 .qe-agent-auth-dialog {
     --qe-auth-panel: #ffffff;
     --qe-auth-panel-border: #333333;

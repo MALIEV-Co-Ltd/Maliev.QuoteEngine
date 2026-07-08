@@ -2005,6 +2005,19 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAgentAuthModal_has_dark_theme_backdrop()
+    {
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var agentStyles = ExtractSourceBlock(styles, "/* Quote agent chat-first shell */", "/* End quote agent chat-first shell */");
+
+        var lightBackdropBlock = ExtractSourceBlock(agentStyles, ".qe-agent-auth-modal-backdrop", ":root[data-maliev-theme=\"dark\"] .qe-agent-auth-modal-backdrop");
+        var darkBackdropBlock = ExtractSourceBlock(agentStyles, ":root[data-maliev-theme=\"dark\"] .qe-agent-auth-modal-backdrop", ".qe-agent-auth-dialog");
+
+        Assert.Contains("background: rgba(255, 255, 255, .82);", lightBackdropBlock, StringComparison.Ordinal);
+        Assert.Contains("background: rgba(0, 0, 0, .72);", darkBackdropBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Legacy_auth_pages_redirect_into_make_studio_auth_dialog()
     {
         var signIn = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "SignIn.razor");
