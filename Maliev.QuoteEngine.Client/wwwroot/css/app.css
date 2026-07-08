@@ -849,6 +849,7 @@
 .qe-agent-user-btn,
 .qe-agent-signin-icon-btn,
 .qe-agent-quick-actions button,
+.qe-agent-quick-actions label,
 .qe-agent-action button {
     font: inherit;
 }
@@ -4652,7 +4653,8 @@
     box-shadow: 0 16px 44px rgba(0, 0, 0, .14);
 }
 
-.qe-agent-upload-picker-menu button {
+.qe-agent-upload-picker-menu button,
+.qe-agent-upload-picker-menu label {
     display: grid;
     grid-template-columns: 24px minmax(0, 1fr);
     align-items: center;
@@ -4670,7 +4672,9 @@
 }
 
 .qe-agent-upload-picker-menu button:hover,
-.qe-agent-upload-picker-menu button:focus-visible {
+.qe-agent-upload-picker-menu button:focus-visible,
+.qe-agent-upload-picker-menu label:hover,
+.qe-agent-upload-picker-menu label:focus-visible {
     background: var(--qe-agent-hover);
 }
 
@@ -4996,7 +5000,8 @@
     box-shadow: 0 16px 44px rgba(0, 0, 0, .14);
 }
 
-.qe-agent-quick-actions-menu button {
+.qe-agent-quick-actions-menu button,
+.qe-agent-quick-actions-menu label {
     display: grid;
     grid-template-columns: 22px minmax(0, 1fr) auto;
     align-items: center;
@@ -5015,7 +5020,9 @@
 }
 
 .qe-agent-quick-actions-menu button:hover,
-.qe-agent-quick-actions-menu button:focus-visible {
+.qe-agent-quick-actions-menu button:focus-visible,
+.qe-agent-quick-actions-menu label:hover,
+.qe-agent-quick-actions-menu label:focus-visible {
     background: var(--qe-agent-hover);
 }
 

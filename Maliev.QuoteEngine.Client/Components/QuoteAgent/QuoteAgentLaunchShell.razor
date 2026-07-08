@@ -1436,15 +1436,32 @@
                             <div class="qe-agent-upload-picker-menu" role="menu" aria-label="@Text("Choose file type", "เลือกประเภทไฟล์")">
                                 @foreach (var option in UploadPickerOptions)
                                 {
-                                    <button type="button"
-                                            role="menuitem"
-                                            @onclick="@(() => RequestUploadAsync(option))">
-                                        <MudIcon Icon="@option.Icon" Size="Size.Small" />
-                                        <span>
-                                            <strong>@Text(option.LabelEn, option.LabelTh)</strong>
-                                            <small>@Text(option.DescriptionEn, option.DescriptionTh)</small>
-                                        </span>
-                                    </button>
+                                    if (!string.IsNullOrWhiteSpace(UploadInputElementId))
+                                    {
+                                        <label for="@UploadInputElementId"
+                                               role="menuitem"
+                                               tabindex="0"
+                                               data-upload-input-id="@UploadInputElementId"
+                                               data-upload-accept="@option.Accept">
+                                            <MudIcon Icon="@option.Icon" Size="Size.Small" />
+                                            <span>
+                                                <strong>@Text(option.LabelEn, option.LabelTh)</strong>
+                                                <small>@Text(option.DescriptionEn, option.DescriptionTh)</small>
+                                            </span>
+                                        </label>
+                                    }
+                                    else
+                                    {
+                                        <button type="button"
+                                                role="menuitem"
+                                                @onclick="@(() => RequestUploadAsync(option))">
+                                            <MudIcon Icon="@option.Icon" Size="Size.Small" />
+                                            <span>
+                                                <strong>@Text(option.LabelEn, option.LabelTh)</strong>
+                                                <small>@Text(option.DescriptionEn, option.DescriptionTh)</small>
+                                            </span>
+                                        </button>
+                                    }
                                 }
                             </div>
                         }
@@ -1551,14 +1568,36 @@
                         @if (_quickActionsMenuOpen)
                         {
                             <div class="qe-agent-quick-actions-menu" role="menu" aria-label="@Text("Tools", "เครื่องมือ")">
-                            <button type="button" role="menuitem" @onclick="@(() => RequestUploadFromQuickActionsAsync(UploadPicker3d))">
-                                <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
-                                <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
-                            </button>
-                            <button type="button" role="menuitem" @onclick="@(() => RequestUploadFromQuickActionsAsync(UploadPickerImages))">
-                                <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" />
-                                <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
-                            </button>
+                            @if (!string.IsNullOrWhiteSpace(UploadInputElementId))
+                            {
+                                <label for="@UploadInputElementId"
+                                       role="menuitem"
+                                       tabindex="0"
+                                       data-upload-input-id="@UploadInputElementId"
+                                       data-upload-accept="@UploadAcceptForCategory(UploadPicker3d)">
+                                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
+                                    <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
+                                </label>
+                                <label for="@UploadInputElementId"
+                                       role="menuitem"
+                                       tabindex="0"
+                                       data-upload-input-id="@UploadInputElementId"
+                                       data-upload-accept="@UploadAcceptForCategory(UploadPickerImages)">
+                                    <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" />
+                                    <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
+                                </label>
+                            }
+                            else
+                            {
+                                <button type="button" role="menuitem" @onclick="@(() => RequestUploadFromQuickActionsAsync(UploadPicker3d))">
+                                    <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" />
+                                    <span>@Text("Upload a 3D file", "อัปโหลดไฟล์ 3D")</span>
+                                </button>
+                                <button type="button" role="menuitem" @onclick="@(() => RequestUploadFromQuickActionsAsync(UploadPickerImages))">
+                                    <MudIcon Icon="@Icons.Material.Outlined.PhotoCamera" />
+                                    <span>@Text("Photo of a part", "รูปชิ้นงาน")</span>
+                                </button>
+                            }
                             <button type="button" role="menuitem" @onclick="OpenSketchFromQuickActionsAsync">
                                 <MudIcon Icon="@Icons.Material.Outlined.Draw" />
                                 <span>@Text("Hand sketch", "สเก็ตช์มือ")</span>
@@ -1794,13 +1833,29 @@
                     <strong>@Text("Artifacts", "ไฟล์งาน")</strong>
                 </div>
                 <div class="qe-agent-artifact-header-actions">
-                    <button type="button"
-                            class="qe-agent-round-btn qe-agent-artifact-upload-btn"
-                            title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
-                            aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
-                            @onclick="@(() => RequestUploadAsync(UploadPickerAll))">
-                        <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
-                    </button>
+                    @if (!string.IsNullOrWhiteSpace(UploadInputElementId))
+                    {
+                        <label class="qe-agent-round-btn qe-agent-artifact-upload-btn"
+                               for="@UploadInputElementId"
+                               role="button"
+                               tabindex="0"
+                               title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
+                               aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
+                               data-upload-input-id="@UploadInputElementId"
+                               data-upload-accept="@UploadAcceptForCategory(UploadPickerAll)">
+                            <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
+                        </label>
+                    }
+                    else
+                    {
+                        <button type="button"
+                                class="qe-agent-round-btn qe-agent-artifact-upload-btn"
+                                title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
+                                aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
+                                @onclick="@(() => RequestUploadAsync(UploadPickerAll))">
+                            <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
+                        </button>
+                    }
                     <button type="button" class="qe-agent-round-btn" @onclick="ToggleArtifactPanel" title="@Text("Close", "ปิด")">
                         <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
                     </button>
@@ -2661,12 +2716,12 @@
     private const string UploadPickerAll = "all";
     private IReadOnlyList<UploadPickerOption> UploadPickerOptions =>
     [
-        new(UploadPicker3d, Icons.Material.Outlined.ViewInAr, "3D files", "ไฟล์ 3D", "STEP, STL, 3MF, OBJ, GLB, CAD", "STEP, STL, 3MF, OBJ, GLB, CAD"),
-        new(UploadPickerImages, Icons.Material.Outlined.PhotoCamera, "Images", "รูปภาพ", "Photos, sketches, screenshots", "รูปถ่าย สเก็ตช์ ภาพหน้าจอ"),
-        new(UploadPickerDocuments, Icons.Material.Outlined.PictureAsPdf, "Documents", "เอกสาร", "PDF, DXF, DWG drawings", "แบบ PDF, DXF, DWG"),
-        new(UploadPickerMedia, Icons.Material.Outlined.Category, "Media", "สื่อ", "Audio and video references", "ไฟล์เสียงและวิดีโออ้างอิง"),
-        new(UploadPickerArchives, Icons.Material.Outlined.Archive, "Archives", "ไฟล์บีบอัด", "ZIP bundles", "ชุดไฟล์ ZIP"),
-        new(UploadPickerAll, Icons.Material.Outlined.FolderOpen, "All files", "ไฟล์ทั้งหมด", "Any supported quote attachment", "ไฟล์แนบใบเสนอราคาที่รองรับทั้งหมด")
+        new(UploadPicker3d, Icons.Material.Outlined.ViewInAr, "3D files", "ไฟล์ 3D", "STEP, STL, 3MF, OBJ, GLB, CAD", "STEP, STL, 3MF, OBJ, GLB, CAD", UploadAcceptForCategory(UploadPicker3d)),
+        new(UploadPickerImages, Icons.Material.Outlined.PhotoCamera, "Images", "รูปภาพ", "Photos, sketches, screenshots", "รูปถ่าย สเก็ตช์ ภาพหน้าจอ", UploadAcceptForCategory(UploadPickerImages)),
+        new(UploadPickerDocuments, Icons.Material.Outlined.PictureAsPdf, "Documents", "เอกสาร", "PDF, DXF, DWG drawings", "แบบ PDF, DXF, DWG", UploadAcceptForCategory(UploadPickerDocuments)),
+        new(UploadPickerMedia, Icons.Material.Outlined.Category, "Media", "สื่อ", "Audio and video references", "ไฟล์เสียงและวิดีโออ้างอิง", UploadAcceptForCategory(UploadPickerMedia)),
+        new(UploadPickerArchives, Icons.Material.Outlined.Archive, "Archives", "ไฟล์บีบอัด", "ZIP bundles", "ชุดไฟล์ ZIP", UploadAcceptForCategory(UploadPickerArchives)),
+        new(UploadPickerAll, Icons.Material.Outlined.FolderOpen, "All files", "ไฟล์ทั้งหมด", "Any supported quote attachment", "ไฟล์แนบใบเสนอราคาที่รองรับทั้งหมด", UploadAcceptForCategory(UploadPickerAll))
     ];
 
     [Parameter]
@@ -2713,6 +2768,9 @@
 
     [Parameter]
     public EventCallback<string> OnUploadRequested { get; set; }
+
+    [Parameter]
+    public string? UploadInputElementId { get; set; }
 
     [Parameter]
     public EventCallback OnNewProjectRequested { get; set; }
@@ -5421,6 +5479,19 @@
         return RequestUploadAsync(option.Key);
     }
 
+    private static string UploadAcceptForCategory(string pickerCategory)
+    {
+        return pickerCategory switch
+        {
+            UploadPicker3d => QuoteUploadConstraints.SupportedCadAccept,
+            UploadPickerImages => QuoteUploadConstraints.SupportedImageAccept,
+            UploadPickerDocuments => QuoteUploadConstraints.SupportedDocumentAccept,
+            UploadPickerMedia => QuoteUploadConstraints.SupportedMediaAccept,
+            UploadPickerArchives => QuoteUploadConstraints.SupportedArchiveAccept,
+            _ => QuoteUploadConstraints.SupportedAttachmentAccept
+        };
+    }
+
     private async Task RequestUploadAsync(string pickerCategory)
     {
         _uploadPickerMenuOpen = false;
@@ -5564,6 +5635,8 @@
             return;
         }
 
+        _quickActionsMenuOpen = false;
+        _uploadPickerMenuOpen = false;
         QueueComposerAttachment(part);
         PromoteCurrentSessionToProjectState(part.FileName);
         await InvokeAsync(StateHasChanged);
@@ -8298,7 +8371,8 @@
         string LabelEn,
         string LabelTh,
         string DescriptionEn,
-        string DescriptionTh);
+        string DescriptionTh,
+        string Accept);
 
     private sealed record ComposerAttachmentPreview(
         Guid AttachmentId,

@@ -86,6 +86,27 @@ window.quoteEngineUploads = (() => {
     };
   }
 
+  function syncNativeUploadPickerTrigger(event) {
+    const trigger = event.target?.closest?.("[data-upload-input-id][data-upload-accept]");
+    if (!trigger) {
+      return;
+    }
+
+    const input = document.getElementById(trigger.dataset.uploadInputId || "");
+    if (!input || input.disabled) {
+      return;
+    }
+
+    const accept = trigger.dataset.uploadAccept || "";
+    if (accept) {
+      input.setAttribute("accept", accept);
+    } else {
+      input.removeAttribute("accept");
+    }
+  }
+
+  document.addEventListener("click", syncNativeUploadPickerTrigger, true);
+
   async function openFilePicker(inputId, options, dotNetRef) {
     if (openPickerPending) {
       return;

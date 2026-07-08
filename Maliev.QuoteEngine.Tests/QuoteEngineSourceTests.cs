@@ -1309,6 +1309,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("document.addEventListener(\"keyup\", documentKeyup, true)", composerScript, StringComparison.Ordinal);
         Assert.Contains("CloseQuickActionsMenuFromOutsideAsync", component, StringComparison.Ordinal);
         Assert.Contains("dotNetRef.invokeMethodAsync(\"CloseQuickActionsMenuFromOutsideAsync\")", composerScript, StringComparison.Ordinal);
+        Assert.Contains("isInsideComposerMenu", composerScript, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-quick-actions-wrapper", composerScript, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-picker-menu", composerScript, StringComparison.Ordinal);
         Assert.Contains("shouldHandleComposerShortcut(event, textarea)", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("dictationButton.addEventListener(\"keydown\", dictationKeydown);", composerScript, StringComparison.Ordinal);
         Assert.DoesNotContain("dictationButton.addEventListener(\"keyup\", dictationKeyup);", composerScript, StringComparison.Ordinal);
@@ -2183,12 +2186,42 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("UploadPickerAll", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-upload-picker-menu\"", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("role=\"menuitem\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("for=\"@UploadInputElementId\"", addButtonBlock, StringComparison.Ordinal);
+        Assert.Contains("data-upload-accept=\"@option.Accept\"", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("RequestUploadAsync(option)", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("OnUploadRequested.InvokeAsync(pickerCategory)", component, StringComparison.Ordinal);
         Assert.Contains("RequestUploadFromQuickActionsAsync(UploadPicker3d)", component, StringComparison.Ordinal);
         Assert.Contains("RequestUploadFromQuickActionsAsync(UploadPickerImages)", component, StringComparison.Ordinal);
         Assert.DoesNotContain("<label class=\"qe-agent-round-btn qe-agent-add-btn\"", addButtonBlock, StringComparison.Ordinal);
-        Assert.DoesNotContain("for=\"@UploadInputElementId\"", addButtonBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgentLaunchShell_upload_picker_options_use_native_file_input_activation()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+        var addPickerBlock = ExtractSourceBlock(component, "class=\"qe-agent-upload-picker-menu\"", "</div>");
+        var quickActionsBlock = ExtractSourceBlock(component, "class=\"qe-agent-quick-actions-menu\"", "@if (_connectors.Count > 0)");
+
+        Assert.Contains("UploadInputElementId=\"@UploadInputId\"", workspace, StringComparison.Ordinal);
+        Assert.Contains("public string? UploadInputElementId { get; set; }", component, StringComparison.Ordinal);
+        Assert.Contains("private static string UploadAcceptForCategory(string pickerCategory)", component, StringComparison.Ordinal);
+        Assert.Contains("AcceptForCategory(UploadPicker3d)", component, StringComparison.Ordinal);
+        Assert.Contains("AcceptForCategory(UploadPickerImages)", component, StringComparison.Ordinal);
+        Assert.Contains("AcceptForCategory(UploadPickerAll)", component, StringComparison.Ordinal);
+        Assert.Contains("<label", addPickerBlock, StringComparison.Ordinal);
+        Assert.Contains("for=\"@UploadInputElementId\"", addPickerBlock, StringComparison.Ordinal);
+        Assert.Contains("data-upload-accept=\"@option.Accept\"", addPickerBlock, StringComparison.Ordinal);
+        Assert.Contains("<label", quickActionsBlock, StringComparison.Ordinal);
+        Assert.Contains("for=\"@UploadInputElementId\"", quickActionsBlock, StringComparison.Ordinal);
+        Assert.Contains("data-upload-accept=\"@UploadAcceptForCategory(UploadPicker3d)\"", quickActionsBlock, StringComparison.Ordinal);
+        Assert.Contains("syncNativeUploadPickerTrigger", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("document.addEventListener(\"click\", syncNativeUploadPickerTrigger, true);", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("trigger.dataset.uploadAccept", uploadScript, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-picker-menu label", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-quick-actions-menu label", styles, StringComparison.Ordinal);
     }
 
     [Fact]

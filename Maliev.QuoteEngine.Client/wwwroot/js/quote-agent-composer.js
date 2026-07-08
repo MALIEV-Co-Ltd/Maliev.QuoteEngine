@@ -181,9 +181,17 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     keyboardHoldStarted = false;
     await finishDictationFromUserAction(textarea, dotNetRef);
   };
+  const composer = textarea.closest?.(".qe-agent-composer");
+  const isInsideComposerMenu = target => {
+    if (!target?.closest || !composer) {
+      return false;
+    }
+
+    return target.closest(".qe-agent-quick-actions-wrapper")?.closest(".qe-agent-composer") === composer ||
+      target.closest(".qe-agent-upload-picker-menu")?.closest(".qe-agent-composer") === composer;
+  };
   const outsideQuickActionsPointerDown = event => {
-    const target = event.target;
-    if (target?.closest?.(".qe-agent-quick-actions-wrapper")?.closest?.(".qe-agent-composer") === composer) {
+    if (isInsideComposerMenu(event.target)) {
       return;
     }
 
@@ -218,7 +226,6 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     dictationButtonHandlers.set(textarea, { dictationButton, pointerDown, pointerUp, pointerCancel, click });
   }
 
-  const composer = textarea.closest?.(".qe-agent-composer");
   const resizeObserver = composer && window.ResizeObserver
     ? new ResizeObserver(() => {
       updateComposerExpansionOffset(textarea);
