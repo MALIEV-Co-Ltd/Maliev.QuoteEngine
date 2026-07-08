@@ -90,13 +90,16 @@ public sealed class PaymentNotificationConsumerTests
         var paymentId = Guid.NewGuid();
         var evt = new PaymentCompletedEvent() with
         {
-            Payload = new PaymentCompletedEventPayload(
-                OrderId: Guid.NewGuid(),
-                OrderNumber: OrderNumber,
-                CustomerId: "cust-1",
-                PaymentId: paymentId,
-                Amount: 12500d,
-                Currency: "THB"),
+            Payload = new PaymentCompletedEventPayload
+            {
+                OrderId = Guid.NewGuid(),
+                OrderNumber = OrderNumber,
+                CustomerId = "cust-1",
+                PaymentId = paymentId,
+                Amount = 12500d,
+                Currency = "THB",
+                ProviderName = "omise",
+            },
         };
 
         await consumer.Consume(Context(evt));
@@ -261,13 +264,16 @@ public sealed class PaymentNotificationConsumerTests
         var paymentId = Guid.NewGuid();
         var evt = new PaymentCompletedEvent() with
         {
-            Payload = new PaymentCompletedEventPayload(
-                OrderId: Guid.NewGuid(),
-                OrderNumber: OrderNumber,
-                CustomerId: "cust-1",
-                PaymentId: paymentId,
-                Amount: 12500d,
-                Currency: "THB"),
+            Payload = new PaymentCompletedEventPayload
+            {
+                OrderId = Guid.NewGuid(),
+                OrderNumber = OrderNumber,
+                CustomerId = "cust-1",
+                PaymentId = paymentId,
+                Amount = 12500d,
+                Currency = "THB",
+                ProviderName = "omise",
+            },
         };
 
         await consumer.Consume(Context(evt));
@@ -347,7 +353,16 @@ public sealed class PaymentNotificationConsumerTests
         await Run(h => new QuotePaymentCompletedConsumer(CreateOrderClient(), h, Substitute.For<ILogger<QuotePaymentCompletedConsumer>>())
             .Consume(Context(new PaymentCompletedEvent() with
             {
-                Payload = new PaymentCompletedEventPayload(Guid.NewGuid(), OrderNumber, "c", Guid.NewGuid(), 1d, "THB"),
+                Payload = new PaymentCompletedEventPayload
+                {
+                    OrderId = Guid.NewGuid(),
+                    OrderNumber = OrderNumber,
+                    CustomerId = "c",
+                    PaymentId = Guid.NewGuid(),
+                    Amount = 1d,
+                    Currency = "THB",
+                    ProviderName = "omise",
+                },
             })));
         await Run(h => new QuotePaymentCancelledConsumer(h, Substitute.For<ILogger<QuotePaymentCancelledConsumer>>())
             .Consume(Context(new PaymentCancelledEvent() with
