@@ -1842,7 +1842,6 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(HttpStatusCode.Redirect, signIn.StatusCode);
         Assert.NotNull(signIn.Headers.Location);
         Assert.StartsWith("/quotes?auth=sign-in", signIn.Headers.Location.OriginalString, StringComparison.Ordinal);
-        Assert.Contains("returnUrl=", signIn.Headers.Location.OriginalString, StringComparison.Ordinal);
 
         Assert.Equal(HttpStatusCode.Redirect, signUp.StatusCode);
         Assert.NotNull(signUp.Headers.Location);

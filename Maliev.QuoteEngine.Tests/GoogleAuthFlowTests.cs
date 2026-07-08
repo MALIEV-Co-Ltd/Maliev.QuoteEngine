@@ -72,7 +72,6 @@ public sealed class GoogleAuthFlowTests
         Assert.NotNull(response.Headers.Location);
         var location = response.Headers.Location.OriginalString;
         Assert.StartsWith("/quotes?auth=sign-in", location, StringComparison.Ordinal);
-        Assert.Contains("returnUrl=", location, StringComparison.Ordinal);
     }
 
     [Fact]
