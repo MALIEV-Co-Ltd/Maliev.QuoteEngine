@@ -293,7 +293,7 @@ app.Run();
 static IResult RedirectToStudioAuth(HttpContext context, string page)
 {
     var mode = page == "sign-up" ? "sign-up" : "sign-in";
-    var returnUrl = context.Request.Query["returnUrl"].ToString();
+    var returnUrl = ReadReturnUrlQuery(context);
     string relativeReturnUrl;
     if (string.IsNullOrWhiteSpace(returnUrl))
     {
@@ -320,6 +320,32 @@ static IResult RedirectToStudioAuth(HttpContext context, string page)
         ? $"/quotes?auth={mode}"
         : $"/quotes?auth={mode}&returnUrl={Uri.EscapeDataString(relativeReturnUrl)}";
     return Results.Redirect(destination);
+}
+
+static string ReadReturnUrlQuery(HttpContext context)
+{
+    var returnUrl = context.Request.Query["returnUrl"].ToString();
+    if (!string.IsNullOrWhiteSpace(returnUrl))
+    {
+        return returnUrl;
+    }
+
+    var rawQuery = context.Request.QueryString.Value;
+    if (string.IsNullOrWhiteSpace(rawQuery))
+    {
+        return string.Empty;
+    }
+
+    foreach (var segment in rawQuery.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+    {
+        var pair = segment.Split('=', 2);
+        if (pair.Length == 2 && pair[0].Equals("returnUrl", StringComparison.OrdinalIgnoreCase))
+        {
+            return Uri.UnescapeDataString(pair[1].Replace("+", " ", StringComparison.Ordinal));
+        }
+    }
+
+    return string.Empty;
 }
 
 static bool IsSameOriginReturnUrl(HttpContext context, Uri returnUrl)
