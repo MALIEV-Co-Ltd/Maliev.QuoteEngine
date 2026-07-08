@@ -1319,8 +1319,11 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("dictationButton.addEventListener(\"keyup\", dictationKeyup);", composerScript, StringComparison.Ordinal);
         Assert.Contains("updateComposerTooltipPlacement", composerScript, StringComparison.Ordinal);
         Assert.Contains("wrapper.dataset.tooltipPlacement = spaceBelow >= panelHeight + margin ? \"bottom\" : \"top\";", composerScript, StringComparison.Ordinal);
+        var normalizedStyles = styles.Replace("\r\n", "\n", StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-tooltip:hover,\n.qe-agent-composer-tooltip:focus-within {\n    z-index: 60;\n}", normalizedStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-tooltip:hover .qe-agent-tooltip-panel", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-tooltip[data-tooltip-placement=\"top\"] .qe-agent-tooltip-panel", styles, StringComparison.Ordinal);
+        Assert.Contains("z-index: 70;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-picker-menu", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-picker-menu button", styles, StringComparison.Ordinal);
         Assert.Contains("top: calc(100% + 10px);", styles, StringComparison.Ordinal);

@@ -4634,6 +4634,11 @@
     place-items: center;
 }
 
+.qe-agent-composer-tooltip:hover,
+.qe-agent-composer-tooltip:focus-within {
+    z-index: 60;
+}
+
 .qe-agent-add-tooltip {
     grid-area: add;
 }
@@ -14244,7 +14249,7 @@ body.mud-blazor {
     left: 50%;
     top: calc(100% + 10px);
     bottom: auto;
-    z-index: 20;
+    z-index: 70;
     display: block;
     max-width: min(260px, calc(100vw - 32px));
     padding: 6px 10px;
