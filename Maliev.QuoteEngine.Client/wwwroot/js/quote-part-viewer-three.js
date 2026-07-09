@@ -1510,44 +1510,136 @@ function thicknessMarkerColor(thicknessMm) {
     return 0xffa726;
 }
 
-export function enableThicknessAnalysis(canvasId) {
+export async function enableThicknessAnalysis(canvasId) {
     disableThicknessAnalysis(canvasId);
-    const canvas = canvasEls[canvasId];
-    const camera = cameras[canvasId];
     const scene = scenes[canvasId];
-    if (!canvas || !camera || !scene) return;
+    const meshes = cadMeshes[canvasId] || [];
+    if (!scene || meshes.length === 0) return null;
 
-    const state = { markers: [] };
-    const clickHandler = (evt) => {
-        const rect = canvas.getBoundingClientRect();
-        const pointer = new THREE.Vector2(
-            ((evt.clientX - rect.left) / rect.width) * 2 - 1,
-            -((evt.clientY - rect.top) / rect.height) * 2 + 1,
-        );
-        const raycaster = new THREE.Raycaster();
-        raycaster.far = CONFIG.THICKNESS.maxRayDistanceMm * 10;
-        raycaster.setFromCamera(pointer, camera);
-        const meshes = cadMeshes[canvasId] || [];
-        const hits = raycaster.intersectObjects(meshes, false);
-        if (hits.length < 2) return;
-        const entry = hits[0];
-        const exit = hits[hits.length - 1];
-        const thicknessMm = entry.point.distanceTo(exit.point);
-        if (thicknessMm > CONFIG.THICKNESS.maxRayDistanceMm) return;
-
-        const marker = new THREE.Mesh(
-            new THREE.SphereGeometry(0.4, 10, 10),
-            new THREE.MeshBasicMaterial({ color: thicknessMarkerColor(thicknessMm) }),
-        );
-        marker.position.copy(entry.point);
-        scene.add(marker);
-        state.markers.push(marker);
-        markDirty(canvasId);
-        debugLog(`thickness probe: ${thicknessMm.toFixed(2)}mm`);
-    };
-    canvas.addEventListener('click', clickHandler);
-    state.clickHandler = clickHandler;
+    // Full-mesh wall-thickness heatmap (mold-analysis style): per-vertex
+    // thickness measured by casting a ray from just inside each vertex along
+    // the inward normal to the opposite surface. Large meshes are sampled at a
+    // stride and processed in time-sliced chunks so the UI never freezes.
+    const MAX_SAMPLES = 15000;
+    const CHUNK = 800;
+    const EPSILON_MM = 0.05;
+    const state = { meshes: [], transparent: false };
     thicknessStates[canvasId] = state;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.far = CONFIG.THICKNESS.maxRayDistanceMm;
+    const origin = new THREE.Vector3();
+    const direction = new THREE.Vector3();
+    const vertex = new THREE.Vector3();
+    const normal = new THREE.Vector3();
+
+    const sampledValues = [];
+    const perMesh = [];
+
+    for (const mesh of meshes) {
+        const geometry = mesh?.geometry;
+        const positionAttr = geometry?.attributes?.position;
+        if (!positionAttr) continue;
+        if (!geometry.attributes.normal) geometry.computeVertexNormals();
+        const normalAttr = geometry.attributes.normal;
+        const vertexCount = positionAttr.count;
+        const stride = Math.max(1, Math.ceil(vertexCount / MAX_SAMPLES));
+        const thickness = new Float32Array(vertexCount).fill(NaN);
+        mesh.updateWorldMatrix(true, false);
+
+        for (let start = 0; start < vertexCount; start += stride * CHUNK) {
+            // Abort cleanly if the tool was toggled off mid-computation.
+            if (thicknessStates[canvasId] !== state) return null;
+            const end = Math.min(vertexCount, start + stride * CHUNK);
+            for (let i = start; i < end; i += stride) {
+                vertex.fromBufferAttribute(positionAttr, i).applyMatrix4(mesh.matrixWorld);
+                normal.fromBufferAttribute(normalAttr, i)
+                    .transformDirection(mesh.matrixWorld)
+                    .normalize();
+                direction.copy(normal).negate();
+                origin.copy(vertex).addScaledVector(direction, EPSILON_MM);
+                raycaster.set(origin, direction);
+                const hits = raycaster.intersectObject(mesh, false);
+                if (hits.length > 0) {
+                    const t = hits[0].distance + EPSILON_MM;
+                    if (t <= CONFIG.THICKNESS.maxRayDistanceMm) {
+                        thickness[i] = t;
+                        sampledValues.push(t);
+                    }
+                }
+            }
+            // Yield to the event loop between chunks (keeps mobile smooth).
+            await new Promise((resolve) => setTimeout(resolve, 0));
+        }
+
+        // Propagate sampled values to skipped vertices (stride locality).
+        if (stride > 1) {
+            let last = NaN;
+            for (let i = 0; i < vertexCount; i += 1) {
+                if (Number.isNaN(thickness[i])) thickness[i] = last;
+                else last = thickness[i];
+            }
+        }
+        perMesh.push({ mesh, thickness });
+    }
+
+    if (sampledValues.length === 0) {
+        delete thicknessStates[canvasId];
+        return null;
+    }
+
+    // Scale: 95th percentile so a single deep probe does not wash out the map.
+    sampledValues.sort((a, b) => a - b);
+    const maxMm = Math.max(
+        0.5,
+        sampledValues[Math.min(sampledValues.length - 1, Math.floor(sampledValues.length * 0.95))],
+    );
+
+    for (const entry of perMesh) {
+        const { mesh, thickness } = entry;
+        const geometry = mesh.geometry;
+        const colors = new Float32Array(thickness.length * 3);
+        for (let i = 0; i < thickness.length; i += 1) {
+            const t = thickness[i];
+            let r = 0.55; let g = 0.55; let b = 0.58; // unknown = neutral grey
+            if (!Number.isNaN(t)) {
+                const x = Math.min(1, Math.max(0, t / maxMm));
+                // Jet-style gradient: blue -> cyan -> green -> yellow -> red.
+                r = Math.min(1, Math.max(0, 1.5 - Math.abs(4 * x - 3)));
+                g = Math.min(1, Math.max(0, 1.5 - Math.abs(4 * x - 2)));
+                b = Math.min(1, Math.max(0, 1.5 - Math.abs(4 * x - 1)));
+            }
+            colors[i * 3] = r;
+            colors[i * 3 + 1] = g;
+            colors[i * 3 + 2] = b;
+        }
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+        entry.previousMaterial = mesh.material;
+        mesh.material = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            metalness: 0.05,
+            roughness: 0.85,
+        });
+        state.meshes.push(entry);
+    }
+
+    markDirty(canvasId);
+    return { minMm: 0, maxMm };
+}
+
+export function setThicknessTransparent(canvasId, enabled) {
+    const state = thicknessStates[canvasId];
+    if (!state) return;
+    state.transparent = !!enabled;
+    for (const entry of state.meshes) {
+        const material = entry.mesh.material;
+        if (!material || !material.vertexColors) continue;
+        material.transparent = state.transparent;
+        material.opacity = state.transparent ? 0.55 : 1.0;
+        material.depthWrite = !state.transparent;
+        material.needsUpdate = true;
+    }
+    markDirty(canvasId);
 }
 
 export function disableThicknessAnalysis(canvasId) {
@@ -1556,7 +1648,17 @@ export function disableThicknessAnalysis(canvasId) {
     const canvas = canvasEls[canvasId];
     const scene = scenes[canvasId];
     if (canvas && state.clickHandler) canvas.removeEventListener('click', state.clickHandler);
-    if (scene) state.markers.forEach((m) => { scene.remove(m); disposeObject3D(m); });
+    if (scene && Array.isArray(state.markers)) {
+        state.markers.forEach((m) => { scene.remove(m); disposeObject3D(m); });
+    }
+    for (const entry of state.meshes || []) {
+        if (entry.previousMaterial) {
+            const heatmapMaterial = entry.mesh.material;
+            entry.mesh.material = entry.previousMaterial;
+            if (heatmapMaterial && heatmapMaterial !== entry.previousMaterial) heatmapMaterial.dispose();
+        }
+        if (entry.mesh.geometry?.attributes?.color) entry.mesh.geometry.deleteAttribute('color');
+    }
     delete thicknessStates[canvasId];
     markDirty(canvasId);
 }

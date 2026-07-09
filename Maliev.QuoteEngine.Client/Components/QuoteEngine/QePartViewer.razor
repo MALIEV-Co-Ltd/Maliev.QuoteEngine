@@ -136,6 +136,28 @@
         {
             <div class="qe-viewer-measure-readout" role="status">@_lastMeasurement</div>
         }
+
+        @if (_thicknessOn && _thicknessMaxMm is { } thicknessMax)
+        {
+            <div class="qe-viewer-thickness-legend" role="group" aria-label="Wall thickness scale">
+                <div class="qe-viewer-thickness-gradient" aria-hidden="true"></div>
+                <div class="qe-viewer-thickness-ticks" aria-hidden="true">
+                    @for (var tick = 0; tick <= 4; tick++)
+                    {
+                        <span>@((thicknessMax * tick / 4).ToString("0.00"))</span>
+                    }
+                    <span>&gt; @thicknessMax.ToString("0.00")</span>
+                </div>
+                <div class="qe-viewer-thickness-actions">
+                    <span class="qe-viewer-thickness-unit">millimeters</span>
+                    <button class="@ToolbarButtonClass(_thicknessTransparent)"
+                            @onclick="ToggleThicknessTransparentAsync"
+                            title="Transparent"
+                            aria-label="Toggle transparent thickness view">transparent</button>
+                    <button class="qe-vt-btn" @onclick="ResetCameraAsync" aria-label="Reset view">reset view</button>
+                </div>
+            </div>
+        }
     }
     else
     {
@@ -189,6 +211,8 @@
     private bool _boundingBoxOn;
     private bool _measureOn;
     private bool _thicknessOn;
+    private bool _thicknessTransparent;
+    private double? _thicknessMaxMm;
     private bool _viewerMaterialPushPending;
 
     private static readonly ViewPreset[] ViewPresets =
@@ -549,14 +573,36 @@
         if (_thicknessOn)
         {
             _measureOn = false;
+            _thicknessMaxMm = null;
+            _thicknessTransparent = false;
             await _module.InvokeVoidAsync("disableMeasureTool", _canvasId);
-            await _module.InvokeVoidAsync("enableThicknessAnalysis", _canvasId);
+            var scale = await _module.InvokeAsync<ThicknessScale?>("enableThicknessAnalysis", _canvasId);
+            if (scale is { MaxMm: > 0 })
+            {
+                _thicknessMaxMm = scale.MaxMm;
+            }
+            else
+            {
+                _thicknessOn = false;
+            }
         }
         else
         {
+            _thicknessMaxMm = null;
+            _thicknessTransparent = false;
             await _module.InvokeVoidAsync("disableThicknessAnalysis", _canvasId);
         }
     }
+
+    private async Task ToggleThicknessTransparentAsync()
+    {
+        if (_module is null) return;
+        _thicknessTransparent = !_thicknessTransparent;
+        await _module.InvokeVoidAsync("setThicknessTransparent", _canvasId, _thicknessTransparent);
+    }
+
+    /// <summary>Thickness heatmap color scale returned by the viewer JS.</summary>
+    public sealed record ThicknessScale(double MinMm, double MaxMm);
 
     private async Task ToggleSectionAsync()
     {

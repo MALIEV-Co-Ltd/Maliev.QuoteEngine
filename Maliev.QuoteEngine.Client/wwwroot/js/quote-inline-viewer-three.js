@@ -169,19 +169,62 @@ function createScene(container, meshData) {
         renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
         renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 
+        // Professional CAD studio rig, matching quote-part-viewer-three.js.
+        // The canvas stays transparent (the chat card supplies the backdrop);
+        // only the lighting and edge colors switch with the app theme.
         const scene = new THREE.Scene();
-        scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 0.6 * Math.PI));
-        const dir = new THREE.DirectionalLight(0xffffff, 0.8 * Math.PI);
-        dir.position.set(5, 10, 5);
-        scene.add(dir);
+        const lights = { current: [] };
+        const isDarkTheme = () =>
+            document.documentElement.getAttribute('data-maliev-theme') === 'dark';
+        const applyLights = () => {
+            for (const light of lights.current) scene.remove(light);
+            lights.current = [];
+            const dark = isDarkTheme();
+            const rig = dark
+                ? [
+                    new THREE.DirectionalLight(0xffffff, 2.7),
+                    new THREE.DirectionalLight(0xdce6f5, 1.5),
+                    new THREE.DirectionalLight(0xf2f6ff, 0.7),
+                    new THREE.HemisphereLight(0x9fb2cc, 0x2c313a, 0.9),
+                    new THREE.AmbientLight(0x545e6d, 0.5),
+                ]
+                : [
+                    new THREE.DirectionalLight(0xfffaf2, 2.6),
+                    new THREE.DirectionalLight(0xd9ebff, 1.5),
+                    new THREE.DirectionalLight(0xfffcf7, 0.5),
+                    new THREE.AmbientLight(0xe0e6f5, 0.55),
+                ];
+            const dirs = [[0.5, 1.1, 0.8], [-0.85, 0.4, 0.2], [-0.1, -0.7, 0.4]];
+            let dirIndex = 0;
+            for (const light of rig) {
+                if (light.isDirectionalLight) {
+                    const d = dirs[Math.min(dirIndex, dirs.length - 1)];
+                    light.position.set(d[0], d[1], d[2]).multiplyScalar(radius * 2);
+                    dirIndex += 1;
+                }
+                scene.add(light);
+                lights.current.push(light);
+            }
+        };
+        applyLights();
 
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
         geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
         geometry.setIndex(new THREE.BufferAttribute(triangles, 1));
-        const material = new THREE.MeshStandardMaterial({ color: 0x8c8c8c, metalness: 0.0, roughness: 0.75 });
+        const material = new THREE.MeshStandardMaterial({ color: 0xc7ccd1, metalness: 0.18, roughness: 0.55 });
         const mesh = new THREE.Mesh(geometry, material);
         scene.add(mesh);
+
+        // CAD-style feature edges.
+        const edgeGeometry = new THREE.EdgesGeometry(geometry, 30);
+        const edgeMaterial = new THREE.LineBasicMaterial({
+            color: isDarkTheme() ? 0xcdd3de : 0x1f2226,
+            transparent: true,
+            opacity: 0.55,
+        });
+        const edgeLines = new THREE.LineSegments(edgeGeometry, edgeMaterial);
+        scene.add(edgeLines);
 
         const aspect = (canvas.clientWidth || 1) / (canvas.clientHeight || 1);
         const camera = new THREE.PerspectiveCamera(45, aspect, radius * 0.01, radius * 50);
@@ -196,30 +239,37 @@ function createScene(container, meshData) {
         controls.target.copy(center);
         controls.minDistance = radius * 0.2;
         controls.maxDistance = radius * 5;
-        controls.update();
 
-        const renderInitialFrame = () => {
+        // Render on demand only: chat threads can hold several previews at
+        // once, and a continuous rAF loop per card burns mobile GPU/battery.
+        const renderFrame = () => renderer.render(scene, camera);
+        const resizeAndRender = () => {
             const width = container.clientWidth || 1;
             const height = container.clientHeight || 1;
             renderer.setSize(width, height, false);
             camera.aspect = width / height;
             camera.updateProjectionMatrix();
-            renderer.render(scene, camera);
+            renderFrame();
         };
+        controls.addEventListener('change', renderFrame);
+        controls.update();
+        resizeAndRender();
 
-        let frameHandle = null;
-        const loop = () => {
-            controls.update();
-            renderer.render(scene, camera);
-            frameHandle = requestAnimationFrame(loop);
-        };
-        frameHandle = requestAnimationFrame(loop);
-        renderInitialFrame();
-
-        resizeObserver = new ResizeObserver(renderInitialFrame);
+        resizeObserver = new ResizeObserver(resizeAndRender);
         resizeObserver.observe(container);
 
-        return { renderer, scene, canvas, camera, controls, center, radius, resizeObserver, frameHandle };
+        // Follow live theme switches (lighting + edge color).
+        const themeObserver = new MutationObserver(() => {
+            applyLights();
+            edgeMaterial.color.set(isDarkTheme() ? 0xcdd3de : 0x1f2226);
+            renderFrame();
+        });
+        themeObserver.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['data-maliev-theme'],
+        });
+
+        return { renderer, scene, canvas, camera, controls, center, radius, resizeObserver, themeObserver, renderFrame };
     } catch (creationError) {
         if (resizeObserver) resizeObserver.disconnect();
         if (renderer) renderer.dispose();
@@ -232,6 +282,7 @@ function disposePreview(containerId) {
     const entry = scenes.get(containerId);
     if (!entry) return;
     if (entry.frameHandle) cancelAnimationFrame(entry.frameHandle);
+    if (entry.themeObserver) entry.themeObserver.disconnect();
     if (entry.resizeObserver) entry.resizeObserver.disconnect();
     if (entry.controls) entry.controls.dispose();
     if (entry.scene) {
