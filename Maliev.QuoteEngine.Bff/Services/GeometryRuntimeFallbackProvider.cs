@@ -10,9 +10,6 @@ namespace Maliev.QuoteEngine.Bff.Services;
 public sealed class GeometryRuntimeFallbackProvider
 {
     private const int ManifestVersion = 1;
-    // Keep in lockstep with MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION in the embedded
-    // worker (source of truth: Maliev.GeometryService/src/client_runtime/).
-    private const string RuntimeVersion = "1.3.0";
     private const string AlgorithmVersion = "browser-first-dfm-v1";
     private const string RuntimePrefix = "/geometry/client-runtime/assets/";
     private const string WorkerResourceSuffix = ".GeometryRuntimeFallback.client-geometry-runtime.worker.js";
@@ -22,6 +19,35 @@ public sealed class GeometryRuntimeFallbackProvider
         "FgMEAEEBCwcAIABBA24LBwAgACABTQs=");
 
     private readonly Lazy<byte[]> _workerBytes = new(LoadWorkerBytes);
+
+    // Derived from the embedded worker source, never pinned: services always
+    // ship whatever runtime version the synced GeometryService worker declares.
+    private readonly Lazy<string> _runtimeVersion;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GeometryRuntimeFallbackProvider"/> class.
+    /// </summary>
+    public GeometryRuntimeFallbackProvider()
+    {
+        _runtimeVersion = new Lazy<string>(() => ExtractRuntimeVersion(_workerBytes.Value));
+    }
+
+    private string RuntimeVersion => _runtimeVersion.Value;
+
+    private static string ExtractRuntimeVersion(byte[] workerBytes)
+    {
+        var source = Encoding.UTF8.GetString(workerBytes);
+        const string marker = "MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION = \"";
+        var start = source.IndexOf(marker, StringComparison.Ordinal);
+        if (start < 0)
+        {
+            return "0.0.0";
+        }
+
+        start += marker.Length;
+        var end = source.IndexOf('"', start);
+        return end > start ? source[start..end] : "0.0.0";
+    }
 
     /// <summary>
     /// Builds the packaged runtime manifest response.

@@ -1881,7 +1881,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("\"runtimeVersion\":\"1.3.0\"", body, StringComparison.Ordinal);
+        Assert.Contains($"\"runtimeVersion\":\"{EmbeddedRuntimeWorkerVersion()}\"", body, StringComparison.Ordinal);
         Assert.Contains("\"runtimeKind\":\"browser-first-geometry\"", body, StringComparison.Ordinal);
         Assert.Contains(
             "\"directBrowserViewerExtensions\":[\".3mf\",\".glb\",\".gltf\",\".obj\",\".stl\"]",
@@ -1912,7 +1912,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("\"runtimeVersion\":\"1.3.0\"", body, StringComparison.Ordinal);
+        Assert.Contains($"\"runtimeVersion\":\"{EmbeddedRuntimeWorkerVersion()}\"", body, StringComparison.Ordinal);
         Assert.Contains("\"runtimeKind\":\"browser-first-geometry\"", body, StringComparison.Ordinal);
     }
 
@@ -4630,6 +4630,32 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             return Task.FromResult<string?>(speech);
         }
     }
+
+    /// <summary>
+    /// Runtime version declared by the embedded fallback worker. Never pin a
+    /// literal version in tests: services always pull the latest GeometryService
+    /// runtime, and the fallback manifest derives its version from the synced
+    /// worker source.
+    /// </summary>
+    private static string EmbeddedRuntimeWorkerVersion()
+    {
+        DirectoryInfo? dir = new(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "Maliev.QuoteEngine.slnx")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        var workerPath = Path.Combine(
+            dir!.FullName, "Maliev.QuoteEngine.Bff", "GeometryRuntimeFallback",
+            "client-geometry-runtime.worker.js");
+        var source = File.ReadAllText(workerPath);
+        var match = System.Text.RegularExpressions.Regex.Match(
+            source, "MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION = \"([^\"]+)\"");
+        Assert.True(match.Success, "embedded worker must declare its runtime version");
+        return match.Groups[1].Value;
+    }
+
 }
 
 /// <summary>
