@@ -1881,7 +1881,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("\"runtimeVersion\":\"1.0.0\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"runtimeVersion\":\"1.3.0\"", body, StringComparison.Ordinal);
         Assert.Contains("\"runtimeKind\":\"browser-first-geometry\"", body, StringComparison.Ordinal);
         Assert.Contains(
             "\"directBrowserViewerExtensions\":[\".3mf\",\".glb\",\".gltf\",\".obj\",\".stl\"]",
@@ -1912,7 +1912,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Contains("\"runtimeVersion\":\"1.0.0\"", body, StringComparison.Ordinal);
+        Assert.Contains("\"runtimeVersion\":\"1.3.0\"", body, StringComparison.Ordinal);
         Assert.Contains("\"runtimeKind\":\"browser-first-geometry\"", body, StringComparison.Ordinal);
     }
 

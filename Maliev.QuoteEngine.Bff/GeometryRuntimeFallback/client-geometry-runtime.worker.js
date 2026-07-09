@@ -1,4 +1,4 @@
-const MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION = "1.0.0";
+const MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION = "1.3.0";
 const MALIEV_BROWSER_GEOMETRY_ALGORITHM_VERSION = "browser-first-dfm-v1";
 const MALIEV_BROWSER_GEOMETRY_EXECUTION_MODE = "primary_interactive";
 
@@ -14,7 +14,9 @@ self.onmessage = async event => {
     const operation = String(message.operation || message.input?.operation || "analyze").toLowerCase();
     const result = operation === "extract_mesh"
       ? await extractMesh(message.input || {}, runtimeKernel)
-      : await analyze(message.input || {}, message.processCode || "FDM", runtimeKernel);
+      : operation === "compute_metrics"
+        ? await computeMetricsOnly(message.input || {}, runtimeKernel)
+        : await analyze(message.input || {}, message.processCode || "FDM", runtimeKernel);
     self.postMessage({ id: message.id || null, ok: true, result });
   } catch (error) {
     self.postMessage({
@@ -61,6 +63,7 @@ async function analyze(input, processCode, runtimeKernel = null) {
   const issues = buildIssues(metrics, processCode);
   const publicMetrics = { ...metrics };
   delete publicMetrics.triangles;
+  delete publicMetrics.weldedIndices;
 
   return {
     runtimeVersion: MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION,
@@ -82,6 +85,42 @@ async function analyze(input, processCode, runtimeKernel = null) {
   };
 }
 
+// Metrics-only analysis used by the viewer before a manufacturing process is
+// selected: mesh integrity (manifold/open edges), body count, bounding box,
+// volume, and surface area — no process-specific DFM screening.
+async function computeMetricsOnly(input, runtimeKernel = null) {
+  const mesh = input.meshBuffers
+    ? meshFromBuffers(input.meshBuffers)
+    : await meshFromFile(input.fileBytes, input.fileName || input.fileExtension || "");
+
+  const metrics = computeMetrics(mesh, runtimeKernel);
+  const inputHash = await hashMesh(mesh);
+  const issues = buildIntegrityIssues(metrics);
+  const publicMetrics = { ...metrics };
+  delete publicMetrics.triangles;
+  delete publicMetrics.weldedIndices;
+
+  return {
+    runtimeVersion: MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION,
+    algorithmVersion: MALIEV_BROWSER_GEOMETRY_ALGORITHM_VERSION,
+    executionMode: MALIEV_BROWSER_GEOMETRY_EXECUTION_MODE,
+    isAuthoritative: false,
+    authority: "local_primary",
+    serverRole: "fallback_and_final_validation",
+    status: "metrics_complete",
+    operation: "compute_metrics",
+    processCode: null,
+    inputHash,
+    runtimeKernel: {
+      wasmLoaded: Boolean(runtimeKernel),
+      runtimeVersion: runtimeKernel?.runtimeVersion ?? null
+    },
+    metrics: publicMetrics,
+    issues,
+    localOverlayHints: buildLocalOverlayHints(issues)
+  };
+}
+
 async function extractMesh(input, runtimeKernel = null) {
   const fileName = input.fileName || input.fileExtension || "";
   const mesh = input.meshBuffers
@@ -90,6 +129,7 @@ async function extractMesh(input, runtimeKernel = null) {
   const metrics = computeMetrics(mesh, runtimeKernel);
   const publicMetrics = { ...metrics };
   delete publicMetrics.triangles;
+  delete publicMetrics.weldedIndices;
 
   return {
     runtimeVersion: MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION,
@@ -115,6 +155,7 @@ async function extractMesh(input, runtimeKernel = null) {
 function meshFromBuffers(buffers) {
   const positions = [];
   const indices = [];
+  const sourceGroups = [];
 
   const sources = Array.isArray(buffers) ? buffers : [buffers];
   for (const source of sources) {
@@ -123,7 +164,9 @@ function meshFromBuffers(buffers) {
     if (sourcePositions.length % 3 !== 0) {
       throw new Error("Mesh positions must be a flat XYZ array.");
     }
-    positions.push(...sourcePositions);
+    // Plain loop instead of push(...spread): spreading large viewer meshes
+    // (>~65k elements) overflows the call stack and kills the analysis run.
+    for (const position of sourcePositions) positions.push(position);
 
     const sourceIndices = Array.from(source.indices || []);
     if (sourceIndices.length > 0) {
@@ -136,9 +179,13 @@ function meshFromBuffers(buffers) {
         indices.push(baseVertex + index);
       }
     }
+    sourceGroups.push({
+      startVertex: baseVertex,
+      endVertex: positions.length / 3
+    });
   }
 
-  return { positions, indices };
+  return { positions, indices, sourceGroups };
 }
 
 async function meshFromFile(fileBytes, fileName) {
@@ -536,7 +583,9 @@ function meshFromGltf(gltf, buffers, sourceName) {
         ? sequentialIndices(primitivePositions.length / 3)
         : readGltfAccessorScalars(gltf, buffers, primitive.indices, sourceName);
       const baseVertex = positions.length / 3;
-      positions.push(...primitivePositions);
+      // Plain loop instead of push(...spread): large GLB primitives overflow
+      // the call stack when spread as arguments.
+      for (const position of primitivePositions) positions.push(position);
       for (const index of primitiveIndices) indices.push(baseVertex + index);
     }
   }
@@ -633,6 +682,133 @@ function glbScalarReader(view, componentType) {
   throw new Error("GLB indices must use unsigned byte, unsigned short, or unsigned int components.");
 }
 
+// Welds vertices that share the same position (quantized to 1 µm) so edge and
+// body analysis sees real mesh topology. Viewer meshes (STL parsing, GLB
+// tessellation) duplicate vertices per face — counting edges on raw indices
+// makes every edge look like a boundary and reports thousands of bogus
+// "non-manifold" edges on perfectly valid parts.
+function buildWeldedIndexMap(positions, sourceGroups = null) {
+  const canonicalByKey = new Map();
+  const vertexCount = positions.length / 3;
+  const weldedIndex = new Array(vertexCount);
+  const groupByVertex = buildSourceGroupLookup(vertexCount, sourceGroups);
+  for (let vertex = 0; vertex < vertexCount; vertex += 1) {
+    const key = `${groupByVertex[vertex]}:` +
+      `${Math.round(positions[vertex * 3] * 1000)}:` +
+      `${Math.round(positions[vertex * 3 + 1] * 1000)}:` +
+      `${Math.round(positions[vertex * 3 + 2] * 1000)}`;
+    let canonical = canonicalByKey.get(key);
+    if (canonical === undefined) {
+      canonical = vertex;
+      canonicalByKey.set(key, canonical);
+    }
+    weldedIndex[vertex] = canonical;
+  }
+  return weldedIndex;
+}
+
+function buildSourceGroupLookup(vertexCount, sourceGroups) {
+  const groupByVertex = new Array(vertexCount).fill(0);
+  if (!Array.isArray(sourceGroups) || sourceGroups.length <= 1) return groupByVertex;
+
+  for (let groupIndex = 0; groupIndex < sourceGroups.length; groupIndex += 1) {
+    const group = sourceGroups[groupIndex] || {};
+    const start = Math.max(0, Math.trunc(Number(group.startVertex) || 0));
+    const end = Math.min(vertexCount, Math.trunc(Number(group.endVertex) || 0));
+    for (let vertex = start; vertex < end; vertex += 1) {
+      groupByVertex[vertex] = groupIndex;
+    }
+  }
+  return groupByVertex;
+}
+
+function createUnionFind() {
+  const parent = new Map();
+  function find(value) {
+    let root = value;
+    while (parent.has(root) && parent.get(root) !== root) root = parent.get(root);
+    // Path compression
+    let cursor = value;
+    while (parent.has(cursor) && parent.get(cursor) !== root) {
+      const next = parent.get(cursor);
+      parent.set(cursor, root);
+      cursor = next;
+    }
+    if (!parent.has(value)) parent.set(value, root);
+    return root;
+  }
+  function union(a, b) {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA !== rootB) parent.set(rootA, rootB);
+  }
+  return { find, union, parent };
+}
+
+// Re-orients triangle normals so adjacent faces agree on winding within each
+// connected surface (mirrors GeometryService's trimesh.repair.fix_winding).
+// A handful of inconsistently wound faces — most likely right at a
+// tessellation seam, e.g. where an open cavity's rim meets the outer wall —
+// report their normals on the wrong side of the overhang threshold, which
+// looks like the whole check is backwards even though the threshold itself
+// is fine. Mutates triangles[].normal in place.
+function repairTriangleWinding(triangles, weldedTriangles) {
+  const edgeFaces = new Map();
+  for (let face = 0; face < weldedTriangles.length; face += 1) {
+    const [a, b, c] = weldedTriangles[face];
+    for (const [from, to] of [[a, b], [b, c], [c, a]]) {
+      if (from === to) continue;
+      const key = from < to ? `${from}:${to}` : `${to}:${from}`;
+      const dir = from < to ? 1 : -1;
+      let entries = edgeFaces.get(key);
+      if (!entries) { entries = []; edgeFaces.set(key, entries); }
+      entries.push({ face, dir });
+    }
+  }
+
+  const adjacency = new Map();
+  for (const entries of edgeFaces.values()) {
+    for (let i = 0; i < entries.length; i += 1) {
+      for (let j = 0; j < entries.length; j += 1) {
+        if (i === j) continue;
+        const from = entries[i];
+        const to = entries[j];
+        let list = adjacency.get(from.face);
+        if (!list) { list = []; adjacency.set(from.face, list); }
+        list.push({ neighbor: to.face, sameDirection: from.dir === to.dir });
+      }
+    }
+  }
+
+  const flipped = new Set();
+  const visited = new Set();
+  for (let start = 0; start < weldedTriangles.length; start += 1) {
+    if (visited.has(start)) continue;
+    visited.add(start);
+    const queue = [start];
+    while (queue.length > 0) {
+      const current = queue.pop();
+      const currentFlipped = flipped.has(current);
+      for (const { neighbor, sameDirection } of adjacency.get(current) ?? []) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        // Properly wound adjacent triangles traverse a shared edge in
+        // OPPOSITE directions. Traversing it in the same direction means
+        // exactly one side of the pair is wound backwards.
+        if (sameDirection ? !currentFlipped : currentFlipped) flipped.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+  }
+
+  for (const face of flipped) {
+    const normal = triangles[face].normal;
+    normal[0] = -normal[0];
+    normal[1] = -normal[1];
+    normal[2] = -normal[2];
+  }
+}
+
 function computeMetrics(mesh, runtimeKernel = null) {
   const { positions, indices } = mesh;
   if (positions.length === 0 || indices.length === 0) {
@@ -649,10 +825,14 @@ function computeMetrics(mesh, runtimeKernel = null) {
     }
   }
 
+  const weldedIndex = buildWeldedIndexMap(positions, mesh.sourceGroups);
+  const bodies = createUnionFind();
+
   let area = 0;
   let signedVolume = 0;
   const edgeCounts = new Map();
   const triangles = [];
+  const weldedTriangles = [];
   const minZ = min[2];
   const zTolerance = Math.max(0.01, (max[2] - min[2]) * 0.001);
 
@@ -683,9 +863,21 @@ function computeMetrics(mesh, runtimeKernel = null) {
 
     area += faceArea;
     signedVolume += dot(a, crossProduct(b, c)) / 6;
-    countEdge(edgeCounts, indices[index], indices[index + 1]);
-    countEdge(edgeCounts, indices[index + 1], indices[index + 2]);
-    countEdge(edgeCounts, indices[index + 2], indices[index]);
+
+    const wa = weldedIndex[indices[index]];
+    const wb = weldedIndex[indices[index + 1]];
+    const wc = weldedIndex[indices[index + 2]];
+    weldedTriangles.push([wa, wb, wc]);
+    bodies.union(wa, wb);
+    bodies.union(wb, wc);
+    // Skip degenerate triangles (welded duplicates) for edge topology — their
+    // zero-length edges would distort the manifold classification.
+    if (wa !== wb && wb !== wc && wc !== wa) {
+      countEdge(edgeCounts, wa, wb);
+      countEdge(edgeCounts, wb, wc);
+      countEdge(edgeCounts, wc, wa);
+    }
+
     triangles.push({
       faceIndex,
       areaMm2: faceArea,
@@ -695,7 +887,18 @@ function computeMetrics(mesh, runtimeKernel = null) {
     });
   }
 
-  const nonManifoldEdgeCount = Array.from(edgeCounts.values()).filter(count => count !== 2).length;
+  repairTriangleWinding(triangles, weldedTriangles);
+
+  let openEdgeCount = 0;
+  let nonManifoldEdgeCount = 0;
+  for (const count of edgeCounts.values()) {
+    if (count === 1) openEdgeCount += 1;
+    else if (count > 2) nonManifoldEdgeCount += 1;
+  }
+
+  const bodyRoots = new Set();
+  for (const [wa] of weldedTriangles) bodyRoots.add(bodies.find(wa));
+
   const extents = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
   const faceCount = computeTriangleCount(indices.length, runtimeKernel);
 
@@ -705,9 +908,12 @@ function computeMetrics(mesh, runtimeKernel = null) {
     volumeMm3: Math.abs(signedVolume),
     surfaceAreaMm2: area,
     boundingBox: { x: extents[0], y: extents[1], z: extents[2] },
-    isManifold: nonManifoldEdgeCount === 0,
+    isManifold: nonManifoldEdgeCount === 0 && openEdgeCount === 0,
     nonManifoldEdgeCount,
+    openEdgeCount,
+    bodyCount: bodyRoots.size,
     triangles,
+    weldedIndices: weldedTriangles,
     isEmpty: indices.length === 0,
     complexity: complexityFor(faceCount)
   };
@@ -731,19 +937,96 @@ function emptyMetrics() {
     boundingBox: { x: 0, y: 0, z: 0 },
     isManifold: false,
     nonManifoldEdgeCount: 0,
+    openEdgeCount: 0,
+    bodyCount: 0,
     triangles: [],
+    weldedIndices: [],
     isEmpty: true,
     complexity: "empty"
   };
 }
 
-function buildIssues(metrics, processCode) {
+// Mesh-integrity issues shared by analyze and compute_metrics — independent of
+// the manufacturing process.
+function buildIntegrityIssues(metrics) {
   const issues = [];
   if (metrics.isEmpty) {
     issues.push(issue("system", "error", "Empty mesh", "No triangle geometry was available for local advisory analysis.", 0, 1));
+    return issues;
   }
-  if (!metrics.isManifold) {
-    issues.push(issue("mesh_integrity", "warning", "Mesh may be non-manifold", "Local analysis found boundary or over-shared triangle edges. Server GeometryService remains authoritative.", metrics.nonManifoldEdgeCount, 0));
+  if (metrics.nonManifoldEdgeCount > 0) {
+    issues.push(issue(
+      "mesh_integrity",
+      "warning",
+      "Non-manifold mesh",
+      `Found ${metrics.nonManifoldEdgeCount.toLocaleString()} non-manifold edge(s) shared by more than two faces. This may cause problems during manufacturing.`,
+      metrics.nonManifoldEdgeCount,
+      0));
+  } else if (metrics.openEdgeCount > 0) {
+    issues.push(issue(
+      "mesh_integrity",
+      "warning",
+      "Open mesh edges",
+      `Found ${metrics.openEdgeCount.toLocaleString()} open edge(s) — the mesh is not watertight and may need repair before manufacturing.`,
+      metrics.openEdgeCount,
+      0));
+  }
+  if ((metrics.bodyCount ?? 1) > 1) {
+    issues.push(issue(
+      "multi_body",
+      "info",
+      "Multiple bodies",
+      `The model contains ${metrics.bodyCount.toLocaleString()} separate bodies. Each body is manufactured as its own part.`,
+      metrics.bodyCount,
+      1));
+  }
+  const boundingBox = metrics.boundingBox || { x: 0, y: 0, z: 0 };
+  const maxExtentMm = Math.max(boundingBox.x, boundingBox.y, boundingBox.z);
+  if (maxExtentMm > 0 && maxExtentMm < 1.0) {
+    issues.push(issue(
+      "part_size",
+      "warning",
+      "Sub-millimeter part",
+      `The largest dimension is ${maxExtentMm.toFixed(3)} mm. This usually means the file was exported in the wrong units (meters or inches instead of millimeters) — verify the source units before quoting.`,
+      maxExtentMm,
+      1.0));
+  }
+  return issues;
+}
+
+// Overhang faces need support when they face downward more steeply than the
+// standard 45° self-supporting limit: normal Z below -cos(45°) in Z-up space.
+const OVERHANG_NORMAL_Z_LIMIT = -Math.SQRT1_2;
+
+// Groups overhang faces into connected regions via shared welded mesh edges so
+// the report can say "3 overhang regions" instead of a raw triangle count.
+function groupOverhangRegions(overhangFaces, weldedIndices) {
+  if (!Array.isArray(weldedIndices) || weldedIndices.length === 0) {
+    return overhangFaces.length > 0 ? 1 : 0;
+  }
+  const regions = createUnionFind();
+  const facesByEdge = new Map();
+  for (const face of overhangFaces) {
+    const welded = weldedIndices[face.faceIndex];
+    if (!welded) continue;
+    regions.find(face.faceIndex);
+    const [wa, wb, wc] = welded;
+    for (const [lo, hi] of [[wa, wb], [wb, wc], [wc, wa]]) {
+      const key = lo < hi ? `${lo}:${hi}` : `${hi}:${lo}`;
+      const neighbour = facesByEdge.get(key);
+      if (neighbour === undefined) facesByEdge.set(key, face.faceIndex);
+      else regions.union(neighbour, face.faceIndex);
+    }
+  }
+  const roots = new Set();
+  for (const face of overhangFaces) roots.add(regions.find(face.faceIndex));
+  return roots.size;
+}
+
+function buildIssues(metrics, processCode) {
+  const issues = buildIntegrityIssues(metrics);
+  if (metrics.isEmpty) {
+    return issues;
   }
 
   const minExtent = Math.min(metrics.boundingBox.x, metrics.boundingBox.y, metrics.boundingBox.z);
@@ -756,15 +1039,17 @@ function buildIssues(metrics, processCode) {
   const supportProcesses = ["FDM", "SLA", "SLA_DLP", "DLP"];
   if (supportProcesses.includes(normalizedProcess)) {
     const overhangFaces = metrics.triangles
-      .filter(triangle => !triangle.touchesBuildPlate && triangle.normal[2] < -0.5);
+      .filter(triangle => !triangle.touchesBuildPlate
+        && triangle.normal[2] < OVERHANG_NORMAL_Z_LIMIT);
     if (overhangFaces.length > 0) {
       const overhangAreaMm2 = overhangFaces.reduce((sum, triangle) => sum + triangle.areaMm2, 0);
+      const regionCount = groupOverhangRegions(overhangFaces, metrics.weldedIndices);
       issues.push(issue(
         "overhang",
         "warning",
         "Local support risk",
-        "Local analysis found downward-facing faces that may require supports. Server GeometryService remains authoritative.",
-        overhangAreaMm2 / 100,
+        `Found ${regionCount.toLocaleString()} overhang region(s) (≈${Math.round(overhangAreaMm2).toLocaleString()} mm² total) steeper than 45° that may require supports.`,
+        regionCount,
         0,
         overhangFaces.map(triangle => triangle.faceIndex),
         averageCentroid(overhangFaces)
@@ -776,7 +1061,7 @@ function buildIssues(metrics, processCode) {
 }
 
 function issue(category, severity, title, description, value, threshold, faceIndices = [], centroid = []) {
-  return { category, severity, title, description, value, threshold, faceIndices, centroid };
+  return { category, severity, title, description, value, threshold, faceIndices, centroid, source: "local" };
 }
 
 function buildLocalOverlayHints(issues) {

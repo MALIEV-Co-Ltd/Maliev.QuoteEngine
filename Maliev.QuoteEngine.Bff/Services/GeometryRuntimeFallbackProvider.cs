@@ -10,7 +10,9 @@ namespace Maliev.QuoteEngine.Bff.Services;
 public sealed class GeometryRuntimeFallbackProvider
 {
     private const int ManifestVersion = 1;
-    private const string RuntimeVersion = "1.0.0";
+    // Keep in lockstep with MALIEV_BROWSER_GEOMETRY_RUNTIME_VERSION in the embedded
+    // worker (source of truth: Maliev.GeometryService/src/client_runtime/).
+    private const string RuntimeVersion = "1.3.0";
     private const string AlgorithmVersion = "browser-first-dfm-v1";
     private const string RuntimePrefix = "/geometry/client-runtime/assets/";
     private const string WorkerResourceSuffix = ".GeometryRuntimeFallback.client-geometry-runtime.worker.js";
