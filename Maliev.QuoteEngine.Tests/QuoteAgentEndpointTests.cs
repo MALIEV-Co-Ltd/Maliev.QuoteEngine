@@ -3261,7 +3261,7 @@ Customer message:
 
         await ConfigureFirstPartForEstimateAsync(client, sessionId);
 
-        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_calculate_estimate");
+        var state = await ExecuteEstimateToolForStateAsync(client, sessionId);
 
         Assert.NotNull(state.Estimate);
         Assert.True(state.Estimate.Total > 0);
@@ -3466,7 +3466,7 @@ Customer message:
 
         await ConfigureFirstPartForEstimateAsync(client, sessionId);
 
-        var pricedState = await ExecuteToolForStateAsync(client, sessionId, "quote_calculate_estimate");
+        var pricedState = await ExecuteEstimateToolForStateAsync(client, sessionId);
 
         Assert.NotNull(pricedState.Estimate);
         Assert.Contains(pricedState.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
@@ -6538,7 +6538,7 @@ Customer message:
         var configuredState = await ConfigureFirstPartForEstimateAsync(client, body.SessionId);
         Assert.Contains(configuredState.Gates, gate => gate.Code == "configuration_complete" && gate.Status == "passed");
 
-        var pricedState = await ExecuteToolForStateAsync(client, body.SessionId, "quote_calculate_estimate");
+        var pricedState = await ExecuteEstimateToolForStateAsync(client, body.SessionId);
         Assert.Contains(pricedState.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
         Assert.NotNull(pricedState.Estimate);
         return body.SessionId;
@@ -6596,6 +6596,26 @@ Customer message:
     {
         var json = await ExecuteToolAsync(client, sessionId, toolName, arguments);
         var state = JsonSerializer.Deserialize<QuoteAgentStateResponse>(json, JsonOptions);
+        Assert.NotNull(state);
+        return state;
+    }
+
+    /// <summary>
+    /// Executes quote_calculate_estimate and unwraps its price-first success envelope
+    /// ({ status, estimate, instruction, state }), asserting the estimate leads the payload.
+    /// </summary>
+    private static async Task<QuoteAgentStateResponse> ExecuteEstimateToolForStateAsync(
+        HttpClient client,
+        Guid sessionId)
+    {
+        var json = await ExecuteToolAsync(client, sessionId, "quote_calculate_estimate");
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("estimate_ready", document.RootElement.GetProperty("status").GetString());
+        Assert.True(document.RootElement.GetProperty("estimate").GetProperty("total").GetDecimal() > 0);
+        Assert.False(string.IsNullOrWhiteSpace(document.RootElement.GetProperty("instruction").GetString()));
+        var state = JsonSerializer.Deserialize<QuoteAgentStateResponse>(
+            document.RootElement.GetProperty("state").GetRawText(),
+            JsonOptions);
         Assert.NotNull(state);
         return state;
     }
@@ -7396,7 +7416,7 @@ Customer message:
         Assert.Equal("white", part.Color);
         Assert.True(part.Quantity > 0);
 
-        var pricedState = await ExecuteToolForStateAsync(client, sessionId, "quote_calculate_estimate");
+        var pricedState = await ExecuteEstimateToolForStateAsync(client, sessionId);
 
         Assert.NotNull(pricedState.Estimate);
         Assert.True(pricedState.Estimate.Total > 0);

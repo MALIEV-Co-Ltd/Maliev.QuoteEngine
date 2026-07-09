@@ -2195,7 +2195,31 @@ internal sealed class QuoteAgentService(
             };
         }
 
-        return ToStateResponse(state);
+        // Lead with the price so the model cannot miss it. Returning only the session-state blob
+        // buried the estimate, and flash-class models repeatedly told the customer to "wait for
+        // the calculation" instead of quoting the total that was already computed.
+        return new
+        {
+            status = "estimate_ready",
+            estimate = new
+            {
+                total = estimate.Total,
+                subtotal = estimate.Subtotal,
+                discount = estimate.Discount,
+                currency = estimate.Currency,
+                lines = estimate.Lines
+                    .Select(line => new
+                    {
+                        fileName = line.FileName,
+                        unitPrice = line.UnitPrice,
+                        lineTotal = line.LineTotal,
+                        notes = line.Notes
+                    })
+                    .ToList()
+            },
+            instruction = "The estimate is ready NOW. State the total price to the customer in this same reply. Do not say you are still calculating.",
+            state = ToStateResponse(state)
+        };
     }
 
     private async Task<QuoteEstimateResponse?> CalculateEstimateAsync(
