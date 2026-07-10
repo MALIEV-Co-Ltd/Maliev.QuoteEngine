@@ -2313,23 +2313,24 @@
 
 .qe-agent-chat-selection-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
     gap: 8px;
 }
 
 .qe-agent-chat-selection {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: 36px minmax(0, 1fr) 22px;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
     min-width: 0;
-    padding: 10px 11px;
+    padding: 9px 10px;
     border: 1px solid var(--qe-agent-line);
     border-radius: 9px;
     color: var(--qe-agent-ink);
     background: var(--qe-agent-raised);
     text-align: left;
     cursor: pointer;
+    transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
 }
 
 .qe-agent-chat-selection:hover,
@@ -2338,25 +2339,84 @@
     outline: none;
 }
 
-.qe-agent-chat-selection > span {
+.qe-agent-chat-selection.is-selected {
+    border-color: var(--qe-agent-primary);
+    background: color-mix(in srgb, var(--qe-agent-primary) 8%, var(--qe-agent-raised));
+    box-shadow: inset 3px 0 0 var(--qe-agent-primary);
+}
+
+.qe-agent-chat-selection:disabled {
+    cursor: wait;
+    opacity: 0.72;
+}
+
+.qe-agent-chat-selection-logo {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    color: var(--qe-agent-muted);
+    background: var(--qe-agent-surface);
+    overflow: hidden;
+}
+
+.qe-agent-chat-selection-logo img {
+    display: block;
+    width: 28px;
+    height: 28px;
+    object-fit: contain;
+}
+
+.qe-agent-chat-selection-body {
     display: grid;
     gap: 2px;
     min-width: 0;
 }
 
-.qe-agent-chat-selection strong,
+.qe-agent-chat-selection-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+}
+
+.qe-agent-chat-selection-name,
+.qe-agent-chat-selection-price,
 .qe-agent-chat-selection small {
     overflow-wrap: anywhere;
 }
 
-.qe-agent-chat-selection strong {
+.qe-agent-chat-selection-name,
+.qe-agent-chat-selection-price {
+    color: var(--qe-agent-ink);
     font-size: 13px;
+}
+
+.qe-agent-chat-selection-price {
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 .qe-agent-chat-selection small {
     color: var(--qe-agent-muted);
-    font-size: 12px;
-    line-height: 1.35;
+    font-size: 11px;
+    line-height: 1.3;
+}
+
+.qe-agent-chat-selection-package {
+    color: color-mix(in srgb, var(--qe-agent-ink) 72%, var(--qe-agent-muted));
+}
+
+.qe-agent-chat-selection-state {
+    display: grid;
+    place-items: center;
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-chat-selection.is-selected .qe-agent-chat-selection-state {
+    color: var(--qe-agent-primary);
 }
 
 /* Command palette (Ctrl/Cmd+K): centered overlay near the top, matching the

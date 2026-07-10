@@ -37,7 +37,10 @@ internal sealed class DeliveryServiceClient(HttpClient http) : IDeliveryServiceC
         using var response = await http.PostAsJsonAsync("/delivery/v1/shipping/rates", request, JsonOptions, ct);
         if (!response.IsSuccessStatusCode)
         {
-            return new ShippingRateResponseDto();
+            throw new HttpRequestException(
+                $"DeliveryService shipping rates request failed with HTTP {(int)response.StatusCode}.",
+                inner: null,
+                response.StatusCode);
         }
 
         var downstreamRates = await response.Content.ReadFromJsonAsync<List<DownstreamShippingRateOption>>(JsonOptions, ct) ?? [];

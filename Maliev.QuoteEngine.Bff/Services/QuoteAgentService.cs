@@ -1237,7 +1237,7 @@ internal sealed class QuoteAgentService(
                 Message = message,
                 State = ToStateResponse(state)
             };
-            sessionStore.CompleteAction(state, actionId, result);
+            sessionStore.CompleteAction(state, action, result);
             return result;
         }
         finally
@@ -2958,10 +2958,7 @@ internal sealed class QuoteAgentService(
             state.SelectedShippingRate = CloneShippingRate(selectedRate);
         }
 
-        sessionStore.RemovePendingActions(
-            state,
-            otherAction =>
-                otherAction.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase));
+        sessionStore.MarkShippingActionSelected(state, action.ActionId);
         return BuildSelectedShippingRateMessage(selectedRate);
     }
 
@@ -3018,7 +3015,21 @@ internal sealed class QuoteAgentService(
                 summary,
                 requiresAuthentication: false,
                 actionArguments,
-                requiresConfirmation: false);
+                requiresConfirmation: false,
+                shippingOption: new QuoteAgentShippingOptionDto
+                {
+                    CourierCode = structuredRate.CourierCode,
+                    CourierName = structuredRate.CourierName,
+                    ProductName = structuredRate.ProductName,
+                    CourierLogoUrl = structuredRate.CourierLogoUrl,
+                    TotalPrice = structuredRate.TotalPrice,
+                    CurrencyCode = structuredRate.CurrencyCode,
+                    ServiceLevel = structuredRate.ServiceLevel,
+                    LeadTime = structuredRate.LeadTime,
+                    PackageCount = structuredRate.PackageCount,
+                    TotalWeightGrams = structuredRate.TotalWeight,
+                    Packages = structuredRate.Packages.ToList()
+                });
         }
     }
 

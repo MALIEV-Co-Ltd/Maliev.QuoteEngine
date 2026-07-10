@@ -5935,6 +5935,17 @@ Customer message:
             .EnumerateArray());
         Assert.False(action.GetProperty("requiresConfirmation").GetBoolean());
         Assert.Equal("available", action.GetProperty("status").GetString());
+        var shippingOption = action.GetProperty("shippingOption");
+        Assert.Equal("Flash Express", shippingOption.GetProperty("courierName").GetString());
+        Assert.Equal("Standard Parcel", shippingOption.GetProperty("productName").GetString());
+        Assert.Equal("https://cdn.example/flash.svg", shippingOption.GetProperty("courierLogoUrl").GetString());
+        Assert.Equal(82.25m, shippingOption.GetProperty("totalPrice").GetDecimal());
+        Assert.Equal(1, shippingOption.GetProperty("packageCount").GetInt32());
+        Assert.Equal(1250m, shippingOption.GetProperty("totalWeightGrams").GetDecimal());
+        var visiblePackage = Assert.Single(shippingOption.GetProperty("packages").EnumerateArray());
+        Assert.Equal(20m, visiblePackage.GetProperty("width").GetDecimal());
+        Assert.Equal(25m, visiblePackage.GetProperty("length").GetDecimal());
+        Assert.Equal(8m, visiblePackage.GetProperty("height").GetDecimal());
         var actionId = action.GetProperty("actionId").GetGuid();
         var sessionStore = scopedFactory.Services.GetRequiredService<QuoteAgentSessionStore>();
         Assert.True(sessionStore.TryGetAction(actionId, out var pendingAction));
@@ -6037,8 +6048,55 @@ Customer message:
 
         Assert.Contains("Flash Express", result.Message, StringComparison.OrdinalIgnoreCase);
         Assert.NotNull(result.State);
-        Assert.DoesNotContain(result.State.ProposedActions, action =>
-            action.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, result.State.ProposedActions.Count(action =>
+            action.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase)));
+        Assert.Equal("selected", Assert.Single(result.State.ProposedActions, action =>
+            action.ActionId == flashAction.ActionId).Status);
+        Assert.All(result.State.ProposedActions.Where(action => action.ActionId != flashAction.ActionId), action =>
+            Assert.Equal("available", action.Status));
+    }
+
+    [Fact]
+    public async Task Agent_shipping_selection_preserves_owner_for_subsequent_access_checks()
+    {
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto
+            {
+                Rates = [CreateShippingRateOption("FLE", "Standard Parcel", 82.25m, "Standard")]
+            }
+        };
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        const string ownerEmail = "shipping-owner@example.com";
+        using var ownerClient = await CreateSignedInClientAsync(scopedFactory, ownerEmail);
+        var ownerCustomerId = new Guid(MD5.HashData(Encoding.UTF8.GetBytes(ownerEmail)));
+        var sessionId = Guid.NewGuid();
+        var toolJson = await ExecuteToolAsync(
+            ownerClient,
+            sessionId,
+            "quote_get_shipping_rates",
+            CreateShippingRateArguments(),
+            ownerCustomerId);
+        using var toolDocument = JsonDocument.Parse(toolJson);
+        var actionId = toolDocument.RootElement
+            .GetProperty("state")
+            .GetProperty("proposedActions")[0]
+            .GetProperty("actionId")
+            .GetGuid();
+
+        var ownerResult = await ConfirmActionAsync(ownerClient, actionId);
+        Assert.Equal("selected", Assert.Single(ownerResult.State!.ProposedActions).Status);
+
+        using var otherClient = await CreateSignedInClientAsync(scopedFactory, "shipping-other@example.com");
+        var response = await otherClient.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{actionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest());
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]

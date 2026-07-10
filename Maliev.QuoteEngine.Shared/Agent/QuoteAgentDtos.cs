@@ -537,6 +537,48 @@ public sealed class QuoteAgentProposedActionDto
 
     /// <summary>Gets or sets the action status.</summary>
     public string Status { get; set; } = "pending_confirmation";
+
+    /// <summary>Gets or sets structured customer-visible courier details for a shipping selection.</summary>
+    public QuoteAgentShippingOptionDto? ShippingOption { get; set; }
+}
+
+/// <summary>
+/// Structured customer-visible courier details attached to a selectable shipping action.
+/// </summary>
+public sealed class QuoteAgentShippingOptionDto
+{
+    /// <summary>Gets or sets the courier code.</summary>
+    public string CourierCode { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the customer-visible courier name.</summary>
+    public string CourierName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the customer-visible service product name.</summary>
+    public string ProductName { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the validated HTTPS courier logo URL.</summary>
+    public string? CourierLogoUrl { get; set; }
+
+    /// <summary>Gets or sets the total courier price.</summary>
+    public decimal TotalPrice { get; set; }
+
+    /// <summary>Gets or sets the price currency code.</summary>
+    public string CurrencyCode { get; set; } = "THB";
+
+    /// <summary>Gets or sets the customer-visible service level.</summary>
+    public string ServiceLevel { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the customer-visible delivery lead time.</summary>
+    public string LeadTime { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the number of planned packages.</summary>
+    public int PackageCount { get; set; }
+
+    /// <summary>Gets or sets the estimated total package weight in grams.</summary>
+    public decimal TotalWeightGrams { get; set; }
+
+    /// <summary>Gets or sets the sanitized package and box-size breakdown.</summary>
+    public List<ShippingPackageQuoteDto> Packages { get; set; } = [];
 }
 
 /// <summary>

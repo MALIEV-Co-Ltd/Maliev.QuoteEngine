@@ -79,7 +79,8 @@ internal sealed class QuoteAgentSessionStore
         string summary,
         bool requiresAuthentication,
         Dictionary<string, JsonElement> arguments,
-        bool requiresConfirmation = true)
+        bool requiresConfirmation = true,
+        QuoteAgentShippingOptionDto? shippingOption = null)
     {
         var action = new QuoteAgentPendingAction(
             Guid.NewGuid(),
@@ -91,6 +92,7 @@ internal sealed class QuoteAgentSessionStore
             requiresConfirmation,
             state.CustomerId,
             arguments,
+            shippingOption,
             DateTimeOffset.UtcNow);
         _actions[action.ActionId] = action;
 
@@ -139,17 +141,45 @@ internal sealed class QuoteAgentSessionStore
 
     public void CompleteAction(
         QuoteAgentSessionState state,
-        Guid actionId,
+        QuoteAgentPendingAction pendingAction,
         QuoteAgentActionResultResponse result)
     {
-        _actions.TryRemove(actionId, out var pendingAction);
-        _completedActions[actionId] = new QuoteAgentCompletedAction(result, pendingAction?.CustomerId);
+        var isShippingSelection = pendingAction.ActionType.StartsWith(
+            "select_shipping_rate:",
+            StringComparison.OrdinalIgnoreCase);
+        if (isShippingSelection)
+        {
+            _actions[pendingAction.ActionId] = pendingAction;
+            _completedActions.TryRemove(pendingAction.ActionId, out _);
+        }
+        else
+        {
+            _actions.TryRemove(pendingAction.ActionId, out _);
+            _completedActions[pendingAction.ActionId] = new QuoteAgentCompletedAction(
+                result,
+                pendingAction.CustomerId);
+        }
+
         lock (state.SyncRoot)
         {
-            var action = state.ProposedActions.FirstOrDefault(item => item.ActionId == actionId);
+            var action = state.ProposedActions.FirstOrDefault(item => item.ActionId == pendingAction.ActionId);
             if (action is not null)
             {
-                action.Status = "completed";
+                action.Status = isShippingSelection ? "selected" : "completed";
+            }
+
+            Touch(state);
+        }
+    }
+
+    public void MarkShippingActionSelected(QuoteAgentSessionState state, Guid selectedActionId)
+    {
+        lock (state.SyncRoot)
+        {
+            foreach (var action in state.ProposedActions.Where(item =>
+                item.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase)))
+            {
+                action.Status = action.ActionId == selectedActionId ? "selected" : "available";
             }
 
             Touch(state);
@@ -280,7 +310,8 @@ internal sealed class QuoteAgentSessionStore
 
     private static bool IsActiveAction(QuoteAgentProposedActionDto action) =>
         action.Status.Equals("pending_confirmation", StringComparison.OrdinalIgnoreCase) ||
-        action.Status.Equals("available", StringComparison.OrdinalIgnoreCase);
+        action.Status.Equals("available", StringComparison.OrdinalIgnoreCase) ||
+        action.Status.Equals("selected", StringComparison.OrdinalIgnoreCase);
 
     public static bool HasDfmIssues(QuotePartDraftDto part)
     {
@@ -374,7 +405,57 @@ internal sealed class QuoteAgentSessionStore
             Summary = source.Summary,
             RequiresAuthentication = source.RequiresAuthentication,
             RequiresConfirmation = source.RequiresConfirmation,
-            Status = source.Status
+            Status = source.Status,
+            ShippingOption = CloneShippingOption(source.ShippingOption)
+        };
+    }
+
+    private static QuoteAgentShippingOptionDto? CloneShippingOption(QuoteAgentShippingOptionDto? source)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        return new QuoteAgentShippingOptionDto
+        {
+            CourierCode = source.CourierCode,
+            CourierName = source.CourierName,
+            ProductName = source.ProductName,
+            CourierLogoUrl = source.CourierLogoUrl,
+            TotalPrice = source.TotalPrice,
+            CurrencyCode = source.CurrencyCode,
+            ServiceLevel = source.ServiceLevel,
+            LeadTime = source.LeadTime,
+            PackageCount = source.PackageCount,
+            TotalWeightGrams = source.TotalWeightGrams,
+            Packages = source.Packages.Select(CloneShippingPackage).ToList()
+        };
+    }
+
+    private static ShippingPackageQuoteDto CloneShippingPackage(ShippingPackageQuoteDto source)
+    {
+        return new ShippingPackageQuoteDto
+        {
+            PackageNumber = source.PackageNumber,
+            Name = source.Name,
+            Weight = source.Weight,
+            Width = source.Width,
+            Length = source.Length,
+            Height = source.Height,
+            IsOversized = source.IsOversized,
+            Price = source.Price,
+            Currency = source.Currency,
+            EstimatedDelivery = source.EstimatedDelivery,
+            Items = source.Items.Select(item => new ShippingPackageItemDto
+            {
+                Name = item.Name,
+                Quantity = item.Quantity,
+                UnitWidth = item.UnitWidth,
+                UnitLength = item.UnitLength,
+                UnitHeight = item.UnitHeight,
+                UnitWeight = item.UnitWeight
+            }).ToList()
         };
     }
 
@@ -561,6 +642,7 @@ internal sealed record QuoteAgentPendingAction(
     bool RequiresConfirmation,
     Guid? CustomerId,
     Dictionary<string, JsonElement> Arguments,
+    QuoteAgentShippingOptionDto? ShippingOption,
     DateTimeOffset CreatedAt)
 {
     public QuoteAgentProposedActionDto ToDto()
@@ -573,7 +655,31 @@ internal sealed record QuoteAgentPendingAction(
             Summary = Summary,
             RequiresAuthentication = RequiresAuthentication,
             RequiresConfirmation = RequiresConfirmation,
-            Status = RequiresConfirmation ? "pending_confirmation" : "available"
+            Status = RequiresConfirmation ? "pending_confirmation" : "available",
+            ShippingOption = CloneShippingOption(ShippingOption)
+        };
+    }
+
+    private static QuoteAgentShippingOptionDto? CloneShippingOption(QuoteAgentShippingOptionDto? source)
+    {
+        if (source is null)
+        {
+            return null;
+        }
+
+        return new QuoteAgentShippingOptionDto
+        {
+            CourierCode = source.CourierCode,
+            CourierName = source.CourierName,
+            ProductName = source.ProductName,
+            CourierLogoUrl = source.CourierLogoUrl,
+            TotalPrice = source.TotalPrice,
+            CurrencyCode = source.CurrencyCode,
+            ServiceLevel = source.ServiceLevel,
+            LeadTime = source.LeadTime,
+            PackageCount = source.PackageCount,
+            TotalWeightGrams = source.TotalWeightGrams,
+            Packages = source.Packages.ToList()
         };
     }
 }

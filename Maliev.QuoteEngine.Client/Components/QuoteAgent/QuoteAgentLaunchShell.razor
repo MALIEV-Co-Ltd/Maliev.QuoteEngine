@@ -1305,14 +1305,57 @@
                 <div class="qe-agent-chat-selection-list">
                     @foreach (var action in SelectionActions)
                     {
+                        var shippingOption = action.ShippingOption;
+                        var isSelected = action.Status.Equals("selected", StringComparison.OrdinalIgnoreCase);
+                        var isProcessing = _processingActionIds.Contains(action.ActionId);
                         <button type="button"
-                                class="qe-agent-chat-selection"
+                                class="@ShippingSelectionClass(action)"
+                                aria-pressed="@isSelected"
+                                aria-busy="@isProcessing"
+                                disabled="@isProcessing"
                                 @onclick="@(() => ConfirmActionAsync(action))">
-                            <span>
-                                <strong>@action.Title</strong>
-                                <small>@action.Summary</small>
+                            <span class="qe-agent-chat-selection-logo" aria-hidden="true">
+                                @if (!string.IsNullOrWhiteSpace(shippingOption?.CourierLogoUrl))
+                                {
+                                    <img src="@shippingOption.CourierLogoUrl" alt="" loading="lazy" />
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.LocalShipping" Size="Size.Small" />
+                                }
                             </span>
-                            <MudIcon Icon="@Icons.Material.Outlined.ArrowForward" Size="Size.Small" />
+                            <span class="qe-agent-chat-selection-body">
+                                <span class="qe-agent-chat-selection-heading">
+                                    <span class="qe-agent-chat-selection-name">@(shippingOption?.CourierName ?? action.Title)</span>
+                                    @if (shippingOption is not null)
+                                    {
+                                        <span class="qe-agent-chat-selection-price">@FormatMoney(shippingOption.TotalPrice, shippingOption.CurrencyCode)</span>
+                                    }
+                                </span>
+                                @if (shippingOption is not null)
+                                {
+                                    <small>@ShippingServiceSummary(shippingOption)</small>
+                                    <small class="qe-agent-chat-selection-package">@ShippingPackageSummary(shippingOption)</small>
+                                }
+                                else
+                                {
+                                    <small>@action.Summary</small>
+                                }
+                            </span>
+                            <span class="qe-agent-chat-selection-state" aria-hidden="true">
+                                @if (isProcessing)
+                                {
+                                    <MudProgressCircular Indeterminate="true" Size="Size.Small" />
+                                }
+                                else if (isSelected)
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.CheckCircle" Size="Size.Small" />
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.ChevronRight" Size="Size.Small" />
+                                }
+                            </span>
                         </button>
                     }
                 </div>
@@ -2563,6 +2606,7 @@
     private readonly List<QuoteAgentSearchResultDto> _customerSearchResults = [];
     private readonly List<ComposerAttachmentPreview> _pendingComposerAttachments = [];
     private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<Guid> _processingActionIds = [];
     private const int SearchMinimumCharacters = 3;
     private const int SearchPromptVisibleCharacters = 28;
     private const int DictationMeterBarCount = 320;
@@ -4383,6 +4427,12 @@
 
     private async Task ConfirmActionAsync(QuoteAgentProposedActionDto action)
     {
+        if (!_processingActionIds.Add(action.ActionId))
+        {
+            return;
+        }
+
+        await InvokeAsync(StateHasChanged);
         try
         {
             var previousArtifactCount = _artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact);
@@ -4402,6 +4452,11 @@
         catch (QuoteEngineApiException ex)
         {
             _error = ex.UserMessage;
+        }
+        finally
+        {
+            _processingActionIds.Remove(action.ActionId);
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -4569,6 +4624,45 @@
     private static string FormatMoney(decimal amount, string currency)
     {
         return $"{amount.ToString("0.##", CultureInfo.InvariantCulture)} {currency}";
+    }
+
+    private static string ShippingSelectionClass(QuoteAgentProposedActionDto action)
+    {
+        var stateClass = action.Status.Equals("selected", StringComparison.OrdinalIgnoreCase)
+            ? " is-selected"
+            : string.Empty;
+        return $"qe-agent-chat-selection{stateClass}";
+    }
+
+    private static string ShippingServiceSummary(QuoteAgentShippingOptionDto option)
+    {
+        return string.Join(
+            " · ",
+            new[] { option.ProductName, option.ServiceLevel, option.LeadTime }
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+    }
+
+    private string ShippingPackageSummary(QuoteAgentShippingOptionDto option)
+    {
+        var packageLabel = option.PackageCount == 1
+            ? Text("1 package", "1 กล่อง")
+            : Text(
+                $"{option.PackageCount.ToString(CultureInfo.InvariantCulture)} packages",
+                $"{option.PackageCount.ToString(CultureInfo.InvariantCulture)} กล่อง");
+        var weight = option.TotalWeightGrams >= 1000m
+            ? $"{(option.TotalWeightGrams / 1000m).ToString("0.##", CultureInfo.InvariantCulture)} kg"
+            : $"{option.TotalWeightGrams.ToString("0.##", CultureInfo.InvariantCulture)} g";
+        var firstPackage = option.Packages.FirstOrDefault();
+        var dimensions = firstPackage is null
+            ? null
+            : $"{firstPackage.Length.ToString("0.#", CultureInfo.InvariantCulture)} × " +
+              $"{firstPackage.Width.ToString("0.#", CultureInfo.InvariantCulture)} × " +
+              $"{firstPackage.Height.ToString("0.#", CultureInfo.InvariantCulture)} cm";
+
+        return string.Join(
+            " · ",
+            new[] { packageLabel, weight, dimensions }.Where(value => !string.IsNullOrWhiteSpace(value)));
     }
 
     private async Task EnsureAgentNotificationConnectionAsync()

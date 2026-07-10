@@ -143,6 +143,30 @@ public sealed class DeliveryServiceClientContractTests
         Assert.Equal("GoShip", rate.Provider);
     }
 
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.TooManyRequests)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    public async Task GetShippingRatesAsync_NonSuccessResponse_ThrowsWithDownstreamStatus(
+        HttpStatusCode statusCode)
+    {
+        using var response = new HttpResponseMessage(statusCode)
+        {
+            Content = JsonContent.Create(new { error = "downstream failure" })
+        };
+        var handler = new RecordingHandler(response);
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://delivery.test")
+        };
+        var client = new DeliveryServiceClient(http);
+
+        var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+            client.GetShippingRatesAsync(new ShippingRateRequestDto()));
+
+        Assert.Equal(statusCode, exception.StatusCode);
+    }
+
     [Fact]
     public async Task GetShippingCouriersAsync_TargetsDeliveryServiceCouriersRoute()
     {
