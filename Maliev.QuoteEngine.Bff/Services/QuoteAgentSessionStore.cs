@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
@@ -264,7 +266,13 @@ internal sealed class QuoteAgentSessionStore
                 !string.IsNullOrWhiteSpace(part.MaterialId) &&
                 part.Quantity > 0) &&
             !string.IsNullOrWhiteSpace(state.LeadTimeCode);
-        var hasAuthoritativePricing = state.Estimate?.IsAuthoritative == true;
+        var currentConfigurationFingerprint = ComputeConfigurationFingerprint(state);
+        var hasAuthoritativePricing = state.Estimate?.IsAuthoritative == true &&
+            !string.IsNullOrWhiteSpace(state.PricedConfigurationFingerprint) &&
+            string.Equals(
+                state.PricedConfigurationFingerprint,
+                currentConfigurationFingerprint,
+                StringComparison.Ordinal);
 
         var checkoutReady = state.Order is not null &&
             isAuthenticated &&
@@ -289,7 +297,9 @@ internal sealed class QuoteAgentSessionStore
                 hasAuthoritativePricing
                     ? "Authoritative pricing is available for the current configuration."
                     : state.Estimate is not null
-                        ? "A prototype estimate is available, but authoritative PricingService pricing is required before a formal quote."
+                        ? state.Estimate.IsAuthoritative
+                            ? "Authoritative pricing is stale because the quote configuration changed. Recalculate before a formal quote."
+                            : "A prototype estimate is available, but authoritative PricingService pricing is required before a formal quote."
                         : "Pricing waits for geometry and required configuration."),
             Gate("customer_authenticated", "Customer authenticated", isAuthenticated ? "passed" : "blocked",
                 isAuthenticated ? "Signed-in customer session is available." : "Sign in or sign up before durable quote, order, document, or payment actions."),
@@ -312,6 +322,69 @@ internal sealed class QuoteAgentSessionStore
         action.Status.Equals("pending_confirmation", StringComparison.OrdinalIgnoreCase) ||
         action.Status.Equals("available", StringComparison.OrdinalIgnoreCase) ||
         action.Status.Equals("selected", StringComparison.OrdinalIgnoreCase);
+
+    internal static string ComputeConfigurationFingerprint(QuoteAgentSessionState state)
+    {
+        lock (state.SyncRoot)
+        {
+            return ComputeConfigurationFingerprint(state.LeadTimeCode, state.Parts);
+        }
+    }
+
+    internal static string ComputeConfigurationFingerprint(
+        string? leadTimeCode,
+        IEnumerable<QuotePartDraftDto> parts)
+    {
+        var payload = new
+        {
+            leadTimeCode = NormalizeFingerprintCode(leadTimeCode),
+            parts = parts
+                .OrderBy(part => part.FileId)
+                .ThenBy(part => part.UploadId, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(part => part.StoragePath, StringComparer.OrdinalIgnoreCase)
+                .Select(part => new
+                {
+                    part.FileId,
+                    part.UploadId,
+                    part.StoragePath,
+                    processId = NormalizeFingerprintCode(part.ProcessId),
+                    materialId = NormalizeFingerprintCode(part.MaterialId),
+                    finishId = NormalizeFingerprintCode(part.FinishId),
+                    finishCode = NormalizeFingerprintCode(part.FinishCode),
+                    toleranceId = NormalizeFingerprintCode(part.ToleranceId),
+                    toleranceCode = NormalizeFingerprintCode(part.ToleranceCode),
+                    inspectionLevel = NormalizeFingerprintCode(part.InspectionLevel),
+                    roughnessCode = NormalizeFingerprintCode(part.RoughnessCode),
+                    color = NormalizeFingerprintCode(part.Color),
+                    processOptions = part.ProcessOptionValues
+                        .OrderBy(option => option.Key, StringComparer.OrdinalIgnoreCase)
+                        .Select(option => new
+                        {
+                            key = NormalizeFingerprintCode(option.Key),
+                            value = NormalizeFingerprintCode(option.Value)
+                        }),
+                    part.HasThreadedHoles,
+                    threadSpecification = NormalizeFingerprintCode(part.ThreadSpecification),
+                    part.ThreadedHoleCount,
+                    insertType = NormalizeFingerprintCode(part.InsertType),
+                    part.InsertCount,
+                    part.Quantity,
+                    part.VolumeCc,
+                    part.SurfaceAreaCm2,
+                    part.BoundingBoxMm,
+                    part.IsManifold,
+                    part.FdmReport,
+                    part.SlaReport,
+                    part.CncReport
+                })
+                .ToArray()
+        };
+        var json = JsonSerializer.Serialize(payload);
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(json))).ToLowerInvariant();
+    }
+
+    private static string NormalizeFingerprintCode(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim().ToUpperInvariant();
 
     public static bool HasDfmIssues(QuotePartDraftDto part)
     {
@@ -476,7 +549,7 @@ internal sealed class QuoteAgentSessionStore
         };
     }
 
-    private static QuotePartDraftDto ClonePart(QuotePartDraftDto source)
+    internal static QuotePartDraftDto ClonePart(QuotePartDraftDto source)
     {
         return new QuotePartDraftDto
         {
@@ -575,6 +648,8 @@ internal sealed class QuoteAgentSessionState
     public ShippingRateOptionDto? SelectedShippingRate { get; set; }
 
     public QuoteEstimateResponse? Estimate { get; set; }
+
+    public string? PricedConfigurationFingerprint { get; set; }
 
     public GenerateFormalQuoteResponse? FormalQuote { get; set; }
 

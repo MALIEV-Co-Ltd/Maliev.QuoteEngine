@@ -19,6 +19,29 @@ public interface IQePricingServiceClient
         string leadTimeCode,
         decimal? toleranceAdditionalCostPercent,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Calculates pricing with the canonical MaterialService code while preserving existing client implementations.
+    /// </summary>
+    Task<PricingCalculationResult?> CalculateAsync(
+        QuotePartDraftDto part,
+        Guid customerId,
+        Guid materialId,
+        string materialCode,
+        Guid manufacturingProcessId,
+        string leadTimeCode,
+        decimal? toleranceAdditionalCostPercent,
+        CancellationToken ct = default)
+    {
+        return CalculateAsync(
+            part,
+            customerId,
+            materialId,
+            manufacturingProcessId,
+            leadTimeCode,
+            toleranceAdditionalCostPercent,
+            ct);
+    }
 }
 
 internal sealed class PricingServiceClient(HttpClient http, ILogger<PricingServiceClient> logger) : IQePricingServiceClient
@@ -32,6 +55,27 @@ internal sealed class PricingServiceClient(HttpClient http, ILogger<PricingServi
         decimal? toleranceAdditionalCostPercent,
         CancellationToken ct = default)
     {
+        return await CalculateAsync(
+            part,
+            customerId,
+            materialId,
+            part.MaterialId,
+            manufacturingProcessId,
+            leadTimeCode,
+            toleranceAdditionalCostPercent,
+            ct);
+    }
+
+    public async Task<PricingCalculationResult?> CalculateAsync(
+        QuotePartDraftDto part,
+        Guid customerId,
+        Guid materialId,
+        string materialCode,
+        Guid manufacturingProcessId,
+        string leadTimeCode,
+        decimal? toleranceAdditionalCostPercent,
+        CancellationToken ct = default)
+    {
         try
         {
             var request = new PricingCalculationRequest
@@ -39,7 +83,7 @@ internal sealed class PricingServiceClient(HttpClient http, ILogger<PricingServi
                 FileId = part.FileId == Guid.Empty ? part.PartId : part.FileId,
                 CustomerId = customerId,
                 MaterialId = materialId,
-                MaterialCode = part.MaterialId,
+                MaterialCode = materialCode,
                 ManufacturingProcessId = manufacturingProcessId,
                 ManufacturingProcessName = part.ProcessId.ToUpperInvariant(),
                 Quantity = part.Quantity,

@@ -1210,6 +1210,13 @@ internal sealed class QuoteAgentService(
 
             var state = sessionStore.GetOrCreate(action.SessionId);
             state.CustomerId = customerId ?? state.CustomerId;
+            if (RequiresCommercialGateRevalidation(action.ActionType) &&
+                GetActionBlocker(state, action.ActionType, action.RequiresAuthentication) is { } blocker)
+            {
+                throw new InvalidOperationException(
+                    $"This action is no longer valid for the current quote configuration. {blocker.Detail}");
+            }
+
             var message = action.ActionType switch
             {
                 "draft_project" => await ExecuteDraftProjectAsync(state, customerId!.Value, action, cancellationToken),
@@ -1246,6 +1253,12 @@ internal sealed class QuoteAgentService(
             sessionStore.ReleaseActionLock(actionId);
         }
     }
+
+    private static bool RequiresCommercialGateRevalidation(string actionType) =>
+        actionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase) ||
+        actionType.Equals("quote_approval", StringComparison.OrdinalIgnoreCase) ||
+        actionType.Equals("create_order", StringComparison.OrdinalIgnoreCase) ||
+        actionType.Equals("start_payment", StringComparison.OrdinalIgnoreCase);
 
     public Task RelayThinkingStepAsync(
         Guid sessionId,
@@ -2153,15 +2166,22 @@ internal sealed class QuoteAgentService(
             .FirstOrDefault(gate => gate is not null && !gate.Status.Equals("passed", StringComparison.OrdinalIgnoreCase));
     }
 
-    private QuoteAgentStateResponse UpdatePartConfiguration(
+    private object UpdatePartConfiguration(
         QuoteAgentSessionState state,
         Dictionary<string, JsonElement> arguments)
     {
+        var configurationChanged = false;
         lock (state.SyncRoot)
         {
             var part = ResolvePart(state, arguments);
             if (part is not null)
             {
+                if (HasDurableCommercialState(state) && HasConfigurationMutation(arguments))
+                {
+                    return BuildCommercialStateLockedError(state, "update_part_configuration");
+                }
+
+                var previousFingerprint = QuoteAgentSessionStore.ComputeConfigurationFingerprint(state);
                 SetIfPresent(arguments, "process", value => part.ProcessId = value);
                 SetIfPresent(arguments, "material", value => part.MaterialId = value);
                 SetIfPresent(arguments, "finish", value =>
@@ -2184,10 +2204,39 @@ internal sealed class QuoteAgentService(
                 });
                 SetIfPresent(arguments, "lead_time", value => state.LeadTimeCode = value);
                 state.ConfigurationConfirmed = true;
+                configurationChanged = !string.Equals(
+                    previousFingerprint,
+                    QuoteAgentSessionStore.ComputeConfigurationFingerprint(state),
+                    StringComparison.Ordinal);
             }
         }
 
+        if (configurationChanged)
+        {
+            InvalidateDraftCommercialState(state);
+        }
+
         return ToStateResponse(state);
+    }
+
+    private static bool HasConfigurationMutation(IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        string[] configurationKeys = ["process", "material", "finish", "color", "tolerance", "quantity", "lead_time"];
+        return configurationKeys.Any(key => arguments.ContainsKey(key));
+    }
+
+    private static bool HasDurableCommercialState(QuoteAgentSessionState state) =>
+        state.FormalQuote is not null || state.Order is not null || state.Payment is not null;
+
+    private object BuildCommercialStateLockedError(QuoteAgentSessionState state, string actionType)
+    {
+        return new
+        {
+            error = "Draft configuration cannot change after a formal quote, order, or payment exists. Start a new quote revision instead.",
+            requiredGateCode = "commercial_state_locked",
+            actionType,
+            state = ToStateResponse(state)
+        };
     }
 
     private async Task<object> CalculateEstimateOrGateErrorAsync(
@@ -2259,6 +2308,7 @@ internal sealed class QuoteAgentService(
     {
         List<QuotePartDraftDto> parts;
         string leadTimeCode;
+        string configurationFingerprint;
         Guid sessionId;
         lock (state.SyncRoot)
         {
@@ -2267,8 +2317,9 @@ internal sealed class QuoteAgentService(
                 return null;
             }
 
-            parts = state.Parts.ToList();
+            parts = state.Parts.Select(QuoteAgentSessionStore.ClonePart).ToList();
             leadTimeCode = state.LeadTimeCode;
+            configurationFingerprint = QuoteAgentSessionStore.ComputeConfigurationFingerprint(leadTimeCode, parts);
             sessionId = state.SessionId;
         }
 
@@ -2308,7 +2359,17 @@ internal sealed class QuoteAgentService(
 
         lock (state.SyncRoot)
         {
+            var currentFingerprint = QuoteAgentSessionStore.ComputeConfigurationFingerprint(state);
+            if (!string.Equals(configurationFingerprint, currentFingerprint, StringComparison.Ordinal))
+            {
+                logger.LogWarning(
+                    "Discarding PricingService estimate for quote session {QuoteSessionId} because configuration changed during calculation.",
+                    sessionId);
+                return null;
+            }
+
             state.Estimate = estimate;
+            state.PricedConfigurationFingerprint = estimate is null ? null : configurationFingerprint;
             if (estimate is not null)
             {
                 UpsertArtifact(state, "pricing", "Pricing estimate", FormatEstimateStatus(estimate), null, null);
@@ -2587,14 +2648,15 @@ internal sealed class QuoteAgentService(
             foreach (var part in parts)
             {
                 var processId = await materialCatalog.ResolveProcessIdAsync(part.ProcessId, cancellationToken);
-                var materialId = await materialCatalog.ResolveMaterialIdAsync(
+                var material = await materialCatalog.ResolveMaterialAsync(
                     part.ProcessId,
                     part.MaterialId,
                     cancellationToken);
                 var serviceResult = await pricingClient.CalculateAsync(
                     part,
                     customerId,
-                    materialId,
+                    material.Id,
+                    material.Code,
                     processId,
                     leadTimeCode,
                     ResolveToleranceAdditionalCostPercent(part),
@@ -4730,6 +4792,14 @@ internal sealed class QuoteAgentService(
             }
         }
 
+        lock (state.SyncRoot)
+        {
+            if (HasDurableCommercialState(state) && attachments.Any(IsGeometryChangingAttachment))
+            {
+                return BuildCommercialStateLockedError(state, "register_uploads");
+            }
+        }
+
         var requirements = ReadString(arguments, "requirements") ?? "Register uploaded manufacturing files.";
         var request = new QuoteAgentMessageRequest
         {
@@ -4743,6 +4813,12 @@ internal sealed class QuoteAgentService(
         MaterializePrototypeParts(state, request);
         return ToStateResponse(state);
     }
+
+    private static bool IsGeometryChangingAttachment(QuoteAgentAttachmentDto attachment) =>
+        QuoteUploadConstraints.IsSupportedCadFileName(attachment.FileName) ||
+        attachment.Kind.Equals("cad", StringComparison.OrdinalIgnoreCase) ||
+        attachment.Kind.Equals("geometry", StringComparison.OrdinalIgnoreCase) ||
+        attachment.Kind.Equals("3d", StringComparison.OrdinalIgnoreCase);
 
     private QuoteAgentConnectorRegistryResponse BuildConnectorRegistry(QuoteAgentSessionState state)
     {
@@ -5320,6 +5396,7 @@ internal sealed class QuoteAgentService(
             state.Artifacts.Clear();
             state.ProposedActions.Clear();
             state.Estimate = null;
+            state.PricedConfigurationFingerprint = null;
             state.FormalQuote = null;
             state.QuoteApproved = false;
             state.Order = null;
@@ -6969,6 +7046,11 @@ internal sealed class QuoteAgentService(
 
         lock (state.SyncRoot)
         {
+            if (HasDurableCommercialState(state))
+            {
+                return;
+            }
+
             foreach (var attachment in geometryAttachments)
             {
                 var uploadId = ResolveUploadId(attachment);
@@ -6990,11 +7072,11 @@ internal sealed class QuoteAgentService(
 
             ApplyMessageConfiguration(state, request.Message);
             state.ConfigurationConfirmed = false;
-            ResetCommercialStateAfterGeometryChange(state);
+            InvalidateDraftCommercialState(state);
         }
     }
 
-    private static void SupersedeGeometryRevisions(
+    private void SupersedeGeometryRevisions(
         QuoteAgentSessionState state,
         IReadOnlyCollection<UploadRegistration> registrations)
     {
@@ -7033,21 +7115,35 @@ internal sealed class QuoteAgentService(
             }
 
             state.Artifacts.RemoveAll(artifact => artifact.PartId.HasValue && removedPartIds.Contains(artifact.PartId.Value));
-            ResetCommercialStateAfterGeometryChange(state);
+            InvalidateDraftCommercialState(state);
             state.ConfigurationConfirmed = false;
         }
     }
 
-    private static void ResetCommercialStateAfterGeometryChange(QuoteAgentSessionState state)
+    private void InvalidateDraftCommercialState(QuoteAgentSessionState state)
     {
-        state.ProposedActions.Clear();
-        state.Estimate = null;
-        state.FormalQuote = null;
-        state.QuoteApproved = false;
-        state.Order = null;
-        state.Payment = null;
-        state.Artifacts.RemoveAll(IsCommercialArtifact);
+        sessionStore.RemovePendingActions(state, IsDraftDependentPendingAction);
+        lock (state.SyncRoot)
+        {
+            state.Estimate = null;
+            state.PricedConfigurationFingerprint = null;
+            state.FormalQuote = null;
+            state.QuoteApproved = false;
+            state.Order = null;
+            state.Payment = null;
+            state.LastShippingDestination = null;
+            state.ShippingRateOptions.Clear();
+            state.SelectedShippingRate = null;
+            state.Artifacts.RemoveAll(IsCommercialArtifact);
+        }
     }
+
+    private static bool IsDraftDependentPendingAction(QuoteAgentProposedActionDto action) =>
+        action.ActionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase) ||
+        action.ActionType.Equals("quote_approval", StringComparison.OrdinalIgnoreCase) ||
+        action.ActionType.Equals("create_order", StringComparison.OrdinalIgnoreCase) ||
+        action.ActionType.Equals("start_payment", StringComparison.OrdinalIgnoreCase) ||
+        action.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsPricingArtifact(QuoteAgentArtifactDto artifact) =>
         artifact.ArtifactType.Equals("pricing", StringComparison.OrdinalIgnoreCase);
@@ -9047,6 +9143,20 @@ Customer message:
         var insertedGroundedLine = false;
         foreach (var line in lines)
         {
+            if (TryGroundMixedThaiFormalQuoteAvailabilityClaim(
+                    line,
+                    insertedGroundedLine ? string.Empty : groundedLine,
+                    out var groundedMixedLine))
+            {
+                if (!string.IsNullOrWhiteSpace(groundedMixedLine))
+                {
+                    groundedLines.Add(groundedMixedLine);
+                }
+
+                insertedGroundedLine = true;
+                continue;
+            }
+
             if (ContainsFormalQuoteAvailabilityClaim(line))
             {
                 if (!insertedGroundedLine)
@@ -9090,6 +9200,45 @@ Customer message:
         }
 
         return insertedGroundedLine ? string.Join('\n', groundedLines).Trim() : content;
+    }
+
+    private static bool TryGroundMixedThaiFormalQuoteAvailabilityClaim(
+        string content,
+        string groundedLine,
+        out string groundedContent)
+    {
+        groundedContent = content;
+        if (!content.Contains("ใบเสนอราคาอย่างเป็นทางการ", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var claim = Regex.Match(
+            content,
+            @"(?:(?:ตอนนี้|ขณะนี้)\s*)?ใบเสนอราคา(?:อย่างเป็นทางการ)?\s*(?:พร้อมแล้ว|จัดทำแล้ว|สร้างแล้ว|เสร็จแล้ว)(?:\s*[,，]?\s*ดาวน์โหลดได้(?:เลย)?)?(?:\s*[,，]?\s*และ\s*(?:น้องมะลิ|ฉัน|เรา)\s*(?:ได้)?(?:จัดทำ|สร้าง|เตรียม)(?:ไว้)?(?:ใน|ไว้ใน)\s*(?:แผง\s*)?Artifacts)?(?:\s*คุณสามารถตรวจสอบรายละเอียดได้เลย(?:ค่ะ|ครับ)?)?(?:\s+(?:ยอดรวม|มูลค่า)\s*[0-9][0-9,]*(?:\.[0-9]+)?\s*(?:[A-Z]{3}|บาท))?",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (!claim.Success)
+        {
+            return false;
+        }
+
+        var trailingText = content[(claim.Index + claim.Length)..].TrimStart();
+        if (trailingText.StartsWith("?", StringComparison.Ordinal) ||
+            trailingText.StartsWith("？", StringComparison.Ordinal) ||
+            trailingText.StartsWith("ไหม", StringComparison.Ordinal) ||
+            trailingText.StartsWith("หรือไม่", StringComparison.Ordinal) ||
+            trailingText.StartsWith("หรือยัง", StringComparison.Ordinal) ||
+            trailingText.StartsWith("หรือเปล่า", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var prefix = content[..claim.Index].TrimEnd();
+        var suffix = content[(claim.Index + claim.Length)..].TrimStart();
+        groundedContent = string.Join(
+            ' ',
+            new[] { prefix, groundedLine, suffix }.Where(segment => !string.IsNullOrWhiteSpace(segment)));
+        return true;
     }
 
     private static bool ContainsFormalQuoteAvailabilityClaim(string content)

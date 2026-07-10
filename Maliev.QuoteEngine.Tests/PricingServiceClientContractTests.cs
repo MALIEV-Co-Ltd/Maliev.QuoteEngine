@@ -44,7 +44,7 @@ public sealed class PricingServiceClientContractTests
                 FileId = fileId,
                 PartId = Guid.NewGuid(),
                 ProcessId = "cnc",
-                MaterialId = "al6061",
+                MaterialId = "legacy-aluminum",
                 Quantity = 2,
                 VolumeCc = 12.5m,
                 SurfaceAreaCm2 = 88.2m,
@@ -54,6 +54,7 @@ public sealed class PricingServiceClientContractTests
             },
             customerId,
             materialId,
+            "AL6061",
             processId,
             "STANDARD",
             8m);
@@ -70,7 +71,7 @@ public sealed class PricingServiceClientContractTests
         Assert.Equal(fileId, body.GetProperty("fileId").GetGuid());
         Assert.Equal(customerId, body.GetProperty("customerId").GetGuid());
         Assert.Equal(materialId, body.GetProperty("materialId").GetGuid());
-        Assert.Equal("al6061", body.GetProperty("materialCode").GetString());
+        Assert.Equal("AL6061", body.GetProperty("materialCode").GetString());
         Assert.Equal(processId, body.GetProperty("manufacturingProcessId").GetGuid());
         Assert.Equal("CNC", body.GetProperty("manufacturingProcessName").GetString());
         Assert.Equal(2m, body.GetProperty("quantity").GetDecimal());

@@ -89,6 +89,20 @@ public sealed class ThinkingStepSummarizerTests
     }
 
     [Fact]
+    public void Summarize_prepare_formal_quote_reports_that_confirmation_is_still_required()
+    {
+        var step = new QuoteAgentThinkingStepDto
+        {
+            Type = "quote_prepare_formal_quote",
+            Detail = """Arguments: {"requirements":"Generate the reviewed formal quote."}"""
+        };
+
+        ThinkingStepSummarizer.Summarize(step);
+
+        Assert.Equal("Awaiting confirmation to prepare formal quote", step.Summary);
+    }
+
+    [Fact]
     public void Summarize_quote_generate_3d_preview_request_is_readable_without_ids()
     {
         var step = new QuoteAgentThinkingStepDto

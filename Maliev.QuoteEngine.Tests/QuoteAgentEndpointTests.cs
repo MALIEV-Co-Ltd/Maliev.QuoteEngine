@@ -2513,6 +2513,138 @@ Customer message:
         Assert.Contains("authoritative line total", estimateLine.Notes, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public async Task Agent_priced_gate_requires_estimate_for_current_configuration_fingerprint()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = scopedFactory.CreateClient();
+        var sessionId = await StartPricedCadSessionAsync(client);
+        var sessionStore = scopedFactory.Services.GetRequiredService<QuoteAgentSessionStore>();
+        var internalState = sessionStore.GetOrCreate(sessionId);
+
+        lock (internalState.SyncRoot)
+        {
+            internalState.Parts[0].Quantity += 1;
+        }
+
+        var state = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+
+        Assert.NotNull(state.Estimate);
+        Assert.Contains(state.Gates, gate => gate.Code == "priced" && gate.Status == "pending");
+    }
+
+    [Fact]
+    public async Task Agent_draft_configuration_change_invalidates_stale_commercial_and_shipping_state()
+    {
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [CreateShippingRateOption()] }
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = await CreateSignedInClientAsync(
+            scopedFactory,
+            $"agent-config-invalidation-{Guid.NewGuid():N}@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        await ExecuteToolAsync(client, sessionId, "quote_get_shipping_rates", CreateShippingRateArguments());
+        var pendingFormalState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        var pendingFormalAction = Assert.Single(pendingFormalState.ProposedActions, action =>
+            action.ActionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(pendingFormalState.Estimate);
+        Assert.Contains(pendingFormalState.Artifacts, artifact => artifact.ArtifactType == "pricing");
+
+        var changedState = await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_update_part_configuration",
+            new Dictionary<string, JsonElement>
+            {
+                ["quantity"] = JsonSerializer.SerializeToElement("26", JsonOptions)
+            });
+
+        Assert.Null(changedState.Estimate);
+        Assert.DoesNotContain(changedState.Artifacts, artifact =>
+            artifact.ArtifactType is "pricing" or "formal_quote" or "order" or "payment");
+        Assert.DoesNotContain(changedState.ProposedActions, action =>
+            action.ActionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase) ||
+            action.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(changedState.Gates, gate => gate.Code == "priced" && gate.Status == "pending");
+
+        var internalState = scopedFactory.Services.GetRequiredService<QuoteAgentSessionStore>().GetOrCreate(sessionId);
+        Assert.Empty(internalState.ShippingRateOptions);
+        Assert.Null(internalState.SelectedShippingRate);
+
+        using var staleConfirmation = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{pendingFormalAction.ActionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest());
+        Assert.Equal(HttpStatusCode.NotFound, staleConfirmation.StatusCode);
+    }
+
+    [Fact]
+    public async Task Agent_configuration_change_is_rejected_after_formal_quote_creation()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(
+            scopedFactory,
+            $"agent-config-locked-{Guid.NewGuid():N}@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+        var pendingState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        var pendingAction = Assert.Single(pendingState.ProposedActions, action =>
+            action.ActionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+        var formalResult = await ConfirmActionAsync(client, pendingAction.ActionId);
+        var originalPart = Assert.Single(formalResult.State!.Parts);
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_update_part_configuration",
+            new Dictionary<string, JsonElement>
+            {
+                ["quantity"] = JsonSerializer.SerializeToElement("99", JsonOptions)
+            });
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal("commercial_state_locked", document.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Contains("formal quote", document.RootElement.GetProperty("error").GetString(), StringComparison.OrdinalIgnoreCase);
+        var state = document.RootElement.GetProperty("state").Deserialize<QuoteAgentStateResponse>(JsonOptions);
+        Assert.NotNull(state);
+        Assert.Equal(originalPart.Quantity, Assert.Single(state.Parts).Quantity);
+        Assert.NotNull(state.Estimate);
+        Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
+    }
+
+    [Fact]
+    public async Task Agent_formal_quote_confirmation_revalidates_current_pricing_fingerprint()
+    {
+        await using var scopedFactory = CreateAgentFactory();
+        using var client = await CreateSignedInClientAsync(
+            scopedFactory,
+            $"agent-formal-stale-fingerprint-{Guid.NewGuid():N}@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+        var pendingState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        var pendingAction = Assert.Single(pendingState.ProposedActions, action =>
+            action.ActionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+        var internalState = scopedFactory.Services.GetRequiredService<QuoteAgentSessionStore>().GetOrCreate(sessionId);
+
+        lock (internalState.SyncRoot)
+        {
+            internalState.Parts[0].Quantity += 1;
+        }
+
+        using var response = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/actions/{pendingAction.ActionId:D}/confirm",
+            new QuoteAgentConfirmActionRequest());
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var currentState = await ExecuteToolForStateAsync(client, sessionId, "quote_get_state");
+        Assert.DoesNotContain(currentState.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
+        Assert.Contains(currentState.Gates, gate => gate.Code == "priced" && gate.Status == "pending");
+    }
+
     [Theory]
     [InlineData("en", "Your formal quote is ready and available to download.", "awaiting your confirmation", null)]
     [InlineData("en", "Your formal quote has been generated and completed.", "awaiting your confirmation", null)]
@@ -2524,6 +2656,7 @@ Customer message:
     [InlineData("en", "**Your formal quote is ready.**", "awaiting your confirmation", null)]
     [InlineData("th", "- ใบเสนอราคาอย่างเป็นทางการพร้อมแล้ว", "รอการยืนยัน", null)]
     [InlineData("th", "**ใบเสนอราคาอย่างเป็นทางการพร้อมแล้ว**", "รอการยืนยัน", null)]
+    [InlineData("th", "ก่อนอื่น น้องมะลิขออนุญาตยืนยันใบเสนอราคาอย่างเป็นทางการก่อนนะคะ ตอนนี้ใบเสนอราคาพร้อมแล้ว และน้องมะลิได้สร้างไว้ในแผง Artifacts คุณสามารถตรวจสอบรายละเอียดได้เลยค่ะ\n\nคุณพร้อมที่จะยืนยันใบเสนอราคานี้หรือไม่คะ?", "รอการยืนยัน", "ก่อนอื่น น้องมะลิขออนุญาตยืนยันใบเสนอราคาอย่างเป็นทางการก่อนนะคะ")]
     [InlineData("en", "Your formal quote is ready and available in Artifacts for 12,345 THB.", "awaiting your confirmation", null)]
     public async Task Agent_grounding_treats_pending_formal_quote_as_awaiting_confirmation(
         string language,
@@ -2672,6 +2805,8 @@ Customer message:
     [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการยังไม่พร้อม")]
     [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการพร้อมแล้วหรือยัง")]
     [InlineData("th", "ช่วยบอกได้ไหมว่าใบเสนอราคาอย่างเป็นทางการพร้อมหรือยัง? ลูกค้ายังต้องตรวจสอบ")]
+    [InlineData("th", "ตอนนี้ใบเสนอราคาอย่างเป็นทางการยังไม่พร้อม และจะปรากฏใน Artifacts หลังยืนยัน")]
+    [InlineData("th", "หากลูกค้ายืนยัน ใบเสนอราคาอย่างเป็นทางการจะพร้อมใน Artifacts")]
     public async Task Agent_grounding_preserves_non_availability_formal_quote_language(
         string language,
         string modelText)
@@ -5031,7 +5166,7 @@ Customer message:
     }
 
     [Fact]
-    public async Task Agent_register_uploads_clears_commercial_state_after_new_geometry()
+    public async Task Agent_register_uploads_rejects_geometry_changes_after_payment()
     {
         await using var scopedFactory = CreateAgentFactory();
         using var client = await CreateSignedInClientAsync(scopedFactory, "agent-reupload-after-payment@example.com");
@@ -5071,7 +5206,7 @@ Customer message:
         Assert.Contains(paymentResult.State.Artifacts, artifact => artifact.ArtifactType == "order");
         Assert.Contains(paymentResult.State.Artifacts, artifact => artifact.ArtifactType == "payment");
 
-        var reuploadedState = await ExecuteToolForStateAsync(
+        var reuploadJson = await ExecuteToolAsync(
             client,
             sessionId,
             "quote_register_uploads",
@@ -5091,19 +5226,22 @@ Customer message:
                     }
                 }, JsonOptions)
             });
+        using var reuploadDocument = JsonDocument.Parse(reuploadJson);
 
-        Assert.Null(reuploadedState.Estimate);
-        Assert.Empty(reuploadedState.ProposedActions);
-        Assert.Contains(reuploadedState.Parts, part => part.UploadId == "fixture-cover-rev-b-upload");
-        Assert.DoesNotContain(reuploadedState.Artifacts, artifact => artifact.ArtifactType == "pricing");
-        Assert.DoesNotContain(reuploadedState.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
-        Assert.DoesNotContain(reuploadedState.Artifacts, artifact => artifact.ArtifactType == "order");
-        Assert.DoesNotContain(reuploadedState.Artifacts, artifact => artifact.ArtifactType == "payment");
-        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "priced" && gate.Status == "pending");
-        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "quote_artifact_ready" && gate.Status == "pending");
-        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "quote_approved" && gate.Status == "pending");
-        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "order_created" && gate.Status == "pending");
-        Assert.Contains(reuploadedState.Gates, gate => gate.Code == "payment_started_or_completed" && gate.Status == "pending");
+        Assert.Equal("commercial_state_locked", reuploadDocument.RootElement.GetProperty("requiredGateCode").GetString());
+        var preservedState = reuploadDocument.RootElement.GetProperty("state").Deserialize<QuoteAgentStateResponse>(JsonOptions);
+        Assert.NotNull(preservedState);
+        Assert.NotNull(preservedState.Estimate);
+        Assert.DoesNotContain(preservedState.Parts, part => part.UploadId == "fixture-cover-rev-b-upload");
+        Assert.Contains(preservedState.Artifacts, artifact => artifact.ArtifactType == "pricing");
+        Assert.Contains(preservedState.Artifacts, artifact => artifact.ArtifactType == "formal_quote");
+        Assert.Contains(preservedState.Artifacts, artifact => artifact.ArtifactType == "order");
+        Assert.Contains(preservedState.Artifacts, artifact => artifact.ArtifactType == "payment");
+        Assert.Contains(preservedState.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(preservedState.Gates, gate => gate.Code == "quote_artifact_ready" && gate.Status == "passed");
+        Assert.Contains(preservedState.Gates, gate => gate.Code == "quote_approved" && gate.Status == "passed");
+        Assert.Contains(preservedState.Gates, gate => gate.Code == "order_created" && gate.Status == "passed");
+        Assert.Contains(preservedState.Gates, gate => gate.Code == "payment_started_or_completed" && gate.Status == "passed");
     }
 
     [Fact]

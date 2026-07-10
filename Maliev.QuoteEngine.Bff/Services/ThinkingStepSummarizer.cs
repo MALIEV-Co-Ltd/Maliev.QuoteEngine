@@ -79,7 +79,7 @@ internal static class ThinkingStepSummarizer
             _ when tool.Contains("focus_ui") => "Updated workspace view",
             _ when tool.Contains("get_settings") => "Checked session settings",
             _ when tool.Contains("update_settings") => "Updated session settings",
-            _ when tool.Contains("prepare_quote") || tool.Contains("formal_quote") => "Prepared formal quote",
+            _ when tool.Contains("prepare_quote") || tool.Contains("formal_quote") => "Awaiting confirmation to prepare formal quote",
             _ when tool.Contains("approve_quote") || tool.Contains("quote_approval") => "Approved formal quote",
             _ when tool.Contains("acknowledge") || tool.Contains("dfm") => "Reviewed DFM findings",
             _ when tool.Contains("checkout") => "Saved checkout details",
