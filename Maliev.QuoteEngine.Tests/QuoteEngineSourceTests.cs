@@ -2738,42 +2738,64 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_groups_uploaded_files_with_previews_view_toggle_and_linked_dfm()
+    public void QuoteAgentLaunchShell_renders_a_compact_deduplicated_workbench_before_the_selected_preview()
     {
         var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
-        var uploadedSection = ExtractSourceBlock(
+        var drawer = ExtractSourceBlock(shell, "qe-agent-artifact-drawer", "</aside>");
+        var workbenchSection = ExtractSourceBlock(
             shell,
-            "<section class=\"qe-agent-artifact-section qe-agent-artifact-section--uploaded\"",
-            "@if (MessageSketches.Count > 0)");
-        var generatedSection = ExtractSourceBlock(
-            shell,
-            "@if (VisibleDrawerArtifacts.Count > 0)",
-            "else if (UploadedParts.Count == 0 && MessageSketches.Count == 0)");
+            "<section class=\"qe-agent-workbench-files\"",
+            "@if (HasSelectedWorkbenchPreview)");
 
-        Assert.Contains("role=\"switch\"", uploadedSection, StringComparison.Ordinal);
-        Assert.Contains("aria-checked=\"@AriaChecked(_uploadedFilesCardView)\"", uploadedSection, StringComparison.Ordinal);
-        Assert.Contains("@onclick=\"ToggleUploadedFilesView\"", uploadedSection, StringComparison.Ordinal);
-        Assert.Contains("class=\"@UploadedFilesGridClass\"", uploadedSection, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-upload-preview\"", uploadedSection, StringComparison.Ordinal);
-        Assert.Contains("part.ThumbnailUrl", uploadedSection, StringComparison.Ordinal);
-        Assert.Contains("UploadedPartIcon(part)", uploadedSection, StringComparison.Ordinal);
-        Assert.Contains("UploadedPartDfmTitle(part)", uploadedSection, StringComparison.Ordinal);
-        Assert.Contains("UploadedPartDfmStatus(part)", uploadedSection, StringComparison.Ordinal);
+        Assert.True(
+            drawer.IndexOf("qe-agent-workbench-files", StringComparison.Ordinal) <
+            drawer.IndexOf("qe-agent-workbench-preview", StringComparison.Ordinal));
+        Assert.Contains("role=\"group\"", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("aria-pressed=\"@AriaPressed(!_uploadedFilesCardView)\"", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("aria-pressed=\"@AriaPressed(_uploadedFilesCardView)\"", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"@(() => SetUploadedFilesView(false))\"", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"@(() => SetUploadedFilesView(true))\"", workbenchSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("role=\"switch\"", workbenchSection, StringComparison.Ordinal);
+        Assert.DoesNotContain("aria-checked", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("private bool _uploadedFilesCardView;", shell, StringComparison.Ordinal);
+        Assert.Contains("class=\"@WorkbenchFilesGridClass\"", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var attachment in WorkbenchPendingAttachments)", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var (index, part) in UniqueUploadedPartsWithIndex)", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var sketch in MessageSketches)", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var artifact in VisibleDrawerArtifacts)", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-upload-preview\"", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("part.ThumbnailUrl", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("UploadedPartIcon(part)", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("UploadedPartDfmTitle(part)", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("UploadedPartDfmStatus(part)", workbenchSection, StringComparison.Ordinal);
+        Assert.Contains("Add files", drawer, StringComparison.Ordinal);
+        Assert.Contains("Google Drive", drawer, StringComparison.Ordinal);
+        Assert.Contains("AttachFromGoogleDriveAsync", drawer, StringComparison.Ordinal);
         Assert.Contains("qe-agent-artifact-upload-card", shell, StringComparison.Ordinal);
         Assert.Contains("VisibleDrawerArtifacts", shell, StringComparison.Ordinal);
         Assert.Contains("ShouldShowStandaloneArtifact", shell, StringComparison.Ordinal);
         Assert.Contains("LinkedDfmArtifact(part)", shell, StringComparison.Ordinal);
         Assert.Contains("ResolveDfmArtifactPart(artifact) is null", shell, StringComparison.Ordinal);
-        Assert.Contains("@foreach (var artifact in VisibleDrawerArtifacts)", generatedSection, StringComparison.Ordinal);
-        Assert.DoesNotContain("_artifacts.Where(QuoteAgentUiHelpers.IsVisibleArtifact)", generatedSection, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-artifacts--cards", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-artifacts--list", styles, StringComparison.Ordinal);
+        Assert.Contains(".GroupBy(WorkbenchArtifactKey, StringComparer.OrdinalIgnoreCase)", shell, StringComparison.Ordinal);
+        Assert.Contains("!seen.Any(item => item.Matches(identity))", shell, StringComparison.Ordinal);
+        Assert.Contains("result.Any(item => item.Matches(attachment))", shell, StringComparison.Ordinal);
+        Assert.Contains("private int ArtifactCount => WorkbenchPendingAttachments.Count +", shell, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentUiHelpers.FormatCustomerStatus", shell, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentUiHelpers.FormatVolume", shell, StringComparison.Ordinal);
+        Assert.Contains("private bool HasSelectedWorkbenchPreview", shell, StringComparison.Ordinal);
+        Assert.Contains("CollapseWorkbenchPreview", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("@selectedGeneratedViewer.Status", drawer, StringComparison.Ordinal);
+        Assert.DoesNotContain("{part.VolumeCc:0.##} cc", shell, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-workbench-files--cards", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-workbench-files--list", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-workbench-view-group", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-workbench-preview", styles, StringComparison.Ordinal);
+        Assert.DoesNotContain("min-height: clamp(300px, 38dvh, 420px);", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-artifact-upload-card", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-upload-view-switch", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-preview", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-upload-dfm", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-artifact-section-header", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-workbench-files-header", styles, StringComparison.Ordinal);
         // Failed DFM checks must be named in the uploaded-files list, not just counted.
         Assert.Contains("FailedDfmChecks(part)", shell, StringComparison.Ordinal);
         Assert.Contains("DfmCheckScopeLabel(part, failedCheck)", shell, StringComparison.Ordinal);

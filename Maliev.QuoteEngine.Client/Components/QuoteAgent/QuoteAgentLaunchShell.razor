@@ -1957,14 +1957,15 @@
     {
         <aside class="@($"qe-agent-artifact-drawer {UiFocusClass("artifacts", "workbench")}")" aria-label="@Text("Quote artifacts", "ไฟล์งานใบเสนอราคา")">
             <header>
-                <div>
+                <div class="qe-agent-workbench-heading">
                     <span>@Text("Workbench", "พื้นที่งาน")</span>
-                    <strong>@Text("Artifacts", "ไฟล์งาน")</strong>
+                    <strong>@Text("Project files", "ไฟล์โปรเจกต์")</strong>
+                    <small>@WorkbenchFileCountLabel</small>
                 </div>
                 <div class="qe-agent-artifact-header-actions">
                     @if (!string.IsNullOrWhiteSpace(UploadInputElementId))
                     {
-                        <label class="qe-agent-round-btn qe-agent-artifact-upload-btn"
+                        <label class="qe-agent-workbench-action qe-agent-artifact-upload-btn"
                                for="@UploadInputElementId"
                                role="button"
                                tabindex="0"
@@ -1973,32 +1974,223 @@
                                data-upload-input-id="@UploadInputElementId"
                                data-upload-accept="@UploadAcceptForCategory(UploadPickerAll)">
                             <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
+                            <span>@Text("Add files", "เพิ่มไฟล์")</span>
                         </label>
                     }
                     else
                     {
                         <button type="button"
-                                class="qe-agent-round-btn qe-agent-artifact-upload-btn"
+                                class="qe-agent-workbench-action qe-agent-artifact-upload-btn"
                                 title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
                                 aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
                                 @onclick="@(() => RequestUploadAsync(UploadPickerAll))">
                             <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
+                            <span>@Text("Add files", "เพิ่มไฟล์")</span>
                         </button>
                     }
+                    <button type="button"
+                            class="qe-agent-workbench-action"
+                            disabled="@_drivePickerOpening"
+                            title="@Text("Attach files from Google Drive", "แนบไฟล์จาก Google Drive")"
+                            @onclick="AttachFromGoogleDriveAsync">
+                        <span class="qe-agent-workbench-drive-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false">
+                                <path fill="#1a73e8" d="M8.7 3.5h6.6l6.2 10.8h-6.7L8.7 3.5Z" />
+                                <path fill="#fbbc04" d="M2.5 14.3 8.7 3.5l3.3 5.8-2.9 5H2.5Z" />
+                                <path fill="#34a853" d="M5.8 20.5 2.5 14.3h12.3l3.5 6.2H5.8Z" />
+                            </svg>
+                        </span>
+                        <span>@Text("Google Drive", "Google Drive")</span>
+                    </button>
                     <button type="button" class="qe-agent-round-btn" @onclick="ToggleArtifactPanel" title="@Text("Close", "ปิด")">
                         <MudIcon Icon="@Icons.Material.Outlined.Close" Size="Size.Small" />
                     </button>
                 </div>
             </header>
-            @if (ArtifactCount == 0)
-            {
-                <p class="qe-agent-muted">@Text("Add files with the upload button above, or they will appear here as the assistant works: viewer, DFM reports, estimates, quote PDFs, order records, and payment handoffs.", "เพิ่มไฟล์ด้วยปุ่มอัปโหลดด้านบน หรือไฟล์จะปรากฏที่นี่เมื่อผู้ช่วยทำงาน เช่น โมเดล รายงาน DFM ราคา ใบเสนอราคา คำสั่งซื้อ และการชำระเงิน")</p>
-            }
-            else
+
+            <section class="qe-agent-workbench-files" aria-label="@Text("Project file explorer", "ตัวสำรวจไฟล์โปรเจกต์")">
+                <header class="qe-agent-workbench-files-header">
+                    <div>
+                        <span>@Text("Files", "ไฟล์")</span>
+                        <small>@Text("Shared by you and the assistant", "ใช้งานร่วมกันระหว่างคุณกับผู้ช่วย")</small>
+                    </div>
+                    <div class="qe-agent-workbench-view-group"
+                         role="group"
+                         aria-label="@Text("File layout", "รูปแบบการแสดงไฟล์")">
+                        <button type="button"
+                                class="@WorkbenchViewButtonClass(false)"
+                                aria-pressed="@AriaPressed(!_uploadedFilesCardView)"
+                                title="@Text("Compact list", "รายการแบบกระชับ")"
+                                @onclick="@(() => SetUploadedFilesView(false))">
+                            <MudIcon Icon="@Icons.Material.Outlined.ViewList" Size="Size.Small" />
+                            <span>@Text("List", "รายการ")</span>
+                        </button>
+                        <button type="button"
+                                class="@WorkbenchViewButtonClass(true)"
+                                aria-pressed="@AriaPressed(_uploadedFilesCardView)"
+                                title="@Text("Thumbnail cards", "การ์ดภาพตัวอย่าง")"
+                                @onclick="@(() => SetUploadedFilesView(true))">
+                            <MudIcon Icon="@Icons.Material.Outlined.GridView" Size="Size.Small" />
+                            <span>@Text("Cards", "การ์ด")</span>
+                        </button>
+                    </div>
+                </header>
+                @if (ArtifactCount == 0)
+                {
+                    <div class="qe-agent-workbench-empty">
+                        <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Medium" />
+                        <div>
+                            <span>@Text("No project files yet", "ยังไม่มีไฟล์โปรเจกต์")</span>
+                            <small>@Text("Add a file or choose one from Google Drive. Generated quotes and outputs will appear here too.", "เพิ่มไฟล์หรือเลือกจาก Google Drive ใบเสนอราคาและผลลัพธ์ที่สร้างขึ้นจะแสดงที่นี่ด้วย")</small>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="@WorkbenchFilesGridClass">
+                        @foreach (var attachment in WorkbenchPendingAttachments)
+                        {
+                            <button type="button"
+                                    class="@WorkbenchAttachmentCardClass(attachment)"
+                                    disabled="@IsComposerUploadPending(attachment)"
+                                    @onclick="@(() => OpenWorkbenchAttachmentPreview(attachment))">
+                                <span class="qe-agent-upload-preview" aria-hidden="true">
+                                    @if (!string.IsNullOrWhiteSpace(attachment.PreviewUrl))
+                                    {
+                                        <img src="@attachment.PreviewUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@UploadedPartIcon(attachment)" Size="Size.Small" />
+                                    }
+                                    @if (IsComposerUploadPending(attachment))
+                                    {
+                                        <span class="qe-agent-workbench-uploading-indicator"></span>
+                                    }
+                                </span>
+                                <div class="qe-agent-upload-copy">
+                                    <span class="qe-agent-upload-title-row">
+                                        <strong>@attachment.FileName</strong>
+                                        <small>@Text("In composer", "อยู่ในกล่องข้อความ")</small>
+                                    </span>
+                                    <small>@AttachmentStatusLabel(attachment)</small>
+                                    <small>@QuoteAgentUiHelpers.FormatFileSize(attachment.FileSizeBytes)</small>
+                                </div>
+                            </button>
+                        }
+                        @foreach (var (index, part) in UniqueUploadedPartsWithIndex)
+                        {
+                            <button type="button"
+                                    class="@UploadedFileCardClass(index, part)"
+                                    @onclick="@(() => SelectUploadedPartAsync(index))"
+                                    @ondblclick="@(() => OpenUploadedPreviewAsync(index))">
+                                <span class="qe-agent-upload-preview" aria-hidden="true">
+                                    @if (!string.IsNullOrWhiteSpace(part.LocalThumbnailDataUrl ?? part.ThumbnailUrl))
+                                    {
+                                        <img src="@(part.LocalThumbnailDataUrl ?? part.ThumbnailUrl)" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
+                                    }
+                                </span>
+                                <div class="qe-agent-upload-copy">
+                                    <span class="qe-agent-upload-title-row">
+                                        <strong>@part.FileName</strong>
+                                        <small>@SupplementalArtifactLabel(part)</small>
+                                    </span>
+                                    <small>@UploadedPartStatus(part)</small>
+                                    <span class="@UploadedPartDfmClass(part)">
+                                        <MudIcon Icon="@UploadedPartDfmIcon(part)" Size="Size.Small" />
+                                        <span>
+                                            <strong>@UploadedPartDfmTitle(part)</strong>
+                                            <small>@UploadedPartDfmStatus(part)</small>
+                                            @if (_uploadedFilesCardView)
+                                            {
+                                                @foreach (var failedCheck in FailedDfmChecks(part))
+                                                {
+                                                    <small class="qe-agent-upload-dfm-issue">
+                                                        <span class="qe-agent-upload-dfm-issue-scope">@DfmCheckScopeLabel(part, failedCheck)</span>
+                                                        @failedCheck.Label
+                                                    </small>
+                                                }
+                                            }
+                                        </span>
+                                    </span>
+                                </div>
+                            </button>
+                        }
+                        @foreach (var sketch in MessageSketches)
+                        {
+                            <button type="button"
+                                    class="qe-agent-artifact qe-agent-artifact--button qe-agent-artifact-upload-card qe-agent-workbench-item"
+                                    @onclick="@(() => OpenSketchPreview(sketch))">
+                                <span class="qe-agent-upload-preview" aria-hidden="true">
+                                    @if (!string.IsNullOrWhiteSpace(sketch.PreviewUrl))
+                                    {
+                                        <img src="@sketch.PreviewUrl" alt="" loading="lazy" />
+                                    }
+                                    else
+                                    {
+                                        <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
+                                    }
+                                </span>
+                                <div class="qe-agent-upload-copy">
+                                    <span class="qe-agent-upload-title-row">
+                                        <strong>@sketch.FileName</strong>
+                                        <small>@Text("Sketch", "สเก็ตช์")</small>
+                                    </span>
+                                    <small>@AttachmentStatusLabel(sketch)</small>
+                                </div>
+                            </button>
+                        }
+                        @foreach (var artifact in VisibleDrawerArtifacts)
+                        {
+                            var isSelected = _artifactPreviewExpanded && _selectedArtifact?.ArtifactId == artifact.ArtifactId;
+                            var artifactSummary = ArtifactSummary(artifact);
+                            <button type="button"
+                                    class="@($"qe-agent-artifact qe-agent-artifact--button qe-agent-workbench-item qe-agent-workbench-generated {(isSelected ? "active" : string.Empty)} {UiFocusClass(ArtifactFocusKey(artifact), ArtifactTypeFocusKey(artifact.ArtifactType))}")"
+                                    @onclick="@(() => SelectArtifact(artifact))">
+                                <span class="qe-agent-upload-preview" aria-hidden="true">
+                                    <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
+                                </span>
+                                <div class="qe-agent-upload-copy">
+                                    <span class="qe-agent-upload-title-row">
+                                        <strong>@artifact.Title</strong>
+                                        <small>@ArtifactKindLabel(artifact)</small>
+                                    </span>
+                                    <small>@ArtifactStatusLabel(artifact)</small>
+                                    @if (!string.IsNullOrWhiteSpace(artifactSummary))
+                                    {
+                                        <small class="qe-agent-artifact-metadata">@artifactSummary</small>
+                                    }
+                                </div>
+                            </button>
+                        }
+                    </div>
+                }
+            </section>
+
+            @if (HasSelectedWorkbenchPreview)
             {
                 var selectedGeneratedViewer = SelectedGeneratedViewerArtifact;
                 var selectedArtifactPreview = SelectedArtifactPreviewItem;
-                if (selectedGeneratedViewer is not null &&
+                <section class="qe-agent-workbench-preview" aria-label="@Text("Selected file preview", "พรีวิวไฟล์ที่เลือก")">
+                    <header>
+                        <div>
+                            <span>@Text("Preview", "พรีวิว")</span>
+                            <small>@Text("Selected file details", "รายละเอียดไฟล์ที่เลือก")</small>
+                        </div>
+                        <button type="button"
+                                class="qe-agent-round-btn"
+                                title="@Text("Collapse preview", "ย่อพรีวิว")"
+                                aria-label="@Text("Collapse selected file preview", "ย่อพรีวิวไฟล์ที่เลือก")"
+                                @onclick="CollapseWorkbenchPreview">
+                            <MudIcon Icon="@Icons.Material.Outlined.ExpandLess" Size="Size.Small" />
+                        </button>
+                    </header>
+                    <div class="qe-agent-workbench-preview-body">
+                @if (selectedGeneratedViewer is not null &&
                     TryGetGeneratedViewerCommands(selectedGeneratedViewer, out var selectedGeneratedCommandsJson))
                 {
                     <div class="qe-agent-artifact-preview-shell">
@@ -2008,7 +2200,7 @@
                                     <span>@Text("Generated 3D preview", "พรีวิว 3D ที่สร้างขึ้น")</span>
                                     <strong>@selectedGeneratedViewer.Title</strong>
                                 </div>
-                                <small>@selectedGeneratedViewer.Status</small>
+                                <small>@ArtifactStatusLabel(selectedGeneratedViewer)</small>
                             </header>
                             <div class="qe-agent-artifact-viewer-canvas qe-agent-artifact-generated-viewer">
                                 <QeInlinePartViewer CommandsJson="@selectedGeneratedCommandsJson"
@@ -2213,149 +2405,8 @@
                         }
                     </div>
                 }
-                @if (UploadedParts.Count > 0)
-                {
-                    <section class="qe-agent-artifact-section qe-agent-artifact-section--uploaded" aria-label="@Text("Uploaded files", "ไฟล์ที่อัปโหลด")">
-                        <header class="qe-agent-artifact-section-header">
-                            <div>
-                                <span>@Text("Uploaded files", "ไฟล์ที่อัปโหลด")</span>
-                                <small>@Text("File previews with connected DFM status", "พรีวิวไฟล์พร้อมสถานะ DFM ที่เกี่ยวข้อง")</small>
-                            </div>
-                            <button type="button"
-                                    class="@UploadedFilesViewSwitchClass"
-                                    role="switch"
-                                    aria-checked="@AriaChecked(_uploadedFilesCardView)"
-                                    title="@UploadedFilesViewSwitchTitle"
-                                    aria-label="@UploadedFilesViewSwitchTitle"
-                                    @onclick="ToggleUploadedFilesView">
-                                <span class="qe-agent-upload-view-option qe-agent-upload-view-option--cards">
-                                    <MudIcon Icon="@Icons.Material.Outlined.GridView" Size="Size.Small" />
-                                    <span>@Text("Cards", "การ์ด")</span>
-                                </span>
-                                <span class="qe-agent-upload-view-option qe-agent-upload-view-option--list">
-                                    <MudIcon Icon="@Icons.Material.Outlined.ViewList" Size="Size.Small" />
-                                    <span>@Text("List", "รายการ")</span>
-                                </span>
-                            </button>
-                        </header>
-                        <div class="@UploadedFilesGridClass">
-                            @foreach (var (index, part) in UniqueUploadedPartsWithIndex)
-                            {
-                                <button type="button"
-                                        class="@UploadedFileCardClass(index, part)"
-                                        @onclick="@(() => SelectUploadedPartAsync(index))"
-                                        @ondblclick="@(() => OpenUploadedPreviewAsync(index))">
-                                    <span class="qe-agent-upload-preview" aria-hidden="true">
-                                        @if (!string.IsNullOrWhiteSpace(part.LocalThumbnailDataUrl ?? part.ThumbnailUrl))
-                                        {
-                                            <img src="@(part.LocalThumbnailDataUrl ?? part.ThumbnailUrl)" alt="" loading="lazy" onerror="this.style.display='none'" />
-                                        }
-                                        else
-                                        {
-                                            <MudIcon Icon="@UploadedPartIcon(part)" Size="Size.Small" />
-                                        }
-                                    </span>
-                                    <div class="qe-agent-upload-copy">
-                                        <span class="qe-agent-upload-title-row">
-                                            <strong>@part.FileName</strong>
-                                            <small>@SupplementalArtifactLabel(part)</small>
-                                        </span>
-                                        <small>@UploadedPartStatus(part)</small>
-                                        <span class="@UploadedPartDfmClass(part)">
-                                            <MudIcon Icon="@UploadedPartDfmIcon(part)" Size="Size.Small" />
-                                            <span>
-                                                <strong>@UploadedPartDfmTitle(part)</strong>
-                                                <small>@UploadedPartDfmStatus(part)</small>
-                                                @foreach (var failedCheck in FailedDfmChecks(part))
-                                                {
-                                                    <small class="qe-agent-upload-dfm-issue">
-                                                        <span class="qe-agent-upload-dfm-issue-scope">@DfmCheckScopeLabel(part, failedCheck)</span>
-                                                        @failedCheck.Label
-                                                    </small>
-                                                }
-                                            </span>
-                                        </span>
-                                    </div>
-                                </button>
-                            }
-                        </div>
-                    </section>
-                }
-                @if (MessageSketches.Count > 0)
-                {
-                    <section class="qe-agent-artifact-section" aria-label="@Text("Sketches", "สเก็ตช์")">
-                        <header class="qe-agent-artifact-section-header">
-                            <div>
-                                <span>@Text("Sketches", "สเก็ตช์")</span>
-                                <small>@Text("Hand sketches and image notes from chat", "สเก็ตช์และโน้ตรูปจากแชท")</small>
-                            </div>
-                        </header>
-                        <div class="qe-agent-artifacts">
-                            @foreach (var sketch in MessageSketches)
-                            {
-                                <button type="button"
-                                        class="qe-agent-artifact qe-agent-artifact--button"
-                                        @onclick="@(() => OpenSketchPreview(sketch))">
-                                    @if (!string.IsNullOrWhiteSpace(sketch.PreviewUrl))
-                                    {
-                                        <img class="qe-agent-artifact-thumb" src="@sketch.PreviewUrl" alt="" loading="lazy" />
-                                    }
-                                    else
-                                    {
-                                        <MudIcon Icon="@Icons.Material.Outlined.Draw" Size="Size.Small" />
-                                    }
-                                    <div>
-                                        <strong>@sketch.FileName</strong>
-                                        <small>@AttachmentStatusLabel(sketch)</small>
-                                    </div>
-                                </button>
-                            }
-                        </div>
-                    </section>
-                }
-                @if (VisibleDrawerArtifacts.Count > 0)
-                {
-                    <section class="qe-agent-artifact-section" aria-label="@Text("Generated artifacts", "ไฟล์งานที่สร้างขึ้น")">
-                        <header class="qe-agent-artifact-section-header">
-                            <div>
-                                <span>@Text("Generated artifacts", "ไฟล์งานที่สร้างขึ้น")</span>
-                                <small>@Text("Quotes, summaries, payment handoffs, and outputs", "ใบเสนอราคา สรุป การชำระเงิน และผลลัพธ์")</small>
-                            </div>
-                        </header>
-                        <div class="qe-agent-artifacts">
-                            @foreach (var artifact in VisibleDrawerArtifacts)
-                            {
-                                var isSelected = _selectedArtifact?.ArtifactId == artifact.ArtifactId;
-                                var artifactSummary = ArtifactSummary(artifact);
-                                <button type="button"
-                                        class="@($"qe-agent-artifact qe-agent-artifact--button {(isSelected ? "active" : string.Empty)} {UiFocusClass(ArtifactFocusKey(artifact), ArtifactTypeFocusKey(artifact.ArtifactType))}")"
-                                        @onclick="@(() => SelectArtifact(artifact))">
-                                    <MudIcon Icon="@ArtifactIcon(artifact.ArtifactType)" Size="Size.Small" />
-                                    <div>
-                                        <strong>@artifact.Title</strong>
-                                        <small>@ArtifactStatusLabel(artifact)</small>
-                                        @if (!string.IsNullOrWhiteSpace(artifactSummary))
-                                        {
-                                            <small class="qe-agent-artifact-metadata">@artifactSummary</small>
-                                        }
-                                    </div>
-                                </button>
-                            }
-                        </div>
-                    </section>
-                }
-                else if (UploadedParts.Count == 0 && MessageSketches.Count == 0)
-                {
-                    <section class="qe-agent-artifact-section" aria-label="@Text("Generated artifacts", "ไฟล์งานที่สร้างขึ้น")">
-                        <header class="qe-agent-artifact-section-header">
-                            <div>
-                                <span>@Text("Generated artifacts", "ไฟล์งานที่สร้างขึ้น")</span>
-                                <small>@Text("Quote outputs will appear here when ready", "ผลลัพธ์ใบเสนอราคาจะแสดงที่นี่เมื่อพร้อม")</small>
-                            </div>
-                        </header>
-                        <p class="qe-agent-muted">@Text("No generated artifacts yet.", "ยังไม่มีไฟล์งานที่สร้างขึ้น")</p>
-                    </section>
-                }
+                    </div>
+                </section>
             }
 
             @if (ConfirmationActions.Count > 0)
@@ -2751,7 +2802,8 @@
     private bool _exportingPdf;
     private bool _artifactPanelOpen;
     private bool _summaryPanelOpen;
-    private bool _uploadedFilesCardView = true;
+    private bool _uploadedFilesCardView;
+    private bool _artifactPreviewExpanded;
     private bool _previewDialogOpen;
     private bool _artifactNoteDialogOpen;
     private int _previewIndex;
@@ -3020,45 +3072,93 @@
     private const string SpeechRecognitionLanguages = "th-TH,en-US";
 
     private bool RightPanelOpen => _artifactPanelOpen || _summaryPanelOpen;
-    private int ArtifactCount => VisibleDrawerArtifacts.Count + UploadedParts.Count + MessageSketches.Count;
+    private int ArtifactCount => WorkbenchPendingAttachments.Count +
+        UniqueUploadedPartsWithIndex.Count +
+        MessageSketches.Count +
+        VisibleDrawerArtifacts.Count;
+    private string WorkbenchFileCountLabel => Text(
+        $"{ArtifactCount:N0} project {(ArtifactCount == 1 ? "item" : "items")}",
+        $"{ArtifactCount:N0} รายการในโปรเจกต์");
+    private bool HasSelectedWorkbenchPreview =>
+        _artifactPreviewExpanded && (_selectedArtifact is not null || UploadedParts.Count > 0);
     private IReadOnlyList<QuoteAgentArtifactDto> VisibleDrawerArtifacts =>
         _artifacts
             .Where(QuoteAgentUiHelpers.IsVisibleArtifact)
             .Where(ShouldShowStandaloneArtifact)
+            .GroupBy(WorkbenchArtifactKey, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.Last())
             .ToList();
-    private string UploadedFilesGridClass => _uploadedFilesCardView
-        ? "qe-agent-artifacts qe-agent-artifacts--uploaded qe-agent-artifacts--cards"
-        : "qe-agent-artifacts qe-agent-artifacts--uploaded qe-agent-artifacts--list";
-    private string UploadedFilesViewSwitchClass => _uploadedFilesCardView
-        ? "qe-agent-upload-view-switch is-card-view"
-        : "qe-agent-upload-view-switch is-list-view";
-    private string UploadedFilesViewSwitchTitle => _uploadedFilesCardView
-        ? Text("Switch uploaded files to list view", "เปลี่ยนไฟล์ที่อัปโหลดเป็นมุมมองรายการ")
-        : Text("Switch uploaded files to cards with thumbnails", "เปลี่ยนไฟล์ที่อัปโหลดเป็นการ์ดพร้อมรูปตัวอย่าง");
+    private string WorkbenchFilesGridClass => _uploadedFilesCardView
+        ? "qe-agent-workbench-file-grid qe-agent-workbench-files--cards"
+        : "qe-agent-workbench-file-grid qe-agent-workbench-files--list";
+
+    private IReadOnlyList<ComposerAttachmentPreview> WorkbenchPendingAttachments
+    {
+        get
+        {
+            var uploaded = UniqueUploadedPartsWithIndex
+                .Select(item => ComposerAttachmentPreview.FromPart(item.Part))
+                .ToList();
+            var sentSketches = MessageSketches;
+            var result = new List<ComposerAttachmentPreview>();
+            foreach (var attachment in _pendingComposerAttachments)
+            {
+                if (uploaded.Any(item => item.Matches(attachment)) ||
+                    sentSketches.Any(item => item.Matches(attachment)) ||
+                    result.Any(item => item.Matches(attachment)))
+                {
+                    continue;
+                }
+
+                result.Add(attachment);
+            }
+
+            return result;
+        }
+    }
 
     private IReadOnlyList<(int OriginalIndex, QuotePartViewModel Part)> UniqueUploadedPartsWithIndex
     {
         get
         {
-            var seen = new HashSet<Guid>();
+            var seen = new List<ComposerAttachmentPreview>();
             var result = new List<(int, QuotePartViewModel)>();
             for (var i = 0; i < UploadedParts.Count; i++)
             {
-                if (seen.Add(UploadedParts[i].PartId))
+                var identity = ComposerAttachmentPreview.FromPart(UploadedParts[i]);
+                if (!seen.Any(item => item.Matches(identity)))
                 {
                     result.Add((i, UploadedParts[i]));
+                    seen.Add(identity);
                 }
             }
             return result;
         }
     }
 
-    private IReadOnlyList<ComposerAttachmentPreview> MessageSketches =>
-        _messages
-            .Where(m => m.Role.Equals("user", StringComparison.OrdinalIgnoreCase))
-            .SelectMany(m => m.Attachments)
-            .Where(a => a.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase))
-            .ToList();
+    private IReadOnlyList<ComposerAttachmentPreview> MessageSketches
+    {
+        get
+        {
+            var uploaded = UniqueUploadedPartsWithIndex
+                .Select(item => ComposerAttachmentPreview.FromPart(item.Part))
+                .ToList();
+            var result = new List<ComposerAttachmentPreview>();
+            foreach (var sketch in _messages
+                         .Where(message => message.Role.Equals("user", StringComparison.OrdinalIgnoreCase))
+                         .SelectMany(message => message.Attachments)
+                         .Where(attachment => attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (!uploaded.Any(item => item.Matches(sketch)) &&
+                    !result.Any(item => item.Matches(sketch)))
+                {
+                    result.Add(sketch);
+                }
+            }
+
+            return result;
+        }
+    }
     private QuotePartViewModel SelectedUploadedPart => UploadedParts[Math.Clamp(SelectedPartIndex, 0, Math.Max(UploadedParts.Count - 1, 0))];
     private QuotePartViewModel? ArtifactNoteDialogPart => _artifactNotePartIndex >= 0 && _artifactNotePartIndex < UploadedParts.Count
         ? UploadedParts[_artifactNotePartIndex]
@@ -5257,11 +5357,33 @@
         {
             _summaryPanelOpen = false;
         }
+        else
+        {
+            _artifactPreviewExpanded = false;
+        }
     }
 
-    private void ToggleUploadedFilesView()
+    private void SetUploadedFilesView(bool showCards)
     {
-        _uploadedFilesCardView = !_uploadedFilesCardView;
+        _uploadedFilesCardView = showCards;
+    }
+
+    private string WorkbenchViewButtonClass(bool cardView)
+    {
+        return _uploadedFilesCardView == cardView
+            ? "qe-agent-workbench-view-button is-active"
+            : "qe-agent-workbench-view-button";
+    }
+
+    private string WorkbenchAttachmentCardClass(ComposerAttachmentPreview attachment)
+    {
+        var pendingClass = IsComposerUploadPending(attachment) ? " is-uploading" : string.Empty;
+        return $"qe-agent-artifact qe-agent-artifact--button qe-agent-artifact-upload-card qe-agent-workbench-item{pendingClass}";
+    }
+
+    private void CollapseWorkbenchPreview()
+    {
+        _artifactPreviewExpanded = false;
     }
 
     private void ToggleSummaryPanel()
@@ -5271,6 +5393,7 @@
         if (next)
         {
             _artifactPanelOpen = false;
+            _artifactPreviewExpanded = false;
         }
     }
 
@@ -5278,6 +5401,7 @@
     {
         _artifactPanelOpen = false;
         _summaryPanelOpen = false;
+        _artifactPreviewExpanded = false;
     }
 
     private async Task OpenUploadedPreviewAsync(int uploadedPartIndex)
@@ -5320,9 +5444,30 @@
         }
     }
 
+    private void OpenWorkbenchAttachmentPreview(ComposerAttachmentPreview attachment)
+    {
+        if (IsComposerUploadPending(attachment))
+        {
+            return;
+        }
+
+        var previewUrl = attachment.PreviewUrl ?? attachment.Url ?? string.Empty;
+        var previewIndex = PreviewItems.ToList().FindIndex(item =>
+            item.Source.Equals("pending", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(item.Url, previewUrl, StringComparison.Ordinal) &&
+            string.Equals(item.Title, attachment.FileName, StringComparison.OrdinalIgnoreCase));
+        if (previewIndex >= 0)
+        {
+            _previewIndex = previewIndex;
+            _previewDialogOpen = true;
+        }
+    }
+
     private void SelectArtifact(QuoteAgentArtifactDto artifact)
     {
-        _selectedArtifact = _selectedArtifact?.ArtifactId == artifact.ArtifactId ? null : artifact;
+        var deselect = _artifactPreviewExpanded && _selectedArtifact?.ArtifactId == artifact.ArtifactId;
+        _selectedArtifact = deselect ? null : artifact;
+        _artifactPreviewExpanded = !deselect;
     }
 
     private void SyncSelectedArtifactWithArtifacts()
@@ -5336,6 +5481,11 @@
         if (_selectedArtifact is not null && !QuoteAgentUiHelpers.IsVisibleArtifact(_selectedArtifact))
         {
             _selectedArtifact = null;
+        }
+
+        if (_selectedArtifact is null)
+        {
+            _artifactPreviewExpanded = false;
         }
     }
 
@@ -5403,6 +5553,25 @@
     private IReadOnlyList<PreviewItem> BuildPreviewItems()
     {
         var items = new List<PreviewItem>();
+        foreach (var attachment in WorkbenchPendingAttachments)
+        {
+            var previewUrl = attachment.PreviewUrl ?? attachment.Url;
+            if (string.IsNullOrWhiteSpace(previewUrl))
+            {
+                continue;
+            }
+
+            items.Add(new PreviewItem(
+                "pending",
+                -1,
+                attachment.FileName,
+                AttachmentStatusLabel(attachment),
+                previewUrl,
+                Text("Attached file", "ไฟล์แนบ"),
+                UploadedPartIcon(attachment),
+                attachment.ContentType));
+        }
+
         for (var i = 0; i < UploadedParts.Count; i++)
         {
             var part = UploadedParts[i];
@@ -5426,7 +5595,7 @@
                 "sketch",
                 -1,
                 sketch.FileName,
-                sketch.Status,
+                AttachmentStatusLabel(sketch),
                 sketch.PreviewUrl ?? string.Empty,
                 Text("Sketch", "สเก็ตช์"),
                 Icons.Material.Outlined.Draw,
@@ -5629,6 +5798,11 @@
         return value ? "true" : "false";
     }
 
+    private static string AriaPressed(bool value)
+    {
+        return value ? "true" : "false";
+    }
+
     private string UiFocusClass(params string[] keys)
     {
         return keys.Any(key =>
@@ -5825,6 +5999,7 @@
     private async Task SelectUploadedPartAsync(int index)
     {
         _selectedArtifact = null;
+        _artifactPreviewExpanded = true;
         if (OnUploadedPartSelected.HasDelegate)
         {
             await OnUploadedPartSelected.InvokeAsync(index);
@@ -6127,7 +6302,7 @@
 
     private string UploadedPartStatus(QuotePartViewModel part)
     {
-        var status = string.IsNullOrWhiteSpace(part.Status) ? Text("Attached", "แนบแล้ว") : part.Status;
+        var status = QuoteAgentUiHelpers.FormatCustomerStatus(part.Status);
         if (QuoteUploadConstraints.IsSupportedCadFileName(part.FileName))
         {
             var metadata = QuoteAgentUiHelpers.FormatUploadedPartMetadata(part);
@@ -6135,7 +6310,7 @@
         }
 
         var metrics = part.VolumeCc > 0
-            ? FormattableString.Invariant($"{part.VolumeCc:0.##} cc")
+            ? QuoteAgentUiHelpers.FormatVolume(part.VolumeCc)
             : part.SurfaceAreaCm2 > 0
                 ? FormattableString.Invariant($"{part.SurfaceAreaCm2:0.##} cm²")
                 : null;
@@ -6145,11 +6320,13 @@
 
     private string UploadedFileCardClass(int index, QuotePartViewModel part)
     {
-        var selectedClass = index == SelectedPartIndex ? "active" : string.Empty;
+        var selectedClass = _artifactPreviewExpanded && _selectedArtifact is null && index == SelectedPartIndex
+            ? "active"
+            : string.Empty;
         var viewClass = _uploadedFilesCardView
             ? "qe-agent-upload-card--card"
             : "qe-agent-upload-card--list";
-        return $"qe-agent-artifact qe-agent-artifact--button qe-agent-artifact-upload-card {viewClass} {selectedClass} {UiFocusClass(PartFocusKey(part.PartId), UploadedPartFocusKey(part))}";
+        return $"qe-agent-artifact qe-agent-artifact--button qe-agent-artifact-upload-card qe-agent-workbench-item {viewClass} {selectedClass} {UiFocusClass(PartFocusKey(part.PartId), UploadedPartFocusKey(part))}";
     }
 
     private string UploadedPartDfmClass(QuotePartViewModel part)
@@ -6410,6 +6587,11 @@
         _quickActionsMenuOpen = false;
         _highlightConnectorId = "google-drive";
         await OpenPluginsPageAsync();
+    }
+
+    private async Task AttachFromGoogleDriveAsync()
+    {
+        _ = await OpenDriveMentionConnectorAsync();
     }
 
     private async Task ApplyDriveMentionAsync()
@@ -6998,6 +7180,16 @@
     {
         return !artifact.ArtifactType.Equals("dfm", StringComparison.OrdinalIgnoreCase) ||
             ResolveDfmArtifactPart(artifact) is null;
+    }
+
+    private static string WorkbenchArtifactKey(QuoteAgentArtifactDto artifact)
+    {
+        return string.Join(
+            '|',
+            artifact.ArtifactType.Trim(),
+            artifact.PartId?.ToString("D") ?? string.Empty,
+            artifact.Title.Trim(),
+            artifact.Url?.Trim() ?? string.Empty);
     }
 
     private string DfmChecksStatusLabel(QuotePartViewModel part)
