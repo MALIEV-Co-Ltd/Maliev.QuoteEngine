@@ -30,7 +30,7 @@ export function isUploadMenuInteraction(target) {
   );
 }
 
-export function initComposer(textarea, dotNetRef, dictationButton) {
+export function initComposer(textarea, dotNetRef, dictationButton, voiceTrigger) {
   if (!textarea || !dotNetRef) {
     return;
   }
@@ -72,13 +72,10 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     updateComposerShape(textarea);
   };
 
-  let holdTimer = 0;
-  let holdStarted = false;
   let keyboardHoldStarted = false;
   let keyboardHoldPending = false;
   let keyboardHoldTimer = 0;
-  let pressStartedActive = false;
-  let suppressClick = false;
+  let suppressNextTriggerClick = false;
   const clearKeyboardHold = () => {
     window.clearTimeout(keyboardHoldTimer);
     keyboardHoldTimer = 0;
@@ -90,75 +87,73 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
     }
 
     keyboardHoldStarted = true;
-    suppressClick = true;
+    suppressNextTriggerClick = true;
     await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
   };
-  const pointerDown = async event => {
-    if (event.button !== undefined && event.button !== 0) {
-      return;
-    }
+  const createDictationTriggerHandlers = trigger => {
+    let holdTimer = 0;
+    let holdStarted = false;
+    let pressStartedActive = false;
+    let suppressClick = false;
 
-    pressStartedActive = isDictationActive(textarea);
-    holdStarted = false;
-    window.clearTimeout(holdTimer);
-    if (pressStartedActive) {
+    const pointerDown = async event => {
+      if (event.button !== undefined && event.button !== 0) {
+        return;
+      }
+
+      pressStartedActive = isDictationActive(textarea);
+      holdStarted = false;
+      window.clearTimeout(holdTimer);
+      suppressClick = true;
+      if (pressStartedActive) {
+        await finishDictationFromUserAction(textarea, dotNetRef);
+        return;
+      }
+
+      event.currentTarget?.setPointerCapture?.(event.pointerId);
+      await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
+      holdTimer = window.setTimeout(() => {
+        holdStarted = true;
+      }, 220);
+    };
+    const pointerUp = async event => {
+      window.clearTimeout(holdTimer);
+      event.currentTarget?.releasePointerCapture?.(event.pointerId);
+      if (pressStartedActive || !holdStarted) {
+        return;
+      }
+
       await finishDictationFromUserAction(textarea, dotNetRef);
-      return;
-    }
+    };
+    const pointerCancel = async event => {
+      window.clearTimeout(holdTimer);
+      event.currentTarget?.releasePointerCapture?.(event.pointerId);
+      if (pressStartedActive || !holdStarted) {
+        return;
+      }
 
-    suppressClick = true;
-    dictationButton?.setPointerCapture?.(event.pointerId);
-    await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
-    holdTimer = window.setTimeout(async () => {
-      holdStarted = true;
-    }, 220);
-  };
-  const pointerUp = async event => {
-    window.clearTimeout(holdTimer);
-    dictationButton?.releasePointerCapture?.(event.pointerId);
-    if (pressStartedActive) {
-      return;
-    }
-
-    if (!holdStarted) {
-      return;
-    }
-
-    await finishDictationFromUserAction(textarea, dotNetRef);
-  };
-  const pointerCancel = async event => {
-    window.clearTimeout(holdTimer);
-    dictationButton?.releasePointerCapture?.(event.pointerId);
-    if (pressStartedActive) {
-      return;
-    }
-
-    if (!holdStarted) {
-      return;
-    }
-
-    await finishDictationFromUserAction(textarea, dotNetRef);
-  };
-  const click = async event => {
-    if (suppressClick) {
-      suppressClick = false;
-      event.preventDefault();
-      return;
-    }
-
-    const session = dictationSessions.get(textarea);
-    if (!session || session.settled) {
-      event.preventDefault();
-      return;
-    }
-
-    if (isDictationActive(textarea) || dictationButton?.classList.contains("active")) {
       await finishDictationFromUserAction(textarea, dotNetRef);
-      return;
-    }
+    };
+    const click = async event => {
+      if (suppressClick || suppressNextTriggerClick) {
+        suppressClick = false;
+        suppressNextTriggerClick = false;
+        event.preventDefault();
+        return;
+      }
 
-    await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
+      if (isDictationActive(textarea) || dictationButton?.classList.contains("active")) {
+        await finishDictationFromUserAction(textarea, dotNetRef);
+        return;
+      }
+
+      await startDictationFromUserAction(textarea, dictationButton, dotNetRef);
+    };
+
+    return { trigger, pointerDown, pointerUp, pointerCancel, click };
   };
+  const dictationTriggerHandlers = [...new Set([dictationButton, voiceTrigger].filter(Boolean))]
+    .map(createDictationTriggerHandlers);
   const documentKeydown = async event => {
     if (!isSpaceKey(event) ||
         event.altKey ||
@@ -243,13 +238,15 @@ export function initComposer(textarea, dotNetRef, dictationButton) {
   document.addEventListener("keydown", documentKeydown, true);
   document.addEventListener("keyup", documentKeyup, true);
   document.addEventListener("pointerdown", outsideQuickActionsPointerDown, true);
-  if (dictationButton) {
-    dictationButton.addEventListener("pointerdown", pointerDown);
-    dictationButton.addEventListener("pointerup", pointerUp);
-    dictationButton.addEventListener("pointerleave", pointerCancel);
-    dictationButton.addEventListener("pointercancel", pointerCancel);
-    dictationButton.addEventListener("click", click);
-    dictationButtonHandlers.set(textarea, { dictationButton, pointerDown, pointerUp, pointerCancel, click });
+  for (const handlers of dictationTriggerHandlers) {
+    handlers.trigger.addEventListener("pointerdown", handlers.pointerDown);
+    handlers.trigger.addEventListener("pointerup", handlers.pointerUp);
+    handlers.trigger.addEventListener("pointerleave", handlers.pointerCancel);
+    handlers.trigger.addEventListener("pointercancel", handlers.pointerCancel);
+    handlers.trigger.addEventListener("click", handlers.click);
+  }
+  if (dictationTriggerHandlers.length > 0) {
+    dictationButtonHandlers.set(textarea, { dictationButton, triggers: dictationTriggerHandlers });
   }
 
   const resizeObserver = composer && window.ResizeObserver
@@ -325,12 +322,14 @@ export function disposeComposer(textarea) {
   }
   window.removeEventListener("resize", handlers.updateAllTooltipPlacements);
   const dictationHandlers = dictationButtonHandlers.get(textarea);
-  if (dictationHandlers?.dictationButton) {
-    dictationHandlers.dictationButton.removeEventListener("pointerdown", dictationHandlers.pointerDown);
-    dictationHandlers.dictationButton.removeEventListener("pointerup", dictationHandlers.pointerUp);
-    dictationHandlers.dictationButton.removeEventListener("pointerleave", dictationHandlers.pointerCancel);
-    dictationHandlers.dictationButton.removeEventListener("pointercancel", dictationHandlers.pointerCancel);
-    dictationHandlers.dictationButton.removeEventListener("click", dictationHandlers.click);
+  for (const triggerHandlers of dictationHandlers?.triggers || []) {
+    triggerHandlers.trigger.removeEventListener("pointerdown", triggerHandlers.pointerDown);
+    triggerHandlers.trigger.removeEventListener("pointerup", triggerHandlers.pointerUp);
+    triggerHandlers.trigger.removeEventListener("pointerleave", triggerHandlers.pointerCancel);
+    triggerHandlers.trigger.removeEventListener("pointercancel", triggerHandlers.pointerCancel);
+    triggerHandlers.trigger.removeEventListener("click", triggerHandlers.click);
+  }
+  if (dictationHandlers) {
     dictationButtonHandlers.delete(textarea);
   }
 

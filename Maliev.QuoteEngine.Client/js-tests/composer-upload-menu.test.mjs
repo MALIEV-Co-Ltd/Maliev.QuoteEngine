@@ -80,6 +80,142 @@ function makeDotNetRef() {
   };
 }
 
+function makeClassList() {
+  const values = new Set();
+  return {
+    add(...names) { names.forEach(name => values.add(name)); },
+    remove(...names) { names.forEach(name => values.delete(name)); },
+    contains(name) { return values.has(name); },
+    toggle(name, force) {
+      const enabled = force === undefined ? !values.has(name) : Boolean(force);
+      if (enabled) values.add(name);
+      else values.delete(name);
+      return enabled;
+    }
+  };
+}
+
+function makeStyle() {
+  const values = new Map();
+  return {
+    setProperty(name, value) { values.set(name, value); },
+    removeProperty(name) { values.delete(name); },
+    getPropertyValue(name) { return values.get(name) || ""; }
+  };
+}
+
+function makeVoiceComposer() {
+  let overlay = null;
+  return {
+    classList: makeClassList(),
+    dataset: {},
+    style: makeStyle(),
+    addEventListener() {},
+    removeEventListener() {},
+    contains() { return false; },
+    getBoundingClientRect() { return { height: 58 }; },
+    querySelector(selector) {
+      return selector === ".qe-agent-dictation-preview" && !overlay?.removed ? overlay : null;
+    },
+    querySelectorAll() { return []; },
+    setAttribute() {},
+    removeAttribute() {},
+    setOverlay(element) {
+      overlay = element;
+      element.remove = () => { element.removed = true; };
+    }
+  };
+}
+
+function makeVoiceTextarea(composer) {
+  const textarea = {
+    classList: makeClassList(),
+    dataset: { speechLanguages: "en-US" },
+    lang: "en-US",
+    selectionEnd: 0,
+    selectionStart: 0,
+    value: "",
+    closest(selector) { return selector === ".qe-agent-composer" ? composer : null; },
+    addEventListener() {},
+    removeEventListener() {},
+    dispatchEvent() {},
+    focus() { document.activeElement = textarea; },
+    insertAdjacentElement(_position, element) { composer.setOverlay(element); },
+    setSelectionRange(start, end) {
+      textarea.selectionStart = start;
+      textarea.selectionEnd = end;
+    }
+  };
+  return textarea;
+}
+
+function makeVoiceTrigger(composer) {
+  const listeners = new Map();
+  const trigger = {
+    capturedPointers: [],
+    classList: makeClassList(),
+    closestCalls: 0,
+    disabled: false,
+    releasedPointers: [],
+    addEventListener(type, listener) {
+      const entries = listeners.get(type) || [];
+      entries.push(listener);
+      listeners.set(type, entries);
+    },
+    removeEventListener(type, listener) {
+      const entries = listeners.get(type) || [];
+      listeners.set(type, entries.filter(entry => entry !== listener));
+    },
+    listenerCount(type) { return (listeners.get(type) || []).length; },
+    closest(selector) {
+      trigger.closestCalls += 1;
+      return selector === ".qe-agent-composer" ? composer : null;
+    },
+    setPointerCapture(pointerId) { trigger.capturedPointers.push(pointerId); },
+    releasePointerCapture(pointerId) { trigger.releasedPointers.push(pointerId); },
+    async dispatch(type, event = {}) {
+      event.currentTarget = trigger;
+      event.target ??= trigger;
+      event.preventDefault ??= () => { event.defaultPrevented = true; };
+      for (const listener of [...(listeners.get(type) || [])]) {
+        await listener(event);
+      }
+      return event;
+    }
+  };
+  return trigger;
+}
+
+function makeVoiceWindow() {
+  let nextTimerId = 1;
+  const timers = new Map();
+  class FakeSpeechRecognition {
+    abort() { this.aborted = true; }
+    start() { this.started = true; }
+    stop() { this.stopped = true; }
+  }
+
+  return {
+    SpeechRecognition: FakeSpeechRecognition,
+    addEventListener() {},
+    removeEventListener() {},
+    cancelAnimationFrame() {},
+    clearTimeout(id) { timers.delete(id); },
+    getSelection() { return null; },
+    requestAnimationFrame() { return 0; },
+    setTimeout(callback) {
+      const id = nextTimerId++;
+      timers.set(id, callback);
+      return id;
+    },
+    async runTimers() {
+      const callbacks = [...timers.values()];
+      timers.clear();
+      for (const callback of callbacks) await callback();
+    }
+  };
+}
+
 function installDom() {
   const doc = makeFakeDocument();
   globalThis.document = doc;
@@ -90,6 +226,44 @@ function installDom() {
 function teardownDom() {
   delete globalThis.document;
   delete globalThis.window;
+}
+
+function installVoiceDom() {
+  const doc = makeFakeDocument();
+  doc.activeElement = null;
+  doc.body = { appendChild() {} };
+  doc.documentElement = { lang: "en-US" };
+  doc.createElement = tagName => ({
+    append(...children) { this.children.push(...children); },
+    children: [],
+    className: "",
+    innerHTML: "",
+    removed: false,
+    setAttribute() {},
+    style: makeStyle(),
+    tagName,
+    textContent: ""
+  });
+
+  const voiceWindow = makeVoiceWindow();
+  globalThis.document = doc;
+  globalThis.window = voiceWindow;
+  globalThis.MutationObserver = class {
+    disconnect() {}
+    observe() {}
+  };
+  globalThis.getComputedStyle = () => ({
+    getPropertyValue(name) { return name === "--qe-composer-collapsed-height" ? "58" : ""; },
+    gridTemplateColumns: "",
+    lineHeight: "24px"
+  });
+  return { doc, voiceWindow };
+}
+
+function teardownVoiceDom() {
+  teardownDom();
+  delete globalThis.MutationObserver;
+  delete globalThis.getComputedStyle;
 }
 
 // --- Tests ------------------------------------------------------------------
@@ -149,6 +323,124 @@ test("a pointerdown inside the upload menu keeps the menu open (so the picker cl
 
     disposeComposer(current);
   } finally {
+    teardownDom();
+  }
+});
+
+test("primary dictation and optional voice triggers both toggle one canonical dictation session", async () => {
+  const { voiceWindow } = installVoiceDom();
+  const composer = makeVoiceComposer();
+  const textarea = makeVoiceTextarea(composer);
+  const primary = makeVoiceTrigger(composer);
+  const voice = makeVoiceTrigger(composer);
+  const dotNet = makeDotNetRef();
+
+  try {
+    initComposer(textarea, dotNet, primary, voice);
+    assert.equal(primary.listenerCount("click"), 1, "primary trigger is wired");
+    assert.equal(voice.listenerCount("click"), 1, "optional voice trigger is wired");
+
+    await primary.dispatch("click");
+    assert.equal(dotNet.calls.filter(call => call === "DictationStartedAsync").length, 1);
+    await primary.dispatch("click");
+    assert.equal(dotNet.calls.filter(call => call === "BeginDictationProcessingAsync").length, 1);
+
+    await voice.dispatch("click");
+    assert.equal(dotNet.calls.filter(call => call === "DictationStartedAsync").length, 2);
+    assert.ok(primary.closestCalls > 0, "meter/state stays anchored to the canonical dictation button");
+    assert.equal(voice.closestCalls, 0, "secondary trigger is not used as the meter/state owner");
+    await voice.dispatch("click");
+    assert.equal(dotNet.calls.filter(call => call === "BeginDictationProcessingAsync").length, 2);
+
+    await voice.dispatch("pointerdown", { button: 0, pointerId: 41 });
+    await voice.dispatch("pointerup", { pointerId: 41 });
+    await voice.dispatch("click");
+
+    assert.deepEqual(voice.capturedPointers, [41], "the pressed voice trigger owns pointer capture");
+    assert.deepEqual(voice.releasedPointers, [41], "the pressed voice trigger releases pointer capture");
+    assert.equal(primary.capturedPointers.length, 0, "the canonical button must not capture the voice trigger pointer");
+    assert.equal(dotNet.calls.filter(call => call === "DictationStartedAsync").length, 3);
+    await voice.dispatch("click");
+    assert.equal(dotNet.calls.filter(call => call === "BeginDictationProcessingAsync").length, 3);
+    assert.equal(dotNet.calls.filter(call => call === "CompleteDictationAsync").length, 3);
+    await voiceWindow.runTimers();
+  } finally {
+    disposeComposer(textarea);
+    teardownVoiceDom();
+  }
+});
+
+test("holding either voice trigger dictates only while the pointer is held", async () => {
+  const { voiceWindow } = installVoiceDom();
+  const composer = makeVoiceComposer();
+  const textarea = makeVoiceTextarea(composer);
+  const primary = makeVoiceTrigger(composer);
+  const voice = makeVoiceTrigger(composer);
+  const dotNet = makeDotNetRef();
+
+  try {
+    initComposer(textarea, dotNet, primary, voice);
+
+    for (const [trigger, pointerId] of [[voice, 61], [primary, 62]]) {
+      await trigger.dispatch("pointerdown", { button: 0, pointerId });
+      await voiceWindow.runTimers();
+      await trigger.dispatch("pointerup", { pointerId });
+      await trigger.dispatch("click");
+    }
+
+    assert.equal(dotNet.calls.filter(call => call === "DictationStartedAsync").length, 2);
+    assert.equal(dotNet.calls.filter(call => call === "BeginDictationProcessingAsync").length, 2);
+    assert.equal(dotNet.calls.filter(call => call === "CompleteDictationAsync").length, 2);
+    assert.deepEqual(voice.capturedPointers, [61]);
+    assert.deepEqual(primary.capturedPointers, [62]);
+  } finally {
+    disposeComposer(textarea);
+    teardownVoiceDom();
+  }
+});
+
+test("disposeComposer removes voice handlers from every registered trigger", async () => {
+  installDom();
+  const textarea = makeTextarea();
+  const primary = makeVoiceTrigger(null);
+  const voice = makeVoiceTrigger(null);
+  const dotNet = makeDotNetRef();
+
+  try {
+    initComposer(textarea, dotNet, primary, voice);
+    for (const type of ["pointerdown", "pointerup", "pointerleave", "pointercancel", "click"]) {
+      assert.equal(primary.listenerCount(type), 1, `primary ${type} handler is registered`);
+      assert.equal(voice.listenerCount(type), 1, `voice ${type} handler is registered`);
+    }
+
+    disposeComposer(textarea);
+
+    for (const type of ["pointerdown", "pointerup", "pointerleave", "pointercancel", "click"]) {
+      assert.equal(primary.listenerCount(type), 0, `primary ${type} handler is disposed`);
+      assert.equal(voice.listenerCount(type), 0, `voice ${type} handler is disposed`);
+    }
+
+    await primary.dispatch("click");
+    await voice.dispatch("click");
+    assert.deepEqual(dotNet.calls, [], "disposed triggers cannot call .NET");
+  } finally {
+    disposeComposer(textarea);
+    teardownDom();
+  }
+});
+
+test("initComposer remains backward-compatible when the optional voice trigger is absent", () => {
+  installDom();
+  const textarea = makeTextarea();
+  const primary = makeVoiceTrigger(null);
+
+  try {
+    initComposer(textarea, makeDotNetRef(), primary);
+    assert.equal(primary.listenerCount("click"), 1);
+    disposeComposer(textarea);
+    assert.equal(primary.listenerCount("click"), 0);
+  } finally {
+    disposeComposer(textarea);
     teardownDom();
   }
 });
