@@ -2104,6 +2104,474 @@ Customer message:
         Assert.False(string.IsNullOrWhiteSpace(chatbot.LastSendRequest?.QuoteAgentContextToken));
     }
 
+    [Theory]
+    [InlineData("tools.quotecalculateestimate()")]
+    [InlineData("`tools.quotecalculateestimate()`")]
+    [InlineData("- tools.quotecalculateestimate()")]
+    [InlineData("> `tools.quotecalculateestimate()`")]
+    public async Task Agent_grounding_strips_bare_tool_call_and_synthesizes_state_text(string modelText)
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelText
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = Guid.NewGuid(),
+            Message = "Please calculate my estimate.",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.False(string.IsNullOrWhiteSpace(body.AssistantText));
+        Assert.DoesNotContain("tools.", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Describe the part", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_grounding_replaces_unsupported_five_unit_estimate_claim_with_state_total_and_unit_price()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "Your quote is ready: the estimated total is 120 THB for 5 units, or 120 THB per unit."
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new FixedPricingServiceClient(
+                    unitPrice: 500m,
+                    totalAmount: 2_500m));
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement(
+                    "Quote this STEP as 5 PLA pieces with standard lead time.",
+                    JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "volume-part.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "grounded-estimate-upload",
+                        storage_path = "quotes/temp/session/grounded-estimate-upload/volume-part.step"
+                    }
+                }, JsonOptions)
+            });
+        await ConfigureFirstPartForEstimateAsync(client, sessionId, quantity: 5);
+        var pricedState = await ExecuteEstimateToolForStateAsync(client, sessionId);
+
+        Assert.NotNull(pricedState.Estimate);
+        Assert.Equal(2_500m, pricedState.Estimate.Total);
+        var estimateLine = Assert.Single(pricedState.Estimate.Lines);
+        Assert.Equal(500m, estimateLine.UnitPrice);
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "What is the total and unit price?",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains("2,500 THB", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("500 THB", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("120 THB", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_grounding_replaces_unbacked_estimate_claim_when_server_has_no_estimate()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = "The estimate is 120 THB."
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = Guid.NewGuid(),
+            Message = "What is the estimate?",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.DoesNotContain("120 THB", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("not available yet", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_estimate_preserves_authoritative_pricing_total_and_derives_consistent_unit_price()
+    {
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new FixedPricingServiceClient(
+                    unitPrice: 123.46m,
+                    totalAmount: 493.82m));
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement(
+                    "Quote this STEP as 4 PLA pieces with standard lead time.",
+                    JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "authoritative-total.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "authoritative-total-upload",
+                        storage_path = "quotes/temp/session/authoritative-total-upload/authoritative-total.step"
+                    }
+                }, JsonOptions)
+            });
+        await ConfigureFirstPartForEstimateAsync(client, sessionId, quantity: 4);
+
+        var pricedState = await ExecuteEstimateToolForStateAsync(client, sessionId);
+
+        Assert.NotNull(pricedState.Estimate);
+        Assert.Equal(493.82m, pricedState.Estimate.Subtotal);
+        Assert.Equal(493.82m, pricedState.Estimate.Total);
+        var estimateLine = Assert.Single(pricedState.Estimate.Lines);
+        Assert.Equal(493.82m, estimateLine.LineTotal);
+        Assert.Equal(123.46m, estimateLine.UnitPrice);
+        Assert.Contains("approximate", estimateLine.Notes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("authoritative line total", estimateLine.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_estimate_rounds_display_unit_and_marks_authoritative_non_divisible_total()
+    {
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new FixedPricingServiceClient(
+                    unitPrice: 33.33m,
+                    totalAmount: 100m));
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        await ExecuteToolForStateAsync(
+            client,
+            sessionId,
+            "quote_register_uploads",
+            new Dictionary<string, JsonElement>
+            {
+                ["requirements"] = JsonSerializer.SerializeToElement(
+                    "Quote this STEP as 3 PLA pieces with standard lead time.",
+                    JsonOptions),
+                ["files"] = JsonSerializer.SerializeToElement(new[]
+                {
+                    new
+                    {
+                        file_name = "non-divisible-total.step",
+                        content_type = "model/step",
+                        file_size_bytes = 240_000,
+                        kind = "cad",
+                        upload_id = "non-divisible-total-upload",
+                        storage_path = "quotes/temp/session/non-divisible-total-upload/non-divisible-total.step"
+                    }
+                }, JsonOptions)
+            });
+        await ConfigureFirstPartForEstimateAsync(client, sessionId, quantity: 3);
+
+        var pricedState = await ExecuteEstimateToolForStateAsync(client, sessionId);
+
+        Assert.NotNull(pricedState.Estimate);
+        Assert.Equal(100m, pricedState.Estimate.Total);
+        var estimateLine = Assert.Single(pricedState.Estimate.Lines);
+        Assert.Equal(100m, estimateLine.LineTotal);
+        Assert.Equal(33.33m, estimateLine.UnitPrice);
+        Assert.Contains("approximate", estimateLine.Notes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("authoritative line total", estimateLine.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("en", "Your formal quote is ready and available to download.", "awaiting your confirmation")]
+    [InlineData("en", "Your formal quote has been generated and completed.", "awaiting your confirmation")]
+    [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการพร้อมแล้ว ดาวน์โหลดได้เลย", "รอการยืนยัน")]
+    public async Task Agent_grounding_treats_pending_formal_quote_as_awaiting_confirmation(
+        string language,
+        string modelClaim,
+        string expectedGroundedText)
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelClaim,
+            ResponseLanguage = language
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = await CreateSignedInClientAsync(
+            scopedFactory,
+            $"agent-ground-formal-{language}-{Guid.NewGuid():N}@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+        var pendingState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+
+        Assert.Contains(pendingState.ProposedActions, action =>
+            action.ActionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(pendingState.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = language == "th" ? "ใบเสนอราคาพร้อมหรือยัง" : "Is the formal quote available?",
+            Language = language
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(expectedGroundedText, body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(modelClaim, body.AssistantText, StringComparison.Ordinal);
+        Assert.DoesNotContain(body.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task Agent_grounding_allows_formal_quote_availability_when_artifact_exists()
+    {
+        const string modelClaim = "Your formal quote is ready and available in Artifacts.";
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelClaim
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = await CreateSignedInClientAsync(
+            scopedFactory,
+            $"agent-ground-formal-ready-{Guid.NewGuid():N}@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client);
+        var pendingState = await ExecuteToolForStateAsync(client, sessionId, "quote_prepare_formal_quote");
+        var pendingAction = Assert.Single(pendingState.ProposedActions, action =>
+            action.ActionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+        var formalQuoteResult = await ConfirmActionAsync(client, pendingAction.ActionId);
+
+        Assert.NotNull(formalQuoteResult.State);
+        Assert.Contains(formalQuoteResult.State.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Is the formal quote available?",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(modelClaim, body.AssistantText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("I can prepare a formal quote when you are ready.")]
+    [InlineData("The formal quote is not ready yet.")]
+    [InlineData("Is the formal quote ready?")]
+    public async Task Agent_grounding_preserves_non_availability_formal_quote_language(string modelText)
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelText
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = Guid.NewGuid(),
+            Message = "Can we prepare a formal quote later?",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(modelText, body.AssistantText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Agent_grounding_does_not_replace_unrelated_ordinary_quote_language()
+    {
+        const string modelText = "I can quote this part after you confirm the material and quantity.";
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelText
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = Guid.NewGuid(),
+            Message = "Can you quote this part?",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(modelText, body.AssistantText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("The selected courier's shipping price is 150 THB.")]
+    [InlineData("The selected courier's shipping quote is 150 THB.")]
+    public async Task Agent_grounding_does_not_replace_unrelated_shipping_price_language(string modelText)
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelText
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "How much is the selected courier?",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(modelText, body.AssistantText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Agent_prototype_estimate_exposes_non_authoritative_provenance_and_does_not_unlock_formal_quote()
+    {
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new QuoteEngineWebApplicationFactory.EmptyPricingServiceClient());
+            });
+        });
+        using var client = await CreateSignedInClientAsync(
+            scopedFactory,
+            $"agent-prototype-pricing-{Guid.NewGuid():N}@example.com");
+        var sessionId = await StartPricedCadSessionAsync(client, expectAuthoritativePricing: false);
+
+        var estimateJson = await ExecuteToolAsync(client, sessionId, "quote_calculate_estimate");
+        using var estimateDocument = JsonDocument.Parse(estimateJson);
+        var estimate = estimateDocument.RootElement.GetProperty("estimate");
+        Assert.Equal("prototype", estimate.GetProperty("pricingSource").GetString());
+        Assert.False(estimate.GetProperty("isAuthoritative").GetBoolean());
+
+        var state = estimateDocument.RootElement.GetProperty("state");
+        var stateEstimate = state.GetProperty("estimate");
+        Assert.Equal("prototype", stateEstimate.GetProperty("pricingSource").GetString());
+        Assert.False(stateEstimate.GetProperty("isAuthoritative").GetBoolean());
+        Assert.Contains(state.GetProperty("gates").EnumerateArray(), gate =>
+            gate.GetProperty("code").GetString() == "priced" &&
+            gate.GetProperty("status").GetString() != "passed");
+
+        var pricingArtifact = Assert.Single(state.GetProperty("artifacts").EnumerateArray(), artifact =>
+            artifact.GetProperty("artifactType").GetString() == "pricing");
+        var metadata = pricingArtifact.GetProperty("metadata");
+        Assert.Equal("prototype", metadata.GetProperty("pricingSource").GetString());
+        Assert.Equal("false", metadata.GetProperty("isAuthoritative").GetString());
+        Assert.DoesNotContain("validated", metadata.GetProperty("summary").GetString(), StringComparison.OrdinalIgnoreCase);
+
+        var formalQuoteJson = await ExecuteToolAsync(client, sessionId, "quote_prepare_formal_quote");
+        using var formalQuoteDocument = JsonDocument.Parse(formalQuoteJson);
+        Assert.Equal("priced", formalQuoteDocument.RootElement.GetProperty("requiredGateCode").GetString());
+        Assert.Equal(0, formalQuoteDocument.RootElement.GetProperty("state").GetProperty("proposedActions").GetArrayLength());
+    }
+
     [Fact]
     public async Task Agent_message_stream_uses_quote_engine_fallback_when_chatbot_returns_generic_apology()
     {
@@ -6511,7 +6979,9 @@ Customer message:
         return client;
     }
 
-    private async Task<Guid> StartPricedCadSessionAsync(HttpClient client)
+    private async Task<Guid> StartPricedCadSessionAsync(
+        HttpClient client,
+        bool expectAuthoritativePricing = true)
     {
         var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
         {
@@ -6539,12 +7009,17 @@ Customer message:
         Assert.Contains(configuredState.Gates, gate => gate.Code == "configuration_complete" && gate.Status == "passed");
 
         var pricedState = await ExecuteEstimateToolForStateAsync(client, body.SessionId);
-        Assert.Contains(pricedState.Gates, gate => gate.Code == "priced" && gate.Status == "passed");
+        Assert.Contains(pricedState.Gates, gate =>
+            gate.Code == "priced" &&
+            (expectAuthoritativePricing ? gate.Status == "passed" : gate.Status != "passed"));
         Assert.NotNull(pricedState.Estimate);
         return body.SessionId;
     }
 
-    private static Task<QuoteAgentStateResponse> ConfigureFirstPartForEstimateAsync(HttpClient client, Guid sessionId)
+    private static Task<QuoteAgentStateResponse> ConfigureFirstPartForEstimateAsync(
+        HttpClient client,
+        Guid sessionId,
+        int quantity = 25)
     {
         return ExecuteToolForStateAsync(
             client,
@@ -6556,7 +7031,7 @@ Customer message:
                 ["material"] = JsonSerializer.SerializeToElement("pla_black", JsonOptions),
                 ["finish"] = JsonSerializer.SerializeToElement("as_printed", JsonOptions),
                 ["tolerance"] = JsonSerializer.SerializeToElement("standard", JsonOptions),
-                ["quantity"] = JsonSerializer.SerializeToElement("25", JsonOptions),
+                ["quantity"] = JsonSerializer.SerializeToElement(quantity.ToString(CultureInfo.InvariantCulture), JsonOptions),
                 ["lead_time"] = JsonSerializer.SerializeToElement("STANDARD", JsonOptions)
             });
     }
@@ -11441,6 +11916,8 @@ Customer message:
 
         public string ResponseContent { get; init; } = "Upload the bracket CAD file and I will check geometry, DFM, material, and price gates.";
 
+        public string ResponseLanguage { get; init; } = "en";
+
         public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; init; } = [];
 
         public QuoteAgentUsageSnapshotDto UsageSnapshot { get; init; } = new()
@@ -11495,7 +11972,7 @@ Customer message:
                 MessageId = Guid.Parse("d127db4e-1106-4106-8f6b-32c6b467e8ad"),
                 Content = ResponseContent,
                 Role = "assistant",
-                Language = "en",
+                Language = ResponseLanguage,
                 CreatedAt = DateTimeOffset.UtcNow,
                 ThinkingSteps = ThinkingSteps.Select(CloneThinkingStep).ToList(),
                 UsageSnapshot = UsageSnapshot
@@ -11533,7 +12010,7 @@ Customer message:
                     MessageId = Guid.Parse("d127db4e-1106-4106-8f6b-32c6b467e8ad"),
                     Content = ResponseContent,
                     Role = "assistant",
-                    Language = "en",
+                    Language = ResponseLanguage,
                     CreatedAt = DateTimeOffset.UtcNow,
                     ThinkingSteps = ThinkingSteps.Select(CloneThinkingStep).ToList(),
                     UsageSnapshot = UsageSnapshot
@@ -11573,6 +12050,30 @@ Customer message:
                 Timestamp = step.Timestamp,
                 DurationMs = step.DurationMs
             };
+        }
+    }
+
+    private sealed class FixedPricingServiceClient(decimal unitPrice, decimal totalAmount) : IQePricingServiceClient
+    {
+        public Task<PricingCalculationResult?> CalculateAsync(
+            QuotePartDraftDto part,
+            Guid customerId,
+            Guid materialId,
+            Guid manufacturingProcessId,
+            string leadTimeCode,
+            decimal? toleranceAdditionalCostPercent,
+            CancellationToken ct = default)
+        {
+            return Task.FromResult<PricingCalculationResult?>(new PricingCalculationResult
+            {
+                UnitPrice = unitPrice,
+                TotalAmount = totalAmount,
+                UnitPriceBeforeVolumeDiscount = unitPrice,
+                ConfidenceScore = 0.95m,
+                EngineName = "Fixed test pricing",
+                AuditId = Guid.Parse("d58a337c-13ea-40c4-b15e-29882cf6429e"),
+                EstimatedLeadTimeDays = 7
+            });
         }
     }
 

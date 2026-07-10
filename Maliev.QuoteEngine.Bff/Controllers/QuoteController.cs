@@ -385,27 +385,36 @@ public sealed class QuoteController(
                 }
 
                 var adjustment = BuildQuoteEngineConfigurationAdjustment(part);
-                var unitPrice = Math.Round(serviceResult.UnitPrice * adjustment.Multiplier + adjustment.Additive, 2);
-                var lineTotal = Math.Round(unitPrice * part.Quantity, 2);
+                var quantity = Math.Max(1, part.Quantity);
+                var lineTotal = serviceResult.TotalAmount;
+                var unitPrice = QuoteEstimateMoney.DeriveDisplayUnitPrice(lineTotal, quantity);
+                var notes = QuoteEstimateMoney.AppendAuthoritativeTotalNote(
+                    adjustment.Notes,
+                    lineTotal,
+                    quantity,
+                    "THB");
                 lines.Add(new QuoteLineEstimateDto(
                     part.PartId,
                     part.FileName,
                     unitPrice,
                     lineTotal,
                     "THB",
-                    adjustment.Notes));
+                    notes));
             }
 
             var subtotal = lines.Sum(line => line.LineTotal);
-            var discount = subtotal >= 25_000m ? Math.Round(subtotal * 0.05m, 2) : 0m;
             return new QuoteEstimateResponse(
                 request.QuoteSessionId,
                 subtotal,
-                discount,
-                subtotal - discount,
+                0m,
+                subtotal,
                 "THB",
                 true,
-                lines);
+                lines)
+            {
+                PricingSource = "pricing_service",
+                IsAuthoritative = true
+            };
         }
         catch (OperationCanceledException)
         {

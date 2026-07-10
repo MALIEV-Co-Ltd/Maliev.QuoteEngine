@@ -1,9 +1,73 @@
 using Maliev.QuoteEngine.Bff.Services;
+using Maliev.QuoteEngine.Shared.Quotes;
 
 namespace Maliev.QuoteEngine.Tests;
 
 public sealed class PrototypeStoreTests
 {
+    [Theory]
+    [InlineData(1, 215, 215, false)]
+    [InlineData(5, 595, 119, false)]
+    [InlineData(7, 785, 112.14, true)]
+    public void Estimate_charges_setup_once_per_line_and_derives_unit_price_from_total(
+        int quantity,
+        decimal expectedTotal,
+        decimal expectedUnitPrice,
+        bool expectedApproximateUnitPrice)
+    {
+        var store = new QuoteEnginePrototypeStore();
+        var request = new QuoteEstimateRequest
+        {
+            QuoteSessionId = $"prototype-setup-once-{quantity}",
+            LeadTimeCode = "STANDARD",
+            Parts =
+            [
+                new QuotePartDraftDto
+                {
+                    PartId = Guid.NewGuid(),
+                    FileId = Guid.NewGuid(),
+                    UploadId = $"prototype-setup-once-{quantity}",
+                    FileName = "prototype-part.step",
+                    ProcessId = "fdm",
+                    MaterialId = "pla",
+                    FinishId = "fdm-matte",
+                    FinishCode = "MATTE",
+                    ToleranceId = "fdm-standard",
+                    ToleranceCode = "FDM_STANDARD",
+                    InspectionLevel = "STANDARD",
+                    Quantity = quantity,
+                    VolumeCc = 1m,
+                    DfmAcknowledged = true
+                }
+            ]
+        };
+
+        var estimate = store.Estimate(request);
+
+        Assert.Equal(expectedTotal, estimate.Subtotal);
+        Assert.Equal(expectedTotal, estimate.Total);
+        var line = Assert.Single(estimate.Lines);
+        Assert.Equal(expectedTotal, line.LineTotal);
+        Assert.Equal(expectedUnitPrice, line.UnitPrice);
+        Assert.Equal(expectedApproximateUnitPrice, line.Notes.Contains("approximate", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void Quote_estimate_provenance_defaults_fail_closed()
+    {
+        var estimate = new QuoteEstimateResponse(
+            "unknown-provenance",
+            100m,
+            0m,
+            100m,
+            "THB",
+            true,
+            []);
+
+        Assert.Equal("unknown", estimate.PricingSource);
+        Assert.False(estimate.IsAuthoritative);
+    }
+
     [Fact]
     public void TryGetProfile_resolves_the_prototype_demo_customer()
     {

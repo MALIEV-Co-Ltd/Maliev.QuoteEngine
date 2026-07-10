@@ -232,6 +232,7 @@ internal sealed class QuoteAgentSessionStore
                 !string.IsNullOrWhiteSpace(part.MaterialId) &&
                 part.Quantity > 0) &&
             !string.IsNullOrWhiteSpace(state.LeadTimeCode);
+        var hasAuthoritativePricing = state.Estimate?.IsAuthoritative == true;
 
         var checkoutReady = state.Order is not null &&
             isAuthenticated &&
@@ -252,8 +253,12 @@ internal sealed class QuoteAgentSessionStore
                 dfmReviewed ? "Blocking manufacturing risks are resolved or acknowledged." : "Review and acknowledge DFM risks before formal quote or order actions."),
             Gate("configuration_complete", "Configuration complete", configurationComplete ? "passed" : "pending",
                 configurationComplete ? "Process, material, quantity, and lead time are selected." : "Select process, material, quantity, finish/color, tolerance, and lead time."),
-            Gate("priced", "Current estimate available", state.Estimate is not null ? "passed" : "pending",
-                state.Estimate is not null ? "Pricing is available for the current configuration." : "Pricing waits for geometry and required configuration."),
+            Gate("priced", "Authoritative pricing available", hasAuthoritativePricing ? "passed" : "pending",
+                hasAuthoritativePricing
+                    ? "Authoritative pricing is available for the current configuration."
+                    : state.Estimate is not null
+                        ? "A prototype estimate is available, but authoritative PricingService pricing is required before a formal quote."
+                        : "Pricing waits for geometry and required configuration."),
             Gate("customer_authenticated", "Customer authenticated", isAuthenticated ? "passed" : "blocked",
                 isAuthenticated ? "Signed-in customer session is available." : "Sign in or sign up before durable quote, order, document, or payment actions."),
             Gate("quote_artifact_ready", "Quote artifacts ready", state.FormalQuote is not null ? "passed" : "pending",

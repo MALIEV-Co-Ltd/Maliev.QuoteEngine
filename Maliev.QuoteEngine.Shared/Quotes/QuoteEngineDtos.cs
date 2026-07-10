@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Globalization;
 
 namespace Maliev.QuoteEngine.Shared.Quotes;
 
@@ -378,7 +379,55 @@ public sealed record QuoteEstimateResponse(
     decimal Total,
     string Currency,
     bool RequiresSignIn,
-    IReadOnlyList<QuoteLineEstimateDto> Lines);
+    IReadOnlyList<QuoteLineEstimateDto> Lines)
+{
+    /// <summary>Gets the pricing source that produced this estimate.</summary>
+    public string PricingSource { get; init; } = "unknown";
+
+    /// <summary>Gets whether this estimate is authoritative enough for durable quote actions.</summary>
+    public bool IsAuthoritative { get; init; }
+}
+
+/// <summary>Defines display-unit derivation for quote estimate line totals.</summary>
+public static class QuoteEstimateMoney
+{
+    /// <summary>Gets the number of decimal places used for customer-visible unit prices.</summary>
+    public const int DisplayUnitPriceDecimalPlaces = 2;
+
+    /// <summary>Derives a rounded display unit price without changing the authoritative line total.</summary>
+    public static decimal DeriveDisplayUnitPrice(decimal authoritativeLineTotal, int quantity)
+    {
+        if (quantity < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(quantity), quantity, "Quantity must be positive.");
+        }
+
+        return Math.Round(
+            authoritativeLineTotal / quantity,
+            DisplayUnitPriceDecimalPlaces,
+            MidpointRounding.AwayFromZero);
+    }
+
+    /// <summary>Adds an explicit approximation note when the rounded display unit cannot reproduce the authoritative total.</summary>
+    public static string AppendAuthoritativeTotalNote(
+        string notes,
+        decimal authoritativeLineTotal,
+        int quantity,
+        string currency)
+    {
+        var displayUnitPrice = DeriveDisplayUnitPrice(authoritativeLineTotal, quantity);
+        if (displayUnitPrice * quantity == authoritativeLineTotal)
+        {
+            return notes;
+        }
+
+        var total = authoritativeLineTotal.ToString("#,0.##", CultureInfo.InvariantCulture);
+        var approximationNote = $"Unit price is approximate after rounding to {DisplayUnitPriceDecimalPlaces.ToString(CultureInfo.InvariantCulture)} decimal places; authoritative line total is {total} {currency}.";
+        return string.IsNullOrWhiteSpace(notes)
+            ? approximationNote
+            : $"{notes.Trim().TrimEnd('.')}; {approximationNote}";
+    }
+}
 
 public sealed record CreateDraftProjectRequest(
     string QuoteSessionId,

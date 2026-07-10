@@ -132,6 +132,8 @@ internal sealed class QuoteAgentService(
         "amount",
         "currency",
         "summary",
+        "pricingSource",
+        "isAuthoritative",
         "issueCount",
         "lineCount",
         "quoteNumber",
@@ -284,9 +286,11 @@ internal sealed class QuoteAgentService(
         {
             SessionId = state.SessionId,
             MessageId = chatbotResponse?.MessageId,
-            AssistantText = string.IsNullOrWhiteSpace(assistantContent)
-                ? FallbackAgentAnswer(currentState, generatedFallbackPreview)
-                : GroundAssistantText(StripToolTraces(assistantContent), currentState, responseLanguage),
+            AssistantText = BuildGroundedAssistantText(
+                assistantContent,
+                currentState,
+                responseLanguage,
+                generatedFallbackPreview),
             Role = string.IsNullOrWhiteSpace(chatbotResponse?.Role) ? "assistant" : chatbotResponse.Role,
             Language = responseLanguage,
             CreatedAt = chatbotResponse?.CreatedAt == default ? DateTimeOffset.UtcNow : chatbotResponse!.CreatedAt,
@@ -480,9 +484,11 @@ internal sealed class QuoteAgentService(
         {
             SessionId = state.SessionId,
             MessageId = finalMessage?.MessageId,
-            AssistantText = string.IsNullOrWhiteSpace(assistantContent)
-                ? FallbackAgentAnswer(currentState, generatedFallbackPreview)
-                : GroundAssistantText(StripToolTraces(assistantContent), currentState, responseLanguage),
+            AssistantText = BuildGroundedAssistantText(
+                assistantContent,
+                currentState,
+                responseLanguage,
+                generatedFallbackPreview),
             Role = string.IsNullOrWhiteSpace(finalMessage?.Role) ? "assistant" : finalMessage.Role,
             Language = responseLanguage,
             CreatedAt = finalMessage?.CreatedAt == default ? DateTimeOffset.UtcNow : finalMessage!.CreatedAt,
@@ -2207,6 +2213,8 @@ internal sealed class QuoteAgentService(
                 subtotal = estimate.Subtotal,
                 discount = estimate.Discount,
                 currency = estimate.Currency,
+                pricingSource = estimate.PricingSource,
+                isAuthoritative = estimate.IsAuthoritative,
                 lines = estimate.Lines
                     .Select(line => new
                     {
@@ -2456,12 +2464,18 @@ internal sealed class QuoteAgentService(
         var unitPrice = line?.UnitPrice ?? 0m;
         var total = state.Estimate.Total;
         var currency = state.Estimate.Currency;
+        var prototypeNotice = state.Estimate.IsAuthoritative
+            ? string.Empty
+            : " This is a prototype estimate, not authoritative pricing, so a formal quote still waits for PricingService.";
         if (string.Equals(language, "th", StringComparison.OrdinalIgnoreCase))
         {
-            return $"น้องมะลิคำนวณราคาเบื้องต้นให้แล้ว: {total:0.##} {currency} สำหรับ {fileName} จำนวน {quantity.ToString(CultureInfo.InvariantCulture)} ชิ้น ราคาต่อชิ้นประมาณ {unitPrice:0.##} {currency}. รายละเอียดราคาอยู่ใน Artifacts > Pricing estimate และสามารถไปต่อเป็นใบเสนอราคาอย่างเป็นทางการได้เมื่อพร้อมครับ";
+            var thaiPrototypeNotice = state.Estimate.IsAuthoritative
+                ? " สามารถไปต่อเป็นใบเสนอราคาอย่างเป็นทางการได้เมื่อพร้อมครับ"
+                : " ราคานี้มาจากระบบต้นแบบและยังไม่ใช่ราคาทางการ จึงต้องรอ PricingService ก่อนจัดทำใบเสนอราคาอย่างเป็นทางการครับ";
+            return $"น้องมะลิคำนวณราคาเบื้องต้นให้แล้ว: {total:0.##} {currency} สำหรับ {fileName} จำนวน {quantity.ToString(CultureInfo.InvariantCulture)} ชิ้น ราคาต่อชิ้นประมาณ {unitPrice:0.##} {currency}. รายละเอียดราคาอยู่ใน Artifacts > Pricing estimate{thaiPrototypeNotice}";
         }
 
-        return $"Mali calculated the current estimate: {total:0.##} {currency} for {quantity.ToString(CultureInfo.InvariantCulture)} piece(s) of {fileName}. Estimated unit price is {unitPrice:0.##} {currency}. Details are available in Artifacts > Pricing estimate, and you can continue to a formal quote when ready.";
+        return $"Mali calculated the current estimate: {total:0.##} {currency} for {quantity.ToString(CultureInfo.InvariantCulture)} piece(s) of {fileName}. Estimated unit price is {unitPrice:0.##} {currency}. Details are available in Artifacts > Pricing estimate.{prototypeNotice}";
     }
 
     private static string BuildDeferredEstimateBlockedText(
@@ -2494,10 +2508,14 @@ internal sealed class QuoteAgentService(
     {
         return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["summary"] = $"Validated pricing estimate with {estimate.Lines.Count.ToString(CultureInfo.InvariantCulture)} line item(s).",
+            ["summary"] = estimate.IsAuthoritative
+                ? $"Authoritative PricingService estimate with {estimate.Lines.Count.ToString(CultureInfo.InvariantCulture)} line item(s)."
+                : $"Prototype estimate with {estimate.Lines.Count.ToString(CultureInfo.InvariantCulture)} line item(s); not authoritative for a formal quote.",
             ["total"] = estimate.Total.ToString("0.##", CultureInfo.InvariantCulture),
             ["currency"] = estimate.Currency,
-            ["lineCount"] = estimate.Lines.Count.ToString(CultureInfo.InvariantCulture)
+            ["lineCount"] = estimate.Lines.Count.ToString(CultureInfo.InvariantCulture),
+            ["pricingSource"] = estimate.PricingSource,
+            ["isAuthoritative"] = estimate.IsAuthoritative.ToString().ToLowerInvariant()
         };
     }
 
@@ -2538,28 +2556,36 @@ internal sealed class QuoteAgentService(
                     return null;
                 }
 
-                var adjustment = BuildQuoteEngineConfigurationAdjustment(part);
-                var unitPrice = Math.Round(serviceResult.UnitPrice * adjustment.Multiplier + adjustment.Additive, 2);
-                var lineTotal = Math.Round(unitPrice * part.Quantity, 2);
+                var quantity = Math.Max(1, part.Quantity);
+                var lineTotal = serviceResult.TotalAmount;
+                var unitPrice = QuoteEstimateMoney.DeriveDisplayUnitPrice(lineTotal, quantity);
+                var notes = QuoteEstimateMoney.AppendAuthoritativeTotalNote(
+                    BuildQuoteEngineConfigurationNotes(part),
+                    lineTotal,
+                    quantity,
+                    "THB");
                 lines.Add(new QuoteLineEstimateDto(
                     part.PartId,
                     part.FileName,
                     unitPrice,
                     lineTotal,
                     "THB",
-                    adjustment.Notes));
+                    notes));
             }
 
             var subtotal = lines.Sum(line => line.LineTotal);
-            var discount = subtotal >= 25_000m ? Math.Round(subtotal * 0.05m, 2) : 0m;
             return new QuoteEstimateResponse(
                 sessionId.ToString("N"),
                 subtotal,
-                discount,
-                subtotal - discount,
+                0m,
+                subtotal,
                 "THB",
                 true,
-                lines);
+                lines)
+            {
+                PricingSource = "pricing_service",
+                IsAuthoritative = true
+            };
         }
         catch (OperationCanceledException)
         {
@@ -2584,18 +2610,15 @@ internal sealed class QuoteAgentService(
         return Math.Round((tolerance.PriceMultiplier - 1m) * 100m, 2);
     }
 
-    private (decimal Multiplier, decimal Additive, string Notes) BuildQuoteEngineConfigurationAdjustment(
+    private string BuildQuoteEngineConfigurationNotes(
         QuotePartDraftDto part)
     {
-        var multiplier = 1m;
-        var additive = 0m;
         var notes = new List<string> { "PricingService estimate" };
 
         var finish = prototypeStore.ReferenceData.Finishes.FirstOrDefault(option =>
             MatchesReferenceValue(option.Id, part.FinishId) || MatchesReferenceValue(option.Code, part.FinishCode));
         if (finish is not null && finish.PriceMultiplier != 1m)
         {
-            multiplier *= finish.PriceMultiplier;
             notes.Add($"finish {finish.Name}");
         }
 
@@ -2611,24 +2634,18 @@ internal sealed class QuoteAgentService(
         if (inspection is not null)
         {
             notes.Add($"inspection {inspection.Name}");
-            if (inspection.PriceMultiplier != 1m)
-            {
-                multiplier *= inspection.PriceMultiplier;
-            }
         }
 
         var roughness = prototypeStore.ReferenceData.RoughnessOptions.FirstOrDefault(option =>
             MatchesReferenceValue(option.Code, part.RoughnessCode));
         if (roughness is not null && roughness.PriceMultiplier != 1m)
         {
-            multiplier *= roughness.PriceMultiplier;
             notes.Add($"roughness {roughness.Name}");
         }
 
         if (part.HasThreadedHoles || part.ThreadedHoleCount > 0)
         {
             var count = Math.Max(part.ThreadedHoleCount, 1);
-            additive += count * 85m;
             notes.Add($"threaded holes {count}");
         }
 
@@ -2636,11 +2653,10 @@ internal sealed class QuoteAgentService(
             !part.InsertType.Equals("None", StringComparison.OrdinalIgnoreCase))
         {
             var count = Math.Max(part.InsertCount, 1);
-            additive += count * 120m;
             notes.Add($"thread inserts {count}");
         }
 
-        return (multiplier, additive, string.Join("; ", notes));
+        return string.Join("; ", notes);
     }
 
     private static bool MatchesReferenceValue(string? left, string? right) =>
@@ -7349,7 +7365,7 @@ internal sealed class QuoteAgentService(
 
         if (state.Estimate is not null)
         {
-            contextLines.Add($"Current estimate: {state.Estimate.Total.ToString("0.##", CultureInfo.InvariantCulture)} {state.Estimate.Currency}, {state.Estimate.Lines.Count} line(s)");
+            contextLines.Add($"Current estimate: {state.Estimate.Total.ToString("0.##", CultureInfo.InvariantCulture)} {state.Estimate.Currency}, {state.Estimate.Lines.Count} line(s), pricingSource={state.Estimate.PricingSource}, isAuthoritative={state.Estimate.IsAuthoritative.ToString().ToLowerInvariant()}");
         }
 
         if (!string.IsNullOrWhiteSpace(customerContext))
@@ -8031,6 +8047,24 @@ Customer message:
         }
     }
 
+    private static string BuildGroundedAssistantText(
+        string? assistantContent,
+        QuoteAgentStateResponse state,
+        string language,
+        bool generatedFallbackPreview)
+    {
+        var sanitized = StripToolTraces(assistantContent ?? string.Empty);
+        if (string.IsNullOrWhiteSpace(sanitized))
+        {
+            sanitized = FallbackAgentAnswer(state, generatedFallbackPreview);
+        }
+
+        var grounded = GroundAssistantText(sanitized, state, language);
+        return string.IsNullOrWhiteSpace(grounded)
+            ? FallbackAgentAnswer(state, generatedFallbackPreview)
+            : grounded;
+    }
+
     private static string StripToolTraces(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -8049,6 +8083,11 @@ Customer message:
             if (IsToolTraceHeader(trimmed) || IsToolTraceResult(trimmed))
             {
                 skippingToolPayload = true;
+                continue;
+            }
+
+            if (IsBareToolCall(trimmed))
+            {
                 continue;
             }
 
@@ -8072,6 +8111,35 @@ Customer message:
         }
 
         return sanitized.Count == 0 ? string.Empty : string.Join('\n', sanitized).Trim();
+    }
+
+    private static bool IsBareToolCall(string trimmed)
+    {
+        var candidate = trimmed.Trim();
+        while (TryStripMarkdownLinePrefix(candidate, out var unwrapped))
+        {
+            candidate = unwrapped;
+        }
+
+        candidate = candidate.Trim().Trim('`').Trim().TrimEnd(';').TrimEnd();
+        return candidate.StartsWith("tools.", StringComparison.OrdinalIgnoreCase) &&
+            candidate.EndsWith(')') &&
+            candidate.IndexOf('(', StringComparison.Ordinal) > "tools.".Length;
+    }
+
+    private static bool TryStripMarkdownLinePrefix(string candidate, out string unwrapped)
+    {
+        foreach (var prefix in new[] { "- ", "* ", "+ ", "> " })
+        {
+            if (candidate.StartsWith(prefix, StringComparison.Ordinal))
+            {
+                unwrapped = candidate[prefix.Length..].TrimStart();
+                return true;
+            }
+        }
+
+        unwrapped = candidate;
+        return false;
     }
 
     private static bool IsToolTraceHeader(string trimmed)
@@ -8106,6 +8174,8 @@ Customer message:
         content = GroundGoogleDriveConnectorText(content);
         content = GroundAuthHandoffText(content, state);
         content = GroundGeneratedPreviewText(content, state);
+        content = GroundEstimateText(content, state, language);
+        content = GroundFormalQuoteAvailabilityText(content, state, language);
 
         if (string.IsNullOrWhiteSpace(content) ||
             HasExplicitViewerOpenDirective(state.UiDirectives) ||
@@ -8140,6 +8210,202 @@ Customer message:
         }
 
         return string.Join('\n', sanitizedLines).Trim();
+    }
+
+    private static string GroundEstimateText(
+        string content,
+        QuoteAgentStateResponse state,
+        string language)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return content;
+        }
+
+        var currency = state.Estimate?.Currency ?? "THB";
+        if (!ContainsEstimatePriceClaim(content, currency))
+        {
+            return content;
+        }
+
+        var groundedLine = state.Estimate is null
+            ? BuildUnavailableEstimateLine(content, language)
+            : BuildGroundedEstimateLine(state, language);
+        var lines = content.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var groundedLines = new List<string>(lines.Length);
+        var insertedGroundedLine = false;
+        foreach (var line in lines)
+        {
+            if (ContainsEstimatePriceClaim(line, currency))
+            {
+                if (!insertedGroundedLine)
+                {
+                    groundedLines.Add(groundedLine);
+                    insertedGroundedLine = true;
+                }
+
+                continue;
+            }
+
+            groundedLines.Add(line);
+        }
+
+        return string.Join('\n', groundedLines).Trim();
+    }
+
+    private static bool ContainsEstimatePriceClaim(string content, string currency)
+    {
+        var referencesCurrency = content.Contains(currency, StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("บาท", StringComparison.Ordinal);
+        if (!referencesCurrency)
+        {
+            return false;
+        }
+
+        if (content.Contains("shipping", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("courier", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("freight", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("delivery fee", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("ค่าจัดส่ง", StringComparison.Ordinal) ||
+            content.Contains("ค่าขนส่ง", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return content.Contains("estimate", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("estimated", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("unit price", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("per unit", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("quote", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("ราคาประเมิน", StringComparison.Ordinal) ||
+            content.Contains("ใบเสนอราคา", StringComparison.Ordinal) ||
+            content.Contains("ต่อชิ้น", StringComparison.Ordinal);
+    }
+
+    private static string BuildUnavailableEstimateLine(string content, string language)
+    {
+        return string.Equals(language, "th", StringComparison.OrdinalIgnoreCase) || ContainsThaiText(content)
+            ? "ยังไม่มีราคาประเมินที่ยืนยันจากสถานะเซิร์ฟเวอร์ กรุณาตั้งค่าชิ้นงานและคำนวณราคาก่อน"
+            : "A server-backed estimate is not available yet. Confirm the part configuration and calculate the estimate first.";
+    }
+
+    private static string BuildGroundedEstimateLine(QuoteAgentStateResponse state, string language)
+    {
+        var estimate = state.Estimate!;
+        var total = FormatGroundedMoney(estimate.Total);
+        var line = estimate.Lines.Count == 1 ? estimate.Lines[0] : null;
+        var useThai = string.Equals(language, "th", StringComparison.OrdinalIgnoreCase);
+        var provenance = estimate.IsAuthoritative
+            ? string.Empty
+            : useThai
+                ? " ราคานี้มาจากระบบต้นแบบและยังไม่ใช่ราคาทางการ"
+                : " This is a prototype estimate and is not authoritative pricing.";
+        if (line is null)
+        {
+            return useThai
+                ? $"น้องมะลิยืนยันราคาประเมินตามสถานะเซิร์ฟเวอร์ปัจจุบันที่ {total} {estimate.Currency} รวม {estimate.Lines.Count.ToString(CultureInfo.InvariantCulture)} รายการ.{provenance}"
+                : $"The current server-backed estimate is {total} {estimate.Currency} total across {estimate.Lines.Count.ToString(CultureInfo.InvariantCulture)} line item(s).{provenance}";
+        }
+
+        var part = state.Parts.FirstOrDefault(candidate => candidate.PartId == line.PartId);
+        var quantity = Math.Max(1, part?.Quantity ?? 1);
+        var unitDetail = useThai
+            ? $" ราคาต่อชิ้น {FormatGroundedMoney(line.UnitPrice)} {estimate.Currency}"
+            : $", or {FormatGroundedMoney(line.UnitPrice)} {estimate.Currency} per unit";
+
+        return useThai
+            ? $"น้องมะลิยืนยันราคาประเมินตามสถานะเซิร์ฟเวอร์ปัจจุบันที่ {total} {estimate.Currency} สำหรับ {quantity.ToString(CultureInfo.InvariantCulture)} ชิ้น{unitDetail}.{provenance}"
+            : $"The current server-backed estimate is {total} {estimate.Currency} total for {quantity.ToString(CultureInfo.InvariantCulture)} piece(s){unitDetail}.{provenance}";
+    }
+
+    private static string FormatGroundedMoney(decimal amount)
+    {
+        return amount.ToString("#,0.##", CultureInfo.InvariantCulture);
+    }
+
+    private static string GroundFormalQuoteAvailabilityText(
+        string content,
+        QuoteAgentStateResponse state,
+        string language)
+    {
+        if (string.IsNullOrWhiteSpace(content) ||
+            !ContainsFormalQuoteAvailabilityClaim(content) ||
+            state.Artifacts.Any(artifact =>
+                artifact.ArtifactType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase)))
+        {
+            return content;
+        }
+
+        var awaitingConfirmation = state.ProposedActions.Any(action =>
+            action.ActionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+        var useThai = string.Equals(language, "th", StringComparison.OrdinalIgnoreCase) || ContainsThaiText(content);
+        var groundedLine = useThai
+            ? awaitingConfirmation
+                ? "ใบเสนอราคาอย่างเป็นทางการกำลังรอการยืนยัน และจะปรากฏใน Artifacts หลังยืนยันสำเร็จเท่านั้น"
+                : "ยังไม่มีไฟล์ใบเสนอราคาอย่างเป็นทางการใน Artifacts"
+            : awaitingConfirmation
+                ? "The formal quote is awaiting your confirmation and will appear in Artifacts only after confirmation succeeds."
+                : "A formal quote artifact is not available yet.";
+        var lines = content.Replace("\r\n", "\n", StringComparison.Ordinal).Split('\n');
+        var groundedLines = new List<string>(lines.Length);
+        var insertedGroundedLine = false;
+        foreach (var line in lines)
+        {
+            if (ContainsFormalQuoteAvailabilityClaim(line))
+            {
+                if (!insertedGroundedLine)
+                {
+                    groundedLines.Add(groundedLine);
+                    insertedGroundedLine = true;
+                }
+
+                continue;
+            }
+
+            groundedLines.Add(line);
+        }
+
+        return string.Join('\n', groundedLines).Trim();
+    }
+
+    private static bool ContainsFormalQuoteAvailabilityClaim(string content)
+    {
+        var referencesFormalQuote = content.Contains("formal quote", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("formal quotation", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("ใบเสนอราคาอย่างเป็นทางการ", StringComparison.Ordinal);
+        if (!referencesFormalQuote)
+        {
+            return false;
+        }
+
+        var trimmed = content.Trim();
+        if (trimmed.EndsWith('?') ||
+            content.Contains("when you are ready", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("if you are ready", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("once you are ready", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("not ready", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("isn't ready", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("not available", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("has not been generated", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("has not been created", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("ยังไม่พร้อม", StringComparison.Ordinal) ||
+            content.Contains("ยังไม่มี", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return content.Contains("ready", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("available", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("artifact", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("download", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("generated", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("created", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("completed", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("prepared", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("พร้อม", StringComparison.Ordinal) ||
+            content.Contains("ดาวน์โหลด", StringComparison.Ordinal) ||
+            content.Contains("เสร็จ", StringComparison.Ordinal) ||
+            content.Contains("จัดทำแล้ว", StringComparison.Ordinal);
     }
 
     private static string GroundAssistantPersonaText(string content, string language)
@@ -10585,7 +10851,9 @@ Customer message:
 
         if (state.Estimate is not null)
         {
-            return $"I have {partNames} and the current estimate is {state.Estimate.Total:0.##} {state.Estimate.Currency}.";
+            return state.Estimate.IsAuthoritative
+                ? $"I have {partNames} and the current estimate is {state.Estimate.Total:0.##} {state.Estimate.Currency}."
+                : $"I have {partNames} and the current prototype estimate is {state.Estimate.Total:0.##} {state.Estimate.Currency}. It is not authoritative pricing and cannot be used for a formal quote yet.";
         }
 
         var configurationGate = state.Gates.FirstOrDefault(gate =>

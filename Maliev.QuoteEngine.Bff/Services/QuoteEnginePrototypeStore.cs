@@ -855,14 +855,28 @@ public sealed class QuoteEnginePrototypeStore
 
             var setup = material?.ProcessId == "cnc" ? 850m : 120m;
             var config = EstimateConfiguration(part);
-            var unitPrice = Math.Round(((setup + (Math.Max(part.VolumeCc, 1m) * baseRate)) * config.Multiplier + config.Additive) * leadTime.PriceMultiplier, 2);
-            var lineTotal = Math.Round(unitPrice * part.Quantity, 2);
-            return new QuoteLineEstimateDto(part.PartId, part.FileName, unitPrice, lineTotal, "THB", config.Notes);
+            var quantity = Math.Max(1, part.Quantity);
+            var setupCost = setup * config.Multiplier * leadTime.PriceMultiplier;
+            var variableUnitCost =
+                ((Math.Max(part.VolumeCc, 1m) * baseRate * config.Multiplier) + config.Additive) *
+                leadTime.PriceMultiplier;
+            var lineTotal = Math.Round(setupCost + (variableUnitCost * quantity), 2);
+            var unitPrice = QuoteEstimateMoney.DeriveDisplayUnitPrice(lineTotal, quantity);
+            var notes = QuoteEstimateMoney.AppendAuthoritativeTotalNote(
+                config.Notes,
+                lineTotal,
+                quantity,
+                "THB");
+            return new QuoteLineEstimateDto(part.PartId, part.FileName, unitPrice, lineTotal, "THB", notes);
         }).ToArray();
 
         var subtotal = lines.Sum(x => x.LineTotal);
         var discount = subtotal >= 25_000m ? Math.Round(subtotal * 0.05m, 2) : 0m;
-        return new QuoteEstimateResponse(request.QuoteSessionId, subtotal, discount, subtotal - discount, "THB", true, lines);
+        return new QuoteEstimateResponse(request.QuoteSessionId, subtotal, discount, subtotal - discount, "THB", true, lines)
+        {
+            PricingSource = "prototype",
+            IsAuthoritative = false
+        };
     }
 
     public CreateDraftProjectResponse CreateDraftProject(Guid customerId, CreateDraftProjectRequest request)

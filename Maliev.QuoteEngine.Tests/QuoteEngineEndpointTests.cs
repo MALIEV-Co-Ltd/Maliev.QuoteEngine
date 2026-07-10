@@ -2565,9 +2565,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var standardBody = await standard.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
 
         Assert.NotNull(standardBody);
-        Assert.Equal(2_596.00m, standardBody.Total);
+        Assert.Equal(2_476.00m, standardBody.Total);
+        Assert.Equal("prototype", standardBody.PricingSource);
+        Assert.False(standardBody.IsAuthoritative);
         var standardLine = Assert.Single(standardBody.Lines);
-        Assert.Equal(1_298.00m, standardLine.UnitPrice);
+        Assert.Equal(1_238.00m, standardLine.UnitPrice);
 
         var express = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
         {
@@ -2579,7 +2581,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var expressBody = await express.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
 
         Assert.NotNull(expressBody);
-        Assert.Equal(3_504.60m, expressBody.Total);
+        Assert.Equal(3_342.60m, expressBody.Total);
 
         part.Quantity = 3;
         var quantityThree = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
@@ -2592,7 +2594,113 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var quantityThreeBody = await quantityThree.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
 
         Assert.NotNull(quantityThreeBody);
-        Assert.Equal(5_256.90m, quantityThreeBody.Total);
+        Assert.Equal(4_932.90m, quantityThreeBody.Total);
+    }
+
+    [Fact]
+    public async Task Estimate_preserves_authoritative_pricing_service_total_and_derives_consistent_unit_price()
+    {
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new FixedTotalPricingServiceClient(
+                    unitPrice: 123.46m,
+                    totalAmount: 493.82m));
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
+        {
+            QuoteSessionId = "authoritative-pricing-total",
+            LeadTimeCode = "STANDARD",
+            Parts =
+            [
+                new QuotePartDraftDto
+                {
+                    PartId = Guid.NewGuid(),
+                    FileId = Guid.NewGuid(),
+                    UploadId = "authoritative-pricing-total",
+                    FileName = "authoritative-total.step",
+                    ProcessId = "fdm",
+                    MaterialId = "pla",
+                    FinishId = "fdm-matte",
+                    FinishCode = "MATTE",
+                    ToleranceId = "fdm-standard",
+                    ToleranceCode = "FDM_STANDARD",
+                    InspectionLevel = "STANDARD",
+                    Quantity = 4,
+                    VolumeCc = 1m,
+                    DfmAcknowledged = true
+                }
+            ]
+        });
+        var estimate = await response.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(estimate);
+        Assert.Equal(493.82m, estimate.Subtotal);
+        Assert.Equal(0m, estimate.Discount);
+        Assert.Equal(493.82m, estimate.Total);
+        var line = Assert.Single(estimate.Lines);
+        Assert.Equal(493.82m, line.LineTotal);
+        Assert.Equal(123.46m, line.UnitPrice);
+        Assert.Contains("approximate", line.Notes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("authoritative line total", line.Notes, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Estimate_rounds_display_unit_and_marks_authoritative_non_divisible_total()
+    {
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQePricingServiceClient>();
+                services.AddSingleton<IQePricingServiceClient>(new FixedTotalPricingServiceClient(
+                    unitPrice: 33.33m,
+                    totalAmount: 100m));
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/estimate", new QuoteEstimateRequest
+        {
+            QuoteSessionId = "non-divisible-authoritative-total",
+            LeadTimeCode = "STANDARD",
+            Parts =
+            [
+                new QuotePartDraftDto
+                {
+                    PartId = Guid.NewGuid(),
+                    FileId = Guid.NewGuid(),
+                    UploadId = "non-divisible-authoritative-total",
+                    FileName = "non-divisible-total.step",
+                    ProcessId = "fdm",
+                    MaterialId = "pla",
+                    FinishId = "fdm-matte",
+                    FinishCode = "MATTE",
+                    ToleranceId = "fdm-standard",
+                    ToleranceCode = "FDM_STANDARD",
+                    InspectionLevel = "STANDARD",
+                    Quantity = 3,
+                    VolumeCc = 1m,
+                    DfmAcknowledged = true
+                }
+            ]
+        });
+        var estimate = await response.Content.ReadFromJsonAsync<QuoteEstimateResponse>();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(estimate);
+        Assert.Equal(100m, estimate.Total);
+        var line = Assert.Single(estimate.Lines);
+        Assert.Equal(100m, line.LineTotal);
+        Assert.Equal(33.33m, line.UnitPrice);
+        Assert.Contains("approximate", line.Notes, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("authoritative line total", line.Notes, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -4628,6 +4736,30 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         public Task<string?> CleanSpeechAsync(string speech, string language, CancellationToken cancellationToken)
         {
             return Task.FromResult<string?>(speech);
+        }
+    }
+
+    private sealed class FixedTotalPricingServiceClient(decimal unitPrice, decimal totalAmount) : IQePricingServiceClient
+    {
+        public Task<PricingCalculationResult?> CalculateAsync(
+            QuotePartDraftDto part,
+            Guid customerId,
+            Guid materialId,
+            Guid manufacturingProcessId,
+            string leadTimeCode,
+            decimal? toleranceAdditionalCostPercent,
+            CancellationToken ct = default)
+        {
+            return Task.FromResult<PricingCalculationResult?>(new PricingCalculationResult
+            {
+                UnitPrice = unitPrice,
+                TotalAmount = totalAmount,
+                UnitPriceBeforeVolumeDiscount = unitPrice,
+                ConfidenceScore = 0.95m,
+                EngineName = "Fixed total pricing test",
+                AuditId = Guid.Parse("49a6fc7f-773f-4268-a03e-1ba8cbc399be"),
+                EstimatedLeadTimeDays = 7
+            });
         }
     }
 
