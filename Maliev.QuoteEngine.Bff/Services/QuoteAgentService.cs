@@ -8116,16 +8116,21 @@ Customer message:
 
     private static bool IsBareToolCall(string trimmed)
     {
-        var candidate = trimmed.Trim();
+        var candidate = NormalizeMarkdownLineForClassification(trimmed).TrimEnd(';').TrimEnd();
+        return candidate.StartsWith("tools.", StringComparison.OrdinalIgnoreCase) &&
+            candidate.EndsWith(')') &&
+            candidate.IndexOf('(', StringComparison.Ordinal) > "tools.".Length;
+    }
+
+    private static string NormalizeMarkdownLineForClassification(string content)
+    {
+        var candidate = content.Trim();
         while (TryStripMarkdownLinePrefix(candidate, out var unwrapped))
         {
             candidate = unwrapped;
         }
 
-        candidate = StripMatchingMarkdownWrappers(candidate).TrimEnd(';').TrimEnd();
-        return candidate.StartsWith("tools.", StringComparison.OrdinalIgnoreCase) &&
-            candidate.EndsWith(')') &&
-            candidate.IndexOf('(', StringComparison.Ordinal) > "tools.".Length;
+        return StripMatchingMarkdownWrappers(candidate);
     }
 
     private static bool TryStripMarkdownLinePrefix(string candidate, out string unwrapped)
@@ -8207,8 +8212,8 @@ Customer message:
         content = GroundGoogleDriveConnectorText(content);
         content = GroundAuthHandoffText(content, state);
         content = GroundGeneratedPreviewText(content, state);
-        content = GroundEstimateText(content, state, language);
         content = GroundFormalQuoteAvailabilityText(content, state, language);
+        content = GroundEstimateText(content, state, language);
 
         if (string.IsNullOrWhiteSpace(content) ||
             HasExplicitViewerOpenDirective(state.UiDirectives) ||
@@ -8290,6 +8295,12 @@ Customer message:
             return false;
         }
 
+        var normalizedContent = NormalizeMarkdownLineForClassification(content);
+        if (ContainsFormalQuoteIntent(normalizedContent))
+        {
+            return false;
+        }
+
         var hasExplicitManufacturingPriceLanguage =
             content.Contains("estimate", StringComparison.OrdinalIgnoreCase) ||
             content.Contains("estimated", StringComparison.OrdinalIgnoreCase) ||
@@ -8317,6 +8328,13 @@ Customer message:
             content.Contains("ค่าขนส่ง", StringComparison.Ordinal);
 
         return !hasShippingContext;
+    }
+
+    private static bool ContainsFormalQuoteIntent(string content)
+    {
+        return content.Contains("formal quote", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("formal quotation", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("ใบเสนอราคาอย่างเป็นทางการ", StringComparison.Ordinal);
     }
 
     private static string BuildUnavailableEstimateLine(string content, string language)
@@ -8387,6 +8405,17 @@ Customer message:
         var insertedGroundedLine = false;
         foreach (var line in lines)
         {
+            if (ContainsFormalQuoteAvailabilityClaim(line))
+            {
+                if (!insertedGroundedLine)
+                {
+                    groundedLines.Add(groundedLine);
+                    insertedGroundedLine = true;
+                }
+
+                continue;
+            }
+
             var groundedLineBuilder = new StringBuilder(line.Length + groundedLine.Length);
             var lineContainsAvailabilityClaim = false;
             foreach (Match sentenceMatch in Regex.Matches(
@@ -8423,9 +8452,8 @@ Customer message:
 
     private static bool ContainsFormalQuoteAvailabilityClaim(string content)
     {
-        if (string.IsNullOrWhiteSpace(content) ||
-            content.Contains('?') ||
-            content.Contains('？'))
+        content = NormalizeMarkdownLineForClassification(content);
+        if (string.IsNullOrWhiteSpace(content) || content.Contains('?') || content.Contains('？'))
         {
             return false;
         }
@@ -8443,18 +8471,19 @@ Customer message:
         const RegexOptions options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
         const string formalQuote = @"(?:(?:your|the|this|our|a)\s+)?formal\s+(?:quote|quotation)(?:\s+artifact)?";
         const string completedStatus = @"(?:ready|available|generated|created|completed|prepared|downloadable)";
+        const string amount = @"(?:\s+for\s+[0-9][0-9,]*(?:\.[0-9]+)?\s+(?:[A-Z]{3}|บาท))?";
 
         return Regex.IsMatch(
                 content,
-                $@"^\s*{formalQuote}\s+(?:is|has\s+been)\s+(?:now\s+)?{completedStatus}(?:\s+and\s+{completedStatus})*(?:\s+(?:in|under)\s+(?:the\s+)?artifacts)?(?:\s+to\s+download)?\s*[.!]?\s*$",
+                $@"^\s*{formalQuote}\s+(?:is|has\s+been)\s+(?:now\s+)?{completedStatus}(?:\s+and\s+{completedStatus})*(?:\s+(?:in|under)\s+(?:the\s+)?artifacts)?(?:\s+to\s+download)?{amount}\s*[.!]?\s*$",
                 options) ||
             Regex.IsMatch(
                 content,
-                $@"^\s*{formalQuote}\s+(?:is|has\s+been)\s+(?:now\s+)?(?:in|under)\s+(?:the\s+)?artifacts\s*[.!]?\s*$",
+                $@"^\s*{formalQuote}\s+(?:is|has\s+been)\s+(?:now\s+)?(?:in|under)\s+(?:the\s+)?artifacts{amount}\s*[.!]?\s*$",
                 options) ||
             Regex.IsMatch(
                 content,
-                $@"^\s*{formalQuote}\s+(?:can\s+be|is)\s+downloaded\s*[.!]?\s*$",
+                $@"^\s*{formalQuote}\s+(?:can\s+be|is)\s+downloaded{amount}\s*[.!]?\s*$",
                 options);
     }
 
@@ -8464,10 +8493,11 @@ Customer message:
         const string subject = "ใบเสนอราคาอย่างเป็นทางการ";
         const string downloadable = @"ดาวน์โหลดได้(?:เลย)?";
         const string completedStatus = @"(?:พร้อมแล้ว|จัดทำแล้ว|สร้างแล้ว|เสร็จแล้ว)";
+        const string amount = @"(?:\s+(?:ยอดรวม|มูลค่า)\s*[0-9][0-9,]*(?:\.[0-9]+)?\s*(?:[A-Z]{3}|บาท))?";
 
         return Regex.IsMatch(
             content,
-            $@"^\s*{subject}\s*(?:(?:ตอนนี้|ขณะนี้)\s*)?(?:{completedStatus}(?:\s*[,，]?\s*{downloadable})?|{downloadable}|อยู่ใน\s+Artifacts)\s*[.!。]?\s*$",
+            $@"^\s*{subject}\s*(?:(?:ตอนนี้|ขณะนี้)\s*)?(?:{completedStatus}(?:\s*[,，]?\s*{downloadable})?|{downloadable}|อยู่ใน\s+Artifacts){amount}\s*[.!。]?\s*$",
             options);
     }
 

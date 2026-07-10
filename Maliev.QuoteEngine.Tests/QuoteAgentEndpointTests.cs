@@ -2453,6 +2453,11 @@ Customer message:
     [InlineData("en", "Status update:\nYour formal quote is ready.", "awaiting your confirmation", "Status update:")]
     [InlineData("en", "Your formal quote is ready.\nWould you like me to explain the next step?", "awaiting your confirmation", "Would you like me to explain the next step?")]
     [InlineData("en", "Your formal quote is ready. Please review the pending action.", "awaiting your confirmation", "Please review the pending action.")]
+    [InlineData("en", "- Your formal quote is ready.", "awaiting your confirmation", null)]
+    [InlineData("en", "**Your formal quote is ready.**", "awaiting your confirmation", null)]
+    [InlineData("th", "- ใบเสนอราคาอย่างเป็นทางการพร้อมแล้ว", "รอการยืนยัน", null)]
+    [InlineData("th", "**ใบเสนอราคาอย่างเป็นทางการพร้อมแล้ว**", "รอการยืนยัน", null)]
+    [InlineData("en", "Your formal quote is ready and available in Artifacts for 12,345 THB.", "awaiting your confirmation", null)]
     public async Task Agent_grounding_treats_pending_formal_quote_as_awaiting_confirmation(
         string language,
         string modelClaim,
@@ -2506,7 +2511,7 @@ Customer message:
     [Fact]
     public async Task Agent_grounding_allows_formal_quote_availability_when_artifact_exists()
     {
-        const string modelClaim = "Your formal quote is ready and available in Artifacts.";
+        const string modelClaim = "Your formal quote is ready and available in Artifacts for 12,345 THB.";
         var chatbot = new RecordingChatbotServiceClient
         {
             ResponseContent = modelClaim
@@ -2543,6 +2548,49 @@ Customer message:
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(body);
         Assert.Contains(modelClaim, body.AssistantText, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("en", "Your formal quote is ready for 12,345 THB.", "formal quote artifact is not available yet")]
+    [InlineData("en", "The formal quotation is ready for 12,345 THB.", "formal quote artifact is not available yet")]
+    [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการพร้อมแล้ว ยอดรวม 12,345 บาท", "ยังไม่มีไฟล์ใบเสนอราคาอย่างเป็นทางการ")]
+    public async Task Agent_grounding_treats_currency_bearing_formal_quote_as_unavailable_without_action_or_artifact(
+        string language,
+        string modelClaim,
+        string expectedUnavailableText)
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelClaim,
+            ResponseLanguage = language
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = Guid.NewGuid(),
+            Message = language == "th" ? "ใบเสนอราคาอย่างเป็นทางการพร้อมหรือยัง" : "Is the formal quote available?",
+            Language = language
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(expectedUnavailableText, body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("12,345", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("server-backed estimate", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(body.Artifacts, artifact =>
+            artifact.ArtifactType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(body.ProposedActions, action =>
+            action.ActionType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
     }
 
     [Theory]
@@ -2652,6 +2700,39 @@ Customer message:
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(body);
         Assert.Contains(modelText, body.AssistantText, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Agent_grounding_still_replaces_ordinary_manufacturing_quote_amount()
+    {
+        const string modelText = "The manufacturing quote is 120 THB.";
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelText
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "What is the manufacturing quote?",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.DoesNotContain("120 THB", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("server-backed estimate", body.AssistantText, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
