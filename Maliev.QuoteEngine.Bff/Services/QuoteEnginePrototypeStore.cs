@@ -381,7 +381,10 @@ public sealed class QuoteEnginePrototypeStore
                 record.Status,
                 record.IsPinned,
                 record.IsArchived,
-                record.UpdatedAt))
+                record.UpdatedAt)
+            {
+                CreatedAt = record.CreatedAt
+            })
             .ToArray();
     }
 
@@ -401,7 +404,10 @@ public sealed class QuoteEnginePrototypeStore
             project.IsPinned,
             project.IsArchived,
             project.UpdatedAt,
-            ClonePartsForResponse(project.Parts));
+            ClonePartsForResponse(project.Parts))
+        {
+            CreatedAt = project.CreatedAt
+        };
     }
 
     public IReadOnlyList<QuoteAgentSearchResultDto> SearchCustomerData(

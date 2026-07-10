@@ -119,13 +119,16 @@
                                 title="@Text("New chat", "แชทใหม่")"
                                 aria-label="@Text("New chat", "แชทใหม่")"
                                 @onclick="StartNewProjectAsync">
-                            <MudIcon Icon="@Icons.Material.Outlined.PostAdd" Size="Size.Small" />
+                            <MudIcon Icon="@Icons.Material.Outlined.AddComment" Size="Size.Small" />
                         </button>
                         <button type="button"
                                 class="qe-agent-rail-group-toggle"
                                 aria-expanded="@AriaExpanded(!_chatsCollapsed)"
                                 @onclick="ToggleChats">
-                            <span>@Text("Chats", "แชท")</span>
+                            <span class="qe-agent-rail-group-label">
+                                <MudIcon Icon="@Icons.Material.Outlined.ChatBubbleOutline" Size="Size.Small" />
+                                <span>@Text("Chats", "แชท")</span>
+                            </span>
                             <MudIcon Icon="@(_chatsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
                         </button>
                     </div>
@@ -159,17 +162,20 @@
                                 title="@Text("New project", "โปรเจกต์ใหม่")"
                                 aria-label="@Text("New project", "โปรเจกต์ใหม่")"
                                 @onclick="StartNewProjectAsync">
-                            <MudIcon Icon="@Icons.Material.Outlined.PostAdd" Size="Size.Small" />
+                            <MudIcon Icon="@Icons.Material.Outlined.CreateNewFolder" Size="Size.Small" />
                         </button>
                         <button type="button"
                                 class="qe-agent-rail-group-toggle"
-                                aria-expanded="@AriaExpanded(!_projectsCollapsed)"
-                                @onclick="ToggleProjects">
-                            <span>@Text("Projects", "โปรเจกต์")</span>
-                            <MudIcon Icon="@(_projectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                                aria-expanded="@AriaExpanded(!_railProjectsCollapsed)"
+                                @onclick="ToggleRailProjects">
+                            <span class="qe-agent-rail-group-label">
+                                <MudIcon Icon="@Icons.Material.Outlined.Folder" Size="Size.Small" />
+                                <span>@Text("Projects", "โปรเจกต์")</span>
+                            </span>
+                            <MudIcon Icon="@(_railProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
                         </button>
                     </div>
-                    @if (!_projectsCollapsed)
+                    @if (!_railProjectsCollapsed)
                     {
                         @if (RailProjects.Any())
                         {
@@ -179,19 +185,59 @@
                                     <a href="@ProjectHref(project)" @onclick="CloseNavigationDrawer">
                                         <span class="qe-agent-project-title-row">
                                             <span class="qe-agent-project-title">@ProjectName(project)</span>
+                                        </span>
+                                        <span class="qe-agent-project-meta-row">
+                                            <span class="@ProjectStatusBadgeClass(project)">@ProjectStatusLabel(project)</span>
                                             <small class="qe-agent-project-date">@ProjectUpdatedLabel(project)</small>
                                         </span>
-                                        <span class="@ProjectStatusBadgeClass(project)">@ProjectStatusLabel(project)</span>
                                     </a>
                                     @if (CanManageProject(project))
                                     {
-                                        <button type="button"
-                                                class="@ProjectPinButtonClass(project)"
-                                                title="@ProjectPinButtonTitle(project)"
-                                                aria-label="@ProjectPinButtonTitle(project)"
-                                                @onclick="@(() => ToggleProjectPinAsync(project))">
-                                            <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
-                                        </button>
+                                        <div class="qe-agent-project-actions" aria-busy="@AriaExpanded(IsAnyProjectActionBusy(project))">
+                                            <button type="button"
+                                                    class="@(project.IsPinned ? "is-active" : null)"
+                                                    disabled="@IsProjectActionBusy(project, ProjectAction.Pin)"
+                                                    title="@ProjectPinButtonTitle(project)"
+                                                    aria-label="@ProjectPinButtonTitle(project)"
+                                                    @onclick="@(() => ToggleProjectPinAsync(project))">
+                                                @if (IsProjectActionBusy(project, ProjectAction.Pin))
+                                                {
+                                                    <span class="qe-agent-project-action-spinner" aria-hidden="true"></span>
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@(project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
+                                                }
+                                            </button>
+                                            <button type="button"
+                                                    disabled="@IsProjectActionBusy(project, ProjectAction.Duplicate)"
+                                                    title="@Text($"Duplicate {ProjectName(project)}", $"ทำสำเนา {ProjectName(project)}")"
+                                                    aria-label="@Text($"Duplicate {ProjectName(project)}", $"ทำสำเนา {ProjectName(project)}")"
+                                                    @onclick="@(() => DuplicateProjectAsync(project))">
+                                                @if (IsProjectActionBusy(project, ProjectAction.Duplicate))
+                                                {
+                                                    <span class="qe-agent-project-action-spinner" aria-hidden="true"></span>
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                                                }
+                                            </button>
+                                            <button type="button"
+                                                    disabled="@IsProjectActionBusy(project, ProjectAction.Archive)"
+                                                    title="@Text($"Archive {ProjectName(project)}", $"เก็บ {ProjectName(project)}")"
+                                                    aria-label="@Text($"Archive {ProjectName(project)}", $"เก็บ {ProjectName(project)}")"
+                                                    @onclick="@(() => ArchiveProjectAsync(project))">
+                                                @if (IsProjectActionBusy(project, ProjectAction.Archive))
+                                                {
+                                                    <span class="qe-agent-project-action-spinner" aria-hidden="true"></span>
+                                                }
+                                                else
+                                                {
+                                                    <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                                                }
+                                            </button>
+                                        </div>
                                     }
                                 </div>
                             }
@@ -480,140 +526,189 @@
                     {
                         <section class="qe-agent-management-empty">
                             <strong>@Text("Sign in to view projects", "เข้าสู่ระบบเพื่อดูโปรเจกต์")</strong>
-                            <p>@Text("Your projects, files, quotes, and orders are kept in your MALIEV account.", "โปรเจกต์ ไฟล์ ใบเสนอราคา และคำสั่งซื้อจะอยู่ในบัญชี MALIEV ของคุณ")</p>
+                            <p>@Text("Your projects and files are kept in your MALIEV account.", "โปรเจกต์และไฟล์จะอยู่ในบัญชี MALIEV ของคุณ")</p>
                             <button type="button" @onclick='@(() => OpenAuthDialog("sign-in"))'>@Text("Sign in", "เข้าสู่ระบบ")</button>
                         </section>
                     }
-                    else if (!_projects.Any(project => !project.IsArchived))
-                    {
-                        <p class="qe-agent-management-empty">@Text("No projects yet. Start a new project from chat.", "ยังไม่มีโปรเจกต์ เริ่มโปรเจกต์ใหม่จากแชท")</p>
-                    }
                     else
                     {
-                        @if (PinnedProjects.Any())
-                        {
-                            <section class="@ProjectManagementSectionClass(_pinnedProjectsCollapsed)">
-                                <header>
-                                    <button type="button"
-                                            class="qe-agent-management-section-toggle"
-                                            aria-expanded="@AriaExpanded(!_pinnedProjectsCollapsed)"
-                                            @onclick="TogglePinnedProjects">
-                                        <span>
-                                            <strong>@Text("Pinned", "ปักหมุด")</strong>
-                                            <small>@Text("Fast access projects", "โปรเจกต์ที่เข้าถึงบ่อย")</small>
-                                        </span>
-                                        <MudIcon Icon="@(_pinnedProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
-                                    </button>
-                                </header>
-                                @if (!_pinnedProjectsCollapsed)
+                        <section class="qe-agent-project-search" role="search" aria-label="@Text("Search projects", "ค้นหาโปรเจกต์")">
+                            <label for="qe-agent-project-search">@Text("Search projects", "ค้นหาโปรเจกต์")</label>
+                            <div>
+                                <MudIcon Icon="@Icons.Material.Outlined.Search" Size="Size.Small" />
+                                <input id="qe-agent-project-search"
+                                       value="@_projectSearchQuery"
+                                       @oninput="OnProjectManagementSearchInputAsync"
+                                       autocomplete="off"
+                                       maxlength="120"
+                                       placeholder="@Text("Search by project, file, material, or status", "ค้นหาจากโปรเจกต์ ไฟล์ วัสดุ หรือสถานะ")" />
+                                @if (_projectSearchLoading)
                                 {
-                                    <div class="qe-agent-management-list">
-                                        @foreach (var project in PinnedProjects)
-                                        {
-                                            <article class="qe-agent-management-row">
-                                                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
-                                                <div>
-                                                    <strong>@ProjectName(project)</strong>
-                                                    <span class="@ProjectStatusBadgeClass(project)">@ProjectStatusLabel(project)</span>
-                                                </div>
-                                                <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
-                                                @if (CanManageProject(project))
-                                                {
-                                                    <button type="button"
-                                                            title="@Text("Duplicate project", "ทำสำเนาโปรเจกต์")"
-                                                            aria-label="@Text($"Duplicate {project.NameEn}", $"ทำสำเนา{project.NameTh}")"
-                                                            @onclick="@(() => DuplicateProjectAsync(project))">
-                                                        <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
-                                                    </button>
-                                                    <button type="button"
-                                                            title="@Text("Unpin project", "เลิกปักหมุดโปรเจกต์")"
-                                                            aria-label="@Text($"Unpin {project.NameEn}", $"เลิกปักหมุด{project.NameTh}")"
-                                                            @onclick="@(() => ToggleProjectPinAsync(project))">
-                                                        <MudIcon Icon="@Icons.Material.Filled.PushPin" Size="Size.Small" />
-                                                    </button>
-                                                    <button type="button"
-                                                            title="@Text("Archive project", "เก็บโปรเจกต์")"
-                                                            aria-label="@Text($"Archive {project.NameEn}", $"เก็บโปรเจกต์{project.NameTh}")"
-                                                            @onclick="@(() => ArchiveProjectAsync(project))">
-                                                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
-                                                    </button>
-                                                    <button type="button"
-                                                            title="@Text("Mark achieved", "ทำเครื่องหมายว่าสำเร็จ")"
-                                                            aria-label="@Text($"Mark {project.NameEn} achieved", $"ทำเครื่องหมาย{project.NameTh}ว่าสำเร็จ")"
-                                                            @onclick="@(() => AchieveProjectAsync(project))">
-                                                        <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
-                                                    </button>
-                                                }
-                                            </article>
-                                        }
-                                    </div>
+                                    <span class="qe-agent-project-action-spinner" aria-hidden="true"></span>
                                 }
-                            </section>
-                        }
-                        <section class="@ProjectManagementSectionClass(_projectsCollapsed)">
-                            <header>
-                                <button type="button"
-                                        class="qe-agent-management-section-toggle"
-                                        aria-expanded="@AriaExpanded(!_projectsCollapsed)"
-                                        @onclick="ToggleProjects">
-                                    <span>
-                                        <strong>@Text("All projects", "โปรเจกต์ทั้งหมด")</strong>
-                                        <small>@Text("Pinned projects are not duplicated here.", "โปรเจกต์ที่ปักหมุดจะไม่แสดงซ้ำที่นี่")</small>
-                                    </span>
-                                    <MudIcon Icon="@(_projectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
-                                </button>
-                            </header>
-                            @if (!_projectsCollapsed)
+                            </div>
+                            @if (ProjectManagementSearchIsActive)
                             {
-                                @if (ProjectManagementProjects.Any())
+                                <p class="qe-agent-project-search-status" aria-live="polite">
+                                    @if (!ProjectManagementSearchHasMinimumQuery)
+                                    {
+                                        @Text("Type at least 2 characters.", "พิมพ์อย่างน้อย 2 ตัวอักษร")
+                                    }
+                                    else if (_projectSearchLoading)
+                                    {
+                                        @Text("Searching projects...", "กำลังค้นหาโปรเจกต์...")
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(_projectSearchError))
+                                    {
+                                        @_projectSearchError
+                                    }
+                                    else
+                                    {
+                                        @Text($"{_projectSearchResults.Count} matching projects", $"พบ {_projectSearchResults.Count} โปรเจกต์")
+                                    }
+                                </p>
+                            }
+                        </section>
+
+                        @if (ProjectManagementSearchIsActive)
+                        {
+                            @if (ProjectManagementSearchHasMinimumQuery && !_projectSearchLoading && string.IsNullOrWhiteSpace(_projectSearchError))
+                            {
+                                @if (_projectSearchResults.Count > 0)
                                 {
-                                    <div class="qe-agent-management-list">
-                                        @foreach (var project in ProjectManagementProjects)
-                                        {
-                                            <article class="qe-agent-management-row">
-                                                <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Small" />
-                                                <div>
-                                                    <strong>@ProjectName(project)</strong>
-                                                    <span class="@ProjectStatusBadgeClass(project)">@ProjectStatusLabel(project)</span>
-                                                </div>
-                                                <a href="@ProjectHref(project)">@Text("Open", "เปิด")</a>
-                                                @if (CanManageProject(project))
-                                                {
-                                                    <button type="button"
-                                                            title="@Text("Duplicate project", "ทำสำเนาโปรเจกต์")"
-                                                            aria-label="@Text($"Duplicate {project.NameEn}", $"ทำสำเนา{project.NameTh}")"
-                                                            @onclick="@(() => DuplicateProjectAsync(project))">
-                                                        <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
-                                                    </button>
-                                                    <button type="button"
-                                                            title="@Text("Pin project", "ปักหมุดโปรเจกต์")"
-                                                            aria-label="@Text($"Pin {project.NameEn}", $"ปักหมุด{project.NameTh}")"
-                                                            @onclick="@(() => ToggleProjectPinAsync(project))">
-                                                        <MudIcon Icon="@Icons.Material.Outlined.PushPin" Size="Size.Small" />
-                                                    </button>
-                                                    <button type="button"
-                                                            title="@Text("Archive project", "เก็บโปรเจกต์")"
-                                                            aria-label="@Text($"Archive {project.NameEn}", $"เก็บโปรเจกต์{project.NameTh}")"
-                                                            @onclick="@(() => ArchiveProjectAsync(project))">
-                                                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
-                                                    </button>
-                                                    <button type="button"
-                                                            title="@Text("Mark achieved", "ทำเครื่องหมายว่าสำเร็จ")"
-                                                            aria-label="@Text($"Mark {project.NameEn} achieved", $"ทำเครื่องหมาย{project.NameTh}ว่าสำเร็จ")"
-                                                            @onclick="@(() => AchieveProjectAsync(project))">
-                                                        <MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" />
-                                                    </button>
-                                                }
-                                            </article>
-                                        }
-                                    </div>
+                                    <section class="qe-agent-management-section" aria-label="@Text("Project search results", "ผลการค้นหาโปรเจกต์")">
+                                        <div class="qe-agent-management-list">
+                                            @foreach (var project in _projectSearchResults)
+                                            {
+                                                var detailState = GetProjectDetailState(project.ProjectId);
+                                                <QuoteProjectManagementRow Project="@project.ToDto()"
+                                                                           Detail="@detailState?.Detail"
+                                                                           ErrorMessage="@detailState?.ErrorMessage"
+                                                                           ProjectHref="@ProjectHref(project)"
+                                                                           StatusLabel="@ProjectStatusLabel(project)"
+                                                                           StatusCssClass="@ProjectStatusBadgeClass(project)"
+                                                                           IsThai="@IsThaiCulture"
+                                                                           IsExpanded="@(detailState?.IsExpanded == true)"
+                                                                           IsLoading="@(detailState?.IsLoading == true)"
+                                                                           CanManage="@CanManageProject(project)"
+                                                                           IsPinBusy="@IsProjectActionBusy(project, ProjectAction.Pin)"
+                                                                           IsDuplicateBusy="@IsProjectActionBusy(project, ProjectAction.Duplicate)"
+                                                                           IsArchiveBusy="@IsProjectActionBusy(project, ProjectAction.Archive)"
+                                                                           OnToggleExpanded="@(() => ToggleProjectDetailAsync(project))"
+                                                                           OnRetry="@(() => ReloadProjectDetailAsync(project))"
+                                                                           OnPin="@(() => ToggleProjectPinAsync(project))"
+                                                                           OnDuplicate="@(() => DuplicateProjectAsync(project))"
+                                                                           OnArchive="@(() => ArchiveProjectAsync(project))" />
+                                            }
+                                        </div>
+                                    </section>
                                 }
                                 else
                                 {
-                                    <p class="qe-agent-management-empty">@Text("No unpinned projects.", "ไม่มีโปรเจกต์ที่ไม่ได้ปักหมุด")</p>
+                                    <p class="qe-agent-management-empty">@Text("No projects match this search.", "ไม่พบโปรเจกต์ที่ตรงกับการค้นหา")</p>
                                 }
                             }
-                        </section>
+                        }
+                        else if (!_projects.Any(project => !project.IsArchived))
+                        {
+                            <p class="qe-agent-management-empty">@Text("No projects yet. Start a new project from chat.", "ยังไม่มีโปรเจกต์ เริ่มโปรเจกต์ใหม่จากแชท")</p>
+                        }
+                        else
+                        {
+                            @if (PinnedProjects.Any())
+                            {
+                                <section class="@ProjectManagementSectionClass(_pinnedProjectsCollapsed)">
+                                    <header>
+                                        <button type="button"
+                                                class="qe-agent-management-section-toggle"
+                                                aria-expanded="@AriaExpanded(!_pinnedProjectsCollapsed)"
+                                                @onclick="TogglePinnedProjects">
+                                            <span>
+                                                <strong>@Text("Pinned", "ปักหมุด")</strong>
+                                                <small>@Text("Fast access projects", "โปรเจกต์ที่เข้าถึงบ่อย")</small>
+                                            </span>
+                                            <MudIcon Icon="@(_pinnedProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                                        </button>
+                                    </header>
+                                    @if (!_pinnedProjectsCollapsed)
+                                    {
+                                        <div class="qe-agent-management-list">
+                                            @foreach (var project in PinnedProjects)
+                                            {
+                                                var detailState = GetProjectDetailState(project.ProjectId);
+                                                <QuoteProjectManagementRow Project="@project.ToDto()"
+                                                                           Detail="@detailState?.Detail"
+                                                                           ErrorMessage="@detailState?.ErrorMessage"
+                                                                           ProjectHref="@ProjectHref(project)"
+                                                                           StatusLabel="@ProjectStatusLabel(project)"
+                                                                           StatusCssClass="@ProjectStatusBadgeClass(project)"
+                                                                           IsThai="@IsThaiCulture"
+                                                                           IsExpanded="@(detailState?.IsExpanded == true)"
+                                                                           IsLoading="@(detailState?.IsLoading == true)"
+                                                                           CanManage="@CanManageProject(project)"
+                                                                           IsPinBusy="@IsProjectActionBusy(project, ProjectAction.Pin)"
+                                                                           IsDuplicateBusy="@IsProjectActionBusy(project, ProjectAction.Duplicate)"
+                                                                           IsArchiveBusy="@IsProjectActionBusy(project, ProjectAction.Archive)"
+                                                                           OnToggleExpanded="@(() => ToggleProjectDetailAsync(project))"
+                                                                           OnRetry="@(() => ReloadProjectDetailAsync(project))"
+                                                                           OnPin="@(() => ToggleProjectPinAsync(project))"
+                                                                           OnDuplicate="@(() => DuplicateProjectAsync(project))"
+                                                                           OnArchive="@(() => ArchiveProjectAsync(project))" />
+                                            }
+                                        </div>
+                                    }
+                                </section>
+                            }
+
+                            <section class="@ProjectManagementSectionClass(_managementProjectsCollapsed)">
+                                <header>
+                                    <button type="button"
+                                            class="qe-agent-management-section-toggle"
+                                            aria-expanded="@AriaExpanded(!_managementProjectsCollapsed)"
+                                            @onclick="ToggleManagementProjects">
+                                        <span>
+                                            <strong>@Text("All projects", "โปรเจกต์ทั้งหมด")</strong>
+                                            <small>@Text("Pinned projects are not duplicated here.", "โปรเจกต์ที่ปักหมุดจะไม่แสดงซ้ำที่นี่")</small>
+                                        </span>
+                                        <MudIcon Icon="@(_managementProjectsCollapsed ? Icons.Material.Outlined.ChevronRight : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+                                    </button>
+                                </header>
+                                @if (!_managementProjectsCollapsed)
+                                {
+                                    @if (ProjectManagementProjects.Any())
+                                    {
+                                        <div class="qe-agent-management-list">
+                                            @foreach (var project in ProjectManagementProjects)
+                                            {
+                                                var detailState = GetProjectDetailState(project.ProjectId);
+                                                <QuoteProjectManagementRow Project="@project.ToDto()"
+                                                                           Detail="@detailState?.Detail"
+                                                                           ErrorMessage="@detailState?.ErrorMessage"
+                                                                           ProjectHref="@ProjectHref(project)"
+                                                                           StatusLabel="@ProjectStatusLabel(project)"
+                                                                           StatusCssClass="@ProjectStatusBadgeClass(project)"
+                                                                           IsThai="@IsThaiCulture"
+                                                                           IsExpanded="@(detailState?.IsExpanded == true)"
+                                                                           IsLoading="@(detailState?.IsLoading == true)"
+                                                                           CanManage="@CanManageProject(project)"
+                                                                           IsPinBusy="@IsProjectActionBusy(project, ProjectAction.Pin)"
+                                                                           IsDuplicateBusy="@IsProjectActionBusy(project, ProjectAction.Duplicate)"
+                                                                           IsArchiveBusy="@IsProjectActionBusy(project, ProjectAction.Archive)"
+                                                                           OnToggleExpanded="@(() => ToggleProjectDetailAsync(project))"
+                                                                           OnRetry="@(() => ReloadProjectDetailAsync(project))"
+                                                                           OnPin="@(() => ToggleProjectPinAsync(project))"
+                                                                           OnDuplicate="@(() => DuplicateProjectAsync(project))"
+                                                                           OnArchive="@(() => ArchiveProjectAsync(project))" />
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <p class="qe-agent-management-empty">@Text("No unpinned projects.", "ไม่มีโปรเจกต์ที่ไม่ได้ปักหมุด")</p>
+                                    }
+                                }
+                            </section>
+                        }
                     }
                 }
                 else if (IsWorkspacePage(WorkspacePage.Settings))
@@ -2609,11 +2704,15 @@
 @code {
     private readonly List<AgentMessageRow> _messages = [];
     private readonly List<ProjectNavItem> _projects = [];
+    private readonly List<ProjectNavItem> _projectSearchResults = [];
+    private readonly Dictionary<Guid, ProjectManagementDetailState> _projectDetailStates = [];
+    private readonly HashSet<ProjectActionKey> _processingProjectActions = [];
     private readonly List<QuoteAgentSearchResultDto> _customerSearchResults = [];
     private readonly List<ComposerAttachmentPreview> _pendingComposerAttachments = [];
     private readonly HashSet<string> _activeUiHighlightKeys = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<Guid> _processingActionIds = [];
     private const int SearchMinimumCharacters = 3;
+    private const int ProjectSearchMinimumCharacters = 2;
     private const int SearchPromptVisibleCharacters = 28;
     private const int DictationMeterBarCount = 320;
     private const int AgentStreamRevealCharacters = 18;
@@ -2622,6 +2721,7 @@
     private const string WorkspaceHandoffKey = "maliev.quote.workspace.handoff";
     private static readonly TimeSpan AgentHealthRefreshInterval = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan AgentStreamRevealInterval = TimeSpan.FromMilliseconds(28);
+    private static readonly TimeSpan ProjectSearchDebounceDelay = TimeSpan.FromMilliseconds(250);
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
@@ -2659,9 +2759,10 @@
     private string _artifactNoteDraft = string.Empty;
     private bool _navigationDrawerOpen;
     private bool _accountMenuOpen;
-    private bool _chatsCollapsed;
+    private bool _chatsCollapsed = true;
     private bool _pinnedProjectsCollapsed;
-    private bool _projectsCollapsed;
+    private bool _railProjectsCollapsed;
+    private bool _managementProjectsCollapsed;
     private bool _quickActionsMenuOpen;
     private bool _sketchOpen;
     private bool _sketchInitPending;
@@ -2671,6 +2772,7 @@
     private bool _connectorRegistryLoaded;
     private bool _connectorRegistryRequiresAuthentication;
     private bool _searchLoading;
+    private bool _projectSearchLoading;
     private bool _customerSearchUnavailable;
     private bool _dictating;
     private bool _dictationProcessing;
@@ -2713,6 +2815,9 @@
     private string _projectName = string.Empty;
     private bool _projectNameUserSet;
     private string _searchQuery = string.Empty;
+    private string _projectSearchQuery = string.Empty;
+    private string? _projectSearchError;
+    private int _projectSearchVersion;
     private string _animatedSearchPrompt = string.Empty;
     private string? _highlightConnectorId;
     private string _sketchTitle = "Manufacturing sketch";
@@ -2720,6 +2825,7 @@
     private string _sketchMode = "ink";
     private bool _sketchAttaching;
     private CancellationTokenSource? _searchPromptAnimationCts;
+    private CancellationTokenSource? _projectManagementSearchCts;
     private ElementReference _composerTextarea;
     private ElementReference _searchInput;
     private ElementReference _dictationButton;
@@ -3118,6 +3224,10 @@
         .OrderByDescending(project => project.IsPinned)
         .ThenByDescending(project => project.UpdatedAt);
     private IEnumerable<ProjectNavItem> ProjectManagementProjects => RailProjects.Where(project => !project.IsPinned);
+    private bool ProjectManagementSearchIsActive => !string.IsNullOrWhiteSpace(_projectSearchQuery);
+    private bool ProjectManagementSearchHasMinimumQuery =>
+        _projectSearchQuery.Trim().Length >= ProjectSearchMinimumCharacters;
+    private bool IsThaiCulture => SupportedCultures.Normalize(Culture) == SupportedCultures.ThaiCulture;
     private IEnumerable<SearchNavItem> SearchResults => BuildSearchResults();
     private bool SearchHasMinimumQuery => _searchQuery.Trim().Length >= SearchMinimumCharacters;
     private bool CanAnimateSearchPrompt => string.IsNullOrEmpty(_searchQuery) && !_searchPromptHovered && !_searchPromptFocused;
@@ -3337,6 +3447,7 @@
         else
         {
             _projects.RemoveAll(project => project.IsPersisted);
+            ClearProjectManagementState();
             _customerSearchResults.Clear();
             _customerSearchUnavailable = true;
             _projectNavigationLoaded = false;
@@ -7826,7 +7937,7 @@
 
     private static string ProjectUpdatedLabel(ProjectNavItem project)
     {
-        var local = project.UpdatedAt.ToLocalTime();
+        var local = (project.CreatedAt ?? project.UpdatedAt).ToLocalTime();
         var now = DateTimeOffset.Now;
         return local.Year == now.Year
             ? local.ToString("MMM d", CultureInfo.InvariantCulture)
@@ -7839,6 +7950,7 @@
         {
             "chat" => Text("Chat", "แชท"),
             "draft" => Text("Draft", "ฉบับร่าง"),
+            "quoted" => Text("Quoted", "เสนอราคาแล้ว"),
             "ordered" => Text("Ordered", "สั่งผลิตแล้ว"),
             "payment-pending" => Text("Payment pending", "รอชำระเงิน"),
             "manufacturing" => Text("Manufacturing", "กำลังผลิต"),
@@ -7861,6 +7973,7 @@
         {
             "chat" => "chat",
             "draft" => "draft",
+            "quoted" or "quote_ready" or "quotation_ready" or "customer_review" or "approved" => "quoted",
             "ordered" or "order" => "ordered",
             "payment_pending" or "pending_payment" or "awaiting_payment" or "payment pending" => "payment-pending",
             "manufacturing" or "in_production" => "manufacturing",
@@ -8015,6 +8128,32 @@
         return project.IsPersisted && project.ProjectId != Guid.Empty;
     }
 
+    private bool IsProjectActionBusy(ProjectNavItem project, ProjectAction action) =>
+        _processingProjectActions.Contains(new ProjectActionKey(project.ProjectId, action));
+
+    private bool IsAnyProjectActionBusy(ProjectNavItem project) =>
+        Enum.GetValues<ProjectAction>().Any(action => IsProjectActionBusy(project, action));
+
+    private bool BeginProjectAction(ProjectNavItem project, ProjectAction action)
+    {
+        var added = _processingProjectActions.Add(new ProjectActionKey(project.ProjectId, action));
+        if (added)
+        {
+            StateHasChanged();
+        }
+
+        return added;
+    }
+
+    private void EndProjectAction(ProjectNavItem project, ProjectAction action)
+    {
+        _processingProjectActions.Remove(new ProjectActionKey(project.ProjectId, action));
+        if (!_disposed)
+        {
+            StateHasChanged();
+        }
+    }
+
     private async Task ToggleProjectPinAsync(ProjectNavItem project)
     {
         if (!IsSignedIn)
@@ -8028,6 +8167,11 @@
             _error = Text(
                 "Save this draft project before pinning it.",
                 "บันทึกโปรเจกต์ฉบับร่างนี้ก่อนปักหมุด");
+            return;
+        }
+
+        if (!BeginProjectAction(project, ProjectAction.Pin))
+        {
             return;
         }
 
@@ -8045,6 +8189,10 @@
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
             _error = Text("Project pin status could not be updated right now.", "ยังไม่สามารถอัปเดตสถานะปักหมุดโปรเจกต์ได้");
+        }
+        finally
+        {
+            EndProjectAction(project, ProjectAction.Pin);
         }
     }
 
@@ -8064,6 +8212,11 @@
             return;
         }
 
+        if (!BeginProjectAction(project, ProjectAction.Duplicate))
+        {
+            return;
+        }
+
         try
         {
             var response = await Api.DuplicateProjectAsync(project.ProjectId, new DuplicateDraftProjectRequest(Text($"{project.NameEn} copy", $"สำเนา {project.NameTh}")));
@@ -8076,6 +8229,10 @@
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
             _error = Text("Project duplication is temporarily unavailable.", "ยังไม่สามารถทำสำเนาโปรเจกต์ได้ชั่วคราว");
+        }
+        finally
+        {
+            EndProjectAction(project, ProjectAction.Duplicate);
         }
     }
 
@@ -8095,6 +8252,11 @@
             return;
         }
 
+        if (!BeginProjectAction(project, ProjectAction.Archive))
+        {
+            return;
+        }
+
         try
         {
             var response = await Api.ArchiveProjectAsync(project.ProjectId);
@@ -8107,6 +8269,10 @@
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
         {
             _error = Text("Project archiving is temporarily unavailable.", "ยังไม่สามารถเก็บโปรเจกต์ได้ชั่วคราว");
+        }
+        finally
+        {
+            EndProjectAction(project, ProjectAction.Archive);
         }
     }
 
@@ -8151,9 +8317,14 @@
         _chatsCollapsed = !_chatsCollapsed;
     }
 
-    private void ToggleProjects()
+    private void ToggleRailProjects()
     {
-        _projectsCollapsed = !_projectsCollapsed;
+        _railProjectsCollapsed = !_railProjectsCollapsed;
+    }
+
+    private void ToggleManagementProjects()
+    {
+        _managementProjectsCollapsed = !_managementProjectsCollapsed;
     }
 
     private void ApplyProjectManagement(ProjectManagementResponse response)
@@ -8180,6 +8351,192 @@
         _projects.RemoveAll(project => project.ProjectId == response.ProjectId);
         _projects.Insert(0, ProjectNavItem.FromDuplicateResponse(response));
         _activeWorkspacePage = WorkspacePage.Projects;
+    }
+
+    private async Task OnProjectManagementSearchInputAsync(ChangeEventArgs args)
+    {
+        _projectSearchQuery = args.Value?.ToString() ?? string.Empty;
+        var normalizedQuery = _projectSearchQuery.Trim();
+        var requestVersion = ++_projectSearchVersion;
+
+        _projectManagementSearchCts?.Cancel();
+        _projectManagementSearchCts?.Dispose();
+        _projectManagementSearchCts = null;
+        _projectSearchResults.Clear();
+        _projectSearchError = null;
+
+        if (normalizedQuery.Length < ProjectSearchMinimumCharacters)
+        {
+            _projectSearchLoading = false;
+            return;
+        }
+
+        var requestCts = new CancellationTokenSource();
+        _projectManagementSearchCts = requestCts;
+        var cancellationToken = requestCts.Token;
+        _projectSearchLoading = true;
+
+        try
+        {
+            await Task.Delay(ProjectSearchDebounceDelay, cancellationToken);
+            var response = await Api.SearchProjectsAsync(normalizedQuery, 50, cancellationToken);
+            if (requestVersion != _projectSearchVersion ||
+                !normalizedQuery.Equals(_projectSearchQuery.Trim(), StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            MergeProjectSearchResults(response.Projects);
+            _projectSearchLoading = false;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Superseded search requests must not clear or replace the newest results.
+        }
+        catch (OperationCanceledException)
+        {
+            if (requestVersion != _projectSearchVersion)
+            {
+                return;
+            }
+
+            _projectSearchLoading = false;
+            _projectSearchError = Text(
+                "Project search timed out. Try again.",
+                "การค้นหาโปรเจกต์หมดเวลา กรุณาลองอีกครั้ง");
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            if (requestVersion != _projectSearchVersion)
+            {
+                return;
+            }
+
+            _projectSearchLoading = false;
+            _projectSearchError = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            if (requestVersion != _projectSearchVersion)
+            {
+                return;
+            }
+
+            _projectSearchLoading = false;
+            _projectSearchError = Text(
+                "Project search is temporarily unavailable.",
+                "การค้นหาโปรเจกต์ยังไม่พร้อมใช้งานชั่วคราว");
+        }
+    }
+
+    private void MergeProjectSearchResults(IReadOnlyList<CustomerProjectNavItemDto> results)
+    {
+        _projectSearchResults.Clear();
+        foreach (var result in results)
+        {
+            var project = _projects.FirstOrDefault(candidate => candidate.ProjectId == result.ProjectId);
+            if (project is null)
+            {
+                project = ProjectNavItem.FromDto(result);
+                _projects.Add(project);
+            }
+            else
+            {
+                project.Apply(result);
+            }
+
+            _projectSearchResults.Add(project);
+        }
+    }
+
+    private ProjectManagementDetailState? GetProjectDetailState(Guid projectId) =>
+        _projectDetailStates.GetValueOrDefault(projectId);
+
+    private async Task ToggleProjectDetailAsync(ProjectNavItem project)
+    {
+        if (!_projectDetailStates.TryGetValue(project.ProjectId, out var state))
+        {
+            state = new ProjectManagementDetailState();
+            _projectDetailStates[project.ProjectId] = state;
+        }
+
+        state.IsExpanded = !state.IsExpanded;
+        if (state.IsExpanded && state.Detail is null && !state.IsLoading)
+        {
+            await LoadProjectDetailAsync(project, state);
+        }
+    }
+
+    private async Task ReloadProjectDetailAsync(ProjectNavItem project)
+    {
+        if (!_projectDetailStates.TryGetValue(project.ProjectId, out var state))
+        {
+            state = new ProjectManagementDetailState { IsExpanded = true };
+            _projectDetailStates[project.ProjectId] = state;
+        }
+
+        await LoadProjectDetailAsync(project, state);
+    }
+
+    private async Task LoadProjectDetailAsync(ProjectNavItem project, ProjectManagementDetailState state)
+    {
+        state.LoadCts?.Cancel();
+        state.LoadCts?.Dispose();
+        state.LoadCts = new CancellationTokenSource();
+        var cancellationToken = state.LoadCts.Token;
+        state.IsLoading = true;
+        state.ErrorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            state.Detail = await Api.GetProjectDetailAsync(project.ProjectId, cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (OperationCanceledException)
+        {
+            state.ErrorMessage = Text(
+                "Project details timed out. Try again.",
+                "การโหลดรายละเอียดโปรเจกต์หมดเวลา กรุณาลองอีกครั้ง");
+        }
+        catch (QuoteEngineApiException ex)
+        {
+            state.ErrorMessage = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            state.ErrorMessage = Text(
+                "Project details are temporarily unavailable.",
+                "รายละเอียดโปรเจกต์ยังไม่พร้อมใช้งานชั่วคราว");
+        }
+        finally
+        {
+            state.IsLoading = false;
+        }
+    }
+
+    private void ClearProjectManagementState()
+    {
+        _projectManagementSearchCts?.Cancel();
+        _projectManagementSearchCts?.Dispose();
+        _projectManagementSearchCts = null;
+        _projectSearchVersion++;
+        _projectSearchQuery = string.Empty;
+        _projectSearchResults.Clear();
+        _projectSearchLoading = false;
+        _projectSearchError = null;
+        _processingProjectActions.Clear();
+
+        foreach (var state in _projectDetailStates.Values)
+        {
+            state.LoadCts?.Cancel();
+            state.LoadCts?.Dispose();
+        }
+
+        _projectDetailStates.Clear();
     }
 
     private async Task OpenSearchAsync()
@@ -9041,11 +9398,38 @@
 
         public DateTimeOffset UpdatedAt { get; set; } = updatedAt;
 
+        public DateTimeOffset? CreatedAt { get; set; }
+
         public bool HasMeaningfulProjectState { get; set; } = hasMeaningfulProjectState;
+
+        public CustomerProjectNavItemDto ToDto() => new(
+            ProjectId,
+            ProjectNumber,
+            NameEn,
+            Status,
+            IsPinned,
+            IsArchived,
+            UpdatedAt)
+        {
+            CreatedAt = this.CreatedAt
+        };
+
+        public void Apply(CustomerProjectNavItemDto project)
+        {
+            ProjectNumber = project.ProjectNumber;
+            NameEn = project.Title;
+            NameTh = project.Title;
+            Status = project.Status;
+            IsPinned = project.IsPinned;
+            IsArchived = project.IsArchived;
+            UpdatedAt = project.UpdatedAt;
+            CreatedAt = project.CreatedAt ?? CreatedAt;
+            HasMeaningfulProjectState = true;
+        }
 
         public static ProjectNavItem FromDto(CustomerProjectNavItemDto project)
         {
-            return new(
+            return new ProjectNavItem(
                 project.ProjectId,
                 project.ProjectNumber,
                 project.Title,
@@ -9055,12 +9439,15 @@
                 project.IsArchived,
                 true,
                 project.UpdatedAt,
-                true);
+                true)
+            {
+                CreatedAt = project.CreatedAt
+            };
         }
 
         public static ProjectNavItem FromManagementResponse(ProjectManagementResponse project)
         {
-            return new(
+            return new ProjectNavItem(
                 project.ProjectId,
                 project.ProjectNumber,
                 project.Title,
@@ -9070,12 +9457,15 @@
                 project.IsArchived,
                 true,
                 DateTimeOffset.UtcNow,
-                true);
+                true)
+            {
+                CreatedAt = DateTimeOffset.UtcNow
+            };
         }
 
         public static ProjectNavItem FromDuplicateResponse(DuplicateDraftProjectResponse project)
         {
-            return new(
+            return new ProjectNavItem(
                 project.ProjectId,
                 project.ProjectNumber,
                 project.Title,
@@ -9085,13 +9475,17 @@
                 false,
                 true,
                 DateTimeOffset.UtcNow,
-                true);
+                true)
+            {
+                CreatedAt = DateTimeOffset.UtcNow
+            };
         }
     }
 
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
+        ClearProjectManagementState();
         StopReasoningTimer();
 
         if (_agentHealthCts is not null)
@@ -9139,6 +9533,28 @@
 
             await _sketchModule.DisposeAsync();
         }
+    }
+
+    private sealed class ProjectManagementDetailState
+    {
+        public bool IsExpanded { get; set; }
+
+        public bool IsLoading { get; set; }
+
+        public string? ErrorMessage { get; set; }
+
+        public CustomerProjectDetailResponse? Detail { get; set; }
+
+        public CancellationTokenSource? LoadCts { get; set; }
+    }
+
+    private readonly record struct ProjectActionKey(Guid ProjectId, ProjectAction Action);
+
+    private enum ProjectAction
+    {
+        Pin,
+        Duplicate,
+        Archive
     }
 
     private enum AgentBackendStatus

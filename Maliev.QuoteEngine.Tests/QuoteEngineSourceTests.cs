@@ -1062,6 +1062,7 @@ public sealed class QuoteEngineSourceTests
     public void QuoteAgentLaunchShell_has_monochrome_chatgpt_like_contract()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var projectManagementRow = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteProjectManagementRow.razor");
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var index = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "index.html");
         var apiClient = ReadRepoFile("Maliev.QuoteEngine.Client", "Services", "QuoteEngineApiClient.cs");
@@ -1093,14 +1094,18 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("CloseNavigationDrawer", component, StringComparison.Ordinal);
         Assert.Contains("AriaExpanded", component, StringComparison.Ordinal);
         Assert.Contains("TogglePinnedProjects", component, StringComparison.Ordinal);
-        Assert.Contains("ToggleProjects", component, StringComparison.Ordinal);
+        Assert.Contains("ToggleRailProjects", component, StringComparison.Ordinal);
+        Assert.Contains("ToggleManagementProjects", component, StringComparison.Ordinal);
         Assert.Contains("ProjectManagementSectionClass", component, StringComparison.Ordinal);
         Assert.Contains("_pinnedProjectsCollapsed", component, StringComparison.Ordinal);
-        Assert.Contains("_projectsCollapsed", component, StringComparison.Ordinal);
+        Assert.Contains("_railProjectsCollapsed", component, StringComparison.Ordinal);
+        Assert.Contains("_managementProjectsCollapsed", component, StringComparison.Ordinal);
         Assert.Contains("aria-expanded=\"@AriaExpanded(!_pinnedProjectsCollapsed)\"", component, StringComparison.Ordinal);
-        Assert.Contains("aria-expanded=\"@AriaExpanded(!_projectsCollapsed)\"", component, StringComparison.Ordinal);
+        Assert.Contains("aria-expanded=\"@AriaExpanded(!_railProjectsCollapsed)\"", component, StringComparison.Ordinal);
+        Assert.Contains("aria-expanded=\"@AriaExpanded(!_managementProjectsCollapsed)\"", component, StringComparison.Ordinal);
         Assert.Contains("@if (!_pinnedProjectsCollapsed)", component, StringComparison.Ordinal);
-        Assert.Contains("@if (!_projectsCollapsed)", component, StringComparison.Ordinal);
+        Assert.Contains("@if (!_railProjectsCollapsed)", component, StringComparison.Ordinal);
+        Assert.Contains("@if (!_managementProjectsCollapsed)", component, StringComparison.Ordinal);
         Assert.Contains("MainClass => _messages.Count == 0 ? \"qe-agent-main qe-agent-main--empty\" : \"qe-agent-main qe-agent-main--chat\"", component, StringComparison.Ordinal);
         Assert.Contains("<h1>@Text(\"What do you want to make today?\", \"วันนี้ต้องการผลิตอะไร?\")</h1>", component, StringComparison.Ordinal);
         Assert.DoesNotContain("<h1 tabindex=\"-1\"", component, StringComparison.Ordinal);
@@ -1199,7 +1204,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("OpenProjectsPage", component, StringComparison.Ordinal);
         Assert.Contains("OpenSettingsPage", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-management-page\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-management-row\"", component, StringComparison.Ordinal);
+        Assert.Contains("<QuoteProjectManagementRow", component, StringComparison.Ordinal);
         // Settings general/profile tabs embed the account components instead of
         // the old shortcut grid.
         Assert.Contains("<QeAccountPreferences />", component, StringComparison.Ordinal);
@@ -1229,7 +1234,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@if (ProjectManagementProjects.Any())", managementProjectsPage, StringComparison.Ordinal);
         Assert.Contains("@foreach (var project in ProjectManagementProjects)", managementProjectsPage, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-project-row\"", component, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-management-row\"", component, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-project-management-row\"", projectManagementRow, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-rail-group-heading", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-rail-group-action", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-project-row--chat", styles, StringComparison.Ordinal);
@@ -1243,8 +1248,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("DuplicateDraftProjectRequest", component, StringComparison.Ordinal);
         Assert.Contains("ApplyDuplicatedProject", component, StringComparison.Ordinal);
         Assert.Contains("ProjectNavItem.FromDuplicateResponse", component, StringComparison.Ordinal);
-        Assert.Contains("Icons.Material.Outlined.ContentCopy", component, StringComparison.Ordinal);
-        Assert.Contains("Duplicate project", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.ContentCopy", projectManagementRow, StringComparison.Ordinal);
+        Assert.Contains("DuplicateActionLabel", projectManagementRow, StringComparison.Ordinal);
         Assert.Contains("ToggleProjectPinAsync", component, StringComparison.Ordinal);
         Assert.Contains("CanManageProject(project)", component, StringComparison.Ordinal);
         Assert.Contains("private static bool CanManageProject(ProjectNavItem project)", component, StringComparison.Ordinal);
@@ -1254,18 +1259,16 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("UnpinProjectAsync", component, StringComparison.Ordinal);
         Assert.Contains("ArchiveProjectAsync", component, StringComparison.Ordinal);
         Assert.Contains("Api.ArchiveProjectAsync(project.ProjectId)", component, StringComparison.Ordinal);
-        Assert.Contains("Icons.Material.Outlined.Archive", component, StringComparison.Ordinal);
-        Assert.Contains("Archive project", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.Archive", projectManagementRow, StringComparison.Ordinal);
+        Assert.Contains("ArchiveActionLabel", projectManagementRow, StringComparison.Ordinal);
         Assert.Contains("Task<ProjectManagementResponse> ArchiveProjectAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/projects/{projectId:D}/archive", apiClient, StringComparison.Ordinal);
         Assert.Contains("AchieveProjectAsync", component, StringComparison.Ordinal);
         Assert.Contains("Api.AchieveProjectAsync(project.ProjectId)", component, StringComparison.Ordinal);
-        Assert.Contains("Icons.Material.Outlined.TaskAlt", component, StringComparison.Ordinal);
-        Assert.Contains("Mark achieved", component, StringComparison.Ordinal);
         Assert.Contains("Task<ProjectManagementResponse> AchieveProjectAsync", apiClient, StringComparison.Ordinal);
         Assert.Contains("quote/v1/projects/{projectId:D}/achieve", apiClient, StringComparison.Ordinal);
-        Assert.Contains("Icons.Material.Outlined.PushPin", component, StringComparison.Ordinal);
-        Assert.Contains("Icons.Material.Filled.PushPin", component, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Outlined.PushPin", projectManagementRow, StringComparison.Ordinal);
+        Assert.Contains("Icons.Material.Filled.PushPin", projectManagementRow, StringComparison.Ordinal);
         Assert.Contains("Icons.Material.Outlined.Search", primaryNav, StringComparison.Ordinal);
         Assert.DoesNotContain("@onclick=\"ToggleSearch\"", primaryNav, StringComparison.Ordinal);
         Assert.DoesNotContain("<span>@Text(\"Search\"", primaryNav, StringComparison.Ordinal);

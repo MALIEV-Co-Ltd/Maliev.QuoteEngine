@@ -465,7 +465,11 @@ public sealed record CustomerProjectDetailResponse(
     bool IsPinned,
     bool IsArchived,
     DateTimeOffset UpdatedAt,
-    IReadOnlyList<QuotePartDraftDto> Parts);
+    IReadOnlyList<QuotePartDraftDto> Parts)
+{
+    /// <summary>Gets when the durable project was created, when supplied by ProjectService.</summary>
+    public DateTimeOffset? CreatedAt { get; init; }
+}
 
 public sealed record DuplicateDraftProjectRequest(string? Title);
 
@@ -491,7 +495,11 @@ public sealed record CustomerProjectNavItemDto(
     string Status,
     bool IsPinned,
     bool IsArchived,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt)
+{
+    /// <summary>Gets when the durable project was created, when supplied by ProjectService.</summary>
+    public DateTimeOffset? CreatedAt { get; init; }
+}
 
 public sealed record CustomerProjectSearchResponse(
     string Query,

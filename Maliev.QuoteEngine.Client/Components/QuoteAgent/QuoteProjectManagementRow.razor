@@ -1,0 +1,362 @@
+@namespace Maliev.QuoteEngine.Client.Components.QuoteAgent
+@using System.Globalization
+@using System.Text.RegularExpressions
+
+<article class="qe-agent-project-management-row" aria-busy="@AriaBool(IsLoading)">
+    <div class="qe-agent-project-management-summary">
+        <button type="button"
+                class="qe-agent-project-management-expand"
+                aria-expanded="@AriaBool(IsExpanded)"
+                aria-controls="@ProjectDetailsId"
+                @onclick="OnToggleExpanded">
+            <MudIcon Icon="@(IsExpanded ? Icons.Material.Outlined.FolderOpen : Icons.Material.Outlined.Folder)" Size="Size.Small" />
+            <span class="qe-agent-project-management-title-block">
+                <span class="qe-agent-project-management-title">@Project.Title</span>
+                <span class="qe-agent-project-management-meta">
+                    <span class="@StatusCssClass">@StatusLabel</span>
+                    <time datetime="@ProjectDate.ToString("O", CultureInfo.InvariantCulture)">@FormatDate(ProjectDate)</time>
+                </span>
+            </span>
+            <MudIcon Icon="@(IsExpanded ? Icons.Material.Outlined.ExpandLess : Icons.Material.Outlined.ExpandMore)" Size="Size.Small" />
+        </button>
+
+        <div class="qe-agent-project-management-actions">
+            <a href="@ProjectHref"
+               title="@Text("Open project", "เปิดโปรเจกต์")"
+               aria-label="@Text($"Open {Project.Title}", $"เปิด {Project.Title}")">
+                <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+            </a>
+            @if (CanManage)
+            {
+                <button type="button"
+                        class="@(Project.IsPinned ? "is-active" : null)"
+                        disabled="@IsPinBusy"
+                        aria-busy="@AriaBool(IsPinBusy)"
+                        title="@PinActionLabel"
+                        aria-label="@PinActionLabel"
+                        @onclick="OnPin">
+                    @if (IsPinBusy)
+                    {
+                        <span class="qe-agent-project-action-spinner" aria-hidden="true"></span>
+                        <span class="qe-agent-visually-hidden">@Text("Updating pin", "กำลังอัปเดตหมุด")</span>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@(Project.IsPinned ? Icons.Material.Filled.PushPin : Icons.Material.Outlined.PushPin)" Size="Size.Small" />
+                    }
+                </button>
+                <button type="button"
+                        disabled="@IsDuplicateBusy"
+                        aria-busy="@AriaBool(IsDuplicateBusy)"
+                        title="@DuplicateActionLabel"
+                        aria-label="@DuplicateActionLabel"
+                        @onclick="OnDuplicate">
+                    @if (IsDuplicateBusy)
+                    {
+                        <span class="qe-agent-project-action-spinner" aria-hidden="true"></span>
+                        <span class="qe-agent-visually-hidden">@Text("Duplicating project", "กำลังทำสำเนาโปรเจกต์")</span>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Outlined.ContentCopy" Size="Size.Small" />
+                    }
+                </button>
+                <button type="button"
+                        disabled="@IsArchiveBusy"
+                        aria-busy="@AriaBool(IsArchiveBusy)"
+                        title="@ArchiveActionLabel"
+                        aria-label="@ArchiveActionLabel"
+                        @onclick="OnArchive">
+                    @if (IsArchiveBusy)
+                    {
+                        <span class="qe-agent-project-action-spinner" aria-hidden="true"></span>
+                        <span class="qe-agent-visually-hidden">@Text("Archiving project", "กำลังเก็บโปรเจกต์")</span>
+                    }
+                    else
+                    {
+                        <MudIcon Icon="@Icons.Material.Outlined.Archive" Size="Size.Small" />
+                    }
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (IsExpanded)
+    {
+        <section id="@ProjectDetailsId" class="qe-agent-project-management-detail" aria-live="polite">
+            @if (IsLoading)
+            {
+                <div class="qe-agent-project-detail-loading" role="status">
+                    <span class="qe-agent-project-action-spinner" aria-hidden="true"></span>
+                    <span>@Text("Loading project details...", "กำลังโหลดรายละเอียดโปรเจกต์...")</span>
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+            {
+                <div class="qe-agent-project-detail-error" role="alert">
+                    <span>@ErrorMessage</span>
+                    <button type="button" @onclick="OnRetry">@Text("Try again", "ลองอีกครั้ง")</button>
+                </div>
+            }
+            else if (Detail is not null)
+            {
+                <dl class="qe-agent-project-detail-facts">
+                    <div>
+                        <dt>@Text("Project number", "หมายเลขโปรเจกต์")</dt>
+                        <dd>@Detail.ProjectNumber</dd>
+                    </div>
+                    <div>
+                        <dt>@Text("Status", "สถานะ")</dt>
+                        <dd>@HumanizeCode(Detail.Status)</dd>
+                    </div>
+                    @if (Detail.CreatedAt is { } createdAt)
+                    {
+                        <div>
+                            <dt>@Text("Created", "สร้างเมื่อ")</dt>
+                            <dd><time datetime="@createdAt.ToString("O", CultureInfo.InvariantCulture)">@FormatDate(createdAt)</time></dd>
+                        </div>
+                    }
+                    <div>
+                        <dt>@Text("Updated", "อัปเดตเมื่อ")</dt>
+                        <dd><time datetime="@Detail.UpdatedAt.ToString("O", CultureInfo.InvariantCulture)">@FormatDate(Detail.UpdatedAt)</time></dd>
+                    </div>
+                </dl>
+
+                <section class="qe-agent-project-files" aria-label="@Text("Project files", "ไฟล์โปรเจกต์")">
+                    <header>
+                        <span>@Text("Files", "ไฟล์")</span>
+                        <small>@Text($"{Detail.Parts.Count} part files", $"ไฟล์ชิ้นงาน {Detail.Parts.Count} ไฟล์")</small>
+                    </header>
+                    @if (Detail.Parts.Count == 0)
+                    {
+                        <p>@Text("No files are attached to this project.", "ยังไม่มีไฟล์แนบในโปรเจกต์นี้")</p>
+                    }
+                    else
+                    {
+                        <div class="qe-agent-project-file-list">
+                            @foreach (var part in Detail.Parts)
+                            {
+                                <article class="qe-agent-project-file-card">
+                                    <div class="qe-agent-project-file-heading">
+                                        <span class="qe-agent-project-file-preview" aria-hidden="true">
+                                            @if (CanRenderThumbnail(part.ThumbnailUrl))
+                                            {
+                                                <img src="@part.ThumbnailUrl" alt="" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <MudIcon Icon="@Icons.Material.Outlined.ViewInAr" Size="Size.Small" />
+                                            }
+                                        </span>
+                                        <span>
+                                            <span class="qe-agent-project-file-name">@part.FileName</span>
+                                            <small>@PartSummary(part)</small>
+                                        </span>
+                                    </div>
+
+                                    <dl class="qe-agent-project-part-facts">
+                                        <div><dt>@Text("Process", "กระบวนการ")</dt><dd>@HumanizeCode(part.ProcessId)</dd></div>
+                                        <div><dt>@Text("Material", "วัสดุ")</dt><dd>@HumanizeCode(part.MaterialId)</dd></div>
+                                        <div><dt>@Text("Quantity", "จำนวน")</dt><dd>@part.Quantity</dd></div>
+                                        <div><dt>@Text("Analysis", "การวิเคราะห์")</dt><dd>@HumanizeCode(part.Status)</dd></div>
+                                        @if (part.BoundingBoxMm is { } bounds)
+                                        {
+                                            <div><dt>@Text("Size", "ขนาด")</dt><dd>@FormatDimensions(bounds)</dd></div>
+                                        }
+                                        @if (part.VolumeCc > 0)
+                                        {
+                                            <div><dt>@Text("Volume", "ปริมาตร")</dt><dd>@FormatNumber(part.VolumeCc) cm³</dd></div>
+                                        }
+                                        @if (part.SurfaceAreaCm2 > 0)
+                                        {
+                                            <div><dt>@Text("Surface area", "พื้นที่ผิว")</dt><dd>@FormatNumber(part.SurfaceAreaCm2) cm²</dd></div>
+                                        }
+                                        @if (FirstNonEmpty(part.FinishCode, part.FinishId) is { } finish)
+                                        {
+                                            <div><dt>@Text("Finish", "ผิวสำเร็จ")</dt><dd>@HumanizeCode(finish)</dd></div>
+                                        }
+                                        @if (FirstNonEmpty(part.ToleranceCode, part.ToleranceId) is { } tolerance)
+                                        {
+                                            <div><dt>@Text("Tolerance", "ค่าความคลาดเคลื่อน")</dt><dd>@HumanizeCode(tolerance)</dd></div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(part.InspectionLevel))
+                                        {
+                                            <div><dt>@Text("Inspection", "การตรวจสอบ")</dt><dd>@HumanizeCode(part.InspectionLevel)</dd></div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(part.Color))
+                                        {
+                                            <div><dt>@Text("Color", "สี")</dt><dd>@HumanizeCode(part.Color)</dd></div>
+                                        }
+                                    </dl>
+
+                                    @if (!string.IsNullOrWhiteSpace(part.PartNotes))
+                                    {
+                                        <p class="qe-agent-project-part-notes">@part.PartNotes</p>
+                                    }
+
+                                    @if (part.DrawingFiles.Count > 0)
+                                    {
+                                        <div class="qe-agent-project-drawings">
+                                            <span>@Text("Drawings and supporting files", "แบบและไฟล์ประกอบ")</span>
+                                            <ul>
+                                                @foreach (var drawing in part.DrawingFiles)
+                                                {
+                                                    <li>
+                                                        <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
+                                                        <span>@drawing.FileName</span>
+                                                        <small>@DrawingSummary(drawing)</small>
+                                                    </li>
+                                                }
+                                            </ul>
+                                        </div>
+                                    }
+                                </article>
+                            }
+                        </div>
+                    }
+                </section>
+            }
+        </section>
+    }
+</article>
+
+@code {
+    [Parameter, EditorRequired]
+    public CustomerProjectNavItemDto Project { get; set; } = default!;
+
+    [Parameter]
+    public CustomerProjectDetailResponse? Detail { get; set; }
+
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    [Parameter]
+    public string ProjectHref { get; set; } = string.Empty;
+
+    [Parameter]
+    public string StatusLabel { get; set; } = string.Empty;
+
+    [Parameter]
+    public string StatusCssClass { get; set; } = "qe-agent-project-badge";
+
+    [Parameter]
+    public bool IsThai { get; set; }
+
+    [Parameter]
+    public bool IsExpanded { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool CanManage { get; set; }
+
+    [Parameter]
+    public bool IsPinBusy { get; set; }
+
+    [Parameter]
+    public bool IsDuplicateBusy { get; set; }
+
+    [Parameter]
+    public bool IsArchiveBusy { get; set; }
+
+    [Parameter]
+    public EventCallback OnToggleExpanded { get; set; }
+
+    [Parameter]
+    public EventCallback OnRetry { get; set; }
+
+    [Parameter]
+    public EventCallback OnPin { get; set; }
+
+    [Parameter]
+    public EventCallback OnDuplicate { get; set; }
+
+    [Parameter]
+    public EventCallback OnArchive { get; set; }
+
+    private string ProjectDetailsId => $"qe-project-details-{Project.ProjectId:N}";
+
+    private DateTimeOffset ProjectDate => Project.CreatedAt ?? Project.UpdatedAt;
+
+    private string PinActionLabel => Project.IsPinned
+        ? Text($"Unpin {Project.Title}", $"เลิกปักหมุด {Project.Title}")
+        : Text($"Pin {Project.Title}", $"ปักหมุด {Project.Title}");
+
+    private string DuplicateActionLabel => Text($"Duplicate {Project.Title}", $"ทำสำเนา {Project.Title}");
+
+    private string ArchiveActionLabel => Text($"Archive {Project.Title}", $"เก็บ {Project.Title}");
+
+    private string Text(string english, string thai) => IsThai ? thai : english;
+
+    private string FormatDate(DateTimeOffset value)
+    {
+        var culture = CultureInfo.GetCultureInfo(IsThai ? "th-TH" : "en-US");
+        return value.ToLocalTime().ToString(IsThai ? "d MMM yyyy, HH:mm" : "MMM d, yyyy, HH:mm", culture);
+    }
+
+    private string PartSummary(QuotePartDraftDto part)
+    {
+        var summary = Text(
+            $"{HumanizeCode(part.ProcessId)} · {HumanizeCode(part.MaterialId)} · {part.Quantity} pcs",
+            $"{HumanizeCode(part.ProcessId)} · {HumanizeCode(part.MaterialId)} · {part.Quantity} ชิ้น");
+        return part.Findings.Count == 0
+            ? summary
+            : Text($"{summary} · {part.Findings.Count} DFM findings", $"{summary} · ข้อสังเกต DFM {part.Findings.Count} รายการ");
+    }
+
+    private string DrawingSummary(QuotePartAttachmentDto drawing)
+    {
+        var kind = HumanizeCode(drawing.Kind);
+        var size = FormatFileSize(drawing.FileSizeBytes);
+        return string.IsNullOrWhiteSpace(size) ? kind : $"{kind} · {size}";
+    }
+
+    private static string FormatDimensions(QuotePartBoundingBoxDto bounds) =>
+        $"{FormatNumber(bounds.X)} × {FormatNumber(bounds.Y)} × {FormatNumber(bounds.Z)} mm";
+
+    private static string FormatNumber(decimal value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes <= 0)
+        {
+            return string.Empty;
+        }
+
+        if (bytes >= 1024L * 1024L)
+        {
+            return $"{bytes / 1024d / 1024d:0.#} MB";
+        }
+
+        if (bytes >= 1024L)
+        {
+            return $"{bytes / 1024d:0.#} KB";
+        }
+
+        return $"{bytes} B";
+    }
+
+    private static bool CanRenderThumbnail(string? url) =>
+        !string.IsNullOrWhiteSpace(url) &&
+        (url.StartsWith("/", StringComparison.Ordinal) ||
+         Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http");
+
+    private static string? FirstNonEmpty(params string?[] values) =>
+        values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();
+
+    private static string HumanizeCode(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "—";
+        }
+
+        var normalized = Regex.Replace(value.Trim(), "([a-z0-9])([A-Z])", "$1 $2")
+            .Replace('_', ' ')
+            .Replace('-', ' ');
+        return CultureInfo.InvariantCulture.TextInfo.ToTitleCase(normalized.ToLowerInvariant());
+    }
+
+    private static string AriaBool(bool value) => value ? "true" : "false";
+}

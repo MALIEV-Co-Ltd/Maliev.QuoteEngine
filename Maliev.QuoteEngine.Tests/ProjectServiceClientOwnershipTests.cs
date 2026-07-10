@@ -27,6 +27,52 @@ public sealed class ProjectServiceClientOwnershipTests
             handler.Request!.RequestUri!.PathAndQuery);
         var project = Assert.Single(projects);
         Assert.Equal(ownerProjectId, project.ProjectId);
+        Assert.NotNull(project.CreatedAt);
+        Assert.True(project.CreatedAt < project.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task GetProjectDetailAsync_MapsCreatedDateAndOwnedFiles()
+    {
+        var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var createdAt = DateTime.UtcNow.AddDays(-2);
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                id = projectId,
+                projectNumber = "PRJ-DATE-001",
+                customerId = ownerId,
+                title = "Created date fixture",
+                status = "Draft",
+                isPinned = false,
+                isArchived = false,
+                createdAt,
+                updatedAt = createdAt.AddHours(4),
+                parts = new[]
+                {
+                    new
+                    {
+                        id = Guid.NewGuid(),
+                        fileName = "fixture.step",
+                        process = "cnc",
+                        material = "al6061",
+                        quantity = 2,
+                        status = "Ready"
+                    }
+                }
+            })
+        };
+        var handler = new RecordingHandler(response);
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://project.test") };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+
+        var detail = await client.GetProjectDetailAsync(ownerId, projectId, CancellationToken.None);
+
+        Assert.NotNull(detail);
+        Assert.Equal(new DateTimeOffset(createdAt, TimeSpan.Zero), detail.CreatedAt);
+        Assert.Equal("fixture.step", Assert.Single(detail.Parts).FileName);
     }
 
     [Fact]

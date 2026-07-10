@@ -492,7 +492,12 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             project.Status,
             project.IsPinned,
             IsArchivedStatus(project),
-            new DateTimeOffset(updatedAt, TimeSpan.Zero));
+            new DateTimeOffset(updatedAt, TimeSpan.Zero))
+        {
+            CreatedAt = project.CreatedAt == default
+                ? null
+                : new DateTimeOffset(project.CreatedAt, TimeSpan.Zero)
+        };
     }
 
     private static CustomerProjectDetailResponse ToCustomerProjectDetail(ProjectServiceProjectResponse project)
@@ -506,7 +511,12 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             project.IsPinned,
             IsArchivedStatus(project),
             new DateTimeOffset(updatedAt, TimeSpan.Zero),
-            project.Parts.Select(ToQuotePartDraft).ToArray());
+            project.Parts.Select(ToQuotePartDraft).ToArray())
+        {
+            CreatedAt = project.CreatedAt == default
+                ? null
+                : new DateTimeOffset(project.CreatedAt, TimeSpan.Zero)
+        };
     }
 
     private static ProjectManagementResponse ToManagementResponse(ProjectServiceProjectResponse project) =>

@@ -1401,6 +1401,21 @@
     white-space: nowrap;
 }
 
+.qe-agent-rail-group-toggle > .qe-agent-rail-group-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+}
+
+.qe-agent-rail-group-toggle > .qe-agent-rail-group-label .mud-icon-root {
+    flex: 0 0 auto;
+    font-size: 16px;
+}
+
 .qe-agent-rail-group a {
     grid-template-columns: minmax(0, 1fr);
     min-width: 0;
@@ -1411,18 +1426,13 @@
 }
 
 .qe-agent-project-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 28px;
-    align-items: center;
+    position: relative;
+    display: block;
     border-radius: 9px;
 }
 
 .qe-agent-project-row a:hover {
     background: transparent;
-}
-
-.qe-agent-project-row--chat {
-    grid-template-columns: minmax(0, 1fr);
 }
 
 .qe-agent-project-row--chat a {
@@ -1451,11 +1461,10 @@
     align-content: center;
 }
 
-/* Name on the left, updated date pinned to the right edge of the row. */
+/* Project title stays on line one; lifecycle state and time share line two. */
 .qe-agent-project-title-row {
     display: flex;
     align-items: baseline;
-    gap: 8px;
     min-width: 0;
 }
 
@@ -1468,10 +1477,18 @@
 }
 
 .qe-agent-project-date {
-    flex-shrink: 0;
+    flex: 0 0 auto;
     color: var(--qe-agent-muted);
     font-size: 10.5px;
     line-height: 1.2;
+}
+
+.qe-agent-project-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
 }
 
 /* Project lifecycle badges: Draft, Ordered, Payment pending, Shipped, Delivered, Archived, ... */
@@ -1505,6 +1522,11 @@
     color: color-mix(in srgb, #339cff 72%, var(--qe-agent-ink));
 }
 
+.qe-agent-project-badge--quoted {
+    background: color-mix(in srgb, #4f8cff 14%, transparent);
+    color: color-mix(in srgb, #4f8cff 66%, var(--qe-agent-ink));
+}
+
 .qe-agent-project-badge--payment-pending {
     background: color-mix(in srgb, #f0a020 16%, transparent);
     color: color-mix(in srgb, #f0a020 62%, var(--qe-agent-ink));
@@ -1536,28 +1558,88 @@
     margin-top: 3px;
 }
 
-.qe-agent-pin-btn {
-    justify-content: center;
-    width: 28px;
-    min-height: 28px;
-    padding: 0;
-    color: var(--qe-agent-muted);
+.qe-agent-project-actions {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 1px;
+    padding: 2px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--qe-agent-surface) 94%, transparent);
+    box-shadow: -8px 0 12px color-mix(in srgb, var(--qe-agent-surface) 90%, transparent);
     opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
 }
 
-.qe-agent-project-row:hover .qe-agent-pin-btn,
-.qe-agent-pin-btn:focus-visible,
-.qe-agent-pin-btn.active {
+.qe-agent-project-row:hover .qe-agent-project-actions,
+.qe-agent-project-row:focus-within .qe-agent-project-actions,
+.qe-agent-project-actions:focus-within,
+.qe-agent-project-actions[aria-busy="true"] {
     opacity: 1;
+    pointer-events: auto;
 }
 
-.qe-agent-pin-btn.active {
-    color: var(--qe-agent-ink);
+.qe-agent-project-actions button {
+    display: inline-grid;
+    place-items: center;
+    width: 24px;
+    min-width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--qe-agent-muted);
+    cursor: pointer;
 }
 
-.qe-agent-pin-btn:hover {
+.qe-agent-project-actions button:hover,
+.qe-agent-project-actions button:focus-visible,
+.qe-agent-project-actions button.is-active {
     background: var(--qe-agent-hover);
     color: var(--qe-agent-ink);
+}
+
+.qe-agent-project-actions button:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--qe-agent-primary) 50%, transparent);
+    outline-offset: 1px;
+}
+
+.qe-agent-project-actions button:disabled {
+    cursor: wait;
+    opacity: .72;
+}
+
+.qe-agent-project-action-spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid color-mix(in srgb, currentColor 28%, transparent);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: qe-agent-project-spin 720ms linear infinite;
+}
+
+.qe-agent-visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+@keyframes qe-agent-project-spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .qe-agent-empty-projects {
@@ -5673,9 +5755,363 @@
     font-size: 17px;
 }
 
+.qe-agent-project-search {
+    display: grid;
+    gap: 6px;
+}
+
+.qe-agent-project-search > label {
+    color: var(--qe-agent-ink);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.qe-agent-project-search > div {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) 18px;
+    align-items: center;
+    gap: 8px;
+    min-height: 42px;
+    padding: 8px 12px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 12px;
+    background: var(--qe-agent-surface);
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-project-search > div:focus-within {
+    border-color: color-mix(in srgb, var(--qe-agent-primary) 56%, var(--qe-agent-line));
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--qe-agent-primary) 12%, transparent);
+}
+
+.qe-agent-project-search input {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--qe-agent-ink);
+    font: inherit;
+    font-size: 14px;
+}
+
+.qe-agent-project-search-status {
+    min-height: 18px;
+    margin: 0;
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+}
+
 .qe-agent-management-list {
     display: grid;
     gap: 8px;
+}
+
+.qe-agent-project-management-row {
+    overflow: hidden;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--qe-agent-surface) 92%, var(--qe-agent-raised));
+    box-shadow: inset 0 0 0 1px var(--qe-agent-line);
+}
+
+.qe-agent-project-management-summary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 62px;
+    padding: 6px 8px;
+}
+
+.qe-agent-project-management-expand {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) 20px;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    min-height: 48px;
+    padding: 4px 6px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--qe-agent-muted);
+    cursor: pointer;
+    text-align: left;
+}
+
+.qe-agent-project-management-expand:hover,
+.qe-agent-project-management-expand:focus-visible {
+    background: var(--qe-agent-hover);
+}
+
+.qe-agent-project-management-expand:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--qe-agent-primary) 46%, transparent);
+    outline-offset: 1px;
+}
+
+.qe-agent-project-management-expand > .mud-icon-root:first-child {
+    width: 34px;
+    height: 34px;
+    padding: 7px;
+    border-radius: 9px;
+    background: var(--qe-agent-raised);
+    color: var(--qe-agent-ink);
+}
+
+.qe-agent-project-management-title-block {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.qe-agent-project-management-title {
+    overflow: hidden;
+    color: var(--qe-agent-ink);
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-project-management-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+}
+
+.qe-agent-project-management-meta time {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+.qe-agent-project-management-actions {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.qe-agent-project-management-actions a,
+.qe-agent-project-management-actions button {
+    display: inline-grid;
+    place-items: center;
+    width: 30px;
+    min-width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--qe-agent-muted);
+    cursor: pointer;
+}
+
+.qe-agent-project-management-actions a:hover,
+.qe-agent-project-management-actions a:focus-visible,
+.qe-agent-project-management-actions button:hover,
+.qe-agent-project-management-actions button:focus-visible,
+.qe-agent-project-management-actions button.is-active {
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-ink);
+}
+
+.qe-agent-project-management-actions a:focus-visible,
+.qe-agent-project-management-actions button:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--qe-agent-primary) 46%, transparent);
+    outline-offset: 1px;
+}
+
+.qe-agent-project-management-actions button:disabled {
+    cursor: wait;
+    opacity: .72;
+}
+
+.qe-agent-project-management-detail {
+    display: grid;
+    gap: 16px;
+    padding: 4px 14px 16px 56px;
+}
+
+.qe-agent-project-detail-loading,
+.qe-agent-project-detail-error {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    min-height: 38px;
+    color: var(--qe-agent-muted);
+    font-size: 13px;
+}
+
+.qe-agent-project-detail-error {
+    justify-content: space-between;
+    color: #b7423e;
+}
+
+.qe-agent-project-detail-error button {
+    min-height: 30px;
+    padding: 5px 10px;
+    border: 0;
+    border-radius: 8px;
+    background: var(--qe-agent-hover);
+    color: var(--qe-agent-ink);
+    cursor: pointer;
+}
+
+.qe-agent-project-detail-facts,
+.qe-agent-project-part-facts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 16px;
+    margin: 0;
+}
+
+.qe-agent-project-detail-facts div,
+.qe-agent-project-part-facts div {
+    min-width: 0;
+}
+
+.qe-agent-project-detail-facts dt,
+.qe-agent-project-part-facts dt {
+    color: var(--qe-agent-muted);
+    font-size: 10px;
+    letter-spacing: .03em;
+    text-transform: uppercase;
+}
+
+.qe-agent-project-detail-facts dd,
+.qe-agent-project-part-facts dd {
+    margin: 3px 0 0;
+    overflow-wrap: anywhere;
+    color: var(--qe-agent-ink);
+    font-size: 12px;
+}
+
+.qe-agent-project-files {
+    display: grid;
+    gap: 10px;
+}
+
+.qe-agent-project-files > header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.qe-agent-project-files > header > span {
+    color: var(--qe-agent-ink);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.qe-agent-project-files > header small,
+.qe-agent-project-files > p {
+    margin: 0;
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+}
+
+.qe-agent-project-file-list {
+    display: grid;
+    gap: 8px;
+}
+
+.qe-agent-project-file-card {
+    display: grid;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 10px;
+    background: var(--qe-agent-raised);
+}
+
+.qe-agent-project-file-heading {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+}
+
+.qe-agent-project-file-preview {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    overflow: hidden;
+    border-radius: 8px;
+    background: var(--qe-agent-surface);
+    color: var(--qe-agent-muted);
+}
+
+.qe-agent-project-file-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.qe-agent-project-file-heading > span:last-child {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.qe-agent-project-file-name {
+    overflow: hidden;
+    color: var(--qe-agent-ink);
+    font-size: 13px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.qe-agent-project-file-heading small,
+.qe-agent-project-part-notes,
+.qe-agent-project-drawings small {
+    margin: 0;
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    line-height: 1.4;
+}
+
+.qe-agent-project-part-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-left: 50px;
+}
+
+.qe-agent-project-part-notes,
+.qe-agent-project-drawings {
+    margin-left: 50px;
+}
+
+.qe-agent-project-drawings > span {
+    color: var(--qe-agent-ink);
+    font-size: 11px;
+}
+
+.qe-agent-project-drawings ul {
+    display: grid;
+    gap: 5px;
+    margin: 7px 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.qe-agent-project-drawings li {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    color: var(--qe-agent-ink);
+    font-size: 12px;
+}
+
+.qe-agent-project-drawings li > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .qe-agent-management-row {
@@ -7825,6 +8261,22 @@
         display: none;
     }
 
+    .qe-agent-project-management-detail {
+        padding: 4px 12px 14px;
+    }
+
+    .qe-agent-project-detail-facts,
+    .qe-agent-project-part-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .qe-agent-project-part-facts,
+    .qe-agent-project-part-notes,
+    .qe-agent-project-drawings {
+        margin-left: 0;
+        padding-left: 0;
+    }
+
     .qe-agent-settings-grid {
         grid-template-columns: 1fr;
     }
@@ -7847,6 +8299,37 @@
 
     .qe-agent-sketch-canvas {
         min-height: 420px;
+    }
+}
+
+@media (max-width: 560px) {
+    .qe-agent-project-management-summary {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .qe-agent-project-management-actions {
+        justify-content: flex-end;
+        padding: 0 6px 4px;
+    }
+
+    .qe-agent-project-detail-facts,
+    .qe-agent-project-part-facts {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .qe-agent-project-drawings li {
+        grid-template-columns: 18px minmax(0, 1fr);
+    }
+
+    .qe-agent-project-drawings li small {
+        grid-column: 2;
+    }
+}
+
+@media (hover: none) {
+    .qe-agent-project-actions {
+        opacity: 1;
+        pointer-events: auto;
     }
 }
 
