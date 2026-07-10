@@ -78,7 +78,8 @@ internal sealed class QuoteAgentSessionStore
         string title,
         string summary,
         bool requiresAuthentication,
-        Dictionary<string, JsonElement> arguments)
+        Dictionary<string, JsonElement> arguments,
+        bool requiresConfirmation = true)
     {
         var action = new QuoteAgentPendingAction(
             Guid.NewGuid(),
@@ -87,6 +88,7 @@ internal sealed class QuoteAgentSessionStore
             title,
             summary,
             requiresAuthentication,
+            requiresConfirmation,
             state.CustomerId,
             arguments,
             DateTimeOffset.UtcNow);
@@ -552,6 +554,7 @@ internal sealed record QuoteAgentPendingAction(
     string Title,
     string Summary,
     bool RequiresAuthentication,
+    bool RequiresConfirmation,
     Guid? CustomerId,
     Dictionary<string, JsonElement> Arguments,
     DateTimeOffset CreatedAt)
@@ -565,7 +568,7 @@ internal sealed record QuoteAgentPendingAction(
             Title = Title,
             Summary = Summary,
             RequiresAuthentication = RequiresAuthentication,
-            RequiresConfirmation = true,
+            RequiresConfirmation = RequiresConfirmation,
             Status = "pending_confirmation"
         };
     }

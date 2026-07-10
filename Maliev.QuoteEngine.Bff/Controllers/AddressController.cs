@@ -65,14 +65,9 @@ public sealed class AddressController(
                 return Ok(new List<ThaiAddressRegistryLocationDto>());
             }
 
-            await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-            using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
-            var data = document.RootElement.TryGetProperty("data", out var dataElement)
-                ? dataElement
-                : document.RootElement;
-
-            return Ok(data.ValueKind == JsonValueKind.Array
-                ? data.EnumerateArray().Select(MapThaiLocation).OfType<ThaiAddressRegistryLocationDto>().ToList()
+            var lookup = await ThaiAddressRegistryResponseMapper.ParseAsync(response.Content, cancellationToken);
+            return Ok(lookup.IsAvailable
+                ? lookup.Locations.ToList()
                 : []);
         }
         catch (HttpRequestException)
@@ -83,56 +78,5 @@ public sealed class AddressController(
         {
             return Ok(new List<ThaiAddressRegistryLocationDto>());
         }
-    }
-
-    private static ThaiAddressRegistryLocationDto? MapThaiLocation(JsonElement root)
-    {
-        var location = new ThaiAddressRegistryLocationDto
-        {
-            Id = GetGuid(root, "id", "Id") ?? Guid.Empty,
-            PostalCode = GetString(root, "postalCode", "PostalCode") ?? string.Empty,
-            SubDistrictTh = GetString(root, "subDistrictTh", "SubDistrictTh") ?? string.Empty,
-            DistrictTh = GetString(root, "districtTh", "DistrictTh") ?? string.Empty,
-            ProvinceTh = GetString(root, "provinceTh", "ProvinceTh") ?? string.Empty,
-            SubDistrictEn = GetString(root, "subDistrictEn", "SubDistrictEn") ?? string.Empty,
-            DistrictEn = GetString(root, "districtEn", "DistrictEn") ?? string.Empty,
-            ProvinceEn = GetString(root, "provinceEn", "ProvinceEn") ?? string.Empty
-        };
-
-        return string.IsNullOrWhiteSpace(location.PostalCode)
-            && string.IsNullOrWhiteSpace(location.SubDistrictTh)
-            && string.IsNullOrWhiteSpace(location.SubDistrictEn)
-            && string.IsNullOrWhiteSpace(location.DistrictTh)
-            && string.IsNullOrWhiteSpace(location.DistrictEn)
-            && string.IsNullOrWhiteSpace(location.ProvinceTh)
-            && string.IsNullOrWhiteSpace(location.ProvinceEn)
-                ? null
-                : location;
-    }
-
-    private static string? GetString(JsonElement root, params string[] names)
-    {
-        foreach (var name in names)
-        {
-            if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String)
-            {
-                return value.GetString();
-            }
-        }
-
-        return null;
-    }
-
-    private static Guid? GetGuid(JsonElement root, params string[] names)
-    {
-        foreach (var name in names)
-        {
-            if (root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && Guid.TryParse(value.GetString(), out var guid))
-            {
-                return guid;
-            }
-        }
-
-        return null;
     }
 }

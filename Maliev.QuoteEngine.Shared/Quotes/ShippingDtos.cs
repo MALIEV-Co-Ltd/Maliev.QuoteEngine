@@ -164,6 +164,9 @@ public sealed class ShippingRateOptionDto
     /// <summary>Courier code from the shipping gateway.</summary>
     public string CourierCode { get; set; } = string.Empty;
 
+    /// <summary>Courier display name.</summary>
+    public string CourierName { get; set; } = string.Empty;
+
     /// <summary>Carrier product name.</summary>
     public string ProductName { get; set; } = string.Empty;
 

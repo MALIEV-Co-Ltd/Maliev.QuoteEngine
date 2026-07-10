@@ -1545,27 +1545,41 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
     private sealed class FakeRegistryServiceClient : IRegistryServiceClient
     {
+        private static readonly ThaiAddressRegistryLocationDto KhlongKhoiLocation = new()
+        {
+            Id = Guid.Parse("1f54cb83-cfa2-4e4c-baa8-e902e458019b"),
+            PostalCode = "11120",
+            SubDistrictTh = "คลองข่อย",
+            DistrictTh = "ปากเกร็ด",
+            ProvinceTh = "นนทบุรี",
+            SubDistrictEn = "Khlong Khoi",
+            DistrictEn = "Pak Kret",
+            ProvinceEn = "Nonthaburi"
+        };
+
         public Task<HttpResponseMessage> SearchThaiLocationsAsync(string query, int limit, CancellationToken cancellationToken)
         {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = JsonContent.Create(new
                 {
-                    data = new[]
-                    {
-                        new
-                        {
-                            id = Guid.Parse("1f54cb83-cfa2-4e4c-baa8-e902e458019b"),
-                            postalCode = "11120",
-                            subDistrictTh = "คลองข่อย",
-                            districtTh = "ปากเกร็ด",
-                            provinceTh = "นนทบุรี",
-                            subDistrictEn = "Khlong Khoi",
-                            districtEn = "Pak Kret",
-                            provinceEn = "Nonthaburi"
-                        }
-                    }
+                    data = new[] { KhlongKhoiLocation }
                 }, options: new JsonSerializerOptions(JsonSerializerDefaults.Web))
+            });
+        }
+
+        public Task<ThaiAddressRegistryLookupResult> SearchThaiAddressHierarchyAsync(
+            string postalCode,
+            string district,
+            string city,
+            string province,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new ThaiAddressRegistryLookupResult
+            {
+                IsAvailable = true,
+                Locations = [KhlongKhoiLocation]
             });
         }
     }

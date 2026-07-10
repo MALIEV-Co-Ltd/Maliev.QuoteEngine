@@ -5074,6 +5074,578 @@ Customer message:
     }
 
     [Fact]
+    public async Task Agent_shipping_rates_tool_queries_registry_hierarchy_before_delivery()
+    {
+        var calls = new List<string>();
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()],
+            CallSequence = calls
+        };
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [CreateShippingRateOption()] },
+            CallSequence = calls
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_get_shipping_rates",
+            CreateShippingRateArguments());
+        using var document = JsonDocument.Parse(json);
+
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
+        Assert.Equal("validated", document.RootElement.GetProperty("addressValidation").GetString());
+        Assert.Equal(1, registry.MultiFieldCallCount);
+        Assert.Equal("21150", registry.LastPostalCode);
+        Assert.Equal("Map Ta Phut", registry.LastDistrict);
+        Assert.Equal("Mueang Rayong", registry.LastCity);
+        Assert.Equal("Rayong", registry.LastProvince);
+        Assert.Equal(["registry", "delivery"], calls);
+        Assert.Equal(1, delivery.RateCallCount);
+    }
+
+    [Theory]
+    [InlineData(" Sub-District   MAP TA PHUT ", "Amphoe MUEANG RAYONG", "Province RAYONG")]
+    [InlineData("ตำบลมาบตาพุด", "อำเภอเมืองระยอง", "จังหวัดระยอง")]
+    public async Task Agent_shipping_rates_tool_accepts_normalized_exact_english_or_thai_hierarchy(
+        string district,
+        string city,
+        string province)
+    {
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [CreateShippingRateOption()] }
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+
+        var arguments = CreateShippingRateArguments();
+        arguments["district"] = JsonSerializer.SerializeToElement(district, JsonOptions);
+        arguments["city"] = JsonSerializer.SerializeToElement(city, JsonOptions);
+        arguments["province"] = JsonSerializer.SerializeToElement(province, JsonOptions);
+        var json = await ExecuteToolAsync(client, Guid.NewGuid(), "quote_get_shipping_rates", arguments);
+        using var document = JsonDocument.Parse(json);
+
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
+        Assert.Equal("validated", document.RootElement.GetProperty("addressValidation").GetString());
+        Assert.Equal(1, registry.MultiFieldCallCount);
+        Assert.Equal(1, delivery.RateCallCount);
+    }
+
+    [Fact]
+    public async Task Agent_shipping_rates_tool_falls_back_to_postal_candidates_when_registry_case_filter_returns_no_rows()
+    {
+        var postalCandidates = Enumerable.Range(1, 6)
+            .Select(index => CreateMapTaPhutRegistryLocation(
+                subDistrictEn: $"Other Subdistrict {index}",
+                subDistrictTh: $"ตำบลอื่น {index}"))
+            .Append(CreateMapTaPhutRegistryLocation())
+            .ToList();
+        var registry = new RecordingRegistryServiceClient
+        {
+            HierarchyResultFactory = request => string.IsNullOrWhiteSpace(request.District)
+                ? new ThaiAddressRegistryLookupResult
+                {
+                    IsAvailable = true,
+                    Locations = postalCandidates.Take(request.Limit).ToList()
+                }
+                : new ThaiAddressRegistryLookupResult { IsAvailable = true }
+        };
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [CreateShippingRateOption()] }
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+        var arguments = CreateShippingRateArguments();
+        arguments["district"] = JsonSerializer.SerializeToElement("MAP TA PHUT", JsonOptions);
+        arguments["city"] = JsonSerializer.SerializeToElement("MUEANG RAYONG", JsonOptions);
+        arguments["province"] = JsonSerializer.SerializeToElement("RAYONG", JsonOptions);
+
+        var json = await ExecuteToolAsync(client, Guid.NewGuid(), "quote_get_shipping_rates", arguments);
+        using var document = JsonDocument.Parse(json);
+
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean(), json);
+        Assert.Equal(2, registry.MultiFieldCallCount);
+        Assert.Equal("MAP TA PHUT", registry.HierarchyRequests[0].District);
+        Assert.Equal("MUEANG RAYONG", registry.HierarchyRequests[0].City);
+        Assert.Equal("RAYONG", registry.HierarchyRequests[0].Province);
+        Assert.Equal("21150", registry.HierarchyRequests[1].PostalCode);
+        Assert.Equal(string.Empty, registry.HierarchyRequests[1].District);
+        Assert.Equal(100, registry.HierarchyRequests[1].Limit);
+        Assert.Equal(1, delivery.RateCallCount);
+    }
+
+    [Theory]
+    [InlineData("Map Ta Phut", "21150", "Map Ta Phut Nuea", "21150")]
+    [InlineData("Map Ta Phut", "2115", "Map Ta Phut", "21150")]
+    public async Task Agent_shipping_rates_tool_returns_review_suggestions_without_delivery_on_registry_mismatch(
+        string requestedDistrict,
+        string requestedPostalCode,
+        string registryDistrict,
+        string registryPostalCode)
+    {
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations =
+            [
+                CreateMapTaPhutRegistryLocation(
+                    postalCode: registryPostalCode,
+                    subDistrictEn: registryDistrict)
+            ]
+        };
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [CreateShippingRateOption()] }
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+
+        var arguments = CreateShippingRateArguments();
+        arguments["district"] = JsonSerializer.SerializeToElement(requestedDistrict, JsonOptions);
+        arguments["postalCode"] = JsonSerializer.SerializeToElement(requestedPostalCode, JsonOptions);
+        var json = await ExecuteToolAsync(client, Guid.NewGuid(), "quote_get_shipping_rates", arguments);
+        using var document = JsonDocument.Parse(json);
+
+        Assert.False(document.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal("needs_customer_review", document.RootElement.GetProperty("addressValidation").GetString());
+        Assert.Equal(0, delivery.RateCallCount);
+        var suggestion = Assert.Single(document.RootElement.GetProperty("suggestions").EnumerateArray());
+        Assert.Equal(registryPostalCode, suggestion.GetProperty("postalCode").GetString());
+        Assert.Equal(registryDistrict, suggestion.GetProperty("subDistrict").GetString());
+        Assert.False(suggestion.TryGetProperty("provider", out _));
+        Assert.False(suggestion.TryGetProperty("id", out _));
+    }
+
+    [Fact]
+    public async Task Agent_shipping_rates_tool_distinguishes_registry_unavailable_without_calling_delivery()
+    {
+        var registry = new RecordingRegistryServiceClient { IsAvailable = false };
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [CreateShippingRateOption()] }
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+
+        var json = await ExecuteToolAsync(
+            client,
+            Guid.NewGuid(),
+            "quote_get_shipping_rates",
+            CreateShippingRateArguments());
+        using var document = JsonDocument.Parse(json);
+
+        Assert.False(document.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal("validation_unavailable", document.RootElement.GetProperty("addressValidation").GetString());
+        Assert.Empty(document.RootElement.GetProperty("suggestions").EnumerateArray());
+        Assert.Equal(1, registry.MultiFieldCallCount);
+        Assert.Equal(0, delivery.RateCallCount);
+    }
+
+    [Fact]
+    public async Task Agent_shipping_rates_tool_clears_stale_selection_when_new_destination_is_incomplete()
+    {
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [CreateShippingRateOption()] }
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var firstJson = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_get_shipping_rates",
+            CreateShippingRateArguments());
+        using var firstDocument = JsonDocument.Parse(firstJson);
+        Assert.Single(firstDocument.RootElement.GetProperty("state").GetProperty("proposedActions").EnumerateArray());
+
+        var incompleteJson = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_get_shipping_rates",
+            new Dictionary<string, JsonElement>
+            {
+                ["address"] = JsonSerializer.SerializeToElement("1 I-1 Road", JsonOptions)
+            });
+        using var incompleteDocument = JsonDocument.Parse(incompleteJson);
+
+        Assert.False(incompleteDocument.RootElement.GetProperty("success").GetBoolean());
+        Assert.Empty(incompleteDocument.RootElement
+            .GetProperty("state")
+            .GetProperty("proposedActions")
+            .EnumerateArray());
+        var sessionStore = scopedFactory.Services.GetRequiredService<QuoteAgentSessionStore>();
+        Assert.Empty(sessionStore.GetOrCreate(sessionId).ShippingRateOptions);
+        Assert.Null(sessionStore.GetOrCreate(sessionId).SelectedShippingRate);
+    }
+
+    [Theory]
+    [InlineData("addressline1", "postalcode", "phonenumber", "countrycode")]
+    [InlineData("address_line_1", "postal_code", "phone_number", "country_code")]
+    [InlineData("addressLine1", "postalCode", "phoneNumber", "countryCode")]
+    public async Task Agent_shipping_rates_tool_maps_compact_snake_and_camel_destination_aliases(
+        string addressKey,
+        string postalCodeKey,
+        string phoneKey,
+        string countryCodeKey)
+    {
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [CreateShippingRateOption()] }
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            [addressKey] = JsonSerializer.SerializeToElement("1 I-1 Road", JsonOptions),
+            ["district"] = JsonSerializer.SerializeToElement("Map Ta Phut", JsonOptions),
+            ["city"] = JsonSerializer.SerializeToElement("Mueang Rayong", JsonOptions),
+            ["province"] = JsonSerializer.SerializeToElement("Rayong", JsonOptions),
+            [postalCodeKey] = JsonSerializer.SerializeToElement("21150", JsonOptions),
+            [phoneKey] = JsonSerializer.SerializeToElement("038683930", JsonOptions),
+            [countryCodeKey] = JsonSerializer.SerializeToElement("TH", JsonOptions),
+            ["weight"] = JsonSerializer.SerializeToElement(1250m, JsonOptions),
+            ["length"] = JsonSerializer.SerializeToElement(25m, JsonOptions),
+            ["width"] = JsonSerializer.SerializeToElement(20m, JsonOptions),
+            ["height"] = JsonSerializer.SerializeToElement(8m, JsonOptions)
+        };
+
+        var json = await ExecuteToolAsync(client, Guid.NewGuid(), "quote_get_shipping_rates", arguments);
+        using var document = JsonDocument.Parse(json);
+
+        Assert.True(document.RootElement.GetProperty("success").GetBoolean());
+        Assert.Equal("1 I-1 Road", delivery.LastRateRequest?.To.Address);
+        Assert.Equal("21150", delivery.LastRateRequest?.To.Postcode);
+        Assert.Equal("038683930", delivery.LastRateRequest?.To.Tel);
+        Assert.Equal("TH", delivery.LastRateRequest?.To.CountryCode);
+    }
+
+    [Fact]
+    public async Task Agent_shipping_rates_tool_filters_irrelevant_rates_and_only_retains_oversize_for_oversized_parcel()
+    {
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto
+            {
+                Rates =
+                [
+                    CreateShippingRateOption("STD", "Standard Parcel", 80m, "Standard"),
+                    CreateShippingRateOption("ZERO", "Zero Quote", 0m, "Standard"),
+                    CreateShippingRateOption("NEG", "Negative Quote", -1m, "Standard"),
+                    CreateShippingRateOption("FOOD", "Fresh Food Courier", 60m, "Fresh delivery"),
+                    CreateShippingRateOption("FRUIT", "Fruit Parcel", 61m, "Fruit delivery"),
+                    CreateShippingRateOption("FROZEN", "Frozen Parcel", 62m, "Frozen delivery"),
+                    CreateShippingRateOption("CHILLED", "Chilled Parcel", 63m, "Chilled delivery"),
+                    CreateShippingRateOption("BULKY", "Flash Express Bulky", 70m, "Oversize parcel")
+                ]
+            }
+        };
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+
+        var normalJson = await ExecuteToolAsync(
+            client,
+            Guid.NewGuid(),
+            "quote_get_shipping_rates",
+            CreateShippingRateArguments());
+        using var normalDocument = JsonDocument.Parse(normalJson);
+
+        var normalRates = normalDocument.RootElement.GetProperty("rates").EnumerateArray().ToArray();
+        var normalRate = Assert.Single(normalRates);
+        Assert.Equal("STD", normalRate.GetProperty("courierCode").GetString());
+
+        var oversizedArguments = CreateShippingRateArguments();
+        oversizedArguments["length"] = JsonSerializer.SerializeToElement(61m, JsonOptions);
+        var oversizedJson = await ExecuteToolAsync(
+            client,
+            Guid.NewGuid(),
+            "quote_get_shipping_rates",
+            oversizedArguments);
+        using var oversizedDocument = JsonDocument.Parse(oversizedJson);
+
+        var oversizedCodes = oversizedDocument.RootElement
+            .GetProperty("rates")
+            .EnumerateArray()
+            .Select(rate => rate.GetProperty("courierCode").GetString() ?? string.Empty)
+            .ToArray();
+        Assert.Equal(["BULKY", "STD"], oversizedCodes);
+    }
+
+    [Fact]
+    public async Task Agent_shipping_rates_tool_deduplicates_deterministically_ranks_and_caps_six_choices()
+    {
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto
+            {
+                Rates =
+                [
+                    CreateShippingRateOption("FLE", "Flash Express", 45m, "Standard", "Shippop"),
+                    CreateShippingRateOption("FLE", "Flash Express", 35m, "Standard", "GoShip"),
+                    CreateShippingRateOption("C7", "Courier Seven", 70m, "Standard"),
+                    CreateShippingRateOption("C2", "Courier Two", 20m, "Standard"),
+                    CreateShippingRateOption("C6", "Courier Six", 60m, "Standard"),
+                    CreateShippingRateOption("C1", "Courier One", 10m, "Standard"),
+                    CreateShippingRateOption("C5", "Courier Five", 50m, "Standard"),
+                    CreateShippingRateOption("C4", "Courier Four", 40m, "Standard"),
+                    CreateShippingRateOption("C3", "Courier Three", 30m, "Standard")
+                ]
+            }
+        };
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+
+        var json = await ExecuteToolAsync(
+            client,
+            Guid.NewGuid(),
+            "quote_get_shipping_rates",
+            CreateShippingRateArguments());
+        using var document = JsonDocument.Parse(json);
+
+        var rates = document.RootElement.GetProperty("rates").EnumerateArray().ToArray();
+        Assert.Equal(6, rates.Length);
+        Assert.Equal(
+            ["C1", "C2", "C3", "FLE", "C4", "C5"],
+            rates.Select(rate => rate.GetProperty("courierCode").GetString() ?? string.Empty).ToArray());
+        var flash = Assert.Single(rates, rate => rate.GetProperty("courierCode").GetString() == "FLE");
+        Assert.Equal(35m, flash.GetProperty("totalPrice").GetDecimal());
+    }
+
+    [Fact]
+    public async Task Agent_shipping_rates_tool_rank_and_cap_are_invariant_to_downstream_input_order()
+    {
+        var rates = Enumerable.Range(1, 8)
+            .Select(index => CreateShippingRateOption("FLE", $"Product {index}", 80m, "Standard"))
+            .ToList();
+        rates.ForEach(rate => SetShippingCourierNameIfSupported(rate, "Flash Express"));
+
+        var forward = await FetchProductsAsync(rates);
+        var reversed = await FetchProductsAsync(rates.AsEnumerable().Reverse().ToList());
+
+        Assert.Equal(["Product 1", "Product 2", "Product 3", "Product 4", "Product 5", "Product 6"], forward);
+        Assert.Equal(forward, reversed);
+
+        async Task<string[]> FetchProductsAsync(IReadOnlyList<ShippingRateOptionDto> orderedRates)
+        {
+            var delivery = new RecordingDeliveryServiceClient
+            {
+                Rates = new ShippingRateResponseDto { Rates = orderedRates.ToList() }
+            };
+            var registry = new RecordingRegistryServiceClient
+            {
+                Locations = [CreateMapTaPhutRegistryLocation()]
+            };
+            await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+            using var client = scopedFactory.CreateClient();
+            var json = await ExecuteToolAsync(
+                client,
+                Guid.NewGuid(),
+                "quote_get_shipping_rates",
+                CreateShippingRateArguments());
+            using var document = JsonDocument.Parse(json);
+            return document.RootElement
+                .GetProperty("rates")
+                .EnumerateArray()
+                .Select(rate => rate.GetProperty("productName").GetString() ?? string.Empty)
+                .ToArray();
+        }
+    }
+
+    [Fact]
+    public async Task Agent_shipping_rates_tool_keeps_distinct_same_courier_services_selectable()
+    {
+        var standard = CreateShippingRateOption("FLE", "Standard Parcel", 80m, "Standard");
+        var express = CreateShippingRateOption("FLE", "Express Parcel", 120m, "Express");
+        SetShippingCourierNameIfSupported(standard, "Flash Express");
+        SetShippingCourierNameIfSupported(express, "Flash Express");
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [standard, express] }
+        };
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+
+        var json = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_get_shipping_rates",
+            CreateShippingRateArguments());
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Equal(2, document.RootElement.GetProperty("rates").GetArrayLength());
+        var actionElements = document.RootElement
+            .GetProperty("state")
+            .GetProperty("proposedActions")
+            .EnumerateArray()
+            .ToArray();
+        Assert.Equal(2, actionElements.Length);
+        Assert.Equal(2, actionElements.Select(action => action.GetProperty("actionType").GetString()).Distinct().Count());
+
+        var ambiguousJson = await ExecuteToolAsync(
+            client,
+            sessionId,
+            "quote_select_shipping_rate",
+            new Dictionary<string, JsonElement>
+            {
+                ["courier_code"] = JsonSerializer.SerializeToElement("FLE", JsonOptions)
+            });
+        using var ambiguousDocument = JsonDocument.Parse(ambiguousJson);
+        Assert.False(ambiguousDocument.RootElement.GetProperty("success").GetBoolean());
+        Assert.Contains(
+            "multiple shipping options",
+            ambiguousDocument.RootElement.GetProperty("error").GetString() ?? string.Empty,
+            StringComparison.OrdinalIgnoreCase);
+
+        var sessionStore = scopedFactory.Services.GetRequiredService<QuoteAgentSessionStore>();
+        var expressActionId = actionElements
+            .Select(action => action.GetProperty("actionId").GetGuid())
+            .Single(actionId =>
+                sessionStore.TryGetAction(actionId, out var pending) &&
+                pending.Arguments["product_name"].GetString() == "Express Parcel");
+
+        await ConfirmActionAsync(client, expressActionId);
+
+        Assert.Equal("Express Parcel", sessionStore.GetOrCreate(sessionId).SelectedShippingRate?.ProductName);
+    }
+
+    [Fact]
+    public async Task Agent_shipping_rates_tool_preserves_structured_logo_and_package_metadata_without_provider_copy()
+    {
+        var detailedRate = CreateShippingRateOption("FLE", "Standard Parcel", 82.25m, "Pickup standard", "GoShip");
+        SetShippingCourierNameIfSupported(detailedRate, "Flash Express");
+        detailedRate.EstimatedDeliveryDate = "1-2 business days";
+        detailedRate.CourierLogoUrl = " https://cdn.example/flash.svg ";
+        detailedRate.PackageCount = 1;
+        detailedRate.TotalWeight = 1250m;
+        detailedRate.Packages =
+        [
+            new ShippingPackageQuoteDto
+            {
+                PackageNumber = 1,
+                Name = "GoShip MALIEV box 1",
+                Weight = 1250m,
+                Width = 20m,
+                Length = 25m,
+                Height = 8m,
+                IsOversized = false,
+                Price = 82.25m,
+                Currency = "THB",
+                EstimatedDelivery = "GoShip 1-2 business days",
+                Items =
+                [
+                    new ShippingPackageItemDto
+                    {
+                        Name = "GoShip Bracket",
+                        Quantity = 2,
+                        UnitWidth = 8m,
+                        UnitLength = 12m,
+                        UnitHeight = 4m,
+                        UnitWeight = 500m
+                    }
+                ]
+            }
+        ];
+        var delivery = new RecordingDeliveryServiceClient
+        {
+            Rates = new ShippingRateResponseDto { Rates = [detailedRate] }
+        };
+        var registry = new RecordingRegistryServiceClient
+        {
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
+        using var client = scopedFactory.CreateClient();
+
+        var json = await ExecuteToolAsync(
+            client,
+            Guid.NewGuid(),
+            "quote_get_shipping_rates",
+            CreateShippingRateArguments());
+        using var document = JsonDocument.Parse(json);
+
+        var rate = Assert.Single(document.RootElement.GetProperty("rates").EnumerateArray());
+        Assert.Equal("FLE", rate.GetProperty("courierCode").GetString());
+        Assert.Equal("Flash Express", rate.GetProperty("courierName").GetString());
+        Assert.Equal("Standard Parcel", rate.GetProperty("productName").GetString());
+        Assert.Equal("https://cdn.example/flash.svg", rate.GetProperty("courierLogoUrl").GetString());
+        Assert.Equal(82.25m, rate.GetProperty("totalPrice").GetDecimal());
+        Assert.Equal("THB", rate.GetProperty("currencyCode").GetString());
+        Assert.Equal("Pickup standard", rate.GetProperty("serviceLevel").GetString());
+        Assert.Equal("1-2 business days", rate.GetProperty("leadTime").GetString());
+        Assert.Equal(1, rate.GetProperty("packageCount").GetInt32());
+        Assert.Equal(1250m, rate.GetProperty("totalWeight").GetDecimal());
+        Assert.False(rate.TryGetProperty("provider", out _));
+
+        var package = Assert.Single(rate.GetProperty("packages").EnumerateArray());
+        Assert.Equal(1, package.GetProperty("packageNumber").GetInt32());
+        Assert.Equal("MALIEV box 1", package.GetProperty("name").GetString());
+        Assert.Equal(1250m, package.GetProperty("weight").GetDecimal());
+        Assert.Equal(20m, package.GetProperty("width").GetDecimal());
+        Assert.Equal(25m, package.GetProperty("length").GetDecimal());
+        Assert.Equal(8m, package.GetProperty("height").GetDecimal());
+        Assert.Equal("1-2 business days", package.GetProperty("estimatedDelivery").GetString());
+        var item = Assert.Single(package.GetProperty("items").EnumerateArray());
+        Assert.Equal("Bracket", item.GetProperty("name").GetString());
+        Assert.Equal(2, item.GetProperty("quantity").GetInt32());
+        Assert.Equal(8m, item.GetProperty("unitWidth").GetDecimal());
+        Assert.Equal(12m, item.GetProperty("unitLength").GetDecimal());
+        Assert.Equal(4m, item.GetProperty("unitHeight").GetDecimal());
+        Assert.Equal(500m, item.GetProperty("unitWeight").GetDecimal());
+        Assert.DoesNotContain("Shippop", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GoShip", json, StringComparison.OrdinalIgnoreCase);
+
+        var action = Assert.Single(document.RootElement
+            .GetProperty("state")
+            .GetProperty("proposedActions")
+            .EnumerateArray());
+        Assert.False(action.GetProperty("requiresConfirmation").GetBoolean());
+        var actionId = action.GetProperty("actionId").GetGuid();
+        var sessionStore = scopedFactory.Services.GetRequiredService<QuoteAgentSessionStore>();
+        Assert.True(sessionStore.TryGetAction(actionId, out var pendingAction));
+        Assert.Equal("https://cdn.example/flash.svg", pendingAction.Arguments["courier_logo_url"].GetString());
+        Assert.Equal("Pickup standard", pendingAction.Arguments["service_level"].GetString());
+        Assert.Equal(1, pendingAction.Arguments["package_count"].GetInt32());
+        Assert.Equal(1250m, pendingAction.Arguments["total_weight"].GetDecimal());
+        var actionPackage = Assert.Single(pendingAction.Arguments["packages"].EnumerateArray());
+        Assert.Equal("MALIEV box 1", actionPackage.GetProperty("name").GetString());
+        Assert.DoesNotContain("Shippop", JsonSerializer.Serialize(pendingAction.Arguments, JsonOptions), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("GoShip", JsonSerializer.Serialize(pendingAction.Arguments, JsonOptions), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task Agent_shipping_rates_tool_returns_table_and_clickable_courier_actions()
     {
         var delivery = new RecordingDeliveryServiceClient
@@ -5109,14 +5681,11 @@ Customer message:
                 ]
             }
         };
-        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        var registry = new RecordingRegistryServiceClient
         {
-            builder.ConfigureTestServices(services =>
-            {
-                services.RemoveAll<IDeliveryServiceClient>();
-                services.AddSingleton<IDeliveryServiceClient>(delivery);
-            });
-        });
+            Locations = [CreateMapTaPhutRegistryLocation()]
+        };
+        await using var scopedFactory = CreateShippingAgentFactory(registry, delivery);
         using var client = scopedFactory.CreateClient();
         var sessionId = Guid.NewGuid();
 
@@ -12305,11 +12874,174 @@ Customer message:
         }
     }
 
+    private WebApplicationFactory<Program> CreateShippingAgentFactory(
+        RecordingRegistryServiceClient registry,
+        RecordingDeliveryServiceClient delivery)
+    {
+        return factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IRegistryServiceClient>();
+                services.AddSingleton<IRegistryServiceClient>(registry);
+                services.RemoveAll<IDeliveryServiceClient>();
+                services.AddSingleton<IDeliveryServiceClient>(delivery);
+            });
+        });
+    }
+
+    private static Dictionary<string, JsonElement> CreateShippingRateArguments()
+    {
+        return new Dictionary<string, JsonElement>
+        {
+            ["name"] = JsonSerializer.SerializeToElement("Map Ta Phut Industrial Estate", JsonOptions),
+            ["address"] = JsonSerializer.SerializeToElement("1 I-1 Road", JsonOptions),
+            ["district"] = JsonSerializer.SerializeToElement("Map Ta Phut", JsonOptions),
+            ["city"] = JsonSerializer.SerializeToElement("Mueang Rayong", JsonOptions),
+            ["province"] = JsonSerializer.SerializeToElement("Rayong", JsonOptions),
+            ["postalCode"] = JsonSerializer.SerializeToElement("21150", JsonOptions),
+            ["phone"] = JsonSerializer.SerializeToElement("038683930", JsonOptions),
+            ["countryCode"] = JsonSerializer.SerializeToElement("TH", JsonOptions),
+            ["weight"] = JsonSerializer.SerializeToElement(1250m, JsonOptions),
+            ["length"] = JsonSerializer.SerializeToElement(25m, JsonOptions),
+            ["width"] = JsonSerializer.SerializeToElement(20m, JsonOptions),
+            ["height"] = JsonSerializer.SerializeToElement(8m, JsonOptions)
+        };
+    }
+
+    private static ThaiAddressRegistryLocationDto CreateMapTaPhutRegistryLocation(
+        string postalCode = "21150",
+        string subDistrictEn = "Map Ta Phut",
+        string subDistrictTh = "มาบตาพุด")
+    {
+        return new ThaiAddressRegistryLocationDto
+        {
+            Id = Guid.Parse("cbaf2da7-5ff8-40f4-9089-147e07f6f920"),
+            PostalCode = postalCode,
+            SubDistrictTh = subDistrictTh,
+            DistrictTh = "เมืองระยอง",
+            ProvinceTh = "ระยอง",
+            SubDistrictEn = subDistrictEn,
+            DistrictEn = "Mueang Rayong",
+            ProvinceEn = "Rayong"
+        };
+    }
+
+    private static ShippingRateOptionDto CreateShippingRateOption()
+    {
+        return CreateShippingRateOption(
+            "FLE",
+            "Flash Express",
+            82.25m,
+            "Standard pickup");
+    }
+
+    private static ShippingRateOptionDto CreateShippingRateOption(
+        string courierCode,
+        string productName,
+        decimal totalPrice,
+        string? serviceLevel,
+        string provider = "Shippop")
+    {
+        return new ShippingRateOptionDto
+        {
+            CourierCode = courierCode,
+            ProductName = productName,
+            Provider = provider,
+            ServiceLevel = serviceLevel,
+            EstimatedDeliveryDate = "1-2 business days",
+            TotalPrice = totalPrice,
+            CurrencyCode = "THB",
+            PackageCount = 1,
+            TotalWeight = 1250m
+        };
+    }
+
+    private static void SetShippingCourierNameIfSupported(ShippingRateOptionDto rate, string courierName)
+    {
+        typeof(ShippingRateOptionDto).GetProperty("CourierName")?.SetValue(rate, courierName);
+    }
+
+    private sealed record RegistryHierarchyRequest(
+        string PostalCode,
+        string District,
+        string City,
+        string Province,
+        int Limit);
+
+    private sealed class RecordingRegistryServiceClient : IRegistryServiceClient
+    {
+        public bool IsAvailable { get; init; } = true;
+
+        public IReadOnlyList<ThaiAddressRegistryLocationDto> Locations { get; init; } = [];
+
+        public List<string>? CallSequence { get; init; }
+
+        public Func<RegistryHierarchyRequest, ThaiAddressRegistryLookupResult>? HierarchyResultFactory { get; init; }
+
+        public List<RegistryHierarchyRequest> HierarchyRequests { get; } = [];
+
+        public int MultiFieldCallCount { get; private set; }
+
+        public string? LastPostalCode { get; private set; }
+
+        public string? LastDistrict { get; private set; }
+
+        public string? LastCity { get; private set; }
+
+        public string? LastProvince { get; private set; }
+
+        public Task<HttpResponseMessage> SearchThaiLocationsAsync(
+            string query,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new HttpResponseMessage(IsAvailable ? HttpStatusCode.OK : HttpStatusCode.ServiceUnavailable)
+            {
+                Content = IsAvailable
+                    ? JsonContent.Create(new { success = true, data = Locations }, options: JsonOptions)
+                    : null
+            });
+        }
+
+        public Task<ThaiAddressRegistryLookupResult> SearchThaiAddressHierarchyAsync(
+            string postalCode,
+            string district,
+            string city,
+            string province,
+            int limit,
+            CancellationToken cancellationToken)
+        {
+            MultiFieldCallCount++;
+            LastPostalCode = postalCode;
+            LastDistrict = district;
+            LastCity = city;
+            LastProvince = province;
+            CallSequence?.Add("registry");
+            var request = new RegistryHierarchyRequest(postalCode, district, city, province, limit);
+            HierarchyRequests.Add(request);
+            if (HierarchyResultFactory is not null)
+            {
+                return Task.FromResult(HierarchyResultFactory(request));
+            }
+
+            return Task.FromResult(new ThaiAddressRegistryLookupResult
+            {
+                IsAvailable = IsAvailable,
+                Locations = IsAvailable ? Locations : []
+            });
+        }
+    }
+
     private sealed class RecordingDeliveryServiceClient : IDeliveryServiceClient
     {
         public IReadOnlyList<ShippingCourierDto> Couriers { get; init; } = [];
 
         public ShippingRateResponseDto Rates { get; init; } = new();
+
+        public List<string>? CallSequence { get; init; }
+
+        public int RateCallCount { get; private set; }
 
         public ShippingRateRequestDto? LastRateRequest { get; private set; }
 
@@ -12322,6 +13054,8 @@ Customer message:
 
         public Task<ShippingRateResponseDto> GetShippingRatesAsync(ShippingRateRequestDto request, CancellationToken ct = default)
         {
+            RateCallCount++;
+            CallSequence?.Add("delivery");
             LastRateRequest = request;
             return Task.FromResult(Rates);
         }

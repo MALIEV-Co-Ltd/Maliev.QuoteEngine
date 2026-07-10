@@ -46,7 +46,8 @@ internal sealed class DeliveryServiceClient(HttpClient http) : IDeliveryServiceC
             Rates = downstreamRates.Select(rate => new ShippingRateOptionDto
             {
                 CourierCode = rate.CourierCode,
-                ProductName = FirstNonEmpty(rate.CourierName, rate.CourierCode),
+                CourierName = FirstNonEmpty(rate.CourierName, rate.CourierCode),
+                ProductName = FirstNonEmpty(rate.ProductName, rate.CourierName, rate.CourierCode),
                 TotalPrice = rate.Price,
                 CurrencyCode = FirstNonEmpty(rate.Currency, "THB"),
                 EstimatedDeliveryDate = rate.EstimatedDelivery,
@@ -79,6 +80,8 @@ internal sealed class DeliveryServiceClient(HttpClient http) : IDeliveryServiceC
         public string CourierCode { get; set; } = string.Empty;
 
         public string CourierName { get; set; } = string.Empty;
+
+        public string? ProductName { get; set; }
 
         public decimal Price { get; set; }
 
