@@ -8370,42 +8370,55 @@ Customer message:
 
     private static bool ContainsFormalQuoteAvailabilityClaim(string content)
     {
-        var referencesFormalQuote = content.Contains("formal quote", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("formal quotation", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("ใบเสนอราคาอย่างเป็นทางการ", StringComparison.Ordinal);
-        if (!referencesFormalQuote)
+        if (string.IsNullOrWhiteSpace(content) ||
+            content.Contains('?') ||
+            content.Contains('？'))
         {
             return false;
         }
 
-        var trimmed = content.Trim();
-        if (trimmed.EndsWith('?') ||
-            content.Contains("when you are ready", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("if you are ready", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("once you are ready", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("not ready", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("isn't ready", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("not available", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("has not been generated", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("has not been created", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("ยังไม่พร้อม", StringComparison.Ordinal) ||
-            content.Contains("ยังไม่มี", StringComparison.Ordinal))
+        if (content.Contains("ใบเสนอราคาอย่างเป็นทางการ", StringComparison.Ordinal))
+        {
+            return ContainsAffirmativeThaiFormalQuoteAvailability(content);
+        }
+
+        return ContainsAffirmativeEnglishFormalQuoteAvailability(content);
+    }
+
+    private static bool ContainsAffirmativeEnglishFormalQuoteAvailability(string content)
+    {
+        const RegexOptions options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
+        const string formalQuote = @"(?:(?:your|the|this|our|a)\s+)?formal\s+(?:quote|quotation)(?:\s+artifact)?";
+        const string completedStatus = @"(?:ready|available|generated|created|completed|prepared|downloadable)";
+
+        return Regex.IsMatch(
+                content,
+                $@"^\s*{formalQuote}\s+(?:is|has\s+been)\s+(?:now\s+)?{completedStatus}(?:\s+and\s+{completedStatus})*(?:\s+(?:in|under)\s+(?:the\s+)?artifacts)?(?:\s+to\s+download)?\s*[.!]?\s*$",
+                options) ||
+            Regex.IsMatch(
+                content,
+                $@"^\s*{formalQuote}\s+(?:is|has\s+been)\s+(?:now\s+)?(?:in|under)\s+(?:the\s+)?artifacts\s*[.!]?\s*$",
+                options) ||
+            Regex.IsMatch(
+                content,
+                $@"^\s*{formalQuote}\s+(?:can\s+be|is)\s+downloaded\s*[.!]?\s*$",
+                options);
+    }
+
+    private static bool ContainsAffirmativeThaiFormalQuoteAvailability(string content)
+    {
+        var trimmed = content.TrimStart();
+        if (!trimmed.StartsWith("ใบเสนอราคาอย่างเป็นทางการ", StringComparison.Ordinal))
         {
             return false;
         }
 
-        return content.Contains("ready", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("available", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("artifact", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("download", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("generated", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("created", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("completed", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("prepared", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("พร้อม", StringComparison.Ordinal) ||
-            content.Contains("ดาวน์โหลด", StringComparison.Ordinal) ||
-            content.Contains("เสร็จ", StringComparison.Ordinal) ||
-            content.Contains("จัดทำแล้ว", StringComparison.Ordinal);
+        return trimmed.Contains("พร้อมแล้ว", StringComparison.Ordinal) ||
+            trimmed.Contains("จัดทำแล้ว", StringComparison.Ordinal) ||
+            trimmed.Contains("สร้างแล้ว", StringComparison.Ordinal) ||
+            trimmed.Contains("เสร็จแล้ว", StringComparison.Ordinal) ||
+            trimmed.Contains("ดาวน์โหลดได้", StringComparison.Ordinal) ||
+            trimmed.Contains("อยู่ใน Artifacts", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string GroundAssistantPersonaText(string content, string language)

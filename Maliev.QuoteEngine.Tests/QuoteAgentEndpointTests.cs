@@ -2433,14 +2433,23 @@ Customer message:
     }
 
     [Theory]
-    [InlineData("I can prepare a formal quote when you are ready.")]
-    [InlineData("The formal quote is not ready yet.")]
-    [InlineData("Is the formal quote ready?")]
-    public async Task Agent_grounding_preserves_non_availability_formal_quote_language(string modelText)
+    [InlineData("en", "I can prepare a formal quote when you are ready.")]
+    [InlineData("en", "The formal quote is not ready yet.")]
+    [InlineData("en", "Is the formal quote ready?")]
+    [InlineData("en", "If pricing passes, the formal quote will be ready.")]
+    [InlineData("en", "The formal quote is not yet ready.")]
+    [InlineData("en", "Can you tell me whether the formal quote is ready? I still need to review it.")]
+    [InlineData("th", "หากการกำหนดราคาผ่าน ใบเสนอราคาอย่างเป็นทางการจะพร้อม")]
+    [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการยังไม่พร้อม")]
+    [InlineData("th", "ช่วยบอกได้ไหมว่าใบเสนอราคาอย่างเป็นทางการพร้อมหรือยัง? ลูกค้ายังต้องตรวจสอบ")]
+    public async Task Agent_grounding_preserves_non_availability_formal_quote_language(
+        string language,
+        string modelText)
     {
         var chatbot = new RecordingChatbotServiceClient
         {
-            ResponseContent = modelText
+            ResponseContent = modelText,
+            ResponseLanguage = language
         };
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
         {
@@ -2455,8 +2464,8 @@ Customer message:
         using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
         {
             SessionId = Guid.NewGuid(),
-            Message = "Can we prepare a formal quote later?",
-            Language = "en"
+            Message = language == "th" ? "ค่อยจัดทำใบเสนอราคาได้ไหม" : "Can we prepare a formal quote later?",
+            Language = language
         }, JsonOptions);
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
 
