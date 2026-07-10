@@ -1,6 +1,7 @@
 using Maliev.QuoteEngine.Client.Models;
 using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
+using System.Globalization;
 
 namespace Maliev.QuoteEngine.Client.Components.QuoteAgent;
 
@@ -72,7 +73,7 @@ public static class QuoteAgentUiHelpers
 
         if (part.VolumeCc > 0)
         {
-            parts.Add($"{part.VolumeCc:0.##} cc");
+            parts.Add(FormatVolume(part.VolumeCc));
         }
         else if (part.SurfaceAreaCm2 > 0)
         {
@@ -80,6 +81,59 @@ public static class QuoteAgentUiHelpers
         }
 
         return string.Join(" · ", parts);
+    }
+
+    /// <summary>
+    /// Converts internal upload and geometry states into customer-safe status labels.
+    /// </summary>
+    public static string FormatCustomerStatus(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return "Attached";
+        }
+
+        return status.Trim().ToLowerInvariant() switch
+        {
+            "attached" => "Attached",
+            "uploaded" => "Uploaded",
+            "uploading" => "Uploading",
+            "waitingforupload" or "waiting_for_upload" or "waiting for upload" => "Waiting to upload",
+            "processing" => "Preparing preview",
+            "glbready" or "glb_ready" or "modelgenerated" or "model_generated" => "3D preview ready",
+            "dfmanalysisready" or "dfm_analysis_ready" => "DFM analysis ready",
+            "analyzed" => "Analysis ready",
+            "ready" => "Ready",
+            "failed" or "upload failed" or "upload_failed" => "File unavailable",
+            _ => "In progress"
+        };
+    }
+
+    /// <summary>
+    /// Formats a volume stored in cubic centimetres using a scale-appropriate SI unit.
+    /// </summary>
+    public static string FormatVolume(decimal volumeCc)
+    {
+        decimal value;
+        string unit;
+
+        if (volumeCc < 1m)
+        {
+            value = volumeCc * 1_000m;
+            unit = "mm³";
+        }
+        else if (volumeCc >= 1_000_000m)
+        {
+            value = volumeCc / 1_000_000m;
+            unit = "m³";
+        }
+        else
+        {
+            value = volumeCc;
+            unit = "cm³";
+        }
+
+        return $"{value.ToString("0.###", CultureInfo.InvariantCulture)} {unit}";
     }
 
     public static string FormatFileSize(long bytes)

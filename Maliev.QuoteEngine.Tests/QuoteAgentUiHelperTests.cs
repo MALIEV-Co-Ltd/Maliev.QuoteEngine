@@ -1,6 +1,7 @@
 using Maliev.QuoteEngine.Client.Components.QuoteAgent;
 using Maliev.QuoteEngine.Client.Models;
 using Maliev.QuoteEngine.Shared.Agent;
+using System.Globalization;
 
 namespace Maliev.QuoteEngine.Tests;
 
@@ -104,6 +105,51 @@ public sealed class QuoteAgentUiHelperTests
 
         var metadata = QuoteAgentUiHelpers.FormatUploadedPartMetadata(part);
 
-        Assert.Equal("1.2 MB · 10.5 × 8.2 × 4.1 mm · 12.34 cc", metadata);
+        Assert.Equal("1.2 MB · 10.5 × 8.2 × 4.1 mm · 12.34 cm³", metadata);
+    }
+
+    [Theory]
+    [InlineData(null, "Attached")]
+    [InlineData("", "Attached")]
+    [InlineData("Uploading", "Uploading")]
+    [InlineData("WaitingForUpload", "Waiting to upload")]
+    [InlineData("Processing", "Preparing preview")]
+    [InlineData("GlbReady", "3D preview ready")]
+    [InlineData("DfmAnalysisReady", "DFM analysis ready")]
+    [InlineData("ModelGenerated", "3D preview ready")]
+    [InlineData("Ready", "Ready")]
+    [InlineData("Upload failed", "File unavailable")]
+    [InlineData("InternalPipelineStage42", "In progress")]
+    public void Customer_status_replaces_internal_file_states_with_safe_labels(string? status, string expected)
+    {
+        Assert.Equal(expected, QuoteAgentUiHelpers.FormatCustomerStatus(status));
+    }
+
+    [Fact]
+    public void Volume_formatter_uses_units_appropriate_to_stored_cubic_centimetres()
+    {
+        Assert.Equal("0.1 mm³", QuoteAgentUiHelpers.FormatVolume(0.0001m));
+        Assert.Equal("999 mm³", QuoteAgentUiHelpers.FormatVolume(0.999m));
+        Assert.Equal("1 cm³", QuoteAgentUiHelpers.FormatVolume(1m));
+        Assert.Equal("999999.999 cm³", QuoteAgentUiHelpers.FormatVolume(999_999.999m));
+        Assert.Equal("1 m³", QuoteAgentUiHelpers.FormatVolume(1_000_000m));
+    }
+
+    [Fact]
+    public void Volume_formatter_uses_invariant_decimal_output_and_sensible_precision()
+    {
+        var previousCulture = CultureInfo.CurrentCulture;
+
+        try
+        {
+            CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("de-DE");
+
+            Assert.Equal("12.346 cm³", QuoteAgentUiHelpers.FormatVolume(12.34567m));
+            Assert.Equal("1.235 m³", QuoteAgentUiHelpers.FormatVolume(1_234_567.89m));
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = previousCulture;
+        }
     }
 }
