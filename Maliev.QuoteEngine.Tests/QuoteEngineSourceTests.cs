@@ -779,7 +779,7 @@ public sealed class QuoteEngineSourceTests
             .Replace("\r\n", "\n", StringComparison.Ordinal);
 
         Assert.Contains(
-            "_parts.Add(part);\n            _selectedPartIndex = _parts.Count - 1;\n            if (_agentShell is not null)\n            {\n                await _agentShell.NotifyUploadStartedAsync(part);\n            }\n\n            await InvokeAsync(StateHasChanged);\n            await Task.Yield();\n            try",
+            "_parts.Add(part);\n            _selectedPartIndex = _parts.Count - 1;\n            if (_agentShell is not null)\n            {\n                await _agentShell.NotifyUploadStartedAsync(part);\n            }\n\n            StartLocalCadThumbnailGeneration(part, candidate);\n            await InvokeAsync(StateHasChanged);\n            await Task.Yield();\n            try",
             workspace,
             StringComparison.Ordinal);
         var uploadFailureBlock = ExtractSourceBlock(
@@ -791,6 +791,58 @@ public sealed class QuoteEngineSourceTests
             uploadFailureBlock,
             StringComparison.Ordinal);
         Assert.DoesNotContain("_error = ex.Message", uploadFailureBlock, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteWorkspace_generates_transient_cad_thumbnails_with_the_GeometryService_browser_runtime()
+    {
+        var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
+        var partModel = ReadRepoFile("Maliev.QuoteEngine.Client", "Models", "QuotePartViewModel.cs");
+        var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
+        var thumbnailScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-cad-thumbnail.js");
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+
+        Assert.Contains("LocalThumbnailDataUrl", partModel, StringComparison.Ordinal);
+        var draftMapping = ExtractSourceBlock(partModel, "public QuotePartDraftDto ToDraft()", "};\n}");
+        Assert.DoesNotContain("LocalThumbnailDataUrl", draftMapping, StringComparison.Ordinal);
+
+        Assert.Contains("TryApplyLocalCadThumbnailAsync(part, candidate, generation)", workspace, StringComparison.Ordinal);
+        Assert.Contains("quoteEngineUploads.generateCadThumbnail", workspace, StringComparison.Ordinal);
+        Assert.Contains("NotifyUploadPreviewUpdatedAsync(part)", workspace, StringComparison.Ordinal);
+        Assert.Contains("NotifyUploadFailedAsync(part)", workspace, StringComparison.Ordinal);
+
+        Assert.Contains("import('/js/quote-cad-thumbnail.js", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("generateCadThumbnail", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("file.size > MAX_LOCAL_BYTES", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("/quote/v1/geometry/runtime/manifest", thumbnailScript, StringComparison.Ordinal);
+        Assert.Contains("/quote/v1/geometry/runtime/assets/", thumbnailScript, StringComparison.Ordinal);
+        Assert.Contains("operation: 'extract_mesh'", thumbnailScript, StringComparison.Ordinal);
+        Assert.Contains("export async function generateThumbnail", thumbnailScript, StringComparison.Ordinal);
+        Assert.Contains("part.LocalThumbnailDataUrl ?? part.ThumbnailUrl", shell, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void QuoteAgent_attachments_use_square_previews_and_upload_aware_send_feedback()
+    {
+        var shell = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
+        var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
+
+        Assert.Contains("qe-agent-composer-attachment-card--thumbnail", shell, StringComparison.Ordinal);
+        Assert.Contains("SelectMessageAttachmentAsync(attachment)", shell, StringComparison.Ordinal);
+        Assert.Contains("NotifyUploadFailedAsync", shell, StringComparison.Ordinal);
+        Assert.Contains("HasPendingComposerUpload ? Text(\"Uploading\"", shell, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-message-attachment-preview", shell, StringComparison.Ordinal);
+        var previewUpdateBlock = ExtractSourceBlock(
+            shell,
+            "public async Task NotifyUploadPreviewUpdatedAsync",
+            "public async Task NotifyUploadFailedAsync");
+        Assert.DoesNotContain("QueueComposerAttachment", previewUpdateBlock, StringComparison.Ordinal);
+        Assert.Contains("message.Attachments[messageAttachmentIndex] = updatedAttachment;", previewUpdateBlock, StringComparison.Ordinal);
+
+        Assert.Contains(".qe-agent-composer-attachment-card--thumbnail", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-composer-attachment-card:hover .qe-agent-composer-attachment-remove", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-message-attachment-preview", styles, StringComparison.Ordinal);
+        Assert.Contains("aspect-ratio: 1;", styles, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2524,8 +2576,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-composer-attachment-card--image", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-composer-attachment-card--file", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-attachment-card--image", styles, StringComparison.Ordinal);
-        Assert.Contains("width: 72px;", styles, StringComparison.Ordinal);
-        Assert.Contains("height: 72px;", styles, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-composer-attachment-card--thumbnail", component, StringComparison.Ordinal);
+        Assert.Contains("width: 108px;", styles, StringComparison.Ordinal);
+        Assert.Contains("aspect-ratio: 1;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-attachment-card--file", styles, StringComparison.Ordinal);
         Assert.Contains("width: min(214px, 66vw);", styles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-agent-composer-attachment-card.active", styles, StringComparison.Ordinal);
@@ -2572,7 +2625,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("background: var(--qe-agent-primary);", userBubbleStyleBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message--user {\n    justify-content: flex-end;\n    margin-bottom: 8px;", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--chat .qe-agent-thread-wrap {\n    flex: 1 1 0;", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-message-attachment--image", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-message-attachment-preview", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-message-footer", styles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-usage-ring", styles, StringComparison.Ordinal);
         Assert.Contains("conic-gradient", styles, StringComparison.Ordinal);

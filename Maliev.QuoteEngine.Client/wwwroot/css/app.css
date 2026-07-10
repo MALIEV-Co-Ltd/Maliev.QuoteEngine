@@ -3047,56 +3047,63 @@
 }
 
 .qe-agent-message-attachments .qe-agent-message-attachment {
+    appearance: none;
     display: grid;
-    grid-template-columns: 34px minmax(0, 1fr);
-    align-items: center;
-    gap: 8px;
-    max-width: min(260px, 100%);
-    padding: 5px 8px 5px 5px;
-    border-radius: 12px;
+    grid-template-rows: 86px auto;
+    gap: 6px;
+    width: 98px;
+    max-width: 100%;
+    padding: 5px;
+    border-radius: 11px;
     border: 1px solid var(--qe-agent-line);
     background: var(--qe-agent-soft);
     color: var(--qe-agent-ink);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    transition: border-color 140ms ease, background-color 140ms ease, transform 140ms ease;
 }
 
-.qe-agent-message-attachments .qe-agent-message-attachment--image {
-    grid-template-columns: minmax(0, 1fr);
-    width: 78px;
-    height: 78px;
-    max-width: none;
-    padding: 0;
+.qe-agent-message-attachments .qe-agent-message-attachment:hover,
+.qe-agent-message-attachments .qe-agent-message-attachment:focus-visible {
+    border-color: var(--qe-agent-ink);
+    background: var(--qe-agent-surface);
+    outline: none;
+    transform: translateY(-1px);
+}
+
+.qe-agent-message-attachment-preview {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    aspect-ratio: 1;
     overflow: hidden;
     border-radius: 8px;
     background: var(--qe-agent-surface);
 }
 
-.qe-agent-message-attachments img,
-.qe-agent-message-attachments svg {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
+.qe-agent-message-attachment-preview img {
+    display: block;
+    width: 100%;
+    height: 100%;
     object-fit: cover;
 }
 
-.qe-agent-message-attachments .qe-agent-message-attachment--image img,
-.qe-agent-message-attachments .qe-agent-message-attachment--image svg {
-    width: 100%;
-    height: 100%;
-    border-radius: 0;
+.qe-agent-message-attachment-preview svg {
+    width: 30px;
+    height: 30px;
 }
 
 .qe-agent-message-attachments small {
+    display: block;
     min-width: 0;
     overflow: hidden;
-    color: inherit;
-    font-size: 12px;
-    font-weight: 600;
+    color: var(--qe-agent-ink);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.25;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
-
-.qe-agent-message-attachments .qe-agent-message-attachment--image small {
-    display: none;
 }
 
 .qe-agent-message-footer {
@@ -4519,11 +4526,15 @@
 
 .qe-agent-composer-attachment-card--image {
     grid-template-columns: 1fr;
-    width: 72px;
-    height: 72px;
-    min-height: 72px;
-    padding: 4px;
+    width: 108px;
+    height: auto;
+    min-height: 128px;
+    padding: 6px;
     border-radius: 12px;
+}
+
+.qe-agent-composer-attachment-card--thumbnail {
+    align-items: start;
 }
 
 .qe-agent-composer-attachment-card--file {
@@ -4545,9 +4556,12 @@
 }
 
 .qe-agent-composer-attachment-card--image .qe-agent-composer-attachment-main {
-    display: block;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 96px auto;
+    gap: 6px;
     width: 100%;
-    height: 100%;
+    height: auto;
 }
 
 .qe-agent-composer-attachment-preview {
@@ -4562,8 +4576,9 @@
 
 .qe-agent-composer-attachment-card--image .qe-agent-composer-attachment-preview {
     width: 100%;
-    height: 100%;
-    border-radius: 12px;
+    height: auto;
+    aspect-ratio: 1;
+    border-radius: 9px;
 }
 
 .qe-agent-composer-attachment-preview img {
@@ -4571,6 +4586,26 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+}
+
+.qe-agent-composer-attachment-card.is-uploading .qe-agent-composer-attachment-preview {
+    animation: qe-agent-thumbnail-pulse 1.25s ease-in-out infinite alternate;
+}
+
+.qe-agent-composer-attachment-card.is-uploading .qe-agent-composer-attachment-preview img {
+    filter: blur(3px);
+    opacity: .62;
+}
+
+@keyframes qe-agent-thumbnail-pulse {
+    from { background-color: var(--qe-agent-bg); }
+    to { background-color: var(--qe-agent-hover); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .qe-agent-composer-attachment-card.is-uploading .qe-agent-composer-attachment-preview {
+        animation: none;
+    }
 }
 
 .qe-agent-composer-attachment-preview svg {
@@ -4586,7 +4621,7 @@
 }
 
 .qe-agent-composer-attachment-card--image .qe-agent-composer-attachment-copy {
-    display: none;
+    display: grid;
 }
 
 .qe-agent-composer-attachment-copy strong,
@@ -4600,7 +4635,7 @@
 
 .qe-agent-composer-attachment-copy strong {
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 500;
 }
 
 .qe-agent-composer-attachment-copy small {
@@ -4630,6 +4665,16 @@
     background: color-mix(in srgb, var(--qe-agent-bg) 92%, transparent);
     color: var(--qe-agent-ink);
     box-shadow: 0 2px 8px rgba(0, 0, 0, .16);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.qe-agent-composer-attachment-card:hover .qe-agent-composer-attachment-remove,
+.qe-agent-composer-attachment-card:focus-within .qe-agent-composer-attachment-remove,
+.qe-agent-composer-attachment-remove:focus-visible {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .qe-agent-composer-attachment-remove:hover,

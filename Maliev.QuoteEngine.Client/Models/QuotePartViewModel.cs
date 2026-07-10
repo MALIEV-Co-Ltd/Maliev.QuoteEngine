@@ -50,6 +50,12 @@ public sealed class QuotePartViewModel
     public string? ViewerStoragePath { get; set; }
     public string? ViewerFileExtension { get; set; }
     public string? ThumbnailUrl { get; set; }
+    /// <summary>
+    /// Browser-only preview generated from the selected file. This is deliberately
+    /// excluded from persisted quote DTOs; GeometryService remains authoritative for
+    /// durable thumbnails.
+    /// </summary>
+    public string? LocalThumbnailDataUrl { get; set; }
     public int BodyCount { get; set; } = 1;
     public bool IsManifold { get; set; } = true;
     public string? NonManifoldReason { get; set; }

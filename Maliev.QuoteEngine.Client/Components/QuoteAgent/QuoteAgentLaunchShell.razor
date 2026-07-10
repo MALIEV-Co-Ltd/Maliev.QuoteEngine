@@ -798,19 +798,23 @@
                                     <div class="qe-agent-message-attachments" aria-label="@Text("Attached files", "ไฟล์ที่แนบ")">
                                         @foreach (var attachment in message.Attachments)
                                         {
-                                            <span class="@MessageAttachmentClass(attachment)"
-                                                  title="@attachment.FileName"
-                                                  aria-label="@attachment.FileName">
-                                                @if (!string.IsNullOrWhiteSpace(attachment.PreviewUrl))
-                                                {
-                                                    <img src="@attachment.PreviewUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
-                                                }
-                                                else
-                                                {
-                                                    <MudIcon Icon="@UploadedPartIcon(attachment)" Size="Size.Small" />
-                                                }
+                                            <button type="button"
+                                                    class="@MessageAttachmentClass(attachment)"
+                                                    title="@attachment.FileName"
+                                                    aria-label="@Text($"Open {attachment.FileName} in the Workbench", $"เปิด {attachment.FileName} ในพื้นที่ทำงาน")"
+                                                    @onclick="@(() => SelectMessageAttachmentAsync(attachment))">
+                                                <span class="qe-agent-message-attachment-preview" aria-hidden="true">
+                                                    @if (!string.IsNullOrWhiteSpace(attachment.PreviewUrl))
+                                                    {
+                                                        <img src="@attachment.PreviewUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                                    }
+                                                    else
+                                                    {
+                                                        <MudIcon Icon="@UploadedPartIcon(attachment)" Size="Size.Small" />
+                                                    }
+                                                </span>
                                                 <small>@attachment.FileName</small>
-                                            </span>
+                                            </button>
                                         }
                                     </div>
                                 }
@@ -1651,7 +1655,7 @@
                     <button type="submit"
                             class="qe-agent-send-btn"
                             aria-describedby="qe-agent-send-tooltip"
-                            aria-label="@Text("Send message", "ส่งข้อความ")"
+                            aria-label="@ComposerSendTooltip"
                             disabled="@IsComposerSendDisabled">
                         @if (_sending)
                         {
@@ -1665,8 +1669,11 @@
                     </button>
                     <span id="qe-agent-send-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
                         <span class="qe-agent-tooltip-content">
-                            <span>@Text("Send message", "ส่งข้อความ")</span>
-                            <kbd>Enter</kbd>
+                            <span>@ComposerSendTooltip</span>
+                            @if (!HasPendingComposerUpload && !_sending)
+                            {
+                                <kbd>Enter</kbd>
+                            }
                         </span>
                     </span>
                 </div>
@@ -2144,9 +2151,9 @@
                                         @onclick="@(() => SelectUploadedPartAsync(index))"
                                         @ondblclick="@(() => OpenUploadedPreviewAsync(index))">
                                     <span class="qe-agent-upload-preview" aria-hidden="true">
-                                        @if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
+                                        @if (!string.IsNullOrWhiteSpace(part.LocalThumbnailDataUrl ?? part.ThumbnailUrl))
                                         {
-                                            <img src="@part.ThumbnailUrl" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                            <img src="@(part.LocalThumbnailDataUrl ?? part.ThumbnailUrl)" alt="" loading="lazy" onerror="this.style.display='none'" />
                                         }
                                         else
                                         {
@@ -2833,9 +2840,14 @@
     private string ShellClass => $"qe-agent-shell{(_navigationDrawerOpen ? " qe-agent-shell--menu-open" : string.Empty)}{(RightPanelOpen ? " qe-agent-shell--artifacts-open" : string.Empty)}";
     private string MainClass => _messages.Count == 0 ? "qe-agent-main qe-agent-main--empty" : "qe-agent-main qe-agent-main--chat";
     private bool IsDictationActive => _dictating || _dictationProcessing;
-    private bool HasPendingComposerUpload => _pendingComposerAttachments.Any(IsComposerUploadPending);
+    private bool HasPendingComposerUpload =>
+        UploadedParts.Any(IsAuthoritativeUploadPending) ||
+        _pendingComposerAttachments.Any(IsComposerUploadPending);
     private bool IsAgentBackendConnected => _agentBackendStatus == AgentBackendStatus.Connected;
     private bool IsComposerSendDisabled => _sending || _drivePickerOpening || IsDictationActive || HasPendingComposerUpload;
+    private string ComposerSendTooltip => HasPendingComposerUpload ? Text("Uploading", "กำลังอัปโหลด")
+        : _sending ? Text("Sending", "กำลังส่ง")
+        : Text("Send message", "ส่งข้อความ");
     private string ComposerWrapClass => $"qe-agent-composer-wrap{(IsDictationActive ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
     private bool DriveMentionActive => ContainsDriveMention(_draftMessage);
     private string DriveMentionToken => "@drive";
@@ -5846,6 +5858,39 @@
         await RefreshPendingAttachmentPreviewAsync();
     }
 
+    public async Task NotifyUploadPreviewUpdatedAsync(QuotePartViewModel part)
+    {
+        if (string.IsNullOrWhiteSpace(part.FileName))
+        {
+            return;
+        }
+
+        var updatedAttachment = ComposerAttachmentPreview.FromPart(part);
+        var pendingIndex = _pendingComposerAttachments.FindIndex(item => item.Matches(updatedAttachment));
+        if (pendingIndex >= 0)
+        {
+            _pendingComposerAttachments[pendingIndex] = updatedAttachment;
+        }
+
+        foreach (var message in _messages)
+        {
+            var messageAttachmentIndex = message.Attachments.FindIndex(item => item.Matches(updatedAttachment));
+            if (messageAttachmentIndex >= 0)
+            {
+                message.Attachments[messageAttachmentIndex] = updatedAttachment;
+            }
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public async Task NotifyUploadFailedAsync(QuotePartViewModel part)
+    {
+        var failedAttachment = ComposerAttachmentPreview.FromPart(part);
+        _pendingComposerAttachments.RemoveAll(item => item.Matches(failedAttachment));
+        await InvokeAsync(StateHasChanged);
+    }
+
     private void QueueComposerAttachment(QuotePartViewModel part)
     {
         QueueComposerAttachment(ComposerAttachmentPreview.FromPart(part));
@@ -5871,10 +5916,7 @@
         }
 
         var attachment = _pendingComposerAttachments[index];
-        var uploadedPartIndex = UploadedParts.ToList().FindIndex(part =>
-            string.Equals(part.ClientFileId, attachment.ClientFileId, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(part.UploadId, attachment.UploadId, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(part.FileName, attachment.FileName, StringComparison.OrdinalIgnoreCase));
+        var uploadedPartIndex = FindUploadedPartIndex(attachment);
 
         if (uploadedPartIndex >= 0)
         {
@@ -5885,6 +5927,32 @@
         _artifactPanelOpen = true;
         _summaryPanelOpen = false;
         await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SelectMessageAttachmentAsync(ComposerAttachmentPreview attachment)
+    {
+        var uploadedPartIndex = FindUploadedPartIndex(attachment);
+        if (uploadedPartIndex >= 0)
+        {
+            SelectedPartIndex = uploadedPartIndex;
+            await SelectUploadedPartAsync(uploadedPartIndex);
+            _artifactPanelOpen = true;
+            _summaryPanelOpen = false;
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        if (attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(attachment.PreviewUrl))
+        {
+            OpenSketchPreview(attachment);
+        }
+    }
+
+    private int FindUploadedPartIndex(ComposerAttachmentPreview attachment)
+    {
+        return UploadedParts.ToList().FindIndex(part =>
+            ComposerAttachmentPreview.FromPart(part).Matches(attachment));
     }
 
     private async Task RemovePendingComposerAttachmentAsync(int index)
@@ -5923,15 +5991,17 @@
 
     private string ComposerAttachmentCardClass(ComposerAttachmentPreview part, int index)
     {
-        var kindClass = IsImageComposerAttachment(part)
-            ? "qe-agent-composer-attachment-card--image"
+        var kindClass = IsThumbnailComposerAttachment(part)
+            ? "qe-agent-composer-attachment-card--thumbnail qe-agent-composer-attachment-card--image"
             : "qe-agent-composer-attachment-card--file";
-        return $"qe-agent-composer-attachment-card {kindClass}";
+        var pendingClass = IsComposerUploadPending(part) ? " is-uploading" : string.Empty;
+        return $"qe-agent-composer-attachment-card {kindClass}{pendingClass}";
     }
 
-    private static bool IsImageComposerAttachment(ComposerAttachmentPreview part)
+    private static bool IsThumbnailComposerAttachment(ComposerAttachmentPreview part)
     {
-        return part.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase) ||
+        return part.Kind.Equals("cad", StringComparison.OrdinalIgnoreCase) ||
+            part.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase) ||
             part.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -6046,6 +6116,11 @@
             !part.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsAuthoritativeUploadPending(QuotePartViewModel part)
+    {
+        return part.Status is "Uploading" or "WaitingForUpload";
+    }
+
     private static bool CanRenderUploadedPartViewer(QuotePartViewModel part)
     {
         return QuoteUploadConstraints.IsSupportedCadFileName(part.FileName);
@@ -6137,6 +6212,7 @@
     private static string MessageAttachmentClass(ComposerAttachmentPreview attachment)
     {
         var kindClass = !string.IsNullOrWhiteSpace(attachment.PreviewUrl) ||
+                        attachment.Kind.Equals("cad", StringComparison.OrdinalIgnoreCase) ||
                         attachment.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase) ||
                         attachment.Kind.Equals("sketch", StringComparison.OrdinalIgnoreCase)
             ? "qe-agent-message-attachment--image"
@@ -7379,6 +7455,11 @@
 
     private string PreviewUrlForUploadedPart(QuotePartViewModel part)
     {
+        if (!string.IsNullOrWhiteSpace(part.LocalThumbnailDataUrl))
+        {
+            return part.LocalThumbnailDataUrl;
+        }
+
         if (!string.IsNullOrWhiteSpace(part.ThumbnailUrl))
         {
             return part.ThumbnailUrl;
@@ -8622,7 +8703,7 @@
     {
         public static ComposerAttachmentPreview FromPart(QuotePartViewModel part)
         {
-            var previewUrl = part.ThumbnailUrl;
+            var previewUrl = part.LocalThumbnailDataUrl ?? part.ThumbnailUrl;
             var url = part.GlbUrl ?? part.ThumbnailUrl;
             var kind = InferKind(part.FileName, part.ContentType);
 
@@ -8675,11 +8756,26 @@
 
         public bool Matches(ComposerAttachmentPreview other)
         {
-            return MatchesValue(ClientFileId, other.ClientFileId)
-                || MatchesValue(UploadId, other.UploadId)
-                || MatchesValue(StoragePath, other.StoragePath)
-                || MatchesValue(FileName, other.FileName);
+            if (AttachmentId != Guid.Empty && AttachmentId == other.AttachmentId ||
+                MatchesValue(ClientFileId, other.ClientFileId) ||
+                MatchesValue(UploadId, other.UploadId) ||
+                MatchesValue(StoragePath, other.StoragePath))
+            {
+                return true;
+            }
+
+            if (HasStableIdentity || other.HasStableIdentity)
+            {
+                return false;
+            }
+
+            return MatchesValue(FileName, other.FileName);
         }
+
+        private bool HasStableIdentity => AttachmentId != Guid.Empty ||
+            !string.IsNullOrWhiteSpace(ClientFileId) ||
+            !string.IsNullOrWhiteSpace(UploadId) ||
+            !string.IsNullOrWhiteSpace(StoragePath);
 
         private static string InferKind(string fileName, string contentType)
         {
@@ -8781,7 +8877,7 @@
             ReasoningEntries.Add(new ReasoningEntry { IsTool = true, Text = text.Trim() });
         }
 
-        public IReadOnlyList<ComposerAttachmentPreview> Attachments { get; } = attachments ?? [];
+        public List<ComposerAttachmentPreview> Attachments { get; } = attachments?.ToList() ?? [];
 
         public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; set; } = [];
 

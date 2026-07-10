@@ -6,6 +6,7 @@ window.quoteEngineUploads = (() => {
   const clearTimerMap = new Map();
   const pendingUploadIds = new Set();
   const activeUploadIds = new Set();
+  let cadThumbnailModulePromise = null;
   const fileRetentionMs = 10 * 60 * 1000;
   let lastCaptureDiagnostics = null;
   let lastClearDiagnostics = null;
@@ -502,6 +503,43 @@ window.quoteEngineUploads = (() => {
     return objectUrl;
   }
 
+  function getCadThumbnailModule() {
+    cadThumbnailModulePromise ??= import('/js/quote-cad-thumbnail.js?v=geometry-runtime-v1');
+    return cadThumbnailModulePromise;
+  }
+
+  async function generateCadThumbnail(clientFileId, fileName, timeoutMs) {
+    const file = fileMap.get(clientFileId);
+    if (!file?.blob || file.size > MAX_LOCAL_BYTES) {
+      return null;
+    }
+
+    const objectUrl = getObjectUrl(clientFileId);
+    if (!objectUrl) {
+      return null;
+    }
+
+    const thumbnailModule = await getCadThumbnailModule();
+    return await thumbnailModule.generateThumbnail(objectUrl, {
+      fileName,
+      fileExtension: String(fileName || '').split('.').pop() || '',
+      timeoutMs
+    });
+  }
+
+  async function generateCadThumbnailFromUrl(fileUrl, fileName, timeoutMs) {
+    if (!fileUrl) {
+      return null;
+    }
+
+    const thumbnailModule = await getCadThumbnailModule();
+    return await thumbnailModule.generateThumbnail(fileUrl, {
+      fileName,
+      fileExtension: String(fileName || '').split('.').pop() || '',
+      timeoutMs
+    });
+  }
+
   return {
     captureFiles,
     openFilePicker,
@@ -513,6 +551,8 @@ window.quoteEngineUploads = (() => {
     clearFile,
     scheduleClearFile,
     getFileBytes,
-    getObjectUrl
+    getObjectUrl,
+    generateCadThumbnail,
+    generateCadThumbnailFromUrl
   };
 })();

@@ -89,6 +89,7 @@
     private QuoteAgentLaunchShell? _agentShell;
     private readonly HashSet<string> _registeredDropzoneIds = [];
     private readonly List<(QuotePartViewModel Part, string GlbUrl, string FileExtension)> _pendingViewerParts = [];
+    private readonly Dictionary<QuotePartViewModel, int> _localThumbnailGenerations = [];
     private static readonly HashSet<string> DefaultBrowserViewerExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".3mf",
@@ -114,6 +115,7 @@
     private string? _lastWorkspacePath;
     private string? _lastHandoff;
     private string? _error;
+    private bool _disposed;
 
     [CascadingParameter(Name = "IsDarkMode")]
     private bool IsDarkMode { get; set; }
@@ -657,6 +659,7 @@
                 await _agentShell.NotifyUploadStartedAsync(part);
             }
 
+            StartLocalCadThumbnailGeneration(part, candidate);
             await InvokeAsync(StateHasChanged);
             await Task.Yield();
             try
@@ -720,6 +723,10 @@
             {
                 part.Status = "Upload failed";
                 _error = BuildUploadFailureMessage(candidate.FileName);
+                if (_agentShell is not null)
+                {
+                    await _agentShell.NotifyUploadFailedAsync(part);
+                }
                 await ScheduleBrowserUploadFileCleanupAsync(candidate.ClientFileId);
                 await InvokeAsync(StateHasChanged);
             }
@@ -758,6 +765,114 @@
         catch (JSException)
         {
             // Preview is optional; the upload path remains authoritative.
+        }
+    }
+
+    private void StartLocalCadThumbnailGeneration(QuotePartViewModel part, UploadCandidate candidate)
+    {
+        var extension = NormalizeViewerFileExtension(null, candidate.FileName);
+        if (string.IsNullOrWhiteSpace(candidate.ClientFileId) ||
+            string.IsNullOrWhiteSpace(extension) ||
+            !DefaultBrowserViewerExtensions.Contains(extension))
+        {
+            return;
+        }
+
+        var generation = BeginLocalThumbnailGeneration(part);
+        _ = TryApplyLocalCadThumbnailAsync(part, candidate, generation);
+    }
+
+    private async Task TryApplyLocalCadThumbnailAsync(
+        QuotePartViewModel part,
+        UploadCandidate candidate,
+        int generation)
+    {
+        try
+        {
+            var thumbnail = await Js.InvokeAsync<string?>(
+                "quoteEngineUploads.generateCadThumbnail",
+                candidate.ClientFileId,
+                candidate.FileName,
+                12_000);
+            await ApplyLocalCadThumbnailAsync(part, thumbnail, generation);
+        }
+        catch (Exception ex) when (ex is JSException or TaskCanceledException or InvalidOperationException)
+        {
+            CompleteLocalThumbnailGeneration(part, generation);
+            // A browser preview is opportunistic. Upload and GeometryService conversion
+            // remain authoritative when WebGL or the local runtime is unavailable.
+        }
+    }
+
+    private void StartConvertedCadThumbnailGeneration(QuotePartViewModel part, string glbUrl)
+    {
+        if (string.IsNullOrWhiteSpace(glbUrl))
+        {
+            return;
+        }
+
+        var generation = BeginLocalThumbnailGeneration(part);
+        _ = TryApplyConvertedCadThumbnailAsync(part, glbUrl, generation);
+    }
+
+    private async Task TryApplyConvertedCadThumbnailAsync(
+        QuotePartViewModel part,
+        string glbUrl,
+        int generation)
+    {
+        try
+        {
+            var thumbnail = await Js.InvokeAsync<string?>(
+                "quoteEngineUploads.generateCadThumbnailFromUrl",
+                glbUrl,
+                "geometry-preview.glb",
+                12_000);
+            await ApplyLocalCadThumbnailAsync(part, thumbnail, generation);
+        }
+        catch (Exception ex) when (ex is JSException or TaskCanceledException or InvalidOperationException)
+        {
+            CompleteLocalThumbnailGeneration(part, generation);
+        }
+    }
+
+    private int BeginLocalThumbnailGeneration(QuotePartViewModel part)
+    {
+        var generation = _localThumbnailGenerations.TryGetValue(part, out var current)
+            ? current + 1
+            : 1;
+        _localThumbnailGenerations[part] = generation;
+        return generation;
+    }
+
+    private async Task ApplyLocalCadThumbnailAsync(
+        QuotePartViewModel part,
+        string? thumbnail,
+        int generation)
+    {
+        if (_disposed ||
+            string.IsNullOrWhiteSpace(thumbnail) ||
+            !_parts.Contains(part) ||
+            !_localThumbnailGenerations.TryGetValue(part, out var current) ||
+            current != generation)
+        {
+            CompleteLocalThumbnailGeneration(part, generation);
+            return;
+        }
+
+        part.LocalThumbnailDataUrl = thumbnail;
+        CompleteLocalThumbnailGeneration(part, generation);
+        if (_agentShell is not null)
+        {
+            await _agentShell.NotifyUploadPreviewUpdatedAsync(part);
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CompleteLocalThumbnailGeneration(QuotePartViewModel part, int generation)
+    {
+        if (_localThumbnailGenerations.TryGetValue(part, out var current) && current == generation)
+        {
+            _localThumbnailGenerations.Remove(part);
         }
     }
 
@@ -1138,6 +1253,7 @@
     private async Task RemovePart(QuotePartViewModel part)
     {
         var idx = _parts.IndexOf(part);
+        _localThumbnailGenerations.Remove(part);
         _parts.Remove(part);
         await ClearBrowserUploadFileAsync(part, reason: "remove-part");
         _draftProjectId = null;
@@ -1712,12 +1828,29 @@
                 part.ViewerStoragePath = payload.ViewerStoragePath ?? part.ViewerStoragePath;
                 part.ViewerFileExtension = NormalizeViewerFileExtension(payload.ViewerFileExtension, part.ViewerStoragePath ?? part.StoragePath);
                 part.ThumbnailUrl = payload.ThumbnailUrl;
+                if (!string.IsNullOrWhiteSpace(payload.ThumbnailUrl))
+                {
+                    _localThumbnailGenerations.Remove(part);
+                    part.LocalThumbnailDataUrl = null;
+                }
                 part.IsManifold = payload.IsManifold;
                 part.BodyCount = payload.BodyCount;
                 if (payload.Failed)
                     part.Status = "Failed";
                 else if (part.Status is "Processing" or "WaitingForUpload")
                     part.Status = "GlbReady";
+
+                if (_agentShell is not null)
+                {
+                    await _agentShell.NotifyUploadPreviewUpdatedAsync(part);
+                }
+
+                if (!payload.Failed &&
+                    string.IsNullOrWhiteSpace(payload.ThumbnailUrl) &&
+                    !string.IsNullOrWhiteSpace(payload.GlbUrl))
+                {
+                    StartConvertedCadThumbnailGeneration(part, payload.GlbUrl);
+                }
 
                 await InvokeAsync(StateHasChanged);
             });
@@ -1992,6 +2125,8 @@
 
     public async ValueTask DisposeAsync()
     {
+        _disposed = true;
+        _localThumbnailGenerations.Clear();
         try
         {
             await ClearRetainedBrowserUploadFilesAsync("dispose");
