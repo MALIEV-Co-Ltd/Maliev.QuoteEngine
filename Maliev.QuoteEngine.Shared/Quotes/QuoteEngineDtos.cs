@@ -493,6 +493,11 @@ public sealed record CustomerProjectNavItemDto(
     bool IsArchived,
     DateTimeOffset UpdatedAt);
 
+public sealed record CustomerProjectSearchResponse(
+    string Query,
+    int TotalCount,
+    IReadOnlyList<CustomerProjectNavItemDto> Projects);
+
 public sealed record GenerateFormalQuoteRequest(Guid ProjectId, string QuoteSessionId, IReadOnlyList<QuotePartDraftDto> Parts, string Notes);
 
 public sealed record GenerateFormalQuoteResponse(Guid QuoteId, string QuoteNumber, string PdfUrl, string Status)

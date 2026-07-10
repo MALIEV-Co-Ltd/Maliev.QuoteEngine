@@ -143,6 +143,7 @@ builder.AddAuthenticatedServiceClient<IOrderServiceClient, OrderServiceClient>("
 builder.AddAuthenticatedServiceClient<IDeliveryServiceClient, DeliveryServiceClient>("DeliveryService");
 builder.AddAuthenticatedServiceClient<ICustomerServiceClient, CustomerServiceClient>("CustomerService");
 builder.AddAuthenticatedServiceClient<IProjectServiceClient, ProjectServiceClient>("ProjectService");
+builder.AddAuthenticatedServiceClient<ISearchServiceClient, SearchServiceClient>("SearchService");
 builder.AddAuthenticatedServiceClient<ICountryServiceClient, CountryServiceClient>("CountryService");
 builder.AddAuthenticatedServiceClient<ICurrencyServiceClient, CurrencyServiceClient>("CurrencyService");
 builder.AddAuthenticatedServiceClient<IRegistryServiceClient, RegistryServiceClient>("RegistryService");

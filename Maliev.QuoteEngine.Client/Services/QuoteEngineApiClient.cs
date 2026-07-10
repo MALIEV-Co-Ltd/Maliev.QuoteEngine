@@ -206,6 +206,17 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken) ?? [];
     }
 
+    public async Task<CustomerProjectSearchResponse> SearchProjectsAsync(
+        string? query,
+        int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedQuery = query?.Trim() ?? string.Empty;
+        var uri = $"quote/v1/projects/search?query={Uri.EscapeDataString(normalizedQuery)}&limit={Math.Clamp(limit, 1, 50)}";
+        return await httpClient.GetFromJsonAsync<CustomerProjectSearchResponse>(uri, cancellationToken)
+            ?? new CustomerProjectSearchResponse(normalizedQuery, 0, []);
+    }
+
     public async Task<CustomerProjectDetailResponse> GetProjectDetailAsync(
         Guid projectId,
         CancellationToken cancellationToken = default)

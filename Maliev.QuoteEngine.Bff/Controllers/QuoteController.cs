@@ -31,6 +31,7 @@ public sealed class QuoteController(
     IOrderServiceClient orderClient,
     ICustomerServiceClient customerClient,
     IProjectServiceClient projectClient,
+    ISearchServiceClient searchClient,
     IPaymentServiceClient paymentClient,
     IQePricingServiceClient pricingClient,
     QuoteUploadHandoffToken handoffToken,
@@ -573,6 +574,72 @@ public sealed class QuoteController(
             : Ok(store.GetProjectNavigation(customerId));
     }
 
+    [HttpGet("projects/search")]
+    [ProducesResponseType(typeof(CustomerProjectSearchResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<CustomerProjectSearchResponse>> SearchProjects(
+        [FromQuery] string? query,
+        [FromQuery] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized(new ProblemDetails
+            {
+                Title = "Sign-in required.",
+                Detail = "Project search is available only for signed-in customers."
+            });
+        }
+
+        var normalizedQuery = query?.Trim() ?? string.Empty;
+        if (normalizedQuery.Length > 120)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Search query is too long.",
+                Detail = "Project search queries must be 120 characters or fewer."
+            });
+        }
+
+        if (normalizedQuery.Length < 2)
+        {
+            return Ok(new CustomerProjectSearchResponse(normalizedQuery, 0, []));
+        }
+
+        var projects = await projectClient.GetProjectNavigationAsync(customerId, cancellationToken);
+        if (projects.Count == 0 && CanUsePrototypeFallback())
+        {
+            projects = store.GetProjectNavigation(customerId);
+        }
+
+        var normalizedLimit = Math.Clamp(limit, 1, 50);
+        var indexed = await searchClient.SearchProjectsAsync(normalizedQuery, 50, cancellationToken);
+        CustomerProjectNavItemDto[] matches;
+        if (indexed.IsAvailable)
+        {
+            var ownedProjects = projects
+                .GroupBy(project => project.ProjectId)
+                .ToDictionary(group => group.Key, group => group.First());
+            matches = indexed.ProjectIds
+                .Where(ownedProjects.ContainsKey)
+                .Select(projectId => ownedProjects[projectId])
+                .Take(normalizedLimit)
+                .ToArray();
+        }
+        else
+        {
+            matches = projects
+                .Where(project => ProjectMatchesQuery(project, normalizedQuery))
+                .OrderByDescending(project => project.IsPinned)
+                .ThenByDescending(project => project.UpdatedAt)
+                .Take(normalizedLimit)
+                .ToArray();
+        }
+
+        return Ok(new CustomerProjectSearchResponse(normalizedQuery, matches.Length, matches));
+    }
+
     [HttpGet("projects/{projectId:guid}")]
     public async Task<ActionResult<CustomerProjectDetailResponse>> GetProjectDetail(Guid projectId, CancellationToken cancellationToken)
     {
@@ -702,6 +769,11 @@ public sealed class QuoteController(
     {
         return environment.IsDevelopment() || environment.IsEnvironment("Testing");
     }
+
+    private static bool ProjectMatchesQuery(CustomerProjectNavItemDto project, string query) =>
+        project.Title.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+        project.ProjectNumber.Contains(query, StringComparison.OrdinalIgnoreCase) ||
+        project.Status.Contains(query, StringComparison.OrdinalIgnoreCase);
 
     [HttpPost("quotes/formal")]
     public async Task<ActionResult<GenerateFormalQuoteResponse>> GenerateFormalQuote(

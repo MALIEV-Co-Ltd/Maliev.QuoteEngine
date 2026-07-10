@@ -211,7 +211,7 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
                 $"/project/v1/projects?customerId={customerId:D}&pageSize=100",
                 ct);
             return paged?.Data?
-                .Where(project => !IsArchivedStatus(project))
+                .Where(project => project.CustomerId == customerId && !IsArchivedStatus(project))
                 .Select(ToNavigationItem)
                 .OrderByDescending(project => project.UpdatedAt)
                 .ToArray() ?? [];
@@ -345,6 +345,7 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
 
             var paged = await http.GetFromJsonAsync<ProjectServicePagedProjectsResponse>(path, ct);
             return paged?.Data?
+                .Where(project => project.CustomerId == customerId)
                 .Select(ToSearchResult)
                 .ToArray() ?? [];
         }

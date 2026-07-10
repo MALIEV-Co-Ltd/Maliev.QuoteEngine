@@ -122,6 +122,9 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             services.RemoveAll<IProjectServiceClient>();
             services.AddSingleton<IProjectServiceClient>(_fakeProjectServiceClient);
 
+            services.RemoveAll<ISearchServiceClient>();
+            services.AddSingleton<ISearchServiceClient>(new UnavailableSearchServiceClient());
+
             services.RemoveAll<ICountryServiceClient>();
             services.AddSingleton<ICountryServiceClient>(new FakeCountryServiceClient());
 
@@ -912,6 +915,15 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             int limit,
             CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<QuoteAgentSearchResultDto>>([]);
+    }
+
+    private sealed class UnavailableSearchServiceClient : ISearchServiceClient
+    {
+        public Task<ProjectSearchIndexResult> SearchProjectsAsync(
+            string query,
+            int limit,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(ProjectSearchIndexResult.Unavailable());
     }
 
     public sealed class TestHostEnvironment(string environmentName) : IHostEnvironment
