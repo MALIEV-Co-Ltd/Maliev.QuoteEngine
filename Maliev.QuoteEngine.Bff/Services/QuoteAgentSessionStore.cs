@@ -98,7 +98,7 @@ internal sealed class QuoteAgentSessionStore
         {
             state.ProposedActions.RemoveAll(existing =>
                 existing.ActionType.Equals(actionType, StringComparison.OrdinalIgnoreCase) &&
-                existing.Status.Equals("pending_confirmation", StringComparison.OrdinalIgnoreCase));
+                IsActiveAction(existing));
             state.ProposedActions.Add(action.ToDto());
             Touch(state);
         }
@@ -165,7 +165,7 @@ internal sealed class QuoteAgentSessionStore
             var removed = false;
             foreach (var action in state.ProposedActions
                 .Where(item =>
-                    item.Status.Equals("pending_confirmation", StringComparison.OrdinalIgnoreCase) &&
+                    IsActiveAction(item) &&
                     predicate(item))
                 .ToList())
             {
@@ -210,7 +210,7 @@ internal sealed class QuoteAgentSessionStore
                 Artifacts = state.Artifacts.Select(CloneArtifact).ToList(),
                 Gates = BuildGates(state, isAuthenticated),
                 ProposedActions = state.ProposedActions
-                    .Where(action => action.Status.Equals("pending_confirmation", StringComparison.OrdinalIgnoreCase))
+                    .Where(IsActiveAction)
                     .Select(CloneAction)
                     .ToList(),
                 Estimate = state.Estimate,
@@ -277,6 +277,10 @@ internal sealed class QuoteAgentSessionStore
                 state.Payment is not null ? "Payment handoff exists." : "Payment has not started.")
         ];
     }
+
+    private static bool IsActiveAction(QuoteAgentProposedActionDto action) =>
+        action.Status.Equals("pending_confirmation", StringComparison.OrdinalIgnoreCase) ||
+        action.Status.Equals("available", StringComparison.OrdinalIgnoreCase);
 
     public static bool HasDfmIssues(QuotePartDraftDto part)
     {
@@ -569,7 +573,7 @@ internal sealed record QuoteAgentPendingAction(
             Summary = Summary,
             RequiresAuthentication = RequiresAuthentication,
             RequiresConfirmation = RequiresConfirmation,
-            Status = "pending_confirmation"
+            Status = RequiresConfirmation ? "pending_confirmation" : "available"
         };
     }
 }

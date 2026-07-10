@@ -1257,7 +1257,7 @@
             <div class="qe-agent-error" role="alert">@_error</div>
         }
 
-        @if (_proposedActions.Count > 0)
+        @if (ConfirmationActions.Count > 0)
         {
             <section class="qe-agent-chat-actions" aria-label="@Text("Pending confirmation actions", "รายการรอยืนยัน")">
                 <header>
@@ -1272,7 +1272,7 @@
                         <span>@Text("Open workbench", "เปิดพื้นที่งาน")</span>
                     </button>
                 </header>
-                @foreach (var action in _proposedActions)
+                @foreach (var action in ConfirmationActions)
                 {
                     <article class="qe-agent-action">
                         <div>
@@ -1292,6 +1292,30 @@
                         }
                     </article>
                 }
+            </section>
+        }
+
+        @if (SelectionActions.Count > 0)
+        {
+            <section class="qe-agent-chat-selections" aria-label="@Text("Shipping options", "ตัวเลือกการจัดส่ง")">
+                <header>
+                    <span>@Text("Shipping options", "ตัวเลือกการจัดส่ง")</span>
+                    <strong>@Text("Choose a courier service", "เลือกบริการขนส่ง")</strong>
+                </header>
+                <div class="qe-agent-chat-selection-list">
+                    @foreach (var action in SelectionActions)
+                    {
+                        <button type="button"
+                                class="qe-agent-chat-selection"
+                                @onclick="@(() => ConfirmActionAsync(action))">
+                            <span>
+                                <strong>@action.Title</strong>
+                                <small>@action.Summary</small>
+                            </span>
+                            <MudIcon Icon="@Icons.Material.Outlined.ArrowForward" Size="Size.Small" />
+                        </button>
+                    }
+                </div>
             </section>
         }
 
@@ -1764,14 +1788,14 @@
 
             <section class="qe-agent-summary-section">
                 <header>@Text("Next actions", "ขั้นตอนถัดไป")</header>
-                @if (_proposedActions.Count == 0)
+                @if (ConfirmationActions.Count == 0)
                 {
                     <p class="qe-agent-muted">@Text("No confirmation actions are waiting.", "ยังไม่มีรายการที่ต้องยืนยัน")</p>
                 }
                 else
                 {
                     <div class="qe-agent-summary-actions">
-                        @foreach (var action in _proposedActions.Take(3))
+                        @foreach (var action in ConfirmationActions.Take(3))
                         {
                             <article>
                                 <strong>@action.Title</strong>
@@ -2189,11 +2213,11 @@
                 }
             }
 
-            @if (_proposedActions.Count > 0)
+            @if (ConfirmationActions.Count > 0)
             {
                 <section class="qe-agent-actions">
                     <header>@Text("Confirm actions", "ยืนยันการทำงาน")</header>
-                    @foreach (var action in _proposedActions)
+                    @foreach (var action in ConfirmationActions)
                     {
                         <article class="qe-agent-action">
                             <strong>@action.Title</strong>
@@ -2551,6 +2575,10 @@
     private List<QuoteAgentGateDto> _gates = [];
     private List<QuoteAgentArtifactDto> _artifacts = [];
     private List<QuoteAgentProposedActionDto> _proposedActions = [];
+    private IReadOnlyList<QuoteAgentProposedActionDto> ConfirmationActions =>
+        _proposedActions.Where(action => action.RequiresConfirmation).ToList();
+    private IReadOnlyList<QuoteAgentProposedActionDto> SelectionActions =>
+        _proposedActions.Where(action => !action.RequiresConfirmation).ToList();
     private QuoteAgentArtifactDto? _selectedArtifact;
     private AgentWorkbenchSnapshot? _stateWorkbench;
     private List<QuoteAgentUiDirectiveDto> _uiFocusDirectives = [];

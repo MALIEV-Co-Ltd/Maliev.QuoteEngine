@@ -2283,6 +2283,82 @@
     line-height: 1.4;
 }
 
+.qe-agent-chat-selections {
+    display: grid;
+    gap: 8px;
+    width: min(780px, calc(100% - 32px));
+    margin: 0 auto 14px;
+    padding: 10px 12px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 12px;
+    background: var(--qe-agent-surface);
+}
+
+.qe-agent-chat-selections > header {
+    display: grid;
+    gap: 2px;
+}
+
+.qe-agent-chat-selections > header span {
+    color: var(--qe-agent-muted);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.qe-agent-chat-selections > header strong {
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+.qe-agent-chat-selection-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    gap: 8px;
+}
+
+.qe-agent-chat-selection {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    padding: 10px 11px;
+    border: 1px solid var(--qe-agent-line);
+    border-radius: 9px;
+    color: var(--qe-agent-ink);
+    background: var(--qe-agent-raised);
+    text-align: left;
+    cursor: pointer;
+}
+
+.qe-agent-chat-selection:hover,
+.qe-agent-chat-selection:focus-visible {
+    border-color: var(--qe-agent-primary);
+    outline: none;
+}
+
+.qe-agent-chat-selection > span {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.qe-agent-chat-selection strong,
+.qe-agent-chat-selection small {
+    overflow-wrap: anywhere;
+}
+
+.qe-agent-chat-selection strong {
+    font-size: 13px;
+}
+
+.qe-agent-chat-selection small {
+    color: var(--qe-agent-muted);
+    font-size: 12px;
+    line-height: 1.35;
+}
+
 /* Command palette (Ctrl/Cmd+K): centered overlay near the top, matching the
    reference search — input row, then grouped project and command rows. */
 .qe-agent-palette-modal {
@@ -7563,6 +7639,10 @@
     .qe-agent-chat-actions .qe-agent-action button,
     .qe-agent-chat-actions > header button {
         width: 100%;
+    }
+
+    .qe-agent-chat-selection-list {
+        grid-template-columns: 1fr;
     }
 
     .qe-agent-composer {

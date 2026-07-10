@@ -1622,13 +1622,14 @@ internal sealed class QuoteAgentService(
             });
         }
 
-        if (state.ProposedActions.Count > 0)
+        var firstConfirmationAction = state.ProposedActions.FirstOrDefault(action => action.RequiresConfirmation);
+        if (firstConfirmationAction is not null)
         {
             directives.Add(new QuoteAgentUiDirectiveDto
             {
                 Panel = "summary",
                 TargetType = "confirmation_action",
-                TargetId = state.ProposedActions[0].ActionId.ToString("D"),
+                TargetId = firstConfirmationAction.ActionId.ToString("D"),
                 HighlightKey = "summary:actions",
                 Label = "Opened the summary so you can review the confirmation action."
             });
@@ -2734,23 +2735,6 @@ internal sealed class QuoteAgentService(
                 NormalizeShippingAdministrativeValue(destination.Province, ShippingProvincePrefixes),
                 ThaiAddressSuggestionLimit,
                 cancellationToken);
-            if (registryResult.IsAvailable && registryResult.Locations.Count == 0)
-            {
-                registryResult = await registryClient.SearchThaiAddressHierarchyAsync(
-                    destination.Postcode.Trim(),
-                    string.Empty,
-                    string.Empty,
-                    string.Empty,
-                    ThaiAddressValidationCandidateLimit,
-                    cancellationToken);
-            }
-
-            var suggestions = registryResult.Locations
-                .Take(ThaiAddressSuggestionLimit)
-                .Select(MapAddressSuggestion)
-                .OfType<object>()
-                .ToList();
-
             if (!registryResult.IsAvailable)
             {
                 ClearShippingRateSelectionState(state);
@@ -2764,23 +2748,37 @@ internal sealed class QuoteAgentService(
                 };
             }
 
-            var exactLocation = registryResult.Locations.FirstOrDefault(location =>
-                destination.Postcode.Trim().Equals(location.PostalCode.Trim(), StringComparison.Ordinal) &&
-                MatchesShippingAdministrativeValue(
-                    destination.District,
-                    ShippingSubDistrictPrefixes,
-                    location.SubDistrictTh,
-                    location.SubDistrictEn) &&
-                MatchesShippingAdministrativeValue(
-                    destination.State,
-                    ShippingDistrictPrefixes,
-                    location.DistrictTh,
-                    location.DistrictEn) &&
-                MatchesShippingAdministrativeValue(
-                    destination.Province,
-                    ShippingProvincePrefixes,
-                    location.ProvinceTh,
-                    location.ProvinceEn));
+            var exactLocation = FindExactThaiShippingLocation(destination, registryResult.Locations);
+            if (exactLocation is null)
+            {
+                registryResult = await registryClient.SearchThaiAddressHierarchyAsync(
+                    destination.Postcode.Trim(),
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    ThaiAddressValidationCandidateLimit,
+                    cancellationToken);
+                if (!registryResult.IsAvailable)
+                {
+                    ClearShippingRateSelectionState(state);
+                    return new
+                    {
+                        success = false,
+                        addressValidation = "validation_unavailable",
+                        error = "Thai address validation is temporarily unavailable, so delivery rates were not requested.",
+                        suggestions = Array.Empty<object>(),
+                        state = ToStateResponse(state)
+                    };
+                }
+
+                exactLocation = FindExactThaiShippingLocation(destination, registryResult.Locations);
+            }
+
+            var suggestions = registryResult.Locations
+                .Take(ThaiAddressSuggestionLimit)
+                .Select(MapAddressSuggestion)
+                .OfType<object>()
+                .ToList();
             if (exactLocation is null)
             {
                 ClearShippingRateSelectionState(state);
@@ -2813,7 +2811,25 @@ internal sealed class QuoteAgentService(
             UsePublicRates = ReadBool(normalizedArguments, "use_public_rates") || ReadBool(normalizedArguments, "usePublicRates")
         };
 
-        var response = await deliveryClient.GetShippingRatesAsync(request, cancellationToken);
+        ClearShippingRateSelectionState(state);
+        ShippingRateResponseDto response;
+        try
+        {
+            response = await deliveryClient.GetShippingRatesAsync(request, cancellationToken);
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            return BuildDeliveryRateUnavailableResponse(state, addressValidation, exception);
+        }
+        catch (HttpRequestException exception)
+        {
+            return BuildDeliveryRateUnavailableResponse(state, addressValidation, exception);
+        }
+        catch (JsonException exception)
+        {
+            return BuildDeliveryRateUnavailableResponse(state, addressValidation, exception);
+        }
+
         var plannedPackageExceedsStandardLimits = PlannedPackageExceedsStandardLimits(request);
         var rates = FilterRankAndCapShippingRates(response.Rates, plannedPackageExceedsStandardLimits);
 
@@ -2848,12 +2864,7 @@ internal sealed class QuoteAgentService(
         IReadOnlyDictionary<string, JsonElement> arguments)
     {
         var normalizedArguments = UnwrapToolArguments(arguments);
-        var selector = ReadString(normalizedArguments, "selection_key") ??
-            ReadString(normalizedArguments, "selectionKey") ??
-            ReadString(normalizedArguments, "courier_code") ??
-            ReadString(normalizedArguments, "courierCode") ??
-            ReadString(normalizedArguments, "code") ??
-            ReadString(normalizedArguments, "courier");
+        var selector = ReadShippingRateSelector(normalizedArguments);
         var resolution = ResolveShippingRate(state, selector);
         if (resolution.IsAmbiguous)
         {
@@ -2899,12 +2910,13 @@ internal sealed class QuoteAgentService(
         QuoteAgentSessionState state,
         QuoteAgentPendingAction action)
     {
+        var selectionKey = ReadString(action.Arguments, "selection_key") ??
+            ReadString(action.Arguments, "selectionKey");
         var resolution = ResolveShippingRate(
             state,
-            ReadString(action.Arguments, "selection_key") ??
-                ReadString(action.Arguments, "selectionKey") ??
-                ReadString(action.Arguments, "courier_code") ??
-                ReadString(action.Arguments, "courierCode"));
+            string.IsNullOrWhiteSpace(selectionKey)
+                ? null
+                : new ShippingRateSelector(ShippingRateSelectorKind.SelectionKey, selectionKey));
         var selectedRate = resolution.Rate;
         if (selectedRate is null)
         {
@@ -2935,12 +2947,8 @@ internal sealed class QuoteAgentService(
         foreach (var rate in rates)
         {
             var structuredRate = BuildShippingRateRow(rate);
-            var courierName = SanitizeCustomerShippingCopy(
-                FirstNonEmpty(rate.CourierName, rate.ProductName, rate.CourierCode, "Courier"),
-                rate.Provider);
-            var productName = SanitizeCustomerShippingCopy(
-                FirstNonEmpty(rate.ProductName, rate.CourierName, rate.CourierCode),
-                rate.Provider);
+            var courierName = BuildCustomerShippingCourierName(rate);
+            var productName = BuildCustomerShippingProductName(rate);
             var baseActionCode = NormalizeShippingActionCode(rate);
             var selectionKey = BuildShippingRateSelectionKey(rate);
             var actionCode = actionCodeCounts[baseActionCode] > 1 ? selectionKey : baseActionCode;
@@ -2988,40 +2996,69 @@ internal sealed class QuoteAgentService(
 
     private ShippingRateSelectionResolution ResolveShippingRate(
         QuoteAgentSessionState state,
-        string? selector)
+        ShippingRateSelector? selector)
     {
-        if (string.IsNullOrWhiteSpace(selector))
+        if (selector is null || string.IsNullOrWhiteSpace(selector.Value))
         {
             return ShippingRateSelectionResolution.NotFound;
         }
 
-        var normalized = selector.Trim();
+        var normalized = selector.Value.Trim();
         lock (state.SyncRoot)
         {
             var options = state.ShippingRateOptions.Select(CloneShippingRate).ToList();
-            var selectionKeyMatches = options
-                .Where(option => BuildShippingRateSelectionKey(option).Equals(normalized, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (selectionKeyMatches.Count > 0)
+            var matches = selector.Kind switch
             {
-                return ShippingRateSelectionResolution.FromMatches(selectionKeyMatches);
-            }
-
-            var productMatches = options
-                .Where(option => option.ProductName.Equals(normalized, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            if (productMatches.Count > 0)
-            {
-                return ShippingRateSelectionResolution.FromMatches(productMatches);
-            }
-
-            var courierMatches = options
-                .Where(option =>
-                    option.CourierCode.Equals(normalized, StringComparison.OrdinalIgnoreCase) ||
-                    option.CourierName.Equals(normalized, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            return ShippingRateSelectionResolution.FromMatches(courierMatches);
+                ShippingRateSelectorKind.SelectionKey => options
+                    .Where(option => BuildShippingRateSelectionKey(option)
+                        .Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                    .ToList(),
+                ShippingRateSelectorKind.CourierCode => options
+                    .Where(option => option.CourierCode.Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                    .ToList(),
+                ShippingRateSelectorKind.ProductName => options
+                    .Where(option => BuildCustomerShippingProductName(option)
+                        .Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                    .ToList(),
+                ShippingRateSelectorKind.DisplayName => options
+                    .Where(option => BuildCustomerShippingCourierName(option)
+                        .Equals(normalized, StringComparison.OrdinalIgnoreCase))
+                    .ToList(),
+                _ => []
+            };
+            return ShippingRateSelectionResolution.FromMatches(matches);
         }
+    }
+
+    private static ShippingRateSelector? ReadShippingRateSelector(
+        IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        var selectionKey = ReadString(arguments, "selection_key") ?? ReadString(arguments, "selectionKey");
+        if (!string.IsNullOrWhiteSpace(selectionKey))
+        {
+            return new ShippingRateSelector(ShippingRateSelectorKind.SelectionKey, selectionKey);
+        }
+
+        var courierCode = ReadString(arguments, "courier_code") ??
+            ReadString(arguments, "courierCode") ??
+            ReadString(arguments, "code");
+        if (!string.IsNullOrWhiteSpace(courierCode))
+        {
+            return new ShippingRateSelector(ShippingRateSelectorKind.CourierCode, courierCode);
+        }
+
+        var productName = ReadString(arguments, "product_name") ?? ReadString(arguments, "productName");
+        if (!string.IsNullOrWhiteSpace(productName))
+        {
+            return new ShippingRateSelector(ShippingRateSelectorKind.ProductName, productName);
+        }
+
+        var displayName = ReadString(arguments, "courier_name") ??
+            ReadString(arguments, "courierName") ??
+            ReadString(arguments, "courier");
+        return string.IsNullOrWhiteSpace(displayName)
+            ? null
+            : new ShippingRateSelector(ShippingRateSelectorKind.DisplayName, displayName);
     }
 
     private ShippingAddressDto BuildShippingOriginAddress()
@@ -3116,6 +3153,29 @@ internal sealed class QuoteAgentService(
         string.IsNullOrWhiteSpace(destination.CountryCode) ||
         destination.CountryCode.Trim().Equals("TH", StringComparison.OrdinalIgnoreCase);
 
+    private static ThaiAddressRegistryLocationDto? FindExactThaiShippingLocation(
+        ShippingAddressDto destination,
+        IReadOnlyList<ThaiAddressRegistryLocationDto> locations)
+    {
+        return locations.FirstOrDefault(location =>
+            destination.Postcode.Trim().Equals(location.PostalCode.Trim(), StringComparison.Ordinal) &&
+            MatchesShippingAdministrativeValue(
+                destination.District,
+                ShippingSubDistrictPrefixes,
+                location.SubDistrictTh,
+                location.SubDistrictEn) &&
+            MatchesShippingAdministrativeValue(
+                destination.State,
+                ShippingDistrictPrefixes,
+                location.DistrictTh,
+                location.DistrictEn) &&
+            MatchesShippingAdministrativeValue(
+                destination.Province,
+                ShippingProvincePrefixes,
+                location.ProvinceTh,
+                location.ProvinceEn));
+    }
+
     private static bool MatchesShippingAdministrativeValue(
         string requestedValue,
         IReadOnlyList<string> presentationPrefixes,
@@ -3181,6 +3241,22 @@ internal sealed class QuoteAgentService(
         sessionStore.RemovePendingActions(
             state,
             action => action.ActionType.StartsWith("select_shipping_rate:", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private object BuildDeliveryRateUnavailableResponse(
+        QuoteAgentSessionState state,
+        string addressValidation,
+        Exception exception)
+    {
+        logger.LogWarning(exception, "DeliveryService rate lookup failed after shipping state was cleared.");
+        return new
+        {
+            success = false,
+            addressValidation,
+            error = "Delivery rates are temporarily unavailable. Try again before selecting a courier.",
+            rates = Array.Empty<object>(),
+            state = ToStateResponse(state)
+        };
     }
 
     private static List<ShippingRateOptionDto> FilterRankAndCapShippingRates(
@@ -3391,12 +3467,8 @@ internal sealed class QuoteAgentService(
         return new ShippingRateToolRow(
             rate.CourierCode,
             BuildShippingRateSelectionKey(rate),
-            SanitizeCustomerShippingCopy(
-                FirstNonEmpty(rate.CourierName, rate.ProductName, rate.CourierCode),
-                rate.Provider),
-            SanitizeCustomerShippingCopy(
-                FirstNonEmpty(rate.ProductName, rate.CourierName, rate.CourierCode),
-                rate.Provider),
+            BuildCustomerShippingCourierName(rate),
+            BuildCustomerShippingProductName(rate),
             SanitizeCourierLogoUrl(rate.CourierLogoUrl),
             rate.TotalPrice,
             FirstNonEmpty(rate.CurrencyCode, "THB"),
@@ -3506,10 +3578,8 @@ internal sealed class QuoteAgentService(
 
     private static string BuildSelectedShippingRateMessage(ShippingRateOptionDto rate)
     {
-        var courierName = SanitizeCustomerShippingCopy(
-            FirstNonEmpty(rate.CourierName, rate.ProductName, rate.CourierCode, "the selected courier"),
-            rate.Provider);
-        var productName = SanitizeCustomerShippingCopy(rate.ProductName, rate.Provider);
+        var courierName = BuildCustomerShippingCourierName(rate);
+        var productName = BuildCustomerShippingProductName(rate);
         var serviceDescription = string.Join(
             " · ",
             new[]
@@ -3527,6 +3597,16 @@ internal sealed class QuoteAgentService(
             : $", lead time {SanitizeCustomerShippingCopy(rate.EstimatedDeliveryDate, rate.Provider)}";
         return $"Selected {courierName}{serviceSuffix} ({rate.CourierCode}) for shipping: {FormatMoney(rate.TotalPrice, rate.CurrencyCode)}{leadTime}.";
     }
+
+    private static string BuildCustomerShippingCourierName(ShippingRateOptionDto rate) =>
+        SanitizeCustomerShippingCopy(
+            FirstNonEmpty(rate.CourierName, rate.ProductName, rate.CourierCode, "Courier"),
+            rate.Provider);
+
+    private static string BuildCustomerShippingProductName(ShippingRateOptionDto rate) =>
+        SanitizeCustomerShippingCopy(
+            FirstNonEmpty(rate.ProductName, rate.CourierName, rate.CourierCode),
+            rate.Provider);
 
     private static ShippingRateOptionDto CloneShippingRate(ShippingRateOptionDto source)
     {
@@ -3768,6 +3848,16 @@ internal sealed class QuoteAgentService(
                 ? new ShippingRateSelectionResolution(matches[0], matches)
                 : new ShippingRateSelectionResolution(null, matches);
     }
+
+    private enum ShippingRateSelectorKind
+    {
+        SelectionKey,
+        CourierCode,
+        ProductName,
+        DisplayName
+    }
+
+    private sealed record ShippingRateSelector(ShippingRateSelectorKind Kind, string Value);
 
     private object UpdateCheckoutDetailsOrGateError(
         QuoteAgentSessionState state,

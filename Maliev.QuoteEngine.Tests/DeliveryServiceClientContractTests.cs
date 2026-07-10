@@ -132,7 +132,8 @@ public sealed class DeliveryServiceClientContractTests
         var rate = Assert.Single(result.Rates);
         Assert.Equal("flash", rate.CourierCode);
         Assert.Equal("Flash Express", rate.CourierName);
-        Assert.Equal("Flash Express", rate.ProductName);
+        Assert.Equal("standard", rate.ProductName);
+        Assert.Equal("standard", rate.ServiceLevel);
         Assert.Equal(82.25m, rate.TotalPrice);
         Assert.Equal("https://cdn.example/flash.svg", rate.CourierLogoUrl);
         Assert.Equal(2, rate.PackageCount);

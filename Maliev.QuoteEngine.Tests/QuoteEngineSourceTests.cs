@@ -2080,21 +2080,32 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_surfaces_confirmation_cards_in_chat_when_artifacts_are_collapsed()
+    public void QuoteAgentLaunchShell_separates_reversible_shipping_selections_from_confirmation_cards()
     {
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var threadBlock = ExtractSourceBlock(component, "<div class=\"qe-agent-thread\"", "<section class=\"@ComposerWrapClass\"");
         var artifactDrawerBlock = ExtractSourceBlock(component, "qe-agent-artifact-drawer", "</aside>");
+        var selectionBlock = ExtractSourceBlock(threadBlock, "class=\"qe-agent-chat-selections\"", "</section>");
         var confirmBlock = ExtractSourceBlock(component, "private async Task ConfirmActionAsync", "public async Task ApplyAgentStateAsync");
 
         Assert.Contains("class=\"qe-agent-chat-actions\"", threadBlock, StringComparison.Ordinal);
-        Assert.Contains("@if (_proposedActions.Count > 0)", threadBlock, StringComparison.Ordinal);
-        Assert.Contains("@foreach (var action in _proposedActions)", threadBlock, StringComparison.Ordinal);
+        Assert.Contains("@if (ConfirmationActions.Count > 0)", threadBlock, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var action in ConfirmationActions)", threadBlock, StringComparison.Ordinal);
         Assert.Contains("ConfirmActionAsync(action)", threadBlock, StringComparison.Ordinal);
         Assert.Contains("action.RequiresAuthentication && !IsSignedIn", threadBlock, StringComparison.Ordinal);
+        Assert.Contains("@if (SelectionActions.Count > 0)", threadBlock, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var action in SelectionActions)", threadBlock, StringComparison.Ordinal);
+        Assert.Contains("Shipping options", selectionBlock, StringComparison.Ordinal);
+        Assert.Contains("ConfirmActionAsync(action)", selectionBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("Confirmation required", selectionBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("Open workbench", selectionBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain(">Confirm<", selectionBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-chat-actions\"", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.Contains("@foreach (var action in ConfirmationActions)", artifactDrawerBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("SelectionActions", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-chat-actions", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-chat-selections", styles, StringComparison.Ordinal);
         Assert.Contains("var previousArtifactCount = _artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact);", confirmBlock, StringComparison.Ordinal);
         Assert.Contains("result.State.UiDirectives.Count == 0 &&", confirmBlock, StringComparison.Ordinal);
         Assert.Contains("result.State.Artifacts.Count(QuoteAgentUiHelpers.IsVisibleArtifact) > previousArtifactCount", confirmBlock, StringComparison.Ordinal);
