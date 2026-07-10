@@ -323,7 +323,8 @@ internal sealed class QuoteAgentService(
             UiCulture = pendingUiCulture,
             ProjectName = state.ProjectName,
             CustomerQuestion = state.PendingCustomerQuestion,
-            UsageSnapshot = chatbotResponse?.UsageSnapshot
+            UsageSnapshot = chatbotResponse?.UsageSnapshot,
+            GroundingProvenance = MapGroundingProvenance(chatbotResponse?.GroundingProvenance)
         };
         StoreLastAssistantThinkingSteps(state, response.ThinkingSteps);
         return response;
@@ -521,7 +522,8 @@ internal sealed class QuoteAgentService(
             UiCulture = pendingUiCulture,
             ProjectName = state.ProjectName,
             CustomerQuestion = state.PendingCustomerQuestion,
-            UsageSnapshot = finalMessage?.UsageSnapshot
+            UsageSnapshot = finalMessage?.UsageSnapshot,
+            GroundingProvenance = MapGroundingProvenance(finalMessage?.GroundingProvenance)
         };
         StoreLastAssistantThinkingSteps(state, response.ThinkingSteps);
 
@@ -2497,6 +2499,32 @@ internal sealed class QuoteAgentService(
         }
 
         return $"Mali calculated the current estimate: {total:0.##} {currency} for {quantity.ToString(CultureInfo.InvariantCulture)} piece(s) of {fileName}. Estimated unit price is {unitPrice:0.##} {currency}. Details are available in Artifacts > Pricing estimate.{prototypeNotice}";
+    }
+
+    private static QuoteAgentGroundingProvenanceDto? MapGroundingProvenance(
+        ChatbotGroundingProvenanceResponse? provenance)
+    {
+        if (provenance is null)
+        {
+            return null;
+        }
+
+        return new QuoteAgentGroundingProvenanceDto
+        {
+            Purpose = provenance.Purpose,
+            Provider = provenance.Provider,
+            Status = provenance.Status,
+            Queries = provenance.Queries.ToList(),
+            Sources = provenance.Sources
+                .Select(source => new QuoteAgentGroundingSourceDto
+                {
+                    Title = source.Title,
+                    Url = source.Url,
+                    Domain = source.Domain
+                })
+                .ToList(),
+            ErrorCode = provenance.ErrorCode
+        };
     }
 
     private static string BuildDeferredEstimateBlockedText(

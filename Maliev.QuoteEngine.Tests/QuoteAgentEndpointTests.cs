@@ -134,6 +134,53 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_forwards_customer_safe_grounding_provenance()
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            GroundingProvenance = new ChatbotGroundingProvenanceResponse
+            {
+                Purpose = "shipping_address_validation",
+                Provider = "google_search",
+                Status = "grounded",
+                Queries = ["36/1 moo 3 Bang Kruai 12345"],
+                Sources =
+                [
+                    new ChatbotGroundingSourceResponse
+                    {
+                        Title = "Public address source",
+                        Url = "https://example.go.th/address",
+                        Domain = "example.go.th"
+                    }
+                ]
+            }
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            Message = "Ship to 36/1 moo 3, Bang Kruai, Nonthaburi 12345.",
+            Language = "en"
+        });
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body?.GroundingProvenance);
+        Assert.Equal("shipping_address_validation", body.GroundingProvenance.Purpose);
+        Assert.Equal("grounded", body.GroundingProvenance.Status);
+        Assert.Equal("36/1 moo 3 Bang Kruai 12345", Assert.Single(body.GroundingProvenance.Queries));
+        Assert.Equal("example.go.th", Assert.Single(body.GroundingProvenance.Sources).Domain);
+    }
+
+    [Fact]
     public async Task Agent_export_pdf_uses_mapped_chatbot_session_after_quote_engine_turn()
     {
         var quoteSessionId = Guid.NewGuid();
@@ -1175,7 +1222,25 @@ Customer message:
     [Fact]
     public async Task Agent_message_stream_returns_incremental_events_before_final_state()
     {
-        var chatbot = new RecordingChatbotServiceClient();
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            GroundingProvenance = new ChatbotGroundingProvenanceResponse
+            {
+                Purpose = "shipping_address_validation",
+                Provider = "google_search",
+                Status = "grounded",
+                Queries = ["36/1 moo 3 Bang Kruai 12345"],
+                Sources =
+                [
+                    new ChatbotGroundingSourceResponse
+                    {
+                        Title = "Public address source",
+                        Url = "https://example.go.th/address",
+                        Domain = "example.go.th"
+                    }
+                ]
+            }
+        };
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
         {
             builder.ConfigureTestServices(services =>
@@ -1214,6 +1279,8 @@ Customer message:
         Assert.NotNull(final.Response.UsageSnapshot);
         Assert.Equal(850_000, final.Response.UsageSnapshot!.UsedTokens);
         Assert.Equal(7_250, final.Response.UsageSnapshot.UsedCostMicroUsd);
+        Assert.Equal("grounded", final.Response.GroundingProvenance?.Status);
+        Assert.Equal("example.go.th", Assert.Single(final.Response.GroundingProvenance!.Sources).Domain);
         Assert.Contains(final.Response.Gates, gate => gate.Code == "geometry_required" && gate.Status == "blocked");
         Assert.False(string.IsNullOrWhiteSpace(chatbot.LastStreamRequest?.QuoteAgentContextToken));
     }
@@ -12931,6 +12998,8 @@ Customer message:
 
         public List<QuoteAgentThinkingStepDto> ThinkingSteps { get; init; } = [];
 
+        public ChatbotGroundingProvenanceResponse? GroundingProvenance { get; init; }
+
         public QuoteAgentUsageSnapshotDto UsageSnapshot { get; init; } = new()
         {
             IsEnabled = true,
@@ -12986,6 +13055,7 @@ Customer message:
                 Language = ResponseLanguage,
                 CreatedAt = DateTimeOffset.UtcNow,
                 ThinkingSteps = ThinkingSteps.Select(CloneThinkingStep).ToList(),
+                GroundingProvenance = GroundingProvenance,
                 UsageSnapshot = UsageSnapshot
             });
         }
@@ -13024,6 +13094,7 @@ Customer message:
                     Language = ResponseLanguage,
                     CreatedAt = DateTimeOffset.UtcNow,
                     ThinkingSteps = ThinkingSteps.Select(CloneThinkingStep).ToList(),
+                    GroundingProvenance = GroundingProvenance,
                     UsageSnapshot = UsageSnapshot
                 }
             };

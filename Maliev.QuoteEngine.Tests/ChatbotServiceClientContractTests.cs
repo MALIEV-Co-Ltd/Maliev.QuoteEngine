@@ -14,7 +14,7 @@ public sealed class ChatbotServiceClientContractTests
             {"type":"started"}
             {"type":"delta","delta":"Assistant "}
             {"type":"thought","thought":"Checking uploaded files."}
-            {"type":"final","message":{"message_id":"d127db4e-1106-4106-8f6b-32c6b467e8ad","content":"Assistant response from the streaming endpoint.","role":"assistant","language":"en","created_at":"2026-07-02T04:00:00Z","suggested_actions":[],"thinking_steps":[],"usage_snapshot":{"is_enabled":true,"used_tokens":42,"daily_token_budget":2000000,"remaining_tokens":1999958,"used_ratio":0.000021,"is_exceeded":false}}}
+            {"type":"final","message":{"message_id":"d127db4e-1106-4106-8f6b-32c6b467e8ad","content":"Assistant response from the streaming endpoint.","role":"assistant","language":"en","created_at":"2026-07-02T04:00:00Z","suggested_actions":[],"thinking_steps":[],"grounding_provenance":{"purpose":"shipping_address_validation","provider":"google_search","status":"grounded","queries":["36/1 moo 3 Bang Kruai 12345"],"sources":[{"title":"Public address source","url":"https://example.go.th/address","domain":"example.go.th"}],"error_code":null},"usage_snapshot":{"is_enabled":true,"used_tokens":42,"daily_token_budget":2000000,"remaining_tokens":1999958,"used_ratio":0.000021,"is_exceeded":false}}}
             """;
         using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
         {
@@ -52,6 +52,14 @@ public sealed class ChatbotServiceClientContractTests
         Assert.NotNull(final.Message);
         Assert.Equal("Assistant response from the streaming endpoint.", final.Message.Content);
         Assert.Equal(42, final.Message.UsageSnapshot?.UsedTokens);
+        Assert.Equal("shipping_address_validation", final.Message.GroundingProvenance?.Purpose);
+        Assert.Equal("google_search", final.Message.GroundingProvenance?.Provider);
+        Assert.Equal("grounded", final.Message.GroundingProvenance?.Status);
+        Assert.Equal("36/1 moo 3 Bang Kruai 12345", Assert.Single(final.Message.GroundingProvenance!.Queries));
+        var source = Assert.Single(final.Message.GroundingProvenance.Sources);
+        Assert.Equal("Public address source", source.Title);
+        Assert.Equal("https://example.go.th/address", source.Url);
+        Assert.Equal("example.go.th", source.Domain);
     }
 
     [Fact]

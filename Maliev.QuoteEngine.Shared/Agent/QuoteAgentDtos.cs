@@ -227,6 +227,48 @@ public sealed class QuoteAgentTurnResponse
 
     /// <summary>Gets or sets the current chatbot usage snapshot.</summary>
     public QuoteAgentUsageSnapshotDto? UsageSnapshot { get; set; }
+
+    /// <summary>Gets or sets customer-safe provenance for externally grounded facts in this turn.</summary>
+    public QuoteAgentGroundingProvenanceDto? GroundingProvenance { get; set; }
+}
+
+/// <summary>
+/// Customer-safe provenance for externally grounded facts in an agent turn.
+/// </summary>
+public sealed class QuoteAgentGroundingProvenanceDto
+{
+    /// <summary>Gets or sets the bounded grounding purpose identifier.</summary>
+    public string Purpose { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the grounding provider identifier.</summary>
+    public string Provider { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets grounded, no_evidence, or unavailable.</summary>
+    public string Status { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets bounded provider-reported search queries.</summary>
+    public List<string> Queries { get; set; } = [];
+
+    /// <summary>Gets or sets bounded HTTPS sources used by the grounded turn.</summary>
+    public List<QuoteAgentGroundingSourceDto> Sources { get; set; } = [];
+
+    /// <summary>Gets or sets a customer-safe failure code when grounding did not succeed.</summary>
+    public string? ErrorCode { get; set; }
+}
+
+/// <summary>
+/// Customer-safe source used to ground an agent fact.
+/// </summary>
+public sealed class QuoteAgentGroundingSourceDto
+{
+    /// <summary>Gets or sets the source title.</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the canonical HTTPS source URL.</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the normalized source host.</summary>
+    public string Domain { get; set; } = string.Empty;
 }
 
 /// <summary>

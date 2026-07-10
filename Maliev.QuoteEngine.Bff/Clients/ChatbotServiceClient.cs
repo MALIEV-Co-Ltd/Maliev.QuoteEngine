@@ -570,6 +570,44 @@ public sealed class ChatbotMessageResponse
 
     /// <summary>Gets or sets the current daily token usage snapshot.</summary>
     public QuoteAgentUsageSnapshotDto? UsageSnapshot { get; set; }
+
+    /// <summary>Gets or sets customer-safe grounding provenance returned by ChatbotService.</summary>
+    public ChatbotGroundingProvenanceResponse? GroundingProvenance { get; set; }
+}
+
+/// <summary>ChatbotService grounding provenance response.</summary>
+public sealed class ChatbotGroundingProvenanceResponse
+{
+    /// <summary>Gets or sets the bounded grounding purpose identifier.</summary>
+    public string Purpose { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the grounding provider identifier.</summary>
+    public string Provider { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets grounded, no_evidence, or unavailable.</summary>
+    public string Status { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets bounded provider-reported search queries.</summary>
+    public List<string> Queries { get; set; } = [];
+
+    /// <summary>Gets or sets bounded HTTPS sources used by the grounded turn.</summary>
+    public List<ChatbotGroundingSourceResponse> Sources { get; set; } = [];
+
+    /// <summary>Gets or sets a customer-safe failure code.</summary>
+    public string? ErrorCode { get; set; }
+}
+
+/// <summary>ChatbotService grounding source response.</summary>
+public sealed class ChatbotGroundingSourceResponse
+{
+    /// <summary>Gets or sets the source title.</summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the canonical HTTPS source URL.</summary>
+    public string Url { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the normalized source host.</summary>
+    public string Domain { get; set; } = string.Empty;
 }
 
 /// <summary>ChatbotService streamed message event.</summary>
