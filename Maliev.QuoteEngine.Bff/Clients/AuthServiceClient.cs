@@ -12,6 +12,9 @@ public interface IAuthServiceClient
     /// <summary>Signs in with AuthService email/password login.</summary>
     Task<HttpResponseMessage> LoginAsync(object request, CancellationToken cancellationToken);
 
+    /// <summary>Issues a one-time nonce for the QuoteEngine customer GIS exchange.</summary>
+    Task<HttpResponseMessage> IssueCustomerGoogleNonceAsync(object request, CancellationToken cancellationToken);
+
     /// <summary>Exchanges a verified customer Google identity for a MALIEV customer session.</summary>
     Task<HttpResponseMessage> ExchangeCustomerGoogleAsync(object request, CancellationToken cancellationToken);
 }
@@ -20,6 +23,9 @@ internal sealed class AuthServiceClient(HttpClient httpClient) : IAuthServiceCli
 {
     public Task<HttpResponseMessage> LoginAsync(object request, CancellationToken cancellationToken) =>
         httpClient.PostAsJsonAsync("/auth/v1/login", request, cancellationToken);
+
+    public Task<HttpResponseMessage> IssueCustomerGoogleNonceAsync(object request, CancellationToken cancellationToken) =>
+        httpClient.PostAsJsonAsync("/auth/v1/exchange/google/customer/nonce", request, cancellationToken);
 
     public Task<HttpResponseMessage> ExchangeCustomerGoogleAsync(object request, CancellationToken cancellationToken) =>
         httpClient.PostAsJsonAsync("/auth/v1/exchange/google/customer", request, cancellationToken);

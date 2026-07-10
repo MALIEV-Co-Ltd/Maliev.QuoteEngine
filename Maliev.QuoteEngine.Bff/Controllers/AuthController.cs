@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Asp.Versioning;
@@ -9,8 +11,8 @@ using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Maliev.QuoteEngine.Bff.Controllers;
@@ -29,12 +31,15 @@ public sealed class AuthController(
     IAuthServiceClient authClient,
     ICustomerRegistrationClient registrationClient,
     IConfiguration configuration,
+    IDataProtectionProvider dataProtectionProvider,
     IHostEnvironment environment,
     QuoteEnginePrototypeStore store,
     ILogger<AuthController> logger) : ControllerBase
 {
-    private const string ExternalScheme = "MalievExternal";
+    private const string GoogleFlowCookieName = "maliev_qe_google_flow";
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly IDataProtector _googleFlowProtector = dataProtectionProvider.CreateProtector(
+        "Maliev.QuoteEngine.GoogleIdentityFlow.v1");
     private static readonly string[] CustomerAccountPermissions =
     [
         "customer.profile.read",
@@ -96,70 +101,102 @@ public sealed class AuthController(
         return Redirect(NormalizeReturnUrl(returnUrl));
     }
 
-    /// <summary>Starts customer Google sign-in as a same-tab browser flow.</summary>
-    [HttpGet("/auth/google")]
+    /// <summary>Issues the browser configuration for Google's official Identity Services button.</summary>
+    [HttpPost("google/config")]
     [AllowAnonymous]
-    public IActionResult Google([FromQuery] string? returnUrl = null)
+    public async Task<ActionResult<QuoteGoogleIdentityConfigResponse>> GetGoogleConfig(
+        CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(configuration["Authentication:Google:ClientId"]) ||
-            string.IsNullOrWhiteSpace(configuration["Authentication:Google:ClientSecret"]))
+        var clientId = configuration["Authentication:Google:ClientId"];
+        if (string.IsNullOrWhiteSpace(clientId))
         {
-            return Redirect(AppendError(NormalizeReturnUrl(returnUrl), "Google sign-in is not configured yet."));
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
         }
 
-        var redirect = Url.Action(nameof(GoogleCallback), new { returnUrl = NormalizeReturnUrl(returnUrl) })!;
-        return Challenge(new AuthenticationProperties { RedirectUri = redirect }, GoogleDefaults.AuthenticationScheme);
+        using var nonceResponse = await authClient.IssueCustomerGoogleNonceAsync(
+            new { application = "quote-engine" },
+            cancellationToken);
+        if (!nonceResponse.IsSuccessStatusCode)
+        {
+            logger.LogWarning(
+                "AuthService Google nonce issue failed with status {StatusCode}",
+                nonceResponse.StatusCode);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        var nonce = await nonceResponse.Content.ReadFromJsonAsync<AuthGoogleNonceResponse>(
+            JsonOptions,
+            cancellationToken);
+        if (nonce is null ||
+            nonce.Nonce.Length is < 32 or > 256 ||
+            nonce.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        Response.Cookies.Append(
+            GoogleFlowCookieName,
+            _googleFlowProtector.Protect(nonce.Nonce),
+            GoogleFlowCookieOptions(nonce.ExpiresAtUtc));
+        return Ok(new QuoteGoogleIdentityConfigResponse(
+            clientId.Trim(),
+            nonce.Nonce,
+            nonce.ExpiresAtUtc));
     }
 
-    /// <summary>Completes Google sign-in: exchanges the verified identity with AuthService and issues the shared cookie.</summary>
-    [HttpGet("/auth/google/callback")]
+    /// <summary>Exchanges a raw GIS credential with AuthService and issues the MALIEV customer cookie.</summary>
+    [HttpPost("google")]
     [AllowAnonymous]
-    public async Task<IActionResult> GoogleCallback([FromQuery] string? returnUrl = null, CancellationToken cancellationToken = default)
+    public async Task<ActionResult<QuoteAuthStatusResponse>> ExchangeGoogleCredential(
+        [FromBody] QuoteGoogleIdentityExchangeRequest request,
+        CancellationToken cancellationToken)
     {
-        var external = await HttpContext.AuthenticateAsync(ExternalScheme);
-        if (!external.Succeeded || external.Principal is null)
+        if (string.IsNullOrWhiteSpace(request.Credential) ||
+            request.Credential.Length > 8192 ||
+            request.Nonce.Length is < 32 or > 256 ||
+            !TryReadBoundGoogleNonce(out var boundNonce) ||
+            !FixedTimeEquals(request.Nonce, boundNonce))
         {
-            return Redirect(AppendError(NormalizeReturnUrl(returnUrl), "Google sign-in could not be completed."));
-        }
-
-        var email = external.Principal.FindFirstValue(ClaimTypes.Email);
-        var name = external.Principal.FindFirstValue(ClaimTypes.Name) ?? email;
-        var googleUserId = external.Principal.FindFirstValue(ClaimTypes.NameIdentifier);
-        var profileImageUrl = external.Principal.FindFirstValue("picture");
-
-        await HttpContext.SignOutAsync(ExternalScheme);
-
-        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(googleUserId))
-        {
-            return Redirect(AppendError(NormalizeReturnUrl(returnUrl), "Google did not return a verified customer identity."));
+            return Unauthorized();
         }
 
         using var response = await authClient.ExchangeCustomerGoogleAsync(new
         {
-            email,
-            full_name = name,
-            google_user_id = googleUserId,
-            email_verified = true,
-            profile_image_url = profileImageUrl,
-            preferred_language = "en",
+            credential = request.Credential,
+            application = "quote-engine",
+            nonce = request.Nonce,
+            preferred_language = string.Equals(
+                request.PreferredLanguage,
+                "th",
+                StringComparison.OrdinalIgnoreCase) ? "th" : "en",
             timezone = "Asia/Bangkok"
         }, cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             logger.LogWarning("Customer Google exchange failed with status {StatusCode}", response.StatusCode);
-            return Redirect(AppendError(NormalizeReturnUrl(returnUrl), "Google sign-in could not create a MALIEV customer session."));
+            return response.StatusCode switch
+            {
+                HttpStatusCode.Conflict => Conflict(new ProblemDetails
+                {
+                    Title = "Existing MALIEV account verification required",
+                    Detail = "Sign in with your existing MALIEV email first, then link Google from your account."
+                }),
+                HttpStatusCode.ServiceUnavailable => StatusCode(StatusCodes.Status503ServiceUnavailable),
+                _ => Unauthorized()
+            };
         }
 
         var session = await response.Content.ReadFromJsonAsync<AuthLoginResponse>(JsonOptions, cancellationToken);
         if (session?.User is null)
         {
-            return Redirect(AppendError(NormalizeReturnUrl(returnUrl), "Google sign-in returned an incomplete customer session."));
+            return Unauthorized();
         }
 
         session.User.EmailVerified = true;
         await SignInCustomerAsync(session.User);
-        return Redirect(NormalizeReturnUrl(returnUrl));
+        Response.Cookies.Delete(GoogleFlowCookieName, GoogleFlowCookieOptions(DateTime.UtcNow));
+        return SignedInStatus(session.User);
     }
 
     /// <summary>Signs a customer in with email and password against AuthService.</summary>
@@ -295,11 +332,40 @@ public sealed class AuthController(
         return "/quotes";
     }
 
-    private static string AppendError(string path, string error)
+    private bool TryReadBoundGoogleNonce(out string nonce)
     {
-        var separator = path.Contains('?', StringComparison.Ordinal) ? '&' : '?';
-        return $"{path}{separator}authError={Uri.EscapeDataString(error)}";
+        nonce = string.Empty;
+        if (!Request.Cookies.TryGetValue(GoogleFlowCookieName, out var protectedNonce) ||
+            string.IsNullOrWhiteSpace(protectedNonce))
+        {
+            return false;
+        }
+
+        try
+        {
+            nonce = _googleFlowProtector.Unprotect(protectedNonce);
+            return nonce.Length is >= 32 and <= 256;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
     }
+
+    private static bool FixedTimeEquals(string left, string right) =>
+        CryptographicOperations.FixedTimeEquals(
+            SHA256.HashData(Encoding.UTF8.GetBytes(left)),
+            SHA256.HashData(Encoding.UTF8.GetBytes(right)));
+
+    private static CookieOptions GoogleFlowCookieOptions(DateTime expiresAtUtc) => new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Strict,
+        IsEssential = true,
+        Path = "/",
+        Expires = new DateTimeOffset(DateTime.SpecifyKind(expiresAtUtc, DateTimeKind.Utc))
+    };
 
     private static (string FirstName, string LastName) SplitFullName(string? fullName, string email)
     {
@@ -317,6 +383,15 @@ public sealed class AuthController(
     {
         [JsonPropertyName("user")]
         public AuthUser? User { get; set; }
+    }
+
+    private sealed class AuthGoogleNonceResponse
+    {
+        [JsonPropertyName("nonce")]
+        public string Nonce { get; set; } = string.Empty;
+
+        [JsonPropertyName("expires_at_utc")]
+        public DateTime ExpiresAtUtc { get; set; }
     }
 
     private sealed class AuthUser

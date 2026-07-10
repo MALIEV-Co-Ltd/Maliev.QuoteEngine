@@ -7,9 +7,6 @@ using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Google;
-using Microsoft.AspNetCore.Authentication.OAuth.Claims;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
@@ -41,7 +38,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 builder.Services.AddSingleton<BffMetrics>();
-var authentication = builder.AddMalievIdentityCookie(options =>
+builder.AddMalievIdentityCookie(options =>
 {
     // Unauthenticated requests redirect cross-domain to the Web sign-in page,
     // passing the original QuoteEngine URL as an absolute returnUrl.
@@ -54,30 +51,6 @@ var authentication = builder.AddMalievIdentityCookie(options =>
         return Task.CompletedTask;
     };
 });
-// Google OAuth runs in this BFF and completes against AuthService — customer
-// sign-in never depends on the Maliev.Web frontend.
-var googleClientId = builder.Configuration["Authentication:Google:ClientId"];
-var googleClientSecret = builder.Configuration["Authentication:Google:ClientSecret"];
-if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(googleClientSecret))
-{
-    authentication.AddGoogle(GoogleDefaults.AuthenticationScheme, options =>
-    {
-        options.SignInScheme = IdentityCookieExtensions.ExternalSchemeName;
-        options.ClientId = googleClientId;
-        options.ClientSecret = googleClientSecret;
-        options.CallbackPath = "/auth/google/signin";
-        options.Scope.Add("profile");
-        options.Scope.Add("email");
-        options.ClaimActions.MapJsonKey("picture", "picture");
-        options.SaveTokens = true;
-        options.Events.OnRedirectToAuthorizationEndpoint = context =>
-        {
-            context.Response.Redirect(context.RedirectUri + "&prompt=select_account");
-            return Task.CompletedTask;
-        };
-    });
-}
-
 // Persist Data Protection keys to Redis so Web and QuoteEngine share the same key ring.
 builder.Services.AddSingleton<IPostConfigureOptions<KeyManagementOptions>>(sp =>
     new PostConfigureOptions<KeyManagementOptions>(Microsoft.Extensions.Options.Options.DefaultName, opts =>

@@ -76,6 +76,50 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
         return await response.Content.ReadFromJsonAsync<QuoteAuthStatusResponse>(cancellationToken: cancellationToken);
     }
 
+    /// <summary>Gets a one-time nonce and public client id for Google's official GIS button.</summary>
+    public async Task<QuoteGoogleIdentityConfigResponse> GetGoogleIdentityConfigAsync(
+        CancellationToken cancellationToken = default)
+    {
+        const string requestUri = "quote/v1/auth/google/config";
+        using var response = await httpClient.PostAsync(requestUri, content: null, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(requestUri, response, cancellationToken);
+        }
+
+        return await response.Content.ReadFromJsonAsync<QuoteGoogleIdentityConfigResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new QuoteEngineApiException(
+                HttpStatusCode.ServiceUnavailable,
+                "Google sign-in configuration is unavailable.",
+                requestUri);
+    }
+
+    /// <summary>Exchanges the raw official GIS credential through the QuoteEngine BFF.</summary>
+    public async Task<QuoteAuthStatusResponse> ExchangeGoogleIdentityAsync(
+        string credential,
+        string nonce,
+        string? preferredLanguage,
+        CancellationToken cancellationToken = default)
+    {
+        const string requestUri = "quote/v1/auth/google";
+        using var response = await httpClient.PostAsJsonAsync(
+            requestUri,
+            new QuoteGoogleIdentityExchangeRequest(credential, nonce, preferredLanguage),
+            cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(requestUri, response, cancellationToken);
+        }
+
+        return await response.Content.ReadFromJsonAsync<QuoteAuthStatusResponse>(
+            cancellationToken: cancellationToken)
+            ?? throw new QuoteEngineApiException(
+                HttpStatusCode.Unauthorized,
+                "Google sign-in returned an incomplete MALIEV session.",
+                requestUri);
+    }
+
     public async Task SignOutAsync(CancellationToken cancellationToken = default)
     {
         using var response = await httpClient.PostAsync("quote/v1/auth/sign-out", content: null, cancellationToken);

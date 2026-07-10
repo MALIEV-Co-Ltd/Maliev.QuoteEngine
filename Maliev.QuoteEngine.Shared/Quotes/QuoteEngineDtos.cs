@@ -65,6 +65,15 @@ public sealed record QuoteAuthStatusResponse(bool IsSignedIn, Guid? CustomerId, 
 /// <summary>Email credential sign-in/sign-up request handled by the QuoteEngine BFF against AuthService.</summary>
 public sealed record QuoteEmailAuthRequest(string Email, string Password, string? FullName = null, string? Language = null);
 
+/// <summary>Public configuration needed to render Google's official Identity Services button.</summary>
+public sealed record QuoteGoogleIdentityConfigResponse(string ClientId, string Nonce, DateTime ExpiresAtUtc);
+
+/// <summary>Raw GIS credential callback forwarded through the QuoteEngine BFF.</summary>
+public sealed record QuoteGoogleIdentityExchangeRequest(
+    string Credential,
+    string Nonce,
+    string? PreferredLanguage = null);
+
 public sealed class InitiateQuoteUploadRequest
 {
     [Required]

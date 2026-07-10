@@ -1092,7 +1092,7 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("class=\"qe-agent-signup-btn\"", component, StringComparison.Ordinal);
         Assert.Contains("OpenAuthDialog(\"sign-in\")", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-auth-modal\"", component, StringComparison.Ordinal);
-        Assert.Contains("ContinueWithGoogle", component, StringComparison.Ordinal);
+        Assert.Contains("RenderGoogleIdentityButtonAsync", component, StringComparison.Ordinal);
         Assert.Contains("forceLoad: true", component, StringComparison.Ordinal);
         Assert.DoesNotContain("href=\"/auth/sign-in?returnUrl=/quotes\"", component, StringComparison.Ordinal);
         Assert.DoesNotContain("href=\"/auth/sign-up?returnUrl=/quotes\"", component, StringComparison.Ordinal);
@@ -1915,9 +1915,10 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("max-width: 730px;", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-auth-modal", agentStyles, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-auth-dialog", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("--qe-auth-panel-border: #333333;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("--qe-auth-panel: #ffffff;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("--qe-auth-ink: #333333;", agentStyles, StringComparison.Ordinal);
-        Assert.Contains("border: 1px solid var(--qe-auth-panel-border);", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("border: 0;", agentStyles, StringComparison.Ordinal);
+        Assert.Contains("box-shadow: 0 28px 90px rgba(20, 24, 28, .18);", agentStyles, StringComparison.Ordinal);
         Assert.Contains("background: #333333;", agentStyles, StringComparison.Ordinal);
         Assert.Contains("color: var(--qe-agent-ink) !important;", agentStyles, StringComparison.Ordinal);
         Assert.DoesNotContain(".qe-agent-signup-btn", agentStyles, StringComparison.Ordinal);
@@ -2854,18 +2855,22 @@ public sealed class QuoteEngineSourceTests
         var chatbotJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "maliev-chatbot.js");
         var composerJs = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-agent-composer.js");
 
-        // Sign-in is a same-tab handoff to the MALIEV account page with a returnUrl
-        // back to the current conversation — never a popup, which re-rendered the
-        // same shell in a second window.
+        // Sign-in stays in the workspace dialog. Google's official GIS button
+        // returns only a signed credential to this BFF; successful email and Google
+        // exchanges both preserve the active workspace before the session reload.
         Assert.DoesNotContain("malievChatbot.openSignInPopup", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("listenForAuthComplete", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("%2Fauth%2Fchatbot-complete", shell, StringComparison.Ordinal);
-        var continueWithGoogle = ExtractSourceBlock(shell, "private async Task ContinueWithGoogle()", "public void OnAuthPopupCompleted()");
-        Assert.Contains("await MarkAuthWorkspaceHandoffAsync();", continueWithGoogle, StringComparison.Ordinal);
-        Assert.Contains("Navigation.NavigateTo($\"/auth/google?returnUrl={Uri.EscapeDataString(AuthReturnUrl)}\", forceLoad: true);", continueWithGoogle, StringComparison.Ordinal);
+        Assert.DoesNotContain("/auth/google?returnUrl=", shell, StringComparison.Ordinal);
+        var renderGoogle = ExtractSourceBlock(shell, "private async Task RenderGoogleIdentityButtonAsync()", "[JSInvokable]");
+        Assert.Contains("Api.GetGoogleIdentityConfigAsync()", renderGoogle, StringComparison.Ordinal);
+        Assert.Contains("_googleIdentityModule.InvokeVoidAsync", renderGoogle, StringComparison.Ordinal);
+        var exchangeGoogle = ExtractSourceBlock(shell, "public async Task OnGoogleCredentialReceived", "public Task OnGoogleIdentityError");
+        Assert.Contains("Api.ExchangeGoogleIdentityAsync(credential, nonce, language)", exchangeGoogle, StringComparison.Ordinal);
+        Assert.Contains("await MarkAuthWorkspaceHandoffAsync();", exchangeGoogle, StringComparison.Ordinal);
         Assert.Contains("private async Task MarkAuthWorkspaceHandoffAsync()", shell, StringComparison.Ordinal);
         Assert.Contains("malievChatbot.markWorkspaceHandoff", shell, StringComparison.Ordinal);
-        Assert.Contains("await MarkAuthWorkspaceHandoffAsync();", ExtractSourceBlock(shell, "private async Task ContinueWithEmailAsync()", "private async Task ContinueWithGoogle()"), StringComparison.Ordinal);
+        Assert.Contains("await MarkAuthWorkspaceHandoffAsync();", ExtractSourceBlock(shell, "private async Task ContinueWithEmailAsync()", "private async Task RenderGoogleIdentityButtonAsync()"), StringComparison.Ordinal);
         Assert.Contains("public void OnAuthPopupCompleted()", shell, StringComparison.Ordinal);
         Assert.Contains("Navigation.NavigateTo(Navigation.Uri, forceLoad: true);", shell, StringComparison.Ordinal);
         Assert.Contains("if (SessionId == _loadedSessionId)", shell, StringComparison.Ordinal);
@@ -2942,31 +2947,9 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("app.MapGet(\"/auth/sign-up\"", program, StringComparison.Ordinal);
         Assert.Contains("RedirectToStudioAuth", program, StringComparison.Ordinal);
         Assert.DoesNotContain("RedirectToWebAuth", program, StringComparison.Ordinal);
-        Assert.Contains("authentication.AddGoogle(GoogleDefaults.AuthenticationScheme", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("authentication.AddGoogle", program, StringComparison.Ordinal);
         Assert.Contains("AddAuthenticatedServiceClient<IAuthServiceClient, AuthServiceClient>(\"AuthService\")", program, StringComparison.Ordinal);
-        Assert.True(File.Exists(authPath), "The BFF should own server-rendered auth pages before the WASM fallback.");
-
-        var auth = File.ReadAllText(authPath);
-        Assert.Contains("class=\"auth-shell\"", auth, StringComparison.Ordinal);
-        Assert.Contains("data-auth-appbar", auth, StringComparison.Ordinal);
-        Assert.Contains("width: min(100%, 640px);", auth, StringComparison.Ordinal);
-        Assert.Contains("padding: clamp(34px, 5vw, 56px);", auth, StringComparison.Ordinal);
-        Assert.Contains("var formMode = isSignUp ? \"sign-up\" : \"sign-in\";", auth, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-email-entry-form", auth, StringComparison.Ordinal);
-        Assert.Contains("class=\"auth-credential-form", auth, StringComparison.Ordinal);
-        Assert.Contains("data-auth-step", auth, StringComparison.Ordinal);
-        Assert.Contains("data-auth-back", auth, StringComparison.Ordinal);
-        Assert.Contains("Verify email address", auth, StringComparison.Ordinal);
-        Assert.Contains("Password has at least 6 characters.", auth, StringComparison.Ordinal);
-        Assert.Contains("const handoffKey = \"{{WorkspaceHandoffKey}}\";", auth, StringComparison.Ordinal);
-        Assert.Contains("sessionStorage.setItem(handoffKey, \"true\")", auth, StringComparison.Ordinal);
-        Assert.DoesNotContain("name=\"firstName\"", auth, StringComparison.Ordinal);
-        Assert.DoesNotContain("name=\"lastName\"", auth, StringComparison.Ordinal);
-        Assert.DoesNotContain("name=\"phone\"", auth, StringComparison.Ordinal);
-        Assert.DoesNotContain("name=\"companyName\"", auth, StringComparison.Ordinal);
-        Assert.DoesNotContain("data-wasm-entry", auth, StringComparison.Ordinal);
-        Assert.DoesNotContain("_framework/blazor.webassembly.js", auth, StringComparison.Ordinal);
-        Assert.DoesNotContain("MudBlazor", auth, StringComparison.Ordinal);
+        Assert.False(File.Exists(authPath), "Obsolete server-rendered pages must not retain a fake Google sign-in button.");
 
         Assert.Contains("sessionStorage.getItem(\"maliev.quote.workspace.handoff\")", loader, StringComparison.Ordinal);
         Assert.Contains("Starting your studio", loader, StringComparison.Ordinal);
@@ -2974,19 +2957,21 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void Google_oauth_redirect_uri_manifest_covers_quoteengine_callbacks()
+    public void Google_identity_and_drive_manifest_keep_separate_contracts()
     {
         var program = ReadRepoFile("Maliev.QuoteEngine.Bff", "Program.cs");
         var launchSettings = ReadRepoFile("Maliev.QuoteEngine.Bff", "Properties", "launchSettings.json");
         var manifest = ReadRepoFile("docs", "google-oauth-redirect-uris.md");
 
-        Assert.Contains("options.CallbackPath = \"/auth/google/signin\";", program, StringComparison.Ordinal);
+        Assert.DoesNotContain("options.CallbackPath = \"/auth/google/signin\";", program, StringComparison.Ordinal);
         Assert.Contains("\"https://localhost:7297;http://localhost:5012\"", launchSettings, StringComparison.Ordinal);
 
-        Assert.Contains("MALIEV Sign-In - Shared", manifest, StringComparison.Ordinal);
-        Assert.Contains("https://localhost:7297/auth/google/signin", manifest, StringComparison.Ordinal);
-        Assert.Contains("http://localhost:5012/auth/google/signin", manifest, StringComparison.Ordinal);
-        Assert.Contains("https://make.maliev.com/auth/google/signin", manifest, StringComparison.Ordinal);
+        Assert.Contains("Google Identity Services", manifest, StringComparison.Ordinal);
+        Assert.Contains("https://localhost:7297", manifest, StringComparison.Ordinal);
+        Assert.Contains("https://make.maliev.com", manifest, StringComparison.Ordinal);
+        Assert.DoesNotContain("https://localhost:7297/auth/google/signin", manifest, StringComparison.Ordinal);
+        Assert.DoesNotContain("http://localhost:5012/auth/google/signin", manifest, StringComparison.Ordinal);
+        Assert.DoesNotContain("https://make.maliev.com/auth/google/signin", manifest, StringComparison.Ordinal);
 
         Assert.Contains("MALIEV QuoteEngine - Google Drive Connector", manifest, StringComparison.Ordinal);
         Assert.Contains("https://localhost:7297/auth/google/drive/callback", manifest, StringComparison.Ordinal);
@@ -3055,13 +3040,14 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("Navigation.NavigateTo(\"/quotes?auth=sign-up\"", signUp, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"auth-shell\"", signUp, StringComparison.Ordinal);
 
-        // Sign-in completes against AuthService via this BFF: Google as a same-tab
-        // browser flow, email + password collected in the studio dialog.
+        // Sign-in completes against AuthService via this BFF: Google through the
+        // official GIS-rendered button, email + password through the studio dialog.
         Assert.Contains("class=\"qe-agent-auth-modal\"", shell, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-auth-google\"", shell, StringComparison.Ordinal);
-        Assert.Contains("fill=\"#4285F4\"", shell, StringComparison.Ordinal);
-        Assert.Contains("ContinueWithGoogle", shell, StringComparison.Ordinal);
-        Assert.Contains("/auth/google?returnUrl=", shell, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-google-identity-host\"", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("qe-agent-auth-google-mark", shell, StringComparison.Ordinal);
+        Assert.Contains("RenderGoogleIdentityButtonAsync", shell, StringComparison.Ordinal);
+        Assert.Contains("OnGoogleCredentialReceived", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("/auth/google?returnUrl=", shell, StringComparison.Ordinal);
         Assert.Contains("public string AuthReturnUrl { get; set; } = \"/quote/new\";", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("private string AuthReturnUrl => \"/quotes\"", shell, StringComparison.Ordinal);
         Assert.DoesNotContain("NavigateToMalievAccount", shell, StringComparison.Ordinal);

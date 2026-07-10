@@ -1,25 +1,26 @@
 # Google OAuth Redirect URIs
 
-QuoteEngine uses two Google OAuth web clients. Keep the redirect URIs in Google
-Cloud Console aligned with the callback path used by each flow.
+QuoteEngine uses Google Identity Services (GIS) for customer sign-in and a
+separate OAuth web client for Google Drive. Keep the two contracts separate in
+Google Cloud Console.
 
-## MALIEV Sign-In - Shared
+## MALIEV Sign-In - Google Identity Services
 
-Use this client for customer sign-in through Web, QuoteEngine, and Intranet.
-QuoteEngine normal sign-in uses ASP.NET Google authentication with callback path
-`/auth/google/signin`.
+Use the shared MALIEV sign-in client ID with the official GIS-rendered button.
+GIS posts a signed ID credential to the app BFF; normal sign-in has no OAuth
+redirect callback and does not require a client secret in the browser or BFF.
 
-Required QuoteEngine redirect URIs:
+Authorized JavaScript origins for QuoteEngine:
 
 ```text
-https://localhost:7297/auth/google/signin
-http://localhost:5012/auth/google/signin
-https://make.maliev.com/auth/google/signin
+https://localhost:7297
+http://localhost:5012
+https://make.maliev.com
 ```
 
-Do not use the Google Drive callback URI for customer sign-in. Google requires
-the `redirect_uri` in the authorization request to exactly match a redirect URI
-registered on this same sign-in client.
+Do not add `/auth/google/signin` redirect URIs for GIS. The BFF obtains a
+single-use nonce from AuthService and sends the credential, nonce, and exact
+`quote-engine` application binding to AuthService for verification.
 
 ## MALIEV QuoteEngine - Google Drive Connector
 
