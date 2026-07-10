@@ -862,11 +862,12 @@ public sealed class QuoteEnginePrototypeStore
                 leadTime.PriceMultiplier;
             var lineTotal = Math.Round(setupCost + (variableUnitCost * quantity), 2);
             var unitPrice = QuoteEstimateMoney.DeriveDisplayUnitPrice(lineTotal, quantity);
-            var notes = QuoteEstimateMoney.AppendAuthoritativeTotalNote(
+            var notes = QuoteEstimateMoney.AppendRoundedDisplayUnitNote(
                 config.Notes,
                 lineTotal,
                 quantity,
-                "THB");
+                "THB",
+                lineTotalIsAuthoritative: false);
             return new QuoteLineEstimateDto(part.PartId, part.FileName, unitPrice, lineTotal, "THB", notes);
         }).ToArray();
 

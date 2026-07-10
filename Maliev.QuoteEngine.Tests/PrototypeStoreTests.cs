@@ -50,6 +50,11 @@ public sealed class PrototypeStoreTests
         Assert.Equal(expectedTotal, line.LineTotal);
         Assert.Equal(expectedUnitPrice, line.UnitPrice);
         Assert.Equal(expectedApproximateUnitPrice, line.Notes.Contains("approximate", StringComparison.OrdinalIgnoreCase));
+        if (expectedApproximateUnitPrice)
+        {
+            Assert.Contains($"line total remains {expectedTotal:0.##} THB", line.Notes, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("authoritative", line.Notes, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]

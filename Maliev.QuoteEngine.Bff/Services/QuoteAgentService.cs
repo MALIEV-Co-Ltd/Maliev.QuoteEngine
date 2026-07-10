@@ -2559,11 +2559,12 @@ internal sealed class QuoteAgentService(
                 var quantity = Math.Max(1, part.Quantity);
                 var lineTotal = serviceResult.TotalAmount;
                 var unitPrice = QuoteEstimateMoney.DeriveDisplayUnitPrice(lineTotal, quantity);
-                var notes = QuoteEstimateMoney.AppendAuthoritativeTotalNote(
+                var notes = QuoteEstimateMoney.AppendRoundedDisplayUnitNote(
                     BuildQuoteEngineConfigurationNotes(part),
                     lineTotal,
                     quantity,
-                    "THB");
+                    "THB",
+                    lineTotalIsAuthoritative: true);
                 lines.Add(new QuoteLineEstimateDto(
                     part.PartId,
                     part.FileName,
@@ -8121,7 +8122,7 @@ Customer message:
             candidate = unwrapped;
         }
 
-        candidate = candidate.Trim().Trim('`').Trim().TrimEnd(';').TrimEnd();
+        candidate = StripMatchingMarkdownWrappers(candidate).TrimEnd(';').TrimEnd();
         return candidate.StartsWith("tools.", StringComparison.OrdinalIgnoreCase) &&
             candidate.EndsWith(')') &&
             candidate.IndexOf('(', StringComparison.Ordinal) > "tools.".Length;
@@ -8129,6 +8130,13 @@ Customer message:
 
     private static bool TryStripMarkdownLinePrefix(string candidate, out string unwrapped)
     {
+        var orderedListPrefix = Regex.Match(candidate, @"^\d+[.)]\s+");
+        if (orderedListPrefix.Success)
+        {
+            unwrapped = candidate[orderedListPrefix.Length..].TrimStart();
+            return true;
+        }
+
         foreach (var prefix in new[] { "- ", "* ", "+ ", "> " })
         {
             if (candidate.StartsWith(prefix, StringComparison.Ordinal))
@@ -8140,6 +8148,31 @@ Customer message:
 
         unwrapped = candidate;
         return false;
+    }
+
+    private static string StripMatchingMarkdownWrappers(string candidate)
+    {
+        candidate = candidate.Trim();
+        var removedWrapper = true;
+        while (removedWrapper)
+        {
+            removedWrapper = false;
+            foreach (var wrapper in new[] { "`", "**", "__", "~~" })
+            {
+                if (candidate.Length <= wrapper.Length * 2 ||
+                    !candidate.StartsWith(wrapper, StringComparison.Ordinal) ||
+                    !candidate.EndsWith(wrapper, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                candidate = candidate[wrapper.Length..^wrapper.Length].Trim();
+                removedWrapper = true;
+                break;
+            }
+        }
+
+        return candidate;
     }
 
     private static bool IsToolTraceHeader(string trimmed)
@@ -8223,11 +8256,6 @@ Customer message:
         }
 
         var currency = state.Estimate?.Currency ?? "THB";
-        if (!ContainsEstimatePriceClaim(content, currency))
-        {
-            return content;
-        }
-
         var groundedLine = state.Estimate is null
             ? BuildUnavailableEstimateLine(content, language)
             : BuildGroundedEstimateLine(state, language);
@@ -8250,7 +8278,7 @@ Customer message:
             groundedLines.Add(line);
         }
 
-        return string.Join('\n', groundedLines).Trim();
+        return insertedGroundedLine ? string.Join('\n', groundedLines).Trim() : content;
     }
 
     private static bool ContainsEstimatePriceClaim(string content, string currency)
@@ -8262,24 +8290,33 @@ Customer message:
             return false;
         }
 
-        if (content.Contains("shipping", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("courier", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("freight", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("delivery fee", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("ค่าจัดส่ง", StringComparison.Ordinal) ||
-            content.Contains("ค่าขนส่ง", StringComparison.Ordinal))
+        var hasExplicitManufacturingPriceLanguage =
+            content.Contains("estimate", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("estimated", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("unit price", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("per unit", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("ราคาประเมิน", StringComparison.Ordinal) ||
+            content.Contains("ต่อชิ้น", StringComparison.Ordinal);
+        if (hasExplicitManufacturingPriceLanguage)
+        {
+            return true;
+        }
+
+        var hasGenericQuoteLanguage = content.Contains("quote", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("ใบเสนอราคา", StringComparison.Ordinal);
+        if (!hasGenericQuoteLanguage)
         {
             return false;
         }
 
-        return content.Contains("estimate", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("estimated", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("unit price", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("per unit", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("quote", StringComparison.OrdinalIgnoreCase) ||
-            content.Contains("ราคาประเมิน", StringComparison.Ordinal) ||
-            content.Contains("ใบเสนอราคา", StringComparison.Ordinal) ||
-            content.Contains("ต่อชิ้น", StringComparison.Ordinal);
+        var hasShippingContext = content.Contains("shipping", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("delivery", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("courier", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("freight", StringComparison.OrdinalIgnoreCase) ||
+            content.Contains("ค่าจัดส่ง", StringComparison.Ordinal) ||
+            content.Contains("ค่าขนส่ง", StringComparison.Ordinal);
+
+        return !hasShippingContext;
     }
 
     private static string BuildUnavailableEstimateLine(string content, string language)
@@ -8329,7 +8366,6 @@ Customer message:
         string language)
     {
         if (string.IsNullOrWhiteSpace(content) ||
-            !ContainsFormalQuoteAvailabilityClaim(content) ||
             state.Artifacts.Any(artifact =>
                 artifact.ArtifactType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase)))
         {
@@ -8351,21 +8387,38 @@ Customer message:
         var insertedGroundedLine = false;
         foreach (var line in lines)
         {
-            if (ContainsFormalQuoteAvailabilityClaim(line))
+            var groundedLineBuilder = new StringBuilder(line.Length + groundedLine.Length);
+            var lineContainsAvailabilityClaim = false;
+            foreach (Match sentenceMatch in Regex.Matches(
+                         line,
+                         @"[^.!?。！？]+(?:[.!?。！？]+|$)|[.!?。！？]+"))
             {
-                if (!insertedGroundedLine)
+                var sentence = sentenceMatch.Value;
+                if (!ContainsFormalQuoteAvailabilityClaim(sentence))
                 {
-                    groundedLines.Add(groundedLine);
-                    insertedGroundedLine = true;
+                    groundedLineBuilder.Append(sentence);
+                    continue;
                 }
 
-                continue;
+                lineContainsAvailabilityClaim = true;
+                if (!insertedGroundedLine)
+                {
+                    groundedLineBuilder.Append(groundedLine);
+                    insertedGroundedLine = true;
+                }
             }
 
-            groundedLines.Add(line);
+            if (!lineContainsAvailabilityClaim)
+            {
+                groundedLines.Add(line);
+            }
+            else if (!string.IsNullOrWhiteSpace(groundedLineBuilder.ToString()))
+            {
+                groundedLines.Add(groundedLineBuilder.ToString());
+            }
         }
 
-        return string.Join('\n', groundedLines).Trim();
+        return insertedGroundedLine ? string.Join('\n', groundedLines).Trim() : content;
     }
 
     private static bool ContainsFormalQuoteAvailabilityClaim(string content)
@@ -8407,18 +8460,15 @@ Customer message:
 
     private static bool ContainsAffirmativeThaiFormalQuoteAvailability(string content)
     {
-        var trimmed = content.TrimStart();
-        if (!trimmed.StartsWith("ใบเสนอราคาอย่างเป็นทางการ", StringComparison.Ordinal))
-        {
-            return false;
-        }
+        const RegexOptions options = RegexOptions.IgnoreCase | RegexOptions.CultureInvariant;
+        const string subject = "ใบเสนอราคาอย่างเป็นทางการ";
+        const string downloadable = @"ดาวน์โหลดได้(?:เลย)?";
+        const string completedStatus = @"(?:พร้อมแล้ว|จัดทำแล้ว|สร้างแล้ว|เสร็จแล้ว)";
 
-        return trimmed.Contains("พร้อมแล้ว", StringComparison.Ordinal) ||
-            trimmed.Contains("จัดทำแล้ว", StringComparison.Ordinal) ||
-            trimmed.Contains("สร้างแล้ว", StringComparison.Ordinal) ||
-            trimmed.Contains("เสร็จแล้ว", StringComparison.Ordinal) ||
-            trimmed.Contains("ดาวน์โหลดได้", StringComparison.Ordinal) ||
-            trimmed.Contains("อยู่ใน Artifacts", StringComparison.OrdinalIgnoreCase);
+        return Regex.IsMatch(
+            content,
+            $@"^\s*{subject}\s*(?:(?:ตอนนี้|ขณะนี้)\s*)?(?:{completedStatus}(?:\s*[,，]?\s*{downloadable})?|{downloadable}|อยู่ใน\s+Artifacts)\s*[.!。]?\s*$",
+            options);
     }
 
     private static string GroundAssistantPersonaText(string content, string language)

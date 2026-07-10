@@ -2109,6 +2109,11 @@ Customer message:
     [InlineData("`tools.quotecalculateestimate()`")]
     [InlineData("- tools.quotecalculateestimate()")]
     [InlineData("> `tools.quotecalculateestimate()`")]
+    [InlineData("1. tools.quotecalculateestimate()")]
+    [InlineData("1) `tools.quotecalculateestimate()`")]
+    [InlineData("**tools.quotecalculateestimate()**")]
+    [InlineData("__tools.quotecalculateestimate()__")]
+    [InlineData("~~tools.quotecalculateestimate()~~")]
     public async Task Agent_grounding_strips_bare_tool_call_and_synthesizes_state_text(string modelText)
     {
         var chatbot = new RecordingChatbotServiceClient
@@ -2138,6 +2143,39 @@ Customer message:
         Assert.False(string.IsNullOrWhiteSpace(body.AssistantText));
         Assert.DoesNotContain("tools.", body.AssistantText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Describe the part", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("Use tools.quotecalculateestimate() only after configuration.")]
+    [InlineData("const call = \"tools.quotecalculateestimate()\";")]
+    [InlineData("1. Use `tools.quotecalculateestimate()` only after configuration.")]
+    public async Task Agent_grounding_preserves_tool_call_text_inside_ordinary_prose_or_code(string modelText)
+    {
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelText
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = Guid.NewGuid(),
+            Message = "Explain the estimate tool.",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.Contains(modelText, body.AssistantText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2236,6 +2274,73 @@ Customer message:
         Assert.NotNull(body);
         Assert.DoesNotContain("120 THB", body.AssistantText, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("not available yet", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_grounding_replaces_explicit_estimate_claim_even_when_shipping_is_excluded()
+    {
+        const string modelText = "The manufacturing estimate is 120 THB, excluding shipping.";
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = modelText
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "What is the manufacturing estimate?",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.DoesNotContain("120 THB", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("server-backed estimate", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Agent_grounding_replaces_only_manufacturing_estimate_line_in_mixed_response()
+    {
+        const string shippingLine = "The delivery quote is 150 THB.";
+        var chatbot = new RecordingChatbotServiceClient
+        {
+            ResponseContent = $"The manufacturing estimate is 120 THB.{Environment.NewLine}{shippingLine}"
+        };
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = await StartPricedCadSessionAsync(client);
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Summarize manufacturing and delivery prices.",
+            Language = "en"
+        }, JsonOptions);
+        var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(body);
+        Assert.DoesNotContain("120 THB", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("server-backed estimate", body.AssistantText, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(shippingLine, body.AssistantText, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2342,13 +2447,17 @@ Customer message:
     }
 
     [Theory]
-    [InlineData("en", "Your formal quote is ready and available to download.", "awaiting your confirmation")]
-    [InlineData("en", "Your formal quote has been generated and completed.", "awaiting your confirmation")]
-    [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการพร้อมแล้ว ดาวน์โหลดได้เลย", "รอการยืนยัน")]
+    [InlineData("en", "Your formal quote is ready and available to download.", "awaiting your confirmation", null)]
+    [InlineData("en", "Your formal quote has been generated and completed.", "awaiting your confirmation", null)]
+    [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการพร้อมแล้ว ดาวน์โหลดได้เลย", "รอการยืนยัน", null)]
+    [InlineData("en", "Status update:\nYour formal quote is ready.", "awaiting your confirmation", "Status update:")]
+    [InlineData("en", "Your formal quote is ready.\nWould you like me to explain the next step?", "awaiting your confirmation", "Would you like me to explain the next step?")]
+    [InlineData("en", "Your formal quote is ready. Please review the pending action.", "awaiting your confirmation", "Please review the pending action.")]
     public async Task Agent_grounding_treats_pending_formal_quote_as_awaiting_confirmation(
         string language,
         string modelClaim,
-        string expectedGroundedText)
+        string expectedGroundedText,
+        string? expectedPreservedText)
     {
         var chatbot = new RecordingChatbotServiceClient
         {
@@ -2386,6 +2495,10 @@ Customer message:
         Assert.NotNull(body);
         Assert.Contains(expectedGroundedText, body.AssistantText, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(modelClaim, body.AssistantText, StringComparison.Ordinal);
+        if (expectedPreservedText is not null)
+        {
+            Assert.Contains(expectedPreservedText, body.AssistantText, StringComparison.Ordinal);
+        }
         Assert.DoesNotContain(body.Artifacts, artifact =>
             artifact.ArtifactType.Equals("formal_quote", StringComparison.OrdinalIgnoreCase));
     }
@@ -2440,7 +2553,9 @@ Customer message:
     [InlineData("en", "The formal quote is not yet ready.")]
     [InlineData("en", "Can you tell me whether the formal quote is ready? I still need to review it.")]
     [InlineData("th", "หากการกำหนดราคาผ่าน ใบเสนอราคาอย่างเป็นทางการจะพร้อม")]
+    [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการจะพร้อมแล้ว")]
     [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการยังไม่พร้อม")]
+    [InlineData("th", "ใบเสนอราคาอย่างเป็นทางการพร้อมแล้วหรือยัง")]
     [InlineData("th", "ช่วยบอกได้ไหมว่าใบเสนอราคาอย่างเป็นทางการพร้อมหรือยัง? ลูกค้ายังต้องตรวจสอบ")]
     public async Task Agent_grounding_preserves_non_availability_formal_quote_language(
         string language,
@@ -2508,6 +2623,7 @@ Customer message:
     [Theory]
     [InlineData("The selected courier's shipping price is 150 THB.")]
     [InlineData("The selected courier's shipping quote is 150 THB.")]
+    [InlineData("The delivery quote is 150 THB.")]
     public async Task Agent_grounding_does_not_replace_unrelated_shipping_price_language(string modelText)
     {
         var chatbot = new RecordingChatbotServiceClient

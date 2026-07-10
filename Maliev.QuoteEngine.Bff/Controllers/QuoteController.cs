@@ -388,11 +388,12 @@ public sealed class QuoteController(
                 var quantity = Math.Max(1, part.Quantity);
                 var lineTotal = serviceResult.TotalAmount;
                 var unitPrice = QuoteEstimateMoney.DeriveDisplayUnitPrice(lineTotal, quantity);
-                var notes = QuoteEstimateMoney.AppendAuthoritativeTotalNote(
+                var notes = QuoteEstimateMoney.AppendRoundedDisplayUnitNote(
                     adjustment.Notes,
                     lineTotal,
                     quantity,
-                    "THB");
+                    "THB",
+                    lineTotalIsAuthoritative: true);
                 lines.Add(new QuoteLineEstimateDto(
                     part.PartId,
                     part.FileName,

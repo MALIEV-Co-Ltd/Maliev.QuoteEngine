@@ -394,8 +394,8 @@ public static class QuoteEstimateMoney
     /// <summary>Gets the number of decimal places used for customer-visible unit prices.</summary>
     public const int DisplayUnitPriceDecimalPlaces = 2;
 
-    /// <summary>Derives a rounded display unit price without changing the authoritative line total.</summary>
-    public static decimal DeriveDisplayUnitPrice(decimal authoritativeLineTotal, int quantity)
+    /// <summary>Derives a rounded display unit price without changing the line total.</summary>
+    public static decimal DeriveDisplayUnitPrice(decimal lineTotal, int quantity)
     {
         if (quantity < 1)
         {
@@ -403,26 +403,30 @@ public static class QuoteEstimateMoney
         }
 
         return Math.Round(
-            authoritativeLineTotal / quantity,
+            lineTotal / quantity,
             DisplayUnitPriceDecimalPlaces,
             MidpointRounding.AwayFromZero);
     }
 
-    /// <summary>Adds an explicit approximation note when the rounded display unit cannot reproduce the authoritative total.</summary>
-    public static string AppendAuthoritativeTotalNote(
+    /// <summary>Adds an explicit approximation note when the rounded display unit cannot reproduce the line total.</summary>
+    public static string AppendRoundedDisplayUnitNote(
         string notes,
-        decimal authoritativeLineTotal,
+        decimal lineTotal,
         int quantity,
-        string currency)
+        string currency,
+        bool lineTotalIsAuthoritative)
     {
-        var displayUnitPrice = DeriveDisplayUnitPrice(authoritativeLineTotal, quantity);
-        if (displayUnitPrice * quantity == authoritativeLineTotal)
+        var displayUnitPrice = DeriveDisplayUnitPrice(lineTotal, quantity);
+        if (displayUnitPrice * quantity == lineTotal)
         {
             return notes;
         }
 
-        var total = authoritativeLineTotal.ToString("#,0.##", CultureInfo.InvariantCulture);
-        var approximationNote = $"Unit price is approximate after rounding to {DisplayUnitPriceDecimalPlaces.ToString(CultureInfo.InvariantCulture)} decimal places; authoritative line total is {total} {currency}.";
+        var total = lineTotal.ToString("#,0.##", CultureInfo.InvariantCulture);
+        var totalProvenance = lineTotalIsAuthoritative
+            ? $"authoritative line total is {total} {currency}"
+            : $"line total remains {total} {currency}";
+        var approximationNote = $"Rounded display unit price is approximate after rounding to {DisplayUnitPriceDecimalPlaces.ToString(CultureInfo.InvariantCulture)} decimal places; {totalProvenance}.";
         return string.IsNullOrWhiteSpace(notes)
             ? approximationNote
             : $"{notes.Trim().TrimEnd('.')}; {approximationNote}";
