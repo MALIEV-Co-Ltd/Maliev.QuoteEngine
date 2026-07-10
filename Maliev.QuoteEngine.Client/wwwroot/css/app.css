@@ -7706,6 +7706,15 @@
     opacity: .78;
 }
 
+.qe-agent-workbench-item.is-uploading .qe-agent-upload-preview {
+    animation: qe-agent-thumbnail-pulse 1.25s ease-in-out infinite alternate;
+}
+
+.qe-agent-workbench-item.is-uploading .qe-agent-upload-preview img {
+    filter: blur(3px);
+    opacity: .62;
+}
+
 .qe-agent-workbench-uploading-indicator {
     position: absolute;
     inset: auto 5px 5px auto;
@@ -8584,6 +8593,7 @@
 :root[data-motion-reduced="true"] .qe-agent-rail-scroll,
 :root[data-motion-reduced="true"] .qe-agent-signin-row.is-auth-required,
 :root[data-motion-reduced="true"] .qe-agent-artifact-drawer,
+:root[data-motion-reduced="true"] .qe-agent-workbench-item.is-uploading .qe-agent-upload-preview,
 :root[data-motion-reduced="true"] .qe-agent-workbench-uploading-indicator {
     animation: none !important;
     transition: none !important;

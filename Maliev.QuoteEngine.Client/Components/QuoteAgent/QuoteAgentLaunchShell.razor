@@ -1972,7 +1972,8 @@
                                title="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
                                aria-label="@Text("Add files to workbench", "เพิ่มไฟล์เข้าพื้นที่งาน")"
                                data-upload-input-id="@UploadInputElementId"
-                               data-upload-accept="@UploadAcceptForCategory(UploadPickerAll)">
+                               data-upload-accept="@UploadAcceptForCategory(UploadPickerAll)"
+                               @onkeydown="HandleWorkbenchUploadKeyDownAsync">
                             <MudIcon Icon="@Icons.Material.Outlined.UploadFile" Size="Size.Small" />
                             <span>@Text("Add files", "เพิ่มไฟล์")</span>
                         </label>
@@ -2052,8 +2053,7 @@
                         {
                             <button type="button"
                                     class="@WorkbenchAttachmentCardClass(attachment)"
-                                    disabled="@IsComposerUploadPending(attachment)"
-                                    @onclick="@(() => OpenWorkbenchAttachmentPreview(attachment))">
+                                    @onclick="@(() => SelectWorkbenchAttachment(attachment))">
                                 <span class="qe-agent-upload-preview" aria-hidden="true">
                                     @if (!string.IsNullOrWhiteSpace(attachment.PreviewUrl))
                                     {
@@ -2123,8 +2123,8 @@
                         @foreach (var sketch in MessageSketches)
                         {
                             <button type="button"
-                                    class="qe-agent-artifact qe-agent-artifact--button qe-agent-artifact-upload-card qe-agent-workbench-item"
-                                    @onclick="@(() => OpenSketchPreview(sketch))">
+                                    class="@WorkbenchAttachmentCardClass(sketch)"
+                                    @onclick="@(() => SelectWorkbenchAttachment(sketch))">
                                 <span class="qe-agent-upload-preview" aria-hidden="true">
                                     @if (!string.IsNullOrWhiteSpace(sketch.PreviewUrl))
                                     {
@@ -2175,6 +2175,10 @@
             {
                 var selectedGeneratedViewer = SelectedGeneratedViewerArtifact;
                 var selectedArtifactPreview = SelectedArtifactPreviewItem;
+                var selectedWorkbenchAttachment = SelectedWorkbenchAttachment;
+                var selectedWorkbenchAttachmentPreview = selectedWorkbenchAttachment is null
+                    ? null
+                    : BuildWorkbenchAttachmentPreviewItem(selectedWorkbenchAttachment);
                 <section class="qe-agent-workbench-preview" aria-label="@Text("Selected file preview", "พรีวิวไฟล์ที่เลือก")">
                     <header>
                         <div>
@@ -2298,6 +2302,67 @@
                                             <dd>@detail.Value</dd>
                                         </div>
                                     }
+                                </dl>
+                            </div>
+                        </section>
+                    </div>
+                }
+                else if (selectedWorkbenchAttachment is not null && selectedWorkbenchAttachmentPreview is not null)
+                {
+                    <div class="qe-agent-artifact-preview-shell">
+                        <section class="qe-agent-artifact-context" aria-label="@Text("Selected attached file", "ไฟล์แนบที่เลือก")">
+                            <header>
+                                <div>
+                                    <span>@WorkbenchAttachmentKindLabel(selectedWorkbenchAttachment)</span>
+                                    <strong>@selectedWorkbenchAttachment.FileName</strong>
+                                </div>
+                                <div class="qe-agent-artifact-preview-actions">
+                                    <small>@AttachmentStatusLabel(selectedWorkbenchAttachment)</small>
+                                    @if (!string.IsNullOrWhiteSpace(selectedWorkbenchAttachmentPreview.Url))
+                                    {
+                                        <a href="@selectedWorkbenchAttachmentPreview.Url"
+                                           target="_blank"
+                                           rel="noopener noreferrer"
+                                           class="qe-agent-artifact-link qe-agent-artifact-open-link"
+                                           title="@Text("Open in new tab", "เปิดในแท็บใหม่")"
+                                           aria-label="@Text("Open selected file in a new tab", "เปิดไฟล์ที่เลือกในแท็บใหม่")">
+                                            <MudIcon Icon="@Icons.Material.Outlined.OpenInNew" Size="Size.Small" />
+                                        </a>
+                                    }
+                                </div>
+                            </header>
+                            <div class="qe-agent-artifact-context-body">
+                                @if (!string.IsNullOrWhiteSpace(selectedWorkbenchAttachmentPreview.Url) && IsImagePreview(selectedWorkbenchAttachmentPreview))
+                                {
+                                    <img class="qe-agent-artifact-preview-media" src="@selectedWorkbenchAttachmentPreview.Url" alt="" loading="lazy" onerror="this.style.display='none'" />
+                                }
+                                else if (!string.IsNullOrWhiteSpace(selectedWorkbenchAttachmentPreview.Url) && IsPdfPreview(selectedWorkbenchAttachmentPreview))
+                                {
+                                    <iframe src="@selectedWorkbenchAttachmentPreview.Url"
+                                            class="qe-agent-artifact-frame"
+                                            title="@selectedWorkbenchAttachmentPreview.Title"
+                                            loading="lazy"
+                                            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+                                }
+                                else
+                                {
+                                    <div class="qe-agent-artifact-preview-fallback">
+                                        <MudIcon Icon="@UploadedPartIcon(selectedWorkbenchAttachment)" Size="Size.Large" />
+                                    </div>
+                                }
+                                <dl class="qe-agent-artifact-details">
+                                    <div>
+                                        <dt>@Text("Status", "สถานะ")</dt>
+                                        <dd>@AttachmentStatusLabel(selectedWorkbenchAttachment)</dd>
+                                    </div>
+                                    <div>
+                                        <dt>@Text("File type", "ประเภทไฟล์")</dt>
+                                        <dd>@WorkbenchAttachmentKindLabel(selectedWorkbenchAttachment)</dd>
+                                    </div>
+                                    <div>
+                                        <dt>@Text("File size", "ขนาดไฟล์")</dt>
+                                        <dd>@QuoteAgentUiHelpers.FormatFileSize(selectedWorkbenchAttachment.FileSizeBytes)</dd>
+                                    </div>
                                 </dl>
                             </div>
                         </section>
@@ -2781,6 +2846,7 @@
     private IReadOnlyList<QuoteAgentProposedActionDto> SelectionActions =>
         _proposedActions.Where(action => !action.RequiresConfirmation).ToList();
     private QuoteAgentArtifactDto? _selectedArtifact;
+    private ComposerAttachmentPreview? _selectedWorkbenchAttachment;
     private AgentWorkbenchSnapshot? _stateWorkbench;
     private List<QuoteAgentUiDirectiveDto> _uiFocusDirectives = [];
     private QuoteAgentAuthHandoffResponse? _authHandoff;
@@ -3080,7 +3146,8 @@
         $"{ArtifactCount:N0} project {(ArtifactCount == 1 ? "item" : "items")}",
         $"{ArtifactCount:N0} รายการในโปรเจกต์");
     private bool HasSelectedWorkbenchPreview =>
-        _artifactPreviewExpanded && (_selectedArtifact is not null || UploadedParts.Count > 0);
+        _artifactPreviewExpanded &&
+        (_selectedArtifact is not null || SelectedWorkbenchAttachment is not null || UploadedParts.Count > 0);
     private IReadOnlyList<QuoteAgentArtifactDto> VisibleDrawerArtifacts =>
         _artifacts
             .Where(QuoteAgentUiHelpers.IsVisibleArtifact)
@@ -3159,6 +3226,11 @@
             return result;
         }
     }
+    private ComposerAttachmentPreview? SelectedWorkbenchAttachment => _selectedWorkbenchAttachment is null
+        ? null
+        : WorkbenchPendingAttachments
+            .Concat(MessageSketches)
+            .FirstOrDefault(attachment => attachment.Matches(_selectedWorkbenchAttachment));
     private QuotePartViewModel SelectedUploadedPart => UploadedParts[Math.Clamp(SelectedPartIndex, 0, Math.Max(UploadedParts.Count - 1, 0))];
     private QuotePartViewModel? ArtifactNoteDialogPart => _artifactNotePartIndex >= 0 && _artifactNotePartIndex < UploadedParts.Count
         ? UploadedParts[_artifactNotePartIndex]
@@ -5378,7 +5450,11 @@
     private string WorkbenchAttachmentCardClass(ComposerAttachmentPreview attachment)
     {
         var pendingClass = IsComposerUploadPending(attachment) ? " is-uploading" : string.Empty;
-        return $"qe-agent-artifact qe-agent-artifact--button qe-agent-artifact-upload-card qe-agent-workbench-item{pendingClass}";
+        var selectedClass = _artifactPreviewExpanded &&
+            SelectedWorkbenchAttachment?.Matches(attachment) == true
+                ? " active"
+                : string.Empty;
+        return $"qe-agent-artifact qe-agent-artifact--button qe-agent-artifact-upload-card qe-agent-workbench-item{pendingClass}{selectedClass}";
     }
 
     private void CollapseWorkbenchPreview()
@@ -5444,28 +5520,19 @@
         }
     }
 
-    private void OpenWorkbenchAttachmentPreview(ComposerAttachmentPreview attachment)
+    private void SelectWorkbenchAttachment(ComposerAttachmentPreview attachment)
     {
-        if (IsComposerUploadPending(attachment))
-        {
-            return;
-        }
-
-        var previewUrl = attachment.PreviewUrl ?? attachment.Url ?? string.Empty;
-        var previewIndex = PreviewItems.ToList().FindIndex(item =>
-            item.Source.Equals("pending", StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(item.Url, previewUrl, StringComparison.Ordinal) &&
-            string.Equals(item.Title, attachment.FileName, StringComparison.OrdinalIgnoreCase));
-        if (previewIndex >= 0)
-        {
-            _previewIndex = previewIndex;
-            _previewDialogOpen = true;
-        }
+        var deselect = _artifactPreviewExpanded &&
+            SelectedWorkbenchAttachment?.Matches(attachment) == true;
+        _selectedArtifact = null;
+        _selectedWorkbenchAttachment = deselect ? null : attachment;
+        _artifactPreviewExpanded = !deselect;
     }
 
     private void SelectArtifact(QuoteAgentArtifactDto artifact)
     {
         var deselect = _artifactPreviewExpanded && _selectedArtifact?.ArtifactId == artifact.ArtifactId;
+        _selectedWorkbenchAttachment = null;
         _selectedArtifact = deselect ? null : artifact;
         _artifactPreviewExpanded = !deselect;
     }
@@ -5555,21 +5622,13 @@
         var items = new List<PreviewItem>();
         foreach (var attachment in WorkbenchPendingAttachments)
         {
-            var previewUrl = attachment.PreviewUrl ?? attachment.Url;
-            if (string.IsNullOrWhiteSpace(previewUrl))
+            var preview = BuildWorkbenchAttachmentPreviewItem(attachment);
+            if (string.IsNullOrWhiteSpace(preview.Url))
             {
                 continue;
             }
 
-            items.Add(new PreviewItem(
-                "pending",
-                -1,
-                attachment.FileName,
-                AttachmentStatusLabel(attachment),
-                previewUrl,
-                Text("Attached file", "ไฟล์แนบ"),
-                UploadedPartIcon(attachment),
-                attachment.ContentType));
+            items.Add(preview);
         }
 
         for (var i = 0; i < UploadedParts.Count; i++)
@@ -5603,6 +5662,31 @@
         }
 
         return items;
+    }
+
+    private PreviewItem BuildWorkbenchAttachmentPreviewItem(ComposerAttachmentPreview attachment)
+    {
+        return new PreviewItem(
+            "pending",
+            -1,
+            attachment.FileName,
+            AttachmentStatusLabel(attachment),
+            attachment.PreviewUrl ?? attachment.Url ?? string.Empty,
+            WorkbenchAttachmentKindLabel(attachment),
+            UploadedPartIcon(attachment),
+            attachment.ContentType);
+    }
+
+    private string WorkbenchAttachmentKindLabel(ComposerAttachmentPreview attachment)
+    {
+        return attachment.Kind.ToLowerInvariant() switch
+        {
+            "cad" => Text("3D/CAD file", "ไฟล์ 3D/CAD"),
+            "sketch" => Text("Sketch", "สเก็ตช์"),
+            "drawing" => Text("Drawing", "แบบงาน"),
+            "photo" => Text("Image", "รูปภาพ"),
+            _ => Text("Attached file", "ไฟล์แนบ")
+        };
     }
 
     private async Task OpenNavigationDrawerAsync()
@@ -5989,6 +6073,14 @@
         }
     }
 
+    private async Task HandleWorkbenchUploadKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter" or " " or "Spacebar")
+        {
+            await RequestUploadAsync(UploadPickerAll);
+        }
+    }
+
     private async Task RequestUploadFromComposerMenuAsync()
     {
         _composerMenuOpen = false;
@@ -5999,6 +6091,7 @@
     private async Task SelectUploadedPartAsync(int index)
     {
         _selectedArtifact = null;
+        _selectedWorkbenchAttachment = null;
         _artifactPreviewExpanded = true;
         if (OnUploadedPartSelected.HasDelegate)
         {
@@ -7184,12 +7277,16 @@
 
     private static string WorkbenchArtifactKey(QuoteAgentArtifactDto artifact)
     {
+        if (artifact.ArtifactId != Guid.Empty)
+        {
+            return $"artifact:{artifact.ArtifactId:D}";
+        }
+
         return string.Join(
             '|',
             artifact.ArtifactType.Trim(),
             artifact.PartId?.ToString("D") ?? string.Empty,
-            artifact.Title.Trim(),
-            artifact.Url?.Trim() ?? string.Empty);
+            artifact.Title.Trim());
     }
 
     private string DfmChecksStatusLabel(QuotePartViewModel part)
