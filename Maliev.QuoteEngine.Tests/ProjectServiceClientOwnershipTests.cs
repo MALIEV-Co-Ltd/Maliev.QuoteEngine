@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Maliev.QuoteEngine.Bff.Clients;
+using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Maliev.QuoteEngine.Tests;
@@ -73,6 +74,92 @@ public sealed class ProjectServiceClientOwnershipTests
         Assert.NotNull(detail);
         Assert.Equal(new DateTimeOffset(createdAt, TimeSpan.Zero), detail.CreatedAt);
         Assert.Equal("fixture.step", Assert.Single(detail.Parts).FileName);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("0")]
+    public async Task GetProjectDetailAsync_MapsProjectServiceSupplementaryFilesAndPreservesUnknownVolume(string volumeJson)
+    {
+        var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        var partId = Guid.NewGuid();
+        var drawingId = Guid.NewGuid();
+        var supplementaryId = Guid.NewGuid();
+        var responseJson = $$"""
+            {
+              "id": "{{projectId:D}}",
+              "projectNumber": "PRJ-FILES-001",
+              "customerId": "{{ownerId:D}}",
+              "title": "Attachment truth fixture",
+              "status": "Draft",
+              "createdAt": "2026-07-08T08:30:00Z",
+              "updatedAt": "2026-07-10T09:45:00Z",
+              "parts": [
+                {
+                  "id": "{{partId:D}}",
+                  "fileName": "housing.step",
+                  "processType": "CncMilling",
+                  "materialCode": "AL6061",
+                  "quantity": 1,
+                  "volumeCm3": {{volumeJson}},
+                  "status": "DfmAnalysisReady",
+                  "drawingFiles": [
+                    {
+                      "fileId": "{{drawingId:D}}",
+                      "fileName": "housing-drawing.pdf",
+                      "storagePath": "customers/owner/drawings/housing-drawing.pdf",
+                      "signedUrl": "https://files.example.test/drawing",
+                      "sizeBytes": 4096,
+                      "contentType": "application/pdf",
+                      "uploadedAt": "2026-07-08T08:31:00Z"
+                    }
+                  ],
+                  "supplementaryFiles": [
+                    {
+                      "fileId": "{{supplementaryId:D}}",
+                      "fileName": "inspection-notes.txt",
+                      "storagePath": "customers/owner/support/inspection-notes.txt",
+                      "signedUrl": "https://files.example.test/notes",
+                      "sizeBytes": 512,
+                      "contentType": "text/plain",
+                      "uploadedAt": "2026-07-08T08:32:00Z"
+                    }
+                  ]
+                }
+              ]
+            }
+            """;
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(responseJson, System.Text.Encoding.UTF8, "application/json")
+        };
+        var handler = new RecordingHandler(response);
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://project.test") };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+
+        var detail = await client.GetProjectDetailAsync(ownerId, projectId, CancellationToken.None);
+
+        var part = Assert.Single(Assert.IsType<CustomerProjectDetailResponse>(detail).Parts);
+        Assert.Equal(0m, part.VolumeCc);
+        Assert.Collection(
+            part.DrawingFiles,
+            drawing =>
+            {
+                Assert.Equal("housing-drawing.pdf", drawing.FileName);
+                Assert.Equal("customers/owner/drawings/housing-drawing.pdf", drawing.StoragePath);
+                Assert.Equal("application/pdf", drawing.ContentType);
+                Assert.Equal(4096, drawing.FileSizeBytes);
+                Assert.Equal("Drawing", drawing.Kind);
+            },
+            supplementary =>
+            {
+                Assert.Equal("inspection-notes.txt", supplementary.FileName);
+                Assert.Equal("customers/owner/support/inspection-notes.txt", supplementary.StoragePath);
+                Assert.Equal("text/plain", supplementary.ContentType);
+                Assert.Equal(512, supplementary.FileSizeBytes);
+                Assert.Equal("Supplementary", supplementary.Kind);
+            });
     }
 
     [Fact]

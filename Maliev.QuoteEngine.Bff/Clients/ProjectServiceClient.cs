@@ -571,7 +571,7 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             InsertType = part.InsertType,
             InsertCount = part.InsertCount,
             Quantity = Math.Max(1, part.Quantity),
-            VolumeCc = Math.Max(0.01m, part.VolumeCm3 ?? 0.01m),
+            VolumeCc = Math.Max(0m, part.VolumeCm3 ?? 0m),
             SurfaceAreaCm2 = Math.Max(0m, part.SurfaceAreaCm2 ?? 0m),
             BoundingBoxMm = TryCreateBoundingBox(part.BoundingBoxX, part.BoundingBoxY, part.BoundingBoxZ),
             StoragePath = part.FileReference,
@@ -583,17 +583,20 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
             PartNotes = part.CustomNotes,
             BodyCount = part.BodyCount,
             SelectedBodyIndex = part.SelectedBodyIndex,
-            DrawingFiles = part.DrawingFiles.Select(ToQuoteAttachment).ToList()
+            DrawingFiles = part.DrawingFiles
+                .Select(attachment => ToQuoteAttachment(attachment, "Drawing"))
+                .Concat(part.SupplementaryFiles.Select(attachment => ToQuoteAttachment(attachment, "Supplementary")))
+                .ToList()
         };
     }
 
-    private static QuotePartAttachmentDto ToQuoteAttachment(ProjectServiceAttachmentResponse attachment) =>
+    private static QuotePartAttachmentDto ToQuoteAttachment(ProjectServiceAttachmentResponse attachment, string kind) =>
         new(
             attachment.FileName,
             attachment.StoragePath ?? string.Empty,
             attachment.ContentType ?? "application/octet-stream",
             attachment.SizeBytes ?? 0,
-            "Drawing");
+            kind);
 
     private static QuotePartBoundingBoxDto? TryCreateBoundingBox(decimal? x, decimal? y, decimal? z)
     {
@@ -662,14 +665,18 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
         public bool? IsManifold { get; set; }
         public string Status { get; set; } = string.Empty;
         public List<ProjectServiceAttachmentResponse> DrawingFiles { get; set; } = [];
+        public List<ProjectServiceAttachmentResponse> SupplementaryFiles { get; set; } = [];
     }
 
     private sealed class ProjectServiceAttachmentResponse
     {
+        public Guid? FileId { get; set; }
         public string FileName { get; set; } = string.Empty;
         public string? StoragePath { get; set; }
+        public string? SignedUrl { get; set; }
         public long? SizeBytes { get; set; }
         public string? ContentType { get; set; }
+        public DateTime? UploadedAt { get; set; }
     }
 }
 
