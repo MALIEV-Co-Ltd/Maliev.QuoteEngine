@@ -1611,32 +1611,15 @@
                                 <div class="qe-agent-upload-picker-section-label" role="presentation">@Text("Files", "ไฟล์")</div>
                                 @foreach (var option in UploadPickerOptions)
                                 {
-                                    if (!string.IsNullOrWhiteSpace(UploadInputElementId))
-                                    {
-                                        <label for="@UploadInputElementId"
-                                               role="menuitem"
-                                               tabindex="0"
-                                               data-upload-input-id="@UploadInputElementId"
-                                               data-upload-accept="@option.Accept">
-                                            <MudIcon Icon="@option.Icon" Size="Size.Small" />
-                                            <span>
-                                                <strong>@Text(option.LabelEn, option.LabelTh)</strong>
-                                                <small>@Text(option.DescriptionEn, option.DescriptionTh)</small>
-                                            </span>
-                                        </label>
-                                    }
-                                    else
-                                    {
-                                        <button type="button"
-                                                role="menuitem"
-                                                @onclick="@(() => RequestUploadAsync(option))">
-                                            <MudIcon Icon="@option.Icon" Size="Size.Small" />
-                                            <span>
-                                                <strong>@Text(option.LabelEn, option.LabelTh)</strong>
-                                                <small>@Text(option.DescriptionEn, option.DescriptionTh)</small>
-                                            </span>
-                                        </button>
-                                    }
+                                    <button type="button"
+                                            role="menuitem"
+                                            @onclick="@(() => RequestUploadAsync(option))">
+                                        <MudIcon Icon="@option.Icon" Size="Size.Small" />
+                                        <span>
+                                            <strong>@Text(option.LabelEn, option.LabelTh)</strong>
+                                            <small>@Text(option.DescriptionEn, option.DescriptionTh)</small>
+                                        </span>
+                                    </button>
                                 }
                                 <hr class="qe-agent-upload-picker-divider" />
                                 <div class="qe-agent-upload-picker-section-label" role="presentation">@Text("Tools", "เครื่องมือ")</div>
@@ -1746,11 +1729,30 @@
                         </span>
                     </span>
                 </div>
-                <div class="qe-agent-composer-tooltip qe-agent-send-tooltip">
+                <div class="@VoiceTriggerTooltipClass">
+                    <button type="button"
+                            @ref="_voiceButton"
+                            class="@VoiceTriggerButtonClass"
+                            aria-describedby="qe-agent-voice-tooltip"
+                            aria-label="@VoiceTriggerTitle"
+                            aria-pressed="@_dictating"
+                            disabled="@_dictationUnsupported">
+                        <span class="qe-agent-voice-wave" aria-hidden="true">
+                            <i></i><i></i><i></i><i></i><i></i>
+                        </span>
+                    </button>
+                    <span id="qe-agent-voice-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
+                        <span class="qe-agent-tooltip-content">
+                            <span>@VoiceTriggerTitle</span>
+                        </span>
+                    </span>
+                </div>
+                <div class="@SendTooltipClass">
                     <button type="submit"
                             class="qe-agent-send-btn"
                             aria-describedby="qe-agent-send-tooltip"
                             aria-label="@ComposerSendTooltip"
+                            aria-busy="@(_sending ? "true" : "false")"
                             disabled="@IsComposerSendDisabled">
                         @if (_sending)
                         {
@@ -1765,7 +1767,7 @@
                     <span id="qe-agent-send-tooltip" class="qe-agent-tooltip-panel" role="tooltip">
                         <span class="qe-agent-tooltip-content">
                             <span>@ComposerSendTooltip</span>
-                            @if (!HasPendingComposerUpload && !_sending)
+                            @if (!HasPendingComposerUpload && !_sending && HasComposerSubmitContent)
                             {
                                 <kbd>Enter</kbd>
                             }
@@ -2947,6 +2949,7 @@
     private ElementReference _composerTextarea;
     private ElementReference _searchInput;
     private ElementReference _dictationButton;
+    private ElementReference _voiceButton;
     private ElementReference _googleIdentityHost;
     private bool _dictationUnsupported;
     private ElementReference _threadElement;
@@ -3067,11 +3070,28 @@
     private bool HasPendingComposerUpload =>
         UploadedParts.Any(IsAuthoritativeUploadPending) ||
         _pendingComposerAttachments.Any(IsComposerUploadPending);
+    private bool HasComposerSubmitContent =>
+        !string.IsNullOrWhiteSpace(_draftMessage) || _pendingComposerAttachments.Count > 0;
     private bool IsAgentBackendConnected => _agentBackendStatus == AgentBackendStatus.Connected;
-    private bool IsComposerSendDisabled => _sending || _drivePickerOpening || IsDictationActive || HasPendingComposerUpload;
+    private bool ShowComposerVoiceTrigger =>
+        !_dictationUnsupported &&
+        (IsDictationActive ||
+         (!_sending && !_drivePickerOpening && !HasPendingComposerUpload && !HasComposerSubmitContent));
+    private bool IsComposerSendDisabled =>
+        _sending || _drivePickerOpening || IsDictationActive || HasPendingComposerUpload || !HasComposerSubmitContent;
     private string ComposerSendTooltip => HasPendingComposerUpload ? Text("Uploading", "กำลังอัปโหลด")
         : _sending ? Text("Sending", "กำลังส่ง")
+        : !HasComposerSubmitContent ? Text("Write a message", "เขียนข้อความ")
         : Text("Send message", "ส่งข้อความ");
+    private string VoiceTriggerTitle => IsDictationActive
+        ? Text("Stop voice", "หยุดใช้เสียง")
+        : Text("Use voice", "ใช้เสียง");
+    private string VoiceTriggerTooltipClass =>
+        $"qe-agent-composer-tooltip qe-agent-send-tooltip qe-agent-voice-tooltip{(ShowComposerVoiceTrigger ? string.Empty : " is-hidden")}";
+    private string SendTooltipClass =>
+        $"qe-agent-composer-tooltip qe-agent-send-tooltip{(ShowComposerVoiceTrigger ? " is-hidden" : string.Empty)}";
+    private string VoiceTriggerButtonClass =>
+        $"qe-agent-send-btn qe-agent-voice-btn{(_dictating ? " active" : string.Empty)}{(_dictationProcessing ? " processing" : string.Empty)}";
     private string ComposerWrapClass => $"qe-agent-composer-wrap{(IsDictationActive ? " qe-agent-composer-wrap--dictation-active" : string.Empty)}";
     private bool DriveMentionActive => ContainsDriveMention(_draftMessage);
     private string DriveMentionToken => "@drive";
@@ -4007,8 +4027,9 @@
         {
             _composerDotNetRef = DotNetObjectReference.Create(this);
             _composerModule = await Js.InvokeAsync<IJSObjectReference>("import", "/js/quote-agent-composer.js");
-            await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef, _dictationButton);
+            await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef, _dictationButton, _voiceButton);
             _dictationUnsupported = !await _composerModule.InvokeAsync<bool>("isSpeechRecognitionSupported");
+            await InvokeAsync(StateHasChanged);
             await _composerModule.InvokeVoidAsync("focusComposer", _composerTextarea);
 
             try
@@ -4027,7 +4048,7 @@
             var hasHandlers = await _composerModule.InvokeAsync<bool>("isComposerInitialized", _composerTextarea);
             if (!hasHandlers)
             {
-                await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef, _dictationButton);
+                await _composerModule.InvokeVoidAsync("initComposer", _composerTextarea, _composerDotNetRef, _dictationButton, _voiceButton);
             }
         }
 
@@ -8750,7 +8771,7 @@
         }
 
         state.IsExpanded = !state.IsExpanded;
-        if (state.IsExpanded && state.Detail is null && !state.IsLoading)
+        if (state.IsExpanded && !state.IsLoading)
         {
             await LoadProjectDetailAsync(project, state);
         }

@@ -122,6 +122,133 @@
                     </div>
                 </dl>
 
+                <div class="qe-agent-project-detail-toolbar">
+                    <span>@Text("Live project snapshot", "ข้อมูลโปรเจกต์ล่าสุด")</span>
+                    <button type="button" disabled="@IsLoading" @onclick="OnRetry">
+                        <MudIcon Icon="@Icons.Material.Outlined.Refresh" Size="Size.Small" />
+                        <span>@Text("Refresh", "รีเฟรช")</span>
+                    </button>
+                </div>
+
+                @if (Detail.DataWarnings.Count > 0)
+                {
+                    <div class="qe-agent-project-data-warnings" role="status">
+                        <MudIcon Icon="@Icons.Material.Outlined.CloudOff" Size="Size.Small" />
+                        <div>
+                            <span>@Text("Some project records could not be refreshed", "ไม่สามารถรีเฟรชข้อมูลโปรเจกต์บางส่วนได้")</span>
+                            @foreach (var warning in Detail.DataWarnings)
+                            {
+                                <small><strong>@warning.Source:</strong> @warning.Message</small>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @if (Detail.Quote is not null || Detail.Order is not null || Detail.Invoice is not null ||
+                     Detail.Receipts.Count > 0 || Detail.Documents.Count > 0)
+                {
+                    <section class="qe-agent-project-commercial" aria-label="@Text("Commercial records", "เอกสารการค้า")">
+                        <header>
+                            <span>@Text("Quote and order records", "ข้อมูลใบเสนอราคาและคำสั่งซื้อ")</span>
+                            <small>@Text("Customer-owned records linked through this project", "ข้อมูลของลูกค้าที่เชื่อมโยงผ่านโปรเจกต์นี้")</small>
+                        </header>
+                        <div class="qe-agent-project-commercial-grid">
+                            @if (Detail.Quote is { } quote)
+                            {
+                                <article>
+                                    <span class="qe-agent-project-record-icon"><MudIcon Icon="@Icons.Material.Outlined.RequestQuote" Size="Size.Small" /></span>
+                                    <div>
+                                        <small>@Text("Formal quote", "ใบเสนอราคา")</small>
+                                        <strong>@quote.QuoteNumber</strong>
+                                        <span>@HumanizeCode(quote.Status) · @FormatMoney(quote.Total, quote.Currency)</span>
+                                        <time datetime="@quote.UpdatedAt.ToString("O", CultureInfo.InvariantCulture)">@FormatDate(quote.UpdatedAt)</time>
+                                    </div>
+                                    @if (CanOpenUrl(quote.PdfUrl))
+                                    {
+                                        <a href="@quote.PdfUrl" target="_blank" rel="noopener noreferrer">@Text("View PDF", "ดู PDF")</a>
+                                    }
+                                </article>
+                            }
+                            @if (Detail.Order is { } order)
+                            {
+                                <article>
+                                    <span class="qe-agent-project-record-icon"><MudIcon Icon="@Icons.Material.Outlined.Inventory2" Size="Size.Small" /></span>
+                                    <div>
+                                        <small>@Text("Order", "คำสั่งซื้อ")</small>
+                                        <strong>@order.OrderNumber</strong>
+                                        <span>@HumanizeCode(order.CurrentStatus) · @Text("Payment", "การชำระเงิน") @HumanizeCode(order.PaymentStatus)</span>
+                                        <time datetime="@order.CreatedAt.ToString("O", CultureInfo.InvariantCulture)">@FormatDate(order.CreatedAt)</time>
+                                    </div>
+                                    <a href="@OrderHref(order.OrderNumber)">@Text("Open", "เปิด")</a>
+                                </article>
+                            }
+                            @if (Detail.Invoice is { } invoice)
+                            {
+                                <article>
+                                    <span class="qe-agent-project-record-icon"><MudIcon Icon="@Icons.Material.Outlined.ReceiptLong" Size="Size.Small" /></span>
+                                    <div>
+                                        <small>@Text("Invoice", "ใบแจ้งหนี้")</small>
+                                        <strong>@invoice.InvoiceNumber</strong>
+                                        <span>@HumanizeCode(invoice.Status) · @FormatMoney(invoice.Total, invoice.Currency)</span>
+                                    @if (invoice.IssueDate is { } issueDate)
+                                    {
+                                        <time datetime="@issueDate.ToString("O", CultureInfo.InvariantCulture)">@FormatDate(issueDate)</time>
+                                    }
+                                </div>
+                                @if (CanOpenUrl(invoice.DocumentUrl))
+                                {
+                                    <a href="@invoice.DocumentUrl" target="_blank" rel="noopener noreferrer">@Text("View PDF", "ดู PDF")</a>
+                                }
+                            </article>
+                            }
+                            @foreach (var receipt in Detail.Receipts)
+                            {
+                                <article>
+                                    <span class="qe-agent-project-record-icon"><MudIcon Icon="@Icons.Material.Outlined.TaskAlt" Size="Size.Small" /></span>
+                                    <div>
+                                        <small>@Text("Receipt", "ใบเสร็จรับเงิน")</small>
+                                        <strong>@receipt.ReceiptNumber</strong>
+                                        <span>@HumanizeCode(receipt.Status) · @FormatMoney(receipt.Total, receipt.Currency)</span>
+                                    <time datetime="@receipt.IssueDate.ToString("O", CultureInfo.InvariantCulture)">@FormatDate(receipt.IssueDate)</time>
+                                </div>
+                                @if (CanOpenUrl(receipt.DocumentUrl))
+                                {
+                                    <a href="@receipt.DocumentUrl" target="_blank" rel="noopener noreferrer">@Text("View PDF", "ดู PDF")</a>
+                                }
+                            </article>
+                            }
+                        </div>
+
+                        @if (Detail.Documents.Count > 0 || Detail.Order?.OrderFiles.Count > 0)
+                        {
+                            <div class="qe-agent-project-linked-documents">
+                                <span>@Text("Linked documents", "เอกสารที่เชื่อมโยง")</span>
+                                <ul>
+                                    @foreach (var document in Detail.Documents)
+                                    {
+                                        <li>
+                                            <MudIcon Icon="@Icons.Material.Outlined.Description" Size="Size.Small" />
+                                            <span>@document.FileName</span>
+                                            <small>@HumanizeCode(document.Kind) · @FormatDate(document.UploadedAt)</small>
+                                        </li>
+                                    }
+                                    @if (Detail.Order is { } orderWithFiles)
+                                    {
+                                        @foreach (var file in orderWithFiles.OrderFiles)
+                                        {
+                                            <li>
+                                                <MudIcon Icon="@Icons.Material.Outlined.AttachFile" Size="Size.Small" />
+                                                <span>@file.FileName</span>
+                                                <small>@HumanizeCode(FirstNonEmpty(file.FileRole, file.FileCategory)) · @FormatFileSize(file.FileSizeBytes)</small>
+                                            </li>
+                                        }
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    </section>
+                }
+
                 <section class="qe-agent-project-files" aria-label="@Text("Project files", "ไฟล์โปรเจกต์")">
                     <header>
                         <span>@Text("Files", "ไฟล์")</span>
@@ -158,15 +285,22 @@
                                         <div><dt>@Text("Process", "กระบวนการ")</dt><dd>@HumanizeCode(part.ProcessId)</dd></div>
                                         <div><dt>@Text("Material", "วัสดุ")</dt><dd>@HumanizeCode(part.MaterialId)</dd></div>
                                         <div><dt>@Text("Quantity", "จำนวน")</dt><dd>@part.Quantity</dd></div>
-                                        <div><dt>@Text("Analysis", "การวิเคราะห์")</dt><dd>@HumanizeCode(part.Status)</dd></div>
+                                        <div>
+                                            <dt>@Text("Analysis", "การวิเคราะห์")</dt>
+                                            <dd>@(string.IsNullOrWhiteSpace(part.Status)
+                                                    ? Text("Not analyzed", "ยังไม่ได้วิเคราะห์")
+                                                    : QuoteAgentUiHelpers.FormatCustomerStatus(part.Status))</dd>
+                                        </div>
                                         @if (part.BoundingBoxMm is { } bounds)
                                         {
                                             <div><dt>@Text("Size", "ขนาด")</dt><dd>@FormatDimensions(bounds)</dd></div>
                                         }
-                                        @if (part.VolumeCc > 0)
-                                        {
-                                            <div><dt>@Text("Volume", "ปริมาตร")</dt><dd>@FormatNumber(part.VolumeCc) cm³</dd></div>
-                                        }
+                                        <div>
+                                            <dt>@Text("Volume", "ปริมาตร")</dt>
+                                            <dd>@(part.VolumeCc > 0
+                                                    ? QuoteAgentUiHelpers.FormatVolume(part.VolumeCc)
+                                                    : Text("Not analyzed", "ยังไม่ได้วิเคราะห์"))</dd>
+                                        </div>
                                         @if (part.SurfaceAreaCm2 > 0)
                                         {
                                             <div><dt>@Text("Surface area", "พื้นที่ผิว")</dt><dd>@FormatNumber(part.SurfaceAreaCm2) cm²</dd></div>
@@ -337,10 +471,18 @@
         return $"{bytes} B";
     }
 
-    private static bool CanRenderThumbnail(string? url) =>
+    private static bool CanRenderThumbnail(string? url) => CanOpenUrl(url);
+
+    private static bool CanOpenUrl(string? url) =>
         !string.IsNullOrWhiteSpace(url) &&
         (url.StartsWith("/", StringComparison.Ordinal) ||
          Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "https" or "http");
+
+    private static string OrderHref(string orderNumber) =>
+        $"/orders/{Uri.EscapeDataString(orderNumber)}";
+
+    private static string FormatMoney(decimal amount, string currency) =>
+        $"{amount.ToString("N2", CultureInfo.InvariantCulture)} {currency}";
 
     private static string? FirstNonEmpty(params string?[] values) =>
         values.FirstOrDefault(value => !string.IsNullOrWhiteSpace(value))?.Trim();

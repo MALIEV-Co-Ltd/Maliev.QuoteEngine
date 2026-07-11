@@ -94,6 +94,8 @@ public sealed class QuoteAgentProjectManagementSourceTests
 
         Assert.Contains("<QuoteProjectManagementRow", shell, StringComparison.Ordinal);
         Assert.Contains("ToggleProjectDetailAsync", shell, StringComparison.Ordinal);
+        Assert.Contains("if (state.IsExpanded && !state.IsLoading)", shell, StringComparison.Ordinal);
+        Assert.DoesNotContain("state.IsExpanded && state.Detail is null", shell, StringComparison.Ordinal);
         Assert.Contains("Api.GetProjectDetailAsync(project.ProjectId", shell, StringComparison.Ordinal);
         Assert.Contains("ProjectManagementDetailState", shell, StringComparison.Ordinal);
 
@@ -110,6 +112,56 @@ public sealed class QuoteAgentProjectManagementSourceTests
         Assert.Contains("public DateTimeOffset? CreatedAt { get; init; }", sharedDtos, StringComparison.Ordinal);
         Assert.Contains("CreatedAt = project.CreatedAt == default", projectClient, StringComparison.Ordinal);
         Assert.Contains("new DateTimeOffset(project.CreatedAt, TimeSpan.Zero)", projectClient, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Expanded_project_files_use_customer_safe_analysis_and_adaptive_volume_labels()
+    {
+        var row = ReadRepoFile(
+            "Maliev.QuoteEngine.Client",
+            "Components",
+            "QuoteAgent",
+            "QuoteProjectManagementRow.razor");
+
+        Assert.Contains("QuoteAgentUiHelpers.FormatCustomerStatus(part.Status)", row, StringComparison.Ordinal);
+        Assert.Contains("QuoteAgentUiHelpers.FormatVolume(part.VolumeCc)", row, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Not analyzed\", \"ยังไม่ได้วิเคราะห์\")", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("HumanizeCode(part.Status)", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("@FormatNumber(part.VolumeCc) cm³", row, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Expanded_project_row_renders_only_service_backed_commercial_records()
+    {
+        var row = ReadRepoFile(
+            "Maliev.QuoteEngine.Client",
+            "Components",
+            "QuoteAgent",
+            "QuoteProjectManagementRow.razor");
+        var sharedDtos = ReadRepoFile(
+            "Maliev.QuoteEngine.Shared",
+            "Quotes",
+            "QuoteEngineDtos.cs");
+
+        Assert.Contains("Detail.Quote", row, StringComparison.Ordinal);
+        Assert.Contains("Detail.Order", row, StringComparison.Ordinal);
+        Assert.Contains("Detail.Invoice", row, StringComparison.Ordinal);
+        Assert.Contains("Detail.Receipts", row, StringComparison.Ordinal);
+        Assert.Contains("Detail.Documents", row, StringComparison.Ordinal);
+        Assert.Contains("Detail.DataWarnings", row, StringComparison.Ordinal);
+        Assert.Contains("Live project snapshot", row, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"OnRetry\"", row, StringComparison.Ordinal);
+        Assert.Contains("invoice.DocumentUrl", row, StringComparison.Ordinal);
+        Assert.Contains("receipt.DocumentUrl", row, StringComparison.Ordinal);
+        Assert.Contains("orderWithFiles.OrderFiles", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("placeholder", row, StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("public CustomerQuoteSummaryDto? Quote", sharedDtos, StringComparison.Ordinal);
+        Assert.Contains("public CustomerOrderDetailDto? Order", sharedDtos, StringComparison.Ordinal);
+        Assert.Contains("public CustomerProjectInvoiceDto? Invoice", sharedDtos, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<CustomerProjectReceiptDto> Receipts", sharedDtos, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<CustomerDocumentDto> Documents", sharedDtos, StringComparison.Ordinal);
+        Assert.Contains("public IReadOnlyList<CustomerProjectDataWarningDto> DataWarnings", sharedDtos, StringComparison.Ordinal);
     }
 
     private static string ReadRepoFile(params string[] relativePathParts)

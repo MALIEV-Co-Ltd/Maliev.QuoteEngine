@@ -1410,7 +1410,8 @@ public sealed class QuoteEngineSourceTests
         Assert.DoesNotContain("_error = ex.Message;", component, StringComparison.Ordinal);
         Assert.Contains("I can still help collect requirements", component, StringComparison.Ordinal);
         Assert.Contains("part.ThumbnailUrl", component, StringComparison.Ordinal);
-        Assert.Contains("qe-agent-artifact-thumb", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-upload-preview", component, StringComparison.Ordinal);
+        Assert.Contains("part.LocalThumbnailDataUrl ?? part.ThumbnailUrl", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-markdown\"", component, StringComparison.Ordinal);
         Assert.Contains("class=\"qe-agent-reasoning-summary\"", component, StringComparison.Ordinal);
         Assert.Contains("assistantMessage.Content = streamEvent.Response.AssistantText;", component, StringComparison.Ordinal);
@@ -1452,7 +1453,12 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("qe-agent-dictation-spinner", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-dictation-meter", component, StringComparison.Ordinal);
         Assert.Contains("DictationMeterBarCount = 320", component, StringComparison.Ordinal);
-        Assert.Contains("IsComposerSendDisabled => _sending || _drivePickerOpening || IsDictationActive || HasPendingComposerUpload", component, StringComparison.Ordinal);
+        Assert.Contains("HasPendingComposerUpload || !HasComposerSubmitContent", component, StringComparison.Ordinal);
+        Assert.Contains("private bool ShowComposerVoiceTrigger", component, StringComparison.Ordinal);
+        Assert.Contains("@ref=\"_voiceButton\"", component, StringComparison.Ordinal);
+        Assert.Contains("qe-agent-voice-wave", component, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Use voice\", \"ใช้เสียง\")", component, StringComparison.Ordinal);
+        Assert.Contains("Text(\"Stop voice\", \"หยุดใช้เสียง\")", component, StringComparison.Ordinal);
         Assert.DoesNotContain("|| !IsAgentBackendConnected", component, StringComparison.Ordinal);
         Assert.Contains("ComposerWrapClass", component, StringComparison.Ordinal);
         Assert.Contains("lang=\"@SpeechRecognitionLanguage\"", component, StringComparison.Ordinal);
@@ -1520,7 +1526,7 @@ public sealed class QuoteEngineSourceTests
             component,
             "if (firstRender)",
             "else if (_composerModule is not null)");
-        Assert.Contains("InvokeVoidAsync(\"initComposer\", _composerTextarea, _composerDotNetRef, _dictationButton)", firstRenderBlock, StringComparison.Ordinal);
+        Assert.Contains("InvokeVoidAsync(\"initComposer\", _composerTextarea, _composerDotNetRef, _dictationButton, _voiceButton)", firstRenderBlock, StringComparison.Ordinal);
         Assert.Contains("InvokeVoidAsync(\"focusComposer\", _composerTextarea)", firstRenderBlock, StringComparison.Ordinal);
         Assert.Contains("class=\"@UseCaseListClass\"", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-search-panel", agentStyles, StringComparison.Ordinal);
@@ -1811,9 +1817,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("border-left: 1px solid var(--qe-agent-line);", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.Contains("border-radius: 14px 0 0 0;", artifactDrawerBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("border-radius: 14px 0 0 14px;", artifactDrawerBlock, StringComparison.Ordinal);
-        Assert.Contains("grid-template-rows: auto minmax(0, 1fr);", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-preview-shell {", ".qe-agent-artifact-preview-shell > *"), StringComparison.Ordinal);
+        var artifactPreviewShellBlock = ExtractSourceBlock(agentStyles, ".qe-agent-artifact-preview-shell {", ".qe-agent-artifact-preview-shell > *");
+        Assert.Contains("display: grid;", artifactPreviewShellBlock, StringComparison.Ordinal);
+        Assert.Contains("min-width: 0;", artifactPreviewShellBlock, StringComparison.Ordinal);
         Assert.Contains("grid-template-rows: auto minmax(0, 1fr);", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer {", ".qe-agent-artifact-viewer > header"), StringComparison.Ordinal);
-        Assert.Contains("height: 100%;", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer-canvas {", ".qe-agent-artifact-viewer-canvas .qe-viewer-wrap"), StringComparison.Ordinal);
+        Assert.Contains("height: clamp(260px, 34dvh, 380px);", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer-canvas {", ".qe-agent-artifact-viewer-canvas .qe-viewer-wrap"), StringComparison.Ordinal);
         Assert.Contains("height: 100%;", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer-canvas .qe-viewer-wrap {", ".qe-agent-artifact-viewer-canvas .qe-viewer-toolbar"), StringComparison.Ordinal);
         Assert.Contains("white-space: normal;", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer-metadata {", ".qe-agent-artifact-metadata {"), StringComparison.Ordinal);
         Assert.Contains("grid-template-columns: minmax(0, 1fr) auto;", ExtractSourceBlock(agentStyles, ".qe-agent-artifact-viewer > header {", ".qe-agent-artifact-viewer > header div"), StringComparison.Ordinal);
@@ -2292,8 +2300,6 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("@Text(\"Tools\", \"เครื่องมือ\")", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("@Text(\"Plugins\", \"ปลั๊กอิน\")", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("role=\"menuitem\"", addButtonBlock, StringComparison.Ordinal);
-        Assert.Contains("for=\"@UploadInputElementId\"", addButtonBlock, StringComparison.Ordinal);
-        Assert.Contains("data-upload-accept=\"@option.Accept\"", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("RequestUploadAsync(option)", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("OpenSketchAsync", addButtonBlock, StringComparison.Ordinal);
         Assert.Contains("ApplyConnectorFromPluginsAsync(connector)", addButtonBlock, StringComparison.Ordinal);
@@ -2304,11 +2310,10 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAgentLaunchShell_upload_picker_options_use_native_file_input_activation()
+    public void QuoteAgentLaunchShell_upload_picker_options_use_callback_activation()
     {
         var workspace = ReadRepoFile("Maliev.QuoteEngine.Client", "Pages", "QuoteWorkspace.razor");
         var component = ReadRepoFile("Maliev.QuoteEngine.Client", "Components", "QuoteAgent", "QuoteAgentLaunchShell.razor");
-        var uploadScript = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "js", "quote-upload.js");
         var styles = ReadRepoFile("Maliev.QuoteEngine.Client", "wwwroot", "css", "app.css");
         var addPickerBlock = ExtractSourceBlock(component, "class=\"qe-agent-upload-picker-menu\"", "<span id=\"qe-agent-add-tooltip\"");
         var uploadPickerRowStyleBlock = ExtractSourceBlock(styles, ".qe-agent-upload-picker-menu button,", ".qe-agent-upload-picker-menu button:hover");
@@ -2319,23 +2324,20 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("AcceptForCategory(UploadPicker3d)", component, StringComparison.Ordinal);
         Assert.Contains("AcceptForCategory(UploadPickerImages)", component, StringComparison.Ordinal);
         Assert.Contains("AcceptForCategory(UploadPickerAll)", component, StringComparison.Ordinal);
-        Assert.Contains("<label", addPickerBlock, StringComparison.Ordinal);
-        Assert.Contains("for=\"@UploadInputElementId\"", addPickerBlock, StringComparison.Ordinal);
-        Assert.Contains("data-upload-accept=\"@option.Accept\"", addPickerBlock, StringComparison.Ordinal);
+        Assert.Contains("<button type=\"button\"", addPickerBlock, StringComparison.Ordinal);
+        Assert.Contains("@onclick=\"@(() => RequestUploadAsync(option))\"", addPickerBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("<label", addPickerBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-quick-actions-menu\"", component, StringComparison.Ordinal);
-        Assert.Contains("syncNativeUploadPickerTrigger", uploadScript, StringComparison.Ordinal);
-        Assert.Contains("document.addEventListener(\"click\", syncNativeUploadPickerTrigger, true);", uploadScript, StringComparison.Ordinal);
-        Assert.Contains("trigger.dataset.uploadAccept", uploadScript, StringComparison.Ordinal);
-        Assert.Contains("event.preventDefault();", uploadScript, StringComparison.Ordinal);
-        Assert.Contains("input.click();", uploadScript, StringComparison.Ordinal);
+        Assert.Contains("await OnUploadRequested.InvokeAsync(pickerCategory);", component, StringComparison.Ordinal);
+        Assert.Contains("private async Task OpenFilePickerAsync(string pickerCategory)", workspace, StringComparison.Ordinal);
         Assert.Contains("data-tooltip-suppressed=\"@(_uploadPickerMenuOpen ? \"true\" : \"false\")\"", component, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-composer-tooltip[data-tooltip-suppressed=\"true\"] .qe-agent-tooltip-panel", styles, StringComparison.Ordinal);
-        Assert.Contains(".qe-agent-upload-picker-menu label", styles, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-upload-picker-menu button", styles, StringComparison.Ordinal);
         Assert.Contains("bottom: calc(100% + 58px);", styles, StringComparison.Ordinal);
         Assert.Contains("min-height: 36px;", uploadPickerRowStyleBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-main--empty .qe-agent-upload-picker-menu", styles, StringComparison.Ordinal);
         Assert.Contains("top: calc(100% + 16px);", styles, StringComparison.Ordinal);
-        Assert.Contains("max-height: min(42dvh, 360px);", styles, StringComparison.Ordinal);
+        Assert.Contains("max-height: min(44dvh, 390px);", styles, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2437,6 +2439,11 @@ public sealed class QuoteEngineSourceTests
         var reasoningStyleBlock = ExtractSourceBlock(styles, ".qe-agent-reasoning {", ".qe-agent-reasoning-summary {");
         Assert.Contains("background: transparent;", reasoningStyleBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("color-mix", reasoningStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("interpolate-size: allow-keywords;", reasoningStyleBlock, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-reasoning::details-content", reasoningStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("block-size 190ms", reasoningStyleBlock, StringComparison.Ordinal);
+        Assert.Contains(".qe-agent-reasoning[open]::details-content", reasoningStyleBlock, StringComparison.Ordinal);
+        Assert.Contains("block-size: auto;", reasoningStyleBlock, StringComparison.Ordinal);
         Assert.Contains(".qe-agent-reasoning-stream", styles, StringComparison.Ordinal);
     }
 
@@ -3629,7 +3636,7 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("<QuoteAgentLaunchShell", workspace, StringComparison.Ordinal);
         Assert.Contains("UploadedParts=\"@_parts\"", workspace, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"qe-agent-upload-strip\"", agentShell, StringComparison.Ordinal);
-        Assert.Contains("class=\"qe-agent-artifact-section\"", agentShell, StringComparison.Ordinal);
+        Assert.Contains("class=\"qe-agent-workbench-files\"", agentShell, StringComparison.Ordinal);
         Assert.Contains("UploadedPartStatus", agentShell, StringComparison.Ordinal);
         Assert.Contains("UploadedPartIcon", agentShell, StringComparison.Ordinal);
         Assert.DoesNotContain("<QeQuoteSummaryBar", workspace, StringComparison.Ordinal);
