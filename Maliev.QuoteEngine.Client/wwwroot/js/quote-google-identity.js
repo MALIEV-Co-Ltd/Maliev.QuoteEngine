@@ -49,7 +49,7 @@ export async function renderButton(host, dotNetReference, config, language) {
         nonce: config.nonce,
         auto_select: false,
         cancel_on_tap_outside: true,
-        use_fedcm_for_prompt: true,
+        use_fedcm_for_button: true,
         callback: async response => {
             if (!response?.credential) {
                 await dotNetReference.invokeMethodAsync(

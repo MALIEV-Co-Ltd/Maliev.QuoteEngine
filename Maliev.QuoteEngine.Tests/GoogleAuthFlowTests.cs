@@ -254,6 +254,8 @@ public sealed class GoogleAuthFlowTests
         Assert.Contains("globalThis.google.accounts.id", script, StringComparison.Ordinal);
         Assert.Contains("identity.initialize", script, StringComparison.Ordinal);
         Assert.Contains("identity.renderButton", script, StringComparison.Ordinal);
+        Assert.Contains("use_fedcm_for_button: true", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("use_fedcm_for_prompt", script, StringComparison.Ordinal);
         Assert.Contains("nonce:", script, StringComparison.Ordinal);
     }
 
