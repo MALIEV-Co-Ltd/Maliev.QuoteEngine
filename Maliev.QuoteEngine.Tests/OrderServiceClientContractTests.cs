@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Maliev.QuoteEngine.Bff.Clients;
+using Maliev.QuoteEngine.Shared.Account;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Maliev.QuoteEngine.Tests;
@@ -58,6 +59,259 @@ public sealed class OrderServiceClientContractTests
         Assert.Equal(quoteVersionId, body.GetProperty("quoteVersionId").GetGuid());
         Assert.Equal(2, body.GetProperty("quoteVersionNumber").GetInt32());
         Assert.Equal("PO-QUOTE-TOTAL", body.GetProperty("customerPoNumber").GetString());
+    }
+
+    [Fact]
+    public async Task GetByCustomerAsync_PreservesFormalQuoteLinkageForProjectAggregation()
+    {
+        var quoteId = Guid.NewGuid();
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                items = new[]
+                {
+                    new
+                    {
+                        orderId = "ORD-2026-00046",
+                        customerId = "customer-46",
+                        currentStatus = "Manufacturing",
+                        updatedAt = DateTime.UtcNow,
+                        quotedAmount = 535m,
+                        quoteCurrency = "THB",
+                        quoteId,
+                        quoteNumber = "QT-2026-00046"
+                    }
+                }
+            })
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var result = await client.GetByCustomerAsync("customer-46");
+
+        var order = Assert.Single(result);
+        Assert.Equal("ORD-2026-00046", order.OrderNumber);
+        Assert.Equal(quoteId, order.QuoteId);
+        Assert.Equal("QT-2026-00046", order.QuoteNumber);
+    }
+
+    [Fact]
+    public async Task GetByCustomerAsync_DropsRowsThatDoNotBelongToTheRequestedCustomer()
+    {
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                items = new[]
+                {
+                    new
+                    {
+                        orderId = "ORD-OWNED",
+                        customerId = "customer-46",
+                        currentStatus = "Manufacturing",
+                        updatedAt = DateTime.UtcNow
+                    },
+                    new
+                    {
+                        orderId = "ORD-FOREIGN",
+                        customerId = "customer-99",
+                        currentStatus = "Manufacturing",
+                        updatedAt = DateTime.UtcNow
+                    }
+                }
+            })
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var result = await client.GetByCustomerAsync("customer-46");
+
+        var order = Assert.Single(result);
+        Assert.Equal("ORD-OWNED", order.OrderNumber);
+    }
+
+    [Fact]
+    public async Task LookupByCustomerAsync_ReadsEveryPageAndDropsForeignRows()
+    {
+        var targetQuoteId = Guid.NewGuid();
+        var firstPage = Enumerable.Range(1, 100)
+            .Select(index => new
+            {
+                orderId = index == 100 ? "ORD-FOREIGN" : $"ORD-OWNED-{index:000}",
+                customerId = index == 100 ? "customer-99" : "customer-46",
+                currentStatus = "Manufacturing",
+                updatedAt = DateTime.UtcNow,
+                quotedAmount = (decimal?)535m,
+                quoteCurrency = "THB",
+                quoteId = (Guid?)null,
+                quoteNumber = (string?)null
+            })
+            .ToArray();
+        using var handler = new SequentialHandler(
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    items = firstPage,
+                    totalPages = 2
+                })
+            },
+            new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    items = new[]
+                    {
+                        new
+                        {
+                            orderId = "ORD-TARGET",
+                            customerId = "customer-46",
+                            currentStatus = "Quoted",
+                            updatedAt = DateTime.UtcNow,
+                            quotedAmount = (decimal?)535m,
+                            quoteCurrency = "THB",
+                            quoteId = (Guid?)targetQuoteId,
+                            quoteNumber = "QT-TARGET"
+                        }
+                    },
+                    totalPages = 2
+                })
+            });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var lookup = await client.LookupByCustomerAsync("customer-46");
+
+        Assert.True(lookup.IsAvailable);
+        Assert.Equal(100, lookup.Value.Count);
+        Assert.DoesNotContain(lookup.Value, order => order.OrderNumber == "ORD-FOREIGN");
+        Assert.Contains(lookup.Value, order => order.QuoteId == targetQuoteId);
+        Assert.Equal(
+            [
+                "/order/v1/orders?customerId=customer-46&page=1&pageSize=100",
+                "/order/v1/orders?customerId=customer-46&page=2&pageSize=100"
+            ],
+            handler.RequestTargets);
+    }
+
+    [Fact]
+    public async Task LookupByCustomerAsync_EmptyPageIsAvailable()
+    {
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(new
+            {
+                items = Array.Empty<object>(),
+                totalPages = 0
+            })
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var lookup = await client.LookupByCustomerAsync("customer-46");
+
+        Assert.True(lookup.IsAvailable);
+        Assert.Empty(lookup.Value);
+    }
+
+    [Fact]
+    public async Task LookupByCustomerAsync_NonSuccessIsUnavailable()
+    {
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var lookup = await client.LookupByCustomerAsync("customer-46");
+
+        Assert.False(lookup.IsAvailable);
+        Assert.Empty(lookup.Value);
+    }
+
+    [Fact]
+    public async Task LookupByCustomerAsync_MalformedPayloadIsUnavailable()
+    {
+        using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("{ not-json")
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var lookup = await client.LookupByCustomerAsync("customer-46");
+
+        Assert.False(lookup.IsAvailable);
+        Assert.Empty(lookup.Value);
+    }
+
+    [Fact]
+    public async Task GetDetailForCustomerAsync_RejectsAResponseOwnedByAnotherCustomer()
+    {
+        using var handler = new RouteHandler(
+            ("GET", "/order/v1/orders/ORD-FOREIGN", JsonContent.Create(new
+            {
+                orderId = "ORD-FOREIGN",
+                customerId = "customer-99",
+                currentStatus = "Manufacturing",
+                paymentStatus = "Paid",
+                version = "1",
+                createdAt = DateTime.UtcNow,
+                updatedAt = DateTime.UtcNow
+            })));
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var lookup = await client.LookupDetailForCustomerAsync("ORD-FOREIGN", "customer-46");
+
+        Assert.True(lookup.IsAvailable);
+        Assert.Null(lookup.Value);
+    }
+
+    [Fact]
+    public async Task LookupDetailForCustomerAsync_NonSuccessIsUnavailable()
+    {
+        using var handler = new StatusHandler(HttpStatusCode.ServiceUnavailable);
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://order-service.test")
+        };
+        var client = new OrderServiceClient(http, NullLogger<OrderServiceClient>.Instance);
+
+        var lookup = await client.LookupDetailForCustomerAsync("ORD-OFFLINE", "customer-46");
+
+        Assert.False(lookup.IsAvailable);
+        Assert.Null(lookup.Value);
+    }
+
+    [Fact]
+    public async Task GetDetailForCustomerAsync_DefaultImplementationFailsClosed()
+    {
+        IOrderServiceClient client = new LegacyOrderServiceClient();
+
+        var result = await client.GetDetailForCustomerAsync("ORD-FOREIGN", "customer-46");
+
+        Assert.Null(result);
     }
 
     [Fact]
@@ -286,5 +540,63 @@ public sealed class OrderServiceClientContractTests
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
         }
+    }
+
+    private sealed class SequentialHandler(params HttpResponseMessage[] responses) : HttpMessageHandler
+    {
+        private int _index;
+
+        public List<string> RequestTargets { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            RequestTargets.Add(request.RequestUri?.PathAndQuery ?? string.Empty);
+            return Task.FromResult(responses[_index++]);
+        }
+    }
+
+    private sealed class StatusHandler(HttpStatusCode statusCode) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            Task.FromResult(new HttpResponseMessage(statusCode));
+    }
+
+    private sealed class LegacyOrderServiceClient : IOrderServiceClient
+    {
+        public Task<OrderCreatedResult?> CreateAsync(OrderCreateRequest request, CancellationToken ct = default) =>
+            Task.FromResult<OrderCreatedResult?>(null);
+
+        public Task<IReadOnlyList<CustomerOrderSummaryDto>> GetByCustomerAsync(
+            string customerId,
+            CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<CustomerOrderSummaryDto>>([]);
+
+        public Task<CustomerOrderDetailDto?> GetDetailAsync(string orderNumber, CancellationToken ct = default) =>
+            Task.FromResult<CustomerOrderDetailDto?>(new CustomerOrderDetailDto(
+                Guid.NewGuid(),
+                orderNumber,
+                "Manufacturing",
+                "Paid",
+                null,
+                "THB",
+                null,
+                null,
+                null,
+                null,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                []));
+
+        public Task<bool> AddStatusAsync(string orderId, string status, CancellationToken ct = default) =>
+            Task.FromResult(false);
+
+        public Task<bool> UpdateDeliverySnapshotAsync(
+            OrderDeliverySnapshotRequest request,
+            CancellationToken ct = default) =>
+            Task.FromResult(false);
     }
 }

@@ -23,6 +23,13 @@ public interface IQuotationServiceClient
     /// <summary>Returns the quotation for a source project, or null if none exists.</summary>
     Task<QuotationCreatedResult?> GetBySourceProjectAsync(Guid customerId, Guid sourceProjectId, CancellationToken ct = default);
 
+    /// <summary>Returns a project quotation while preserving downstream availability.</summary>
+    async Task<DownstreamLookupResult<QuotationCreatedResult?>> LookupBySourceProjectAsync(
+        Guid customerId,
+        Guid sourceProjectId,
+        CancellationToken ct = default) =>
+        new(true, await GetBySourceProjectAsync(customerId, sourceProjectId, ct));
+
     /// <summary>Returns all quotations for the given customer as <see cref="CustomerQuoteSummaryDto"/>.</summary>
     Task<IReadOnlyList<CustomerQuoteSummaryDto>> GetByCustomerAsync(Guid customerId, CancellationToken ct = default);
 }
@@ -149,17 +156,40 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
         }
     }
 
-    public async Task<QuotationCreatedResult?> GetBySourceProjectAsync(Guid customerId, Guid sourceProjectId, CancellationToken ct = default)
+    public async Task<QuotationCreatedResult?> GetBySourceProjectAsync(
+        Guid customerId,
+        Guid sourceProjectId,
+        CancellationToken ct = default) =>
+        (await LookupBySourceProjectAsync(customerId, sourceProjectId, ct)).Value;
+
+    public async Task<DownstreamLookupResult<QuotationCreatedResult?>> LookupBySourceProjectAsync(
+        Guid customerId,
+        Guid sourceProjectId,
+        CancellationToken ct = default)
     {
         try
         {
-            var paged = await http.GetFromJsonAsync<QsPagedResponse>(
-                $"/quotation/v1/quotations?customerId={customerId:D}&pageSize=100", ct);
-            return paged?.Data?
-                .Where(quotation => quotation.SourceProjectId == sourceProjectId)
+            using var response = await http.GetAsync(
+                $"/quotation/v1/quotations?customerId={customerId:D}&pageSize=100",
+                ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "QuotationService returned {Status} while reading customer {CustomerId} project {SourceProjectId}.",
+                    response.StatusCode,
+                    customerId,
+                    sourceProjectId);
+                return new DownstreamLookupResult<QuotationCreatedResult?>(false, null);
+            }
+
+            var paged = await response.Content.ReadFromJsonAsync<QsPagedResponse>(cancellationToken: ct);
+            var quotation = paged?.Data?
+                .Where(candidate => candidate.CustomerId == customerId)
+                .Where(candidate => candidate.SourceProjectId == sourceProjectId)
                 .OrderByDescending(quotation => quotation.UpdatedAt)
                 .Select(MapResult)
                 .FirstOrDefault();
+            return new DownstreamLookupResult<QuotationCreatedResult?>(true, quotation);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
@@ -169,7 +199,7 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
                 "QuotationService GetBySourceProject failed for customer {CustomerId} project {SourceProjectId}.",
                 customerId,
                 sourceProjectId);
-            return null;
+            return new DownstreamLookupResult<QuotationCreatedResult?>(false, null);
         }
     }
 
@@ -204,7 +234,9 @@ internal sealed class QuotationServiceClient(HttpClient http, ILogger<QuotationS
                 $"/quotation/v1/quotations?customerId={customerId:D}&pageSize=100", ct);
             if (paged?.Data is null) return [];
 
-            return paged.Data.Select(q => new CustomerQuoteSummaryDto(
+            return paged.Data
+            .Where(q => q.CustomerId == customerId)
+            .Select(q => new CustomerQuoteSummaryDto(
                 q.Id,
                 q.QuotationNumber,
                 ReadStatus(q.Status),

@@ -22,6 +22,26 @@ public interface IOrderServiceClient
     /// <summary>Returns full order detail including status timeline, or null if not found.</summary>
     Task<CustomerOrderDetailDto?> GetDetailAsync(string orderNumber, CancellationToken ct = default);
 
+    /// <summary>Returns order detail only when OrderService confirms the expected customer owns it.</summary>
+    Task<CustomerOrderDetailDto?> GetDetailForCustomerAsync(
+        string orderNumber,
+        string customerId,
+        CancellationToken ct = default) =>
+        Task.FromResult<CustomerOrderDetailDto?>(null);
+
+    /// <summary>Returns all customer orders while preserving downstream availability.</summary>
+    async Task<DownstreamLookupResult<IReadOnlyList<CustomerOrderSummaryDto>>> LookupByCustomerAsync(
+        string customerId,
+        CancellationToken ct = default) =>
+        new(true, await GetByCustomerAsync(customerId, ct));
+
+    /// <summary>Returns customer-owned order detail while preserving downstream availability.</summary>
+    async Task<DownstreamLookupResult<CustomerOrderDetailDto?>> LookupDetailForCustomerAsync(
+        string orderNumber,
+        string customerId,
+        CancellationToken ct = default) =>
+        new(true, await GetDetailForCustomerAsync(orderNumber, customerId, ct));
+
     /// <summary>Appends a status entry to an order. Returns false on non-success (caller logs and continues).</summary>
     Task<bool> AddStatusAsync(string orderId, string status, CancellationToken ct = default);
 
@@ -36,20 +56,25 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
     private sealed class OsOrderResponse
     {
         public string OrderId { get; set; } = string.Empty;
+        public string CustomerId { get; set; } = string.Empty;
         public string? CurrentStatus { get; set; }
         public DateTime UpdatedAt { get; set; }
         public decimal? QuotedAmount { get; set; }
         public string? QuoteCurrency { get; set; }
+        public Guid? QuoteId { get; set; }
+        public string? QuoteNumber { get; set; }
     }
 
     private sealed class OsPaginatedResponse
     {
         public IEnumerable<OsOrderResponse>? Items { get; set; }
+        public int TotalPages { get; set; }
     }
 
     private sealed class OsOrderDetailResponse
     {
         public string OrderId { get; set; } = string.Empty;
+        public string CustomerId { get; set; } = string.Empty;
         public string? CurrentStatus { get; set; }
         public string PaymentStatus { get; set; } = "Unpaid";
         public decimal? QuotedAmount { get; set; }
@@ -103,7 +128,11 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
         r.OrderId,
         r.CurrentStatus ?? "Pending",
         new DateTimeOffset(r.UpdatedAt, TimeSpan.Zero),
-        r.OrderId);
+        r.OrderId)
+    {
+        QuoteId = r.QuoteId,
+        QuoteNumber = r.QuoteNumber
+    };
 
     private static Guid DeterministicGuid(string value)
     {
@@ -160,24 +189,89 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
         }
     }
 
-    public async Task<IReadOnlyList<CustomerOrderSummaryDto>> GetByCustomerAsync(string customerId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<CustomerOrderSummaryDto>> GetByCustomerAsync(
+        string customerId,
+        CancellationToken ct = default) =>
+        (await LookupByCustomerAsync(customerId, ct)).Value;
+
+    public async Task<DownstreamLookupResult<IReadOnlyList<CustomerOrderSummaryDto>>> LookupByCustomerAsync(
+        string customerId,
+        CancellationToken ct = default)
     {
         try
         {
-            var paged = await http.GetFromJsonAsync<OsPaginatedResponse>(
-                $"/order/v1/orders?customerId={Uri.EscapeDataString(customerId)}&pageSize=100", ct);
+            var mapped = new List<CustomerOrderSummaryDto>();
+            var totalPages = 1;
+            for (var pageNumber = 1; pageNumber <= totalPages; pageNumber++)
+            {
+                using var response = await http.GetAsync(
+                    $"/order/v1/orders?customerId={Uri.EscapeDataString(customerId)}&page={pageNumber}&pageSize=100",
+                    ct);
+                if (!response.IsSuccessStatusCode)
+                {
+                    logger.LogWarning(
+                        "OrderService returned {Status} while listing customer {CustomerId} page {Page}.",
+                        response.StatusCode,
+                        customerId,
+                        pageNumber);
+                    return new DownstreamLookupResult<IReadOnlyList<CustomerOrderSummaryDto>>(false, []);
+                }
 
-            return paged?.Items?.Select(MapSummary).ToArray() ?? [];
+                var paged = await response.Content.ReadFromJsonAsync<OsPaginatedResponse>(cancellationToken: ct);
+                if (paged is null)
+                {
+                    return new DownstreamLookupResult<IReadOnlyList<CustomerOrderSummaryDto>>(false, []);
+                }
+
+                if (pageNumber == 1)
+                {
+                    totalPages = Math.Clamp(Math.Max(1, paged.TotalPages), 1, 1000);
+                }
+
+                mapped.AddRange((paged.Items ?? [])
+                    .Where(order => customerId.Equals(order.CustomerId, StringComparison.OrdinalIgnoreCase))
+                    .Select(MapSummary));
+            }
+
+            var orders = mapped
+                .GroupBy(order => order.OrderNumber, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.OrderByDescending(order => order.UpdatedAt).First())
+                .ToArray();
+            return new DownstreamLookupResult<IReadOnlyList<CustomerOrderSummaryDto>>(true, orders);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "OrderService GetByCustomer failed for {CustomerId}.", customerId);
-            return [];
+            return new DownstreamLookupResult<IReadOnlyList<CustomerOrderSummaryDto>>(false, []);
         }
     }
 
-    public async Task<CustomerOrderDetailDto?> GetDetailAsync(string orderNumber, CancellationToken ct = default)
+    public Task<CustomerOrderDetailDto?> GetDetailAsync(string orderNumber, CancellationToken ct = default) =>
+        GetDetailValueAsync(orderNumber, expectedCustomerId: null, ct);
+
+    public async Task<CustomerOrderDetailDto?> GetDetailForCustomerAsync(
+        string orderNumber,
+        string customerId,
+        CancellationToken ct = default) =>
+        (await LookupDetailForCustomerAsync(orderNumber, customerId, ct)).Value;
+
+    public Task<DownstreamLookupResult<CustomerOrderDetailDto?>> LookupDetailForCustomerAsync(
+        string orderNumber,
+        string customerId,
+        CancellationToken ct = default) =>
+        LookupDetailCoreAsync(orderNumber, customerId, ct);
+
+    private async Task<CustomerOrderDetailDto?> GetDetailValueAsync(
+        string orderNumber,
+        string? expectedCustomerId,
+        CancellationToken ct) =>
+        (await LookupDetailCoreAsync(orderNumber, expectedCustomerId, ct)).Value;
+
+    private async Task<DownstreamLookupResult<CustomerOrderDetailDto?>> LookupDetailCoreAsync(
+        string orderNumber,
+        string? expectedCustomerId,
+        CancellationToken ct)
     {
         try
         {
@@ -194,15 +288,30 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
             using var filesResponse = filesTask.Result;
             using var itemsResponse = itemsTask.Result;
 
-            if (detailResponse.StatusCode == HttpStatusCode.NotFound) return null;
+            if (detailResponse.StatusCode == HttpStatusCode.NotFound)
+            {
+                return new DownstreamLookupResult<CustomerOrderDetailDto?>(true, null);
+            }
             if (!detailResponse.IsSuccessStatusCode)
             {
                 logger.LogWarning("OrderService GetDetail returned {Status} for {OrderNumber}.", detailResponse.StatusCode, orderNumber);
-                return null;
+                return new DownstreamLookupResult<CustomerOrderDetailDto?>(false, null);
             }
 
             var detail = await detailResponse.Content.ReadFromJsonAsync<OsOrderDetailResponse>(cancellationToken: ct);
-            if (detail is null) return null;
+            if (detail is null)
+            {
+                return new DownstreamLookupResult<CustomerOrderDetailDto?>(false, null);
+            }
+            if (!string.IsNullOrWhiteSpace(expectedCustomerId) &&
+                !expectedCustomerId.Equals(detail.CustomerId, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogWarning(
+                    "OrderService GetDetail ownership mismatch for {OrderNumber}: expected customer {ExpectedCustomerId}.",
+                    orderNumber,
+                    expectedCustomerId);
+                return new DownstreamLookupResult<CustomerOrderDetailDto?>(true, null);
+            }
 
             IReadOnlyList<OsOrderStatusEntry> statusEntries = [];
             if (statusResponse.IsSuccessStatusCode)
@@ -242,7 +351,7 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                 logger.LogWarning("OrderService GetItems returned {Status} for {OrderNumber}.", itemsResponse.StatusCode, orderNumber);
             }
 
-            return new CustomerOrderDetailDto(
+            var mappedDetail = new CustomerOrderDetailDto(
                 OrderId: DeterministicGuid(detail.OrderId),
                 OrderNumber: detail.OrderId,
                 CurrentStatus: detail.CurrentStatus ?? "Pending",
@@ -278,12 +387,19 @@ internal sealed class OrderServiceClient(HttpClient http, ILogger<OrderServiceCl
                         : null,
                     customerStatusEntries)
             };
+            var auxiliaryReadsAvailable =
+                statusResponse.IsSuccessStatusCode || statusResponse.StatusCode == HttpStatusCode.NotFound;
+            auxiliaryReadsAvailable &=
+                filesResponse.IsSuccessStatusCode || filesResponse.StatusCode == HttpStatusCode.NotFound;
+            auxiliaryReadsAvailable &=
+                itemsResponse.IsSuccessStatusCode || itemsResponse.StatusCode == HttpStatusCode.NotFound;
+            return new DownstreamLookupResult<CustomerOrderDetailDto?>(auxiliaryReadsAvailable, mappedDetail);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception ex)
         {
             logger.LogWarning(ex, "OrderService GetDetail failed for {OrderNumber}.", orderNumber);
-            return null;
+            return new DownstreamLookupResult<CustomerOrderDetailDto?>(false, null);
         }
     }
 
