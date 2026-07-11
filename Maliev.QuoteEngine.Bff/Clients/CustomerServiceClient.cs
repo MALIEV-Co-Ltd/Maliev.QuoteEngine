@@ -59,6 +59,17 @@ public interface ICustomerServiceClient
         Guid customerId,
         CancellationToken cancellationToken);
 
+    /// <summary>Gets customer documents while preserving downstream availability.</summary>
+    async Task<DownstreamLookupResult<IReadOnlyList<CustomerDocumentDto>>> LookupCustomerDocumentsAsync(
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        var documents = await GetCustomerDocumentsAsync(customerId, cancellationToken);
+        return documents is null
+            ? new DownstreamLookupResult<IReadOnlyList<CustomerDocumentDto>>(false, [])
+            : new DownstreamLookupResult<IReadOnlyList<CustomerDocumentDto>>(true, documents);
+    }
+
     /// <summary>Creates a customer-owned account document record.</summary>
     Task<CustomerDocumentDto?> CreateCustomerDocumentAsync(
         Guid customerId,
@@ -135,6 +146,7 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         public Guid Id { get; set; }
         public string OwnerType { get; set; } = string.Empty;
         public Guid OwnerId { get; set; }
+        public string? OrderNumber { get; set; }
         public string DocumentType { get; set; } = string.Empty;
         public string FileReference { get; set; } = string.Empty;
         public string Filename { get; set; } = string.Empty;
@@ -149,6 +161,7 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
     {
         public string OwnerType { get; set; } = "Customer";
         public Guid OwnerId { get; set; }
+        public string? OrderNumber { get; set; }
         public string DocumentType { get; set; } = string.Empty;
         public string FileReference { get; set; } = string.Empty;
         public string Filename { get; set; } = string.Empty;
@@ -403,6 +416,14 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         Guid customerId,
         CancellationToken cancellationToken)
     {
+        var lookup = await LookupCustomerDocumentsAsync(customerId, cancellationToken);
+        return lookup.IsAvailable ? lookup.Value : null;
+    }
+
+    public async Task<DownstreamLookupResult<IReadOnlyList<CustomerDocumentDto>>> LookupCustomerDocumentsAsync(
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
         try
         {
             using var response = await http.GetAsync(
@@ -416,12 +437,18 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
                     response.StatusCode,
                     customerId,
                     body);
-                return null;
+                return new DownstreamLookupResult<IReadOnlyList<CustomerDocumentDto>>(false, []);
             }
 
             var documents = await response.Content.ReadFromJsonAsync<List<CsDocumentResponse>>(
                 cancellationToken: cancellationToken);
-            return documents?.Select(MapDocument).ToList() ?? [];
+            var ownedDocuments = documents?
+                .Where(document =>
+                    document.OwnerId == customerId &&
+                    document.OwnerType.Equals("Customer", StringComparison.OrdinalIgnoreCase))
+                .Select(MapDocument)
+                .ToList() ?? [];
+            return new DownstreamLookupResult<IReadOnlyList<CustomerDocumentDto>>(true, ownedDocuments);
         }
         catch (OperationCanceledException)
         {
@@ -430,7 +457,7 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         catch (Exception ex)
         {
             logger.LogWarning(ex, "CustomerService document list failed for customer {CustomerId}.", customerId);
-            return null;
+            return new DownstreamLookupResult<IReadOnlyList<CustomerDocumentDto>>(false, []);
         }
     }
 
@@ -442,6 +469,7 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         var document = new CsCreateDocumentRequest
         {
             OwnerId = customerId,
+            OrderNumber = string.IsNullOrWhiteSpace(request.OrderNumber) ? null : request.OrderNumber.Trim(),
             DocumentType = request.Kind.Trim(),
             FileReference = request.StoragePath.Trim(),
             Filename = request.FileName.Trim(),
@@ -606,7 +634,8 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
             uploadedAt,
             string.IsNullOrWhiteSpace(result.FileReference) ? null : result.FileReference,
             string.IsNullOrWhiteSpace(result.MimeType) ? null : result.MimeType,
-            result.FileSize);
+            result.FileSize,
+            string.IsNullOrWhiteSpace(result.OrderNumber) ? null : result.OrderNumber.Trim());
     }
 
     private static CustomerNdaDto MapNda(CsNdaResponse result)
@@ -701,3 +730,6 @@ internal sealed class CustomerServiceClient(HttpClient http, ILogger<CustomerSer
         };
     }
 }
+
+/// <summary>Downstream read result that distinguishes a successful empty value from service unavailability.</summary>
+public sealed record DownstreamLookupResult<T>(bool IsAvailable, T Value);
