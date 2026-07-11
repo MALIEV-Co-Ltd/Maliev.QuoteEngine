@@ -6,6 +6,13 @@ namespace Maliev.QuoteEngine.Bff.Clients;
 public interface IPdfServiceClient
 {
     Task<PdfGenerationResult?> GeneratePdfAsync(string documentType, string referenceId, object data, CancellationToken ct = default);
+
+    /// <summary>Returns the latest completed generated PDF for a verified business reference.</summary>
+    Task<PdfGenerationResult?> GetLatestAsync(
+        string documentType,
+        Guid referenceId,
+        CancellationToken ct = default) =>
+        Task.FromResult<PdfGenerationResult?>(null);
 }
 
 internal sealed class PdfServiceClient(HttpClient http, ILogger<PdfServiceClient> logger) : IPdfServiceClient
@@ -46,6 +53,53 @@ internal sealed class PdfServiceClient(HttpClient http, ILogger<PdfServiceClient
         catch (Exception ex)
         {
             logger.LogWarning(ex, "PdfService GeneratePdf failed for {DocumentType}/{ReferenceId}.", documentType, referenceId);
+            return null;
+        }
+    }
+
+    public async Task<PdfGenerationResult?> GetLatestAsync(
+        string documentType,
+        Guid referenceId,
+        CancellationToken ct = default)
+    {
+        if (referenceId == Guid.Empty || documentType is not ("Invoice" or "Receipt"))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var response = await http.GetAsync(
+                $"/pdf/v1/generations/latest?documentType={Uri.EscapeDataString(documentType)}&referenceId={referenceId:D}",
+                ct);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "PdfService returned {StatusCode} while reading latest {DocumentType} PDF {ReferenceId}.",
+                    response.StatusCode,
+                    documentType,
+                    referenceId);
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<PdfGenerationResult>(JsonOptions, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "PdfService latest lookup failed for {DocumentType}/{ReferenceId}.",
+                documentType,
+                referenceId);
             return null;
         }
     }

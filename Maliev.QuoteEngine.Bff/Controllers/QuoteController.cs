@@ -7,6 +7,7 @@ using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
+using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -29,6 +30,9 @@ public sealed class QuoteController(
     IMaterialCatalogClient materialCatalog,
     IQuotationServiceClient quotationClient,
     IOrderServiceClient orderClient,
+    IInvoiceServiceClient invoiceClient,
+    IReceiptServiceClient receiptClient,
+    IPdfServiceClient pdfClient,
     ICustomerServiceClient customerClient,
     IProjectServiceClient projectClient,
     ISearchServiceClient searchClient,
@@ -643,6 +647,7 @@ public sealed class QuoteController(
     [HttpGet("projects/{projectId:guid}")]
     public async Task<ActionResult<CustomerProjectDetailResponse>> GetProjectDetail(Guid projectId, CancellationToken cancellationToken)
     {
+        Response.Headers.CacheControl = "no-store";
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized(new ProblemDetails
@@ -653,16 +658,325 @@ public sealed class QuoteController(
         }
 
         var project = await projectClient.GetProjectDetailAsync(customerId, projectId, cancellationToken);
-        if (project is not null)
+        if (project is null)
         {
-            return Ok(project);
+            project = CanUsePrototypeFallback()
+                ? store.GetProjectDetail(customerId, projectId)
+                : null;
         }
 
-        project = CanUsePrototypeFallback()
-            ? store.GetProjectDetail(customerId, projectId)
-            : null;
-        return project is null ? NotFound() : Ok(project);
+        if (project is null)
+        {
+            return NotFound();
+        }
+
+        return Ok(await EnrichProjectWorkspaceAsync(project, customerId, cancellationToken));
     }
+
+    private async Task<CustomerProjectDetailResponse> EnrichProjectWorkspaceAsync(
+        CustomerProjectDetailResponse project,
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        var warnings = new List<CustomerProjectDataWarningDto>();
+        var quotationTask = quotationClient.LookupBySourceProjectAsync(customerId, project.ProjectId, cancellationToken);
+        var documentsTask = customerClient.LookupCustomerDocumentsAsync(customerId, cancellationToken);
+        await Task.WhenAll(quotationTask, documentsTask);
+
+        var quotationLookup = await quotationTask;
+        var documentsLookup = await documentsTask;
+        AddAvailabilityWarning(warnings, "Quotation", quotationLookup.IsAvailable);
+        AddAvailabilityWarning(warnings, "Documents", documentsLookup.IsAvailable);
+
+        var quotation = quotationLookup.Value;
+        var allDocuments = documentsLookup.Value;
+        if (quotation is null || quotation.CustomerId != customerId || quotation.SourceProjectId != project.ProjectId)
+        {
+            return project with { DataWarnings = warnings };
+        }
+
+        var quote = new CustomerQuoteSummaryDto(
+            quotation.Id,
+            quotation.QuotationNumber,
+            quotation.Status,
+            quotation.Total,
+            quotation.CurrencyCode,
+            AsUtcOffset(quotation.UpdatedAt),
+            quotation.PdfArtifactUrl ?? string.Empty);
+
+        CustomerOrderDetailDto? order = null;
+        var orderLookup = await orderClient.LookupByCustomerAsync(customerId.ToString("D"), cancellationToken);
+        AddAvailabilityWarning(warnings, "Orders", orderLookup.IsAvailable);
+        var linkedOrder = orderLookup.Value
+            .Where(candidate => candidate.QuoteId == quotation.Id)
+            .OrderByDescending(candidate => candidate.UpdatedAt)
+            .FirstOrDefault();
+        if (linkedOrder is not null)
+        {
+            var detailLookup = await orderClient.LookupDetailForCustomerAsync(
+                linkedOrder.OrderNumber,
+                customerId.ToString("D"),
+                cancellationToken);
+            AddAvailabilityWarning(warnings, "Order details", detailLookup.IsAvailable);
+            var candidate = detailLookup.Value;
+            if (candidate?.QuoteId == quotation.Id)
+            {
+                order = candidate;
+            }
+        }
+
+        CustomerProjectInvoiceDto? invoice = null;
+        IReadOnlyList<CustomerProjectReceiptDto> receipts = [];
+        IReadOnlyList<CustomerDocumentDto> documents = [];
+        if (order is not null)
+        {
+            documents = allDocuments
+                .Where(document => order.OrderNumber.Equals(document.OrderNumber, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(document => document.UploadedAt)
+                .ToArray();
+
+            var invoiceLookup = await invoiceClient.LookupForOrderAsync(customerId, order.OrderNumber, cancellationToken);
+            AddAvailabilityWarning(warnings, "Invoices", invoiceLookup.IsAvailable);
+            var invoiceResult = invoiceLookup.Invoice;
+            if (invoiceResult is not null)
+            {
+                invoice = new CustomerProjectInvoiceDto(
+                    invoiceResult.InvoiceId,
+                    invoiceResult.InvoiceNumber,
+                    invoiceResult.Status,
+                    invoiceResult.GrandTotal,
+                    invoiceResult.Currency,
+                    invoiceResult.IssueDate,
+                    string.IsNullOrWhiteSpace(invoiceResult.PdfFileReference)
+                        ? null
+                        : ProjectInvoiceDocumentUrl(project.ProjectId, invoiceResult.InvoiceId));
+                var receiptLookup = await receiptClient.LookupByInvoiceAsync(invoiceResult.InvoiceId, cancellationToken);
+                AddAvailabilityWarning(warnings, "Receipts", receiptLookup.IsAvailable);
+                receipts = receiptLookup.Receipts
+                    .Select(receipt => new CustomerProjectReceiptDto(
+                        receipt.ReceiptId,
+                        receipt.ReceiptNumber,
+                        receipt.Status,
+                        receipt.TotalAmount,
+                        receipt.Currency,
+                        receipt.IssueDate,
+                        receipt.PdfReferenceId.HasValue
+                            ? ProjectReceiptDocumentUrl(project.ProjectId, receipt.ReceiptId)
+                            : null))
+                    .ToArray();
+            }
+        }
+
+        return project with
+        {
+            Quote = quote,
+            Order = order,
+            Invoice = invoice,
+            Receipts = receipts,
+            Documents = documents,
+            DataWarnings = warnings
+        };
+    }
+
+    [HttpGet("projects/{projectId:guid}/invoices/{invoiceId:guid}/document")]
+    public async Task<IActionResult> DownloadProjectInvoiceDocument(
+        Guid projectId,
+        Guid invoiceId,
+        CancellationToken cancellationToken)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        var resolution = await ResolveProjectInvoiceAsync(customerId, projectId, cancellationToken);
+        if (!resolution.IsAvailable)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "Invoice document is temporarily unavailable.",
+                Detail = "MALIEV could not refresh the project ownership chain. Please try again."
+            });
+        }
+
+        if (resolution.Value is not { } invoice || invoice.InvoiceId != invoiceId)
+        {
+            return NotFound();
+        }
+
+        return await RedirectToGeneratedPdfAsync("Invoice", invoiceId, cancellationToken);
+    }
+
+    [HttpGet("projects/{projectId:guid}/receipts/{receiptId:guid}/document")]
+    public async Task<IActionResult> DownloadProjectReceiptDocument(
+        Guid projectId,
+        Guid receiptId,
+        CancellationToken cancellationToken)
+    {
+        if (!sessionResolver.TryResolveCustomerId(out var customerId))
+        {
+            return Unauthorized();
+        }
+
+        var invoiceResolution = await ResolveProjectInvoiceAsync(customerId, projectId, cancellationToken);
+        if (!invoiceResolution.IsAvailable)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "Receipt document is temporarily unavailable.",
+                Detail = "MALIEV could not refresh the project ownership chain. Please try again."
+            });
+        }
+
+        if (invoiceResolution.Value is not { } invoice)
+        {
+            return NotFound();
+        }
+
+        var receiptLookup = await receiptClient.LookupByInvoiceAsync(invoice.InvoiceId, cancellationToken);
+        if (!receiptLookup.IsAvailable)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        var receipt = receiptLookup.Receipts.FirstOrDefault(candidate => candidate.ReceiptId == receiptId);
+        if (receipt?.PdfReferenceId is null)
+        {
+            return NotFound();
+        }
+
+        return await RedirectToGeneratedPdfAsync("Receipt", receiptId, cancellationToken);
+    }
+
+    private async Task<DownstreamLookupResult<CustomerProjectInvoiceResult?>> ResolveProjectInvoiceAsync(
+        Guid customerId,
+        Guid projectId,
+        CancellationToken cancellationToken)
+    {
+        var project = await projectClient.GetProjectDetailAsync(customerId, projectId, cancellationToken);
+        if (project is null)
+        {
+            return new DownstreamLookupResult<CustomerProjectInvoiceResult?>(true, null);
+        }
+
+        var quotationLookup = await quotationClient.LookupBySourceProjectAsync(customerId, projectId, cancellationToken);
+        if (!quotationLookup.IsAvailable)
+        {
+            return new DownstreamLookupResult<CustomerProjectInvoiceResult?>(false, null);
+        }
+
+        var quotation = quotationLookup.Value;
+        if (quotation is null || quotation.CustomerId != customerId || quotation.SourceProjectId != projectId)
+        {
+            return new DownstreamLookupResult<CustomerProjectInvoiceResult?>(true, null);
+        }
+
+        var ordersLookup = await orderClient.LookupByCustomerAsync(customerId.ToString("D"), cancellationToken);
+        if (!ordersLookup.IsAvailable)
+        {
+            return new DownstreamLookupResult<CustomerProjectInvoiceResult?>(false, null);
+        }
+
+        var linkedOrder = ordersLookup.Value
+            .Where(candidate => candidate.QuoteId == quotation.Id)
+            .OrderByDescending(candidate => candidate.UpdatedAt)
+            .FirstOrDefault();
+        if (linkedOrder is null)
+        {
+            return new DownstreamLookupResult<CustomerProjectInvoiceResult?>(true, null);
+        }
+
+        var detailLookup = await orderClient.LookupDetailForCustomerAsync(
+            linkedOrder.OrderNumber,
+            customerId.ToString("D"),
+            cancellationToken);
+        if (!detailLookup.IsAvailable)
+        {
+            return new DownstreamLookupResult<CustomerProjectInvoiceResult?>(false, null);
+        }
+
+        if (detailLookup.Value?.QuoteId != quotation.Id)
+        {
+            return new DownstreamLookupResult<CustomerProjectInvoiceResult?>(true, null);
+        }
+
+        var invoiceLookup = await invoiceClient.LookupForOrderAsync(
+            customerId,
+            linkedOrder.OrderNumber,
+            cancellationToken);
+        return new DownstreamLookupResult<CustomerProjectInvoiceResult?>(
+            invoiceLookup.IsAvailable,
+            invoiceLookup.Invoice);
+    }
+
+    private async Task<IActionResult> RedirectToGeneratedPdfAsync(
+        string documentType,
+        Guid referenceId,
+        CancellationToken cancellationToken)
+    {
+        var generated = await pdfClient.GetLatestAsync(documentType, referenceId, cancellationToken);
+        if (generated is null || !IsSafeGeneratedPdfStoragePath(generated.StoragePath))
+        {
+            return NotFound();
+        }
+
+        try
+        {
+            var signedUrl = await uploadClient.GetDownloadUrlByPathAsync(
+                generated.StoragePath,
+                expirationMinutes: 10,
+                ct: cancellationToken);
+            return IsSafeSignedDownloadUrl(signedUrl) ? Redirect(signedUrl) : NotFound();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Generated {DocumentType} PDF download failed for {ReferenceId}.", documentType, referenceId);
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+    }
+
+    private static void AddAvailabilityWarning(
+        ICollection<CustomerProjectDataWarningDto> warnings,
+        string source,
+        bool isAvailable)
+    {
+        if (!isAvailable && warnings.All(warning => !source.Equals(warning.Source, StringComparison.OrdinalIgnoreCase)))
+        {
+            warnings.Add(new CustomerProjectDataWarningDto(
+                source,
+                $"{source} could not be refreshed. The project may show partial information."));
+        }
+    }
+
+    private static string ProjectInvoiceDocumentUrl(Guid projectId, Guid invoiceId) =>
+        $"/quote/v1/projects/{projectId:D}/invoices/{invoiceId:D}/document";
+
+    private static string ProjectReceiptDocumentUrl(Guid projectId, Guid receiptId) =>
+        $"/quote/v1/projects/{projectId:D}/receipts/{receiptId:D}/document";
+
+    private static bool IsSafeGeneratedPdfStoragePath(string? storagePath)
+    {
+        if (string.IsNullOrWhiteSpace(storagePath))
+        {
+            return false;
+        }
+
+        var normalized = storagePath.Trim().Replace('\\', '/');
+        return !normalized.StartsWith("/", StringComparison.Ordinal) &&
+               !normalized.Contains("://", StringComparison.Ordinal) &&
+               !normalized.Split('/', StringSplitOptions.RemoveEmptyEntries).Any(segment => segment is "." or "..") &&
+               normalized.StartsWith("pdfs/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsSafeSignedDownloadUrl(string? signedUrl) =>
+        Uri.TryCreate(signedUrl, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps;
+
+    private static DateTimeOffset AsUtcOffset(DateTime value) =>
+        new(DateTime.SpecifyKind(value, DateTimeKind.Utc));
 
     [HttpPost("projects/{projectId:guid}/duplicate")]
     public async Task<ActionResult<DuplicateDraftProjectResponse>> DuplicateDraftProject(

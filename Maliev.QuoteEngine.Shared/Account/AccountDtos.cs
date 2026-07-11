@@ -102,7 +102,14 @@ public sealed record CustomerOrderSummaryDto(
     string OrderNumber,
     string Status,
     DateTimeOffset UpdatedAt,
-    string TrackingLabel);
+    string TrackingLabel)
+{
+    /// <summary>Gets the formal quotation accepted for this order, when available.</summary>
+    public Guid? QuoteId { get; init; }
+
+    /// <summary>Gets the customer-visible quotation number accepted for this order.</summary>
+    public string? QuoteNumber { get; init; }
+}
 
 /// <summary>A single entry in the customer-visible status timeline of an order.</summary>
 public sealed record OrderStatusEntryDto(

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Globalization;
+using Maliev.QuoteEngine.Shared.Account;
 
 namespace Maliev.QuoteEngine.Shared.Quotes;
 
@@ -469,7 +470,48 @@ public sealed record CustomerProjectDetailResponse(
 {
     /// <summary>Gets when the durable project was created, when supplied by ProjectService.</summary>
     public DateTimeOffset? CreatedAt { get; init; }
+
+    /// <summary>Gets the latest formal quotation linked to this project.</summary>
+    public CustomerQuoteSummaryDto? Quote { get; init; }
+
+    /// <summary>Gets the customer-owned order linked through the project's quotation.</summary>
+    public CustomerOrderDetailDto? Order { get; init; }
+
+    /// <summary>Gets the invoice linked to the customer-owned order.</summary>
+    public CustomerProjectInvoiceDto? Invoice { get; init; }
+
+    /// <summary>Gets receipts linked to the verified project invoice.</summary>
+    public IReadOnlyList<CustomerProjectReceiptDto> Receipts { get; init; } = [];
+
+    /// <summary>Gets customer documents explicitly linked to the project order.</summary>
+    public IReadOnlyList<CustomerDocumentDto> Documents { get; init; } = [];
+
+    /// <summary>Gets non-fatal downstream availability warnings for this workspace snapshot.</summary>
+    public IReadOnlyList<CustomerProjectDataWarningDto> DataWarnings { get; init; } = [];
 }
+
+/// <summary>Customer-visible warning that a project data source could not be refreshed.</summary>
+public sealed record CustomerProjectDataWarningDto(string Source, string Message);
+
+/// <summary>Customer-safe invoice summary attached to a project workspace.</summary>
+public sealed record CustomerProjectInvoiceDto(
+    Guid InvoiceId,
+    string InvoiceNumber,
+    string Status,
+    decimal Total,
+    string Currency,
+    DateTimeOffset? IssueDate,
+    string? DocumentUrl = null);
+
+/// <summary>Customer-safe receipt summary attached to a project workspace.</summary>
+public sealed record CustomerProjectReceiptDto(
+    Guid ReceiptId,
+    string ReceiptNumber,
+    string Status,
+    decimal Total,
+    string Currency,
+    DateTimeOffset IssueDate,
+    string? DocumentUrl = null);
 
 public sealed record DuplicateDraftProjectRequest(string? Title);
 

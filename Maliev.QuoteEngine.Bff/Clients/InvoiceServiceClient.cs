@@ -13,6 +13,20 @@ public interface IInvoiceServiceClient
     Task<InvoicePreparedResult?> CreateAndFinalizeForOrderAsync(
         InvoiceCreateForOrderRequest request,
         CancellationToken ct = default);
+
+    /// <summary>Returns the customer-owned invoice linked to an order number, when available.</summary>
+    Task<CustomerProjectInvoiceResult?> GetForOrderAsync(
+        Guid customerId,
+        string orderNumber,
+        CancellationToken ct = default) =>
+        Task.FromResult<CustomerProjectInvoiceResult?>(null);
+
+    /// <summary>Looks up an invoice while preserving whether InvoiceService answered successfully.</summary>
+    async Task<CustomerProjectInvoiceLookupResult> LookupForOrderAsync(
+        Guid customerId,
+        string orderNumber,
+        CancellationToken ct = default) =>
+        new(true, await GetForOrderAsync(customerId, orderNumber, ct));
 }
 
 internal sealed class InvoiceServiceClient(HttpClient http, ILogger<InvoiceServiceClient> logger) : IInvoiceServiceClient
@@ -20,10 +34,78 @@ internal sealed class InvoiceServiceClient(HttpClient http, ILogger<InvoiceServi
     private sealed class InvoiceResponse
     {
         public Guid Id { get; set; }
+        public Guid CustomerId { get; set; }
         public string InvoiceNumber { get; set; } = string.Empty;
+        public string? PoNumber { get; set; }
         public string Status { get; set; } = string.Empty;
         public decimal GrandTotal { get; set; }
         public string Currency { get; set; } = "THB";
+        public DateTime IssueDate { get; set; }
+        public string? PdfFileReference { get; set; }
+    }
+
+    private sealed class InvoicePageResponse
+    {
+        public List<InvoiceResponse> Items { get; set; } = [];
+    }
+
+    public async Task<CustomerProjectInvoiceResult?> GetForOrderAsync(
+        Guid customerId,
+        string orderNumber,
+        CancellationToken ct = default) =>
+        (await LookupForOrderAsync(customerId, orderNumber, ct)).Invoice;
+
+    public async Task<CustomerProjectInvoiceLookupResult> LookupForOrderAsync(
+        Guid customerId,
+        string orderNumber,
+        CancellationToken ct = default)
+    {
+        if (customerId == Guid.Empty || string.IsNullOrWhiteSpace(orderNumber))
+        {
+            return new CustomerProjectInvoiceLookupResult(true, null);
+        }
+
+        try
+        {
+            var normalizedOrderNumber = orderNumber.Trim();
+            var page = await http.GetFromJsonAsync<InvoicePageResponse>(
+                $"/invoice/v1/invoices?CustomerId={customerId:D}&PoNumber={Uri.EscapeDataString(normalizedOrderNumber)}&Page=1&PageSize=10",
+                ct);
+            var invoice = page?.Items
+                .Where(candidate => candidate.CustomerId == customerId)
+                .Where(candidate => normalizedOrderNumber.Equals(candidate.PoNumber, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(candidate => candidate.IssueDate)
+                .FirstOrDefault();
+            return new CustomerProjectInvoiceLookupResult(
+                true,
+                invoice is null
+                    ? null
+                    : new CustomerProjectInvoiceResult
+                    {
+                        InvoiceId = invoice.Id,
+                        InvoiceNumber = invoice.InvoiceNumber,
+                        Status = invoice.Status,
+                        GrandTotal = invoice.GrandTotal,
+                        Currency = string.IsNullOrWhiteSpace(invoice.Currency) ? "THB" : invoice.Currency,
+                        IssueDate = invoice.IssueDate == default
+                        ? null
+                        : new DateTimeOffset(invoice.IssueDate, TimeSpan.Zero),
+                        PdfFileReference = invoice.PdfFileReference
+                    });
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "InvoiceService invoice lookup failed for customer {CustomerId} order {OrderNumber}.",
+                customerId,
+                orderNumber);
+            return new CustomerProjectInvoiceLookupResult(false, null);
+        }
     }
 
     public async Task<InvoicePreparedResult?> CreateAndFinalizeForOrderAsync(
@@ -139,3 +221,20 @@ public sealed class InvoicePreparedResult
     public decimal GrandTotal { get; init; }
     public string Currency { get; init; } = "THB";
 }
+
+/// <summary>Customer-safe invoice fields attached to a project workspace.</summary>
+public sealed class CustomerProjectInvoiceResult
+{
+    public Guid InvoiceId { get; init; }
+    public string InvoiceNumber { get; init; } = string.Empty;
+    public string Status { get; init; } = string.Empty;
+    public decimal GrandTotal { get; init; }
+    public string Currency { get; init; } = "THB";
+    public DateTimeOffset? IssueDate { get; init; }
+    public string? PdfFileReference { get; init; }
+}
+
+/// <summary>Invoice lookup result that distinguishes absence from downstream unavailability.</summary>
+public sealed record CustomerProjectInvoiceLookupResult(
+    bool IsAvailable,
+    CustomerProjectInvoiceResult? Invoice);

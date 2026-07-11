@@ -75,6 +75,69 @@ public sealed class InvoiceServiceClientContractTests
         Assert.Equal(7m, line.GetProperty("taxRate").GetDecimal());
     }
 
+    [Fact]
+    public async Task GetForOrderAsync_QueriesTheCustomerAndExactOrderNumber()
+    {
+        var invoiceId = Guid.NewGuid();
+        var customerId = Guid.NewGuid();
+        using var handler = new QueryHandler(new
+        {
+            items = new[]
+            {
+                new
+                {
+                    id = invoiceId,
+                    invoiceNumber = "INV-20260710-000021",
+                    customerId,
+                    poNumber = "ORD-2100",
+                    status = "FullyPaid",
+                    grandTotal = 535m,
+                    currency = "THB",
+                    issueDate = "2026-07-10T02:00:00Z",
+                    pdfFileReference = "pdf/invoices/21.pdf"
+                }
+            },
+            page = 1,
+            pageSize = 10,
+            totalCount = 1
+        });
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://invoice.test") };
+        var client = new InvoiceServiceClient(http, NullLogger<InvoiceServiceClient>.Instance);
+
+        var result = await client.GetForOrderAsync(customerId, "ORD-2100");
+
+        Assert.NotNull(result);
+        Assert.Equal(invoiceId, result.InvoiceId);
+        Assert.Equal("INV-20260710-000021", result.InvoiceNumber);
+        Assert.Equal("FullyPaid", result.Status);
+        Assert.Equal(535m, result.GrandTotal);
+        Assert.Equal("THB", result.Currency);
+        Assert.Equal("pdf/invoices/21.pdf", result.PdfFileReference);
+        Assert.Equal(
+            $"/invoice/v1/invoices?CustomerId={customerId:D}&PoNumber=ORD-2100&Page=1&PageSize=10",
+            handler.PathAndQuery);
+    }
+
+    [Fact]
+    public async Task LookupForOrderAsync_DistinguishesNoInvoiceFromServiceFailure()
+    {
+        var customerId = Guid.NewGuid();
+        using var emptyHandler = new QueryHandler(new { items = Array.Empty<object>() });
+        using var emptyHttp = new HttpClient(emptyHandler) { BaseAddress = new Uri("https://invoice.test") };
+        var emptyClient = new InvoiceServiceClient(emptyHttp, NullLogger<InvoiceServiceClient>.Instance);
+        using var failedHandler = new QueryHandler(new { error = "unavailable" }, HttpStatusCode.ServiceUnavailable);
+        using var failedHttp = new HttpClient(failedHandler) { BaseAddress = new Uri("https://invoice.test") };
+        var failedClient = new InvoiceServiceClient(failedHttp, NullLogger<InvoiceServiceClient>.Instance);
+
+        var empty = await emptyClient.LookupForOrderAsync(customerId, "ORD-EMPTY");
+        var failed = await failedClient.LookupForOrderAsync(customerId, "ORD-FAILED");
+
+        Assert.True(empty.IsAvailable);
+        Assert.Null(empty.Invoice);
+        Assert.False(failed.IsAvailable);
+        Assert.Null(failed.Invoice);
+    }
+
     private sealed class RecordingHandler : HttpMessageHandler
     {
         public Guid InvoiceId { get; } = Guid.NewGuid();
@@ -121,6 +184,25 @@ public sealed class InvoiceServiceClientContractTests
             {
                 Content = new StringContent(JsonSerializer.Serialize(value, JsonOptions), System.Text.Encoding.UTF8, "application/json")
             };
+        }
+    }
+
+    private sealed class QueryHandler(object response, HttpStatusCode statusCode = HttpStatusCode.OK) : HttpMessageHandler
+    {
+        public string PathAndQuery { get; private set; } = string.Empty;
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            PathAndQuery = request.RequestUri?.PathAndQuery ?? string.Empty;
+            return Task.FromResult(new HttpResponseMessage(statusCode)
+            {
+                Content = new StringContent(
+                    JsonSerializer.Serialize(response, JsonOptions),
+                    System.Text.Encoding.UTF8,
+                    "application/json")
+            });
         }
     }
 
