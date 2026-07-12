@@ -48,7 +48,7 @@ public sealed class QuoteNotificationSubscriptionAuthorizationTests(
             storagePath,
             sessionId,
             customerId: null,
-            visitorId: ownerVisitor);
+            visitorId: Guid.NewGuid());
 
         var ownerContext = CreateVisitorContext(ownerVisitor, DateTimeOffset.UtcNow.AddDays(1));
         var otherContext = CreateVisitorContext(otherVisitor, DateTimeOffset.UtcNow.AddDays(1));
