@@ -53,7 +53,7 @@ internal sealed class QuoteNotificationSubscriptionAuthorizer(
     }
 
     /// <summary>Authorizes an upload and returns its canonical server-derived group name.</summary>
-    internal Task<string?> AuthorizeFileAsync(
+    internal async Task<string?> AuthorizeFileAsync(
         HttpContext context,
         string storagePath,
         CancellationToken cancellationToken)
@@ -61,12 +61,22 @@ internal sealed class QuoteNotificationSubscriptionAuthorizer(
         cancellationToken.ThrowIfCancellationRequested();
         var upload = prototypeStore.FindUploadByStoragePath(storagePath);
         var caller = ResolveCaller(context);
-        if (upload is null || !caller.Matches(upload.CustomerId, upload.VisitorId))
+        if (upload is null)
         {
-            return Task.FromResult<string?>(null);
+            return null;
         }
 
-        return Task.FromResult<string?>(Hubs.QuoteNotificationsHub.FileGroup(upload.StoragePath));
+        var ownsUpload = caller.Matches(upload.CustomerId, upload.VisitorId);
+        if (Guid.TryParse(upload.QuoteSessionId, out var sessionId))
+        {
+            // The upload index is a locator only. Session-bound uploads inherit their durable
+            // customer-or-visitor ownership from Redis so a stale local record cannot grant access.
+            ownsUpload = caller.Matches(await sessionOwnerStore.GetAsync(sessionId, cancellationToken));
+        }
+
+        return ownsUpload
+            ? Hubs.QuoteNotificationsHub.FileGroup(upload.StoragePath)
+            : null;
     }
 
     /// <summary>Authorizes an authenticated customer's order and returns its canonical group name.</summary>
