@@ -3,7 +3,9 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Agent;
+using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.WebUtilities;
 
 namespace Maliev.QuoteEngine.Tests;
@@ -95,6 +97,39 @@ public sealed class QuoteAgentPreviewBuildEndpointTests(QuoteEngineWebApplicatio
         string toolName,
         Dictionary<string, JsonElement>? arguments = null)
     {
+        using (var ownership = await client.PostAsJsonAsync(
+            "/quote/v1/uploads/resumable",
+            new InitiateQuoteUploadRequest
+            {
+                FileName = "session-owner.step",
+                ContentType = "application/step",
+                FileSizeBytes = 1,
+                QuoteSessionId = sessionId.ToString("D")
+            },
+            JsonOptions))
+        {
+            Assert.Equal(HttpStatusCode.OK, ownership.StatusCode);
+        }
+
+        var mappingPath = $"/test/agent-conversation?quoteSessionId={sessionId:D}";
+        using var lookupResponse = await client.GetAsync(mappingPath);
+        Guid chatbotSessionId;
+        if (lookupResponse.StatusCode == HttpStatusCode.OK)
+        {
+            var mapping = await lookupResponse.Content.ReadFromJsonAsync<QuoteAgentConversationMapping>(JsonOptions);
+            Assert.NotNull(mapping);
+            chatbotSessionId = mapping.ChatbotSessionId;
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.NotFound, lookupResponse.StatusCode);
+            chatbotSessionId = Guid.NewGuid();
+            using var mappingResponse = await client.PostAsync(
+                $"{mappingPath}&chatbotSessionId={chatbotSessionId:D}",
+                content: null);
+            Assert.Equal(HttpStatusCode.NoContent, mappingResponse.StatusCode);
+        }
+
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/quote/v1/agent/tools/{toolName}")
         {
             Content = JsonContent.Create(new QuoteAgentToolRequest
@@ -104,7 +139,7 @@ public sealed class QuoteAgentPreviewBuildEndpointTests(QuoteEngineWebApplicatio
         };
         request.Headers.TryAddWithoutValidation(
             "X-Maliev-Agent-Context",
-            CreateSignedAgentContextToken(sessionId, Guid.NewGuid()));
+            CreateSignedAgentContextToken(sessionId, chatbotSessionId));
 
         using var response = await client.SendAsync(request);
         var json = await response.Content.ReadAsStringAsync();

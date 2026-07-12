@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using Maliev.QuoteEngine.Bff.Options;
+using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 
 namespace Maliev.QuoteEngine.Bff.Services;
@@ -43,18 +45,113 @@ internal sealed class InMemoryQuoteAgentConversationMap : IQuoteAgentConversatio
         cancellationToken.ThrowIfCancellationRequested();
         if (quoteSessionId != Guid.Empty && chatbotSessionId != Guid.Empty)
         {
-            _mappings[quoteSessionId] = new QuoteAgentConversationMapping(chatbotSessionId, customerId);
+            var incoming = new QuoteAgentConversationMapping(chatbotSessionId, customerId);
+            _mappings.AddOrUpdate(
+                quoteSessionId,
+                incoming,
+                (_, current) => MergeMapping(current, incoming));
         }
 
         return Task.CompletedTask;
+    }
+
+    private static QuoteAgentConversationMapping MergeMapping(
+        QuoteAgentConversationMapping current,
+        QuoteAgentConversationMapping incoming)
+    {
+        if (current.ChatbotSessionId != incoming.ChatbotSessionId ||
+            (current.CustomerId.HasValue &&
+             incoming.CustomerId.HasValue &&
+             current.CustomerId != incoming.CustomerId))
+        {
+            throw new InvalidOperationException(
+                "The quote session is already bound to a different ChatbotService conversation or customer.");
+        }
+
+        return current.CustomerId.HasValue ? current : incoming;
     }
 }
 
 internal sealed class RedisQuoteAgentConversationMap(
     IConnectionMultiplexer redis,
-    ILogger<RedisQuoteAgentConversationMap> logger) : IQuoteAgentConversationMap
+    ILogger<RedisQuoteAgentConversationMap> logger,
+    IOptions<QuoteAgentRetentionOptions>? retentionOptions = null) : IQuoteAgentConversationMap
 {
-    private static readonly TimeSpan MappingTtl = TimeSpan.FromDays(2);
+    private readonly QuoteAgentRetentionOptions _retention = retentionOptions?.Value ?? new QuoteAgentRetentionOptions();
+
+    private const string GetAndRenewScript = """
+        local current = redis.call('GET', KEYS[1])
+        if not current then
+            return nil
+        end
+
+        local desiredTtl = tonumber(ARGV[1])
+        local decoded, mapping = pcall(cjson.decode, current)
+        if decoded and type(mapping) == 'table' and
+           mapping.CustomerId ~= nil and mapping.CustomerId ~= cjson.null and mapping.CustomerId ~= '' then
+            desiredTtl = tonumber(ARGV[2])
+        end
+
+        local currentTtl = redis.call('PTTL', KEYS[1])
+        if currentTtl == -1 or (currentTtl >= 0 and currentTtl < desiredTtl) then
+            redis.call('PEXPIRE', KEYS[1], desiredTtl)
+        end
+        return current
+        """;
+
+    private const string StoreMappingScript = """
+        local function renew(ttl)
+            local currentTtl = redis.call('PTTL', KEYS[1])
+            if currentTtl == -1 or (currentTtl >= 0 and currentTtl < ttl) then
+                redis.call('PEXPIRE', KEYS[1], ttl)
+            end
+        end
+
+        local current = redis.call('GET', KEYS[1])
+        if not current then
+            local desiredTtl = tonumber(ARGV[4])
+            if ARGV[2] ~= '' then
+                desiredTtl = tonumber(ARGV[5])
+            end
+            redis.call('SET', KEYS[1], ARGV[3], 'PX', desiredTtl)
+            return 1
+        end
+
+        local currentChatbot = nil
+        local currentCustomer = ''
+        if current == ARGV[1] then
+            currentChatbot = current
+        else
+            local decoded, mapping = pcall(cjson.decode, current)
+            if not decoded then
+                return -2
+            end
+            currentChatbot = mapping.ChatbotSessionId
+            currentCustomer = mapping.CustomerId
+            if currentCustomer == nil or currentCustomer == cjson.null then
+                currentCustomer = ''
+            end
+        end
+
+        if currentChatbot ~= ARGV[1] then
+            return 0
+        end
+        if currentCustomer ~= '' and ARGV[2] ~= '' and currentCustomer ~= ARGV[2] then
+            return 0
+        end
+        if currentCustomer ~= '' and ARGV[2] == '' then
+            renew(tonumber(ARGV[5]))
+            return 1
+        end
+
+        local desiredTtl = tonumber(ARGV[4])
+        if currentCustomer ~= '' or ARGV[2] ~= '' then
+            desiredTtl = tonumber(ARGV[5])
+        end
+        redis.call('SET', KEYS[1], ARGV[3], 'KEEPTTL')
+        renew(desiredTtl)
+        return 1
+        """;
 
     public async Task<QuoteAgentConversationMapping?> GetMappingAsync(Guid quoteSessionId, CancellationToken cancellationToken)
     {
@@ -64,7 +161,10 @@ internal sealed class RedisQuoteAgentConversationMap(
             return null;
         }
 
-        var value = await redis.GetDatabase().StringGetAsync(BuildKey(quoteSessionId));
+        var value = await redis.GetDatabase().ScriptEvaluateAsync(
+            GetAndRenewScript,
+            [BuildKey(quoteSessionId)],
+            [ToMilliseconds(_retention.Anonymous), ToMilliseconds(_retention.Customer)]);
         var raw = value.ToString();
         if (string.IsNullOrWhiteSpace(raw))
         {
@@ -111,21 +211,31 @@ internal sealed class RedisQuoteAgentConversationMap(
             return;
         }
 
-        try
+        var chatbotId = chatbotSessionId.ToString("D");
+        var customer = customerId?.ToString("D") ?? string.Empty;
+        var serialized = System.Text.Json.JsonSerializer.Serialize(new RedisConversationMapping(
+            chatbotId,
+            customerId?.ToString("D")));
+        var result = (long)await redis.GetDatabase().ScriptEvaluateAsync(
+            StoreMappingScript,
+            [BuildKey(quoteSessionId)],
+            [
+                chatbotId,
+                customer,
+                serialized,
+                ToMilliseconds(_retention.Anonymous),
+                ToMilliseconds(_retention.Customer)
+            ]);
+        if (result == 0)
         {
-            await redis.GetDatabase().StringSetAsync(
-                BuildKey(quoteSessionId),
-                System.Text.Json.JsonSerializer.Serialize(new RedisConversationMapping(
-                    chatbotSessionId.ToString("D"),
-                    customerId?.ToString("D"))),
-                MappingTtl);
+            throw new InvalidOperationException(
+                "The quote session is already bound to a different ChatbotService conversation or customer.");
         }
-        catch (RedisException ex)
+
+        if (result < 0)
         {
-            logger.LogWarning(
-                ex,
-                "Failed to persist QuoteEngine to ChatbotService session mapping for {QuoteSessionId}.",
-                quoteSessionId);
+            throw new InvalidOperationException(
+                "The existing QuoteEngine conversation mapping is malformed and cannot be replaced safely.");
         }
     }
 
@@ -133,6 +243,8 @@ internal sealed class RedisQuoteAgentConversationMap(
     {
         return $"quote-agent:conversation-map:{quoteSessionId:D}";
     }
+
+    private static long ToMilliseconds(TimeSpan retention) => checked((long)retention.TotalMilliseconds);
 
     private sealed record RedisConversationMapping(string ChatbotSessionId, string? CustomerId);
 }

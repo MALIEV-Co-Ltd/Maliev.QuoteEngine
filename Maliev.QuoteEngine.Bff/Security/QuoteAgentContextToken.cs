@@ -99,9 +99,11 @@ public sealed class QuoteAgentContextToken(IConfiguration configuration, IHostEn
         var configured = configuration["QuoteAgent:ContextSigningKey"];
         if (string.IsNullOrWhiteSpace(configured))
         {
-            if (hostEnvironment.IsProduction())
+            if (!hostEnvironment.IsDevelopment() &&
+                !hostEnvironment.IsEnvironment("Testing"))
             {
-                throw new InvalidOperationException("QuoteAgent:ContextSigningKey must be configured in production.");
+                throw new InvalidOperationException(
+                    "QuoteAgent:ContextSigningKey must be configured outside Development and Testing.");
             }
 
             configured = "maliev-local-development-quote-agent-context-key";

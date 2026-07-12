@@ -134,6 +134,118 @@ public sealed class QuoteAgentEndpointTests(QuoteEngineWebApplicationFactory fac
     }
 
     [Fact]
+    public async Task Agent_message_null_chatbot_session_is_unavailable_without_mapping_and_retries_after_recovery()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var recoveredChatbotSessionId = Guid.NewGuid();
+        var chatbot = new RecordingChatbotServiceClient();
+        chatbot.InitiateSessionResponses.Enqueue(null);
+        chatbot.InitiateSessionResponses.Enqueue(new ChatbotSessionResponse
+        {
+            SessionId = recoveredChatbotSessionId,
+            Language = "en"
+        });
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        using var unavailable = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = quoteSessionId,
+            Message = "I need a machined bracket.",
+            Language = "en"
+        });
+        var problem = await unavailable.Content.ReadFromJsonAsync<ProblemDetails>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, unavailable.StatusCode);
+        Assert.NotNull(problem);
+        Assert.Equal("Assistant backend is temporarily unavailable.", problem.Title);
+        Assert.Equal("Please try again in a moment.", problem.Detail);
+        Assert.Equal((int)HttpStatusCode.ServiceUnavailable, problem.Status);
+        Assert.True(problem.Extensions.TryGetValue("code", out var errorCode));
+        Assert.Equal("chatbot_session_unavailable", errorCode?.ToString());
+        using var absentMapping = await client.GetAsync(
+            $"/test/agent-conversation?quoteSessionId={quoteSessionId:D}");
+        Assert.Equal(HttpStatusCode.NotFound, absentMapping.StatusCode);
+        Assert.Null(chatbot.LastSendRequest);
+
+        using var recovered = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        {
+            SessionId = quoteSessionId,
+            Message = "Please retry the bracket request.",
+            Language = "en"
+        });
+        var recoveredBody = await recovered.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
+        var mapping = await GetOrCreateAgentConversationAsync(client, quoteSessionId, customerId: null);
+
+        Assert.Equal(HttpStatusCode.OK, recovered.StatusCode);
+        Assert.NotNull(recoveredBody);
+        Assert.Equal(recoveredChatbotSessionId, mapping.ChatbotSessionId);
+        Assert.Equal(recoveredChatbotSessionId, chatbot.LastSendRequest?.SessionId);
+        Assert.Equal(["initiate", "initiate", "send"], chatbot.Operations);
+    }
+
+    [Fact]
+    public async Task Agent_message_empty_chatbot_session_is_unavailable_without_mapping_and_retries_after_recovery()
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var recoveredChatbotSessionId = Guid.NewGuid();
+        var chatbot = new RecordingChatbotServiceClient();
+        chatbot.InitiateSessionResponses.Enqueue(new ChatbotSessionResponse
+        {
+            SessionId = Guid.Empty,
+            Language = "en"
+        });
+        chatbot.InitiateSessionResponses.Enqueue(new ChatbotSessionResponse
+        {
+            SessionId = recoveredChatbotSessionId,
+            Language = "en"
+        });
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(chatbot);
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+
+        var unavailableEvents = await SendStreamMessageAsync(
+            client,
+            quoteSessionId,
+            "I need a machined bracket.");
+
+        var unavailable = Assert.Single(unavailableEvents, streamEvent => streamEvent.Type == "error");
+        Assert.Equal(
+            "Assistant backend is temporarily unavailable. Please try again in a moment.",
+            unavailable.Error);
+        Assert.DoesNotContain(unavailableEvents, streamEvent => streamEvent.Type == "final");
+        using var absentMapping = await client.GetAsync(
+            $"/test/agent-conversation?quoteSessionId={quoteSessionId:D}");
+        Assert.Equal(HttpStatusCode.NotFound, absentMapping.StatusCode);
+        Assert.Null(chatbot.LastStreamRequest);
+
+        var recoveredEvents = await SendStreamMessageAsync(
+            client,
+            quoteSessionId,
+            "Please retry the bracket request.");
+        var mapping = await GetOrCreateAgentConversationAsync(client, quoteSessionId, customerId: null);
+
+        Assert.Contains(recoveredEvents, streamEvent => streamEvent.Type == "final");
+        Assert.DoesNotContain(recoveredEvents, streamEvent => streamEvent.Type == "error");
+        Assert.Equal(recoveredChatbotSessionId, mapping.ChatbotSessionId);
+        Assert.Equal(recoveredChatbotSessionId, chatbot.LastStreamRequest?.SessionId);
+        Assert.Equal(["initiate", "initiate", "stream"], chatbot.Operations);
+    }
+
+    [Fact]
     public async Task Agent_message_forwards_customer_safe_grounding_provenance()
     {
         var chatbot = new RecordingChatbotServiceClient
@@ -300,6 +412,12 @@ Customer message:
             });
         });
         using var client = scopedFactory.CreateClient();
+        await EnsureAgentSessionOwnedAsync(client, quoteSessionId);
+        await StoreTestAgentConversationAsync(
+            client,
+            quoteSessionId,
+            downstreamChatbotSessionId,
+            customerId: null);
 
         var export = await client.PostAsJsonAsync("/quote/v1/agent/export-pdf", new QuoteAgentExportPdfRequest
         {
@@ -323,7 +441,6 @@ Customer message:
         var customerEmail = $"agent-export-{Guid.NewGuid():N}@example.com";
         var customerId = DeterministicCustomerId(customerEmail);
         var conversationMap = new RecordingQuoteAgentConversationMap();
-        await conversationMap.StoreMappingAsync(quoteSessionId, downstreamChatbotSessionId, customerId, CancellationToken.None);
         var chatbot = new RecordingChatbotServiceClient
         {
             ConversationMessages = new ChatbotConversationMessagesResponse
@@ -378,6 +495,12 @@ Tool Result: Success
             });
         });
         using var client = await CreateSignedInClientAsync(scopedFactory, customerEmail);
+        await EnsureAgentSessionOwnedAsync(client, quoteSessionId);
+        await conversationMap.StoreMappingAsync(
+            quoteSessionId,
+            downstreamChatbotSessionId,
+            customerId,
+            CancellationToken.None);
 
         var export = await client.PostAsJsonAsync("/quote/v1/agent/export-pdf", new QuoteAgentExportPdfRequest
         {
@@ -747,6 +870,7 @@ Tool Result: Success
             }
         });
         listener.Start();
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
 
         var failure = await client.PostAsJsonAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/{artifactId:D}/preview-build",
@@ -773,8 +897,19 @@ Tool Result: Success
     {
         var quoteSessionId = Guid.NewGuid();
         var downstreamChatbotSessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f");
+        var customerEmail = $"cold-history-{Guid.NewGuid():N}@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
+        var ownerStore = new InMemoryQuoteAgentSessionOwnerStore();
+        Assert.True(await ownerStore.TryCreateAsync(
+            quoteSessionId,
+            new QuoteAgentSessionOwner(customerId, Guid.NewGuid()),
+            CancellationToken.None));
         var conversationMap = new RecordingQuoteAgentConversationMap();
-        await conversationMap.StoreMappingAsync(quoteSessionId, downstreamChatbotSessionId, null, CancellationToken.None);
+        await conversationMap.StoreMappingAsync(
+            quoteSessionId,
+            downstreamChatbotSessionId,
+            customerId,
+            CancellationToken.None);
         var chatbot = new RecordingChatbotServiceClient
         {
             ConversationMessages = new ChatbotConversationMessagesResponse
@@ -806,9 +941,12 @@ Tool Result: Success
                 services.AddSingleton<IChatbotServiceClient>(chatbot);
                 services.RemoveAll<IQuoteAgentConversationMap>();
                 services.AddSingleton<IQuoteAgentConversationMap>(conversationMap);
+                services.RemoveAll<IQuoteAgentSessionOwnerStore>();
+                services.AddSingleton<IQuoteAgentSessionOwnerStore>(ownerStore);
             });
         });
-        using var client = scopedFactory.CreateClient();
+        using var client = await CreateSignedInClientAsync(scopedFactory, customerEmail);
+        await EnsureAgentSessionOwnedAsync(client, quoteSessionId);
 
         var history = await client.GetFromJsonAsync<QuoteAgentMessageHistoryResponse>(
             $"/quote/v1/agent/sessions/{quoteSessionId:D}/messages",
@@ -980,6 +1118,12 @@ Customer message:
             });
         });
         using var client = scopedFactory.CreateClient();
+        await EnsureAgentSessionOwnedAsync(client, quoteSessionId);
+        await StoreTestAgentConversationAsync(
+            client,
+            quoteSessionId,
+            downstreamChatbotSessionId,
+            customerId: null);
 
         var history = await client.GetFromJsonAsync<QuoteAgentMessageHistoryResponse>(
             $"/quote/v1/agent/sessions/{quoteSessionId:D}/messages",
@@ -1079,6 +1223,12 @@ Customer message:
             });
         });
         using var client = scopedFactory.CreateClient();
+        await EnsureAgentSessionOwnedAsync(client, quoteSessionId);
+        await StoreTestAgentConversationAsync(
+            client,
+            quoteSessionId,
+            downstreamChatbotSessionId,
+            customerId: null);
 
         var history = await client.GetFromJsonAsync<QuoteAgentMessageHistoryResponse>(
             $"/quote/v1/agent/sessions/{quoteSessionId:D}/messages",
@@ -1372,6 +1522,7 @@ Customer message:
             });
         });
         using var client = scopedFactory.CreateClient();
+        const string inlineSketch = "data:image/png;base64,iVBORw0KGgo=";
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
             Content = JsonContent.Create(new QuoteAgentMessageRequest
@@ -1386,7 +1537,7 @@ Customer message:
                         ContentType = "image/png",
                         FileSizeBytes = 120_000,
                         Kind = "sketch",
-                        Url = "https://files.example.test/manufacturing-sketch.png"
+                        Url = inlineSketch
                     }
                 ]
             })
@@ -1400,7 +1551,7 @@ Customer message:
         Assert.Null(chatbot.LastStreamRequest.CallbackUrl);
         var attachment = Assert.Single(chatbot.LastStreamRequest.Attachments!);
         Assert.Equal("image", attachment.Type);
-        Assert.Equal("https://files.example.test/manufacturing-sketch.png", attachment.Url);
+        Assert.Equal(inlineSketch, attachment.Url);
         Assert.Equal("image/png", attachment.MimeType);
     }
 
@@ -1468,6 +1619,7 @@ Customer message:
                 services.RemoveAll<IHostEnvironment>();
                 services.AddSingleton<IHostEnvironment>(
                     new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                UseProcessLocalAgentStateForProductionTest(services);
                 services.RemoveAll<IChatbotServiceClient>();
                 services.AddSingleton<IChatbotServiceClient>(chatbot);
             });
@@ -1507,25 +1659,29 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
         var inlinePreview = $"data:image/png;base64,{new string('A', 1_200)}";
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Please quote this hand sketch.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "manufacturing-sketch.png",
+                    ContentType = "image/png",
+                    FileSizeBytes = 120_000,
+                    Kind = "sketch",
+                    Url = inlinePreview,
+                    StoragePath = "quotes/temp/session/manufacturing-sketch.png"
+                }
+            ]
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
-            Content = JsonContent.Create(new QuoteAgentMessageRequest
-            {
-                Message = "Please quote this hand sketch.",
-                Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "manufacturing-sketch.png",
-                        ContentType = "image/png",
-                        FileSizeBytes = 120_000,
-                        Kind = "sketch",
-                        Url = inlinePreview,
-                        StoragePath = "quotes/temp/session/manufacturing-sketch.png"
-                    }
-                ]
-            })
+            Content = JsonContent.Create(message)
         };
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
@@ -1559,26 +1715,30 @@ Customer message:
             });
         });
         using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "@drive please analyze this attached bracket.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "drive-bracket.step",
+                    ContentType = "model/step",
+                    FileSizeBytes = 42_000,
+                    Kind = "cad",
+                    UploadId = "drive-upload-1",
+                    StoragePath = "quotes/temp/session/drive-bracket.step",
+                    SatisfiesGeometryGate = true
+                }
+            ]
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
-            Content = JsonContent.Create(new QuoteAgentMessageRequest
-            {
-                Message = "@drive please analyze this attached bracket.",
-                Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "drive-bracket.step",
-                        ContentType = "model/step",
-                        FileSizeBytes = 42_000,
-                        Kind = "cad",
-                        UploadId = "drive-upload-1",
-                        StoragePath = "quotes/temp/session/drive-bracket.step",
-                        SatisfiesGeometryGate = true
-                    }
-                ]
-            })
+            Content = JsonContent.Create(message)
         };
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
@@ -1608,24 +1768,28 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
         const string storagePath = "quotes/temp/session/customer-walkaround.mp4";
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Use this video to quote the part.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "customer-walkaround.mp4",
+                    ContentType = "video/mp4",
+                    FileSizeBytes = 4_200_000,
+                    Kind = "video",
+                    StoragePath = storagePath
+                }
+            ]
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
-            Content = JsonContent.Create(new QuoteAgentMessageRequest
-            {
-                Message = "Use this video to quote the part.",
-                Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "customer-walkaround.mp4",
-                        ContentType = "video/mp4",
-                        FileSizeBytes = 4_200_000,
-                        Kind = "video",
-                        StoragePath = storagePath
-                    }
-                ]
-            })
+            Content = JsonContent.Create(message)
         };
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
@@ -1658,24 +1822,28 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
         const string storagePath = "quotes/temp/session/customer-drawing.pdf";
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Use this drawing to quote the bracket.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "customer-drawing.pdf",
+                    ContentType = "application/pdf",
+                    FileSizeBytes = 2_400_000,
+                    Kind = "drawing",
+                    StoragePath = storagePath
+                }
+            ]
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
-            Content = JsonContent.Create(new QuoteAgentMessageRequest
-            {
-                Message = "Use this drawing to quote the bracket.",
-                Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "customer-drawing.pdf",
-                        ContentType = "application/pdf",
-                        FileSizeBytes = 2_400_000,
-                        Kind = "drawing",
-                        StoragePath = storagePath
-                    }
-                ]
-            })
+            Content = JsonContent.Create(message)
         };
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
@@ -1710,24 +1878,28 @@ Customer message:
             });
         });
         using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Please quote this hand sketch.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "manufacturing-sketch.png",
+                    ContentType = "image/png",
+                    FileSizeBytes = 120_000,
+                    Kind = "sketch",
+                    StoragePath = "quotes/temp/session/manufacturing-sketch.png"
+                }
+            ]
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
-            Content = JsonContent.Create(new QuoteAgentMessageRequest
-            {
-                Message = "Please quote this hand sketch.",
-                Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "manufacturing-sketch.png",
-                        ContentType = "image/png",
-                        FileSizeBytes = 120_000,
-                        Kind = "sketch",
-                        StoragePath = "quotes/temp/session/manufacturing-sketch.png"
-                    }
-                ]
-            })
+            Content = JsonContent.Create(message)
         };
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
@@ -1748,52 +1920,59 @@ Customer message:
             {
                 services.RemoveAll<IChatbotServiceClient>();
                 services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(new RecordingUploadServiceClient());
             });
         });
         using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        const string inlineImage = "data:image/png;base64,iVBORw0KGgo=";
+        var message = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Please quote these attachments.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "bracket.glb",
+                    ContentType = "model/gltf-binary",
+                    FileSizeBytes = 320_000,
+                    Kind = "cad",
+                    StoragePath = "quotes/temp/session/bracket.glb",
+                    SatisfiesGeometryGate = true
+                },
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "manufacturing-sketch.png",
+                    ContentType = "image/png",
+                    FileSizeBytes = 120_000,
+                    Kind = "sketch",
+                    Url = inlineImage
+                },
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "walkaround.mp4",
+                    ContentType = "video/mp4",
+                    FileSizeBytes = 4_200_000,
+                    Kind = "video",
+                    StoragePath = "quotes/temp/session/walkaround.mp4"
+                },
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "spoken-requirements.mp3",
+                    ContentType = "audio/mpeg",
+                    FileSizeBytes = 420_000,
+                    Kind = "audio",
+                    StoragePath = "quotes/temp/session/spoken-requirements.mp3"
+                }
+            ]
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
-            Content = JsonContent.Create(new QuoteAgentMessageRequest
-            {
-                Message = "Please quote these attachments.",
-                Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "bracket.glb",
-                        ContentType = "model/gltf-binary",
-                        FileSizeBytes = 320_000,
-                        Kind = "cad",
-                        Url = "https://files.example.test/bracket.glb",
-                        SatisfiesGeometryGate = true
-                    },
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "manufacturing-sketch.png",
-                        ContentType = "image/png",
-                        FileSizeBytes = 120_000,
-                        Kind = "sketch",
-                        Url = "https://files.example.test/manufacturing-sketch.png"
-                    },
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "walkaround.mp4",
-                        ContentType = "video/mp4",
-                        FileSizeBytes = 4_200_000,
-                        Kind = "video",
-                        Url = "https://files.example.test/walkaround.mp4"
-                    },
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "spoken-requirements.mp3",
-                        ContentType = "audio/mpeg",
-                        FileSizeBytes = 420_000,
-                        Kind = "audio",
-                        Url = "https://files.example.test/spoken-requirements.mp3"
-                    }
-                ]
-            }, options: JsonOptions)
+            Content = JsonContent.Create(message, options: JsonOptions)
         };
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
@@ -1808,7 +1987,7 @@ Customer message:
         var image = Assert.Single(chatbot.LastStreamRequest.Attachments, attachment => attachment.Filename == "manufacturing-sketch.png");
         Assert.Equal("image", image.Type);
         Assert.Equal("image/png", image.MimeType);
-        Assert.Equal("https://files.example.test/manufacturing-sketch.png", image.Url);
+        Assert.Equal(inlineImage, image.Url);
 
         var video = Assert.Single(chatbot.LastStreamRequest.Attachments, attachment => attachment.Filename == "walkaround.mp4");
         Assert.Equal("video", video.Type);
@@ -1822,7 +2001,7 @@ Customer message:
     }
 
     [Fact]
-    public async Task Agent_message_stream_forwards_markdown_documents_to_chatbot_service()
+    public async Task Agent_message_stream_rejects_unregistered_markdown_attachment_before_chatbot_service()
     {
         var chatbot = new RecordingChatbotServiceClient();
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
@@ -1831,42 +2010,41 @@ Customer message:
             {
                 services.RemoveAll<IChatbotServiceClient>();
                 services.AddSingleton<IChatbotServiceClient>(chatbot);
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(new RecordingUploadServiceClient());
             });
         });
         using var client = scopedFactory.CreateClient();
-        const string documentUrl = "https://files.example.test/customer-requirements.md";
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Summarize these requirements for quoting.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "customer-requirements.md",
+                    ContentType = "text/markdown",
+                    FileSizeBytes = 12_000,
+                    Kind = "requirements",
+                    StoragePath = "quotes/temp/session/customer-requirements.md"
+                }
+            ]
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
-            Content = JsonContent.Create(new QuoteAgentMessageRequest
-            {
-                Message = "Summarize these requirements for quoting.",
-                Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "customer-requirements.md",
-                        ContentType = "text/markdown",
-                        FileSizeBytes = 12_000,
-                        Kind = "requirements",
-                        Url = documentUrl
-                    }
-                ]
-            }, options: JsonOptions)
+            Content = JsonContent.Create(message, options: JsonOptions)
         };
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
         _ = await response.Content.ReadAsStringAsync();
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.NotNull(chatbot.LastStreamRequest);
-        var attachment = Assert.Single(chatbot.LastStreamRequest!.Attachments!);
-        Assert.Equal("document", attachment.Type);
-        Assert.Equal("text/markdown", attachment.MimeType);
-        Assert.Equal("customer-requirements.md", attachment.Filename);
-        Assert.Equal(documentUrl, attachment.Url);
-        Assert.Equal(12_000, attachment.SizeBytes);
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Null(chatbot.LastStreamRequest);
     }
 
     [Fact]
@@ -1886,27 +2064,29 @@ Customer message:
         using var client = scopedFactory.CreateClient();
         var sessionId = Guid.NewGuid();
         var inlinePreview = $"data:image/png;base64,{new string('A', 1_200)}";
+        var firstMessage = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "Please quote this hand sketch.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "manufacturing-sketch.png",
+                    ContentType = "image/png",
+                    FileSizeBytes = 120_000,
+                    Kind = "sketch",
+                    Url = inlinePreview,
+                    StoragePath = "agent/sketches/abc/manufacturing-sketch.png"
+                }
+            ]
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, firstMessage.Attachments);
 
         using (var firstRequest = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
-            Content = JsonContent.Create(new QuoteAgentMessageRequest
-            {
-                SessionId = sessionId,
-                Message = "Please quote this hand sketch.",
-                Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "manufacturing-sketch.png",
-                        ContentType = "image/png",
-                        FileSizeBytes = 120_000,
-                        Kind = "sketch",
-                        Url = inlinePreview,
-                        StoragePath = "agent/sketches/abc/manufacturing-sketch.png"
-                    }
-                ]
-            }, options: JsonOptions)
+            Content = JsonContent.Create(firstMessage, options: JsonOptions)
         })
         {
             using var firstResponse = await client.SendAsync(firstRequest, HttpCompletionOption.ResponseHeadersRead);
@@ -2000,7 +2180,7 @@ Customer message:
         });
         var sessionId = Guid.NewGuid();
         using var form = new MultipartFormDataContent();
-        using var pngContent = new ByteArrayContent([1, 2, 3, 4]);
+        using var pngContent = new ByteArrayContent([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
         pngContent.Headers.ContentType = new MediaTypeHeaderValue("image/png");
         form.Add(pngContent, "file", "Manufacturing-sketch.png");
 
@@ -2009,7 +2189,8 @@ Customer message:
 
         Assert.Equal(HttpStatusCode.OK, uploadResponse.StatusCode);
         Assert.NotNull(upload);
-        Assert.Equal($"agent/sketches/{sessionId:N}/Manufacturing-sketch.png", upload.StoragePath);
+        Assert.StartsWith($"agent/sketches/{sessionId:N}/", upload.StoragePath, StringComparison.Ordinal);
+        Assert.EndsWith("/Manufacturing-sketch.png", upload.StoragePath, StringComparison.Ordinal);
         Assert.Equal(upload.StoragePath, uploadClient.LastInitiatedStoragePath);
         Assert.Equal(upload.StoragePath, uploadClient.LastStreamedStoragePath);
         Assert.Equal(
@@ -2021,10 +2202,11 @@ Customer message:
         Assert.Equal(HttpStatusCode.Redirect, redirectResponse.StatusCode);
         Assert.Equal(upload.Url, redirectResponse.Headers.Location?.ToString());
 
-        var otherSessionPath = $"agent/sketches/{Guid.NewGuid():N}/Manufacturing-sketch.png";
+        var otherSessionPath = $"agent/sketches/{Guid.NewGuid():N}/{Guid.NewGuid():N}/Manufacturing-sketch.png";
         var blockedResponse = await client.GetAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(otherSessionPath)}");
-        Assert.Equal(HttpStatusCode.BadRequest, blockedResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, blockedResponse.StatusCode);
+        Assert.Equal(string.Empty, await blockedResponse.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -2047,24 +2229,27 @@ Customer message:
         var customerId = Guid.NewGuid();
         var pdfStoragePath = $"customers/{customerId:D}/quotes/{sessionId:D}/drawings/cover motion.pdf";
 
+        List<QuoteAgentAttachmentDto> attachments =
+        [
+            new()
+            {
+                FileName = "cover motion.pdf",
+                ContentType = "application/pdf",
+                FileSizeBytes = 128_000,
+                Kind = "drawing",
+                UploadId = "upload-pdf-drawing",
+                StoragePath = pdfStoragePath
+            }
+        ];
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, attachments);
+
         var registerResponse = await client.PostAsJsonAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
             new QuoteAgentAttachmentRegisterRequest
             {
                 Message = "Analyze this PDF drawing.",
                 Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "cover motion.pdf",
-                        ContentType = "application/pdf",
-                        FileSizeBytes = 128_000,
-                        Kind = "drawing",
-                        UploadId = "upload-pdf-drawing",
-                        StoragePath = pdfStoragePath
-                    }
-                ]
+                Attachments = attachments
             },
             JsonOptions);
         var state = await registerResponse.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
@@ -2091,7 +2276,8 @@ Customer message:
         var blockedResponse = await client.GetAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(unregisteredPath)}");
 
-        Assert.Equal(HttpStatusCode.BadRequest, blockedResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, blockedResponse.StatusCode);
+        Assert.Equal(string.Empty, await blockedResponse.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -2946,6 +3132,8 @@ Customer message:
             {
                 services.RemoveAll<IQePricingServiceClient>();
                 services.AddSingleton<IQePricingServiceClient>(new QuoteEngineWebApplicationFactory.EmptyPricingServiceClient());
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(new RecordingChatbotServiceClient());
             });
         });
         using var client = await CreateSignedInClientAsync(
@@ -3040,8 +3228,10 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
         {
+            SessionId = sessionId,
             Message = "แบบนี้เท่าไหร่",
             Language = "th",
             Attachments =
@@ -3055,7 +3245,9 @@ Customer message:
                     StoragePath = "quotes/temp/pa6-sample.stl"
                 }
             ]
-        });
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", message);
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -3086,8 +3278,10 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
         {
+            SessionId = sessionId,
             Message = "Quote this STL as 25 pieces, black PLA, standard lead time.",
             Language = "en",
             Attachments =
@@ -3101,7 +3295,9 @@ Customer message:
                     StoragePath = "quotes/temp/fixture.stl"
                 }
             ]
-        });
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", message);
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -3150,8 +3346,10 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
 
-        var initialResponse = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        var sessionId = Guid.NewGuid();
+        var initialMessage = new QuoteAgentMessageRequest
         {
+            SessionId = sessionId,
             Message = "สอบถามราคาพิมพ์ 3D ครับ",
             Language = "th",
             Attachments =
@@ -3167,7 +3365,9 @@ Customer message:
                     SatisfiesGeometryGate = true
                 }
             ]
-        });
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, initialMessage.Attachments);
+        var initialResponse = await client.PostAsJsonAsync("/quote/v1/agent/messages", initialMessage);
         var initialBody = await initialResponse.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
         Assert.Equal(HttpStatusCode.OK, initialResponse.StatusCode);
         Assert.NotNull(initialBody);
@@ -3232,24 +3432,28 @@ Customer message:
             });
         });
         using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
+            Message = "show me the 3d model of the part. I don't have program to open and see it.",
+            Language = "en",
+            Attachments =
+            [
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = "3D_FOR_A SHAPE-1-1.stp",
+                    ContentType = "model/step",
+                    FileSizeBytes = 146_300,
+                    Kind = "cad",
+                    StoragePath = "quotes/temp/shape.stp"
+                }
+            ]
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/messages/stream")
         {
-            Content = JsonContent.Create(new QuoteAgentMessageRequest
-            {
-                Message = "show me the 3d model of the part. I don't have program to open and see it.",
-                Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "3D_FOR_A SHAPE-1-1.stp",
-                        ContentType = "model/step",
-                        FileSizeBytes = 146_300,
-                        Kind = "cad",
-                        StoragePath = "quotes/temp/shape.stp"
-                    }
-                ]
-            }, options: JsonOptions)
+            Content = JsonContent.Create(message, options: JsonOptions)
         };
 
         using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
@@ -3388,8 +3592,10 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
         {
+            SessionId = sessionId,
             Message = "Quote this STEP as 10 pieces in aluminum.",
             Language = "en",
             Attachments =
@@ -3403,7 +3609,9 @@ Customer message:
                     StoragePath = "quotes/temp/bracket.step"
                 }
             ]
-        });
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", message);
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -3422,6 +3630,19 @@ Customer message:
     {
         using var client = factory.CreateClient();
         var sessionId = Guid.NewGuid();
+        List<QuoteAgentAttachmentDto> attachments =
+        [
+            new QuoteAgentAttachmentDto
+            {
+                FileName = "uploaded-bracket.step",
+                ContentType = "model/step",
+                FileSizeBytes = 380_000,
+                Kind = "cad",
+                UploadId = "upload-agent-sync",
+                StoragePath = "quotes/temp/session/uploaded-bracket.step"
+            }
+        ];
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, attachments);
 
         var response = await client.PostAsJsonAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
@@ -3429,18 +3650,7 @@ Customer message:
             {
                 Message = "Customer uploaded a STEP file for 25 aluminum brackets.",
                 Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "uploaded-bracket.step",
-                        ContentType = "model/step",
-                        FileSizeBytes = 380_000,
-                        Kind = "cad",
-                        UploadId = "upload-agent-sync",
-                        StoragePath = "quotes/temp/session/uploaded-bracket.step"
-                    }
-                ]
+                Attachments = attachments
             });
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
 
@@ -3463,6 +3673,19 @@ Customer message:
         using var client = factory.CreateClient();
         var sessionId = Guid.NewGuid();
         const string storagePath = "quotes/temp/session/dfm-bracket.stl";
+        List<QuoteAgentAttachmentDto> attachments =
+        [
+            new QuoteAgentAttachmentDto
+            {
+                FileName = "dfm-bracket.stl",
+                ContentType = "model/stl",
+                FileSizeBytes = 240_000,
+                Kind = "cad",
+                UploadId = "upload-dfm-1",
+                StoragePath = storagePath
+            }
+        ];
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, attachments);
 
         // Register a CAD part so the session has a part keyed by this storage path.
         var register = await client.PostAsJsonAsync(
@@ -3471,18 +3694,7 @@ Customer message:
             {
                 Message = "Customer uploaded an STL for an FDM bracket.",
                 Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "dfm-bracket.stl",
-                        ContentType = "model/stl",
-                        FileSizeBytes = 240_000,
-                        Kind = "cad",
-                        UploadId = "upload-dfm-1",
-                        StoragePath = storagePath
-                    }
-                ]
+                Attachments = attachments
             });
         Assert.Equal(HttpStatusCode.OK, register.StatusCode);
 
@@ -3514,10 +3726,191 @@ Customer message:
     }
 
     [Fact]
+    public async Task Production_processing_cad_does_not_materialize_parts_or_pass_geometry_gates()
+    {
+        await using var productionFactory = CreateProductionAgentFactory();
+        using var client = productionFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        var attachment = new QuoteAgentAttachmentDto
+        {
+            FileName = "pending-bracket.step",
+            ContentType = "model/step",
+            FileSizeBytes = 32_000,
+            Kind = "cad"
+        };
+        await UploadAuthoritativeAttachmentAsync(client, sessionId, attachment);
+        await CompleteAuthoritativeUploadAsync(client, attachment.UploadId!);
+
+        using var response = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
+            new QuoteAgentAttachmentRegisterRequest
+            {
+                Message = "Quote this pending STEP file as 10 aluminum pieces.",
+                Language = "en",
+                Attachments = [attachment]
+            },
+            JsonOptions);
+        var state = await response.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(state);
+        Assert.Empty(state.Parts);
+        Assert.Null(state.Estimate);
+        Assert.DoesNotContain(state.Artifacts, artifact =>
+            artifact.ArtifactType is "viewer" or "dfm" or "pricing");
+        Assert.Contains(state.Gates, gate =>
+            gate.Code == "geometry_required" && gate.Status != "passed");
+        Assert.Contains(state.Gates, gate =>
+            gate.Code == "analysis_complete" && gate.Status != "passed");
+    }
+
+    [Fact]
+    public async Task Production_browser_local_dfm_remains_advisory_and_cannot_clear_server_gates()
+    {
+        await using var productionFactory = CreateProductionAgentFactory();
+        using var client = productionFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        var attachment = new QuoteAgentAttachmentDto
+        {
+            FileName = "local-dfm-bracket.stl",
+            ContentType = "model/stl",
+            FileSizeBytes = 24_000,
+            Kind = "cad"
+        };
+        await UploadAuthoritativeAttachmentAsync(client, sessionId, attachment);
+        await CompleteAuthoritativeUploadAsync(client, attachment.UploadId!);
+        using var register = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
+            new QuoteAgentAttachmentRegisterRequest
+            {
+                Message = "Quote this STL as 5 PLA pieces.",
+                Language = "en",
+                Attachments = [attachment]
+            },
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, register.StatusCode);
+
+        using var response = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/dfm",
+            new QuoteAgentLocalDfmRequest
+            {
+                StoragePath = attachment.StoragePath!,
+                UploadId = attachment.UploadId!,
+                ProcessCode = "FDM",
+                IsManifold = true,
+                FdmReport = new QeFdmDfmReport(0, 0, 0m, false, 0, [])
+            },
+            JsonOptions);
+        var state = await response.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(state);
+        Assert.Empty(state.Parts);
+        Assert.Null(state.Estimate);
+        Assert.DoesNotContain(state.Artifacts, artifact =>
+            artifact.ArtifactType is "viewer" or "dfm" or "pricing");
+        Assert.Contains(state.Gates, gate =>
+            gate.Code == "geometry_required" && gate.Status != "passed");
+        Assert.Contains(state.Gates, gate =>
+            gate.Code == "analysis_complete" && gate.Status != "passed");
+
+        var analysis = await client.GetFromJsonAsync<QuoteAnalysisStatusResponse>(
+            $"/quote/v1/uploads/{attachment.UploadId}/analysis-status",
+            JsonOptions);
+        Assert.NotNull(analysis);
+        Assert.False(analysis.IsAuthoritative);
+        Assert.True(analysis.HasAdvisoryAnalysis);
+        Assert.Equal("browser_local_advisory", analysis.AdvisoryAnalysisSource);
+        Assert.Equal("Processing", analysis.Status);
+        Assert.Null(analysis.FdmReport);
+    }
+
+    [Fact]
+    public async Task Production_authoritative_geometry_and_dfm_materialize_exact_server_metrics()
+    {
+        await using var productionFactory = CreateProductionAgentFactory();
+        using var client = productionFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        var attachment = new QuoteAgentAttachmentDto
+        {
+            FileName = "analyzed-bracket.step",
+            ContentType = "model/step",
+            FileSizeBytes = 48_000,
+            Kind = "cad"
+        };
+        await UploadAuthoritativeAttachmentAsync(client, sessionId, attachment);
+        await CompleteAuthoritativeUploadAsync(client, attachment.UploadId!);
+        var analysisStatus = productionFactory.Services.GetRequiredService<IQuoteFileAnalysisStatusService>();
+        await analysisStatus.SetGlbReadyAsync(
+            attachment.StoragePath!,
+            "https://files.example.com/analyzed-bracket.glb",
+            "https://files.example.com/analyzed-bracket.webp",
+            2,
+            true,
+            viewerStoragePath: "processed/analyzed-bracket.glb",
+            viewerFileExtension: ".glb",
+            volumeCc: 18.75m,
+            surfaceAreaCm2: 64.5m);
+        await analysisStatus.SetDfmReportsAsync(
+            attachment.StoragePath!,
+            new QeFdmDfmReport(0, 0, 0m, false, 0, []),
+            null,
+            null,
+            [],
+            null,
+            null);
+
+        using var response = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
+            new QuoteAgentAttachmentRegisterRequest
+            {
+                Message = "Quote this analyzed STEP file as 12 aluminum pieces.",
+                Language = "en",
+                Attachments = [attachment]
+            },
+            JsonOptions);
+        var state = await response.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(state);
+        var part = Assert.Single(state.Parts);
+        Assert.Equal(18.75m, part.VolumeCc);
+        Assert.Equal(64.5m, part.SurfaceAreaCm2);
+        Assert.Equal("DfmAnalysisReady", part.Status);
+        Assert.Equal("https://files.example.com/analyzed-bracket.glb", part.ViewerGlbUrl);
+        Assert.NotNull(part.FdmReport);
+        Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "viewer" && artifact.Status == "ready");
+        Assert.Contains(state.Artifacts, artifact => artifact.ArtifactType == "dfm" && artifact.Status == "ready");
+        Assert.Contains(state.Gates, gate => gate.Code == "geometry_required" && gate.Status == "passed");
+        Assert.Contains(state.Gates, gate => gate.Code == "analysis_complete" && gate.Status == "passed");
+
+        var analysis = await client.GetFromJsonAsync<QuoteAnalysisStatusResponse>(
+            $"/quote/v1/uploads/{attachment.UploadId}/analysis-status",
+            JsonOptions);
+        Assert.NotNull(analysis);
+        Assert.True(analysis.IsAuthoritative);
+        Assert.Equal("server_analysis", analysis.AnalysisSource);
+        Assert.False(analysis.HasAdvisoryAnalysis);
+    }
+
+    [Fact]
     public async Task Agent_attachment_registration_keeps_supplemental_files_out_of_geometry_gate()
     {
         using var client = factory.CreateClient();
         var sessionId = Guid.NewGuid();
+        List<QuoteAgentAttachmentDto> attachments =
+        [
+            new QuoteAgentAttachmentDto
+            {
+                FileName = "bracket-sketch.png",
+                ContentType = "image/png",
+                FileSizeBytes = 120_000,
+                Kind = "photo",
+                UploadId = "upload-agent-supplemental",
+                StoragePath = "quotes/temp/session/bracket-sketch.png"
+            }
+        ];
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, attachments);
 
         var response = await client.PostAsJsonAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
@@ -3525,18 +3918,7 @@ Customer message:
             {
                 Message = "Customer uploaded a sketch for an aluminum bracket.",
                 Language = "en",
-                Attachments =
-                [
-                    new QuoteAgentAttachmentDto
-                    {
-                        FileName = "bracket-sketch.png",
-                        ContentType = "image/png",
-                        FileSizeBytes = 120_000,
-                        Kind = "photo",
-                        UploadId = "upload-agent-supplemental",
-                        StoragePath = "quotes/temp/session/bracket-sketch.png"
-                    }
-                ]
+                Attachments = attachments
             });
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentStateResponse>(JsonOptions);
 
@@ -3572,8 +3954,10 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
         {
+            SessionId = sessionId,
             Message = "I need 50 aluminum brackets from this hand sketch.",
             Language = "en",
             Attachments =
@@ -3587,7 +3971,9 @@ Customer message:
                     Url = "https://files.example.test/bracket-sketch.jpg"
                 }
             ]
-        });
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", message);
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -3599,7 +3985,7 @@ Customer message:
             artifact.Metadata["geometryGate"] == "not_satisfied_by_supplemental_files");
         var sketchArtifact = Assert.Single(body.Artifacts, artifact => artifact.Title == "bracket-sketch.jpg");
         Assert.Equal("sketch", sketchArtifact.ArtifactType);
-        Assert.Equal("https://files.example.test/bracket-sketch.jpg", sketchArtifact.Url);
+        Assert.Equal(message.Attachments[0].StoragePath, sketchArtifact.Url);
         Assert.Equal("false", sketchArtifact.Metadata["satisfiesGeometryGate"]);
 
         var state = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
@@ -3623,8 +4009,10 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
         {
+            SessionId = sessionId,
             Message = "Need 50 of these brackets in 3mm aluminum. Overall 50 mm x 30 mm, 2x Ø6 thru holes, 8 x 16 mm slot, ±0.1 mm, clear anodize. Can you quote a 7 day lead time?",
             Language = "en",
             Attachments =
@@ -3646,7 +4034,9 @@ Customer message:
                     Url = "https://files.example.test/bracket-drawing.pdf"
                 }
             ]
-        });
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", message);
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -3709,8 +4099,10 @@ Customer message:
         });
         using var client = scopedFactory.CreateClient();
 
-        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
         {
+            SessionId = sessionId,
             Message = "Quote this STEP with the attached drawing for 10 pieces in 6061.",
             Language = "en",
             Attachments =
@@ -3732,7 +4124,9 @@ Customer message:
                     StoragePath = "quotes/temp/housing-drawing.pdf"
                 }
             ]
-        });
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", message);
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -3885,8 +4279,8 @@ Customer message:
                         file_size_bytes = 1_500_000,
                         kind = "sketch",
                         upload_id = "agent-upload-sketch",
-                        storage_path = "",
-                        url = "https://files.example.test/bracket-sketch.jpg"
+                        storage_path = "quotes/temp/session/agent-upload-sketch/bracket-sketch.jpg",
+                        url = ""
                     },
                     new
                     {
@@ -3912,7 +4306,7 @@ Customer message:
         Assert.Contains(state.Artifacts, artifact =>
             artifact.ArtifactType == "sketch" &&
             artifact.Title == "bracket-sketch.jpg" &&
-            artifact.Url == "https://files.example.test/bracket-sketch.jpg");
+            artifact.Url == "quotes/temp/session/agent-upload-sketch/bracket-sketch.jpg");
         Assert.Contains(state.Artifacts, artifact =>
             artifact.ArtifactType == "drawing" &&
             artifact.Title == "bracket-notes.pdf" &&
@@ -4167,6 +4561,7 @@ Customer message:
             {
                 services.RemoveAll<IHostEnvironment>();
                 services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                UseProcessLocalAgentStateForProductionTest(services);
 
                 services.RemoveAll<IQePricingServiceClient>();
                 services.AddSingleton<IQePricingServiceClient>(new QuoteEngineWebApplicationFactory.EmptyPricingServiceClient());
@@ -4174,6 +4569,10 @@ Customer message:
         });
         using var client = productionFactory.CreateClient();
         var sessionId = Guid.NewGuid();
+        const string productionStoragePath = "quotes/temp/session/production-estimate-upload-cad/production-priced-housing.step";
+        await SeedAuthoritativeAnalysisAsync(
+            productionFactory.Services.GetRequiredService<IQuoteFileAnalysisStatusService>(),
+            productionStoragePath);
 
         await ExecuteToolForStateAsync(
             client,
@@ -4193,7 +4592,7 @@ Customer message:
                         file_size_bytes = 240_000,
                         kind = "cad",
                         upload_id = "production-estimate-upload-cad",
-                        storage_path = "quotes/temp/session/production-estimate-upload-cad/production-priced-housing.step"
+                        storage_path = productionStoragePath
                     }
                 }, JsonOptions)
             });
@@ -4225,6 +4624,7 @@ Customer message:
             {
                 services.RemoveAll<IHostEnvironment>();
                 services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                UseProcessLocalAgentStateForProductionTest(services);
 
                 services.RemoveAll<IQePricingServiceClient>();
                 services.AddSingleton<IQePricingServiceClient>(new QuoteEngineWebApplicationFactory.ZeroPricingServiceClient());
@@ -4232,6 +4632,10 @@ Customer message:
         });
         using var client = productionFactory.CreateClient();
         var sessionId = Guid.NewGuid();
+        const string zeroPricingStoragePath = "quotes/temp/session/zero-estimate-upload-cad/zero-priced-housing.step";
+        await SeedAuthoritativeAnalysisAsync(
+            productionFactory.Services.GetRequiredService<IQuoteFileAnalysisStatusService>(),
+            zeroPricingStoragePath);
 
         await ExecuteToolForStateAsync(
             client,
@@ -4251,7 +4655,7 @@ Customer message:
                         file_size_bytes = 240_000,
                         kind = "cad",
                         upload_id = "zero-estimate-upload-cad",
-                        storage_path = "quotes/temp/session/zero-estimate-upload-cad/zero-priced-housing.step"
+                        storage_path = zeroPricingStoragePath
                     }
                 }, JsonOptions)
             });
@@ -4478,13 +4882,16 @@ Customer message:
     public async Task Agent_tool_endpoint_returns_state_for_signed_context()
     {
         using var client = factory.CreateClient();
+        var quoteSessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, quoteSessionId);
+        var mapping = await GetOrCreateAgentConversationAsync(client, quoteSessionId, null);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/tools/quote_get_state")
         {
             Content = JsonContent.Create(new QuoteAgentToolRequest(), options: JsonOptions)
         };
         request.Headers.TryAddWithoutValidation(
             "X-Maliev-Agent-Context",
-            CreateSignedAgentContextToken(Guid.NewGuid(), Guid.NewGuid(), null));
+            CreateSignedAgentContextToken(quoteSessionId, mapping.ChatbotSessionId, null));
 
         using var response = await client.SendAsync(request);
         var state = await response.Content.ReadFromJsonAsync<QuoteAgentStateResponse>();
@@ -4500,6 +4907,8 @@ Customer message:
     {
         using var client = factory.CreateClient();
         var quoteSessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, quoteSessionId);
+        var contextToken = await CreateMappedAgentContextTokenAsync(client, quoteSessionId, null);
         using var prepareRequest = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/tools/quote_prepare_formal_quote")
         {
             Content = JsonContent.Create(new QuoteAgentToolRequest
@@ -4512,7 +4921,7 @@ Customer message:
         };
         prepareRequest.Headers.TryAddWithoutValidation(
             "X-Maliev-Agent-Context",
-            CreateSignedAgentContextToken(quoteSessionId, Guid.NewGuid(), null));
+            contextToken);
 
         using var prepareResponse = await client.SendAsync(prepareRequest);
         using var document = await JsonDocument.ParseAsync(await prepareResponse.Content.ReadAsStreamAsync());
@@ -4527,6 +4936,9 @@ Customer message:
     public async Task Agent_auth_required_gate_error_includes_trusted_auth_handoff()
     {
         using var client = factory.CreateClient();
+        var quoteSessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, quoteSessionId);
+        var contextToken = await CreateMappedAgentContextTokenAsync(client, quoteSessionId, null);
         using var prepareRequest = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/tools/quote_prepare_formal_quote")
         {
             Content = JsonContent.Create(new QuoteAgentToolRequest
@@ -4540,7 +4952,7 @@ Customer message:
         };
         prepareRequest.Headers.TryAddWithoutValidation(
             "X-Maliev-Agent-Context",
-            CreateSignedAgentContextToken(Guid.NewGuid(), Guid.NewGuid(), null));
+            contextToken);
 
         using var prepareResponse = await client.SendAsync(prepareRequest);
         using var document = await JsonDocument.ParseAsync(await prepareResponse.Content.ReadAsStreamAsync());
@@ -4561,7 +4973,12 @@ Customer message:
     [Fact]
     public async Task Agent_formal_quote_tool_blocks_until_geometry_and_pricing_gates_pass()
     {
-        using var client = factory.CreateClient();
+        var customerEmail = $"agent-formal-gates-{Guid.NewGuid():N}@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
+        using var client = await CreateSignedInClientAsync(factory, customerEmail);
+        var quoteSessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, quoteSessionId);
+        var contextToken = await CreateMappedAgentContextTokenAsync(client, quoteSessionId, customerId);
         using var prepareRequest = new HttpRequestMessage(HttpMethod.Post, "/quote/v1/agent/tools/quote_prepare_formal_quote")
         {
             Content = JsonContent.Create(new QuoteAgentToolRequest
@@ -4574,7 +4991,7 @@ Customer message:
         };
         prepareRequest.Headers.TryAddWithoutValidation(
             "X-Maliev-Agent-Context",
-            CreateSignedAgentContextToken(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()));
+            contextToken);
 
         using var prepareResponse = await client.SendAsync(prepareRequest);
         using var document = await JsonDocument.ParseAsync(await prepareResponse.Content.ReadAsStreamAsync());
@@ -4688,7 +5105,8 @@ Customer message:
         var blockedResponse = await client.GetAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(blockedPath)}");
 
-        Assert.Equal(HttpStatusCode.BadRequest, blockedResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, blockedResponse.StatusCode);
+        Assert.Equal(string.Empty, await blockedResponse.Content.ReadAsStringAsync());
     }
 
     [Fact]
@@ -4738,7 +5156,7 @@ Customer message:
         var otherResponse = await otherClient.GetAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/artifacts/download?path={Uri.EscapeDataString(storagePath)}");
 
-        Assert.Equal(HttpStatusCode.BadRequest, otherResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, otherResponse.StatusCode);
     }
 
     [Fact]
@@ -6426,6 +6844,7 @@ Customer message:
             {
                 services.RemoveAll<IHostEnvironment>();
                 services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                UseProcessLocalAgentStateForProductionTest(services);
 
                 services.RemoveAll<IProjectServiceClient>();
                 services.AddSingleton<IProjectServiceClient>(new QuoteEngineWebApplicationFactory.EmptyProjectServiceClient());
@@ -6714,7 +7133,9 @@ Customer message:
     public async Task Agent_search_endpoint_requires_customer_session()
     {
         using var client = factory.CreateClient();
-        var response = await client.GetAsync($"/quote/v1/agent/sessions/{Guid.NewGuid():D}/search?query=fixture");
+        var sessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
+        var response = await client.GetAsync($"/quote/v1/agent/sessions/{sessionId:D}/search?query=fixture");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         var json = await response.Content.ReadAsStringAsync();
@@ -6966,6 +7387,7 @@ Customer message:
         await using var scopedFactory = CreateAgentFactory();
         using var client = await CreateSignedInClientAsync(scopedFactory, "agent-connectors@example.com");
         var sessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
 
         var response = await client.GetAsync($"/quote/v1/agent/sessions/{sessionId:D}/connectors");
 
@@ -6991,6 +7413,7 @@ Customer message:
         await using var scopedFactory = CreateAgentFactory();
         using var client = await CreateSignedInClientAsync(scopedFactory, "agent-connector-browser@example.com");
         var sessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
 
         var response = await client.GetAsync(
             $"/quote/v1/agent/sessions/{sessionId:D}/connectors/google-drive/handoff");
@@ -7124,6 +7547,7 @@ Customer message:
         await using var scopedFactory = CreateAgentFactoryWithConnectedGoogleDrive();
         using var client = await CreateSignedInClientAsync(scopedFactory, "drive-connected@example.com");
         var sessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
 
         var registry = await client.GetFromJsonAsync<QuoteAgentConnectorRegistryResponse>(
             $"/quote/v1/agent/sessions/{sessionId:D}/connectors");
@@ -7186,12 +7610,14 @@ Customer message:
         var google = new RecordingGoogleDriveHttpClientFactory();
         await using var scopedFactory = CreateAgentFactoryWithConnectedGoogleDrive(google);
         using var client = await CreateSignedInClientAsync(scopedFactory, "drive-import@example.com");
-        var quoteSessionId = Guid.NewGuid().ToString("N");
+        var sessionId = Guid.NewGuid();
+        var quoteSessionId = sessionId.ToString("N");
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
 
         var response = await client.PostAsJsonAsync("/quote/v1/connectors/google-drive/imports", new
         {
             quoteSessionId,
-            sessionId = Guid.Parse(quoteSessionId),
+            sessionId,
             files = new[]
             {
                 new
@@ -7218,6 +7644,94 @@ Customer message:
         Assert.Contains($"quotes/{quoteSessionId}", attachment.GetProperty("storagePath").GetString(), StringComparison.Ordinal);
         Assert.NotNull(google.LastRequest);
         Assert.Contains("drive/v3/files/drive-file-1?alt=media", google.LastRequest!.RequestUri!.OriginalString, StringComparison.Ordinal);
+
+        var importedAttachment = JsonSerializer.Deserialize<QuoteAgentAttachmentDto>(attachment.GetRawText(), JsonOptions);
+        Assert.NotNull(importedAttachment);
+        Assert.False(string.IsNullOrWhiteSpace(importedAttachment.UploadId));
+        var upload = scopedFactory.Services
+            .GetRequiredService<QuoteEnginePrototypeStore>()
+            .GetUpload(importedAttachment.UploadId);
+        Assert.NotNull(upload);
+        Assert.Equal(importedAttachment.FileSizeBytes, upload.ExpectedSizeBytes);
+        Assert.Equal(upload.ExpectedSizeBytes, upload.ReceivedBytes);
+
+        using var registerResponse = await client.PostAsJsonAsync(
+            $"/quote/v1/agent/sessions/{sessionId:D}/attachments",
+            new QuoteAgentAttachmentRegisterRequest { Attachments = [importedAttachment] },
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, registerResponse.StatusCode);
+
+        using var messageResponse = await client.PostAsJsonAsync(
+            "/quote/v1/agent/messages",
+            new QuoteAgentMessageRequest
+            {
+                SessionId = sessionId,
+                Message = "Use the imported Google Drive attachment for this quote.",
+                Attachments = [importedAttachment]
+            },
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, messageResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Google_drive_import_rejects_a_foreign_quote_session_before_downloading_files()
+    {
+        var google = new RecordingGoogleDriveHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithConnectedGoogleDrive(google);
+        using var owner = await CreateSignedInClientAsync(scopedFactory, "drive-owner@example.com");
+        using var foreign = await CreateSignedInClientAsync(scopedFactory, "drive-foreign@example.com");
+        var sessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(owner, sessionId);
+
+        using var response = await foreign.PostAsJsonAsync("/quote/v1/connectors/google-drive/imports", new
+        {
+            quoteSessionId = sessionId.ToString("D"),
+            sessionId,
+            files = new[]
+            {
+                new
+                {
+                    id = "drive-file-1",
+                    name = "bracket.step",
+                    mimeType = "model/step",
+                    sizeBytes = 12
+                }
+            }
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.Null(google.LastRequest);
+    }
+
+    [Fact]
+    public async Task Google_drive_import_rejects_mismatched_session_identifiers_before_downloading_files()
+    {
+        var google = new RecordingGoogleDriveHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithConnectedGoogleDrive(google);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-session-mismatch@example.com");
+        var sessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/connectors/google-drive/imports", new
+        {
+            quoteSessionId = Guid.NewGuid().ToString("D"),
+            sessionId,
+            files = new[]
+            {
+                new
+                {
+                    id = "drive-file-1",
+                    name = "bracket.step",
+                    mimeType = "model/step",
+                    sizeBytes = 12
+                }
+            }
+        });
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+        Assert.Null(google.LastRequest);
     }
 
     [Fact]
@@ -7226,6 +7740,7 @@ Customer message:
         await using var scopedFactory = CreateAgentFactory();
         using var client = await CreateSignedInClientAsync(scopedFactory, "drive-unconfigured@example.com");
         var sessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
 
         var registry = await client.GetFromJsonAsync<QuoteAgentConnectorRegistryResponse>(
             $"/quote/v1/agent/sessions/{sessionId:D}/connectors");
@@ -7241,6 +7756,7 @@ Customer message:
         await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig();
         using var client = await CreateSignedInClientAsync(scopedFactory, "drive-configured@example.com");
         var sessionId = Guid.NewGuid();
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
 
         var registry = await client.GetFromJsonAsync<QuoteAgentConnectorRegistryResponse>(
             $"/quote/v1/agent/sessions/{sessionId:D}/connectors");
@@ -7789,10 +8305,19 @@ Customer message:
     [Fact]
     public async Task Agent_turn_includes_auth_handoff_when_authenticated_gate_blocks_next_steps()
     {
-        using var client = factory.CreateClient();
-
-        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
         {
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(new RecordingChatbotServiceClient());
+            });
+        });
+        using var client = scopedFactory.CreateClient();
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
+        {
+            SessionId = sessionId,
             Message = "Quote this STEP as 25 black nylon SLS enclosures, then help me place the order.",
             Language = "en",
             Attachments =
@@ -7807,7 +8332,9 @@ Customer message:
                     SatisfiesGeometryGate = true
                 }
             ]
-        });
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", message);
 
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
@@ -7840,9 +8367,10 @@ Customer message:
             });
         });
         using var client = scopedFactory.CreateClient();
-
-        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
+        var sessionId = Guid.NewGuid();
+        var message = new QuoteAgentMessageRequest
         {
+            SessionId = sessionId,
             Message = "Quote this STEP as 25 black nylon SLS enclosures, then help me place the order.",
             Language = "en",
             Attachments =
@@ -7857,7 +8385,9 @@ Customer message:
                     SatisfiesGeometryGate = true
                 }
             ]
-        });
+        };
+        await PrepareAuthoritativeAttachmentsAsync(client, sessionId, message.Attachments);
+        var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", message);
 
         response.EnsureSuccessStatusCode();
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>(JsonOptions);
@@ -8225,6 +8755,66 @@ Customer message:
         Assert.Null(secondBody.CustomerQuestion);
     }
 
+    private static async Task<string> CreateMappedAgentContextTokenAsync(
+        HttpClient client,
+        Guid quoteSessionId,
+        Guid? customerId)
+    {
+        var mapping = await GetOrCreateAgentConversationAsync(client, quoteSessionId, customerId);
+        return CreateSignedAgentContextToken(quoteSessionId, mapping.ChatbotSessionId, customerId);
+    }
+
+    private static async Task<QuoteAgentConversationMapping> GetOrCreateAgentConversationAsync(
+        HttpClient client,
+        Guid quoteSessionId,
+        Guid? customerId)
+    {
+        var lookupPath = $"/test/agent-conversation?quoteSessionId={quoteSessionId:D}";
+        using var lookupResponse = await client.GetAsync(lookupPath);
+        QuoteAgentConversationMapping mapping;
+        if (lookupResponse.StatusCode == HttpStatusCode.OK)
+        {
+            mapping = Assert.IsType<QuoteAgentConversationMapping>(
+                await lookupResponse.Content.ReadFromJsonAsync<QuoteAgentConversationMapping>(JsonOptions));
+        }
+        else
+        {
+            Assert.Equal(HttpStatusCode.NotFound, lookupResponse.StatusCode);
+            mapping = new QuoteAgentConversationMapping(Guid.NewGuid(), customerId);
+            var createPath = $"/test/agent-conversation?quoteSessionId={quoteSessionId:D}" +
+                $"&chatbotSessionId={mapping.ChatbotSessionId:D}" +
+                (customerId.HasValue ? $"&customerId={customerId.Value:D}" : string.Empty);
+            using var createResponse = await client.PostAsync(createPath, content: null);
+            Assert.Equal(HttpStatusCode.NoContent, createResponse.StatusCode);
+        }
+
+        if (mapping.CustomerId != customerId)
+        {
+            Assert.Null(mapping.CustomerId);
+            Assert.True(customerId.HasValue);
+            var promotePath = $"/test/agent-conversation?quoteSessionId={quoteSessionId:D}" +
+                $"&chatbotSessionId={mapping.ChatbotSessionId:D}&customerId={customerId.Value:D}";
+            using var promoteResponse = await client.PostAsync(promotePath, content: null);
+            Assert.Equal(HttpStatusCode.NoContent, promoteResponse.StatusCode);
+            mapping = mapping with { CustomerId = customerId };
+        }
+
+        return mapping;
+    }
+
+    private static async Task StoreTestAgentConversationAsync(
+        HttpClient client,
+        Guid quoteSessionId,
+        Guid chatbotSessionId,
+        Guid? customerId)
+    {
+        var mappingPath = $"/test/agent-conversation?quoteSessionId={quoteSessionId:D}" +
+            $"&chatbotSessionId={chatbotSessionId:D}" +
+            (customerId.HasValue ? $"&customerId={customerId.Value:D}" : string.Empty);
+        using var response = await client.PostAsync(mappingPath, content: null);
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
     private static string CreateSignedAgentContextToken(Guid quoteSessionId, Guid chatbotSessionId, Guid? customerId)
     {
         var now = DateTimeOffset.UtcNow;
@@ -8253,33 +8843,51 @@ Customer message:
         return client;
     }
 
+    private static void UseProcessLocalAgentStateForProductionTest(IServiceCollection services)
+    {
+        services.RemoveAll<IQuoteAgentSessionOwnerStore>();
+        services.AddSingleton<IQuoteAgentSessionOwnerStore, InMemoryQuoteAgentSessionOwnerStore>();
+        services.RemoveAll<IQuoteAgentConversationMap>();
+        services.AddSingleton<IQuoteAgentConversationMap, InMemoryQuoteAgentConversationMap>();
+        services.RemoveAll<IGoogleDriveConnectorStore>();
+        services.AddSingleton<IGoogleDriveConnectorStore, InMemoryGoogleDriveConnectorStore>();
+    }
+
     private async Task<Guid> StartPricedCadSessionAsync(
         HttpClient client,
         bool expectAuthoritativePricing = true)
     {
+        var sessionId = Guid.NewGuid();
+        var attachment = new QuoteAgentAttachmentDto
+        {
+            FileName = "fixture.step",
+            ContentType = "model/step",
+            FileSizeBytes = 250_000,
+            Kind = "cad"
+        };
+        await UploadAuthoritativeAttachmentAsync(client, sessionId, attachment);
         var response = await client.PostAsJsonAsync("/quote/v1/agent/messages", new QuoteAgentMessageRequest
         {
+            SessionId = sessionId,
             Message = "Quote this STEP as 25 aluminum pieces with standard lead time.",
             Language = "en",
-            Attachments =
-            [
-                new QuoteAgentAttachmentDto
-                {
-                    FileName = "fixture.step",
-                    ContentType = "model/step",
-                    FileSizeBytes = 250_000,
-                    Kind = "cad",
-                    StoragePath = "quotes/temp/fixture.step"
-                }
-            ]
+            Attachments = [attachment]
         });
         var body = await response.Content.ReadFromJsonAsync<QuoteAgentTurnResponse>();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(body);
+        Assert.Equal(sessionId, body.SessionId);
+        var initialState = await client.GetFromJsonAsync<QuoteAgentStateResponse>(
+            $"/quote/v1/agent/sessions/{sessionId:D}",
+            JsonOptions);
+        Assert.NotNull(initialState);
+        Assert.Single(initialState.Attachments);
         Assert.Contains(body.Gates, gate => gate.Code == "priced" && gate.Status != "passed");
 
         var configuredState = await ConfigureFirstPartForEstimateAsync(client, body.SessionId);
+        Assert.Equal(sessionId, configuredState.SessionId);
+        Assert.Single(configuredState.Attachments);
         Assert.Contains(configuredState.Gates, gate => gate.Code == "configuration_complete" && gate.Status == "passed");
 
         var pricedState = await ExecuteEstimateToolForStateAsync(client, body.SessionId);
@@ -8288,6 +8896,112 @@ Customer message:
             (expectAuthoritativePricing ? gate.Status == "passed" : gate.Status != "passed"));
         Assert.NotNull(pricedState.Estimate);
         return body.SessionId;
+    }
+
+    private static async Task UploadAuthoritativeAttachmentAsync(
+        HttpClient client,
+        Guid sessionId,
+        QuoteAgentAttachmentDto attachment)
+    {
+        Assert.NotEqual(Guid.Empty, sessionId);
+        Assert.InRange(attachment.FileSizeBytes, 1, int.MaxValue);
+        using var initiateResponse = await client.PostAsJsonAsync(
+            "/quote/v1/uploads/resumable",
+            new InitiateQuoteUploadRequest
+            {
+                FileName = attachment.FileName,
+                ContentType = attachment.ContentType,
+                FileSizeBytes = attachment.FileSizeBytes,
+                QuoteSessionId = sessionId.ToString("N")
+            },
+            JsonOptions);
+        var initiated = await initiateResponse.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>(JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, initiateResponse.StatusCode);
+        Assert.NotNull(initiated);
+
+        using var content = new ByteArrayContent(new byte[(int)attachment.FileSizeBytes]);
+        content.Headers.ContentType = MediaTypeHeaderValue.Parse(attachment.ContentType);
+        content.Headers.ContentRange = new ContentRangeHeaderValue(
+            0,
+            attachment.FileSizeBytes - 1,
+            attachment.FileSizeBytes);
+        using var uploadResponse = await client.PutAsync(initiated.ProxyUploadUrl, content);
+        Assert.Equal(HttpStatusCode.NoContent, uploadResponse.StatusCode);
+
+        attachment.UploadId = initiated.UploadId;
+        attachment.StoragePath = initiated.StoragePath;
+        attachment.Url = null;
+    }
+
+    private static async Task CompleteAuthoritativeUploadAsync(HttpClient client, string uploadId)
+    {
+        using var response = await client.PostAsync(
+            $"/quote/v1/uploads/resumable/{Uri.EscapeDataString(uploadId)}/complete",
+            content: null);
+        var completed = await response.Content.ReadFromJsonAsync<CompleteQuoteUploadResponse>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(completed);
+        Assert.Equal("Processing", completed.Status);
+    }
+
+    private static async Task SeedAuthoritativeAnalysisAsync(
+        IQuoteFileAnalysisStatusService analysisStatus,
+        string storagePath)
+    {
+        await analysisStatus.SetGlbReadyAsync(
+            storagePath,
+            "https://files.example.com/test-part.glb",
+            thumbnailUrl: null,
+            bodyCount: 1,
+            isManifold: true,
+            viewerStoragePath: "processed/test-part.glb",
+            viewerFileExtension: ".glb",
+            volumeCc: 1m,
+            surfaceAreaCm2: 1m);
+        await analysisStatus.SetDfmReportsAsync(
+            storagePath,
+            new QeFdmDfmReport(0, 0, 0m, false, 0, []),
+            null,
+            null,
+            [],
+            null,
+            null);
+    }
+
+    private static async Task PrepareAuthoritativeAttachmentsAsync(
+        HttpClient client,
+        Guid sessionId,
+        IEnumerable<QuoteAgentAttachmentDto> attachments)
+    {
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
+        foreach (var attachment in attachments)
+        {
+            if (string.IsNullOrWhiteSpace(attachment.StoragePath) &&
+                string.IsNullOrWhiteSpace(attachment.UploadId) &&
+                attachment.Url?.StartsWith("data:image/", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                continue;
+            }
+
+            if (!QuoteUploadConstraints.IsSupportedAttachmentFileName(attachment.FileName))
+            {
+                continue;
+            }
+
+            attachment.UploadId = string.IsNullOrWhiteSpace(attachment.UploadId)
+                ? $"test-upload-{Guid.NewGuid():N}"
+                : attachment.UploadId.Trim();
+            attachment.StoragePath = string.IsNullOrWhiteSpace(attachment.StoragePath)
+                ? $"quotes/temp/{sessionId:N}/{attachment.UploadId}/{Path.GetFileName(attachment.FileName)}"
+                : attachment.StoragePath.Trim();
+            attachment.Url = null;
+            using var response = await client.PostAsJsonAsync(
+                $"/test/agent-upload?quoteSessionId={sessionId:D}",
+                attachment,
+                JsonOptions);
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
     }
 
     private static Task<QuoteAgentStateResponse> ConfigureFirstPartForEstimateAsync(
@@ -8359,7 +9073,10 @@ Customer message:
     {
         var json = await ExecuteToolAsync(client, sessionId, "quote_calculate_estimate");
         using var document = JsonDocument.Parse(json);
-        Assert.Equal("estimate_ready", document.RootElement.GetProperty("status").GetString());
+        Assert.True(
+            document.RootElement.TryGetProperty("status", out var status),
+            $"Expected session {sessionId:D}. Tool response: {json}");
+        Assert.Equal("estimate_ready", status.GetString());
         Assert.True(document.RootElement.GetProperty("estimate").GetProperty("total").GetDecimal() > 0);
         Assert.False(string.IsNullOrWhiteSpace(document.RootElement.GetProperty("instruction").GetString()));
         var state = JsonSerializer.Deserialize<QuoteAgentStateResponse>(
@@ -8387,6 +9104,23 @@ Customer message:
         Dictionary<string, JsonElement>? arguments = null,
         Guid? customerId = null)
     {
+        await EnsureAgentSessionOwnedAsync(client, sessionId);
+        if (toolName.Equals("quote_register_uploads", StringComparison.OrdinalIgnoreCase) &&
+            arguments is not null)
+        {
+            await SeedAuthoritativeToolUploadsAsync(client, sessionId, arguments);
+        }
+
+        if (!customerId.HasValue)
+        {
+            var auth = await client.GetFromJsonAsync<QuoteAuthStatusResponse>(
+                "/quote/v1/auth/session",
+                JsonOptions);
+            customerId = auth?.IsSignedIn == true ? auth.CustomerId : null;
+        }
+
+        var mapping = await GetOrCreateAgentConversationAsync(client, sessionId, customerId);
+
         using var request = new HttpRequestMessage(HttpMethod.Post, $"/quote/v1/agent/tools/{toolName}")
         {
             Content = JsonContent.Create(new QuoteAgentToolRequest
@@ -8396,13 +9130,85 @@ Customer message:
         };
         request.Headers.TryAddWithoutValidation(
             "X-Maliev-Agent-Context",
-            CreateSignedAgentContextToken(sessionId, Guid.NewGuid(), customerId));
+            CreateSignedAgentContextToken(sessionId, mapping.ChatbotSessionId, customerId));
 
         using var response = await client.SendAsync(request);
         var json = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         return json;
+    }
+
+    private static async Task SeedAuthoritativeToolUploadsAsync(
+        HttpClient client,
+        Guid sessionId,
+        IReadOnlyDictionary<string, JsonElement> arguments)
+    {
+        if (!arguments.TryGetValue("files", out var files) || files.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (var file in files.EnumerateArray())
+        {
+            if (!file.TryGetProperty("file_name", out var fileNameElement) ||
+                !file.TryGetProperty("upload_id", out var uploadIdElement) ||
+                !file.TryGetProperty("storage_path", out var storagePathElement) ||
+                !file.TryGetProperty("file_size_bytes", out var sizeElement))
+            {
+                continue;
+            }
+
+            var fileName = fileNameElement.GetString();
+            var uploadId = uploadIdElement.GetString();
+            var storagePath = storagePathElement.GetString();
+            if (string.IsNullOrWhiteSpace(fileName) ||
+                string.IsNullOrWhiteSpace(uploadId) ||
+                string.IsNullOrWhiteSpace(storagePath) ||
+                !QuoteUploadConstraints.IsSupportedAttachmentFileName(fileName) ||
+                !sizeElement.TryGetInt64(out var fileSizeBytes) ||
+                fileSizeBytes <= 0)
+            {
+                continue;
+            }
+
+            var contentType = file.TryGetProperty("content_type", out var contentTypeElement)
+                ? contentTypeElement.GetString()
+                : null;
+            var kind = file.TryGetProperty("kind", out var kindElement)
+                ? kindElement.GetString()
+                : null;
+            using var response = await client.PostAsJsonAsync(
+                $"/test/agent-upload?quoteSessionId={sessionId:D}",
+                new QuoteAgentAttachmentDto
+                {
+                    FileName = fileName,
+                    ContentType = string.IsNullOrWhiteSpace(contentType)
+                        ? "application/octet-stream"
+                        : contentType,
+                    FileSizeBytes = fileSizeBytes,
+                    Kind = string.IsNullOrWhiteSpace(kind) ? "supplemental" : kind,
+                    UploadId = uploadId,
+                    StoragePath = storagePath
+                },
+                JsonOptions);
+            Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        }
+    }
+
+    private static async Task EnsureAgentSessionOwnedAsync(HttpClient client, Guid sessionId)
+    {
+        using var response = await client.PostAsJsonAsync(
+            "/quote/v1/uploads/resumable",
+            new InitiateQuoteUploadRequest
+            {
+                FileName = "session-owner.step",
+                ContentType = "application/step",
+                FileSizeBytes = 1,
+                QuoteSessionId = sessionId.ToString("D")
+            },
+            JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     private static async Task<QuoteAgentActionResultResponse> ConfirmActionAsync(
@@ -8428,6 +9234,30 @@ Customer message:
         {
             builder.ConfigureTestServices(services =>
             {
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient, RecordingChatbotServiceClient>();
+            });
+        });
+    }
+
+    private WebApplicationFactory<Program> CreateProductionAgentFactory()
+    {
+        return factory.WithWebHostBuilder(builder =>
+        {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AnonymousVisitor:SigningKey"] = "quote-agent-production-geometry-test-signing-key",
+                    ["QuoteAgent:ContextSigningKey"] = "maliev-local-development-quote-agent-context-key"
+                });
+            });
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IHostEnvironment>();
+                services.AddSingleton<IHostEnvironment>(
+                    new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                UseProcessLocalAgentStateForProductionTest(services);
                 services.RemoveAll<IChatbotServiceClient>();
                 services.AddSingleton<IChatbotServiceClient, RecordingChatbotServiceClient>();
             });
@@ -12505,7 +13335,8 @@ Customer message:
     [Fact]
     public async Task Agent_preview_feedback_records_artifact_feedback_and_observes_customer_memory()
     {
-        var customerId = Guid.NewGuid();
+        var customerEmail = $"preview-feedback-{Guid.NewGuid():N}@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
         var customerClient = new MemoryCustomerServiceClient(customerId);
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
         {
@@ -12515,7 +13346,7 @@ Customer message:
                 services.AddSingleton<ICustomerServiceClient>(customerClient);
             });
         });
-        using var client = scopedFactory.CreateClient();
+        using var client = await CreateSignedInClientAsync(scopedFactory, customerEmail);
         var sessionId = Guid.NewGuid();
 
         var commands = new[]
@@ -12573,7 +13404,8 @@ Customer message:
     [Fact]
     public async Task Agent_preview_feedback_records_artifact_feedback_when_memory_observation_fails()
     {
-        var customerId = Guid.NewGuid();
+        var customerEmail = $"preview-feedback-memory-failure-{Guid.NewGuid():N}@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
         var customerClient = new MemoryCustomerServiceClient(customerId)
         {
             ThrowOnObserve = true
@@ -12586,7 +13418,7 @@ Customer message:
                 services.AddSingleton<ICustomerServiceClient>(customerClient);
             });
         });
-        using var client = scopedFactory.CreateClient();
+        using var client = await CreateSignedInClientAsync(scopedFactory, customerEmail);
         var sessionId = Guid.NewGuid();
 
         var commands = new[]
@@ -12683,7 +13515,8 @@ Customer message:
     [Fact]
     public async Task Agent_generate_3d_preview_revises_existing_generated_workbench_artifact()
     {
-        var customerId = Guid.NewGuid();
+        var customerEmail = $"preview-revision-{Guid.NewGuid():N}@example.com";
+        var customerId = DeterministicCustomerId(customerEmail);
         var customerClient = new MemoryCustomerServiceClient(customerId);
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
         {
@@ -12693,7 +13526,7 @@ Customer message:
                 services.AddSingleton<ICustomerServiceClient>(customerClient);
             });
         });
-        using var client = scopedFactory.CreateClient();
+        using var client = await CreateSignedInClientAsync(scopedFactory, customerEmail);
         var sessionId = Guid.NewGuid();
 
         var firstCommands = new[]
@@ -13180,6 +14013,8 @@ Customer message:
 
         public ChatbotSessionResponse? InitiateSession { get; init; }
 
+        public Queue<ChatbotSessionResponse?> InitiateSessionResponses { get; } = [];
+
         public bool ThrowStreamException { get; init; }
 
         public bool ThrowSendException { get; init; }
@@ -13223,6 +14058,11 @@ Customer message:
         {
             LastInitiateRequest = request;
             Operations.Add("initiate");
+            if (InitiateSessionResponses.Count > 0)
+            {
+                return Task.FromResult(InitiateSessionResponses.Dequeue());
+            }
+
             return Task.FromResult<ChatbotSessionResponse?>(InitiateSession ?? new ChatbotSessionResponse
             {
                 SessionId = Guid.Parse("3f35a7a7-1450-4b23-820a-0a97b85d5b0f"),
@@ -13389,6 +14229,8 @@ Customer message:
                 services.AddSingleton<IRegistryServiceClient>(registry);
                 services.RemoveAll<IDeliveryServiceClient>();
                 services.AddSingleton<IDeliveryServiceClient>(delivery);
+                services.RemoveAll<IChatbotServiceClient>();
+                services.AddSingleton<IChatbotServiceClient>(new RecordingChatbotServiceClient());
             });
         });
     }

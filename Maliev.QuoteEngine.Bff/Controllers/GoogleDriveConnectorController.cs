@@ -5,6 +5,7 @@ using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Agent;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
 
@@ -16,6 +17,7 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 [ApiController]
 public sealed class GoogleDriveConnectorController(
     CustomerSessionResolver sessionResolver,
+    IQuoteAgentSessionRequestAuthorizer agentSessionAccess,
     IGoogleDriveConnectorStore connectorStore,
     QuoteEnginePrototypeStore store,
     QuoteUploadServiceClient uploadClient,
@@ -277,6 +279,27 @@ public sealed class GoogleDriveConnectorController(
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
             return Unauthorized();
+        }
+
+        if (!Guid.TryParse(request.QuoteSessionId, out var quoteSessionId) ||
+            quoteSessionId == Guid.Empty ||
+            request.SessionId != quoteSessionId)
+        {
+            return EmptyNotFound();
+        }
+
+        var access = await agentSessionAccess.AuthorizeAsync(
+            request.SessionId,
+            allowCreate: false,
+            cancellationToken);
+        if (access == QuoteAgentSessionAccessDecision.Unauthorized)
+        {
+            return Unauthorized();
+        }
+
+        if (access != QuoteAgentSessionAccessDecision.Authorized)
+        {
+            return EmptyNotFound();
         }
 
         if (request.Files.Count == 0)
@@ -551,7 +574,32 @@ public sealed class GoogleDriveConnectorController(
             upload.StoragePath,
             cancellationToken);
 
+        if (imported.Bytes.LongLength != upload.ExpectedSizeBytes ||
+            store.TryAdvanceUpload(
+                upload.UploadId,
+                expectedReceivedBytes: 0,
+                receivedBytes: imported.Bytes.LongLength) is null)
+        {
+            throw new InvalidOperationException("The imported Google Drive upload state could not be finalized.");
+        }
+
         return store.MarkProcessing(upload.UploadId);
+    }
+
+    private void DisableStatusCodeBody()
+    {
+        var statusCodePages = HttpContext.Features.Get<IStatusCodePagesFeature>();
+        if (statusCodePages is not null)
+        {
+            statusCodePages.Enabled = false;
+        }
+    }
+
+    private EmptyResult EmptyNotFound()
+    {
+        DisableStatusCodeBody();
+        Response.StatusCode = StatusCodes.Status404NotFound;
+        return new EmptyResult();
     }
 
     private ActionResult DriveConnectionConflict(string title, string detail)

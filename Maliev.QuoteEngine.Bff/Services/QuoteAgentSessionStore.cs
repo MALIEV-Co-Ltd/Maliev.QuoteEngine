@@ -93,6 +93,7 @@ internal sealed class QuoteAgentSessionStore
             requiresAuthentication,
             requiresConfirmation,
             state.CustomerId,
+            state.VisitorId,
             arguments,
             shippingOption,
             DateTimeOffset.UtcNow);
@@ -115,30 +116,14 @@ internal sealed class QuoteAgentSessionStore
         return _actions.TryGetValue(actionId, out action!);
     }
 
-    public bool TryGetCompletedAction(
-        Guid actionId,
-        Guid? customerId,
-        out QuoteAgentActionResultResponse result)
+    public bool TryGetCompletedAction(Guid actionId, out QuoteAgentCompletedAction completed)
     {
-        result = default!;
-        if (!_completedActions.TryGetValue(actionId, out var completed) ||
-            !CanAccessAction(completed.CustomerId, customerId))
-        {
-            return false;
-        }
-
-        result = completed.Result;
-        return true;
+        return _completedActions.TryGetValue(actionId, out completed!);
     }
 
     public SemaphoreSlim GetActionLock(Guid actionId)
     {
         return _actionLocks.GetOrAdd(actionId, _ => new SemaphoreSlim(1, 1));
-    }
-
-    public void ReleaseActionLock(Guid actionId)
-    {
-        _actionLocks.TryRemove(actionId, out _);
     }
 
     public void CompleteAction(
@@ -159,7 +144,9 @@ internal sealed class QuoteAgentSessionStore
             _actions.TryRemove(pendingAction.ActionId, out _);
             _completedActions[pendingAction.ActionId] = new QuoteAgentCompletedAction(
                 result,
-                pendingAction.CustomerId);
+                pendingAction.SessionId,
+                pendingAction.CustomerId,
+                pendingAction.VisitorId);
         }
 
         lock (state.SyncRoot)
@@ -213,14 +200,18 @@ internal sealed class QuoteAgentSessionStore
         }
     }
 
-    public static bool CanAccessAction(Guid? actionCustomerId, Guid? customerId)
+    public static bool CanAccessAction(
+        Guid? actionCustomerId,
+        Guid? actionVisitorId,
+        Guid? customerId,
+        Guid? visitorId)
     {
-        if (!actionCustomerId.HasValue)
+        if (actionCustomerId.HasValue)
         {
-            return true;
+            return customerId == actionCustomerId;
         }
 
-        return customerId == actionCustomerId;
+        return actionVisitorId.HasValue && visitorId == actionVisitorId;
     }
 
     public QuoteAgentStateResponse ToResponse(
@@ -254,7 +245,9 @@ internal sealed class QuoteAgentSessionStore
 
     public static List<QuoteAgentGateDto> BuildGates(QuoteAgentSessionState state, bool isAuthenticated)
     {
-        var hasGeometry = state.Parts.Count > 0 || state.Attachments.Any(item => item.SatisfiesGeometryGate);
+        // A browser attachment flag is only an upload hint. Geometry becomes gate-eligible when a
+        // part is materialized from an accepted prototype flow or authoritative server analysis.
+        var hasGeometry = state.Parts.Count > 0;
         var analysisComplete = state.Parts.Count > 0 &&
             state.Parts.All(part => IsTerminalAnalysisStatus(part.Status));
         var hasDfmIssues = state.Parts.Any(HasDfmIssues);
@@ -408,7 +401,6 @@ internal sealed class QuoteAgentSessionStore
         return status is not null &&
             (status.Equals("Analyzed", StringComparison.OrdinalIgnoreCase) ||
              status.Equals("DfmAnalysisReady", StringComparison.OrdinalIgnoreCase) ||
-             status.Equals("GlbReady", StringComparison.OrdinalIgnoreCase) ||
              status.Equals("ModelGenerated", StringComparison.OrdinalIgnoreCase) ||
              status.Equals("Failed", StringComparison.OrdinalIgnoreCase));
     }
@@ -609,6 +601,8 @@ internal sealed class QuoteAgentSessionState
 
     public Guid? CustomerId { get; set; }
 
+    public Guid? VisitorId { get; set; }
+
     public string Language { get; set; } = "en";
 
     public string? UiCulture { get; set; }
@@ -716,6 +710,7 @@ internal sealed record QuoteAgentPendingAction(
     bool RequiresAuthentication,
     bool RequiresConfirmation,
     Guid? CustomerId,
+    Guid? VisitorId,
     Dictionary<string, JsonElement> Arguments,
     QuoteAgentShippingOptionDto? ShippingOption,
     DateTimeOffset CreatedAt)
@@ -761,4 +756,6 @@ internal sealed record QuoteAgentPendingAction(
 
 internal sealed record QuoteAgentCompletedAction(
     QuoteAgentActionResultResponse Result,
-    Guid? CustomerId);
+    Guid SessionId,
+    Guid? CustomerId,
+    Guid? VisitorId);

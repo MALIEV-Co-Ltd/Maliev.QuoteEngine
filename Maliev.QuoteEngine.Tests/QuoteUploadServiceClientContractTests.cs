@@ -9,6 +9,42 @@ namespace Maliev.QuoteEngine.Tests;
 public sealed class QuoteUploadServiceClientContractTests
 {
     [Fact]
+    public async Task StreamUploadWithProgressAsync_preserves_resume_incomplete_progress()
+    {
+        using var handler = new RecordingHandler(new HttpResponseMessage((HttpStatusCode)308)
+        {
+            Content = JsonContent.Create(new
+            {
+                uploadId = "downstream-upload",
+                bytesReceived = 4,
+                totalSize = 8,
+                isComplete = false,
+                nextByteRange = "4-7"
+            })
+        });
+        using var http = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://upload-service.test")
+        };
+        var client = new QuoteUploadServiceClient(http, NullLogger<QuoteUploadServiceClient>.Instance);
+        await using var body = new MemoryStream([1, 2, 3, 4]);
+
+        var progress = await client.StreamUploadWithProgressAsync(
+            body,
+            "application/octet-stream",
+            4,
+            "bytes 0-3/8",
+            "downstream-upload",
+            "quotes/temp/session/upload/file.step",
+            CancellationToken.None);
+
+        Assert.False(progress.IsComplete);
+        Assert.Equal(4, progress.BytesReceived);
+        Assert.Equal(HttpMethod.Put, handler.Request?.Method);
+        Assert.Equal("/upload/v1/uploads/resumable/downstream-upload", handler.Request?.RequestUri?.AbsolutePath);
+    }
+
+    [Fact]
     public async Task GetDownloadUrlByPathAsync_UsesUploadServiceByPathSignedUrlContract()
     {
         using var handler = new RecordingHandler(new HttpResponseMessage(HttpStatusCode.OK)

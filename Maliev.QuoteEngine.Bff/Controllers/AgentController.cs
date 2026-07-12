@@ -3,6 +3,7 @@ using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Agent;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
@@ -19,6 +20,7 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 public sealed class AgentController(
     IQuoteAgentService agentService,
     QuoteAgentContextToken contextToken,
+    IQuoteAgentServerContextAuthorizer serverContextAuthorizer,
     IChatbotServiceClient chatbotServiceClient,
     IPdfServiceClient pdfServiceClient,
     QuoteUploadServiceClient uploadClient,
@@ -55,9 +57,12 @@ public sealed class AgentController(
     /// Sends a customer message through the QuoteEngine agent workflow.
     /// </summary>
     [HttpPost("messages")]
+    [RequestSizeLimit(512_000)]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.CreateOrResume)]
     [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
     [ProducesResponseType(typeof(QuoteAgentTurnResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<QuoteAgentTurnResponse>> Send(
         [FromBody] QuoteAgentMessageRequest request,
@@ -68,13 +73,26 @@ public sealed class AgentController(
             return ValidationProblem(ModelState);
         }
 
-        return Ok(await agentService.SendAsync(request, cancellationToken));
+        try
+        {
+            return Ok(await agentService.SendAsync(request, cancellationToken));
+        }
+        catch (QuoteAgentBackendUnavailableException exception)
+        {
+            logger.LogWarning(
+                "QuoteEngine agent session initialization is unavailable for this customer turn.");
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                BuildAgentUnavailableProblem(exception));
+        }
     }
 
     /// <summary>
     /// Streams a customer message through the QuoteEngine agent workflow.
     /// </summary>
     [HttpPost("messages/stream")]
+    [RequestSizeLimit(512_000)]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.CreateOrResume)]
     [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
     [Produces("application/x-ndjson")]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -107,6 +125,20 @@ public sealed class AgentController(
     }
 
     /// <summary>
+    /// Atomically binds a pristine browser workspace to the current signed visitor or customer.
+    /// </summary>
+    [HttpPost("sessions/{sessionId:guid}/bootstrap")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.CreateOrResume)]
+    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
+    public IActionResult BootstrapSession(Guid sessionId)
+    {
+        return NoContent();
+    }
+
+    /// <summary>
     /// Cleans up raw dictated speech text via Gemini, bypassing the agent pipeline.
     /// </summary>
     [HttpPost("clean-speech")]
@@ -131,6 +163,7 @@ public sealed class AgentController(
     /// Gets the current agent state for a QuoteEngine session.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(typeof(QuoteAgentStateResponse), StatusCodes.Status200OK)]
     public ActionResult<QuoteAgentStateResponse> GetState(Guid sessionId)
     {
@@ -141,6 +174,7 @@ public sealed class AgentController(
     /// Gets restored chat messages for a QuoteEngine agent session.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}/messages")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(typeof(QuoteAgentMessageHistoryResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<QuoteAgentMessageHistoryResponse>> GetMessages(
         Guid sessionId,
@@ -149,11 +183,7 @@ public sealed class AgentController(
         var conversationSessionId = await agentService.ResolveConversationSessionIdAsync(sessionId, cancellationToken);
         if (!conversationSessionId.HasValue)
         {
-            return NotFound(new ProblemDetails
-            {
-                Title = "No messages found.",
-                Detail = "The specified session has no messages available for this customer."
-            });
+            return NotFound();
         }
 
         var conversation = await chatbotServiceClient.GetConversationMessagesAsync(conversationSessionId.Value, cancellationToken);
@@ -190,6 +220,7 @@ public sealed class AgentController(
     /// Gets customer-safe connector definitions for the QuoteEngine agent workspace.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}/connectors")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(typeof(QuoteAgentConnectorRegistryResponse), StatusCodes.Status200OK)]
     public ActionResult<QuoteAgentConnectorRegistryResponse> GetConnectors(Guid sessionId)
     {
@@ -200,6 +231,7 @@ public sealed class AgentController(
     /// Gets customer-safe connector handoff details for the QuoteEngine agent workspace.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}/connectors/{connectorId}/handoff")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(typeof(QuoteAgentConnectorHandoffResponse), StatusCodes.Status200OK)]
     public ActionResult<QuoteAgentConnectorHandoffResponse> GetConnectorHandoff(
         Guid sessionId,
@@ -213,24 +245,36 @@ public sealed class AgentController(
     /// Registers browser-uploaded files with a QuoteEngine agent session.
     /// </summary>
     [HttpPost("sessions/{sessionId:guid}/attachments")]
+    [RequestSizeLimit(512_000)]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
+    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
     [ProducesResponseType(typeof(QuoteAgentStateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    public ActionResult<QuoteAgentStateResponse> RegisterAttachments(
+    public async Task<ActionResult<QuoteAgentStateResponse>> RegisterAttachments(
         Guid sessionId,
-        [FromBody] QuoteAgentAttachmentRegisterRequest request)
+        [FromBody] QuoteAgentAttachmentRegisterRequest request,
+        CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
             return ValidationProblem(ModelState);
         }
 
-        return Ok(agentService.RegisterAttachments(sessionId, request));
+        if (request.Attachments.Count == 0)
+        {
+            ModelState.AddModelError(nameof(request.Attachments), "At least one uploaded attachment is required.");
+            return ValidationProblem(ModelState);
+        }
+
+        return Ok(await agentService.RegisterAttachmentsAsync(sessionId, request, cancellationToken));
     }
 
     /// <summary>
-    /// Submits a browser-computed local DFM report into the session's authoritative analysis store.
+    /// Stores a browser-computed local DFM report as advisory session analysis.
     /// </summary>
     [HttpPost("sessions/{sessionId:guid}/dfm")]
+    [RequestSizeLimit(512_000)]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(typeof(QuoteAgentStateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<QuoteAgentStateResponse>> SubmitLocalDfm(
@@ -243,13 +287,23 @@ public sealed class AgentController(
             return ValidationProblem(ModelState);
         }
 
-        return Ok(await agentService.ApplyLocalDfmReportAsync(sessionId, request, cancellationToken));
+        try
+        {
+            return Ok(await agentService.ApplyLocalDfmReportAsync(sessionId, request, cancellationToken));
+        }
+        catch (QuoteAgentSessionResourceNotFoundException)
+        {
+            DisableStatusCodeBody();
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            return new EmptyResult();
+        }
     }
 
     /// <summary>
     /// Records customer feedback for an inline generated 3D preview artifact.
     /// </summary>
     [HttpPost("sessions/{sessionId:guid}/artifacts/{artifactId:guid}/feedback")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(typeof(QuoteAgentPreviewFeedbackResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<QuoteAgentPreviewFeedbackResponse>> RecordPreviewFeedback(
@@ -281,6 +335,7 @@ public sealed class AgentController(
     /// Records a client-side 3D preview build outcome reported by the inline viewer for telemetry.
     /// </summary>
     [HttpPost("sessions/{sessionId:guid}/artifacts/{artifactId:guid}/preview-build")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(typeof(QuoteAgentPreviewBuildResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public ActionResult<QuoteAgentPreviewBuildResponse> RecordPreviewBuild(
@@ -300,6 +355,7 @@ public sealed class AgentController(
     /// Searches signed-in customer quote data for the QuoteEngine agent workspace.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}/search")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(typeof(QuoteAgentSearchResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<QuoteAgentSearchResponse>> SearchCustomerData(
@@ -340,6 +396,13 @@ public sealed class AgentController(
                 Title = "Signed QuoteEngine agent context is required.",
                 Detail = "Tool calls must be made by ChatbotService with a BFF-issued agent context token."
             });
+        }
+
+        if (!await serverContextAuthorizer.IsAuthorizedAsync(context, cancellationToken))
+        {
+            DisableStatusCodeBody();
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return new EmptyResult();
         }
 
         var result = await agentService.ExecuteToolAsync(toolName, request, context, cancellationToken);
@@ -396,6 +459,8 @@ public sealed class AgentController(
     /// Uploads a sketch image attached to an agent message, returning a storage path reference.
     /// </summary>
     [HttpPost("sessions/{sessionId:guid}/sketches")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.CreateOrResume)]
+    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
     [RequestSizeLimit(10_000_000)]
     [ProducesResponseType(typeof(UploadSketchResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -417,12 +482,21 @@ public sealed class AgentController(
         using var memoryStream = new MemoryStream();
         await file.CopyToAsync(memoryStream, cancellationToken);
 
-        var result = await agentService.UploadSketchAsync(
-            sessionId,
-            file.FileName,
-            file.ContentType,
-            memoryStream.ToArray(),
-            cancellationToken);
+        UploadSketchResponse result;
+        try
+        {
+            result = await agentService.UploadSketchAsync(
+                sessionId,
+                file.FileName,
+                file.ContentType,
+                memoryStream.ToArray(),
+                cancellationToken);
+        }
+        catch (ArgumentException ex)
+        {
+            ModelState.AddModelError("file", ex.Message);
+            return ValidationProblem(ModelState);
+        }
 
         return Ok(result);
     }
@@ -431,6 +505,7 @@ public sealed class AgentController(
     /// Redirects a session-owned workbench artifact storage path to a signed download URL.
     /// </summary>
     [HttpGet("sessions/{sessionId:guid}/artifacts/download")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> DownloadArtifact(
@@ -441,7 +516,9 @@ public sealed class AgentController(
         var storagePath = agentService.ResolveAvailableArtifactStoragePath(sessionId, path);
         if (storagePath is null)
         {
-            return ValidationProblem("Artifact path is not available in this quote session.");
+            DisableStatusCodeBody();
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            return new EmptyResult();
         }
 
         var signedUrl = await uploadClient.GetDownloadUrlByPathAsync(storagePath, expirationMinutes: 60, ct: cancellationToken);
@@ -458,14 +535,51 @@ public sealed class AgentController(
         [FromBody] QuoteAgentThinkingStepDto step,
         CancellationToken cancellationToken)
     {
+        if (!contextToken.TryRead(Request.Headers[AgentContextHeader].ToString(), out var context) ||
+            context.QuoteSessionId != sessionId)
+        {
+            DisableStatusCodeBody();
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return new EmptyResult();
+        }
+
+        if (!await serverContextAuthorizer.IsAuthorizedAsync(context, cancellationToken))
+        {
+            DisableStatusCodeBody();
+            Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return new EmptyResult();
+        }
+
         await agentService.RelayThinkingStepAsync(sessionId, step, cancellationToken);
         return Accepted();
+    }
+
+    private void DisableStatusCodeBody()
+    {
+        var statusCodePages = HttpContext.Features.Get<IStatusCodePagesFeature>();
+        if (statusCodePages is not null)
+        {
+            statusCodePages.Enabled = false;
+        }
+    }
+
+    private static ProblemDetails BuildAgentUnavailableProblem(QuoteAgentBackendUnavailableException exception)
+    {
+        var problem = new ProblemDetails
+        {
+            Title = exception.CustomerTitle,
+            Detail = exception.CustomerDetail,
+            Status = StatusCodes.Status503ServiceUnavailable
+        };
+        problem.Extensions["code"] = exception.ErrorCode;
+        return problem;
     }
 
     /// <summary>
     /// Exports the chat transcript for a Make Studio session as a PDF.
     /// </summary>
     [HttpPost("export-pdf")]
+    [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
     [ProducesResponseType(typeof(QuoteAgentExportPdfResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<QuoteAgentExportPdfResponse>> ExportChatPdf(

@@ -1,4 +1,5 @@
 // Maliev.QuoteEngine.Bff/Clients/QuoteUploadServiceClient.cs
+using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
@@ -44,10 +45,70 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
     }
 
     /// <summary>
+    /// Gets authoritative metadata for a completed UploadService file.
+    /// UploadService creates this resource only after the upload is completed.
+    /// </summary>
+    public virtual async Task<QuoteUploadMetadata?> GetCompletedFileMetadataAsync(
+        string uploadId,
+        CancellationToken ct)
+    {
+        using var response = await http.GetAsync(
+            $"/upload/v1/files/{Uri.EscapeDataString(uploadId)}",
+            ct);
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var responseBody = await response.Content.ReadAsStringAsync(ct);
+            logger.LogError(
+                "UploadService metadata lookup failed {Status} for {UploadId}: {Body}",
+                response.StatusCode,
+                uploadId,
+                responseBody);
+            response.EnsureSuccessStatusCode();
+        }
+
+        return await response.Content.ReadFromJsonAsync<QuoteUploadMetadata>(cancellationToken: ct)
+            ?? throw new InvalidOperationException("UploadService returned empty file metadata.");
+    }
+
+    /// <summary>
     /// Streams a chunk of file bytes to UploadService, forwarding the Content-Range header.
     /// </summary>
     public virtual async Task StreamUploadAsync(Stream body, string contentType, long contentLength,
         string contentRange, string downstreamUploadId, string storagePath, CancellationToken ct)
+    {
+        var progress = await StreamUploadWithProgressAsync(
+            body,
+            contentType,
+            contentLength,
+            contentRange,
+            downstreamUploadId,
+            storagePath,
+            ct);
+        if (!progress.IsComplete)
+        {
+            throw new HttpRequestException(
+                "UploadService accepted only part of a one-shot upload.",
+                inner: null,
+                statusCode: (System.Net.HttpStatusCode)308);
+        }
+    }
+
+    /// <summary>
+    /// Streams one resumable chunk and returns the downstream acknowledged progress.
+    /// </summary>
+    public virtual async Task<QuoteUploadStreamProgress> StreamUploadWithProgressAsync(
+        Stream body,
+        string contentType,
+        long contentLength,
+        string contentRange,
+        string downstreamUploadId,
+        string storagePath,
+        CancellationToken ct)
     {
         using var content = new StreamContent(body);
         content.Headers.ContentType = MediaTypeHeaderValue.Parse(contentType);
@@ -66,6 +127,14 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
 
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
 
+        if ((int)response.StatusCode == 308)
+        {
+            var progress = await response.Content.ReadFromJsonAsync<ResumeUploadProgressResponse>(cancellationToken: ct);
+            return new QuoteUploadStreamProgress(
+                IsComplete: false,
+                BytesReceived: progress?.BytesReceived);
+        }
+
         if (!response.IsSuccessStatusCode)
         {
             var responseBody = await response.Content.ReadAsStringAsync(ct);
@@ -76,6 +145,8 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
                 responseBody);
             response.EnsureSuccessStatusCode();
         }
+
+        return new QuoteUploadStreamProgress(IsComplete: true, BytesReceived: null);
     }
 
     /// <summary>
@@ -166,3 +237,17 @@ public class QuoteUploadServiceClient(HttpClient http, ILogger<QuoteUploadServic
 
     private sealed record InitiateResumableUploadResponse(string UploadId, string SessionUri, DateTime ExpiresAt, long TotalSize);
 }
+
+/// <summary>Represents the progress acknowledged by UploadService for one resumable chunk.</summary>
+public sealed record QuoteUploadStreamProgress(bool IsComplete, long? BytesReceived);
+
+/// <summary>Authoritative completed-file metadata returned by UploadService.</summary>
+public sealed record QuoteUploadMetadata(
+    string FileId,
+    string UploadId,
+    string ServiceId,
+    string StoragePath,
+    long FileSize,
+    string ContentType);
+
+file sealed record ResumeUploadProgressResponse(long? BytesReceived);

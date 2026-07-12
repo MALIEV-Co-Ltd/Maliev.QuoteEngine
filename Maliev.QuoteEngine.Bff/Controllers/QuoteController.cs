@@ -9,7 +9,9 @@ using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Account;
 using Maliev.QuoteEngine.Shared.Quotes;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
@@ -23,6 +25,8 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 public sealed class QuoteController(
     QuoteEnginePrototypeStore store,
     CustomerSessionResolver sessionResolver,
+    AnonymousVisitorCookie anonymousVisitorCookie,
+    IQuoteAgentSessionRequestAuthorizer agentSessionAccess,
     IHubContext<QuoteNotificationsHub> hubContext,
     QuoteUploadServiceClient uploadClient,
     IQuoteFileAnalysisStatusService statusService,
@@ -71,6 +75,7 @@ public sealed class QuoteController(
     }
 
     [HttpPost("uploads/resumable")]
+    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
     public async Task<ActionResult<InitiateQuoteUploadResponse>> InitiateUpload(
         [FromBody] InitiateQuoteUploadRequest request,
         CancellationToken cancellationToken)
@@ -98,10 +103,37 @@ public sealed class QuoteController(
             });
         }
 
+        if (!Guid.TryParse(request.QuoteSessionId, out var quoteSessionId) || quoteSessionId == Guid.Empty)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid quote session.",
+                Detail = "Quote uploads require a valid quote session identifier."
+            });
+        }
+
+        var access = await agentSessionAccess.AuthorizeAsync(
+            quoteSessionId,
+            allowCreate: true,
+            cancellationToken);
+        if (access == QuoteAgentSessionAccessDecision.Unauthorized)
+        {
+            return Unauthorized();
+        }
+
+        if (access != QuoteAgentSessionAccessDecision.Authorized)
+        {
+            return EmptyNotFound();
+        }
+
+        request.QuoteSessionId = quoteSessionId.ToString("D");
+
         var customerId = sessionResolver.TryResolveCustomerId(out var resolvedCustomerId)
             ? resolvedCustomerId
             : (Guid?)null;
-        var upload = store.InitiateUpload(request, customerId);
+        var visitor = anonymousVisitorCookie.ResolveForRequest(HttpContext);
+
+        var upload = store.InitiateUpload(request, customerId, visitor.VisitorId);
         try
         {
             var metadataTags = BuildBrowserPrimaryUploadMetadata(upload.FileName);
@@ -140,6 +172,12 @@ public sealed class QuoteController(
     [DisableRequestSizeLimit]
     public async Task<IActionResult> ResumeUpload(string uploadId, CancellationToken cancellationToken)
     {
+        var upload = store.GetUpload(uploadId);
+        if (upload is null || !CanAccessUpload(upload))
+        {
+            return EmptyNotFound();
+        }
+
         var contentRange = Request.Headers.ContentRange.ToString();
         if (string.IsNullOrWhiteSpace(contentRange))
         {
@@ -150,9 +188,51 @@ public sealed class QuoteController(
             });
         }
 
-        var upload = store.GetUpload(uploadId);
-        if (upload is null) return NotFound();
-        if (!CanAccessUpload(upload)) return Forbid();
+        if (!System.Net.Http.Headers.ContentRangeHeaderValue.TryParse(contentRange, out var parsedRange) ||
+            !string.Equals(parsedRange.Unit, "bytes", StringComparison.OrdinalIgnoreCase) ||
+            !parsedRange.HasRange ||
+            !parsedRange.HasLength ||
+            parsedRange.From is not long rangeStart ||
+            parsedRange.To is not long rangeEnd ||
+            parsedRange.Length is not long rangeTotal ||
+            rangeStart < 0 ||
+            rangeEnd < rangeStart)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid Content-Range.",
+                Detail = "Content-Range must use the form bytes start-end/total."
+            });
+        }
+
+        if (rangeTotal != upload.ExpectedSizeBytes)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid Content-Range total.",
+                Detail = "Content-Range total must match the initiated upload size."
+            });
+        }
+
+        if (rangeStart != upload.ReceivedBytes || rangeEnd >= rangeTotal)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid upload range.",
+                Detail = $"The next chunk must start at byte {upload.ReceivedBytes} and remain within the initiated upload size."
+            });
+        }
+
+        var chunkLength = rangeEnd - rangeStart + 1;
+        if (chunkLength <= 0 || Request.ContentLength is not long contentLength || contentLength != chunkLength)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid upload chunk length.",
+                Detail = "Content-Length must be positive and match the Content-Range byte count."
+            });
+        }
+
         if (string.IsNullOrWhiteSpace(upload.DownstreamUploadId))
         {
             logger.LogError("Quote upload {UploadId} has no downstream UploadService session.", uploadId);
@@ -162,16 +242,19 @@ public sealed class QuoteController(
         if (IsPrototypeUpload(upload))
         {
             await Request.Body.CopyToAsync(Stream.Null, cancellationToken);
-            store.MarkUploaded(uploadId, Request.ContentLength ?? upload.ExpectedSizeBytes);
-            return NoContent();
+            var prototypeProgress = store.TryAdvanceUpload(uploadId, rangeStart, rangeEnd + 1);
+            return prototypeProgress is null
+                ? Conflict(new ProblemDetails { Title = "Upload progress changed. Retry from the current offset." })
+                : UploadProgressResult(prototypeProgress);
         }
 
         // Stream body bytes to UploadService (GCS-backed)
+        QuoteUploadStreamProgress downstreamProgress;
         try
         {
-            await uploadClient.StreamUploadAsync(
+            downstreamProgress = await uploadClient.StreamUploadWithProgressAsync(
                 Request.Body, upload.ContentType,
-                Request.ContentLength ?? 0, contentRange,
+                contentLength, contentRange,
                 upload.DownstreamUploadId,
                 upload.StoragePath, cancellationToken);
         }
@@ -184,16 +267,42 @@ public sealed class QuoteController(
                     "UploadService stream failed for quote upload {UploadId}; using local prototype upload fallback.",
                     uploadId);
                 store.AttachDownstreamUpload(uploadId, CreatePrototypeUploadId(uploadId));
-                store.MarkUploaded(uploadId, Request.ContentLength ?? upload.ExpectedSizeBytes);
-                return NoContent();
+                var fallbackProgress = store.TryAdvanceUpload(uploadId, rangeStart, rangeEnd + 1);
+                return fallbackProgress is null
+                    ? Conflict(new ProblemDetails { Title = "Upload progress changed. Retry from the current offset." })
+                    : UploadProgressResult(fallbackProgress);
             }
 
             logger.LogError(ex, "Failed to stream upload chunk for {UploadId}", uploadId);
             return StatusCode(502, new ProblemDetails { Title = "Upload forwarding failed." });
         }
 
-        store.MarkUploaded(uploadId, Request.ContentLength ?? 0);
-        return NoContent();
+        var locallyComplete = rangeEnd + 1 == upload.ExpectedSizeBytes;
+        if (downstreamProgress.IsComplete != locallyComplete)
+        {
+            logger.LogError(
+                "UploadService completion state {DownstreamComplete} disagrees with quote upload {UploadId} range {ContentRange}.",
+                downstreamProgress.IsComplete,
+                uploadId,
+                contentRange);
+            return StatusCode(502, new ProblemDetails { Title = "Upload progress could not be verified." });
+        }
+
+        var acknowledgedBytes = downstreamProgress.BytesReceived ?? rangeEnd + 1;
+        if (acknowledgedBytes != rangeEnd + 1)
+        {
+            logger.LogError(
+                "UploadService acknowledged {AcknowledgedBytes} bytes for quote upload {UploadId}, expected {ExpectedBytes}.",
+                acknowledgedBytes,
+                uploadId,
+                rangeEnd + 1);
+            return StatusCode(502, new ProblemDetails { Title = "Upload progress could not be verified." });
+        }
+
+        var progress = store.TryAdvanceUpload(uploadId, rangeStart, acknowledgedBytes);
+        return progress is null
+            ? Conflict(new ProblemDetails { Title = "Upload progress changed. Retry from the current offset." })
+            : UploadProgressResult(progress);
     }
 
     [HttpPost("uploads/resumable/{uploadId}/complete")]
@@ -201,8 +310,19 @@ public sealed class QuoteController(
         string uploadId, CancellationToken cancellationToken)
     {
         var existingUpload = store.GetUpload(uploadId);
-        if (existingUpload is null) return NotFound();
-        if (!CanAccessUpload(existingUpload)) return Forbid();
+        if (existingUpload is null || !CanAccessUpload(existingUpload))
+        {
+            return EmptyNotFound();
+        }
+
+        if (existingUpload.ReceivedBytes != existingUpload.ExpectedSizeBytes)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Title = "Upload is incomplete.",
+                Detail = $"Received {existingUpload.ReceivedBytes} of {existingUpload.ExpectedSizeBytes} bytes."
+            });
+        }
 
         // Demo short-circuit: sample bracket returns a pre-computed result immediately
         var demo = demoOptions.Value;
@@ -238,7 +358,10 @@ public sealed class QuoteController(
     }
 
     [HttpPost("uploads/handoff")]
-    public ActionResult<QuoteUploadHandoffResponse> ImportHandoff([FromBody] QuoteUploadHandoffRequest request)
+    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
+    public async Task<ActionResult<QuoteUploadHandoffResponse>> ImportHandoff(
+        [FromBody] QuoteUploadHandoffRequest request,
+        CancellationToken cancellationToken)
     {
         if (!ModelState.IsValid)
         {
@@ -255,10 +378,129 @@ public sealed class QuoteController(
             });
         }
 
+        if (!Guid.TryParse(verifiedRequest.QuoteSessionId, out var quoteSessionId) || quoteSessionId == Guid.Empty)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid upload handoff.",
+                Detail = "The verified handoff does not contain a valid quote session identifier."
+            });
+        }
+
+        var access = await agentSessionAccess.AuthorizeAsync(
+            quoteSessionId,
+            allowCreate: true,
+            cancellationToken);
+        if (access == QuoteAgentSessionAccessDecision.Unauthorized)
+        {
+            return Unauthorized();
+        }
+
+        if (access != QuoteAgentSessionAccessDecision.Authorized)
+        {
+            return EmptyNotFound();
+        }
+
+        verifiedRequest.QuoteSessionId = quoteSessionId.ToString("D");
+
+        var canonicalFiles = new List<QuoteUploadHandoffFileDto>(verifiedRequest.Files.Count);
+        try
+        {
+            foreach (var claimedFile in verifiedRequest.Files)
+            {
+                var upload = await uploadClient.GetCompletedFileMetadataAsync(
+                    claimedFile.UploadId,
+                    cancellationToken);
+                if (!TryBuildCanonicalHandoffFile(
+                        quoteSessionId,
+                        claimedFile,
+                        upload,
+                        out var canonicalFile))
+                {
+                    return InvalidUploadHandoff();
+                }
+
+                canonicalFiles.Add(canonicalFile);
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or JsonException)
+        {
+            logger.LogWarning(ex, "UploadService could not verify a Web upload handoff.");
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "Upload verification is temporarily unavailable.",
+                Detail = "We could not verify the website uploads right now. Please try again.",
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
+        }
+
+        var canonicalRequest = new QuoteUploadHandoffRequest
+        {
+            QuoteSessionId = quoteSessionId.ToString("D"),
+            Files = canonicalFiles
+        };
+
         var customerId = sessionResolver.TryResolveCustomerId(out var resolvedCustomerId)
             ? resolvedCustomerId
             : (Guid?)null;
-        return Ok(store.ImportHandoff(verifiedRequest, customerId));
+        var visitor = anonymousVisitorCookie.ResolveForRequest(HttpContext);
+
+        return Ok(store.ImportHandoff(canonicalRequest, customerId, visitor.VisitorId));
+    }
+
+    private static bool TryBuildCanonicalHandoffFile(
+        Guid quoteSessionId,
+        QuoteUploadHandoffFileDto claimedFile,
+        QuoteUploadMetadata? upload,
+        out QuoteUploadHandoffFileDto canonicalFile)
+    {
+        canonicalFile = new QuoteUploadHandoffFileDto();
+        if (upload is null || !Guid.TryParse(upload.FileId, out var fileId))
+        {
+            return false;
+        }
+
+        var canonicalPath = upload.StoragePath.Replace('\\', '/');
+        var expectedPrefix = $"quotes/temp/{quoteSessionId:N}/";
+        var canonicalName = Path.GetFileName(canonicalPath);
+        if (!string.Equals(upload.StoragePath, canonicalPath, StringComparison.Ordinal) ||
+            !string.Equals(upload.ServiceId, "WebBff", StringComparison.Ordinal) ||
+            !canonicalPath.StartsWith(expectedPrefix, StringComparison.Ordinal) ||
+            !QuoteUploadConstraints.IsSupportedAttachmentFileName(canonicalName) ||
+            upload.FileSize is <= 0 or > QuoteUploadConstraints.MaxFileSizeBytes ||
+            string.IsNullOrWhiteSpace(upload.ContentType) ||
+            !string.Equals(claimedFile.UploadId, upload.UploadId, StringComparison.Ordinal) ||
+            claimedFile.FileId != fileId ||
+            !string.Equals(claimedFile.FileName, canonicalName, StringComparison.Ordinal) ||
+            !string.Equals(claimedFile.StoragePath, canonicalPath, StringComparison.Ordinal) ||
+            !string.Equals(claimedFile.ContentType, upload.ContentType, StringComparison.OrdinalIgnoreCase) ||
+            claimedFile.FileSizeBytes != upload.FileSize ||
+            !string.Equals(claimedFile.Status, "Completed", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        canonicalFile = new QuoteUploadHandoffFileDto
+        {
+            UploadId = upload.UploadId,
+            FileId = fileId,
+            FileName = canonicalName,
+            StoragePath = canonicalPath,
+            ContentType = upload.ContentType,
+            FileSizeBytes = upload.FileSize,
+            Status = "Completed"
+        };
+        return true;
+    }
+
+    private BadRequestObjectResult InvalidUploadHandoff()
+    {
+        return BadRequest(new ProblemDetails
+        {
+            Title = "Invalid upload handoff.",
+            Detail = "The website upload handoff could not be verified. Please upload the files again.",
+            Status = StatusCodes.Status400BadRequest
+        });
     }
 
     [HttpGet("uploads/{uploadId}/analysis-status")]
@@ -267,10 +509,10 @@ public sealed class QuoteController(
         CancellationToken cancellationToken)
     {
         var upload = store.GetUpload(uploadId);
-        if (upload is null)
-            return NotFound();
-        if (!CanAccessUpload(upload))
-            return Forbid();
+        if (upload is null || !CanAccessUpload(upload))
+        {
+            return EmptyNotFound();
+        }
 
         var response = upload.ToAnalysisStatus();
         var liveStatus = await statusService.GetStatusAsync(upload.StoragePath, cancellationToken);
@@ -278,6 +520,10 @@ public sealed class QuoteController(
             return Ok(response);
 
         response.Status = liveStatus.Status;
+        response.IsAuthoritative = liveStatus.IsAuthoritative;
+        response.AnalysisSource = liveStatus.AnalysisSource;
+        response.HasAdvisoryAnalysis = liveStatus.AdvisoryAnalysis is not null;
+        response.AdvisoryAnalysisSource = liveStatus.AdvisoryAnalysis?.Source;
         if (liveStatus.VolumeCc.HasValue)
         {
             response.VolumeCc = liveStatus.VolumeCc.Value;
@@ -1874,12 +2120,45 @@ public sealed class QuoteController(
 
     private bool CanAccessUpload(UploadState upload)
     {
-        if (upload.IsTemporary)
+        if (upload.CustomerId.HasValue)
         {
-            return true;
+            return sessionResolver.TryResolveCustomerId(out var customerId) &&
+                   upload.CustomerId == customerId;
         }
 
-        return sessionResolver.TryResolveCustomerId(out var customerId) && upload.CustomerId == customerId;
+        var visitor = anonymousVisitorCookie.ResolveForRequest(HttpContext);
+        return visitor.Status != AnonymousVisitorCredentialStatus.Invalid &&
+               upload.VisitorId.HasValue &&
+               visitor.VisitorId == upload.VisitorId;
+    }
+
+    private void DisableStatusCodeBody()
+    {
+        var statusCodePages = HttpContext.Features.Get<IStatusCodePagesFeature>();
+        if (statusCodePages is not null)
+        {
+            statusCodePages.Enabled = false;
+        }
+    }
+
+    private EmptyResult EmptyNotFound()
+    {
+        DisableStatusCodeBody();
+        Response.StatusCode = StatusCodes.Status404NotFound;
+        return new EmptyResult();
+    }
+
+    private IActionResult UploadProgressResult(UploadState upload)
+    {
+        if (upload.ReceivedBytes == upload.ExpectedSizeBytes)
+        {
+            return NoContent();
+        }
+
+        DisableStatusCodeBody();
+        Response.Headers.Range = $"bytes=0-{upload.ReceivedBytes - 1}";
+        Response.StatusCode = StatusCodes.Status308PermanentRedirect;
+        return new EmptyResult();
     }
 
     private static string BuildOrderRequirements(CreateManufacturingOrderRequest request)

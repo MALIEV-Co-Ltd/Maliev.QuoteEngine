@@ -9020,6 +9020,7 @@
     {
         try
         {
+            await Api.BootstrapAgentSessionAsync(SessionId);
             var registry = await Api.GetConnectorRegistryAsync(SessionId);
             _connectors = registry.Connectors;
             _connectorRegistryRequiresAuthentication = registry.RequiresAuthenticationToList;

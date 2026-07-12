@@ -10,6 +10,9 @@ namespace Maliev.QuoteEngine.Bff.Services;
 /// </summary>
 public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusService
 {
+    private const string PendingAnalysisSource = "pending";
+    private const string ServerAnalysisSource = "server_analysis";
+
     private readonly ConcurrentDictionary<string, QuoteFileAnalysisStatus> _store
         = new(StringComparer.OrdinalIgnoreCase);
 
@@ -20,14 +23,26 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
     {
         _store.AddOrUpdate(
             storagePath,
-            _ => new QuoteFileAnalysisStatus { StoragePath = storagePath, Status = "Processing" },
-            (_, existing) => existing with { Status = "Processing" });
+            _ => new QuoteFileAnalysisStatus
+            {
+                StoragePath = storagePath,
+                Status = "Processing",
+                AnalysisSource = PendingAnalysisSource
+            },
+            (_, existing) => existing.IsAuthoritative
+                ? existing
+                : existing with
+                {
+                    Status = "Processing",
+                    AnalysisSource = PendingAnalysisSource
+                });
         return Task.CompletedTask;
     }
 
     public Task SetGlbReadyAsync(string storagePath, string glbUrl, string? thumbnailUrl,
         int bodyCount, bool isManifold, CancellationToken ct = default,
-        string? viewerStoragePath = null, string? viewerFileExtension = null)
+        string? viewerStoragePath = null, string? viewerFileExtension = null,
+        decimal? volumeCc = null, decimal? surfaceAreaCm2 = null)
     {
         _store.AddOrUpdate(
             storagePath,
@@ -35,24 +50,30 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             {
                 StoragePath = storagePath,
                 Status = "GlbReady",
+                IsAuthoritative = true,
+                AnalysisSource = ServerAnalysisSource,
+                HasAuthoritativeGeometry = true,
                 GlbUrl = glbUrl,
                 ViewerStoragePath = viewerStoragePath,
                 ViewerFileExtension = viewerFileExtension,
                 ThumbnailUrl = thumbnailUrl,
-                VolumeCc = null,
-                SurfaceAreaCm2 = null,
+                VolumeCc = volumeCc,
+                SurfaceAreaCm2 = surfaceAreaCm2,
                 BodyCount = bodyCount,
                 IsManifold = isManifold
             },
             (_, existing) => existing with
             {
-                Status = "GlbReady",
+                Status = existing.HasAuthoritativeDfm ? "DfmAnalysisReady" : "GlbReady",
+                IsAuthoritative = true,
+                AnalysisSource = ServerAnalysisSource,
+                HasAuthoritativeGeometry = true,
                 GlbUrl = glbUrl,
                 ViewerStoragePath = viewerStoragePath ?? existing.ViewerStoragePath,
                 ViewerFileExtension = viewerFileExtension ?? existing.ViewerFileExtension,
                 ThumbnailUrl = thumbnailUrl,
-                VolumeCc = existing.VolumeCc,
-                SurfaceAreaCm2 = existing.SurfaceAreaCm2,
+                VolumeCc = volumeCc,
+                SurfaceAreaCm2 = surfaceAreaCm2,
                 BodyCount = bodyCount,
                 IsManifold = isManifold
             });
@@ -70,6 +91,9 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             {
                 StoragePath = storagePath,
                 Status = "DfmAnalysisReady",
+                IsAuthoritative = true,
+                AnalysisSource = ServerAnalysisSource,
+                HasAuthoritativeDfm = true,
                 FdmReport = fdmReport,
                 SlaReport = slaReport,
                 CncReport = cncReport,
@@ -83,6 +107,9 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             (_, existing) => existing with
             {
                 Status = "DfmAnalysisReady",
+                IsAuthoritative = true,
+                AnalysisSource = ServerAnalysisSource,
+                HasAuthoritativeDfm = true,
                 // Merge-not-overwrite: keep existing non-null reports
                 FdmReport = fdmReport ?? existing.FdmReport,
                 SlaReport = slaReport ?? existing.SlaReport,
@@ -115,20 +142,64 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             {
                 StoragePath = storagePath,
                 Status = "Processing",
-                VolumeCc = volumeCc,
-                SurfaceAreaCm2 = surfaceAreaCm2,
-                IsManifold = isManifold,
-                NonManifoldReason = ResolveNonManifoldReason(isManifold, nonManifoldReason, null)
+                AnalysisSource = PendingAnalysisSource,
+                AdvisoryAnalysis = new QuoteFileAdvisoryAnalysis
+                {
+                    VolumeCc = volumeCc,
+                    SurfaceAreaCm2 = surfaceAreaCm2,
+                    IsManifold = isManifold,
+                    NonManifoldReason = ResolveNonManifoldReason(isManifold, nonManifoldReason, null)
+                }
             },
             (_, existing) => existing with
             {
-                VolumeCc = volumeCc ?? existing.VolumeCc,
-                SurfaceAreaCm2 = surfaceAreaCm2 ?? existing.SurfaceAreaCm2,
-                IsManifold = isManifold,
-                NonManifoldReason = ResolveNonManifoldReason(
-                    isManifold,
-                    nonManifoldReason,
-                    existing.NonManifoldReason)
+                AdvisoryAnalysis = (existing.AdvisoryAnalysis ?? new QuoteFileAdvisoryAnalysis()) with
+                {
+                    VolumeCc = volumeCc ?? existing.AdvisoryAnalysis?.VolumeCc,
+                    SurfaceAreaCm2 = surfaceAreaCm2 ?? existing.AdvisoryAnalysis?.SurfaceAreaCm2,
+                    IsManifold = isManifold,
+                    NonManifoldReason = ResolveNonManifoldReason(
+                        isManifold,
+                        nonManifoldReason,
+                        existing.AdvisoryAnalysis?.NonManifoldReason)
+                }
+            });
+        return Task.CompletedTask;
+    }
+
+    public Task SetLocalDfmReportsAsync(string storagePath,
+        QeFdmDfmReport? fdmReport, QeSlaDfmReport? slaReport, QeCncDfmReport? cncReport,
+        IReadOnlyList<string> overlayGlbUrls, string? nonManifoldReason,
+        CancellationToken ct = default)
+    {
+        _store.AddOrUpdate(
+            storagePath,
+            _ => new QuoteFileAnalysisStatus
+            {
+                StoragePath = storagePath,
+                Status = "Processing",
+                AnalysisSource = PendingAnalysisSource,
+                AdvisoryAnalysis = new QuoteFileAdvisoryAnalysis
+                {
+                    FdmReport = fdmReport,
+                    SlaReport = slaReport,
+                    CncReport = cncReport,
+                    OverlayGlbUrls = overlayGlbUrls,
+                    NonManifoldReason = nonManifoldReason
+                }
+            },
+            (_, existing) => existing with
+            {
+                AdvisoryAnalysis = (existing.AdvisoryAnalysis ?? new QuoteFileAdvisoryAnalysis()) with
+                {
+                    FdmReport = fdmReport ?? existing.AdvisoryAnalysis?.FdmReport,
+                    SlaReport = slaReport ?? existing.AdvisoryAnalysis?.SlaReport,
+                    CncReport = cncReport ?? existing.AdvisoryAnalysis?.CncReport,
+                    OverlayGlbUrls = overlayGlbUrls.Count > 0
+                        ? [.. (existing.AdvisoryAnalysis?.OverlayGlbUrls ?? []), .. overlayGlbUrls]
+                        : existing.AdvisoryAnalysis?.OverlayGlbUrls ?? [],
+                    NonManifoldReason = nonManifoldReason ?? existing.AdvisoryAnalysis?.NonManifoldReason
+                }
             });
         return Task.CompletedTask;
     }
@@ -141,9 +212,17 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             {
                 StoragePath = storagePath,
                 Status = "Failed",
+                IsAuthoritative = true,
+                AnalysisSource = ServerAnalysisSource,
                 AnalysisErrorCode = errorCode
             },
-            (_, existing) => existing with { Status = "Failed", AnalysisErrorCode = errorCode });
+            (_, existing) => existing with
+            {
+                Status = "Failed",
+                IsAuthoritative = true,
+                AnalysisSource = ServerAnalysisSource,
+                AnalysisErrorCode = errorCode
+            });
         return Task.CompletedTask;
     }
 

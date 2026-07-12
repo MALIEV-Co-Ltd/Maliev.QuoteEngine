@@ -63,6 +63,7 @@ public sealed class QuoteAgentMessageRequest
     public string? CustomerContext { get; set; }
 
     /// <summary>Gets or sets supplemental attachments already available to the browser.</summary>
+    [MaxLength(20)]
     public List<QuoteAgentAttachmentDto> Attachments { get; set; } = [];
 
     /// <summary>Gets or sets the ID of a prior message the customer is quoting/replying to.</summary>
@@ -90,6 +91,8 @@ public sealed class QuoteAgentAttachmentRegisterRequest
     public string? Language { get; set; }
 
     /// <summary>Gets or sets the uploaded attachments to register.</summary>
+    [MinLength(1)]
+    [MaxLength(20)]
     public List<QuoteAgentAttachmentDto> Attachments { get; set; } = [];
 }
 

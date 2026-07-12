@@ -45,9 +45,12 @@ public interface IQuoteAgentService
     string? ResolveAvailableArtifactStoragePath(Guid sessionId, string? path);
 
     /// <summary>Registers uploaded browser files with the current agent session.</summary>
-    QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request);
+    Task<QuoteAgentStateResponse> RegisterAttachmentsAsync(
+        Guid sessionId,
+        QuoteAgentAttachmentRegisterRequest request,
+        CancellationToken cancellationToken);
 
-    /// <summary>Applies a browser-computed local DFM report into the authoritative analysis store and session.</summary>
+    /// <summary>Stores a browser-computed local DFM report as advisory session analysis.</summary>
     Task<QuoteAgentStateResponse> ApplyLocalDfmReportAsync(
         Guid sessionId,
         QuoteAgentLocalDfmRequest request,
@@ -101,6 +104,8 @@ internal sealed class QuoteAgentService(
     IQuoteAgentConversationMap conversationMap,
     QuoteAgentContextToken contextToken,
     CustomerSessionResolver sessionResolver,
+    QuoteAgentSessionAccess sessionAccess,
+    QuoteAgentAttachmentAccess attachmentAccess,
     IGoogleDriveConnectorStore googleDriveConnectorStore,
     IHubContext<QuoteNotificationsHub> hubContext,
     IConfiguration configuration,
@@ -227,7 +232,7 @@ internal sealed class QuoteAgentService(
         state.CustomerId = customerId ?? state.CustomerId;
         sessionStore.AddAttachments(state, request.Attachments);
         MaterializeSupplementalAnalysis(state, request);
-        MaterializePrototypeParts(state, request);
+        await MaterializePartsAsync(state, request, cancellationToken);
         await HydratePartDfmFromAuthoritativeStoreAsync(state, cancellationToken);
         if (TryBuildUiLanguageTurnResponse(state, request.Message, out var localLanguageResponse))
         {
@@ -345,7 +350,7 @@ internal sealed class QuoteAgentService(
         state.CustomerId = customerId ?? state.CustomerId;
         sessionStore.AddAttachments(state, request.Attachments);
         MaterializeSupplementalAnalysis(state, request);
-        MaterializePrototypeParts(state, request);
+        await MaterializePartsAsync(state, request, cancellationToken);
         await HydratePartDfmFromAuthoritativeStoreAsync(state, cancellationToken);
         if (TryBuildUiLanguageTurnResponse(state, request.Message, out var localLanguageResponse))
         {
@@ -377,7 +382,27 @@ internal sealed class QuoteAgentService(
         ChatbotMessageResponse? finalMessage = null;
         var receivedError = false;
         var accumulatedThought = new StringBuilder();
-        var chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
+        var chatbotSessionId = Guid.Empty;
+        QuoteAgentBackendUnavailableException? sessionUnavailable = null;
+        try
+        {
+            chatbotSessionId = await EnsureChatbotSessionAsync(state, language, cancellationToken);
+        }
+        catch (QuoteAgentBackendUnavailableException exception)
+        {
+            sessionUnavailable = exception;
+        }
+
+        if (sessionUnavailable is not null)
+        {
+            yield return new QuoteAgentStreamEvent
+            {
+                Type = "error",
+                Error = sessionUnavailable.CustomerMessage
+            };
+            yield break;
+        }
+
         if (request.EditLastTurn && !await chatbotClient.TruncateLastTurnAsync(chatbotSessionId, cancellationToken))
         {
             var rollbackFailure = BuildEditRollbackFailureTurn(state, request.Message, language);
@@ -570,42 +595,22 @@ internal sealed class QuoteAgentService(
     public async Task<Guid?> ResolveConversationSessionIdAsync(Guid sessionId, CancellationToken cancellationToken)
     {
         var currentCustomerId = ResolveCustomerId();
-        if (sessionStore.TryGet(sessionId, out var existingState) &&
-            existingState.ChatbotSessionId is { } chatbotSessionId &&
-            chatbotSessionId != Guid.Empty)
-        {
-            if (!CanAccessConversation(existingState.CustomerId, currentCustomerId))
-            {
-                return null;
-            }
-
-            if (existingState.CustomerId.HasValue)
-            {
-                await conversationMap.StoreMappingAsync(
-                    existingState.SessionId,
-                    chatbotSessionId,
-                    existingState.CustomerId,
-                    cancellationToken);
-            }
-
-            return chatbotSessionId;
-        }
-
         var mapping = await conversationMap.GetMappingAsync(sessionId, cancellationToken);
-        if (mapping is { ChatbotSessionId: { } mapped } && mapped != Guid.Empty)
+        if (mapping is not { ChatbotSessionId: { } mapped } ||
+            mapped == Guid.Empty ||
+            !CanAccessConversation(mapping.CustomerId, currentCustomerId))
         {
-            if (!CanAccessConversation(mapping.CustomerId, currentCustomerId))
-            {
-                return null;
-            }
-
-            var restoredState = sessionStore.GetOrCreate(sessionId);
-            restoredState.ChatbotSessionId = mapped;
-            restoredState.CustomerId = mapping.CustomerId ?? restoredState.CustomerId;
-            return mapped;
+            return null;
         }
 
-        return currentCustomerId.HasValue ? null : sessionId;
+        var restoredState = sessionStore.GetOrCreate(sessionId);
+        lock (restoredState.SyncRoot)
+        {
+            restoredState.ChatbotSessionId = mapped;
+            restoredState.CustomerId = mapping.CustomerId;
+        }
+
+        return mapped;
     }
 
     public QuoteAgentConnectorRegistryResponse GetConnectorRegistry(Guid sessionId)
@@ -637,7 +642,7 @@ internal sealed class QuoteAgentService(
 
         if (!sessionStore.TryGet(sessionId, out var state))
         {
-            return IsLegacySessionScopedArtifactPath(sessionId, normalized) ? normalized : null;
+            return null;
         }
 
         lock (state.SyncRoot)
@@ -648,14 +653,16 @@ internal sealed class QuoteAgentService(
                 return null;
             }
 
-            return IsLegacySessionScopedArtifactPath(sessionId, normalized) ||
-                   IsRegisteredArtifactPath(state, normalized, currentCustomerId)
+            return IsRegisteredArtifactPath(state, normalized, currentCustomerId)
                 ? normalized
                 : null;
         }
     }
 
-    public QuoteAgentStateResponse RegisterAttachments(Guid sessionId, QuoteAgentAttachmentRegisterRequest request)
+    public async Task<QuoteAgentStateResponse> RegisterAttachmentsAsync(
+        Guid sessionId,
+        QuoteAgentAttachmentRegisterRequest request,
+        CancellationToken cancellationToken)
     {
         var message = string.IsNullOrWhiteSpace(request.Message)
             ? "Attached files to this quote session."
@@ -676,7 +683,7 @@ internal sealed class QuoteAgentService(
 
         sessionStore.AddAttachments(state, messageRequest.Attachments);
         MaterializeSupplementalAnalysis(state, messageRequest);
-        MaterializePrototypeParts(state, messageRequest);
+        await MaterializePartsAsync(state, messageRequest, cancellationToken);
         return ToStateResponse(state);
     }
 
@@ -686,35 +693,78 @@ internal sealed class QuoteAgentService(
         CancellationToken cancellationToken)
     {
         var state = sessionStore.GetOrCreate(sessionId);
-        state.CustomerId = ResolveCustomerId() ?? state.CustomerId;
+        var customerId = ResolveCustomerId();
+        state.CustomerId = customerId ?? state.CustomerId;
+        var storagePath = NormalizeArtifactStoragePath(request.StoragePath);
+        lock (state.SyncRoot)
+        {
+            if (storagePath is null ||
+                !IsRegisteredArtifactPath(state, storagePath, customerId) ||
+                !UploadIdMatchesRegisteredPath(state, storagePath, request.UploadId))
+            {
+                throw new QuoteAgentSessionResourceNotFoundException();
+            }
+        }
 
-        // Write the browser-computed report into the single authoritative analysis store, keyed by storage
-        // path. The server DFM pipeline writes to the same store, so the assistant reads one consistent
-        // source for both local and server analysis. Basic manifold state is set first (so it survives the
-        // DFM merge), then the process DFM reports.
+        // Browser/WASM geometry is useful for immediate preview feedback, but it is not trusted for
+        // manufacturing or commercial decisions. Keep it in the advisory sidecar; only GeometryService
+        // event consumers write the authoritative fields hydrated into parts and gates.
         await fileAnalysisStatus.SetLocalGeometryMetricsAsync(
-            request.StoragePath,
+            storagePath,
             volumeCc: null,
             surfaceAreaCm2: null,
             isManifold: request.IsManifold,
             nonManifoldReason: request.NonManifoldReason,
             cancellationToken);
-        await fileAnalysisStatus.SetDfmReportsAsync(
-            request.StoragePath,
+        await fileAnalysisStatus.SetLocalDfmReportsAsync(
+            storagePath,
             request.FdmReport,
             request.SlaReport,
             request.CncReport,
             request.OverlayGlbUrls,
             request.NonManifoldReason,
-            analysisErrorCode: null,
             cancellationToken);
 
-        await HydratePartDfmFromAuthoritativeStoreAsync(state, cancellationToken);
+        if (CanUsePrototypeFallback())
+        {
+            ApplyPrototypeLocalDfmToPart(state, storagePath, request);
+        }
+        else
+        {
+            await HydratePartDfmFromAuthoritativeStoreAsync(state, cancellationToken);
+        }
+
         return ToStateResponse(state);
     }
 
+    private static void ApplyPrototypeLocalDfmToPart(
+        QuoteAgentSessionState state,
+        string storagePath,
+        QuoteAgentLocalDfmRequest request)
+    {
+        lock (state.SyncRoot)
+        {
+            var part = state.Parts.FirstOrDefault(candidate =>
+                string.Equals(candidate.StoragePath, storagePath, StringComparison.OrdinalIgnoreCase));
+            if (part is null)
+            {
+                return;
+            }
+
+            part.FdmReport = request.FdmReport ?? part.FdmReport;
+            part.SlaReport = request.SlaReport ?? part.SlaReport;
+            part.CncReport = request.CncReport ?? part.CncReport;
+            part.OverlayGlbUrls = request.OverlayGlbUrls.Count > 0
+                ? [.. part.OverlayGlbUrls, .. request.OverlayGlbUrls]
+                : part.OverlayGlbUrls;
+            part.IsManifold = request.IsManifold;
+            part.NonManifoldReason = request.IsManifold ? null : request.NonManifoldReason;
+            part.Status = "DfmAnalysisReady";
+        }
+    }
+
     /// <summary>
-    /// Refreshes each session part's DFM from the authoritative analysis store (server + local writers),
+    /// Refreshes each session part's DFM from the authoritative server-analysis store,
     /// so the assistant always reflects real DFM results instead of a stale or empty session copy.
     /// </summary>
     private async Task HydratePartDfmFromAuthoritativeStoreAsync(
@@ -745,7 +795,7 @@ internal sealed class QuoteAgentService(
                 continue;
             }
 
-            if (status is null)
+            if (status?.IsAuthoritative != true)
             {
                 continue;
             }
@@ -1014,13 +1064,15 @@ internal sealed class QuoteAgentService(
         CancellationToken cancellationToken)
     {
         var state = sessionStore.GetOrCreate(context.QuoteSessionId);
-        state.ChatbotSessionId = context.ChatbotSessionId;
-        state.CustomerId = context.CustomerId ?? state.CustomerId;
-        await conversationMap.StoreMappingAsync(
-            context.QuoteSessionId,
-            context.ChatbotSessionId,
-            context.CustomerId,
-            cancellationToken);
+        lock (state.SyncRoot)
+        {
+            if (state.ChatbotSessionId != context.ChatbotSessionId ||
+                state.CustomerId != context.CustomerId)
+            {
+                throw new UnauthorizedAccessException(
+                    "The agent context does not match the active QuoteEngine conversation.");
+            }
+        }
 
         var result = toolName switch
         {
@@ -1042,7 +1094,10 @@ internal sealed class QuoteAgentService(
             "quote_get_connectors" => BuildConnectorRegistry(state),
             "quote_get_connector_handoff" => BuildConnectorHandoff(state, request.Arguments),
             "quote_search_customer_data" => await SearchCustomerDataOrGateErrorAsync(state, request.Arguments, cancellationToken),
-            "quote_register_uploads" => RegisterUploadsOrGateError(state, request.Arguments),
+            "quote_register_uploads" => await RegisterUploadsOrGateErrorAsync(
+                state,
+                request.Arguments,
+                cancellationToken),
             "quote_resume_project" => await ResumeProjectOrGateErrorAsync(state, request.Arguments, cancellationToken),
             "quote_update_part_configuration" => UpdatePartConfiguration(state, request.Arguments),
             "quote_calculate_estimate" => await CalculateEstimateOrGateErrorAsync(state, cancellationToken),
@@ -1183,27 +1238,68 @@ internal sealed class QuoteAgentService(
         QuoteAgentConfirmActionRequest request,
         CancellationToken cancellationToken)
     {
+        if (!sessionStore.TryGetAction(actionId, out _) &&
+            !sessionStore.TryGetCompletedAction(actionId, out _))
+        {
+            return null;
+        }
+
         var actionLock = sessionStore.GetActionLock(actionId);
         await actionLock.WaitAsync(cancellationToken);
         try
         {
-            var customerId = ResolveCustomerId();
+            var caller = sessionAccess.GetCurrentCaller();
+            var customerId = caller.CustomerId;
             if (!sessionStore.TryGetAction(actionId, out var action))
             {
-                if (sessionStore.TryGetCompletedAction(actionId, customerId, out var completed))
+                if (!sessionStore.TryGetCompletedAction(actionId, out var completed))
                 {
-                    return completed;
+                    return null;
                 }
 
+                var completedAccess = await sessionAccess.AuthorizeExistingAsync(
+                    completed.SessionId,
+                    cancellationToken);
+                if (completedAccess == QuoteAgentSessionAccessDecision.Unauthorized)
+                {
+                    throw new UnauthorizedAccessException("A valid customer or visitor session is required.");
+                }
+
+                caller = sessionAccess.GetCurrentCaller();
+                return completedAccess == QuoteAgentSessionAccessDecision.Authorized &&
+                       QuoteAgentSessionStore.CanAccessAction(
+                           completed.CustomerId,
+                           completed.VisitorId,
+                           caller.CustomerId,
+                           caller.VisitorId)
+                    ? completed.Result
+                    : null;
+            }
+
+            var access = await sessionAccess.AuthorizeExistingAsync(action.SessionId, cancellationToken);
+            if (access == QuoteAgentSessionAccessDecision.Unauthorized)
+            {
+                throw new UnauthorizedAccessException("A valid customer or visitor session is required.");
+            }
+
+            if (access != QuoteAgentSessionAccessDecision.Authorized)
+            {
                 return null;
             }
+
+            caller = sessionAccess.GetCurrentCaller();
+            customerId = caller.CustomerId;
 
             if (action.RequiresAuthentication && !customerId.HasValue)
             {
                 throw new UnauthorizedAccessException("This action requires a signed-in customer session.");
             }
 
-            if (!QuoteAgentSessionStore.CanAccessAction(action.CustomerId, customerId))
+            if (!QuoteAgentSessionStore.CanAccessAction(
+                    action.CustomerId,
+                    action.VisitorId,
+                    customerId,
+                    caller.VisitorId))
             {
                 return null;
             }
@@ -1250,7 +1346,6 @@ internal sealed class QuoteAgentService(
         finally
         {
             actionLock.Release();
-            sessionStore.ReleaseActionLock(actionId);
         }
     }
 
@@ -1405,10 +1500,20 @@ internal sealed class QuoteAgentService(
         byte[] imageBytes,
         CancellationToken cancellationToken)
     {
-        var storagePath = $"agent/sketches/{sessionId:N}/{fileName}";
+        var normalizedContentType = contentType.Split(';', 2)[0].Trim().ToLowerInvariant();
+        var extension = GetVerifiedSketchExtension(normalizedContentType, imageBytes);
+        if (extension is null)
+        {
+            throw new ArgumentException(
+                "Sketch content must be a valid PNG, JPEG, GIF, or WebP image.",
+                nameof(imageBytes));
+        }
+
+        var safeFileName = BuildSafeSketchFileName(fileName, extension);
+        var storagePath = $"agent/sketches/{sessionId:N}/{Guid.NewGuid():N}/{safeFileName}";
         var uploadId = await uploadClient.InitiateResumableUploadAsync(
-            fileName,
-            contentType,
+            safeFileName,
+            normalizedContentType,
             imageBytes.Length,
             storagePath,
             metadataTags: null,
@@ -1418,13 +1523,39 @@ internal sealed class QuoteAgentService(
         var contentRange = $"bytes 0-{imageBytes.Length - 1}/{imageBytes.Length}";
         await uploadClient.StreamUploadAsync(
             stream,
-            contentType,
+            normalizedContentType,
             imageBytes.Length,
             contentRange,
             uploadId,
             storagePath,
             cancellationToken);
         var signedUrl = await ResolveSketchUrlAsync(storagePath);
+        var caller = sessionAccess.GetCurrentCaller();
+        prototypeStore.TrackAgentUpload(
+            uploadId,
+            Guid.NewGuid(),
+            safeFileName,
+            normalizedContentType,
+            imageBytes.Length,
+            storagePath,
+            sessionId,
+            caller.CustomerId,
+            caller.VisitorId);
+        var state = sessionStore.GetOrCreate(sessionId);
+        sessionStore.AddAttachments(state,
+        [
+            new QuoteAgentAttachmentDto
+            {
+                FileName = safeFileName,
+                ContentType = normalizedContentType,
+                FileSizeBytes = imageBytes.Length,
+                Url = signedUrl,
+                Kind = "sketch",
+                UploadId = uploadId,
+                StoragePath = storagePath,
+                SatisfiesGeometryGate = false
+            }
+        ]);
 
         return new UploadSketchResponse
         {
@@ -1434,6 +1565,42 @@ internal sealed class QuoteAgentService(
         };
     }
 
+    private static string? GetVerifiedSketchExtension(string contentType, ReadOnlySpan<byte> bytes)
+    {
+        return contentType switch
+        {
+            "image/png" when bytes.StartsWith(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }) => ".png",
+            "image/jpeg" when bytes.StartsWith(new byte[] { 0xFF, 0xD8, 0xFF }) => ".jpg",
+            "image/gif" when bytes.StartsWith("GIF87a"u8) || bytes.StartsWith("GIF89a"u8) => ".gif",
+            "image/webp" when bytes.Length >= 12 &&
+                              bytes[..4].SequenceEqual("RIFF"u8) &&
+                              bytes.Slice(8, 4).SequenceEqual("WEBP"u8) => ".webp",
+            _ => null
+        };
+    }
+
+    private static string BuildSafeSketchFileName(string fileName, string extension)
+    {
+        var leafName = Path.GetFileName((fileName ?? string.Empty).Replace('\\', '/'));
+        var stem = Path.GetFileNameWithoutExtension(leafName).Trim();
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitizedStem = new string(stem
+            .Select(character =>
+                character == '/' ||
+                character == '\\' ||
+                char.IsControl(character) ||
+                invalid.Contains(character)
+                    ? '_'
+                    : character)
+            .ToArray());
+        if (string.IsNullOrWhiteSpace(sanitizedStem) || sanitizedStem is "." or "..")
+        {
+            sanitizedStem = "sketch";
+        }
+
+        return $"{sanitizedStem}{extension}";
+    }
+
     private async Task<Guid> EnsureChatbotSessionAsync(
         QuoteAgentSessionState state,
         string language,
@@ -1441,7 +1608,10 @@ internal sealed class QuoteAgentService(
     {
         if (state.ChatbotSessionId is { } existing && existing != Guid.Empty)
         {
-            return existing;
+            return await StoreOrResolveConversationMappingAsync(
+                state,
+                existing,
+                cancellationToken);
         }
 
         var mapping = await conversationMap.GetMappingAsync(state.SessionId, cancellationToken);
@@ -1469,10 +1639,59 @@ internal sealed class QuoteAgentService(
             Channel = "quote-engine",
             Language = language
         }, cancellationToken);
-        var sessionId = session?.SessionId is { } id && id != Guid.Empty ? id : Guid.NewGuid();
+        if (session?.SessionId is not { } sessionId || sessionId == Guid.Empty)
+        {
+            logger.LogWarning(
+                "ChatbotService did not return an authoritative session ID for QuoteEngine session {SessionId}.",
+                state.SessionId);
+            throw new QuoteAgentBackendUnavailableException();
+        }
+
         state.ChatbotSessionId = sessionId;
-        await conversationMap.StoreMappingAsync(state.SessionId, sessionId, state.CustomerId, cancellationToken);
-        return sessionId;
+        return await StoreOrResolveConversationMappingAsync(state, sessionId, cancellationToken);
+    }
+
+    private async Task<Guid> StoreOrResolveConversationMappingAsync(
+        QuoteAgentSessionState state,
+        Guid candidateChatbotSessionId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await conversationMap.StoreMappingAsync(
+                state.SessionId,
+                candidateChatbotSessionId,
+                state.CustomerId,
+                cancellationToken);
+            return candidateChatbotSessionId;
+        }
+        catch (InvalidOperationException)
+        {
+            var durable = await conversationMap.GetMappingAsync(state.SessionId, cancellationToken);
+            if (durable is null || durable.ChatbotSessionId == Guid.Empty)
+            {
+                throw;
+            }
+
+            if (durable.CustomerId.HasValue && durable.CustomerId != state.CustomerId)
+            {
+                throw new UnauthorizedAccessException(
+                    "The requested quote agent session belongs to another customer.");
+            }
+
+            if (state.CustomerId.HasValue && durable.CustomerId != state.CustomerId)
+            {
+                await conversationMap.StoreMappingAsync(
+                    state.SessionId,
+                    durable.ChatbotSessionId,
+                    state.CustomerId,
+                    cancellationToken);
+            }
+
+            state.ChatbotSessionId = durable.ChatbotSessionId;
+            state.CustomerId = durable.CustomerId ?? state.CustomerId;
+            return durable.ChatbotSessionId;
+        }
     }
 
     private QuoteAgentStateResponse ToStateResponse(QuoteAgentSessionState state)
@@ -4750,9 +4969,10 @@ internal sealed class QuoteAgentService(
                 : null;
     }
 
-    private object RegisterUploadsOrGateError(
+    private async Task<object> RegisterUploadsOrGateErrorAsync(
         QuoteAgentSessionState state,
-        Dictionary<string, JsonElement> arguments)
+        Dictionary<string, JsonElement> arguments,
+        CancellationToken cancellationToken)
     {
         var registrations = ReadUploadRegistrations(arguments).ToList();
         var attachments = registrations.Select(registration => registration.Attachment).ToList();
@@ -4792,6 +5012,29 @@ internal sealed class QuoteAgentService(
             }
         }
 
+        if (!attachmentAccess.TryAuthorizeAndCanonicalizeForOwner(
+                state.SessionId,
+                state.CustomerId,
+                state.VisitorId,
+                attachments,
+                out var authorizedAttachments))
+        {
+            return new
+            {
+                error = "The requested upload is not registered to this quote session.",
+                requiredGateCode = "upload_ownership_required",
+                actionType = "register_uploads",
+                state = ToStateResponse(state)
+            };
+        }
+
+        registrations = registrations
+            .Zip(
+                authorizedAttachments,
+                (registration, authorized) => registration with { Attachment = authorized })
+            .ToList();
+        attachments = authorizedAttachments;
+
         lock (state.SyncRoot)
         {
             if (HasDurableCommercialState(state) && attachments.Any(IsGeometryChangingAttachment))
@@ -4810,7 +5053,7 @@ internal sealed class QuoteAgentService(
         sessionStore.AddAttachments(state, attachments);
         SupersedeGeometryRevisions(state, registrations);
         MaterializeSupplementalAnalysis(state, request);
-        MaterializePrototypeParts(state, request);
+        await MaterializePartsAsync(state, request, cancellationToken);
         return ToStateResponse(state);
     }
 
@@ -7032,6 +7275,106 @@ internal sealed class QuoteAgentService(
             TryGetCurrentDraftProjectId(state, out projectId);
     }
 
+    private async Task MaterializePartsAsync(
+        QuoteAgentSessionState state,
+        QuoteAgentMessageRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (CanUsePrototypeFallback())
+        {
+            MaterializePrototypeParts(state, request);
+            return;
+        }
+
+        var analyzedAttachments = new List<(QuoteAgentAttachmentDto Attachment, QuoteFileAnalysisStatus Status)>();
+        foreach (var attachment in request.Attachments.Where(item => item.SatisfiesGeometryGate))
+        {
+            if (string.IsNullOrWhiteSpace(attachment.StoragePath))
+            {
+                continue;
+            }
+
+            QuoteFileAnalysisStatus? status;
+            try
+            {
+                status = await fileAnalysisStatus.GetStatusAsync(attachment.StoragePath, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Failed to read authoritative geometry status for {StoragePath}.",
+                    attachment.StoragePath);
+                continue;
+            }
+
+            if (status is not
+                {
+                    IsAuthoritative: true,
+                    HasAuthoritativeGeometry: true,
+                    VolumeCc: > 0m
+                } ||
+                status.Status.Equals("Processing", StringComparison.OrdinalIgnoreCase) ||
+                status.Status.Equals("Failed", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            analyzedAttachments.Add((attachment, status));
+        }
+
+        if (analyzedAttachments.Count == 0)
+        {
+            return;
+        }
+
+        lock (state.SyncRoot)
+        {
+            if (HasDurableCommercialState(state))
+            {
+                return;
+            }
+
+            foreach (var (attachment, status) in analyzedAttachments)
+            {
+                var uploadId = ResolveUploadId(attachment);
+                if (state.Parts.Any(part =>
+                    part.UploadId.Equals(uploadId, StringComparison.OrdinalIgnoreCase) ||
+                    part.FileName.Equals(attachment.FileName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                var part = BuildAuthoritativeAnalyzedPart(attachment, uploadId, request.Message, status);
+                AttachSupplementalFiles(part, state.Attachments);
+                state.Parts.Add(part);
+                if (!string.IsNullOrWhiteSpace(part.ViewerGlbUrl) ||
+                    !string.IsNullOrWhiteSpace(part.ViewerStoragePath))
+                {
+                    UpsertArtifact(
+                        state,
+                        "viewer",
+                        $"3D viewer - {part.FileName}",
+                        "ready",
+                        part.PartId,
+                        part.ViewerGlbUrl ?? part.ViewerStoragePath);
+                }
+
+                if (status.HasAuthoritativeDfm)
+                {
+                    UpsertDfmArtifact(state, part);
+                }
+
+                UpsertProjectSummaryArtifact(state, part, "configuration pending");
+                MarkSupplementalAnalysisGeometrySatisfied(state);
+            }
+
+            ApplyMessageConfiguration(state, request.Message);
+            state.ConfigurationConfirmed = false;
+            InvalidateDraftCommercialState(state);
+        }
+    }
+
     private void MaterializePrototypeParts(
         QuoteAgentSessionState state,
         QuoteAgentMessageRequest request)
@@ -7783,6 +8126,50 @@ internal sealed class QuoteAgentService(
             PartNotes = "Prototype analysis generated from uploaded CAD/3D attachment metadata until GeometryService returns authoritative analysis.",
             BodyCount = 1,
             SelectedBodyIndex = 0
+        };
+    }
+
+    private static QuotePartDraftDto BuildAuthoritativeAnalyzedPart(
+        QuoteAgentAttachmentDto attachment,
+        string uploadId,
+        string message,
+        QuoteFileAnalysisStatus status)
+    {
+        var process = InferProcess(attachment, message);
+
+        return new QuotePartDraftDto
+        {
+            PartId = Guid.NewGuid(),
+            FileId = Guid.TryParse(attachment.UploadId, out var fileId) ? fileId : Guid.NewGuid(),
+            UploadId = uploadId,
+            FileName = string.IsNullOrWhiteSpace(attachment.FileName) ? "uploaded-part.stl" : attachment.FileName,
+            ProcessId = process,
+            MaterialId = InferMaterial(process, message),
+            FinishId = InferFinish(process, message),
+            FinishCode = InferFinish(process, message),
+            ToleranceId = InferTolerance(process, message),
+            ToleranceCode = InferTolerance(process, message),
+            InspectionLevel = "STANDARD",
+            Quantity = InferQuantity(message),
+            VolumeCc = status.VolumeCc!.Value,
+            SurfaceAreaCm2 = status.SurfaceAreaCm2.GetValueOrDefault(),
+            StoragePath = attachment.StoragePath,
+            Status = status.HasAuthoritativeDfm ? "DfmAnalysisReady" : "GlbReady",
+            ViewerGlbUrl = status.GlbUrl,
+            ViewerStoragePath = status.ViewerStoragePath,
+            ViewerFileExtension = status.ViewerFileExtension,
+            ThumbnailUrl = status.ThumbnailUrl,
+            Findings = [],
+            IsManifold = status.IsManifold,
+            NonManifoldReason = status.IsManifold ? null : status.NonManifoldReason,
+            DfmAcknowledged = false,
+            PartNotes = "Authoritative geometry analysis received from the server analysis pipeline.",
+            BodyCount = status.BodyCount,
+            SelectedBodyIndex = 0,
+            FdmReport = status.FdmReport,
+            SlaReport = status.SlaReport,
+            CncReport = status.CncReport,
+            OverlayGlbUrls = status.OverlayGlbUrls
         };
     }
 
@@ -8638,15 +9025,6 @@ Customer message:
         return normalized;
     }
 
-    private static bool IsLegacySessionScopedArtifactPath(Guid sessionId, string path)
-    {
-        var compactSessionId = sessionId.ToString("N");
-        var dashedSessionId = sessionId.ToString("D");
-        return path.StartsWith($"agent/sketches/{compactSessionId}/", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith($"quotes/temp/{compactSessionId}/", StringComparison.OrdinalIgnoreCase) ||
-            path.StartsWith($"quotes/temp/{dashedSessionId}/", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static bool IsRegisteredArtifactPath(
         QuoteAgentSessionState state,
         string storagePath,
@@ -8664,6 +9042,24 @@ Customer message:
                 StoragePathMatches(part.StoragePath, storagePath) ||
                 StoragePathMatches(part.ViewerStoragePath, storagePath) ||
                 part.DrawingFiles.Any(file => StoragePathMatches(file.StoragePath, storagePath)));
+    }
+
+    private static bool UploadIdMatchesRegisteredPath(
+        QuoteAgentSessionState state,
+        string storagePath,
+        string? uploadId)
+    {
+        if (string.IsNullOrWhiteSpace(uploadId))
+        {
+            return false;
+        }
+
+        return state.Attachments.Any(attachment =>
+                StoragePathMatches(attachment.StoragePath, storagePath) &&
+                string.Equals(attachment.UploadId, uploadId, StringComparison.Ordinal)) ||
+            state.Parts.Any(part =>
+                StoragePathMatches(part.StoragePath, storagePath) &&
+                string.Equals(part.UploadId, uploadId, StringComparison.Ordinal));
     }
 
     private static bool ArtifactCustomerMatches(QuoteAgentArtifactDto artifact, Guid? currentCustomerId)
