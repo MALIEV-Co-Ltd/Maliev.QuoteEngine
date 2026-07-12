@@ -27,6 +27,19 @@ builder.AddDefaultApiVersioning();
 builder.AddServiceMeters("quote-engine");
 builder.AddIAMServiceClient("QuoteEngineBff");
 
+var redisConnectionString = builder.Configuration.GetConnectionString("redis");
+if (!string.IsNullOrWhiteSpace(redisConnectionString))
+{
+    builder.AddRedisConnectionMultiplexer();
+}
+else if (!builder.Environment.IsDevelopment() &&
+         !builder.Environment.IsEnvironment("Testing"))
+{
+    throw new InvalidOperationException(
+        "Redis connection string 'redis' is required outside Development and Testing. " +
+        "QuoteEngine must not fall back to process-local session ownership in a deployable environment.");
+}
+
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
@@ -108,25 +121,74 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
 builder.Services.AddScoped<QuoteUploadHandoffToken>();
 builder.Services.AddScoped<QuoteAgentContextToken>();
+builder.Services.AddOptions<QuoteAgentRetentionOptions>()
+    .BindConfiguration(QuoteAgentRetentionOptions.Section)
+    .Validate(
+        options => options.HasValidBounds,
+        "Quote agent retention must be positive, anonymous retention cannot exceed 30 days, and customer retention must be between anonymous retention and 365 days.")
+    .ValidateOnStart();
 builder.Services.AddSingleton<QuoteAgentSessionStore>();
+builder.Services.AddSingleton<IQuoteAgentSessionOwnerStore>(sp =>
+{
+    var redis = sp.GetService<IConnectionMultiplexer>();
+    if (redis is not null)
+    {
+        return new RedisQuoteAgentSessionOwnerStore(
+            redis,
+            sp.GetRequiredService<IOptions<QuoteAgentRetentionOptions>>());
+    }
+
+    var environment = sp.GetRequiredService<IHostEnvironment>();
+    if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+    {
+        throw new InvalidOperationException("Durable QuoteEngine session ownership requires Redis.");
+    }
+
+    return new InMemoryQuoteAgentSessionOwnerStore();
+});
 builder.Services.AddSingleton<IQuoteAgentConversationMap>(sp =>
 {
     var redis = sp.GetService<IConnectionMultiplexer>();
-    return redis is null
-        ? new InMemoryQuoteAgentConversationMap()
-        : new RedisQuoteAgentConversationMap(
+    if (redis is not null)
+    {
+        return new RedisQuoteAgentConversationMap(
             redis,
-            sp.GetRequiredService<ILogger<RedisQuoteAgentConversationMap>>());
+            sp.GetRequiredService<ILogger<RedisQuoteAgentConversationMap>>(),
+            sp.GetRequiredService<IOptions<QuoteAgentRetentionOptions>>());
+    }
+
+    var environment = sp.GetRequiredService<IHostEnvironment>();
+    if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+    {
+        throw new InvalidOperationException("Durable QuoteEngine conversation mapping requires Redis.");
+    }
+
+    return new InMemoryQuoteAgentConversationMap();
 });
+builder.Services.AddScoped<QuoteAgentSessionAccess>();
+builder.Services.AddScoped<QuoteAgentAttachmentAccess>();
+builder.Services.AddScoped<IQuoteAgentSessionRequestAuthorizer>(sp =>
+    sp.GetRequiredService<QuoteAgentSessionAccess>());
+builder.Services.AddScoped<IQuoteAgentServerContextAuthorizer>(sp =>
+    sp.GetRequiredService<QuoteAgentSessionAccess>());
 builder.Services.AddSingleton<IGoogleDriveConnectorStore>(sp =>
 {
     var redis = sp.GetService<IConnectionMultiplexer>();
-    return redis is null
-        ? new InMemoryGoogleDriveConnectorStore()
-        : new RedisGoogleDriveConnectorStore(
+    if (redis is not null)
+    {
+        return new RedisGoogleDriveConnectorStore(
             redis,
             sp.GetRequiredService<IDataProtectionProvider>(),
             sp.GetRequiredService<ILogger<RedisGoogleDriveConnectorStore>>());
+    }
+
+    var environment = sp.GetRequiredService<IHostEnvironment>();
+    if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+    {
+        throw new InvalidOperationException("Durable Google Drive connector state requires Redis.");
+    }
+
+    return new InMemoryGoogleDriveConnectorStore();
 });
 builder.Services.AddScoped<IQuoteAgentService, QuoteAgentService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")
@@ -217,8 +279,8 @@ app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/quote/v1/agent"))
     {
-        context.RequestServices.GetRequiredService<AnonymousVisitorCookie>()
-            .IssueIfMissing(context.Request, context.Response);
+        _ = context.RequestServices.GetRequiredService<AnonymousVisitorCookie>()
+            .ResolveForRequest(context);
     }
 
     await next();

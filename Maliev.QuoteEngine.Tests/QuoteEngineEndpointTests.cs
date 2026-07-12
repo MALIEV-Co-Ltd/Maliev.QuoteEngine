@@ -16,6 +16,7 @@ using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -233,6 +234,22 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
 
         public override Task StreamUploadAsync(Stream body, string contentType, long contentLength,
             string contentRange, string downstreamUploadId, string storagePath, CancellationToken ct) => Task.CompletedTask;
+
+        public override Task<QuoteUploadStreamProgress> StreamUploadWithProgressAsync(
+            Stream body,
+            string contentType,
+            long contentLength,
+            string contentRange,
+            string downstreamUploadId,
+            string storagePath,
+            CancellationToken ct)
+        {
+            var range = ContentRangeHeaderValue.Parse(contentRange);
+            var bytesReceived = range.To!.Value + 1;
+            return Task.FromResult(new QuoteUploadStreamProgress(
+                IsComplete: bytesReceived == range.Length,
+                BytesReceived: bytesReceived));
+        }
 
         public override Task<string> GetDownloadUrlByPathAsync(string storagePath,
             int expirationMinutes = 60, CancellationToken ct = default)
@@ -2085,12 +2102,12 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
-    public async Task GeometryRuntime_telemetry_when_accepted_metrics_hydrates_analysis_status()
+    public async Task GeometryRuntime_telemetry_when_accepted_metrics_remains_advisory()
     {
         using var client = factory.CreateClient();
         var initResponse = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
-            QuoteSessionId = "local-metrics-session",
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
             FileName = "local-metrics-part.stl",
             ContentType = "model/stl",
             FileSizeBytes = 12
@@ -2121,10 +2138,13 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var status = await client.GetFromJsonAsync<QuoteAnalysisStatusResponse>(
             $"/quote/v1/uploads/{upload.UploadId}/analysis-status");
         Assert.NotNull(status);
-        Assert.Equal(12.5m, status.VolumeCc);
-        Assert.Equal(62m, status.SurfaceAreaCm2);
-        Assert.False(status.IsManifold);
-        Assert.Equal("Browser local DFM found 4 non-manifold edge(s).", status.NonManifoldReason);
+        Assert.Equal(0m, status.VolumeCc);
+        Assert.Equal(0m, status.SurfaceAreaCm2);
+        Assert.True(status.IsManifold);
+        Assert.Null(status.NonManifoldReason);
+        Assert.False(status.IsAuthoritative);
+        Assert.True(status.HasAdvisoryAnalysis);
+        Assert.Equal("browser_local_advisory", status.AdvisoryAnalysisSource);
     }
 
     [Fact]
@@ -2200,10 +2220,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     public async Task ResumableUpload_allows_anonymous_temporary_workspace_upload()
     {
         using var client = factory.CreateClient();
+        var quoteSessionId = Guid.NewGuid();
 
         var response = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
-            QuoteSessionId = "session-unsigned",
+            QuoteSessionId = quoteSessionId.ToString("D"),
             FileName = "part.stl",
             ContentType = "model/stl",
             FileSizeBytes = 12
@@ -2212,7 +2233,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         response.EnsureSuccessStatusCode();
         var upload = await response.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
         Assert.NotNull(upload);
-        Assert.StartsWith("quotes/temp/session-unsigned/", upload.StoragePath, StringComparison.Ordinal);
+        Assert.StartsWith($"quotes/temp/{quoteSessionId:N}/", upload.StoragePath, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -2231,7 +2252,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var response = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
-            QuoteSessionId = "session-browser-primary",
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
             FileName = "part.stl",
             ContentType = "model/stl",
             FileSizeBytes = 12
@@ -2248,8 +2269,16 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     [Fact]
     public async Task UploadHandoff_imports_web_uploaded_files_into_active_workspace()
     {
-        using var client = factory.CreateClient();
         var quoteSessionId = Guid.NewGuid();
+        var fileId = Guid.NewGuid();
+        var authoritativeUpload = new HandoffUploadRecord(
+            "web-upload-1",
+            fileId,
+            $"quotes/temp/{quoteSessionId:N}/123/web-dropped-part.step",
+            "application/step",
+            420_000);
+        using var handoffFactory = CreateHandoffUploadFactory(authoritativeUpload);
+        using var client = handoffFactory.CreateClient();
         var token = CreateSignedWebUploadHandoffToken(new
         {
             quoteSessionId = quoteSessionId.ToString("D"),
@@ -2258,7 +2287,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
                 new
                 {
                     uploadId = "web-upload-1",
-                    fileId = Guid.NewGuid(),
+                    fileId,
                     fileName = "web-dropped-part.step",
                     storagePath = $"quotes/temp/{quoteSessionId:N}/123/web-dropped-part.step",
                     contentType = "application/step",
@@ -2281,24 +2310,84 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.Equal(quoteSessionId.ToString("D"), handoff.QuoteSessionId);
         var part = Assert.Single(handoff.Parts);
         Assert.Equal("web-upload-1", part.UploadId);
-        Assert.Equal("Analyzed", part.Status);
-        Assert.True(part.VolumeCc > 0);
+        Assert.Equal("Processing", part.Status);
+        Assert.Equal(0, part.VolumeCc);
+        Assert.Equal(0, part.SurfaceAreaCm2);
+        Assert.Empty(part.Findings);
+        Assert.Null(part.ViewerGlbUrl);
+        Assert.Null(part.ThumbnailUrl);
 
         var json = await response.Content.ReadAsStringAsync();
         using var document = JsonDocument.Parse(json);
         var partJson = document.RootElement.GetProperty("parts")[0];
         Assert.True(partJson.TryGetProperty("viewerGlbUrl", out var viewerGlbUrl), "Handoff parts must include the viewer URL used by the canvas.");
-        Assert.Equal("/models/sample.glb", viewerGlbUrl.GetString());
+        Assert.Equal(JsonValueKind.Null, viewerGlbUrl.ValueKind);
         Assert.True(partJson.TryGetProperty("viewerStoragePath", out var viewerStoragePath), "Handoff parts must include the viewer source storage path.");
         Assert.Equal($"quotes/temp/{quoteSessionId:N}/123/web-dropped-part.step", viewerStoragePath.GetString());
         Assert.True(partJson.TryGetProperty("viewerFileExtension", out var viewerFileExtension), "Handoff parts must include the viewer source extension.");
         Assert.Equal(".step", viewerFileExtension.GetString());
-        Assert.True(partJson.TryGetProperty("thumbnailUrl", out var thumbnailUrl), "Handoff parts must include a thumbnail for the imported part list.");
-        Assert.Equal("/images/generated/sample-part.svg", thumbnailUrl.GetString());
+        Assert.True(partJson.TryGetProperty("thumbnailUrl", out var thumbnailUrl), "Handoff parts must retain the nullable thumbnail field for the imported part list.");
+        Assert.Equal(JsonValueKind.Null, thumbnailUrl.ValueKind);
         Assert.True(partJson.TryGetProperty("contentType", out var contentType), "Handoff parts must include the MIME type for agent attachment registration.");
         Assert.Equal("application/step", contentType.GetString());
         Assert.True(partJson.TryGetProperty("fileSizeBytes", out var fileSizeBytes), "Handoff parts must include the original file size for agent attachment registration.");
         Assert.Equal(420_000, fileSizeBytes.GetInt64());
+    }
+
+    [Theory]
+    [InlineData("uploadId")]
+    [InlineData("status")]
+    [InlineData("storagePath")]
+    [InlineData("fileSize")]
+    [InlineData("fileName")]
+    [InlineData("contentType")]
+    [InlineData("fileId")]
+    [InlineData("serviceId")]
+    public async Task UploadHandoff_rejects_signed_metadata_not_confirmed_by_UploadService(string forgery)
+    {
+        var quoteSessionId = Guid.NewGuid();
+        var fileId = Guid.NewGuid();
+        var authoritativeUpload = new HandoffUploadRecord(
+            "web-upload-canonical",
+            fileId,
+            $"quotes/temp/{quoteSessionId:N}/420000/fixture.step",
+            "application/step",
+            420_000);
+        var uploadAvailable = forgery is not ("uploadId" or "status");
+        var servedUpload = forgery == "serviceId"
+            ? authoritativeUpload with { ServiceId = "OtherService" }
+            : authoritativeUpload;
+        using var handoffFactory = CreateHandoffUploadFactory(
+            uploadAvailable ? servedUpload : null);
+        using var client = handoffFactory.CreateClient();
+        var token = CreateSignedWebUploadHandoffToken(new
+        {
+            quoteSessionId = quoteSessionId.ToString("D"),
+            files = new[]
+            {
+                new
+                {
+                    uploadId = forgery == "uploadId" ? "forged-upload" : authoritativeUpload.UploadId,
+                    fileId = forgery == "fileId" ? Guid.NewGuid() : authoritativeUpload.FileId,
+                    fileName = forgery == "fileName" ? "different.step" : "fixture.step",
+                    storagePath = forgery == "storagePath"
+                        ? $"quotes/temp/{quoteSessionId:N}/999/different.step"
+                        : authoritativeUpload.StoragePath,
+                    contentType = forgery == "contentType" ? "application/octet-stream" : authoritativeUpload.ContentType,
+                    fileSizeBytes = forgery == "fileSize" ? authoritativeUpload.FileSizeBytes + 1 : authoritativeUpload.FileSizeBytes,
+                    status = "Completed"
+                }
+            },
+            issuedAt = DateTimeOffset.UtcNow,
+            expiresAt = DateTimeOffset.UtcNow.AddMinutes(15)
+        });
+
+        using var response = await client.PostAsJsonAsync("/quote/v1/uploads/handoff", new QuoteUploadHandoffRequest
+        {
+            HandoffToken = token
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Fact]
@@ -2375,10 +2464,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         using var client = await CreateSignedInClientAsync();
         var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
-            QuoteSessionId = "session-1",
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
             FileName = "part.stl",
             ContentType = "model/stl",
-            FileSizeBytes = 12
+            FileSizeBytes = 4
         });
         initiation.EnsureSuccessStatusCode();
         var upload = await initiation.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
@@ -2398,13 +2487,103 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
-    public async Task Analysis_status_rejects_upload_owned_by_another_customer()
+    public async Task ResumeUpload_rejects_malformed_mismatched_and_noncontiguous_ranges()
+    {
+        using var client = await CreateSignedInClientAsync();
+        var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
+            FileName = "range-validation.step",
+            ContentType = "application/step",
+            FileSizeBytes = 8
+        });
+        initiation.EnsureSuccessStatusCode();
+        var upload = await initiation.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(upload);
+
+        using var malformed = new ByteArrayContent([1]);
+        malformed.Headers.TryAddWithoutValidation("Content-Range", "bytes invalid");
+        var malformedResponse = await client.PutAsync(upload.ProxyUploadUrl, malformed);
+
+        using var wrongTotal = new ByteArrayContent([1, 2, 3]);
+        wrongTotal.Headers.ContentRange = new ContentRangeHeaderValue(0, 2, 7);
+        var wrongTotalResponse = await client.PutAsync(upload.ProxyUploadUrl, wrongTotal);
+
+        using var gap = new ByteArrayContent([1, 2, 3]);
+        gap.Headers.ContentRange = new ContentRangeHeaderValue(3, 5, 8);
+        var gapResponse = await client.PutAsync(upload.ProxyUploadUrl, gap);
+
+        using var wrongLength = new ByteArrayContent([1, 2]);
+        wrongLength.Headers.ContentRange = new ContentRangeHeaderValue(0, 2, 8);
+        var wrongLengthResponse = await client.PutAsync(upload.ProxyUploadUrl, wrongLength);
+
+        using var empty = new ByteArrayContent([]);
+        empty.Headers.ContentRange = new ContentRangeHeaderValue(0, 0, 8);
+        var emptyResponse = await client.PutAsync(upload.ProxyUploadUrl, empty);
+
+        Assert.Equal(HttpStatusCode.BadRequest, malformedResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, wrongTotalResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, gapResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, wrongLengthResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, emptyResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task ResumeUpload_tracks_cumulative_chunks_and_blocks_partial_completion()
+    {
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false,
+            HandleCookies = true
+        });
+        var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
+            FileName = "multi-chunk.step",
+            ContentType = "application/step",
+            FileSizeBytes = 8
+        });
+        initiation.EnsureSuccessStatusCode();
+        var upload = await initiation.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(upload);
+
+        using var first = new ByteArrayContent([1, 2, 3]);
+        first.Headers.ContentRange = new ContentRangeHeaderValue(0, 2, 8);
+        var firstResponse = await client.PutAsync(upload.ProxyUploadUrl, first);
+        var partialCompletion = await client.PostAsync(
+            $"/quote/v1/uploads/resumable/{upload.UploadId}/complete",
+            null);
+
+        using var overlap = new ByteArrayContent([3, 4, 5]);
+        overlap.Headers.ContentRange = new ContentRangeHeaderValue(2, 4, 8);
+        var overlapResponse = await client.PutAsync(upload.ProxyUploadUrl, overlap);
+
+        using var second = new ByteArrayContent([4, 5, 6, 7, 8]);
+        second.Headers.ContentRange = new ContentRangeHeaderValue(3, 7, 8);
+        var secondResponse = await client.PutAsync(upload.ProxyUploadUrl, second);
+        var completedResponse = await client.PostAsync(
+            $"/quote/v1/uploads/resumable/{upload.UploadId}/complete",
+            null);
+
+        Assert.Equal((HttpStatusCode)StatusCodes.Status308PermanentRedirect, firstResponse.StatusCode);
+        Assert.Equal("bytes=0-2", firstResponse.Headers.GetValues("Range").Single());
+        Assert.Equal(HttpStatusCode.Conflict, partialCompletion.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, overlapResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, secondResponse.StatusCode);
+        completedResponse.EnsureSuccessStatusCode();
+        var completed = await completedResponse.Content.ReadFromJsonAsync<CompleteQuoteUploadResponse>();
+        Assert.NotNull(completed);
+        Assert.Equal("Processing", completed.Status);
+    }
+
+    [Fact]
+    public async Task Upload_mutation_and_status_hide_uploads_owned_by_another_customer()
     {
         using var owner = await CreateSignedInClientAsync("analysis-owner@example.com");
         using var other = await CreateSignedInClientAsync("analysis-other@example.com");
         var initiation = await owner.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
-            QuoteSessionId = "analysis-owner-session",
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
             FileName = "owner-private-analysis.step",
             ContentType = "application/step",
             FileSizeBytes = 512
@@ -2413,12 +2592,19 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var upload = await initiation.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
         Assert.NotNull(upload);
 
-        var ownerStatus = await owner.GetAsync($"/quote/v1/uploads/{upload.UploadId}/analysis-status");
-        ownerStatus.EnsureSuccessStatusCode();
-
+        using var chunk = new ByteArrayContent(new byte[512]);
+        chunk.Headers.ContentType = MediaTypeHeaderValue.Parse("application/step");
+        chunk.Headers.ContentRange = new ContentRangeHeaderValue(0, 511, 512);
+        var otherResume = await other.PutAsync(upload.ProxyUploadUrl, chunk);
+        var otherComplete = await other.PostAsync($"/quote/v1/uploads/resumable/{upload.UploadId}/complete", null);
         var otherStatus = await other.GetAsync($"/quote/v1/uploads/{upload.UploadId}/analysis-status");
 
-        Assert.Equal(HttpStatusCode.Forbidden, otherStatus.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, otherResume.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, otherComplete.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, otherStatus.StatusCode);
+        Assert.Empty(await otherResume.Content.ReadAsByteArrayAsync());
+        Assert.Empty(await otherComplete.Content.ReadAsByteArrayAsync());
+        Assert.Empty(await otherStatus.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]
@@ -2436,7 +2622,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
-            QuoteSessionId = "session-local-fallback",
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
             FileName = "local-only-part.step",
             ContentType = "application/step",
             FileSizeBytes = 1024
@@ -2479,6 +2665,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             {
                 services.RemoveAll<IHostEnvironment>();
                 services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                UseProcessLocalAgentStateForProductionTest(services);
 
                 services.RemoveAll<QuoteUploadServiceClient>();
                 services.AddSingleton<QuoteUploadServiceClient>(new FailingQuoteUploadServiceClient());
@@ -2488,7 +2675,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
         {
-            QuoteSessionId = "session-production-upload-fallback",
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
             FileName = "production-upload.step",
             ContentType = "application/step",
             FileSizeBytes = 1024
@@ -2509,7 +2696,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             FileName = "sample.step",
             ContentType = "application/octet-stream",
             FileSizeBytes = 1024,
-            QuoteSessionId = "test-session-demo"
+            QuoteSessionId = Guid.NewGuid().ToString("D")
         });
         initResp.EnsureSuccessStatusCode();
         var initiated = await initResp.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
@@ -2540,11 +2727,16 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             FileName = "my-custom-bracket.step",
             ContentType = "application/octet-stream",
             FileSizeBytes = 512,
-            QuoteSessionId = "test-session-live"
+            QuoteSessionId = Guid.NewGuid().ToString("D")
         });
         initResp.EnsureSuccessStatusCode();
         var initiated = await initResp.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
         Assert.NotNull(initiated);
+
+        using var chunk = new ByteArrayContent(new byte[512]);
+        chunk.Headers.ContentRange = new ContentRangeHeaderValue(0, 511, 512);
+        var uploadResponse = await client.PutAsync(initiated.ProxyUploadUrl, chunk);
+        Assert.Equal(HttpStatusCode.NoContent, uploadResponse.StatusCode);
 
         var completeResp = await client.PostAsync(
             $"/quote/v1/uploads/resumable/{initiated.UploadId}/complete", null);
@@ -2766,10 +2958,18 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     {
         using var productionFactory = factory.WithWebHostBuilder(builder =>
         {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AnonymousVisitor:SigningKey"] = "quote-estimate-production-test-signing-key"
+                });
+            });
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostEnvironment>();
                 services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                UseProcessLocalAgentStateForProductionTest(services);
 
                 services.RemoveAll<IQePricingServiceClient>();
                 services.AddSingleton<IQePricingServiceClient>(new QuoteEngineWebApplicationFactory.EmptyPricingServiceClient());
@@ -3168,10 +3368,18 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var customerId = new Guid(MD5.HashData(Encoding.UTF8.GetBytes(normalizedEmail)));
         await using var scopedFactory = factory.WithWebHostBuilder(builder =>
         {
+            builder.ConfigureAppConfiguration((_, configuration) =>
+            {
+                configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AnonymousVisitor:SigningKey"] = "quote-project-production-test-signing-key"
+                });
+            });
             builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostEnvironment>();
                 services.AddSingleton<IHostEnvironment>(new QuoteEngineWebApplicationFactory.TestHostEnvironment(Environments.Production));
+                UseProcessLocalAgentStateForProductionTest(services);
                 services.RemoveAll<IProjectServiceClient>();
                 services.AddSingleton<IProjectServiceClient>(new QuoteEngineWebApplicationFactory.EmptyProjectServiceClient());
             });
@@ -4699,6 +4907,60 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         project.ProjectServiceProjectId
         ?? throw new InvalidOperationException("QuoteEngine draft response omitted the ProjectService project id.");
 
+    private WebApplicationFactory<Program> CreateHandoffUploadFactory(HandoffUploadRecord? upload)
+    {
+        var uploadClient = new QuoteUploadServiceClient(
+            new HttpClient(new HandoffUploadMetadataHandler(upload))
+            {
+                BaseAddress = new Uri("http://upload.test")
+            },
+            NullLogger<QuoteUploadServiceClient>.Instance);
+        return factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        {
+            services.RemoveAll<QuoteUploadServiceClient>();
+            services.AddSingleton(uploadClient);
+        }));
+    }
+
+    private sealed record HandoffUploadRecord(
+        string UploadId,
+        Guid FileId,
+        string StoragePath,
+        string ContentType,
+        long FileSizeBytes,
+        string ServiceId = "WebBff");
+
+    private sealed class HandoffUploadMetadataHandler(HandoffUploadRecord? upload) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            if (upload is null ||
+                request.Method != HttpMethod.Get ||
+                !string.Equals(
+                    request.RequestUri?.AbsolutePath,
+                    $"/upload/v1/files/{Uri.EscapeDataString(upload.UploadId)}",
+                    StringComparison.Ordinal))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = JsonContent.Create(new
+                {
+                    fileId = upload.FileId.ToString("D"),
+                    uploadId = upload.UploadId,
+                    serviceId = upload.ServiceId,
+                    storagePath = upload.StoragePath,
+                    fileSize = upload.FileSizeBytes,
+                    contentType = upload.ContentType
+                })
+            });
+        }
+    }
+
     private async Task<HttpClient> CreateSignedInClientAsync(string email = "customer@example.com")
     {
         var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
@@ -4717,6 +4979,16 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(email)}");
         signIn.EnsureSuccessStatusCode();
         return client;
+    }
+
+    private static void UseProcessLocalAgentStateForProductionTest(IServiceCollection services)
+    {
+        services.RemoveAll<IQuoteAgentSessionOwnerStore>();
+        services.AddSingleton<IQuoteAgentSessionOwnerStore, InMemoryQuoteAgentSessionOwnerStore>();
+        services.RemoveAll<IQuoteAgentConversationMap>();
+        services.AddSingleton<IQuoteAgentConversationMap, InMemoryQuoteAgentConversationMap>();
+        services.RemoveAll<IGoogleDriveConnectorStore>();
+        services.AddSingleton<IGoogleDriveConnectorStore, InMemoryGoogleDriveConnectorStore>();
     }
 
     private sealed class FailingQuoteUploadServiceClient()
@@ -4953,6 +5225,101 @@ internal sealed class TestSignInStartupFilter : IStartupFilter
                         CookieAuthenticationDefaults.AuthenticationScheme,
                         new ClaimsPrincipal(new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme)));
                     context.Response.StatusCode = 200;
+                    return;
+                }
+                if (context.Request.Path == "/test/agent-conversation" &&
+                    context.Request.Method == "GET")
+                {
+                    if (!Guid.TryParse(context.Request.Query["quoteSessionId"], out var quoteSessionId))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                        return;
+                    }
+
+                    var conversationMap = context.RequestServices
+                        .GetRequiredService<IQuoteAgentConversationMap>();
+                    var mapping = await conversationMap.GetMappingAsync(
+                        quoteSessionId,
+                        context.RequestAborted);
+                    if (mapping is null)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status404NotFound;
+                        return;
+                    }
+
+                    await context.Response.WriteAsJsonAsync(mapping, context.RequestAborted);
+                    return;
+                }
+                if (context.Request.Path == "/test/agent-upload" &&
+                    context.Request.Method == "POST")
+                {
+                    if (!Guid.TryParse(context.Request.Query["quoteSessionId"], out var quoteSessionId))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                        return;
+                    }
+
+                    var attachment = await JsonSerializer.DeserializeAsync<QuoteAgentAttachmentDto>(
+                        context.Request.Body,
+                        new JsonSerializerOptions(JsonSerializerDefaults.Web),
+                        context.RequestAborted);
+                    if (attachment is null ||
+                        string.IsNullOrWhiteSpace(attachment.UploadId) ||
+                        string.IsNullOrWhiteSpace(attachment.StoragePath) ||
+                        string.IsNullOrWhiteSpace(attachment.FileName) ||
+                        attachment.FileSizeBytes <= 0)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                        return;
+                    }
+
+                    var caller = context.RequestServices
+                        .GetRequiredService<QuoteAgentSessionAccess>()
+                        .GetCurrentCaller();
+                    context.RequestServices.GetRequiredService<QuoteEnginePrototypeStore>().TrackAgentUpload(
+                        attachment.UploadId,
+                        attachment.AttachmentId == Guid.Empty ? Guid.NewGuid() : attachment.AttachmentId,
+                        attachment.FileName,
+                        attachment.ContentType,
+                        attachment.FileSizeBytes,
+                        attachment.StoragePath,
+                        quoteSessionId,
+                        caller.CustomerId,
+                        caller.VisitorId);
+                    context.Response.StatusCode = StatusCodes.Status204NoContent;
+                    return;
+                }
+                if (context.Request.Path == "/test/agent-conversation" &&
+                    context.Request.Method == "POST")
+                {
+                    if (!Guid.TryParse(context.Request.Query["quoteSessionId"], out var quoteSessionId) ||
+                        !Guid.TryParse(context.Request.Query["chatbotSessionId"], out var chatbotSessionId))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                        return;
+                    }
+
+                    Guid? customerId = Guid.TryParse(
+                        context.Request.Query["customerId"],
+                        out var parsedCustomerId)
+                            ? parsedCustomerId
+                            : null;
+                    var conversationMap = context.RequestServices
+                        .GetRequiredService<IQuoteAgentConversationMap>();
+                    try
+                    {
+                        await conversationMap.StoreMappingAsync(
+                            quoteSessionId,
+                            chatbotSessionId,
+                            customerId,
+                            context.RequestAborted);
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        context.Response.StatusCode = StatusCodes.Status409Conflict;
+                        return;
+                    }
+                    context.Response.StatusCode = StatusCodes.Status204NoContent;
                     return;
                 }
                 await nextMiddleware(context);

@@ -84,7 +84,7 @@ public sealed class QuoteUploadHandoffToken(IConfiguration configuration, IHostE
         var expectedPrefix = $"quotes/temp/{quoteSessionId:N}/";
         return payload.Files.All(file =>
             !string.IsNullOrWhiteSpace(file.UploadId) &&
-            QuoteUploadConstraints.IsSupportedCadFileName(file.FileName) &&
+            QuoteUploadConstraints.IsSupportedAttachmentFileName(file.FileName) &&
             file.FileSizeBytes is > 0 and <= QuoteUploadConstraints.MaxFileSizeBytes &&
             file.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase) &&
             !string.IsNullOrWhiteSpace(file.StoragePath) &&
@@ -102,9 +102,11 @@ public sealed class QuoteUploadHandoffToken(IConfiguration configuration, IHostE
         var configured = configuration["QuoteUploadHandoff:SigningKey"];
         if (string.IsNullOrWhiteSpace(configured))
         {
-            if (hostEnvironment.IsProduction())
+            if (!hostEnvironment.IsDevelopment() &&
+                !hostEnvironment.IsEnvironment("Testing"))
             {
-                throw new InvalidOperationException("QuoteUploadHandoff:SigningKey must be configured in production.");
+                throw new InvalidOperationException(
+                    "QuoteUploadHandoff:SigningKey must be configured outside Development and Testing.");
             }
 
             configured = "maliev-local-development-quote-upload-handoff-key";

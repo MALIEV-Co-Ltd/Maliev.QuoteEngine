@@ -218,6 +218,14 @@ public sealed class QuoteAnalysisStatusResponse
 
     public string Status { get; set; } = "WaitingForUpload";
 
+    public bool IsAuthoritative { get; set; }
+
+    public string AnalysisSource { get; set; } = "pending";
+
+    public bool HasAdvisoryAnalysis { get; set; }
+
+    public string? AdvisoryAnalysisSource { get; set; }
+
     public decimal VolumeCc { get; set; }
 
     public decimal SurfaceAreaCm2 { get; set; }

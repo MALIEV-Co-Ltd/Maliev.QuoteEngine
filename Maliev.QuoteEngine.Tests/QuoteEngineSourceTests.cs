@@ -1312,6 +1312,17 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("ToggleComposerPluginsMenu", component, StringComparison.Ordinal);
         Assert.Contains("qe-agent-plugin-menu-icon", component, StringComparison.Ordinal);
         Assert.Contains("GetConnectorRegistryAsync", component, StringComparison.Ordinal);
+        var connectorRegistryBlock = ExtractSourceBlock(
+            component,
+            "private async Task LoadConnectorRegistryAsync()",
+            "private List<QuoteAgentConnectorDto> InstalledConnectors");
+        var bootstrapIndex = connectorRegistryBlock.IndexOf(
+            "BootstrapAgentSessionAsync(SessionId)",
+            StringComparison.Ordinal);
+        var registryIndex = connectorRegistryBlock.IndexOf(
+            "GetConnectorRegistryAsync(SessionId)",
+            StringComparison.Ordinal);
+        Assert.True(bootstrapIndex >= 0 && bootstrapIndex < registryIndex);
         Assert.Contains("GetConnectorHandoffAsync", component, StringComparison.Ordinal);
         Assert.Contains("QuoteAgentConnectorHandoffResponse", component, StringComparison.Ordinal);
         Assert.Contains("connector.ConnectorId", component, StringComparison.Ordinal);
@@ -3832,7 +3843,7 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public async Task StatusService_SetLocalGeometryMetrics_merges_with_existing_viewer_status()
+    public async Task StatusService_SetLocalGeometryMetrics_keeps_browser_values_advisory()
     {
         var svc = new QuoteFileAnalysisStatusService();
         const string path = "quotes/temp/s/u/browser-local.stl";
@@ -3856,13 +3867,23 @@ public sealed class QuoteEngineSourceTests
 
         var status = await svc.GetStatusAsync(path);
         Assert.NotNull(status);
-        Assert.Equal("Processing", status.Status);
+        Assert.Equal("GlbReady", status.Status);
+        Assert.True(status.IsAuthoritative);
+        Assert.Equal("server_analysis", status.AnalysisSource);
         Assert.Equal("https://glb.example.com/browser-local.glb", status.GlbUrl);
         Assert.Equal("processed/browser-local.glb", status.ViewerStoragePath);
-        Assert.Equal(12.5m, status.VolumeCc);
-        Assert.Equal(62m, status.SurfaceAreaCm2);
-        Assert.False(status.IsManifold);
-        Assert.Equal("Browser local DFM found 4 non-manifold edge(s).", status.NonManifoldReason);
+        Assert.Null(status.VolumeCc);
+        Assert.Null(status.SurfaceAreaCm2);
+        Assert.True(status.IsManifold);
+        Assert.Null(status.NonManifoldReason);
+        Assert.NotNull(status.AdvisoryAnalysis);
+        Assert.Equal("browser_local_advisory", status.AdvisoryAnalysis.Source);
+        Assert.Equal(12.5m, status.AdvisoryAnalysis.VolumeCc);
+        Assert.Equal(62m, status.AdvisoryAnalysis.SurfaceAreaCm2);
+        Assert.False(status.AdvisoryAnalysis.IsManifold);
+        Assert.Equal(
+            "Browser local DFM found 4 non-manifold edge(s).",
+            status.AdvisoryAnalysis.NonManifoldReason);
     }
 
     [Fact]
@@ -3950,6 +3971,11 @@ public sealed class QuoteEngineSourceTests
         Assert.Null(stored.ThumbnailUrl);
         Assert.Equal(1, stored.BodyCount);
         Assert.True(stored.IsManifold);
+        Assert.True(stored.IsAuthoritative);
+        Assert.True(stored.HasAuthoritativeGeometry);
+        Assert.Equal("server_analysis", stored.AnalysisSource);
+        Assert.Equal(12.4m, stored.VolumeCc);
+        Assert.Equal(0m, stored.SurfaceAreaCm2);
 
         // Assert — SignalR hub called with correct GlbReady payload
         var calls = hubGroup.ReceivedCalls()

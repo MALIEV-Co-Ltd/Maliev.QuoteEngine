@@ -707,13 +707,21 @@ public sealed class QuoteEnginePrototypeStore
         "/images/generated/sample-part.svg",
         "Demo mode uses MALIEV-owned sample files and does not create customer projects, uploads, quotations, orders, or history.");
 
-    public UploadState InitiateUpload(InitiateQuoteUploadRequest request, Guid? customerId)
+    public UploadState InitiateUpload(
+        InitiateQuoteUploadRequest request,
+        Guid? customerId,
+        Guid? visitorId = null)
     {
+        if (!Guid.TryParse(request.QuoteSessionId, out var quoteSessionId) || quoteSessionId == Guid.Empty)
+        {
+            throw new ArgumentException("A valid quote session identifier is required.", nameof(request));
+        }
+
         var uploadId = Guid.NewGuid().ToString("N");
-        var safeName = string.Join("_", request.FileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+        var safeName = SanitizeUploadFileName(request.FileName);
         var storagePath = customerId.HasValue
-            ? $"customers/{customerId.Value:N}/quotes/{request.QuoteSessionId}/{uploadId}/{safeName}"
-            : $"quotes/temp/{request.QuoteSessionId}/{uploadId}/{safeName}";
+            ? $"customers/{customerId.Value:N}/quotes/{quoteSessionId:N}/{uploadId}/{safeName}"
+            : $"quotes/temp/{quoteSessionId:N}/{uploadId}/{safeName}";
         var state = new UploadState(
             uploadId,
             Guid.NewGuid(),
@@ -722,18 +730,28 @@ public sealed class QuoteEnginePrototypeStore
             request.FileSizeBytes,
             storagePath,
             customerId,
-            IsTemporary: !customerId.HasValue);
+            IsTemporary: !customerId.HasValue,
+            VisitorId: visitorId,
+            QuoteSessionId: quoteSessionId.ToString("D"));
 
         _uploads[uploadId] = state;
         return state;
     }
 
-    public QuoteUploadHandoffResponse ImportHandoff(QuoteUploadHandoffRequest request, Guid? customerId)
+    public QuoteUploadHandoffResponse ImportHandoff(
+        QuoteUploadHandoffRequest request,
+        Guid? customerId,
+        Guid? visitorId = null)
     {
+        if (!Guid.TryParse(request.QuoteSessionId, out var quoteSessionId) || quoteSessionId == Guid.Empty)
+        {
+            throw new ArgumentException("A valid quote session identifier is required.", nameof(request));
+        }
+
         var parts = new List<QuoteUploadHandoffPartDto>();
         foreach (var file in request.Files.Where(file => !string.IsNullOrWhiteSpace(file.UploadId)))
         {
-            var safeName = string.Join("_", file.FileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+            var safeName = SanitizeUploadFileName(file.FileName);
             var uploadId = file.UploadId.Trim();
             var state = new UploadState(
                 uploadId,
@@ -743,38 +761,117 @@ public sealed class QuoteEnginePrototypeStore
                 file.FileSizeBytes,
                 file.StoragePath,
                 customerId,
-                IsTemporary: !customerId.HasValue)
+                IsTemporary: !customerId.HasValue,
+                VisitorId: visitorId,
+                QuoteSessionId: quoteSessionId.ToString("D"))
             {
                 ReceivedBytes = file.FileSizeBytes,
-                Status = "Uploaded"
+                Status = "Processing"
             };
 
             _uploads[uploadId] = state;
-            var analyzed = MarkAnalyzed(uploadId);
             parts.Add(new QuoteUploadHandoffPartDto(
                 Guid.NewGuid(),
-                analyzed.FileId,
-                analyzed.UploadId,
-                analyzed.FileName,
-                analyzed.StoragePath,
-                analyzed.Status,
-                analyzed.VolumeCc,
-                analyzed.SurfaceAreaCm2,
-                analyzed.Findings,
-                analyzed.ViewerGlbUrl,
-                analyzed.StoragePath,
-                NormalizeViewerFileExtension(analyzed.StoragePath),
-                analyzed.ThumbnailUrl,
-                analyzed.ContentType,
-                analyzed.ExpectedSizeBytes));
+                state.FileId,
+                state.UploadId,
+                state.FileName,
+                state.StoragePath,
+                state.Status,
+                0,
+                0,
+                [],
+                null,
+                state.StoragePath,
+                NormalizeViewerFileExtension(state.StoragePath),
+                null,
+                state.ContentType,
+                state.ExpectedSizeBytes));
         }
 
         return new QuoteUploadHandoffResponse(request.QuoteSessionId, parts);
     }
 
+    private static string SanitizeUploadFileName(string fileName)
+    {
+        var leafName = Path.GetFileName((fileName ?? string.Empty).Replace('\\', '/')).Trim();
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(leafName
+            .Select(character =>
+                character == '/' ||
+                character == '\\' ||
+                char.IsControl(character) ||
+                invalid.Contains(character)
+                    ? '_'
+                    : character)
+            .ToArray());
+        return string.IsNullOrWhiteSpace(sanitized) || sanitized is "." or ".."
+            ? "upload.bin"
+            : sanitized;
+    }
+
     public UploadState? GetUpload(string uploadId)
     {
         return _uploads.TryGetValue(uploadId, out var upload) ? upload : null;
+    }
+
+    public void PromoteSessionUploads(Guid sessionId, Guid expectedVisitorId, Guid customerId)
+    {
+        if (sessionId == Guid.Empty || expectedVisitorId == Guid.Empty || customerId == Guid.Empty)
+        {
+            return;
+        }
+
+        foreach (var entry in _uploads)
+        {
+            var current = entry.Value;
+            while (!current.CustomerId.HasValue &&
+                   current.VisitorId == expectedVisitorId &&
+                   Guid.TryParse(current.QuoteSessionId, out var uploadSessionId) &&
+                   uploadSessionId == sessionId)
+            {
+                var promoted = current with { CustomerId = customerId };
+                if (_uploads.TryUpdate(entry.Key, promoted, current))
+                {
+                    break;
+                }
+
+                if (!_uploads.TryGetValue(entry.Key, out current))
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    public UploadState TrackAgentUpload(
+        string uploadId,
+        Guid fileId,
+        string fileName,
+        string contentType,
+        long fileSizeBytes,
+        string storagePath,
+        Guid sessionId,
+        Guid? customerId,
+        Guid? visitorId)
+    {
+        var state = new UploadState(
+            uploadId,
+            fileId,
+            fileName,
+            contentType,
+            fileSizeBytes,
+            storagePath,
+            customerId,
+            IsTemporary: !customerId.HasValue,
+            VisitorId: visitorId,
+            QuoteSessionId: sessionId.ToString("D"))
+        {
+            DownstreamUploadId = uploadId,
+            ReceivedBytes = fileSizeBytes,
+            Status = "Uploaded"
+        };
+        _uploads[uploadId] = state;
+        return state;
     }
 
     public UploadState AttachDownstreamUpload(string uploadId, string downstreamUploadId)
@@ -785,16 +882,29 @@ public sealed class QuoteEnginePrototypeStore
         return updated;
     }
 
-    public UploadState MarkUploaded(string uploadId, long receivedBytes)
+    public UploadState? TryAdvanceUpload(string uploadId, long expectedReceivedBytes, long receivedBytes)
     {
-        var current = GetRequiredUpload(uploadId);
-        var updated = current with
+        while (_uploads.TryGetValue(uploadId, out var current))
         {
-            ReceivedBytes = receivedBytes,
-            Status = "Uploaded"
-        };
-        _uploads[uploadId] = updated;
-        return updated;
+            if (current.ReceivedBytes != expectedReceivedBytes ||
+                receivedBytes <= expectedReceivedBytes ||
+                receivedBytes > current.ExpectedSizeBytes)
+            {
+                return null;
+            }
+
+            var updated = current with
+            {
+                ReceivedBytes = receivedBytes,
+                Status = receivedBytes == current.ExpectedSizeBytes ? "Uploaded" : "Uploading"
+            };
+            if (_uploads.TryUpdate(uploadId, updated, current))
+            {
+                return updated;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Transitions an upload to "Processing" status (real pipeline path).</summary>
@@ -1436,7 +1546,9 @@ public sealed record UploadState(
     long ExpectedSizeBytes,
     string StoragePath,
     Guid? CustomerId,
-    bool IsTemporary)
+    bool IsTemporary,
+    Guid? VisitorId = null,
+    string? QuoteSessionId = null)
 {
     public string Status { get; init; } = "WaitingForUpload";
 
@@ -1459,6 +1571,8 @@ public sealed record UploadState(
         UploadId = UploadId,
         StoragePath = StoragePath,
         Status = Status,
+        IsAuthoritative = false,
+        AnalysisSource = Status is "Analyzed" or "DfmAnalysisReady" ? "prototype_demo" : "pending",
         VolumeCc = VolumeCc,
         SurfaceAreaCm2 = SurfaceAreaCm2,
         ViewerGlbUrl = ViewerGlbUrl,

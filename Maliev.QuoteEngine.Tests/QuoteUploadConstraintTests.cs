@@ -72,7 +72,7 @@ public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory 
             FileName = "oversized-part.stl",
             ContentType = "model/stl",
             FileSizeBytes = QuoteUploadConstraints.MaxFileSizeBytes + 1,
-            QuoteSessionId = "upload-limit-test"
+            QuoteSessionId = Guid.NewGuid().ToString("D")
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -88,7 +88,7 @@ public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory 
             FileName = "macro.xlsm",
             ContentType = "application/vnd.ms-excel.sheet.macroEnabled.12",
             FileSizeBytes = 1_024,
-            QuoteSessionId = "upload-extension-test"
+            QuoteSessionId = Guid.NewGuid().ToString("D")
         });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -104,7 +104,7 @@ public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory 
             FileName = "fixture.x_t",
             ContentType = "application/octet-stream",
             FileSizeBytes = QuoteUploadConstraints.MaxFileSizeBytes,
-            QuoteSessionId = "upload-parasolid-test"
+            QuoteSessionId = Guid.NewGuid().ToString("D")
         });
 
         response.EnsureSuccessStatusCode();
@@ -112,6 +112,22 @@ public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory 
 
         Assert.NotNull(upload);
         Assert.Equal(QuoteUploadConstraints.MaxFileSizeBytes, upload.ExpectedSizeBytes);
+    }
+
+    [Fact]
+    public async Task InitiateUpload_rejects_non_guid_quote_session_identifier()
+    {
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            FileName = "fixture.step",
+            ContentType = "application/step",
+            FileSizeBytes = 1_024,
+            QuoteSessionId = "customer-controlled-session-label"
+        });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
     }
 
     [Theory]
@@ -127,7 +143,7 @@ public sealed class QuoteUploadConstraintTests(QuoteEngineWebApplicationFactory 
             FileName = fileName,
             ContentType = contentType,
             FileSizeBytes = 1_024,
-            QuoteSessionId = "upload-context-test"
+            QuoteSessionId = Guid.NewGuid().ToString("D")
         });
 
         response.EnsureSuccessStatusCode();

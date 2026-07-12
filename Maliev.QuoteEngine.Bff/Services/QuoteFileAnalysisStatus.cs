@@ -11,6 +11,10 @@ public sealed record QuoteFileAnalysisStatus
 {
     public required string StoragePath { get; init; }
     public string Status { get; init; } = "Processing";      // Processing | GlbReady | DfmAnalysisReady | Failed
+    public bool IsAuthoritative { get; init; }
+    public string AnalysisSource { get; init; } = "pending";
+    public bool HasAuthoritativeGeometry { get; init; }
+    public bool HasAuthoritativeDfm { get; init; }
     public string? GlbUrl { get; init; }
     public string? ViewerStoragePath { get; init; }
     public string? ViewerFileExtension { get; init; }
@@ -21,6 +25,24 @@ public sealed record QuoteFileAnalysisStatus
     public bool IsManifold { get; init; } = true;
     public string? NonManifoldReason { get; init; }
     public string? AnalysisErrorCode { get; init; }
+    public QeFdmDfmReport? FdmReport { get; init; }
+    public QeSlaDfmReport? SlaReport { get; init; }
+    public QeCncDfmReport? CncReport { get; init; }
+    public IReadOnlyList<string> OverlayGlbUrls { get; init; } = [];
+    public QuoteFileAdvisoryAnalysis? AdvisoryAnalysis { get; init; }
+}
+
+/// <summary>
+/// Browser-computed geometry and DFM observations that may improve the preview experience but
+/// can never satisfy authoritative manufacturing or commercial gates.
+/// </summary>
+public sealed record QuoteFileAdvisoryAnalysis
+{
+    public string Source { get; init; } = "browser_local_advisory";
+    public decimal? VolumeCc { get; init; }
+    public decimal? SurfaceAreaCm2 { get; init; }
+    public bool IsManifold { get; init; } = true;
+    public string? NonManifoldReason { get; init; }
     public QeFdmDfmReport? FdmReport { get; init; }
     public QeSlaDfmReport? SlaReport { get; init; }
     public QeCncDfmReport? CncReport { get; init; }

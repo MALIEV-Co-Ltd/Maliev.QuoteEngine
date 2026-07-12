@@ -41,6 +41,8 @@ public sealed class QuoteFileAnalyzedConsumer(
         var viewerFileExtension = NormalizeViewerFileExtension(
             payload.ViewerFileExtension,
             viewerStoragePath);
+        var volumeCc = ToMetric(payload.Metrics?.VolumeCm3, requirePositive: true);
+        var surfaceAreaCm2 = ToMetric(payload.Metrics?.SurfaceAreaCm2, requirePositive: false);
 
         try
         {
@@ -68,7 +70,9 @@ public sealed class QuoteFileAnalyzedConsumer(
                 payload.Metrics?.IsManifold ?? true,
                 context.CancellationToken,
                 viewerStoragePath,
-                viewerFileExtension);
+                viewerFileExtension,
+                volumeCc,
+                surfaceAreaCm2);
         }
 
         var signalRPayload = new QeGlbReadyPayload(
@@ -97,5 +101,25 @@ public sealed class QuoteFileAnalyzedConsumer(
             return null;
 
         return ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
+    }
+
+    private static decimal? ToMetric(double? value, bool requirePositive)
+    {
+        if (value is not { } number ||
+            double.IsNaN(number) ||
+            double.IsInfinity(number) ||
+            (requirePositive ? number <= 0 : number < 0))
+        {
+            return null;
+        }
+
+        try
+        {
+            return (decimal)number;
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
     }
 }

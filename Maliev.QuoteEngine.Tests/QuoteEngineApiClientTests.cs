@@ -8,6 +8,20 @@ namespace Maliev.QuoteEngine.Tests;
 public sealed class QuoteEngineApiClientTests
 {
     [Fact]
+    public async Task BootstrapAgentSessionAsync_Uses_the_bounded_session_claim_endpoint()
+    {
+        var handler = new RecordingResponseHandler(HttpStatusCode.NoContent);
+        using var httpClient = new HttpClient(handler) { BaseAddress = new Uri("http://localhost/") };
+        var client = new QuoteEngineApiClient(httpClient);
+        var sessionId = Guid.NewGuid();
+
+        await client.BootstrapAgentSessionAsync(sessionId);
+
+        Assert.Equal(HttpMethod.Post, handler.Method);
+        Assert.Equal($"/quote/v1/agent/sessions/{sessionId:D}/bootstrap", handler.Path);
+    }
+
+    [Fact]
     public async Task GetReferenceDataAsync_WhenApiReturnsHtml_FallsBackToEmptyReferenceData()
     {
         var client = CreateClient("<!doctype html><html><body>Client shell</body></html>");
@@ -104,6 +118,22 @@ public sealed class QuoteEngineApiClientTests
 
             response.Content.Headers.ContentType = new(contentType);
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class RecordingResponseHandler(HttpStatusCode statusCode) : HttpMessageHandler
+    {
+        public HttpMethod? Method { get; private set; }
+
+        public string? Path { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            Method = request.Method;
+            Path = request.RequestUri?.AbsolutePath;
+            return Task.FromResult(new HttpResponseMessage(statusCode));
         }
     }
 }

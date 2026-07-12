@@ -464,6 +464,18 @@ public sealed class QuoteEngineApiClient(HttpClient httpClient)
             cancellationToken);
     }
 
+    public async Task BootstrapAgentSessionAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken = default)
+    {
+        var uri = $"quote/v1/agent/sessions/{sessionId:D}/bootstrap";
+        using var response = await httpClient.PostAsync(uri, content: null, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            await ThrowApiExceptionAsync(uri, response, cancellationToken);
+        }
+    }
+
     public async Task<QuoteAgentMessageHistoryResponse> GetAgentMessageHistoryAsync(
         Guid sessionId,
         CancellationToken cancellationToken = default)
