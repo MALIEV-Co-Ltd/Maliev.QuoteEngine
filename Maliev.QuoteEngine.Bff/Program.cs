@@ -167,6 +167,7 @@ builder.Services.AddSingleton<IQuoteAgentConversationMap>(sp =>
 });
 builder.Services.AddScoped<QuoteAgentSessionAccess>();
 builder.Services.AddScoped<QuoteAgentAttachmentAccess>();
+builder.Services.AddScoped<QuoteNotificationSubscriptionAuthorizer>();
 builder.Services.AddScoped<IQuoteAgentSessionRequestAuthorizer>(sp =>
     sp.GetRequiredService<QuoteAgentSessionAccess>());
 builder.Services.AddScoped<IQuoteAgentServerContextAuthorizer>(sp =>

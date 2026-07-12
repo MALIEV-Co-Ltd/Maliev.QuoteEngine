@@ -27,6 +27,15 @@ public sealed class AnonymousVisitorCookie(IConfiguration configuration, IHostEn
     /// </summary>
     public Guid? ReadVisitorId(HttpRequest request)
     {
+        return ReadVisitorCredential(request)?.VisitorId;
+    }
+
+    /// <summary>
+    /// Returns the verified, unexpired visitor credential, including its expiry. This is read-only
+    /// and is used by long-lived transports to end a connection when the browser capability expires.
+    /// </summary>
+    public AnonymousVisitorPayload? ReadVisitorCredential(HttpRequest request)
+    {
         if (!request.Cookies.TryGetValue(CookieName, out var rawValue) || string.IsNullOrWhiteSpace(rawValue))
         {
             return null;
@@ -54,7 +63,7 @@ public sealed class AnonymousVisitorCookie(IConfiguration configuration, IHostEn
                 return null;
             }
 
-            return payload.VisitorId;
+            return payload;
         }
         catch (FormatException)
         {
