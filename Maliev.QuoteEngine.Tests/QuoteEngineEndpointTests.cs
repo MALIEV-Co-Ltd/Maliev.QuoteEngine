@@ -3566,7 +3566,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         // Create formal quote via real QuotationService integration (FakeQuotationServiceClient)
         var quoteResponse = await customerA.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-a", [], "Customer A quote."));
+            await CreateOwnedFormalQuoteRequestAsync(customerA, "session-a", [], "Customer A quote."));
         quoteResponse.EnsureSuccessStatusCode();
         var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -3746,7 +3746,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResponse = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-dfm-blocked-order", [part], "DFM blocked order quote."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-dfm-blocked-order",
+                [part],
+                "DFM blocked order quote."));
         quoteResponse.EnsureSuccessStatusCode();
         var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -3773,7 +3777,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     public async Task Formal_quote_for_same_project_creates_new_version_on_existing_quotation()
     {
         using var client = await CreateSignedInClientAsync("project-quote-versions@example.com");
-        var projectId = Guid.NewGuid();
+        var projectId = RequireProjectServiceProjectId(
+            await CreateDraftProjectAsync(client, "Versioned formal quote project"));
         var part = new QuotePartDraftDto
         {
             PartId = Guid.NewGuid(),
@@ -3825,7 +3830,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     public async Task Order_creation_rejects_superseded_quote_version_before_order_service_call()
     {
         using var client = await CreateSignedInClientAsync("superseded-version-order@example.com");
-        var projectId = Guid.NewGuid();
+        var projectId = RequireProjectServiceProjectId(
+            await CreateDraftProjectAsync(client, "Superseded formal quote project"));
         var part = new QuotePartDraftDto
         {
             PartId = Guid.NewGuid(),
@@ -3890,7 +3896,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResponse = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-expired-version-order", [part], "Quote to expire."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-expired-version-order",
+                [part],
+                "Quote to expire."));
         quoteResponse.EnsureSuccessStatusCode();
         var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -3936,7 +3946,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResponse = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-quoted-total-order", [part], "Quoted total order."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-quoted-total-order",
+                [part],
+                "Quoted total order."));
         quoteResponse.EnsureSuccessStatusCode();
         var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -3985,7 +3999,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResponse = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-dfm-blocked-quote", [part], "DFM blocked formal quote."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-dfm-blocked-quote",
+                [part],
+                "DFM blocked formal quote."));
 
         Assert.Equal(HttpStatusCode.BadRequest, quoteResponse.StatusCode);
         var body = await quoteResponse.Content.ReadAsStringAsync();
@@ -4000,7 +4018,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResponse = await customerA.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-approve", [], "Customer A quote approval."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                customerA,
+                "session-approve",
+                [],
+                "Customer A quote approval."));
         quoteResponse.EnsureSuccessStatusCode();
         var quote = await quoteResponse.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4025,7 +4047,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         // Create an order first
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-detail", [], "Detail test."));
+            await CreateOwnedFormalQuoteRequestAsync(client, "session-detail", [], "Detail test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4076,7 +4098,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await customerA.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-order-owner", [], "Customer A order detail."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                customerA,
+                "session-order-owner",
+                [],
+                "Customer A order detail."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4125,7 +4151,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment", [], "Payment test."));
+            await CreateOwnedFormalQuoteRequestAsync(client, "session-payment", [], "Payment test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4168,7 +4194,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-snapshot", [], "Payment snapshot test."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-payment-snapshot",
+                [],
+                "Payment snapshot test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4224,7 +4254,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-acceptance", [], "Payment acceptance failure test."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-payment-acceptance",
+                [],
+                "Payment acceptance failure test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4261,7 +4295,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-attempt", [], "Payment attempt test."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-payment-attempt",
+                [],
+                "Payment attempt test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4321,7 +4359,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-forwarded", [], "Payment forwarded scheme test."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-payment-forwarded",
+                [],
+                "Payment forwarded scheme test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4359,7 +4401,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-terms", [], "Payment terms test."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-payment-terms",
+                [],
+                "Payment terms test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4392,7 +4438,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-address", [], "Payment address test."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-payment-address",
+                [],
+                "Payment address test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4424,7 +4474,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-address-role", [], "Payment address role test."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-payment-address-role",
+                [],
+                "Payment address role test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4476,7 +4530,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await customerA.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-owner", [], "Owner payment scope."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                customerA,
+                "session-payment-owner",
+                [],
+                "Owner payment scope."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4523,7 +4581,11 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
 
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-payment-amount", [], "Payment amount scope."));
+            await CreateOwnedFormalQuoteRequestAsync(
+                client,
+                "session-payment-amount",
+                [],
+                "Payment amount scope."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4570,7 +4632,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         // Step 1: Generate a formal quote
         var quoteResp = await client.PostAsJsonAsync(
             "/quote/v1/quotes/formal",
-            new GenerateFormalQuoteRequest(Guid.NewGuid(), "session-e2e", [], "Self-service E2E test."));
+            await CreateOwnedFormalQuoteRequestAsync(client, "session-e2e", [], "Self-service E2E test."));
         quoteResp.EnsureSuccessStatusCode();
         var quote = await quoteResp.Content.ReadFromJsonAsync<GenerateFormalQuoteResponse>();
         Assert.NotNull(quote);
@@ -4618,6 +4680,24 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         return await response.Content.ReadFromJsonAsync<CreateDraftProjectResponse>()
             ?? throw new InvalidOperationException("QuoteEngine returned an empty draft project response.");
     }
+
+    private static async Task<GenerateFormalQuoteRequest> CreateOwnedFormalQuoteRequestAsync(
+        HttpClient client,
+        string quoteSessionId,
+        IReadOnlyList<QuotePartDraftDto> parts,
+        string notes)
+    {
+        var project = await CreateDraftProjectAsync(client, $"Formal quote {quoteSessionId}");
+        return new GenerateFormalQuoteRequest(
+            RequireProjectServiceProjectId(project),
+            quoteSessionId,
+            parts,
+            notes);
+    }
+
+    private static Guid RequireProjectServiceProjectId(CreateDraftProjectResponse project) =>
+        project.ProjectServiceProjectId
+        ?? throw new InvalidOperationException("QuoteEngine draft response omitted the ProjectService project id.");
 
     private async Task<HttpClient> CreateSignedInClientAsync(string email = "customer@example.com")
     {

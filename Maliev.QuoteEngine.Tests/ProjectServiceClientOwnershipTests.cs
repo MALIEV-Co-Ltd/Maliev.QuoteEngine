@@ -9,6 +9,139 @@ namespace Maliev.QuoteEngine.Tests;
 public sealed class ProjectServiceClientOwnershipTests
 {
     [Fact]
+    public async Task LookupProjectDetailAsync_OwnedProject_ReturnsAvailableMappedProject()
+    {
+        var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        using var response = BuildProjectResponse(projectId, ownerId);
+        var handler = new RecordingHandler(response);
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("https://project.test") };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+
+        var lookup = await client.LookupProjectDetailAsync(ownerId, projectId, CancellationToken.None);
+
+        Assert.True(lookup.IsAvailable);
+        Assert.Equal(projectId, Assert.IsType<CustomerProjectDetailResponse>(lookup.Value).ProjectId);
+        Assert.Equal($"/project/v1/projects/{projectId:D}", handler.Request!.RequestUri!.PathAndQuery);
+    }
+
+    [Fact]
+    public async Task LookupProjectDetailAsync_ForeignProject_ReturnsAvailableWithoutProject()
+    {
+        var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        using var response = BuildProjectResponse(projectId, Guid.NewGuid());
+        using var http = new HttpClient(new RecordingHandler(response))
+        {
+            BaseAddress = new Uri("https://project.test")
+        };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+
+        var lookup = await client.LookupProjectDetailAsync(ownerId, projectId, CancellationToken.None);
+
+        Assert.True(lookup.IsAvailable);
+        Assert.Null(lookup.Value);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.Forbidden)]
+    public async Task LookupProjectDetailAsync_MissingOrForbiddenProject_ReturnsAvailableWithoutProject(
+        HttpStatusCode statusCode)
+    {
+        using var response = new HttpResponseMessage(statusCode);
+        using var http = new HttpClient(new RecordingHandler(response))
+        {
+            BaseAddress = new Uri("https://project.test")
+        };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+
+        var lookup = await client.LookupProjectDetailAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.True(lookup.IsAvailable);
+        Assert.Null(lookup.Value);
+    }
+
+    [Fact]
+    public async Task LookupProjectDetailAsync_ProjectServiceFailure_ReturnsUnavailable()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+        using var http = new HttpClient(new RecordingHandler(response))
+        {
+            BaseAddress = new Uri("https://project.test")
+        };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+
+        var lookup = await client.LookupProjectDetailAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.False(lookup.IsAvailable);
+        Assert.Null(lookup.Value);
+    }
+
+    [Fact]
+    public async Task LookupProjectDetailAsync_MalformedIdentity_ReturnsUnavailable()
+    {
+        var ownerId = Guid.NewGuid();
+        var projectId = Guid.NewGuid();
+        using var response = BuildProjectResponse(Guid.Empty, ownerId);
+        using var http = new HttpClient(new RecordingHandler(response))
+        {
+            BaseAddress = new Uri("https://project.test")
+        };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+
+        var lookup = await client.LookupProjectDetailAsync(ownerId, projectId, CancellationToken.None);
+
+        Assert.False(lookup.IsAvailable);
+        Assert.Null(lookup.Value);
+    }
+
+    [Fact]
+    public async Task LookupProjectDetailAsync_TransportFailure_ReturnsUnavailable()
+    {
+        using var http = new HttpClient(new ThrowingHandler(new HttpRequestException("Connection failed.")))
+        {
+            BaseAddress = new Uri("https://project.test")
+        };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+
+        var lookup = await client.LookupProjectDetailAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.False(lookup.IsAvailable);
+        Assert.Null(lookup.Value);
+    }
+
+    [Fact]
+    public async Task LookupProjectDetailAsync_HttpTimeout_ReturnsUnavailable()
+    {
+        using var http = new HttpClient(new NeverCompletingHandler())
+        {
+            BaseAddress = new Uri("https://project.test"),
+            Timeout = TimeSpan.FromMilliseconds(25)
+        };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+
+        var lookup = await client.LookupProjectDetailAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
+
+        Assert.False(lookup.IsAvailable);
+        Assert.Null(lookup.Value);
+    }
+
+    [Fact]
+    public async Task LookupProjectDetailAsync_CallerCancellation_Propagates()
+    {
+        using var http = new HttpClient(new NeverCompletingHandler())
+        {
+            BaseAddress = new Uri("https://project.test")
+        };
+        var client = new ProjectServiceClient(http, NullLogger<ProjectServiceClient>.Instance);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(25));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            client.LookupProjectDetailAsync(Guid.NewGuid(), Guid.NewGuid(), cancellation.Token));
+    }
+
+    [Fact]
     public async Task GetProjectNavigationAsync_DropsProjectsNotOwnedByRequestedCustomer()
     {
         var ownerId = Guid.NewGuid();
@@ -185,6 +318,12 @@ public sealed class ProjectServiceClientOwnershipTests
         Content = JsonContent.Create(new { data = projects })
     };
 
+    private static HttpResponseMessage BuildProjectResponse(Guid projectId, Guid customerId) =>
+        new(HttpStatusCode.OK)
+        {
+            Content = JsonContent.Create(Project(projectId, customerId, "Ownership fixture"))
+        };
+
     private static object Project(Guid id, Guid customerId, string title) => new
     {
         id,
@@ -209,6 +348,25 @@ public sealed class ProjectServiceClientOwnershipTests
         {
             Request = request;
             return Task.FromResult(response);
+        }
+    }
+
+    private sealed class ThrowingHandler(Exception exception) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken) =>
+            Task.FromException<HttpResponseMessage>(exception);
+    }
+
+    private sealed class NeverCompletingHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            throw new InvalidOperationException("The cancellation-backed handler completed unexpectedly.");
         }
     }
 }
