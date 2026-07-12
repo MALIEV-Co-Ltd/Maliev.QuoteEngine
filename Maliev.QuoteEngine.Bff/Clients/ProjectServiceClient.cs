@@ -1,4 +1,5 @@
 // Maliev.QuoteEngine.Bff/Clients/ProjectServiceClient.cs
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Maliev.QuoteEngine.Shared.Agent;
@@ -33,6 +34,13 @@ public interface IProjectServiceClient
 
     /// <summary>Returns a customer-scoped project detail from ProjectService.</summary>
     Task<CustomerProjectDetailResponse?> GetProjectDetailAsync(Guid customerId, Guid projectId, CancellationToken ct = default);
+
+    /// <summary>Returns a customer-scoped project detail while preserving ProjectService availability.</summary>
+    async Task<DownstreamLookupResult<CustomerProjectDetailResponse?>> LookupProjectDetailAsync(
+        Guid customerId,
+        Guid projectId,
+        CancellationToken ct = default) =>
+        new(true, await GetProjectDetailAsync(customerId, projectId, ct));
 
     /// <summary>Sets whether a customer-scoped ProjectService project is pinned.</summary>
     Task<ProjectManagementResponse?> SetProjectPinnedAsync(Guid customerId, Guid projectId, bool isPinned, CancellationToken ct = default);
@@ -246,6 +254,72 @@ internal sealed class ProjectServiceClient(HttpClient http, ILogger<ProjectServi
         {
             logger.LogWarning(ex, "ProjectService detail lookup failed for project {ProjectId}.", projectId);
             return null;
+        }
+    }
+
+    public async Task<DownstreamLookupResult<CustomerProjectDetailResponse?>> LookupProjectDetailAsync(
+        Guid customerId,
+        Guid projectId,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            using var response = await http.GetAsync($"/project/v1/projects/{projectId:D}", ct);
+            if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Forbidden)
+            {
+                return new DownstreamLookupResult<CustomerProjectDetailResponse?>(true, null);
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                logger.LogWarning(
+                    "ProjectService returned {Status} while verifying project {ProjectId} ownership for customer {CustomerId}.",
+                    response.StatusCode,
+                    projectId,
+                    customerId);
+                return new DownstreamLookupResult<CustomerProjectDetailResponse?>(false, null);
+            }
+
+            var project = await response.Content.ReadFromJsonAsync<ProjectServiceProjectResponse>(cancellationToken: ct);
+            if (project is null ||
+                project.Id == Guid.Empty ||
+                project.CustomerId == Guid.Empty ||
+                project.Id != projectId)
+            {
+                logger.LogWarning(
+                    "ProjectService returned malformed identity while verifying project {ProjectId} ownership.",
+                    projectId);
+                return new DownstreamLookupResult<CustomerProjectDetailResponse?>(false, null);
+            }
+
+            if (project.CustomerId != customerId)
+            {
+                return new DownstreamLookupResult<CustomerProjectDetailResponse?>(true, null);
+            }
+
+            return new DownstreamLookupResult<CustomerProjectDetailResponse?>(
+                true,
+                ToCustomerProjectDetail(project));
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                ex,
+                "ProjectService ownership lookup timed out for project {ProjectId}.",
+                projectId);
+            return new DownstreamLookupResult<CustomerProjectDetailResponse?>(false, null);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(
+                ex,
+                "ProjectService ownership lookup failed for project {ProjectId}.",
+                projectId);
+            return new DownstreamLookupResult<CustomerProjectDetailResponse?>(false, null);
         }
     }
 

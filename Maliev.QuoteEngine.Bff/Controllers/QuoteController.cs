@@ -1098,6 +1098,28 @@ public sealed class QuoteController(
             return Unauthorized();
         }
 
+        var projectLookup = await projectClient.LookupProjectDetailAsync(
+            customerId,
+            request.ProjectId,
+            cancellationToken);
+        if (!projectLookup.IsAvailable)
+        {
+            return StatusCode(
+                StatusCodes.Status503ServiceUnavailable,
+                new ProblemDetails
+                {
+                    Title = "Project service unavailable.",
+                    Status = StatusCodes.Status503ServiceUnavailable
+                });
+        }
+
+        var ownedProject = projectLookup.Value;
+        if (ownedProject is null || ownedProject.ProjectId != request.ProjectId)
+        {
+            Response.StatusCode = StatusCodes.Status404NotFound;
+            return new EmptyResult();
+        }
+
         var dfmReviewError = ValidateDfmReviewAcknowledgement(request.Parts);
         if (dfmReviewError is not null)
         {
@@ -1146,7 +1168,7 @@ public sealed class QuoteController(
             ValidityPeriodStart = DateTime.UtcNow,
             ValidityPeriodEnd = DateTime.UtcNow.AddDays(30),
             LineItems = lineItems,
-            SourceProjectId = request.ProjectId,
+            SourceProjectId = ownedProject.ProjectId,
             ProjectSnapshotJson = BuildFormalQuoteProjectSnapshotJson(customerId, request),
             ChangeSummary = string.IsNullOrWhiteSpace(request.Notes)
                 ? "Customer self-service formal quote"
