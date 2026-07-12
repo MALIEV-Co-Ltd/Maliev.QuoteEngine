@@ -814,6 +814,22 @@ public sealed class QuoteEnginePrototypeStore
         return _uploads.TryGetValue(uploadId, out var upload) ? upload : null;
     }
 
+    /// <summary>
+    /// Resolves an upload from its canonical storage path. Callers must still verify the returned
+    /// upload's customer or visitor owner before exposing it; a storage path is only a locator.
+    /// </summary>
+    public UploadState? FindUploadByStoragePath(string storagePath)
+    {
+        if (string.IsNullOrWhiteSpace(storagePath))
+        {
+            return null;
+        }
+
+        var normalized = storagePath.Trim();
+        return _uploads.Values.FirstOrDefault(upload =>
+            string.Equals(upload.StoragePath, normalized, StringComparison.Ordinal));
+    }
+
     public void PromoteSessionUploads(Guid sessionId, Guid expectedVisitorId, Guid customerId)
     {
         if (sessionId == Guid.Empty || expectedVisitorId == Guid.Empty || customerId == Guid.Empty)
