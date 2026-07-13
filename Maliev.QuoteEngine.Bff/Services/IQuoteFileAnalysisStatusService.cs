@@ -6,6 +6,23 @@ namespace Maliev.QuoteEngine.Bff.Services;
 public interface IQuoteFileAnalysisStatusService
 {
     Task<QuoteFileAnalysisStatus?> GetStatusAsync(string storagePath, CancellationToken ct = default);
+    Task<QuoteAnalysisEventClaim> ClaimGeometryCompletionAsync(
+        string storagePath, string fileId, Guid eventId, DateTimeOffset occurredAtUtc,
+        DateTimeOffset processedAtUtc, CancellationToken ct = default);
+    Task<QuoteAnalysisEventClaim> ClaimDfmEventAsync(
+        string storagePath, string fileId, Guid eventId, CancellationToken ct = default);
+    Task<bool> RenewAnalysisClaimAsync(
+        QuoteAnalysisEventClaim claim, CancellationToken ct = default);
+    Task<QuoteAnalysisFinalizeResult> FinalizeGeometryCompletionAsync(
+        QuoteAnalysisEventClaim claim, QuoteGeometryCompletionUpdate update,
+        CancellationToken ct = default);
+    Task<QuoteAnalysisFinalizeResult> FinalizeDfmAnalysisAsync(
+        QuoteAnalysisEventClaim claim, QuoteDfmAnalysisUpdate update,
+        CancellationToken ct = default);
+    Task MarkAnalysisNotificationDispatchedAsync(
+        QuoteAnalysisEventClaim claim, long revision, CancellationToken ct = default);
+    Task ReleaseAnalysisClaimAsync(
+        QuoteAnalysisEventClaim claim, CancellationToken ct = default);
     Task<bool> CanApplyGeometryEventAsync(string storagePath, string fileId,
         Guid eventId, DateTimeOffset occurredAtUtc, DateTimeOffset processedAtUtc,
         QuoteGeometryEventPhase phase, CancellationToken ct = default);

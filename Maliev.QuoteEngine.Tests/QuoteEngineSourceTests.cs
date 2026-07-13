@@ -285,7 +285,9 @@ public sealed class QuoteEngineSourceTests
             Failed: false,
             ErrorCode: null,
             ViewerStoragePath: "processed/u/part.glb",
-            ViewerFileExtension: ".glb");
+            ViewerFileExtension: ".glb",
+            EventId: Guid.Parse("8e840798-fbb2-4c52-afdb-3aaaf47cf1f7"),
+            Revision: 12);
 
         var json = JsonSerializer.Serialize(payload);
         var deserialized = JsonSerializer.Deserialize<QeGlbReadyPayload>(json);
@@ -300,6 +302,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Null(deserialized.ErrorCode);
         Assert.Equal("processed/u/part.glb", deserialized.ViewerStoragePath);
         Assert.Equal(".glb", deserialized.ViewerFileExtension);
+        Assert.Equal(Guid.Parse("8e840798-fbb2-4c52-afdb-3aaaf47cf1f7"), deserialized.EventId);
+        Assert.Equal(12, deserialized.Revision);
     }
 
     [Fact]
@@ -314,7 +318,9 @@ public sealed class QuoteEngineSourceTests
             SlaReport: null,
             CncReport: null,
             OverlayGlbUrls: [],
-            AnalysisErrorCode: null);
+            AnalysisErrorCode: null,
+            EventId: Guid.Parse("d6784408-9d26-475e-b5e7-500b877e1982"),
+            Revision: 3);
 
         var json = JsonSerializer.Serialize(partial);
         var d = JsonSerializer.Deserialize<QeDfmAnalysisReadyPayload>(json);
@@ -331,6 +337,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Null(d.SlaReport);
         Assert.Null(d.CncReport);
         Assert.Empty(d.OverlayGlbUrls);
+        Assert.Equal(Guid.Parse("d6784408-9d26-475e-b5e7-500b877e1982"), d.EventId);
+        Assert.Equal(3, d.Revision);
 
         // Full: all three reports, overlay URLs, non-null error context
         var full = new QeDfmAnalysisReadyPayload(
@@ -357,6 +365,24 @@ public sealed class QuoteEngineSourceTests
         Assert.True(d2.CncReport.HasUndercuts);
         Assert.Equal(2, d2.OverlayGlbUrls.Count);
         Assert.Equal("https://cdn.example.com/overlay1.glb", d2.OverlayGlbUrls[0]);
+    }
+
+    [Fact]
+    public void QuoteAnalysisStatusResponse_round_trip_exposes_revision_cursor()
+    {
+        var response = new QuoteAnalysisStatusResponse
+        {
+            UploadId = "upload-123",
+            StoragePath = "quotes/temp/s/u/part.step",
+            AnalysisRevision = 42
+        };
+
+        var json = JsonSerializer.Serialize(response);
+        var deserialized = JsonSerializer.Deserialize<QuoteAnalysisStatusResponse>(json);
+
+        Assert.Contains("\"AnalysisRevision\":42", json, StringComparison.Ordinal);
+        Assert.NotNull(deserialized);
+        Assert.Equal(42, deserialized.AnalysisRevision);
     }
 
     [Fact]
@@ -4279,7 +4305,7 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public async Task FileAnalyzedConsumer_url_signing_failure_marks_failed_and_still_pushes_GlbReady()
+    public async Task FileAnalyzedConsumer_url_signing_failure_is_retryable_and_does_not_mark_analysis_failed()
     {
         var statusSvc = new QuoteFileAnalysisStatusService();
         var uploadClient = new ThrowingQuoteUploadServiceClient();
@@ -4300,24 +4326,15 @@ public sealed class QuoteEngineSourceTests
         consumeCtx.Message.Returns(@event);
         consumeCtx.CancellationToken.Returns(CancellationToken.None);
 
-        await consumer.Consume(consumeCtx);
+        await Assert.ThrowsAsync<QuoteAnalysisPreviewSigningException>(() => consumer.Consume(consumeCtx));
 
         var stored = await statusSvc.GetStatusAsync("quotes/s/u/p.step");
-        Assert.Equal("Failed", stored!.Status);
-        Assert.Equal("GlbSigningFailed", stored.AnalysisErrorCode);
+        Assert.Null(stored);
 
-        // Assert — hub still called with Failed=true payload
         var calls = hubGroup.ReceivedCalls()
             .Where(c => c.GetMethodInfo().Name == "SendCoreAsync")
             .ToList();
-        Assert.Single(calls);
-        var args = calls[0].GetArguments();
-        Assert.Equal("GlbReady", args[0]);
-        var payloadArgs = (object?[])args[1]!;
-        var glbPayload = Assert.IsType<QeGlbReadyPayload>(payloadArgs[0]);
-        Assert.True(glbPayload.Failed);
-        Assert.Equal("GlbSigningFailed", glbPayload.ErrorCode);
-        Assert.Equal("", glbPayload.GlbUrl);  // empty string per contract when Failed=true
+        Assert.Empty(calls);
     }
 
     [Fact]

@@ -31,114 +31,184 @@ public sealed class QuoteFileAnalyzedConsumer(
             return;
         }
 
-        if (!await status.CanApplyGeometryEventAsync(
-                storagePath,
-                payload.FileId,
-                context.Message.MessageId,
-                context.Message.OccurredAtUtc,
-                payload.ProcessedAt,
-                QuoteGeometryEventPhase.Completion,
-                context.CancellationToken))
-        {
+        var claim = await status.ClaimGeometryCompletionAsync(
+            storagePath,
+            payload.FileId,
+            context.Message.MessageId,
+            context.Message.OccurredAtUtc,
+            payload.ProcessedAt,
+            context.CancellationToken);
+        if (claim.Disposition == QuoteAnalysisClaimDisposition.DuplicateOrStale)
             return;
-        }
-
-        string glbUrl = "";
-        string? thumbnailUrl = null;
-        bool failed = false;
-        string? errorCode = null;
-        var viewerStoragePath = string.IsNullOrWhiteSpace(payload.ViewerStoragePath)
-            ? payload.GlbStoragePath
-            : payload.ViewerStoragePath;
-        var viewerFileExtension = NormalizeViewerFileExtension(
-            payload.ViewerFileExtension,
-            viewerStoragePath);
-        var metrics = payload.Metrics;
-        var volumeCc = GeometryMetricMapper.Positive(metrics?.VolumeCm3);
-        var supportVolumeCc = GeometryMetricMapper.NonNegative(metrics?.SupportVolumeCm3);
-        var surfaceAreaCm2 = GeometryMetricMapper.NonNegative(metrics?.SurfaceAreaCm2);
-        var boundingBoxXmm = GeometryMetricMapper.Positive(metrics?.BoundingBox?.X);
-        var boundingBoxYmm = GeometryMetricMapper.Positive(metrics?.BoundingBox?.Y);
-        var boundingBoxZmm = GeometryMetricMapper.Positive(metrics?.BoundingBox?.Z);
-        var triangleCount = GeometryMetricMapper.Positive(metrics?.TriangleCount);
-        var hasCompleteMetrics = volumeCc.HasValue &&
-            boundingBoxXmm.HasValue && boundingBoxYmm.HasValue && boundingBoxZmm.HasValue &&
-            triangleCount.HasValue;
-        if (!hasCompleteMetrics)
-        {
-            supportVolumeCc = null;
-            surfaceAreaCm2 = null;
-            boundingBoxXmm = null;
-            boundingBoxYmm = null;
-            boundingBoxZmm = null;
-            triangleCount = null;
-        }
 
         try
         {
-            if (!string.IsNullOrEmpty(viewerStoragePath))
-                glbUrl = await uploadClient.GetDownloadUrlByPathAsync(viewerStoragePath, ct: context.CancellationToken);
+            if (claim.Disposition == QuoteAnalysisClaimDisposition.PendingNotification)
+            {
+                await SendPendingNotificationAsync(status, claim, hub, context.CancellationToken);
+                return;
+            }
 
-            if (!string.IsNullOrEmpty(payload.ThumbnailStoragePath))
-                thumbnailUrl = await uploadClient.GetDownloadUrlByPathAsync(payload.ThumbnailStoragePath, ct: context.CancellationToken);
+            await EnsureClaimAsync(status, claim, context.CancellationToken);
+            string glbUrl = "";
+            string? thumbnailUrl = null;
+            var viewerStoragePath = string.IsNullOrWhiteSpace(payload.ViewerStoragePath)
+                ? payload.GlbStoragePath
+                : payload.ViewerStoragePath;
+            var viewerFileExtension = NormalizeViewerFileExtension(
+                payload.ViewerFileExtension,
+                viewerStoragePath);
+            var metrics = payload.Metrics;
+            var volumeCc = GeometryMetricMapper.Positive(metrics?.VolumeCm3);
+            var supportVolumeCc = GeometryMetricMapper.NonNegative(metrics?.SupportVolumeCm3);
+            var surfaceAreaCm2 = GeometryMetricMapper.NonNegative(metrics?.SurfaceAreaCm2);
+            var boundingBoxXmm = GeometryMetricMapper.Positive(metrics?.BoundingBox?.X);
+            var boundingBoxYmm = GeometryMetricMapper.Positive(metrics?.BoundingBox?.Y);
+            var boundingBoxZmm = GeometryMetricMapper.Positive(metrics?.BoundingBox?.Z);
+            var triangleCount = GeometryMetricMapper.Positive(metrics?.TriangleCount);
+            var hasCompleteMetrics = volumeCc.HasValue &&
+                boundingBoxXmm.HasValue && boundingBoxYmm.HasValue && boundingBoxZmm.HasValue &&
+                triangleCount.HasValue;
+            if (!hasCompleteMetrics)
+            {
+                supportVolumeCc = null;
+                surfaceAreaCm2 = null;
+                boundingBoxXmm = null;
+                boundingBoxYmm = null;
+                boundingBoxZmm = null;
+                triangleCount = null;
+            }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(viewerStoragePath))
+                {
+                    glbUrl = await uploadClient.GetDownloadUrlByPathAsync(
+                        viewerStoragePath,
+                        ct: context.CancellationToken);
+                    await EnsureClaimAsync(status, claim, context.CancellationToken);
+                }
+
+                if (!string.IsNullOrEmpty(payload.ThumbnailStoragePath))
+                {
+                    thumbnailUrl = await uploadClient.GetDownloadUrlByPathAsync(
+                        payload.ThumbnailStoragePath,
+                        ct: context.CancellationToken);
+                }
+            }
+            catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to get signed URLs for {StoragePath}", storagePath);
+                throw new QuoteAnalysisPreviewSigningException(storagePath, ex);
+            }
+            await EnsureClaimAsync(status, claim, context.CancellationToken);
+            var finalized = await status.FinalizeGeometryCompletionAsync(
+                claim,
+                new QuoteGeometryCompletionUpdate(
+                    glbUrl,
+                    thumbnailUrl,
+                    payload.BodyCount ?? 1,
+                    payload.Metrics?.IsManifold ?? true,
+                    viewerStoragePath,
+                    viewerFileExtension,
+                    volumeCc,
+                    surfaceAreaCm2,
+                    payload.FileId,
+                    supportVolumeCc,
+                    boundingBoxXmm,
+                    boundingBoxYmm,
+                    boundingBoxZmm,
+                    triangleCount,
+                    metrics?.NonManifoldReason,
+                    context.Message.MessageId,
+                    context.Message.OccurredAtUtc,
+                    payload.ProcessedAt),
+                context.CancellationToken);
+            if (!finalized.Applied || finalized.Snapshot is null)
+                return;
+
+            await SendNotificationAsync(
+                status,
+                claim,
+                finalized.Revision,
+                finalized.Snapshot,
+                hub,
+                context.CancellationToken);
         }
-        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        finally
+        {
+            try
+            {
+                await status.ReleaseAnalysisClaimAsync(claim, CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Failed to release the analysis claim for {StoragePath}", storagePath);
+            }
+        }
+    }
+
+    private static Task SendPendingNotificationAsync(
+        IQuoteFileAnalysisStatusService status,
+        QuoteAnalysisEventClaim claim,
+        IHubContext<QuoteNotificationsHub> hub,
+        CancellationToken ct) =>
+        claim.Snapshot is null || claim.Revision is null
+            ? throw new InvalidOperationException("The pending geometry notification is incomplete.")
+            : SendNotificationAsync(status, claim, claim.Revision.Value, claim.Snapshot, hub, ct);
+
+    private static async Task SendNotificationAsync(
+        IQuoteFileAnalysisStatusService status,
+        QuoteAnalysisEventClaim claim,
+        long revision,
+        QuoteFileAnalysisStatus snapshot,
+        IHubContext<QuoteNotificationsHub> hub,
+        CancellationToken ct)
+    {
+        await EnsureClaimAsync(status, claim, ct);
+        var signalRPayload = new QeGlbReadyPayload(
+            StoragePath: claim.StoragePath,
+            GlbUrl: snapshot.GlbUrl ?? "",
+            ThumbnailUrl: snapshot.ThumbnailUrl,
+            BodyCount: snapshot.BodyCount,
+            IsManifold: snapshot.IsManifold,
+            Failed: false,
+            ErrorCode: null,
+            ViewerStoragePath: snapshot.ViewerStoragePath,
+            ViewerFileExtension: snapshot.ViewerFileExtension,
+            EventId: claim.EventId,
+            Revision: revision);
+        try
+        {
+            await hub.Clients
+                .Group(QuoteNotificationsHub.FileGroup(claim.StoragePath))
+                .SendAsync("GlbReady", signalRPayload, ct);
+            await status.MarkAnalysisNotificationDispatchedAsync(claim, revision, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to get signed URLs for {StoragePath}", storagePath);
-            failed = true;
-            errorCode = "GlbSigningFailed";
-            await status.SetFailedAsync(
-                storagePath,
-                payload.FileId,
-                errorCode,
-                context.Message.MessageId,
-                context.Message.OccurredAtUtc,
-                context.CancellationToken);
+            throw new QuoteAnalysisNotificationDeliveryException(
+                claim.StoragePath,
+                claim.EventId,
+                ex);
         }
+    }
 
-        if (!failed)
-        {
-            await status.SetGlbReadyAsync(
-                storagePath,
-                glbUrl,
-                thumbnailUrl,
-                payload.BodyCount ?? 1,
-                payload.Metrics?.IsManifold ?? true,
-                context.CancellationToken,
-                viewerStoragePath,
-                viewerFileExtension,
-                volumeCc,
-                surfaceAreaCm2,
-                payload.FileId,
-                supportVolumeCc,
-                boundingBoxXmm,
-                boundingBoxYmm,
-                boundingBoxZmm,
-                triangleCount,
-                metrics?.NonManifoldReason,
-                context.Message.MessageId,
-                context.Message.OccurredAtUtc,
-                payload.ProcessedAt);
-        }
-
-        var signalRPayload = new QeGlbReadyPayload(
-            StoragePath: storagePath,
-            GlbUrl: glbUrl,
-            ThumbnailUrl: thumbnailUrl,
-            BodyCount: payload.BodyCount ?? 1,
-            IsManifold: payload.Metrics?.IsManifold ?? true,
-            Failed: failed,
-            ErrorCode: errorCode,
-            ViewerStoragePath: viewerStoragePath,
-            ViewerFileExtension: viewerFileExtension);
-
-        await hub.Clients
-            .Group(QuoteNotificationsHub.FileGroup(storagePath))
-            .SendAsync("GlbReady", signalRPayload, context.CancellationToken);
+    private static async Task EnsureClaimAsync(
+        IQuoteFileAnalysisStatusService status,
+        QuoteAnalysisEventClaim claim,
+        CancellationToken ct)
+    {
+        if (!await status.RenewAnalysisClaimAsync(claim, ct))
+            throw new QuoteAnalysisClaimLostException(claim.StoragePath, claim.EventId);
     }
 
     private static string? NormalizeViewerFileExtension(string? fileExtension, string? storagePath)

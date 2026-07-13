@@ -404,6 +404,13 @@ public sealed class RedisQuoteFileAnalysisStatusServiceTests : IAsyncLifetime
         var durableKey = RedisQuoteFileAnalysisStatusService.BuildDurableKey(StoragePath).ToString();
         var previewKey = RedisQuoteFileAnalysisStatusService.BuildPreviewKey(StoragePath).ToString();
         var overlayKey = RedisQuoteFileAnalysisStatusService.BuildOverlayKey(StoragePath).ToString();
+        var eventId = Guid.NewGuid();
+        var claimKey = RedisQuoteFileAnalysisStatusService.BuildClaimKey(
+            StoragePath, QuoteAnalysisEventLane.Geometry).ToString();
+        var receiptKey = RedisQuoteFileAnalysisStatusService.BuildReceiptKey(
+            StoragePath, QuoteAnalysisEventLane.Geometry, eventId).ToString();
+        var processedKey = RedisQuoteFileAnalysisStatusService.BuildProcessedEventSetKey(
+            StoragePath, QuoteAnalysisEventLane.Geometry).ToString();
         Assert.NotEqual(
             durableKey,
             RedisQuoteFileAnalysisStatusService.BuildDurableKey($" {StoragePath}").ToString());
@@ -418,6 +425,9 @@ public sealed class RedisQuoteFileAnalysisStatusServiceTests : IAsyncLifetime
             RedisQuoteFileAnalysisStatusService.BuildDurableKey("quotes/cafe\u0301.step"));
         Assert.Contains(ExtractHashTag(durableKey), previewKey, StringComparison.Ordinal);
         Assert.Contains(ExtractHashTag(durableKey), overlayKey, StringComparison.Ordinal);
+        Assert.Contains(ExtractHashTag(durableKey), claimKey, StringComparison.Ordinal);
+        Assert.Contains(ExtractHashTag(durableKey), receiptKey, StringComparison.Ordinal);
+        Assert.Contains(ExtractHashTag(durableKey), processedKey, StringComparison.Ordinal);
     }
 
     [Fact]

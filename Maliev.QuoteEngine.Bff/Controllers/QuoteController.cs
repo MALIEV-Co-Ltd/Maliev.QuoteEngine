@@ -524,6 +524,7 @@ public sealed class QuoteController(
         if (liveStatus is null)
             return Ok(response);
 
+        response.AnalysisRevision = liveStatus.Revision;
         response.Status = liveStatus.Status;
         response.IsAuthoritative = liveStatus.IsAuthoritative;
         response.AnalysisSource = liveStatus.AnalysisSource;

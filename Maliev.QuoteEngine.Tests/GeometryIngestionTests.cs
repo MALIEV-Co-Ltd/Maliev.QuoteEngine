@@ -38,6 +38,9 @@ public sealed class GeometryIngestionTests
         Assert.Equal(4, Count(source, ".ExcludeFromConfigureEndpoints()"));
         Assert.Contains("cfg.ConfigureEndpoints(context)", source, StringComparison.Ordinal);
         Assert.Contains("e.ConcurrentMessageLimit = 1", source, StringComparison.Ordinal);
+        Assert.Contains("retry.Handle<QuoteAnalysisTransientException>()", source, StringComparison.Ordinal);
+        Assert.Contains("retry.Handle<RedisException>()", source, StringComparison.Ordinal);
+        Assert.Contains("retry.Handle<TimeoutException>()", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -580,6 +583,93 @@ public sealed class GeometryIngestionTests
     }
 
     [Fact]
+    public async Task FileAnalyzedConsumer_ConcurrentReplay_SignsAndNotifiesOnlyOnce()
+    {
+        var status = new QuoteFileAnalysisStatusService();
+        var upload = new RecordingUploadClient();
+        var hub = CreateHub();
+        var at = DateTimeOffset.Parse("2026-07-13T01:02:03Z");
+        var message = new FileAnalyzedEvent
+        {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = at,
+            Payload = new FileAnalyzedEventPayload
+            {
+                FileId = "file-123",
+                StoragePath = StoragePath,
+                ProcessedAt = at,
+                GlbStoragePath = "processed/part.glb",
+                Metrics = new FileAnalyzedEventPayloadMetrics
+                {
+                    VolumeCm3 = 12.5,
+                    BoundingBox = new FileAnalyzedEventPayloadMetricsBoundingBox(10, 20, 30),
+                    TriangleCount = 456,
+                    IsManifold = true
+                }
+            }
+        };
+        var first = new QuoteFileAnalyzedConsumer(
+            status, upload, hub, NullLogger<QuoteFileAnalyzedConsumer>.Instance);
+        var second = new QuoteFileAnalyzedConsumer(
+            status, upload, hub, NullLogger<QuoteFileAnalyzedConsumer>.Instance);
+
+        await Task.WhenAll(first.Consume(ContextFor(message)), second.Consume(ContextFor(message)));
+
+        Assert.Single(upload.Paths);
+        var proxy = hub.Clients.Group(QuoteNotificationsHub.FileGroup(StoragePath));
+        Assert.Single(proxy.ReceivedCalls(), call => call.GetMethodInfo().Name == "SendCoreAsync");
+    }
+
+    [Fact]
+    public async Task FileAnalyzedConsumer_NotificationRetry_DoesNotResignFinalizedPreview()
+    {
+        var status = new QuoteFileAnalysisStatusService();
+        var upload = new RecordingUploadClient();
+        var clients = Substitute.For<IHubClients>();
+        var proxy = Substitute.For<IClientProxy>();
+        var attempts = 0;
+        proxy.SendCoreAsync(
+                Arg.Any<string>(),
+                Arg.Any<object?[]>(),
+                Arg.Any<CancellationToken>())
+            .Returns(_ => ++attempts == 1
+                ? Task.FromException(new IOException("simulated hub failure"))
+                : Task.CompletedTask);
+        clients.Group(Arg.Any<string>()).Returns(proxy);
+        var hub = Substitute.For<IHubContext<QuoteNotificationsHub>>();
+        hub.Clients.Returns(clients);
+        var at = DateTimeOffset.Parse("2026-07-13T01:02:03Z");
+        var message = new FileAnalyzedEvent
+        {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = at,
+            Payload = new FileAnalyzedEventPayload
+            {
+                FileId = "file-123",
+                StoragePath = StoragePath,
+                ProcessedAt = at,
+                GlbStoragePath = "processed/part.glb",
+                Metrics = new FileAnalyzedEventPayloadMetrics
+                {
+                    VolumeCm3 = 12.5,
+                    BoundingBox = new FileAnalyzedEventPayloadMetricsBoundingBox(10, 20, 30),
+                    TriangleCount = 456,
+                    IsManifold = true
+                }
+            }
+        };
+        var consumer = new QuoteFileAnalyzedConsumer(
+            status, upload, hub, NullLogger<QuoteFileAnalyzedConsumer>.Instance);
+
+        await Assert.ThrowsAsync<QuoteAnalysisNotificationDeliveryException>(
+            () => consumer.Consume(ContextFor(message)));
+        await consumer.Consume(ContextFor(message));
+
+        Assert.Single(upload.Paths);
+        Assert.Equal(2, attempts);
+    }
+
+    [Fact]
     public async Task DfmConsumer_CallerCancellationIsRethrown()
     {
         using var cancellation = new CancellationTokenSource();
@@ -694,6 +784,41 @@ public sealed class GeometryIngestionTests
         var stored = await status.GetStatusAsync(StoragePath);
         Assert.NotNull(stored);
         Assert.Equal(2, stored.OverlayGlbUrls.Count);
+    }
+
+    [Fact]
+    public async Task DfmConsumer_OverlaySigningFailure_IsRetryableAndDoesNotFinalizeWithoutOverlay()
+    {
+        var status = new QuoteFileAnalysisStatusService();
+        var upload = new FailOnceUploadClient();
+        var hub = CreateHub();
+        var message = new DfmAnalysisReadyEvent
+        {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = DateTimeOffset.Parse("2026-07-13T01:02:03Z"),
+            Payload = new DfmAnalysisReadyEventPayload
+            {
+                FileId = "file-123",
+                StoragePath = StoragePath,
+                AnalyzedAt = DateTimeOffset.Parse("2026-07-13T01:02:04Z"),
+                FdmReport = new FdmDfmReportPayload { Issues = [] },
+                OverlayPaths = new Dictionary<string, string> { ["FDM__thin_wall"] = "overlay.glb" }
+            }
+        };
+        var consumer = new QuoteDfmAnalysisReadyConsumer(
+            status, upload, hub, CreateMetrics(),
+            NullLogger<QuoteDfmAnalysisReadyConsumer>.Instance);
+
+        await Assert.ThrowsAsync<QuoteAnalysisPreviewSigningException>(
+            () => consumer.Consume(ContextFor(message)));
+        Assert.Null(await status.GetStatusAsync(StoragePath));
+
+        await consumer.Consume(ContextFor(message));
+
+        var stored = await status.GetStatusAsync(StoragePath);
+        Assert.NotNull(stored);
+        Assert.Equal(["https://signed/overlay.glb"], stored.OverlayGlbUrls);
+        Assert.Equal(2, upload.Attempts);
     }
 
     [Fact]
@@ -950,5 +1075,22 @@ public sealed class GeometryIngestionTests
             string storagePath,
             int expirationMinutes = 60,
             CancellationToken ct = default) => Task.FromCanceled<string>(ct);
+    }
+
+    private sealed class FailOnceUploadClient()
+        : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
+    {
+        public int Attempts { get; private set; }
+
+        public override Task<string> GetDownloadUrlByPathAsync(
+            string storagePath,
+            int expirationMinutes = 60,
+            CancellationToken ct = default)
+        {
+            Attempts++;
+            return Attempts == 1
+                ? Task.FromException<string>(new HttpRequestException("simulated transient failure"))
+                : Task.FromResult($"https://signed/{storagePath}");
+        }
     }
 }

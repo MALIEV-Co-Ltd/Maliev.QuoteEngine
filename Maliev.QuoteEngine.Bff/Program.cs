@@ -388,9 +388,16 @@ builder.AddMassTransitWithRabbitMq(
     {
         cfg.ReceiveEndpoint("quote-engine-geometry-analysis-v1", e =>
         {
-            // Status snapshots are now distributed, but consumer pre-checks and downstream side effects are not
-            // one atomic Redis claim. Keep this queue sequential and HPA disabled until that follow-up is complete.
+            // Redis claims fence completion/DFM side effects across replicas. Keep the queue sequential until
+            // the broader two-pod reconnect, retry, and load gate is complete; this is not permission to enable HPA.
             e.ConcurrentMessageLimit = 1;
+            e.UseMessageRetry(retry =>
+            {
+                retry.Handle<QuoteAnalysisTransientException>();
+                retry.Handle<RedisException>();
+                retry.Handle<TimeoutException>();
+                retry.Interval(5, TimeSpan.FromSeconds(2));
+            });
             e.ConfigureConsumeTopology = false;
             e.ConfigureConsumer<QuoteFileMetricsReadyConsumer>(context);
             e.ConfigureConsumer<QuoteFileAnalyzedConsumer>(context);

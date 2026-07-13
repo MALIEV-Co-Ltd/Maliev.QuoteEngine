@@ -12,6 +12,9 @@ internal sealed record RedisQuoteFileAnalysisStatusOptions
 {
     internal TimeSpan DurableLifetime { get; init; } = TimeSpan.FromHours(48);
     internal TimeSpan EphemeralLifetime { get; init; } = TimeSpan.FromMinutes(55);
+    internal TimeSpan ProcessedEventLifetime { get; init; } = TimeSpan.FromDays(30);
+    internal TimeSpan ClaimLifetime { get; init; } = TimeSpan.FromMinutes(2);
+    internal TimeSpan ClaimRetryDelay { get; init; } = TimeSpan.FromMilliseconds(25);
     internal int MaxUpdateAttempts { get; init; } = 8;
 }
 
@@ -49,8 +52,18 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
                 nameof(options),
                 "Durable lifetime must be longer than ephemeral preview lifetime.");
         }
+        if (_options.ProcessedEventLifetime < _options.DurableLifetime)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(options),
+                "Processed-event lifetime must cover the durable analysis lifetime.");
+        }
         if (_options.MaxUpdateAttempts <= 0)
             throw new ArgumentOutOfRangeException(nameof(options), "Max update attempts must be positive.");
+        if (_options.ClaimLifetime <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(options), "Claim lifetime must be positive.");
+        if (_options.ClaimRetryDelay <= TimeSpan.Zero)
+            throw new ArgumentOutOfRangeException(nameof(options), "Claim retry delay must be positive.");
     }
 
     public async Task<QuoteFileAnalysisStatus?> GetStatusAsync(
@@ -59,6 +72,151 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
     {
         var snapshot = await ReadAsync(storagePath, ct);
         return snapshot.State;
+    }
+
+    public Task<QuoteAnalysisEventClaim> ClaimGeometryCompletionAsync(
+        string storagePath,
+        string fileId,
+        Guid eventId,
+        DateTimeOffset occurredAtUtc,
+        DateTimeOffset processedAtUtc,
+        CancellationToken ct = default) =>
+        ClaimAsync(
+            storagePath,
+            fileId,
+            eventId,
+            QuoteAnalysisEventLane.Geometry,
+            existing => existing is null || QuoteFileAnalysisStatusTransitions.CanApplyGeometry(
+                existing,
+                fileId,
+                eventId,
+                occurredAtUtc,
+                processedAtUtc,
+                QuoteGeometryEventPhase.Completion),
+            ct);
+
+    public Task<QuoteAnalysisEventClaim> ClaimDfmEventAsync(
+        string storagePath,
+        string fileId,
+        Guid eventId,
+        CancellationToken ct = default) =>
+        ClaimAsync(
+            storagePath,
+            fileId,
+            eventId,
+            QuoteAnalysisEventLane.Dfm,
+            existing => existing is null ||
+                QuoteFileAnalysisStatusTransitions.CanApplyDfm(existing, fileId, eventId),
+            ct);
+
+    public async Task<bool> RenewAnalysisClaimAsync(
+        QuoteAnalysisEventClaim claim,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        return claim.Token is not null && await _database.LockExtendAsync(
+            BuildClaimKey(claim.StoragePath, claim.Lane),
+            claim.Token,
+            _options.ClaimLifetime).WaitAsync(ct);
+    }
+
+    public Task<QuoteAnalysisFinalizeResult> FinalizeGeometryCompletionAsync(
+        QuoteAnalysisEventClaim claim,
+        QuoteGeometryCompletionUpdate update,
+        CancellationToken ct = default)
+    {
+        QuoteAnalysisClaimValidator.ValidateGeometry(claim, update);
+        var transition = new GeometryCompletionTransition(
+            claim.StoragePath,
+            update.GlbUrl,
+            update.ThumbnailUrl,
+            update.BodyCount,
+            update.IsManifold,
+            update.ViewerStoragePath,
+            update.ViewerFileExtension,
+            update.VolumeCc,
+            update.SurfaceAreaCm2,
+            update.FileId,
+            update.SupportVolumeCc,
+            update.BoundingBoxXmm,
+            update.BoundingBoxYmm,
+            update.BoundingBoxZmm,
+            update.TriangleCount,
+            update.NonManifoldReason,
+            update.EventId,
+            update.OccurredAtUtc,
+            update.ProcessedAtUtc);
+        return FinalizeUnderClaimAsync(
+            claim,
+            existing => QuoteFileAnalysisStatusTransitions.ApplyGlbReady(existing, transition),
+            EphemeralUpdate.Geometry,
+            ct);
+    }
+
+    public Task<QuoteAnalysisFinalizeResult> FinalizeDfmAnalysisAsync(
+        QuoteAnalysisEventClaim claim,
+        QuoteDfmAnalysisUpdate update,
+        CancellationToken ct = default)
+    {
+        QuoteAnalysisClaimValidator.ValidateDfm(claim, update);
+        var transition = new DfmReportsTransition(
+            claim.StoragePath,
+            update.FdmReport,
+            update.SlaReport,
+            update.CncReport,
+            update.OverlayGlbUrls,
+            update.NonManifoldReason,
+            update.AnalysisErrorCode,
+            update.FileId,
+            update.EventId,
+            update.OccurredAtUtc,
+            update.AnalyzedAtUtc,
+            update.BodyCount);
+        return FinalizeUnderClaimAsync(
+            claim,
+            existing => QuoteFileAnalysisStatusTransitions.ApplyDfmReports(existing, transition),
+            new EphemeralUpdate(update.OverlayGlbUrls, null, false),
+            ct);
+    }
+
+    public async Task MarkAnalysisNotificationDispatchedAsync(
+        QuoteAnalysisEventClaim claim,
+        long revision,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (claim.Token is null)
+            throw new InvalidOperationException("The analysis event claim has no lease token.");
+
+        var receiptKey = BuildReceiptKey(claim.StoragePath, claim.Lane, claim.EventId);
+        var raw = await _database.StringGetAsync(receiptKey).WaitAsync(ct);
+        var receipt = DeserializeReceipt(raw);
+        if (receipt is null || receipt.Revision != revision)
+            throw new InvalidOperationException("The pending analysis notification receipt was not found.");
+
+        var transaction = _database.CreateTransaction();
+        transaction.AddCondition(Condition.StringEqual(
+            BuildClaimKey(claim.StoragePath, claim.Lane), claim.Token));
+        transaction.AddCondition(Condition.StringEqual(receiptKey, raw));
+        _ = transaction.StringSetAsync(
+            receiptKey,
+            JsonSerializer.Serialize(receipt with { Dispatched = true }, JsonOptions),
+            _options.EphemeralLifetime);
+        _ = transaction.KeyDeleteAsync(BuildClaimKey(claim.StoragePath, claim.Lane));
+        if (!await transaction.ExecuteAsync().WaitAsync(ct))
+            throw new InvalidOperationException("The analysis event claim was lost before notification dispatch completed.");
+    }
+
+    public async Task ReleaseAnalysisClaimAsync(
+        QuoteAnalysisEventClaim claim,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        if (claim.Token is not null)
+        {
+            await _database.LockReleaseAsync(
+                BuildClaimKey(claim.StoragePath, claim.Lane), claim.Token).WaitAsync(ct);
+        }
     }
 
     public async Task<bool> CanApplyGeometryEventAsync(
@@ -306,6 +464,237 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
 
     internal static RedisKey BuildOverlayKey(string storagePath) => BuildKey("overlays", storagePath);
 
+    internal static RedisKey BuildClaimKey(
+        string storagePath,
+        QuoteAnalysisEventLane lane) =>
+        BuildKey($"claim:{lane.ToString().ToLowerInvariant()}", storagePath);
+
+    internal static RedisKey BuildReceiptKey(
+        string storagePath,
+        QuoteAnalysisEventLane lane,
+        Guid eventId) =>
+        BuildKey($"receipt:{lane.ToString().ToLowerInvariant()}:{eventId:N}", storagePath);
+
+    internal static RedisKey BuildProcessedEventSetKey(
+        string storagePath,
+        QuoteAnalysisEventLane lane) =>
+        BuildKey($"processed:{lane.ToString().ToLowerInvariant()}", storagePath);
+
+    private async Task<QuoteAnalysisEventClaim> ClaimAsync(
+        string storagePath,
+        string fileId,
+        Guid eventId,
+        QuoteAnalysisEventLane lane,
+        Func<QuoteFileAnalysisStatus?, bool> canApply,
+        CancellationToken ct)
+    {
+        var claimKey = BuildClaimKey(storagePath, lane);
+        while (true)
+        {
+            ct.ThrowIfCancellationRequested();
+            var token = Guid.NewGuid().ToString("N");
+            if (!await _database.LockTakeAsync(claimKey, token, _options.ClaimLifetime).WaitAsync(ct))
+            {
+                await Task.Delay(_options.ClaimRetryDelay, ct);
+                continue;
+            }
+
+            try
+            {
+                var receiptTask = _database.StringGetAsync(BuildReceiptKey(storagePath, lane, eventId));
+                var processedTask = _database.SetContainsAsync(
+                    BuildProcessedEventSetKey(storagePath, lane), eventId.ToString("N"));
+                var receipt = DeserializeReceipt(await receiptTask.WaitAsync(ct));
+                var alreadyProcessed = await processedTask.WaitAsync(ct);
+                if (receipt is not null)
+                {
+                    if (!receipt.Dispatched)
+                    {
+                        var pending = await GetStatusAsync(storagePath, ct)
+                            ?? throw new InvalidOperationException(
+                                "A pending analysis notification receipt has no durable status snapshot.");
+                        return new QuoteAnalysisEventClaim(
+                            storagePath,
+                            fileId,
+                            eventId,
+                            lane,
+                            QuoteAnalysisClaimDisposition.PendingNotification,
+                            token,
+                            _timeProvider.GetUtcNow() + _options.ClaimLifetime,
+                            receipt.Revision,
+                            pending);
+                    }
+
+                    await _database.LockReleaseAsync(claimKey, token).WaitAsync(ct);
+                    return DuplicateClaim(storagePath, fileId, eventId, lane);
+                }
+
+                if (alreadyProcessed)
+                {
+                    await _database.LockReleaseAsync(claimKey, token).WaitAsync(ct);
+                    return DuplicateClaim(storagePath, fileId, eventId, lane);
+                }
+
+                var existing = await GetStatusAsync(storagePath, ct);
+                if (!canApply(existing))
+                {
+                    await _database.LockReleaseAsync(claimKey, token).WaitAsync(ct);
+                    return DuplicateClaim(storagePath, fileId, eventId, lane);
+                }
+
+                return new QuoteAnalysisEventClaim(
+                    storagePath,
+                    fileId,
+                    eventId,
+                    lane,
+                    QuoteAnalysisClaimDisposition.Acquired,
+                    token,
+                    _timeProvider.GetUtcNow() + _options.ClaimLifetime);
+            }
+            catch
+            {
+                await _database.LockReleaseAsync(claimKey, token);
+                throw;
+            }
+        }
+    }
+
+    private async Task<QuoteAnalysisFinalizeResult> FinalizeUnderClaimAsync(
+        QuoteAnalysisEventClaim claim,
+        Func<QuoteFileAnalysisStatus?, QuoteFileAnalysisStatus> transition,
+        EphemeralUpdate ephemeralUpdate,
+        CancellationToken ct)
+    {
+        if (claim.Disposition != QuoteAnalysisClaimDisposition.Acquired || claim.Token is null)
+            return new QuoteAnalysisFinalizeResult(false, 0, claim.Snapshot);
+
+        for (var attempt = 0; attempt < _options.MaxUpdateAttempts; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var snapshot = await ReadAsync(claim.StoragePath, ct);
+            var next = transition(snapshot.State);
+            if (snapshot.State is not null && ReferenceEquals(next, snapshot.State))
+            {
+                await ReleaseAnalysisClaimAsync(claim, ct);
+                return new QuoteAnalysisFinalizeResult(false, snapshot.Revision, snapshot.State);
+            }
+
+            var revision = snapshot.Revision + 1;
+            next = next with { Revision = revision };
+            var now = _timeProvider.GetUtcNow();
+            var geometryGeneration = ephemeralUpdate.RefreshGeometry
+                ? Guid.NewGuid()
+                : snapshot.GeometryGeneration;
+            var authoritativeOverlayGeneration = ephemeralUpdate.Authoritative is { Count: > 0 }
+                ? Guid.NewGuid()
+                : snapshot.AuthoritativeOverlayGeneration;
+            var advisoryOverlayGeneration = ephemeralUpdate.Advisory is { Count: > 0 }
+                ? Guid.NewGuid()
+                : snapshot.AdvisoryOverlayGeneration;
+            var durable = new DurableEnvelope(
+                SchemaVersion,
+                revision,
+                geometryGeneration,
+                authoritativeOverlayGeneration,
+                advisoryOverlayGeneration,
+                StripEphemeral(next));
+            var geometry = BuildGeometryEnvelope(
+                snapshot,
+                next,
+                ephemeralUpdate.RefreshGeometry,
+                geometryGeneration,
+                now);
+            var overlays = BuildOverlayEnvelope(
+                snapshot,
+                next,
+                ephemeralUpdate,
+                authoritativeOverlayGeneration,
+                advisoryOverlayGeneration,
+                now);
+            var fileIdentityChanged = !SameFileIdentity(snapshot.State?.FileId, next.FileId);
+            var writeGeometry = ephemeralUpdate.RefreshGeometry ||
+                (fileIdentityChanged && snapshot.Geometry is not null);
+            var writeOverlays = ephemeralUpdate.Authoritative is { Count: > 0 } ||
+                ephemeralUpdate.Advisory is { Count: > 0 } ||
+                (fileIdentityChanged && snapshot.Overlays is not null);
+            var transaction = _database.CreateTransaction();
+            transaction.AddCondition(snapshot.RawDurable.IsNull
+                ? Condition.KeyNotExists(BuildDurableKey(claim.StoragePath))
+                : Condition.StringEqual(BuildDurableKey(claim.StoragePath), snapshot.RawDurable));
+            transaction.AddCondition(Condition.StringEqual(
+                BuildClaimKey(claim.StoragePath, claim.Lane), claim.Token));
+            _ = transaction.StringSetAsync(
+                BuildDurableKey(claim.StoragePath),
+                JsonSerializer.Serialize(durable, JsonOptions),
+                _options.DurableLifetime);
+            if (writeGeometry)
+            {
+                QueueEphemeralWrite(
+                    transaction,
+                    BuildPreviewKey(claim.StoragePath),
+                    geometry,
+                    geometry?.ExpiresAtUtc,
+                    now);
+            }
+
+            if (writeOverlays)
+                QueueOverlayWrite(transaction, BuildOverlayKey(claim.StoragePath), overlays, now);
+
+            _ = transaction.StringSetAsync(
+                BuildReceiptKey(claim.StoragePath, claim.Lane, claim.EventId),
+                JsonSerializer.Serialize(new NotificationReceipt(SchemaVersion, revision, false), JsonOptions),
+                _options.EphemeralLifetime);
+            var processedSetKey = BuildProcessedEventSetKey(claim.StoragePath, claim.Lane);
+            _ = transaction.SetAddAsync(processedSetKey, claim.EventId.ToString("N"));
+            _ = transaction.KeyExpireAsync(processedSetKey, _options.ProcessedEventLifetime);
+            if (await transaction.ExecuteAsync().WaitAsync(ct))
+                return new QuoteAnalysisFinalizeResult(true, revision, next);
+
+            var heldToken = await _database.LockQueryAsync(
+                BuildClaimKey(claim.StoragePath, claim.Lane)).WaitAsync(ct);
+            if (!heldToken.Equals((RedisValue)claim.Token))
+                return new QuoteAnalysisFinalizeResult(false, 0, null);
+
+            if (attempt + 1 < _options.MaxUpdateAttempts)
+                await Task.Delay(TimeSpan.FromMilliseconds(attempt + 1), ct);
+        }
+
+        throw new QuoteAnalysisConcurrencyException(claim.StoragePath);
+    }
+
+    private static NotificationReceipt? DeserializeReceipt(RedisValue raw)
+    {
+        if (raw.IsNull)
+            return null;
+
+        try
+        {
+            var receipt = JsonSerializer.Deserialize<NotificationReceipt>(raw.ToString(), JsonOptions)
+                ?? throw new JsonException("The analysis notification receipt was empty.");
+            if (receipt.SchemaVersion != SchemaVersion || receipt.Revision <= 0)
+                throw new JsonException("The analysis notification receipt is invalid.");
+            return receipt;
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException("The analysis notification receipt is invalid.", ex);
+        }
+    }
+
+    private static QuoteAnalysisEventClaim DuplicateClaim(
+        string storagePath,
+        string fileId,
+        Guid eventId,
+        QuoteAnalysisEventLane lane) =>
+        new(
+            storagePath,
+            fileId,
+            eventId,
+            lane,
+            QuoteAnalysisClaimDisposition.DuplicateOrStale,
+            null,
+            null);
+
     private async Task UpdateAsync(
         string storagePath,
         Func<QuoteFileAnalysisStatus?, QuoteFileAnalysisStatus> transition,
@@ -321,6 +710,7 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
                 return;
 
             var revision = snapshot.Revision + 1;
+            next = next with { Revision = revision };
             var now = _timeProvider.GetUtcNow();
             var geometryGeneration = ephemeralUpdate.RefreshGeometry
                 ? Guid.NewGuid()
@@ -419,7 +809,10 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
         var now = _timeProvider.GetUtcNow();
         var geometry = DeserializeGeometry(values[1], durable, now);
         var overlays = DeserializeOverlays(values[2], durable, now);
-        var state = MergeEphemeral(durable.Status, geometry, overlays);
+        var state = MergeEphemeral(durable.Status, geometry, overlays) with
+        {
+            Revision = durable.Revision
+        };
         return new RedisSnapshot(
             values[0],
             durable.Revision,
@@ -686,6 +1079,11 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
         IReadOnlyList<EphemeralUrl> Advisory);
 
     private sealed record EphemeralUrl(string Url, DateTimeOffset ExpiresAtUtc);
+
+    private sealed record NotificationReceipt(
+        int SchemaVersion,
+        long Revision,
+        bool Dispatched);
 
     private sealed record RedisSnapshot(
         RedisValue RawDurable,

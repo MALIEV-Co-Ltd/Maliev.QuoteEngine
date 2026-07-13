@@ -9,6 +9,8 @@ namespace Maliev.QuoteEngine.Bff.Services;
 /// </summary>
 public sealed record QuoteFileAnalysisStatus
 {
+    [System.Text.Json.Serialization.JsonIgnore]
+    public long Revision { get; init; }
     public required string StoragePath { get; init; }
     public string? FileId { get; init; }
     public string Status { get; init; } = "Processing";      // Processing | GlbReady | DfmAnalysisReady | Failed
