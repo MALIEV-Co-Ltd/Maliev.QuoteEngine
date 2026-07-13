@@ -51,7 +51,7 @@ internal sealed class QuoteAgentSessionAccess(
     IQuoteAgentSessionOwnerStore ownerStore,
     IQuoteAgentConversationMap conversationMap,
     QuoteAgentSessionStore sessionStore,
-    QuoteEnginePrototypeStore uploadStore) : IQuoteAgentServerContextAuthorizer, IQuoteAgentSessionRequestAuthorizer
+    IQuoteUploadStateStore uploadStore) : IQuoteAgentServerContextAuthorizer, IQuoteAgentSessionRequestAuthorizer
 {
     async Task<bool> IQuoteAgentServerContextAuthorizer.IsAuthorizedAsync(
         QuoteAgentContext context,
@@ -156,7 +156,14 @@ internal sealed class QuoteAgentSessionAccess(
                 return QuoteAgentSessionAccessDecision.NotFound;
             }
 
-            uploadStore.PromoteSessionUploads(sessionId, owner.VisitorId, owner.CustomerId.Value);
+            if (!await uploadStore.PromoteSessionAsync(
+                sessionId,
+                owner.VisitorId,
+                owner.CustomerId.Value,
+                cancellationToken))
+            {
+                return QuoteAgentSessionAccessDecision.NotFound;
+            }
             BindInMemoryState(sessionId, owner);
             return QuoteAgentSessionAccessDecision.Authorized;
         }
@@ -197,7 +204,14 @@ internal sealed class QuoteAgentSessionAccess(
                 return QuoteAgentSessionAccessDecision.NotFound;
             }
 
-            uploadStore.PromoteSessionUploads(sessionId, owner.VisitorId, caller.CustomerId.Value);
+            if (!await uploadStore.PromoteSessionAsync(
+                sessionId,
+                owner.VisitorId,
+                caller.CustomerId.Value,
+                cancellationToken))
+            {
+                return QuoteAgentSessionAccessDecision.NotFound;
+            }
         }
 
         BindInMemoryState(sessionId, owner);

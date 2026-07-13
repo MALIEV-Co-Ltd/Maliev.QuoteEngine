@@ -12,6 +12,7 @@ namespace Maliev.QuoteEngine.Bff.Services;
 internal sealed class QuoteNotificationSubscriptionAuthorizer(
     AnonymousVisitorCookie anonymousVisitorCookie,
     IQuoteAgentSessionOwnerStore sessionOwnerStore,
+    IQuoteUploadStateStore uploadStore,
     QuoteEnginePrototypeStore prototypeStore,
     IOrderServiceClient orderServiceClient,
     IHostEnvironment environment)
@@ -59,7 +60,7 @@ internal sealed class QuoteNotificationSubscriptionAuthorizer(
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var upload = prototypeStore.FindUploadByStoragePath(storagePath);
+        var upload = await uploadStore.FindByStoragePathAsync(storagePath, cancellationToken);
         var caller = ResolveCaller(context);
         if (upload is null)
         {

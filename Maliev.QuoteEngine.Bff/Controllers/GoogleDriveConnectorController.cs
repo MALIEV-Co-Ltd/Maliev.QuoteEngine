@@ -24,7 +24,7 @@ public sealed class GoogleDriveConnectorController(
     IQuoteAgentSessionRequestAuthorizer agentSessionAccess,
     IGoogleDriveConnectorStore connectorStore,
     IGoogleDriveOAuthStateStore oauthStateStore,
-    QuoteEnginePrototypeStore store,
+    IQuoteUploadStateStore uploadStore,
     QuoteUploadServiceClient uploadClient,
     IDataProtectionProvider dataProtectionProvider,
     IConfiguration configuration,
@@ -632,13 +632,17 @@ public sealed class GoogleDriveConnectorController(
         GoogleDriveFileMetadataResponse metadata,
         CancellationToken cancellationToken)
     {
-        var upload = store.InitiateUpload(new InitiateQuoteUploadRequest
-        {
-            QuoteSessionId = quoteSessionId,
-            FileName = imported.FileName,
-            ContentType = imported.ContentType,
-            FileSizeBytes = imported.Bytes.LongLength
-        }, customerId);
+        var upload = await uploadStore.InitiateAsync(
+            new InitiateQuoteUploadRequest
+            {
+                QuoteSessionId = quoteSessionId,
+                FileName = imported.FileName,
+                ContentType = imported.ContentType,
+                FileSizeBytes = imported.Bytes.LongLength
+            },
+            customerId,
+            visitorId: null,
+            cancellationToken);
 
         var downstreamUploadId = await uploadClient.InitiateResumableUploadAsync(
             upload.FileName,
@@ -647,7 +651,10 @@ public sealed class GoogleDriveConnectorController(
             upload.StoragePath,
             BuildDriveImportMetadata(metadata),
             cancellationToken);
-        upload = store.AttachDownstreamUpload(upload.UploadId, downstreamUploadId);
+        upload = await uploadStore.AttachDownstreamAsync(
+            upload.UploadId,
+            downstreamUploadId,
+            cancellationToken);
 
         await using var stream = new MemoryStream(imported.Bytes, writable: false);
         await uploadClient.StreamUploadAsync(
@@ -659,16 +666,37 @@ public sealed class GoogleDriveConnectorController(
             upload.StoragePath,
             cancellationToken);
 
-        if (imported.Bytes.LongLength != upload.ExpectedSizeBytes ||
-            store.TryAdvanceUpload(
-                upload.UploadId,
-                expectedReceivedBytes: 0,
-                receivedBytes: imported.Bytes.LongLength) is null)
+        if (imported.Bytes.LongLength != upload.ExpectedSizeBytes)
         {
             throw new InvalidOperationException("The imported Google Drive upload state could not be finalized.");
         }
 
-        return store.MarkProcessing(upload.UploadId);
+        var finalizedUpload = await uploadStore.TryAdvanceAsync(
+            upload.UploadId,
+            expectedReceivedBytes: 0,
+            receivedBytes: imported.Bytes.LongLength,
+            cancellationToken);
+        if (finalizedUpload is null)
+        {
+            throw new InvalidOperationException("The imported Google Drive upload state could not be finalized.");
+        }
+
+        var completedMetadata = await uploadClient.GetCompletedFileMetadataAsync(
+            downstreamUploadId,
+            cancellationToken);
+        if (!QuoteUploadMetadataValidator.TryValidateCompletedUpload(
+                finalizedUpload,
+                completedMetadata,
+                out var canonicalFileId))
+        {
+            throw new InvalidOperationException(
+                "UploadService metadata did not match the imported Google Drive file.");
+        }
+
+        return await uploadStore.MarkProcessingAsync(
+            upload.UploadId,
+            canonicalFileId,
+            cancellationToken);
     }
 
     private void DisableStatusCodeBody()

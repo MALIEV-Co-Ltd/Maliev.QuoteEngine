@@ -23,7 +23,7 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 public sealed class GeometryRuntimeController(
     IQuoteGeometryRuntimeClient runtimeClient,
     IQuoteFileAnalysisStatusService statusService,
-    QuoteEnginePrototypeStore prototypeStore,
+    IQuoteUploadStateStore uploadStore,
     CustomerSessionResolver sessionResolver,
     AnonymousVisitorCookie anonymousVisitorCookie,
     GeometryRuntimeFallbackProvider runtimeFallbackProvider,
@@ -275,7 +275,7 @@ public sealed class GeometryRuntimeController(
                 out var isManifold,
                 out var nonManifoldReason))
         {
-            var upload = prototypeStore.FindUploadByStoragePath(request.StoragePath!);
+            var upload = await uploadStore.FindByStoragePathAsync(request.StoragePath!, ct);
             if (upload is null || !CanAccessUpload(upload))
             {
                 return NotFound();

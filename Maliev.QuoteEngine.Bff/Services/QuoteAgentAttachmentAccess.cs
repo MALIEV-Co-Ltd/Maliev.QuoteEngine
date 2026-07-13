@@ -9,95 +9,98 @@ namespace Maliev.QuoteEngine.Bff.Services;
 /// A storage path or upload id is a locator only and cannot manufacture session membership.
 /// </summary>
 internal sealed class QuoteAgentAttachmentAccess(
-    QuoteEnginePrototypeStore uploadStore,
+    IQuoteUploadStateStore uploadStore,
     QuoteAgentSessionAccess sessionAccess)
 {
-    public bool TryAuthorizeAndCanonicalize(
+    public Task<List<QuoteAgentAttachmentDto>?> AuthorizeAndCanonicalizeAsync(
         Guid sessionId,
         IReadOnlyCollection<QuoteAgentAttachmentDto> requestedAttachments,
-        out List<QuoteAgentAttachmentDto> authorizedAttachments)
+        CancellationToken cancellationToken)
     {
-        return TryAuthorizeAndCanonicalize(
+        return AuthorizeAndCanonicalizeAsync(
             sessionId,
             requestedAttachments,
             sessionAccess.GetCurrentCaller(),
-            out authorizedAttachments);
+            cancellationToken);
     }
 
-    public bool TryAuthorizeAndCanonicalizeForOwner(
+    public Task<List<QuoteAgentAttachmentDto>?> AuthorizeAndCanonicalizeForOwnerAsync(
         Guid sessionId,
         Guid? customerId,
         Guid? visitorId,
         IReadOnlyCollection<QuoteAgentAttachmentDto> requestedAttachments,
-        out List<QuoteAgentAttachmentDto> authorizedAttachments)
+        CancellationToken cancellationToken)
     {
         var owner = new QuoteAgentCallerIdentity(
             customerId,
             visitorId,
             AnonymousVisitorCredentialStatus.Valid);
-        return TryAuthorizeAndCanonicalize(
+        return AuthorizeAndCanonicalizeAsync(
             sessionId,
             requestedAttachments,
             owner,
-            out authorizedAttachments);
+            cancellationToken);
     }
 
-    private bool TryAuthorizeAndCanonicalize(
+    private async Task<List<QuoteAgentAttachmentDto>?> AuthorizeAndCanonicalizeAsync(
         Guid sessionId,
         IReadOnlyCollection<QuoteAgentAttachmentDto> requestedAttachments,
         QuoteAgentCallerIdentity caller,
-        out List<QuoteAgentAttachmentDto> authorizedAttachments)
+        CancellationToken cancellationToken)
     {
-        authorizedAttachments = new List<QuoteAgentAttachmentDto>(requestedAttachments.Count);
+        var authorizedAttachments = new List<QuoteAgentAttachmentDto>(requestedAttachments.Count);
         if (requestedAttachments.Count == 0)
         {
-            return true;
+            return authorizedAttachments;
         }
 
         foreach (var requested in requestedAttachments)
         {
-            if (!TryAuthorizeAndCanonicalize(requested, sessionId, caller, out var authorized))
+            var authorized = await AuthorizeAndCanonicalizeAsync(
+                requested,
+                sessionId,
+                caller,
+                cancellationToken);
+            if (authorized is null)
             {
-                authorizedAttachments.Clear();
-                return false;
+                return null;
             }
 
             authorizedAttachments.Add(authorized);
         }
 
-        return true;
+        return authorizedAttachments;
     }
 
-    private bool TryAuthorizeAndCanonicalize(
+    private async Task<QuoteAgentAttachmentDto?> AuthorizeAndCanonicalizeAsync(
         QuoteAgentAttachmentDto requested,
         Guid sessionId,
         QuoteAgentCallerIdentity caller,
-        out QuoteAgentAttachmentDto authorized)
+        CancellationToken cancellationToken)
     {
-        authorized = default!;
         var storagePath = NormalizeStoragePath(requested.StoragePath);
         if (storagePath is null)
         {
-            return TryAuthorizeInlineData(requested, out authorized);
+            return TryAuthorizeInlineData(requested, out var inline) ? inline : null;
         }
 
         if (string.IsNullOrWhiteSpace(requested.UploadId))
         {
-            return false;
+            return null;
         }
 
-        var upload = uploadStore.GetUpload(requested.UploadId.Trim());
+        var upload = await uploadStore.GetAsync(requested.UploadId.Trim(), cancellationToken);
         if (upload is null ||
             !StoragePathMatches(upload.StoragePath, storagePath) ||
             !BelongsToSession(upload, sessionId) ||
             !HasReceivedAuthoritativeBytes(upload) ||
             !OwnerMatches(upload, caller))
         {
-            return false;
+            return null;
         }
 
         var isCad = QuoteUploadConstraints.IsSupportedCadFileName(upload.FileName);
-        authorized = new QuoteAgentAttachmentDto
+        return new QuoteAgentAttachmentDto
         {
             AttachmentId = upload.FileId,
             FileName = upload.FileName,
@@ -109,7 +112,6 @@ internal sealed class QuoteAgentAttachmentAccess(
             Url = null,
             SatisfiesGeometryGate = isCad
         };
-        return true;
     }
 
     private static bool TryAuthorizeInlineData(

@@ -830,6 +830,20 @@ public sealed class QuoteEnginePrototypeStore
             string.Equals(upload.StoragePath, normalized, StringComparison.Ordinal));
     }
 
+    public IReadOnlyList<UploadState> GetSessionUploads(Guid sessionId)
+    {
+        if (sessionId == Guid.Empty)
+        {
+            return [];
+        }
+
+        return _uploads.Values
+            .Where(upload =>
+                Guid.TryParse(upload.QuoteSessionId, out var uploadSessionId) &&
+                uploadSessionId == sessionId)
+            .ToArray();
+    }
+
     public void PromoteSessionUploads(Guid sessionId, Guid expectedVisitorId, Guid customerId)
     {
         if (sessionId == Guid.Empty || expectedVisitorId == Guid.Empty || customerId == Guid.Empty)
@@ -924,10 +938,19 @@ public sealed class QuoteEnginePrototypeStore
     }
 
     /// <summary>Transitions an upload to "Processing" status (real pipeline path).</summary>
-    public UploadState MarkProcessing(string uploadId)
+    public UploadState MarkProcessing(string uploadId, Guid? canonicalFileId = null)
     {
         var current = GetRequiredUpload(uploadId);
-        var updated = current with { Status = "Processing" };
+        if (canonicalFileId == Guid.Empty)
+        {
+            throw new ArgumentException("A canonical UploadService file identifier must not be empty.", nameof(canonicalFileId));
+        }
+
+        var updated = current with
+        {
+            FileId = canonicalFileId ?? current.FileId,
+            Status = "Processing"
+        };
         _uploads[uploadId] = updated;
         return updated;
     }

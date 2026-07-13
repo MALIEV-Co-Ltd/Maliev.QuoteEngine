@@ -9042,6 +9042,10 @@ Customer message:
     {
         services.RemoveAll<IQuoteAgentSessionOwnerStore>();
         services.AddSingleton<IQuoteAgentSessionOwnerStore, InMemoryQuoteAgentSessionOwnerStore>();
+        services.RemoveAll<IQuoteUploadStateStore>();
+        services.AddSingleton<IQuoteUploadStateStore>(sp =>
+            new InMemoryQuoteUploadStateStore(
+                sp.GetRequiredService<QuoteEnginePrototypeStore>()));
         services.RemoveAll<IQuoteAgentConversationMap>();
         services.AddSingleton<IQuoteAgentConversationMap, InMemoryQuoteAgentConversationMap>();
         services.RemoveAll<IGoogleDriveConnectorStore>();

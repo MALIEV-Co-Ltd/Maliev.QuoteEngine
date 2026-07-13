@@ -224,13 +224,31 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
     private sealed class NoOpQuoteUploadServiceClient()
         : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
     {
+        private readonly ConcurrentDictionary<string, QuoteUploadMetadata> _completedFiles = new();
+
         public override Task<string> InitiateResumableUploadAsync(
             string fileName,
             string contentType,
             long totalSize,
             string storagePath,
             IReadOnlyDictionary<string, string>? metadataTags,
-            CancellationToken ct) => Task.FromResult($"downstream-{Guid.NewGuid():N}");
+            CancellationToken ct)
+        {
+            var uploadId = $"downstream-{Guid.NewGuid():N}";
+            _completedFiles[uploadId] = new QuoteUploadMetadata(
+                Guid.NewGuid().ToString("D"),
+                uploadId,
+                "QuoteEngine",
+                storagePath,
+                totalSize,
+                contentType);
+            return Task.FromResult(uploadId);
+        }
+
+        public override Task<QuoteUploadMetadata?> GetCompletedFileMetadataAsync(
+            string uploadId,
+            CancellationToken ct) =>
+            Task.FromResult(_completedFiles.TryGetValue(uploadId, out var metadata) ? metadata : null);
 
         public override Task StreamUploadAsync(Stream body, string contentType, long contentLength,
             string contentRange, string downstreamUploadId, string storagePath, CancellationToken ct) => Task.CompletedTask;
@@ -254,6 +272,52 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
         public override Task<string> GetDownloadUrlByPathAsync(string storagePath,
             int expirationMinutes = 60, CancellationToken ct = default)
             => Task.FromResult($"https://test-cdn.example.com/{Uri.EscapeDataString(storagePath)}");
+    }
+
+    internal sealed class FixedCompletedMetadataUploadClient(bool metadataMatches)
+        : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
+    {
+        private const string DownstreamUploadId = "fixed-downstream-upload";
+        private string? _contentType;
+        private string? _storagePath;
+        private long _totalSize;
+
+        public Guid CanonicalFileId { get; } = Guid.Parse("7d060b5b-832d-4f48-a875-c4b691ddaa35");
+
+        public override Task<string> InitiateResumableUploadAsync(
+            string fileName,
+            string contentType,
+            long totalSize,
+            string storagePath,
+            IReadOnlyDictionary<string, string>? metadataTags,
+            CancellationToken ct)
+        {
+            _contentType = contentType;
+            _storagePath = storagePath;
+            _totalSize = totalSize;
+            return Task.FromResult(DownstreamUploadId);
+        }
+
+        public override Task<QuoteUploadStreamProgress> StreamUploadWithProgressAsync(
+            Stream body,
+            string contentType,
+            long contentLength,
+            string contentRange,
+            string downstreamUploadId,
+            string storagePath,
+            CancellationToken ct) =>
+            Task.FromResult(new QuoteUploadStreamProgress(IsComplete: true, BytesReceived: _totalSize));
+
+        public override Task<QuoteUploadMetadata?> GetCompletedFileMetadataAsync(
+            string uploadId,
+            CancellationToken ct) =>
+            Task.FromResult<QuoteUploadMetadata?>(new QuoteUploadMetadata(
+                CanonicalFileId.ToString("D"),
+                uploadId,
+                "QuoteEngine",
+                metadataMatches ? _storagePath! : _storagePath + ".foreign",
+                _totalSize,
+                _contentType!));
     }
 
     internal sealed class RecordingQuoteUploadServiceClient()
@@ -302,6 +366,23 @@ public sealed class QuoteEngineWebApplicationFactory : WebApplicationFactory<Pro
             using var memory = new MemoryStream();
             await body.CopyToAsync(memory, ct);
             LastStreamedBytes = memory.ToArray();
+        }
+
+        public override Task<QuoteUploadMetadata?> GetCompletedFileMetadataAsync(
+            string uploadId,
+            CancellationToken ct)
+        {
+            QuoteUploadMetadata? metadata =
+                LastInitiatedStoragePath is not null && LastInitiatedContentType is not null
+                    ? new QuoteUploadMetadata(
+                        Guid.NewGuid().ToString("D"),
+                        uploadId,
+                        "QuoteEngine",
+                        LastInitiatedStoragePath,
+                        LastInitiatedTotalSize,
+                        LastInitiatedContentType)
+                    : null;
+            return Task.FromResult(metadata);
         }
     }
 
@@ -2829,6 +2910,49 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task CompleteUpload_uses_canonical_upload_service_file_id()
+    {
+        var uploadClient = new QuoteEngineWebApplicationFactory.FixedCompletedMetadataUploadClient(metadataMatches: true);
+        var scopedFactory = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(uploadClient);
+            }));
+        using var client = scopedFactory.CreateClient();
+        var initiated = await InitiateAndUploadEightBytesAsync(client, "canonical.step");
+
+        var completion = await client.PostAsync(
+            $"/quote/v1/uploads/resumable/{initiated.UploadId}/complete",
+            content: null);
+        completion.EnsureSuccessStatusCode();
+        var completed = await completion.Content.ReadFromJsonAsync<CompleteQuoteUploadResponse>();
+
+        Assert.NotNull(completed);
+        Assert.Equal(uploadClient.CanonicalFileId, completed.FileId);
+    }
+
+    [Fact]
+    public async Task CompleteUpload_mismatched_upload_service_metadata_fails_closed()
+    {
+        var uploadClient = new QuoteEngineWebApplicationFactory.FixedCompletedMetadataUploadClient(metadataMatches: false);
+        var scopedFactory = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<QuoteUploadServiceClient>();
+                services.AddSingleton<QuoteUploadServiceClient>(uploadClient);
+            }));
+        using var client = scopedFactory.CreateClient();
+        var initiated = await InitiateAndUploadEightBytesAsync(client, "mismatch.step");
+
+        var completion = await client.PostAsync(
+            $"/quote/v1/uploads/resumable/{initiated.UploadId}/complete",
+            content: null);
+
+        Assert.Equal(HttpStatusCode.BadGateway, completion.StatusCode);
+    }
+
+    [Fact]
     public async Task Estimate_uses_deterministic_demo_sample_pricing_before_pricing_service()
     {
         await using var demoFactory = factory.WithWebHostBuilder(builder =>
@@ -5049,6 +5173,26 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         return client;
     }
 
+    private async Task<InitiateQuoteUploadResponse> InitiateAndUploadEightBytesAsync(
+        HttpClient client,
+        string fileName)
+    {
+        var initiation = await client.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            FileName = fileName,
+            ContentType = "model/step",
+            FileSizeBytes = 8,
+            QuoteSessionId = Guid.NewGuid().ToString("D")
+        });
+        initiation.EnsureSuccessStatusCode();
+        var initiated = await initiation.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(initiated);
+        using var chunk = new ByteArrayContent(new byte[8]);
+        chunk.Headers.ContentRange = new ContentRangeHeaderValue(0, 7, 8);
+        Assert.Equal(HttpStatusCode.NoContent, (await client.PutAsync(initiated.ProxyUploadUrl, chunk)).StatusCode);
+        return initiated;
+    }
+
     private async Task<HttpClient> CreateSignedInClientAsync(
         string email,
         Action<IServiceCollection> configureServices)
@@ -5065,6 +5209,10 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     {
         services.RemoveAll<IQuoteAgentSessionOwnerStore>();
         services.AddSingleton<IQuoteAgentSessionOwnerStore, InMemoryQuoteAgentSessionOwnerStore>();
+        services.RemoveAll<IQuoteUploadStateStore>();
+        services.AddSingleton<IQuoteUploadStateStore>(sp =>
+            new InMemoryQuoteUploadStateStore(
+                sp.GetRequiredService<QuoteEnginePrototypeStore>()));
         services.RemoveAll<IQuoteAgentConversationMap>();
         services.AddSingleton<IQuoteAgentConversationMap, InMemoryQuoteAgentConversationMap>();
         services.RemoveAll<IGoogleDriveConnectorStore>();
