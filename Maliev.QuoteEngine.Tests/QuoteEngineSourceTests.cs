@@ -4375,9 +4375,13 @@ public sealed class QuoteEngineSourceTests
         };
         var firstEvent = new DfmAnalysisReadyEvent
         {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = DateTimeOffset.UtcNow,
             Payload = new DfmAnalysisReadyEventPayload
             {
+                FileId = "file-bracket",
                 StoragePath = storagePath,
+                AnalyzedAt = DateTimeOffset.UtcNow,
                 FdmReport = fdmPayload,
                 OverlayPaths = new[] { "processed/u/overlay-fdm.glb" }
             }
@@ -4396,9 +4400,13 @@ public sealed class QuoteEngineSourceTests
         };
         var secondEvent = new DfmAnalysisReadyEvent
         {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = DateTimeOffset.UtcNow.AddSeconds(1),
             Payload = new DfmAnalysisReadyEventPayload
             {
+                FileId = "file-bracket",
                 StoragePath = storagePath,
+                AnalyzedAt = DateTimeOffset.UtcNow.AddSeconds(1),
                 CncReport = cncPayload,
                 OverlayPaths = Array.Empty<string>()
             }
@@ -5803,9 +5811,13 @@ public sealed class QuoteEngineSourceTests
     {
         return new FileAnalyzedEvent
         {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = DateTimeOffset.UtcNow,
             Payload = new FileAnalyzedEventPayload
             {
+                FileId = "file-test",
                 StoragePath = storagePath,
+                ProcessedAt = DateTimeOffset.UtcNow,
                 GlbStoragePath = glbStoragePath,
                 ViewerStoragePath = viewerStoragePath,
                 ViewerFileExtension = viewerFileExtension,
@@ -5815,7 +5827,9 @@ public sealed class QuoteEngineSourceTests
                 {
                     IsManifold = isManifold,
                     VolumeCm3 = volumeCm3,
-                    SurfaceAreaCm2 = 0.0
+                    SurfaceAreaCm2 = 0.0,
+                    BoundingBox = new FileAnalyzedEventPayloadMetricsBoundingBox(10, 20, 30),
+                    TriangleCount = 100
                 }
             }
         };

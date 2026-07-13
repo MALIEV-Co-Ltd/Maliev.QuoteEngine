@@ -25,9 +25,21 @@ public sealed class QuoteFileAnalyzedConsumer(
         }
 
         var storagePath = payload.StoragePath;
-        if (string.IsNullOrEmpty(storagePath))
+        if (string.IsNullOrWhiteSpace(storagePath) || string.IsNullOrWhiteSpace(payload.FileId))
         {
-            logger.LogWarning("FileAnalyzedEvent received with empty StoragePath — skipping");
+            logger.LogWarning("FileAnalyzedEvent received without a canonical file identity; skipping");
+            return;
+        }
+
+        if (!await status.CanApplyGeometryEventAsync(
+                storagePath,
+                payload.FileId,
+                context.Message.MessageId,
+                context.Message.OccurredAtUtc,
+                payload.ProcessedAt,
+                QuoteGeometryEventPhase.Completion,
+                context.CancellationToken))
+        {
             return;
         }
 
@@ -41,8 +53,26 @@ public sealed class QuoteFileAnalyzedConsumer(
         var viewerFileExtension = NormalizeViewerFileExtension(
             payload.ViewerFileExtension,
             viewerStoragePath);
-        var volumeCc = ToMetric(payload.Metrics?.VolumeCm3, requirePositive: true);
-        var surfaceAreaCm2 = ToMetric(payload.Metrics?.SurfaceAreaCm2, requirePositive: false);
+        var metrics = payload.Metrics;
+        var volumeCc = GeometryMetricMapper.Positive(metrics?.VolumeCm3);
+        var supportVolumeCc = GeometryMetricMapper.NonNegative(metrics?.SupportVolumeCm3);
+        var surfaceAreaCm2 = GeometryMetricMapper.NonNegative(metrics?.SurfaceAreaCm2);
+        var boundingBoxXmm = GeometryMetricMapper.Positive(metrics?.BoundingBox?.X);
+        var boundingBoxYmm = GeometryMetricMapper.Positive(metrics?.BoundingBox?.Y);
+        var boundingBoxZmm = GeometryMetricMapper.Positive(metrics?.BoundingBox?.Z);
+        var triangleCount = GeometryMetricMapper.Positive(metrics?.TriangleCount);
+        var hasCompleteMetrics = volumeCc.HasValue &&
+            boundingBoxXmm.HasValue && boundingBoxYmm.HasValue && boundingBoxZmm.HasValue &&
+            triangleCount.HasValue;
+        if (!hasCompleteMetrics)
+        {
+            supportVolumeCc = null;
+            surfaceAreaCm2 = null;
+            boundingBoxXmm = null;
+            boundingBoxYmm = null;
+            boundingBoxZmm = null;
+            triangleCount = null;
+        }
 
         try
         {
@@ -52,12 +82,22 @@ public sealed class QuoteFileAnalyzedConsumer(
             if (!string.IsNullOrEmpty(payload.ThumbnailStoragePath))
                 thumbnailUrl = await uploadClient.GetDownloadUrlByPathAsync(payload.ThumbnailStoragePath, ct: context.CancellationToken);
         }
+        catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to get signed URLs for {StoragePath}", storagePath);
             failed = true;
             errorCode = "GlbSigningFailed";
-            await status.SetFailedAsync(storagePath, errorCode, context.CancellationToken);
+            await status.SetFailedAsync(
+                storagePath,
+                payload.FileId,
+                errorCode,
+                context.Message.MessageId,
+                context.Message.OccurredAtUtc,
+                context.CancellationToken);
         }
 
         if (!failed)
@@ -72,7 +112,17 @@ public sealed class QuoteFileAnalyzedConsumer(
                 viewerStoragePath,
                 viewerFileExtension,
                 volumeCc,
-                surfaceAreaCm2);
+                surfaceAreaCm2,
+                payload.FileId,
+                supportVolumeCc,
+                boundingBoxXmm,
+                boundingBoxYmm,
+                boundingBoxZmm,
+                triangleCount,
+                metrics?.NonManifoldReason,
+                context.Message.MessageId,
+                context.Message.OccurredAtUtc,
+                payload.ProcessedAt);
         }
 
         var signalRPayload = new QeGlbReadyPayload(
@@ -103,23 +153,4 @@ public sealed class QuoteFileAnalyzedConsumer(
         return ext.StartsWith('.') ? ext.ToLowerInvariant() : "." + ext.ToLowerInvariant();
     }
 
-    private static decimal? ToMetric(double? value, bool requirePositive)
-    {
-        if (value is not { } number ||
-            double.IsNaN(number) ||
-            double.IsInfinity(number) ||
-            (requirePositive ? number <= 0 : number < 0))
-        {
-            return null;
-        }
-
-        try
-        {
-            return (decimal)number;
-        }
-        catch (OverflowException)
-        {
-            return null;
-        }
-    }
 }

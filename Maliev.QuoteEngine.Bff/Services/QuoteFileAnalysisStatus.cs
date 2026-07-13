@@ -10,6 +10,7 @@ namespace Maliev.QuoteEngine.Bff.Services;
 public sealed record QuoteFileAnalysisStatus
 {
     public required string StoragePath { get; init; }
+    public string? FileId { get; init; }
     public string Status { get; init; } = "Processing";      // Processing | GlbReady | DfmAnalysisReady | Failed
     public bool IsAuthoritative { get; init; }
     public string AnalysisSource { get; init; } = "pending";
@@ -20,7 +21,12 @@ public sealed record QuoteFileAnalysisStatus
     public string? ViewerFileExtension { get; init; }
     public string? ThumbnailUrl { get; init; }
     public decimal? VolumeCc { get; init; }
+    public decimal? SupportVolumeCc { get; init; }
     public decimal? SurfaceAreaCm2 { get; init; }
+    public decimal? BoundingBoxXmm { get; init; }
+    public decimal? BoundingBoxYmm { get; init; }
+    public decimal? BoundingBoxZmm { get; init; }
+    public int? TriangleCount { get; init; }
     public int BodyCount { get; init; } = 1;
     public bool IsManifold { get; init; } = true;
     public string? NonManifoldReason { get; init; }
@@ -30,6 +36,20 @@ public sealed record QuoteFileAnalysisStatus
     public QeCncDfmReport? CncReport { get; init; }
     public IReadOnlyList<string> OverlayGlbUrls { get; init; } = [];
     public QuoteFileAdvisoryAnalysis? AdvisoryAnalysis { get; init; }
+    public Guid? LastGeometryEventId { get; init; }
+    public DateTimeOffset? LastGeometryEventOccurredAtUtc { get; init; }
+    public DateTimeOffset? LastGeometryProcessedAtUtc { get; init; }
+    public int LastGeometryEventPhase { get; init; }
+    public Guid? LastDfmEventId { get; init; }
+    public DateTimeOffset? LastDfmEventOccurredAtUtc { get; init; }
+    public IReadOnlyList<Guid> ProcessedDfmEventIds { get; init; } = [];
+}
+
+public enum QuoteGeometryEventPhase
+{
+    Metrics = 1,
+    Completion = 2,
+    Failure = 3
 }
 
 /// <summary>

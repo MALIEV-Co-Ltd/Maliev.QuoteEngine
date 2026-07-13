@@ -7,6 +7,7 @@ using Maliev.QuoteEngine.Bff.Hubs;
 using Maliev.QuoteEngine.Bff.Options;
 using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
+using MassTransit;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
@@ -367,18 +368,52 @@ builder.Services.AddHttpClient<QuoteUploadServiceClient>(client =>
     .AddServiceDiscovery()
     .AddHttpMessageHandler<ServiceAccountAuthenticationHandler>();
 
-// MassTransit consumers — FileAnalyzedEvent → GlbReady, DfmAnalysisReadyEvent → DfmAnalysisReady
-builder.AddMassTransitWithRabbitMq(cfg =>
-{
-    cfg.AddConsumer<QuoteFileAnalyzedConsumer>();
-    cfg.AddConsumer<QuoteDfmAnalysisReadyConsumer>();
-    cfg.AddConsumer<QuotePaymentCompletedConsumer>();
-    cfg.AddConsumer<QuotePaymentPendingConsumer>();
-    cfg.AddConsumer<QuotePaymentFailedConsumer>();
-    cfg.AddConsumer<QuotePaymentCancelledConsumer>();
-    cfg.AddConsumer<QuotePaymentExpiredConsumer>();
-    cfg.AddConsumer<QuoteOrderStatusChangedConsumer>();
-});
+// GeometryService publishes Python-generated MassTransit envelopes to a shared topic exchange.
+// Keep those consumers on one explicit durable queue; the remaining consumers retain their
+// conventional auto-configured endpoints.
+builder.AddMassTransitWithRabbitMq(
+    configure: cfg =>
+    {
+        cfg.AddConsumer<QuoteFileMetricsReadyConsumer>().ExcludeFromConfigureEndpoints();
+        cfg.AddConsumer<QuoteFileAnalyzedConsumer>().ExcludeFromConfigureEndpoints();
+        cfg.AddConsumer<QuoteFileAnalysisFailedConsumer>().ExcludeFromConfigureEndpoints();
+        cfg.AddConsumer<QuoteDfmAnalysisReadyConsumer>().ExcludeFromConfigureEndpoints();
+        cfg.AddConsumer<QuotePaymentCompletedConsumer>();
+        cfg.AddConsumer<QuotePaymentPendingConsumer>();
+        cfg.AddConsumer<QuotePaymentFailedConsumer>();
+        cfg.AddConsumer<QuotePaymentCancelledConsumer>();
+        cfg.AddConsumer<QuotePaymentExpiredConsumer>();
+        cfg.AddConsumer<QuoteOrderStatusChangedConsumer>();
+    },
+    configureRabbitMq: (context, cfg) =>
+    {
+        cfg.ReceiveEndpoint("quote-engine-geometry-analysis-v1", e =>
+        {
+            // The in-process status reservation is sequential; Redis-backed cross-pod idempotency is a later slice.
+            e.ConcurrentMessageLimit = 1;
+            e.ConfigureConsumeTopology = false;
+            e.ConfigureConsumer<QuoteFileMetricsReadyConsumer>(context);
+            e.ConfigureConsumer<QuoteFileAnalyzedConsumer>(context);
+            e.ConfigureConsumer<QuoteFileAnalysisFailedConsumer>(context);
+            e.ConfigureConsumer<QuoteDfmAnalysisReadyConsumer>(context);
+            foreach (var routingKey in new[]
+            {
+                "maliev.geometryservice.v1.metrics.ready",
+                "maliev.geometryservice.v1.analysis.completed",
+                "maliev.geometryservice.v1.analysis.failed",
+                "maliev.geometryservice.v1.dfm.ready"
+            })
+            {
+                e.Bind("maliev.events", binding =>
+                {
+                    binding.ExchangeType = "topic";
+                    binding.RoutingKey = routingKey;
+                });
+            }
+        });
+
+        cfg.ConfigureEndpoints(context);
+    });
 
 var app = builder.Build();
 
