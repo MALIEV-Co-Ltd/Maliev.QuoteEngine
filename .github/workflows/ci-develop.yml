@@ -5,10 +5,163 @@ on:
     branches:
       - develop
 
+concurrency:
+  group: quote-engine-develop-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     uses: ./.github/workflows/_build-and-test.yml
     with:
       solution_file: Maliev.QuoteEngine.slnx
-    secrets:
-      gitops_pat: ${{ secrets.GITOPS_PAT }}
+
+  publish-development-image:
+    name: Publish immutable development image
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      IMAGE: asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact-dev/maliev-quote-engine
+      BASE_IMAGE: asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact/maliev-quote-engine
+      GITOPS_OVERLAY: 3-apps/maliev-quote-engine/overlays/development
+    steps:
+      - name: Require WIF publication configuration
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          WIF_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$WIF_PROVIDER"
+          test -n "$WIF_SERVICE_ACCOUNT"
+
+      - name: Checkout source
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Resolve immutable tag
+        id: image
+        shell: bash
+        run: echo "tag=dev-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud with WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Artifact Registry authentication
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          project_id: maliev-website
+
+      - name: Configure Docker credential helper
+        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
+
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build and publish image, SBOM, and provenance
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ env.IMAGE }}:${{ steps.image.outputs.tag }}
+          labels: |
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+          secrets: |
+            nuget_username=${{ github.actor }}
+            nuget_password=${{ github.token }}
+
+      - name: Scan the published digest
+        run: |
+          access_token="$(gcloud auth print-access-token)"
+          echo "::add-mask::${access_token}"
+          TRIVY_USERNAME=oauth2accesstoken TRIVY_PASSWORD="$access_token" docker run --rm \
+            --env TRIVY_USERNAME \
+            --env TRIVY_PASSWORD \
+            aquasec/trivy@sha256:a8ca29078522f30393bdb34225e4c0994d38f37083be81a42da3a2a7e1488e9e \
+            image --exit-code 1 --ignore-unfixed --severity CRITICAL,HIGH \
+            "${IMAGE}@${{ steps.build.outputs.digest }}"
+
+      - name: Verify embedded SBOM and provenance attestations
+        env:
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" --raw \
+            | jq -e '[.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")] | length >= 2'
+
+      - name: Checkout disabled GitOps definition
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: MALIEV-Co-Ltd/maliev-gitops
+          token: ${{ secrets.GITOPS_PAT }}
+          path: maliev-gitops
+
+      - name: Install Kustomize
+        uses: imranismail/setup-kustomize@2ba527d4d055ab63514ba50a99456fc35684947f # v2
+
+      - name: Update and render the development overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "maliev-gitops/${GITOPS_OVERLAY}"
+          kustomize edit set image "${BASE_IMAGE}=${IMAGE}@${{ steps.build.outputs.digest }}"
+          kustomize build . >/dev/null
+          cd ../../../../
+          changed="$(git diff --name-only)"
+          expected="${GITOPS_OVERLAY}/kustomization.yaml"
+          test -f argocd/environments/_disabled_apps/dev/maliev-quote-engine.yaml
+          if grep -RIl '3-apps/maliev-quote-engine/overlays/development' argocd/environments \
+              | grep -v '/_disabled_apps/'; then
+            echo "Refusing promotion because an active ArgoCD Application references QuoteEngine."
+            exit 1
+          fi
+          if [[ -z "$changed" ]]; then
+            echo "Development overlay already points at the requested digest."
+            exit 0
+          fi
+          test "$changed" = "$expected"
+          if git diff --name-only | grep -E '(^|/)([123]-environments|applications)/'; then
+            echo "Refusing to alter active environment or application registration paths."
+            exit 1
+          fi
+
+      - name: Open GitOps pull request without enabling the application
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_PAT }}
+          IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          cd maliev-gitops
+          if git diff --quiet; then
+            echo "Development overlay already points at ${IMAGE_DIGEST}."
+            exit 0
+          fi
+          branch="quote-engine/development"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$branch:refs/remotes/origin/$branch" || true
+          git switch -C "$branch"
+          git add -- "${GITOPS_OVERLAY}/kustomization.yaml"
+          git commit -m "chore(development): Update QuoteEngine image digest"
+          git push --force-with-lease origin "$branch"
+          if ! gh pr list --repo MALIEV-Co-Ltd/maliev-gitops --head "$branch" --state open --json number --jq 'length > 0' | grep -q true; then
+            gh pr create \
+              --repo MALIEV-Co-Ltd/maliev-gitops \
+              --base main \
+              --head "$branch" \
+              --title "chore(development): Update QuoteEngine image" \
+              --body "Promotes QuoteEngine ${IMAGE_TAG} at ${IMAGE_DIGEST}. The ArgoCD Application remains intentionally under _disabled_apps; this PR changes only the disabled service overlay. Source: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}."
+          fi

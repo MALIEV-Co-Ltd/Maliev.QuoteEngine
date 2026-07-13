@@ -6,10 +6,6 @@ on:
       solution_file:
         required: true
         type: string
-    secrets:
-      gitops_pat:
-        required: true
-
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -18,13 +14,13 @@ jobs:
       packages: read
     env:
       NUGET_USERNAME: ${{ github.actor }}
-      NUGET_PASSWORD: ${{ secrets.gitops_pat }}
+      NUGET_PASSWORD: ${{ github.token }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
           dotnet-version: 10.0.x
 
