@@ -15,7 +15,9 @@ public sealed record QeGlbReadyPayload(
     bool Failed,
     string? ErrorCode,
     string? ViewerStoragePath = null,
-    string? ViewerFileExtension = null);
+    string? ViewerFileExtension = null,
+    Guid? EventId = null,
+    long Revision = 0);
 
 /// <summary>
 /// Pushed to the client via SignalR "OrderStatusChanged" when the order transitions to a new lifecycle state.
@@ -95,4 +97,6 @@ public sealed record QeDfmAnalysisReadyPayload(
     QeSlaDfmReport? SlaReport,
     QeCncDfmReport? CncReport,
     IReadOnlyList<string> OverlayGlbUrls,
-    string? AnalysisErrorCode);
+    string? AnalysisErrorCode,
+    Guid? EventId = null,
+    long Revision = 0);

@@ -90,6 +90,7 @@
     private readonly HashSet<string> _registeredDropzoneIds = [];
     private readonly List<(QuotePartViewModel Part, string GlbUrl, string FileExtension)> _pendingViewerParts = [];
     private readonly Dictionary<QuotePartViewModel, int> _localThumbnailGenerations = [];
+    private readonly AnalysisNotificationRevisionTracker _analysisNotificationRevisions = new();
     private static readonly HashSet<string> DefaultBrowserViewerExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".3mf",
@@ -1823,6 +1824,14 @@
             {
                 var part = FindPartByStoragePath(payload.StoragePath);
                 if (part is null) return;
+                if (!_analysisNotificationRevisions.ShouldApply(
+                        payload.StoragePath,
+                        AnalysisNotificationStream.GlbReady,
+                        payload.EventId,
+                        payload.Revision))
+                {
+                    return;
+                }
 
                 part.GlbUrl = payload.Failed ? null : payload.GlbUrl;
                 part.ViewerStoragePath = payload.ViewerStoragePath ?? part.ViewerStoragePath;
@@ -1859,6 +1868,14 @@
             {
                 var part = FindPartByStoragePath(payload.StoragePath);
                 if (part is null) return;
+                if (!_analysisNotificationRevisions.ShouldApply(
+                        payload.StoragePath,
+                        AnalysisNotificationStream.DfmAnalysisReady,
+                        payload.EventId,
+                        payload.Revision))
+                {
+                    return;
+                }
 
                 part.FdmDfmReport = payload.FdmReport;
                 part.SlaDfmReport = payload.SlaReport;

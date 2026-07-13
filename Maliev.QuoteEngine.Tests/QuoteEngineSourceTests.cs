@@ -285,7 +285,9 @@ public sealed class QuoteEngineSourceTests
             Failed: false,
             ErrorCode: null,
             ViewerStoragePath: "processed/u/part.glb",
-            ViewerFileExtension: ".glb");
+            ViewerFileExtension: ".glb",
+            EventId: Guid.Parse("8e840798-fbb2-4c52-afdb-3aaaf47cf1f7"),
+            Revision: 12);
 
         var json = JsonSerializer.Serialize(payload);
         var deserialized = JsonSerializer.Deserialize<QeGlbReadyPayload>(json);
@@ -300,6 +302,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Null(deserialized.ErrorCode);
         Assert.Equal("processed/u/part.glb", deserialized.ViewerStoragePath);
         Assert.Equal(".glb", deserialized.ViewerFileExtension);
+        Assert.Equal(Guid.Parse("8e840798-fbb2-4c52-afdb-3aaaf47cf1f7"), deserialized.EventId);
+        Assert.Equal(12, deserialized.Revision);
     }
 
     [Fact]
@@ -314,7 +318,9 @@ public sealed class QuoteEngineSourceTests
             SlaReport: null,
             CncReport: null,
             OverlayGlbUrls: [],
-            AnalysisErrorCode: null);
+            AnalysisErrorCode: null,
+            EventId: Guid.Parse("d6784408-9d26-475e-b5e7-500b877e1982"),
+            Revision: 3);
 
         var json = JsonSerializer.Serialize(partial);
         var d = JsonSerializer.Deserialize<QeDfmAnalysisReadyPayload>(json);
@@ -331,6 +337,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Null(d.SlaReport);
         Assert.Null(d.CncReport);
         Assert.Empty(d.OverlayGlbUrls);
+        Assert.Equal(Guid.Parse("d6784408-9d26-475e-b5e7-500b877e1982"), d.EventId);
+        Assert.Equal(3, d.Revision);
 
         // Full: all three reports, overlay URLs, non-null error context
         var full = new QeDfmAnalysisReadyPayload(
