@@ -368,13 +368,15 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public void QuoteAnalysisStatusResponse_round_trip_exposes_revision_cursor()
+    public void QuoteAnalysisStatusResponse_round_trip_exposes_revision_and_preview_retry_contract()
     {
         var response = new QuoteAnalysisStatusResponse
         {
             UploadId = "upload-123",
             StoragePath = "quotes/temp/s/u/part.step",
-            AnalysisRevision = 42
+            AnalysisRevision = 42,
+            PreviewAvailability = "temporarily_unavailable",
+            PreviewRetryAfterSeconds = 5
         };
 
         var json = JsonSerializer.Serialize(response);
@@ -383,6 +385,8 @@ public sealed class QuoteEngineSourceTests
         Assert.Contains("\"AnalysisRevision\":42", json, StringComparison.Ordinal);
         Assert.NotNull(deserialized);
         Assert.Equal(42, deserialized.AnalysisRevision);
+        Assert.Equal("temporarily_unavailable", deserialized.PreviewAvailability);
+        Assert.Equal(5, deserialized.PreviewRetryAfterSeconds);
     }
 
     [Fact]
@@ -3857,12 +3861,12 @@ public sealed class QuoteEngineSourceTests
             null,
             1,
             true,
-            viewerStoragePath: "processed/p.glb",
+            viewerStoragePath: path + "_viewer.glb",
             viewerFileExtension: ".glb");
         var ready = await svc.GetStatusAsync(path);
         Assert.Equal("GlbReady", ready!.Status);
         Assert.Equal("https://glb.example.com/part.glb", ready.GlbUrl);
-        Assert.Equal("processed/p.glb", ready.ViewerStoragePath);
+        Assert.Equal(path + "_viewer.glb", ready.ViewerStoragePath);
         Assert.Equal(".glb", ready.ViewerFileExtension);
         Assert.Equal(1, ready.BodyCount);
         Assert.True(ready.IsManifold);
@@ -3880,7 +3884,7 @@ public sealed class QuoteEngineSourceTests
             "https://glb.example.com/browser-local.webp",
             1,
             true,
-            viewerStoragePath: "processed/browser-local.glb",
+            viewerStoragePath: path + "_viewer.glb",
             viewerFileExtension: ".glb");
 
         await svc.SetLocalGeometryMetricsAsync(
@@ -3897,7 +3901,7 @@ public sealed class QuoteEngineSourceTests
         Assert.True(status.IsAuthoritative);
         Assert.Equal("server_analysis", status.AnalysisSource);
         Assert.Equal("https://glb.example.com/browser-local.glb", status.GlbUrl);
-        Assert.Equal("processed/browser-local.glb", status.ViewerStoragePath);
+        Assert.Equal(path + "_viewer.glb", status.ViewerStoragePath);
         Assert.Null(status.VolumeCc);
         Assert.Null(status.SurfaceAreaCm2);
         Assert.True(status.IsManifold);
@@ -3974,7 +3978,7 @@ public sealed class QuoteEngineSourceTests
 
         var @event = BuildFileAnalyzedEvent(
             storagePath: "quotes/temp/s/u/bracket.step",
-            glbStoragePath: "processed/u/bracket.glb",
+            glbStoragePath: "quotes/temp/s/u/bracket.step_viewer.glb",
             thumbnailStoragePath: null,
             bodyCount: 1,
             isManifold: true,
@@ -3992,7 +3996,7 @@ public sealed class QuoteEngineSourceTests
         Assert.NotNull(stored);
         Assert.Equal("GlbReady", stored.Status);
         Assert.Equal("https://cdn.example.com/part.glb", stored.GlbUrl);
-        Assert.Equal("processed/u/bracket.glb", stored.ViewerStoragePath);
+        Assert.Equal("quotes/temp/s/u/bracket.step_viewer.glb", stored.ViewerStoragePath);
         Assert.Equal(".glb", stored.ViewerFileExtension);
         Assert.Null(stored.ThumbnailUrl);
         Assert.Equal(1, stored.BodyCount);
@@ -4014,7 +4018,7 @@ public sealed class QuoteEngineSourceTests
         var glbPayload = Assert.IsType<QeGlbReadyPayload>(payloadArgs[0]);
         Assert.Equal("quotes/temp/s/u/bracket.step", glbPayload.StoragePath);
         Assert.Equal("https://cdn.example.com/part.glb", glbPayload.GlbUrl);
-        Assert.Equal("processed/u/bracket.glb", glbPayload.ViewerStoragePath);
+        Assert.Equal("quotes/temp/s/u/bracket.step_viewer.glb", glbPayload.ViewerStoragePath);
         Assert.Equal(".glb", glbPayload.ViewerFileExtension);
         Assert.Null(glbPayload.ThumbnailUrl);
         Assert.False(glbPayload.Failed);
@@ -4320,7 +4324,13 @@ public sealed class QuoteEngineSourceTests
             statusSvc, uploadClient, hubCtx,
             NullLogger<QuoteFileAnalyzedConsumer>.Instance);
 
-        var @event = BuildFileAnalyzedEvent("quotes/s/u/p.step", "processed/p.glb", null, 1, true, 5.0);
+        var @event = BuildFileAnalyzedEvent(
+            "quotes/s/u/p.step",
+            "quotes/s/u/p.step_viewer.glb",
+            null,
+            1,
+            true,
+            5.0);
 
         var consumeCtx = Substitute.For<ConsumeContext<FileAnalyzedEvent>>();
         consumeCtx.Message.Returns(@event);
@@ -4400,7 +4410,7 @@ public sealed class QuoteEngineSourceTests
                 StoragePath = storagePath,
                 AnalyzedAt = DateTimeOffset.UtcNow,
                 FdmReport = fdmPayload,
-                OverlayPaths = new[] { "processed/u/overlay-fdm.glb" }
+                OverlayPaths = new[] { storagePath + "_fdm_overlay.glb" }
             }
         };
         var firstCtx = Substitute.For<ConsumeContext<DfmAnalysisReadyEvent>>();

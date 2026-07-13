@@ -21,17 +21,21 @@ public sealed class QuoteFileAnalysisStatusTransitionsTests
             Dfm(
                 fdmReport: Fdm(),
                 overlays: ["https://cdn/overhang.glb"],
-                overlayStoragePaths: [" processed/overhang.glb ", "processed/overhang.glb"]));
+                overlayStoragePaths:
+                [
+                    StoragePath + "_overhang_overlay.glb",
+                    StoragePath + "_overhang_overlay.glb"
+                ]));
 
         Assert.Equal("DfmAnalysisReady", result.Status);
         Assert.Equal("https://cdn/part.glb", result.GlbUrl);
-        Assert.Equal("processed/part.glb", result.ViewerStoragePath);
-        Assert.Equal("processed/part.png", result.ThumbnailStoragePath);
+        Assert.Equal(StoragePath + "_viewer.glb", result.ViewerStoragePath);
+        Assert.Equal(StoragePath + "_thumbnail_small.webp", result.ThumbnailStoragePath);
         Assert.Equal("https://cdn/part.png", result.ThumbnailUrl);
         Assert.Equal(12.5m, result.VolumeCc);
         Assert.NotNull(result.FdmReport);
         Assert.Equal(["https://cdn/overhang.glb"], result.OverlayGlbUrls);
-        Assert.Equal(["processed/overhang.glb"], result.AuthoritativeOverlayStoragePaths);
+        Assert.Equal([StoragePath + "_overhang_overlay.glb"], result.AuthoritativeOverlayStoragePaths);
     }
 
     [Fact]
@@ -390,7 +394,7 @@ public sealed class QuoteFileAnalysisStatusTransitionsTests
         "https://cdn/part.png",
         1,
         true,
-        "processed/part.glb",
+        StoragePath + "_viewer.glb",
         ".glb",
         12.5m,
         42.5m,
@@ -404,7 +408,7 @@ public sealed class QuoteFileAnalysisStatusTransitionsTests
         eventId,
         BaseTime,
         BaseTime.AddSeconds(1),
-        " processed/part.png ");
+        StoragePath + "_thumbnail_small.webp");
 
     private static GeometryMetricsTransition Metrics(Guid eventId, DateTimeOffset at) => new(
         StoragePath,

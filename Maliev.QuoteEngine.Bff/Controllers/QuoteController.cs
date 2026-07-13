@@ -30,6 +30,7 @@ public sealed class QuoteController(
     IHubContext<QuoteNotificationsHub> hubContext,
     QuoteUploadServiceClient uploadClient,
     IQuoteFileAnalysisStatusService statusService,
+    IQuoteAnalysisPreviewUrlResolver previewUrlResolver,
     IOptions<DemoModeOptions> demoOptions,
     IMaterialCatalogClient materialCatalog,
     IQuotationServiceClient quotationClient,
@@ -509,6 +510,7 @@ public sealed class QuoteController(
     }
 
     [HttpGet("uploads/{uploadId}/analysis-status")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<ActionResult<QuoteAnalysisStatusResponse>> GetAnalysisStatus(
         string uploadId,
         CancellationToken cancellationToken)
@@ -523,6 +525,14 @@ public sealed class QuoteController(
         var liveStatus = await statusService.GetStatusAsync(upload.StoragePath, cancellationToken);
         if (liveStatus is null)
             return Ok(response);
+
+        var preview = await previewUrlResolver.ResolveAsync(
+            upload.StoragePath,
+            liveStatus,
+            cancellationToken);
+        liveStatus = preview.Status;
+        response.PreviewAvailability = preview.Availability;
+        response.PreviewRetryAfterSeconds = preview.RetryAfterSeconds;
 
         response.AnalysisRevision = liveStatus.Revision;
         response.Status = liveStatus.Status;
@@ -540,10 +550,10 @@ public sealed class QuoteController(
             response.SurfaceAreaCm2 = liveStatus.SurfaceAreaCm2.Value;
         }
 
-        response.ViewerGlbUrl = liveStatus.GlbUrl ?? response.ViewerGlbUrl;
-        response.ViewerStoragePath = liveStatus.ViewerStoragePath ?? response.ViewerStoragePath;
-        response.ViewerFileExtension = liveStatus.ViewerFileExtension ?? response.ViewerFileExtension;
-        response.ThumbnailUrl = liveStatus.ThumbnailUrl ?? response.ThumbnailUrl;
+        response.ViewerGlbUrl = liveStatus.GlbUrl;
+        response.ViewerStoragePath = liveStatus.ViewerStoragePath;
+        response.ViewerFileExtension = liveStatus.ViewerFileExtension;
+        response.ThumbnailUrl = liveStatus.ThumbnailUrl;
         response.IsManifold = liveStatus.IsManifold;
         response.BodyCount = liveStatus.BodyCount;
         response.NonManifoldReason = liveStatus.NonManifoldReason;

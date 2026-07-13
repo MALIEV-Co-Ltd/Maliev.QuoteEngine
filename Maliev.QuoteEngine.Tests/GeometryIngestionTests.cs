@@ -365,8 +365,8 @@ public sealed class GeometryIngestionTests
                 FileId = "file-123",
                 StoragePath = StoragePath,
                 ProcessedAt = metricsAt.AddSeconds(1),
-                GlbStoragePath = "processed/part.glb",
-                ThumbnailStoragePath = " processed/part.png ",
+                GlbStoragePath = StoragePath + "_viewer.glb",
+                ThumbnailStoragePath = StoragePath + "_thumbnail_small.webp",
                 Metrics = new FileAnalyzedEventPayloadMetrics
                 {
                     VolumeCm3 = 0,
@@ -398,7 +398,7 @@ public sealed class GeometryIngestionTests
         Assert.Equal(456, stored.TriangleCount);
         Assert.True(stored.IsManifold);
         Assert.Equal(1, stored.BodyCount);
-        Assert.Equal("processed/part.png", stored.ThumbnailStoragePath);
+        Assert.Equal(StoragePath + "_thumbnail_small.webp", stored.ThumbnailStoragePath);
     }
 
     [Fact]
@@ -533,7 +533,7 @@ public sealed class GeometryIngestionTests
                 FileId = "file-123",
                 StoragePath = StoragePath,
                 ProcessedAt = DateTimeOffset.UtcNow,
-                GlbStoragePath = "processed/part.glb",
+                GlbStoragePath = StoragePath + "_viewer.glb",
                 Metrics = new FileAnalyzedEventPayloadMetrics()
             }
         };
@@ -565,7 +565,7 @@ public sealed class GeometryIngestionTests
                 FileId = "file-123",
                 StoragePath = StoragePath,
                 ProcessedAt = at,
-                GlbStoragePath = "processed/part.glb",
+                GlbStoragePath = StoragePath + "_viewer.glb",
                 Metrics = new FileAnalyzedEventPayloadMetrics
                 {
                     VolumeCm3 = 12.5,
@@ -584,6 +584,83 @@ public sealed class GeometryIngestionTests
         Assert.Single(upload.Paths);
     }
 
+    [Theory]
+    [InlineData("foreign-viewer")]
+    [InlineData("foreign-thumbnail")]
+    [InlineData("trimmed-viewer")]
+    public async Task FileAnalyzedConsumer_NonCanonicalPreviewPath_DoesNotSignFinalizeOrNotify(
+        string invalidField)
+    {
+        var status = new QuoteFileAnalysisStatusService();
+        var upload = new RecordingUploadClient();
+        var hub = CreateHub();
+        var viewerPath = invalidField switch
+        {
+            "foreign-viewer" => "quotes/other/customer/private.glb",
+            "trimmed-viewer" => " " + StoragePath + "_viewer.glb ",
+            _ => StoragePath + "_viewer.glb"
+        };
+        var thumbnailPath = invalidField == "foreign-thumbnail"
+            ? "quotes/other/customer/private.webp"
+            : StoragePath + "_thumbnail_small.webp";
+        var message = new FileAnalyzedEvent
+        {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = DateTimeOffset.UtcNow,
+            Payload = new FileAnalyzedEventPayload
+            {
+                FileId = "file-123",
+                StoragePath = StoragePath,
+                ProcessedAt = DateTimeOffset.UtcNow,
+                GlbStoragePath = viewerPath,
+                ThumbnailStoragePath = thumbnailPath,
+                Metrics = new FileAnalyzedEventPayloadMetrics()
+            }
+        };
+
+        await new QuoteFileAnalyzedConsumer(
+            status, upload, hub, NullLogger<QuoteFileAnalyzedConsumer>.Instance)
+            .Consume(ContextFor(message));
+
+        Assert.Empty(upload.Paths);
+        Assert.Null(await status.GetStatusAsync(StoragePath));
+        var proxy = hub.Clients.Group(QuoteNotificationsHub.FileGroup(StoragePath));
+        Assert.DoesNotContain(proxy.ReceivedCalls(), call => call.GetMethodInfo().Name == "SendCoreAsync");
+    }
+
+    [Theory]
+    [InlineData("http://cdn.example.com/part.glb")]
+    [InlineData("/relative/part.glb")]
+    public async Task FileAnalyzedConsumer_NonHttpsSignerResult_DoesNotFinalizeOrNotify(string signedUrl)
+    {
+        var status = new QuoteFileAnalysisStatusService();
+        var hub = CreateHub();
+        var message = new FileAnalyzedEvent
+        {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = DateTimeOffset.UtcNow,
+            Payload = new FileAnalyzedEventPayload
+            {
+                FileId = "file-123",
+                StoragePath = StoragePath,
+                ProcessedAt = DateTimeOffset.UtcNow,
+                GlbStoragePath = StoragePath + "_viewer.glb",
+                Metrics = new FileAnalyzedEventPayloadMetrics()
+            }
+        };
+
+        await Assert.ThrowsAsync<QuoteAnalysisPreviewSigningException>(() =>
+            new QuoteFileAnalyzedConsumer(
+                status,
+                new FixedUrlUploadClient(signedUrl),
+                hub,
+                NullLogger<QuoteFileAnalyzedConsumer>.Instance).Consume(ContextFor(message)));
+
+        Assert.Null(await status.GetStatusAsync(StoragePath));
+        var proxy = hub.Clients.Group(QuoteNotificationsHub.FileGroup(StoragePath));
+        Assert.DoesNotContain(proxy.ReceivedCalls(), call => call.GetMethodInfo().Name == "SendCoreAsync");
+    }
+
     [Fact]
     public async Task FileAnalyzedConsumer_ConcurrentReplay_SignsAndNotifiesOnlyOnce()
     {
@@ -600,7 +677,7 @@ public sealed class GeometryIngestionTests
                 FileId = "file-123",
                 StoragePath = StoragePath,
                 ProcessedAt = at,
-                GlbStoragePath = "processed/part.glb",
+                GlbStoragePath = StoragePath + "_viewer.glb",
                 Metrics = new FileAnalyzedEventPayloadMetrics
                 {
                     VolumeCm3 = 12.5,
@@ -650,7 +727,7 @@ public sealed class GeometryIngestionTests
                 FileId = "file-123",
                 StoragePath = StoragePath,
                 ProcessedAt = at,
-                GlbStoragePath = "processed/part.glb",
+                GlbStoragePath = StoragePath + "_viewer.glb",
                 Metrics = new FileAnalyzedEventPayloadMetrics
                 {
                     VolumeCm3 = 12.5,
@@ -687,7 +764,10 @@ public sealed class GeometryIngestionTests
                 StoragePath = StoragePath,
                 AnalyzedAt = DateTimeOffset.UtcNow,
                 FdmReport = new FdmDfmReportPayload { Issues = [] },
-                OverlayPaths = new Dictionary<string, string> { ["FDM__thin_wall"] = "overlay.glb" }
+                OverlayPaths = new Dictionary<string, string>
+                {
+                    ["FDM__thin_wall"] = StoragePath + "_thin_wall_overlay.glb"
+                }
             }
         });
         context.CancellationToken.Returns(cancellation.Token);
@@ -710,8 +790,8 @@ public sealed class GeometryIngestionTests
         var upload = new RecordingUploadClient();
         var raw = new Dictionary<string, string>
         {
-            ["FDM__thin_wall"] = "processed/overlays/thin-wall.glb",
-            ["CNC__undercut"] = "processed/overlays/undercut.glb"
+            ["FDM__thin_wall"] = StoragePath + "_thin_wall_overlay.glb",
+            ["CNC__undercut"] = StoragePath + "_undercut_overlay.glb"
         };
         object overlayPaths = jsonElement
             ? JsonSerializer.SerializeToElement(raw)
@@ -741,14 +821,14 @@ public sealed class GeometryIngestionTests
             NullLogger<QuoteDfmAnalysisReadyConsumer>.Instance).Consume(context);
 
         Assert.Equal(2, upload.Paths.Count);
-        Assert.Contains("processed/overlays/thin-wall.glb", upload.Paths);
-        Assert.Contains("processed/overlays/undercut.glb", upload.Paths);
+        Assert.Contains(StoragePath + "_thin_wall_overlay.glb", upload.Paths);
+        Assert.Contains(StoragePath + "_undercut_overlay.glb", upload.Paths);
         var stored = await status.GetStatusAsync(StoragePath);
         Assert.NotNull(stored);
         Assert.Equal(2, stored.OverlayGlbUrls.Count);
         Assert.All(stored.OverlayGlbUrls, url => Assert.StartsWith("https://signed/", url, StringComparison.Ordinal));
         Assert.Equal(
-            ["processed/overlays/thin-wall.glb", "processed/overlays/undercut.glb"],
+            [StoragePath + "_thin_wall_overlay.glb", StoragePath + "_undercut_overlay.glb"],
             stored.AuthoritativeOverlayStoragePaths);
     }
 
@@ -767,7 +847,10 @@ public sealed class GeometryIngestionTests
                 StoragePath = StoragePath,
                 AnalyzedAt = DateTimeOffset.Parse("2026-07-13T01:02:04Z"),
                 FdmReport = new FdmDfmReportPayload { Issues = [] },
-                OverlayPaths = new Dictionary<string, string> { ["FDM__thin_wall"] = "overlay.glb" }
+                OverlayPaths = new Dictionary<string, string>
+                {
+                    ["FDM__thin_wall"] = StoragePath + "_thin_wall_overlay.glb"
+                }
             }
         };
         var consumer = new QuoteDfmAnalysisReadyConsumer(
@@ -780,15 +863,90 @@ public sealed class GeometryIngestionTests
             MessageId = Guid.NewGuid(),
             Payload = message.Payload with
             {
-                OverlayPaths = new Dictionary<string, string> { ["CNC__undercut"] = "second-overlay.glb" }
+                OverlayPaths = new Dictionary<string, string>
+                {
+                    ["CNC__undercut"] = StoragePath + "_undercut_overlay.glb"
+                }
             }
         }));
         await consumer.Consume(ContextFor(message));
 
-        Assert.Equal(["overlay.glb", "second-overlay.glb"], upload.Paths);
+        Assert.Equal(
+            [StoragePath + "_thin_wall_overlay.glb", StoragePath + "_undercut_overlay.glb"],
+            upload.Paths);
         var stored = await status.GetStatusAsync(StoragePath);
         Assert.NotNull(stored);
         Assert.Equal(2, stored.OverlayGlbUrls.Count);
+    }
+
+    [Theory]
+    [InlineData("quotes/other/customer/private_overlay.glb")]
+    [InlineData(" quotes/temp/session/part.step_thin_wall_overlay.glb ")]
+    [InlineData("quotes/temp/session/part.step_../../private_overlay.glb")]
+    public async Task DfmConsumer_NonCanonicalOverlayPath_DoesNotSignFinalizeOrNotify(string overlayPath)
+    {
+        var status = new QuoteFileAnalysisStatusService();
+        var upload = new RecordingUploadClient();
+        var hub = CreateHub();
+        var message = new DfmAnalysisReadyEvent
+        {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = DateTimeOffset.UtcNow,
+            Payload = new DfmAnalysisReadyEventPayload
+            {
+                FileId = "file-123",
+                StoragePath = StoragePath,
+                AnalyzedAt = DateTimeOffset.UtcNow,
+                FdmReport = new FdmDfmReportPayload { Issues = [] },
+                OverlayPaths = new Dictionary<string, string> { ["FDM__thin_wall"] = overlayPath }
+            }
+        };
+
+        await new QuoteDfmAnalysisReadyConsumer(
+            status, upload, hub, CreateMetrics(), NullLogger<QuoteDfmAnalysisReadyConsumer>.Instance)
+            .Consume(ContextFor(message));
+
+        Assert.Empty(upload.Paths);
+        Assert.Null(await status.GetStatusAsync(StoragePath));
+        var proxy = hub.Clients.Group(QuoteNotificationsHub.FileGroup(StoragePath));
+        Assert.DoesNotContain(proxy.ReceivedCalls(), call => call.GetMethodInfo().Name == "SendCoreAsync");
+    }
+
+    [Theory]
+    [InlineData("http://cdn.example.com/overlay.glb")]
+    [InlineData("relative-overlay.glb")]
+    public async Task DfmConsumer_NonHttpsSignerResult_DoesNotFinalizeOrNotify(string signedUrl)
+    {
+        var status = new QuoteFileAnalysisStatusService();
+        var hub = CreateHub();
+        var message = new DfmAnalysisReadyEvent
+        {
+            MessageId = Guid.NewGuid(),
+            OccurredAtUtc = DateTimeOffset.UtcNow,
+            Payload = new DfmAnalysisReadyEventPayload
+            {
+                FileId = "file-123",
+                StoragePath = StoragePath,
+                AnalyzedAt = DateTimeOffset.UtcNow,
+                FdmReport = new FdmDfmReportPayload { Issues = [] },
+                OverlayPaths = new Dictionary<string, string>
+                {
+                    ["FDM__thin_wall"] = StoragePath + "_thin_wall_overlay.glb"
+                }
+            }
+        };
+
+        await Assert.ThrowsAsync<QuoteAnalysisPreviewSigningException>(() =>
+            new QuoteDfmAnalysisReadyConsumer(
+                status,
+                new FixedUrlUploadClient(signedUrl),
+                hub,
+                CreateMetrics(),
+                NullLogger<QuoteDfmAnalysisReadyConsumer>.Instance).Consume(ContextFor(message)));
+
+        Assert.Null(await status.GetStatusAsync(StoragePath));
+        var proxy = hub.Clients.Group(QuoteNotificationsHub.FileGroup(StoragePath));
+        Assert.DoesNotContain(proxy.ReceivedCalls(), call => call.GetMethodInfo().Name == "SendCoreAsync");
     }
 
     [Fact]
@@ -807,7 +965,10 @@ public sealed class GeometryIngestionTests
                 StoragePath = StoragePath,
                 AnalyzedAt = DateTimeOffset.Parse("2026-07-13T01:02:04Z"),
                 FdmReport = new FdmDfmReportPayload { Issues = [] },
-                OverlayPaths = new Dictionary<string, string> { ["FDM__thin_wall"] = "overlay.glb" }
+                OverlayPaths = new Dictionary<string, string>
+                {
+                    ["FDM__thin_wall"] = StoragePath + "_thin_wall_overlay.glb"
+                }
             }
         };
         var consumer = new QuoteDfmAnalysisReadyConsumer(
@@ -822,7 +983,9 @@ public sealed class GeometryIngestionTests
 
         var stored = await status.GetStatusAsync(StoragePath);
         Assert.NotNull(stored);
-        Assert.Equal(["https://signed/overlay.glb"], stored.OverlayGlbUrls);
+        Assert.Equal(
+            ["https://signed/" + StoragePath + "_thin_wall_overlay.glb"],
+            stored.OverlayGlbUrls);
         Assert.Equal(2, upload.Attempts);
     }
 
@@ -833,7 +996,7 @@ public sealed class GeometryIngestionTests
         var upload = new RecordingUploadClient();
         var overlay = JsonSerializer.SerializeToElement(new Dictionary<string, object?>
         {
-            ["valid"] = "overlay.glb",
+            ["valid"] = StoragePath + "_thin_wall_overlay.glb",
             ["number"] = 42,
             ["nested"] = new { storagePath = "must-not-be-used.glb" }
         });
@@ -1071,6 +1234,15 @@ public sealed class GeometryIngestionTests
             Paths.Add(storagePath);
             return Task.FromResult($"https://signed/{storagePath}");
         }
+    }
+
+    private sealed class FixedUrlUploadClient(string url)
+        : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
+    {
+        public override Task<string> GetDownloadUrlByPathAsync(
+            string storagePath,
+            int expirationMinutes = 60,
+            CancellationToken ct = default) => Task.FromResult(url);
     }
 
     private sealed class CancelingUploadClient()

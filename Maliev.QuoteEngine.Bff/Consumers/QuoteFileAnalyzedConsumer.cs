@@ -25,7 +25,8 @@ public sealed class QuoteFileAnalyzedConsumer(
         }
 
         var storagePath = payload.StoragePath;
-        if (string.IsNullOrWhiteSpace(storagePath) || string.IsNullOrWhiteSpace(payload.FileId))
+        if (!QuoteAnalysisArtifactPathValidator.IsCanonicalUploadPath(storagePath) ||
+            string.IsNullOrWhiteSpace(payload.FileId))
         {
             logger.LogWarning("FileAnalyzedEvent received without a canonical file identity; skipping");
             return;
@@ -52,12 +53,22 @@ public sealed class QuoteFileAnalyzedConsumer(
             await EnsureClaimAsync(status, claim, context.CancellationToken);
             string glbUrl = "";
             string? thumbnailUrl = null;
-            var thumbnailStoragePath = string.IsNullOrWhiteSpace(payload.ThumbnailStoragePath)
+            var thumbnailStoragePath = string.IsNullOrEmpty(payload.ThumbnailStoragePath)
                 ? null
-                : payload.ThumbnailStoragePath.Trim();
-            var viewerStoragePath = string.IsNullOrWhiteSpace(payload.ViewerStoragePath)
+                : payload.ThumbnailStoragePath;
+            var viewerStoragePath = string.IsNullOrEmpty(payload.ViewerStoragePath)
                 ? payload.GlbStoragePath
                 : payload.ViewerStoragePath;
+            if (!QuoteAnalysisArtifactPathValidator.AreCanonicalGeometryPaths(
+                    storagePath,
+                    viewerStoragePath,
+                    thumbnailStoragePath))
+            {
+                logger.LogWarning(
+                    "FileAnalyzedEvent contained preview paths outside {StoragePath}; skipping",
+                    storagePath);
+                return;
+            }
             var viewerFileExtension = NormalizeViewerFileExtension(
                 payload.ViewerFileExtension,
                 viewerStoragePath);
@@ -89,6 +100,8 @@ public sealed class QuoteFileAnalyzedConsumer(
                     glbUrl = await uploadClient.GetDownloadUrlByPathAsync(
                         viewerStoragePath,
                         ct: context.CancellationToken);
+                    if (!QuoteAnalysisArtifactPathValidator.IsHttpsCapability(glbUrl))
+                        throw new InvalidOperationException("UploadService returned an invalid viewer URL.");
                     await EnsureClaimAsync(status, claim, context.CancellationToken);
                 }
 
@@ -97,6 +110,8 @@ public sealed class QuoteFileAnalyzedConsumer(
                     thumbnailUrl = await uploadClient.GetDownloadUrlByPathAsync(
                         thumbnailStoragePath,
                         ct: context.CancellationToken);
+                    if (!QuoteAnalysisArtifactPathValidator.IsHttpsCapability(thumbnailUrl))
+                        throw new InvalidOperationException("UploadService returned an invalid thumbnail URL.");
                 }
             }
             catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)

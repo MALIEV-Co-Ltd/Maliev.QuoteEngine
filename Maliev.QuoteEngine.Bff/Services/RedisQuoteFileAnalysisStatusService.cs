@@ -74,6 +74,89 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
         return snapshot.State;
     }
 
+    public async Task<QuoteFileAnalysisStatus?> RefreshPreviewUrlsAsync(
+        string storagePath,
+        QuoteAnalysisPreviewRefresh refresh,
+        CancellationToken ct = default)
+    {
+        for (var attempt = 0; attempt < _options.MaxUpdateAttempts; attempt++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var snapshot = await ReadAsync(storagePath, ct);
+            if (snapshot.State is null ||
+                !QuoteFileAnalysisStatusService.CanRefreshPreview(snapshot.State, refresh))
+            {
+                return snapshot.State;
+            }
+
+            if ((refresh.ViewerStoragePath is not null || refresh.ThumbnailStoragePath is not null) &&
+                !snapshot.GeometryGeneration.HasValue)
+            {
+                return snapshot.State;
+            }
+
+            if (refresh.OverlayStoragePaths.Count > 0 &&
+                !snapshot.AuthoritativeOverlayGeneration.HasValue)
+            {
+                return snapshot.State;
+            }
+
+            var now = _timeProvider.GetUtcNow();
+            var next = snapshot.State with
+            {
+                GlbUrl = refresh.ViewerUrl,
+                ThumbnailUrl = refresh.ThumbnailUrl,
+                OverlayGlbUrls = [.. refresh.OverlayUrls]
+            };
+            var geometry = snapshot.GeometryGeneration.HasValue &&
+                (!string.IsNullOrWhiteSpace(refresh.ViewerUrl) ||
+                 !string.IsNullOrWhiteSpace(refresh.ThumbnailUrl))
+                ? new GeometryPreviewEnvelope(
+                    SchemaVersion,
+                    snapshot.GeometryGeneration.Value,
+                    next.FileId,
+                    refresh.ViewerUrl,
+                    refresh.ThumbnailUrl,
+                    now + _options.EphemeralLifetime)
+                : null;
+            var overlays = snapshot.AuthoritativeOverlayGeneration.HasValue &&
+                refresh.OverlayUrls.Count > 0
+                ? new OverlayPreviewEnvelope(
+                    SchemaVersion,
+                    snapshot.AuthoritativeOverlayGeneration,
+                    snapshot.AdvisoryOverlayGeneration,
+                    next.FileId,
+                    [.. refresh.OverlayUrls.Select(url =>
+                        new EphemeralUrl(url, now + _options.EphemeralLifetime))],
+                    snapshot.Overlays?.Advisory ?? [])
+                : null;
+
+            var transaction = _database.CreateTransaction();
+            transaction.AddCondition(Condition.StringEqual(
+                BuildDurableKey(storagePath), snapshot.RawDurable));
+            if (refresh.ViewerStoragePath is not null || refresh.ThumbnailStoragePath is not null)
+            {
+                QueueEphemeralWrite(
+                    transaction,
+                    BuildPreviewKey(storagePath),
+                    geometry,
+                    geometry?.ExpiresAtUtc,
+                    now);
+            }
+
+            if (refresh.OverlayStoragePaths.Count > 0)
+                QueueOverlayWrite(transaction, BuildOverlayKey(storagePath), overlays, now);
+            if (await transaction.ExecuteAsync().WaitAsync(ct))
+                return next;
+
+            if (attempt + 1 < _options.MaxUpdateAttempts)
+                await Task.Delay(TimeSpan.FromMilliseconds(attempt + 1), ct);
+        }
+
+        throw new InvalidOperationException(
+            $"Analysis preview refresh for '{storagePath}' exceeded the Redis concurrency retry limit.");
+    }
+
     public Task<QuoteAnalysisEventClaim> ClaimGeometryCompletionAsync(
         string storagePath,
         string fileId,
@@ -485,6 +568,12 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
         string storagePath,
         QuoteAnalysisEventLane lane) =>
         BuildKey($"processed:{lane.ToString().ToLowerInvariant()}", storagePath);
+
+    internal static RedisKey BuildPreviewRefreshLockKey(string storagePath) =>
+        BuildKey("preview-refresh", storagePath);
+
+    internal static RedisKey BuildPreviewRefreshFailureKey(string storagePath) =>
+        BuildKey("preview-refresh-failure", storagePath);
 
     private async Task<QuoteAnalysisEventClaim> ClaimAsync(
         string storagePath,

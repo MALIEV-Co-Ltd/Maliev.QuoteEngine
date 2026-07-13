@@ -6,6 +6,8 @@ namespace Maliev.QuoteEngine.Bff.Services;
 public interface IQuoteFileAnalysisStatusService
 {
     Task<QuoteFileAnalysisStatus?> GetStatusAsync(string storagePath, CancellationToken ct = default);
+    Task<QuoteFileAnalysisStatus?> RefreshPreviewUrlsAsync(
+        string storagePath, QuoteAnalysisPreviewRefresh refresh, CancellationToken ct = default);
     Task<QuoteAnalysisEventClaim> ClaimGeometryCompletionAsync(
         string storagePath, string fileId, Guid eventId, DateTimeOffset occurredAtUtc,
         DateTimeOffset processedAtUtc, CancellationToken ct = default);
