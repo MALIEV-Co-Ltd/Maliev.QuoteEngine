@@ -5024,6 +5024,8 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         services.AddSingleton<IQuoteAgentConversationMap, InMemoryQuoteAgentConversationMap>();
         services.RemoveAll<IGoogleDriveConnectorStore>();
         services.AddSingleton<IGoogleDriveConnectorStore, InMemoryGoogleDriveConnectorStore>();
+        services.RemoveAll<IQuoteFileAnalysisStatusService>();
+        services.AddSingleton<IQuoteFileAnalysisStatusService, QuoteFileAnalysisStatusService>();
     }
 
     private sealed class FailingQuoteUploadServiceClient()

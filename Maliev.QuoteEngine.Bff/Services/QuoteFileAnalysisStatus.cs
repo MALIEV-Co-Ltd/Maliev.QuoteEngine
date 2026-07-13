@@ -4,7 +4,7 @@ using Maliev.QuoteEngine.Shared.Quotes;
 namespace Maliev.QuoteEngine.Bff.Services;
 
 /// <summary>
-/// In-memory snapshot of analysis progress for a single uploaded file.
+/// Storage-agnostic snapshot of analysis progress for a single uploaded file.
 /// All writes go through IQuoteFileAnalysisStatusService; never mutate directly.
 /// </summary>
 public sealed record QuoteFileAnalysisStatus
