@@ -3,18 +3,21 @@ name: Build and Test
 on:
   workflow_call:
     inputs:
+      nuget_username:
+        required: true
+        type: string
       solution_file:
         required: true
         type: string
+    secrets:
+      nuget_read_token:
+        required: true
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
-      packages: read
-    env:
-      NUGET_USERNAME: ${{ github.actor }}
-      NUGET_PASSWORD: ${{ github.token }}
     steps:
       - name: Checkout code
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -25,6 +28,9 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Restore
+        env:
+          NUGET_PASSWORD: ${{ secrets.nuget_read_token }}
+          NUGET_USERNAME: ${{ inputs.nuget_username }}
         run: dotnet restore ${{ inputs.solution_file }} /p:GITHUB_ACTIONS=true
 
       - name: Build
