@@ -27,6 +27,8 @@ public sealed class AgentController(
     IWebHostEnvironment environment,
     ILogger<AgentController> logger) : ControllerBase
 {
+    private const long MaxSketchFileSizeBytes = 6L * 1024 * 1024;
+
     private const string AgentContextHeader = "X-Maliev-Agent-Context";
     private static readonly JsonSerializerOptions StreamJsonOptions = new(JsonSerializerDefaults.Web);
 
@@ -275,6 +277,7 @@ public sealed class AgentController(
     [HttpPost("sessions/{sessionId:guid}/dfm")]
     [RequestSizeLimit(512_000)]
     [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.Existing)]
+    [EnableRateLimiting(BffRateLimiterPolicies.BrowserReport)]
     [ProducesResponseType(typeof(QuoteAgentStateResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<QuoteAgentStateResponse>> SubmitLocalDfm(
@@ -460,8 +463,8 @@ public sealed class AgentController(
     /// </summary>
     [HttpPost("sessions/{sessionId:guid}/sketches")]
     [RequireQuoteAgentSessionAccess(QuoteAgentSessionAccessMode.CreateOrResume)]
-    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
-    [RequestSizeLimit(10_000_000)]
+    [EnableRateLimiting(BffRateLimiterPolicies.SketchUpload)]
+    [RequestSizeLimit(8 * 1024 * 1024)]
     [ProducesResponseType(typeof(UploadSketchResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<UploadSketchResponse>> UploadSketch(
@@ -472,6 +475,12 @@ public sealed class AgentController(
         if (file is null || file.Length == 0)
         {
             return ValidationProblem("Sketch file is required.");
+        }
+
+        if (file.Length > MaxSketchFileSizeBytes)
+        {
+            ModelState.AddModelError("file", "Sketch images must be 6 MB or smaller.");
+            return ValidationProblem(ModelState);
         }
 
         if (!file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))

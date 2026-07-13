@@ -7,10 +7,8 @@ namespace Maliev.QuoteEngine.Bff.Security;
 
 /// <summary>
 /// Reads and issues a signed, HttpOnly anonymous-visitor cookie. A verified visitor id is the
-/// anonymous browser principal used to own QuoteEngine agent sessions. It also gives one user behind
-/// a shared NAT/corporate IP their own rate-limit budget. The cookie is not the abuse floor: a client
-/// that drops it still falls back to IP limiting, so rate limiting continues to use valid inbound
-/// cookies only while session creation may use the id minted for the current request.
+/// anonymous browser principal used to own QuoteEngine agent sessions and uploads. Rate limiting is
+/// intentionally independent of this rotatable capability and remains partitioned by trusted client IP.
 /// </summary>
 public sealed class AnonymousVisitorCookie(IConfiguration configuration, IHostEnvironment hostEnvironment)
 {
@@ -23,7 +21,7 @@ public sealed class AnonymousVisitorCookie(IConfiguration configuration, IHostEn
 
     /// <summary>
     /// Returns the visitor id from a valid, unexpired inbound cookie, or null when there is none. Pure
-    /// read — never mints. Use this (not <see cref="IssueIfMissing"/>) to derive a rate-limit key.
+    /// read — never mints. Use this for ownership checks that must not create a new caller identity.
     /// </summary>
     public Guid? ReadVisitorId(HttpRequest request)
     {
@@ -109,10 +107,9 @@ public sealed class AnonymousVisitorCookie(IConfiguration configuration, IHostEn
     }
 
     /// <summary>
-    /// Issues a fresh signed visitor cookie on the response when the request does not already carry a
-    /// valid one. The new id is for <em>future</em> requests' fairness; it deliberately does not affect
-    /// how the current request is rate-limited (that request has no valid inbound cookie, so it is
-    /// IP-limited). A client that ignores the Set-Cookie simply stays on the IP partition.
+    /// Issues a fresh visitor cookie when the request does not already carry a valid one. The
+    /// capability owns future anonymous sessions and uploads; it never changes the caller's
+    /// IP-partitioned abuse budget.
     /// </summary>
     public void IssueIfMissing(HttpRequest request, HttpResponse response)
     {

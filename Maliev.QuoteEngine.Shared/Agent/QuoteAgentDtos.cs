@@ -132,6 +132,7 @@ public sealed class QuoteAgentLocalDfmRequest
     public QeCncDfmReport? CncReport { get; set; }
 
     /// <summary>Gets or sets overlay GLB URLs for highlighting DFM regions.</summary>
+    [MaxLength(20)]
     public List<string> OverlayGlbUrls { get; set; } = [];
 }
 

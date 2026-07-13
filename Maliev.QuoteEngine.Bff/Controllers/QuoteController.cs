@@ -75,7 +75,8 @@ public sealed class QuoteController(
     }
 
     [HttpPost("uploads/resumable")]
-    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
+    [RequestSizeLimit(16_384)]
+    [EnableRateLimiting(BffRateLimiterPolicies.UploadInitiate)]
     public async Task<ActionResult<InitiateQuoteUploadResponse>> InitiateUpload(
         [FromBody] InitiateQuoteUploadRequest request,
         CancellationToken cancellationToken)
@@ -169,7 +170,8 @@ public sealed class QuoteController(
     }
 
     [HttpPut("uploads/resumable/{uploadId}")]
-    [DisableRequestSizeLimit]
+    [RequestSizeLimit(QuoteUploadConstraints.MaxFileSizeBytes)]
+    [EnableRateLimiting(BffRateLimiterPolicies.UploadStream)]
     public async Task<IActionResult> ResumeUpload(string uploadId, CancellationToken cancellationToken)
     {
         var upload = store.GetUpload(uploadId);
@@ -306,6 +308,8 @@ public sealed class QuoteController(
     }
 
     [HttpPost("uploads/resumable/{uploadId}/complete")]
+    [RequestSizeLimit(16_384)]
+    [EnableRateLimiting(BffRateLimiterPolicies.UploadFinalize)]
     public async Task<ActionResult<CompleteQuoteUploadResponse>> CompleteUpload(
         string uploadId, CancellationToken cancellationToken)
     {
@@ -358,7 +362,8 @@ public sealed class QuoteController(
     }
 
     [HttpPost("uploads/handoff")]
-    [EnableRateLimiting(BffRateLimiterPolicies.QuoteAgent)]
+    [RequestSizeLimit(512_000)]
+    [EnableRateLimiting(BffRateLimiterPolicies.UploadHandoff)]
     public async Task<ActionResult<QuoteUploadHandoffResponse>> ImportHandoff(
         [FromBody] QuoteUploadHandoffRequest request,
         CancellationToken cancellationToken)
@@ -550,6 +555,8 @@ public sealed class QuoteController(
     }
 
     [HttpPost("estimate")]
+    [RequestSizeLimit(256_000)]
+    [EnableRateLimiting(BffRateLimiterPolicies.Estimate)]
     public async Task<ActionResult<QuoteEstimateResponse>> Estimate(
         [FromBody] QuoteEstimateRequest request,
         CancellationToken cancellationToken)

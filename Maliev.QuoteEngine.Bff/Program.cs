@@ -12,9 +12,12 @@ using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.DataProtection.StackExchangeRedis;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Hosting.StaticWebAssets;
+using Microsoft.AspNetCore.Http.Metadata;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
+using System.Globalization;
+using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 using System.Threading.RateLimiting;
@@ -45,12 +48,47 @@ builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton(TimeProvider.System);
+var knownProxyAddresses = (builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+    .Select(ParseKnownProxy)
+    .ToArray();
+var knownProxyNetworks = (builder.Configuration.GetSection("ForwardedHeaders:KnownNetworks").Get<string[]>() ?? [])
+    .Select(ParseKnownNetwork)
+    .ToArray();
+if (!builder.Environment.IsDevelopment()
+    && !builder.Environment.IsEnvironment("Testing")
+    && knownProxyAddresses.Length == 0
+    && knownProxyNetworks.Length == 0)
+{
+    throw new InvalidOperationException(
+        "At least one trusted ingress proxy or network must be configured outside Development and Testing. "
+        + "QuoteEngine rate limits must never partition all customers by an untrusted proxy address.");
+}
+
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownIPNetworks.Clear();
-    options.KnownProxies.Clear();
+    options.ForwardLimit = 1;
+
+    foreach (var proxy in knownProxyAddresses)
+    {
+        options.KnownProxies.Add(proxy);
+    }
+
+    foreach (var network in knownProxyNetworks)
+    {
+        options.KnownIPNetworks.Add(network);
+    }
 });
+
+static IPAddress ParseKnownProxy(string value) =>
+    IPAddress.TryParse(value, out var proxy)
+        ? proxy
+        : throw new InvalidOperationException($"ForwardedHeaders trusted proxy '{value}' is not a valid IP address.");
+
+static System.Net.IPNetwork ParseKnownNetwork(string value) =>
+    System.Net.IPNetwork.TryParse(value, out var network)
+        ? network
+        : throw new InvalidOperationException($"ForwardedHeaders trusted network '{value}' is not valid CIDR notation.");
 builder.Services.AddSingleton<BffMetrics>();
 builder.AddMalievIdentityCookie(options =>
 {
@@ -83,42 +121,111 @@ builder.Services.AddSingleton<QuoteEnginePrototypeStore>();
 builder.Services.AddScoped<CustomerSessionResolver>();
 builder.Services.AddScoped<AnonymousVisitorCookie>();
 
-// Defense-in-depth rate limiting for the public, anonymous agent ingress (S1-extras). The IP partition
-// is the real abuse floor; a signed visitor cookie (when present) gives one user behind a shared NAT
-// their own budget rather than sharing the IP's. Disabled by default under integration tests (0 →
-// NoLimiter) so the suite is unaffected unless a test sets the limit explicitly.
-var agentRateLimitPerMinute = builder.Configuration.GetValue<int?>("QuoteAgent:RateLimit:PerMinute")
-    ?? (builder.Environment.IsEnvironment("Testing") ? 0 : 30);
+// Defense-in-depth budgets for anonymous, cost-bearing ingress. Every policy is partitioned by the
+// trusted remote IP so clearing or rotating the signed visitor cookie cannot reset the abuse floor.
+// Limits are disabled by default under integration tests unless a test enables one explicitly.
+var isTesting = builder.Environment.IsEnvironment("Testing");
+var agentRateLimitPerMinute = GetIngressLimit("QuoteAgent:RateLimit:PerMinute", 30);
+var uploadInitiateLimit = GetIngressLimit("QuoteIngress:UploadInitiate:PermitLimit", 20);
+var uploadFinalizeLimit = GetIngressLimit("QuoteIngress:UploadFinalize:PermitLimit", 60);
+var uploadHandoffLimit = GetIngressLimit("QuoteIngress:UploadHandoff:PermitLimit", 6);
+var uploadStreamRequestLimit = GetIngressLimit("QuoteIngress:UploadStream:RequestLimit", 20);
+var uploadStreamConcurrency = GetIngressLimit("QuoteIngress:UploadStream:ConcurrencyLimit", 2);
+var estimateLimit = GetIngressLimit("QuoteIngress:Estimate:PermitLimit", 12);
+var browserReportLimit = GetIngressLimit("QuoteIngress:BrowserReport:PermitLimit", 120);
+var sketchUploadLimit = GetIngressLimit("QuoteIngress:SketchUpload:PermitLimit", 6);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-    options.OnRejected = (context, _) =>
+    options.OnRejected = async (context, cancellationToken) =>
     {
-        context.HttpContext.Response.Headers.RetryAfter = "60";
-        return ValueTask.CompletedTask;
+        var retryAfter = context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var leaseRetryAfter)
+            ? leaseRetryAfter
+            : TimeSpan.FromSeconds(1);
+        var retryAfterSeconds = Math.Max(1, (int)Math.Ceiling(retryAfter.TotalSeconds));
+        var response = context.HttpContext.Response;
+        response.StatusCode = StatusCodes.Status429TooManyRequests;
+        response.Headers.RetryAfter = retryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+        await response.WriteAsJsonAsync(
+            new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Status = StatusCodes.Status429TooManyRequests,
+                Title = "Request rate limit exceeded.",
+                Detail = "Please wait before retrying this operation."
+            },
+            options: null,
+            contentType: "application/problem+json",
+            cancellationToken: cancellationToken);
     };
     options.AddPolicy(BffRateLimiterPolicies.QuoteAgent, httpContext =>
+        FixedWindowByClientIp(httpContext, agentRateLimitPerMinute));
+    options.AddPolicy(BffRateLimiterPolicies.UploadInitiate, httpContext =>
+        FixedWindowByClientIp(httpContext, uploadInitiateLimit));
+    options.AddPolicy(BffRateLimiterPolicies.UploadFinalize, httpContext =>
+        FixedWindowByClientIp(httpContext, uploadFinalizeLimit));
+    options.AddPolicy(BffRateLimiterPolicies.UploadHandoff, httpContext =>
+        FixedWindowByClientIp(httpContext, uploadHandoffLimit));
+    options.AddPolicy(BffRateLimiterPolicies.Estimate, httpContext =>
+        FixedWindowByClientIp(httpContext, estimateLimit));
+    options.AddPolicy(BffRateLimiterPolicies.BrowserReport, httpContext =>
+        FixedWindowByClientIp(httpContext, browserReportLimit));
+    options.AddPolicy(BffRateLimiterPolicies.SketchUpload, httpContext =>
+        FixedWindowByClientIp(httpContext, sketchUploadLimit));
+    options.AddPolicy(BffRateLimiterPolicies.UploadStream, httpContext =>
     {
-        if (agentRateLimitPerMinute <= 0)
+        if (uploadStreamConcurrency <= 0 || uploadStreamRequestLimit <= 0)
         {
             return RateLimitPartition.GetNoLimiter("disabled");
         }
 
-        // Key on the visitor id only when it comes from a VALID INBOUND cookie; a freshly minted id must
-        // never become the key, or a cookie-dropping client would get a new partition every request.
-        var visitorCookie = httpContext.RequestServices.GetRequiredService<AnonymousVisitorCookie>();
-        var key = visitorCookie.ReadVisitorId(httpContext.Request)?.ToString()
-            ?? httpContext.Connection.RemoteIpAddress?.ToString()
-            ?? "unknown";
-
-        return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = agentRateLimitPerMinute,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0
-        });
+        return RateLimitPartition.Get(ClientIpKey(httpContext), _ => RateLimiter.CreateChained(
+            new FixedWindowRateLimiter(new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = uploadStreamRequestLimit,
+                Window = TimeSpan.FromMinutes(1),
+                AutoReplenishment = true,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }),
+            new ConcurrencyLimiter(new ConcurrencyLimiterOptions
+            {
+                PermitLimit = uploadStreamConcurrency,
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            })));
     });
 });
+
+int GetIngressLimit(string key, int productionDefault)
+{
+    var limit = builder.Configuration.GetValue<int?>(key) ?? (isTesting ? 0 : productionDefault);
+    if (limit < 0 || (!isTesting && limit == 0))
+    {
+        throw new InvalidOperationException($"Ingress budget '{key}' must be positive outside the Testing environment.");
+    }
+
+    return limit;
+}
+
+static RateLimitPartition<string> FixedWindowByClientIp(HttpContext context, int permitLimit)
+{
+    if (permitLimit <= 0)
+    {
+        return RateLimitPartition.GetNoLimiter("disabled");
+    }
+
+    return RateLimitPartition.GetFixedWindowLimiter(ClientIpKey(context), _ => new FixedWindowRateLimiterOptions
+    {
+        PermitLimit = permitLimit,
+        Window = TimeSpan.FromMinutes(1),
+        AutoReplenishment = true,
+        QueueLimit = 0,
+        QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+    });
+}
+
+static string ClientIpKey(HttpContext context) =>
+    context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 builder.Services.AddScoped<CustomerAssistantHandoffCookie>();
 builder.Services.AddScoped<QuoteUploadHandoffToken>();
 builder.Services.AddScoped<QuoteAgentContextToken>();
@@ -291,12 +398,38 @@ app.UseStaticFiles();
 app.MapStaticAssets().ShortCircuit();
 
 app.UseRouting();
+app.Use(async (context, next) =>
+{
+    var maxRequestBodySize = context.GetEndpoint()?
+        .Metadata
+        .GetMetadata<IRequestSizeLimitMetadata>()?
+        .MaxRequestBodySize;
+    if (maxRequestBodySize.HasValue
+        && context.Request.ContentLength is long contentLength
+        && contentLength > maxRequestBodySize.Value)
+    {
+        context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+        await context.Response.WriteAsJsonAsync(
+            new Microsoft.AspNetCore.Mvc.ProblemDetails
+            {
+                Status = StatusCodes.Status413PayloadTooLarge,
+                Title = "Request body too large.",
+                Detail = $"This endpoint accepts request bodies up to {maxRequestBodySize.Value} bytes."
+            },
+            options: null,
+            contentType: "application/problem+json",
+            cancellationToken: context.RequestAborted);
+        return;
+    }
+
+    await next();
+});
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Issue the anonymous-visitor cookie on agent requests so subsequent requests get per-visitor fairness
-// (the current request is still IP-limited — issuance does not affect this request's partition key).
+// Issue the signed anonymous-visitor capability used for session and upload ownership. Abuse budgets
+// deliberately remain IP-partitioned, so rotating this cookie cannot reset a limiter.
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/quote/v1/agent"))

@@ -166,8 +166,8 @@ public sealed class BffMetrics
         {
             { "process_family", NormalizeProcessFamily(processCode) },
             { "accepted", accepted },
-            { "authority", NormalizeMarker(authority, "other") },
-            { "execution_mode", NormalizeMarker(executionMode, "other") },
+            { "authority", NormalizeRuntimeAuthority(authority) },
+            { "execution_mode", NormalizeRuntimeExecutionMode(executionMode) },
         });
 
         if (accepted)
@@ -178,8 +178,8 @@ public sealed class BffMetrics
                 { "execution_path", "browser_primary" },
                 { "decision", "satisfied" },
                 { "server_cpu", "avoided" },
-                { "authority", NormalizeMarker(authority, "other") },
-                { "execution_mode", NormalizeMarker(executionMode, "other") },
+                { "authority", NormalizeRuntimeAuthority(authority) },
+                { "execution_mode", NormalizeRuntimeExecutionMode(executionMode) },
             });
             RecordAvoidedServerWorkload(processCode, authority, executionMode, inputByteCount, inputTriangleCount);
         }
@@ -203,8 +203,8 @@ public sealed class BffMetrics
         var tags = new TagList
         {
             { "process_family", NormalizeProcessFamily(processCode) },
-            { "authority", NormalizeMarker(authority, "other") },
-            { "execution_mode", NormalizeMarker(executionMode, "other") },
+            { "authority", NormalizeRuntimeAuthority(authority) },
+            { "execution_mode", NormalizeRuntimeExecutionMode(executionMode) },
         };
 
         _browserDfmRuntimeStarts.Add(1, tags);
@@ -235,9 +235,9 @@ public sealed class BffMetrics
         _browserDfmRuntimeTerminalAttempts.Add(1, new TagList
         {
             { "process_family", NormalizeProcessFamily(processCode) },
-            { "reason", NormalizeMarker(reason, "local_runtime_unavailable") },
-            { "authority", NormalizeMarker(authority, "other") },
-            { "execution_mode", NormalizeMarker(executionMode, "other") },
+            { "reason", NormalizeRuntimeReason(reason) },
+            { "authority", NormalizeRuntimeAuthority(authority) },
+            { "execution_mode", NormalizeRuntimeExecutionMode(executionMode) },
         });
     }
 
@@ -268,8 +268,8 @@ public sealed class BffMetrics
             { "process_family", NormalizeProcessFamily(processCode) },
             { "execution_path", "browser_primary" },
             { "server_cpu", "avoided" },
-            { "authority", NormalizeMarker(authority, "other") },
-            { "execution_mode", NormalizeMarker(executionMode, "other") },
+            { "authority", NormalizeRuntimeAuthority(authority) },
+            { "execution_mode", NormalizeRuntimeExecutionMode(executionMode) },
         };
 
         if (inputByteCount is > 0)
@@ -298,6 +298,28 @@ public sealed class BffMetrics
             "SLS" or "MJF" or "MJ" or "BJ" or "DMLS" => "powder_bed",
             _ => "other"
         };
+    }
+
+    private static string NormalizeRuntimeAuthority(string? value) =>
+        NormalizeAllowedMarker(value, "other", "local_primary", "browser-advisory", "server-authoritative");
+
+    private static string NormalizeRuntimeExecutionMode(string? value) =>
+        NormalizeAllowedMarker(value, "other", "primary_interactive", "browser", "server", "fallback");
+
+    private static string NormalizeRuntimeReason(string? value) =>
+        NormalizeAllowedMarker(
+            value,
+            "local_runtime_unavailable",
+            "unsupported_format",
+            "runtime_unavailable",
+            "runtime_error",
+            "input_too_large",
+            "cancelled");
+
+    private static string NormalizeAllowedMarker(string? value, string fallback, params string[] allowed)
+    {
+        var normalized = NormalizeMarker(value, fallback).ToLowerInvariant();
+        return allowed.Contains(normalized, StringComparer.Ordinal) ? normalized : fallback;
     }
 
     private static string NormalizeMarker(string? value, string fallback)

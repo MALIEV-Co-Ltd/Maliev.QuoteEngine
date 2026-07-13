@@ -1,11 +1,15 @@
+using System.ComponentModel.DataAnnotations;
 using System.Globalization;
 using System.Text;
 using Asp.Versioning;
 using Maliev.QuoteEngine.Bff;
 using Maliev.QuoteEngine.Bff.Clients;
+using Maliev.QuoteEngine.Bff.Security;
 using Maliev.QuoteEngine.Bff.Services;
+using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Polly.Timeout;
 
 namespace Maliev.QuoteEngine.Bff.Controllers;
@@ -19,6 +23,9 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 public sealed class GeometryRuntimeController(
     IQuoteGeometryRuntimeClient runtimeClient,
     IQuoteFileAnalysisStatusService statusService,
+    QuoteEnginePrototypeStore prototypeStore,
+    CustomerSessionResolver sessionResolver,
+    AnonymousVisitorCookie anonymousVisitorCookie,
     GeometryRuntimeFallbackProvider runtimeFallbackProvider,
     BffMetrics bffMetrics,
     ILogger<GeometryRuntimeController> logger) : ControllerBase
@@ -212,6 +219,8 @@ public sealed class GeometryRuntimeController(
     /// <returns>A no-content acknowledgement.</returns>
     [AllowAnonymous]
     [HttpPost("telemetry")]
+    [RequestSizeLimit(32_000)]
+    [EnableRateLimiting(BffRateLimiterPolicies.BrowserReport)]
     public async Task<IActionResult> RecordTelemetry(
         [FromBody] BrowserGeometryRuntimeTelemetryRequest request,
         CancellationToken ct = default)
@@ -266,8 +275,14 @@ public sealed class GeometryRuntimeController(
                 out var isManifold,
                 out var nonManifoldReason))
         {
+            var upload = prototypeStore.FindUploadByStoragePath(request.StoragePath!);
+            if (upload is null || !CanAccessUpload(upload))
+            {
+                return NotFound();
+            }
+
             await statusService.SetLocalGeometryMetricsAsync(
-                request.StoragePath!,
+                upload.StoragePath,
                 volumeCc,
                 surfaceAreaCm2,
                 isManifold,
@@ -284,6 +299,20 @@ public sealed class GeometryRuntimeController(
             request.FaceCount);
 
         return NoContent();
+    }
+
+    private bool CanAccessUpload(UploadState upload)
+    {
+        if (upload.CustomerId.HasValue)
+        {
+            return sessionResolver.TryResolveCustomerId(out var customerId)
+                && upload.CustomerId == customerId;
+        }
+
+        var visitor = anonymousVisitorCookie.ResolveForRequest(HttpContext);
+        return visitor.Status != AnonymousVisitorCredentialStatus.Invalid
+            && upload.VisitorId.HasValue
+            && visitor.VisitorId == upload.VisitorId;
     }
 
     private static bool TryBuildLocalGeometryMetrics(
@@ -356,51 +385,66 @@ public sealed class GeometryRuntimeController(
 public sealed class BrowserGeometryRuntimeTelemetryRequest
 {
     /// <summary>The storage path of the active quote part whose browser runtime produced the result.</summary>
+    [StringLength(500)]
     public string? StoragePath { get; set; }
 
     /// <summary>The manufacturing process code analyzed by the browser runtime.</summary>
+    [StringLength(80)]
     public string? ProcessCode { get; set; }
 
     /// <summary>The browser runtime package version.</summary>
+    [StringLength(80)]
     public string? RuntimeVersion { get; set; }
 
     /// <summary>The browser DFM algorithm version.</summary>
+    [StringLength(80)]
     public string? AlgorithmVersion { get; set; }
 
     /// <summary>The runtime authority marker.</summary>
+    [StringLength(80)]
     public string? Authority { get; set; }
 
     /// <summary>The runtime execution mode marker.</summary>
+    [StringLength(80)]
     public string? ExecutionMode { get; set; }
 
     /// <summary>Telemetry event status, for example <c>started</c>, <c>complete</c>, or <c>unavailable</c>.</summary>
+    [StringLength(80)]
+    [RegularExpression("^(started|complete|unavailable)$", ErrorMessage = "Status must be started, complete, or unavailable.")]
     public string? Status { get; set; }
 
     /// <summary>Low-cardinality reason why a local attempt ended before producing a report.</summary>
+    [StringLength(80)]
     public string? Reason { get; set; }
 
     /// <summary>Whether Blazor accepted and applied the local DFM result.</summary>
     public bool Accepted { get; set; }
 
     /// <summary>The number of local DFM issues produced by the browser runtime.</summary>
+    [Range(0, 20_000_000)]
     public int? IssueCount { get; set; }
 
     /// <summary>The number of warning-or-higher local DFM issues.</summary>
+    [Range(0, 20_000_000)]
     public int? WarningCount { get; set; }
 
     /// <summary>The number of triangle faces analyzed locally.</summary>
+    [Range(0, 20_000_000)]
     public double? FaceCount { get; set; }
 
     /// <summary>Mesh metrics computed locally by the browser runtime.</summary>
     public BrowserGeometryRuntimeMetrics? Metrics { get; set; }
 
     /// <summary>The browser runtime input hash, logged only for correlation and never used as a metric tag.</summary>
+    [StringLength(128)]
     public string? InputHash { get; set; }
 
     /// <summary>The approximate browser-local runtime input size in bytes.</summary>
+    [Range(0, QuoteUploadConstraints.MaxFileSizeBytes)]
     public long? InputByteCount { get; set; }
 
     /// <summary>The approximate browser-local runtime triangle workload.</summary>
+    [Range(0, 20_000_000)]
     public long? InputTriangleCount { get; set; }
 
     /// <summary>Whether this payload represents a terminal local runtime attempt.</summary>
@@ -418,15 +462,19 @@ public sealed class BrowserGeometryRuntimeTelemetryRequest
 public sealed class BrowserGeometryRuntimeMetrics
 {
     /// <summary>Number of mesh vertices analyzed locally.</summary>
+    [Range(0, 20_000_000)]
     public double? VertexCount { get; set; }
 
     /// <summary>Number of mesh triangle faces analyzed locally.</summary>
+    [Range(0, 20_000_000)]
     public double? FaceCount { get; set; }
 
     /// <summary>Computed local volume in cubic millimeters.</summary>
+    [Range(0, 1_000_000_000_000d)]
     public double? VolumeMm3 { get; set; }
 
     /// <summary>Computed local surface area in square millimeters.</summary>
+    [Range(0, 1_000_000_000_000d)]
     public double? SurfaceAreaMm2 { get; set; }
 
     /// <summary>Computed local bounding box dimensions in millimeters.</summary>
@@ -436,9 +484,11 @@ public sealed class BrowserGeometryRuntimeMetrics
     public bool? IsManifold { get; set; }
 
     /// <summary>Number of non-manifold edges found locally.</summary>
+    [Range(0, 20_000_000)]
     public double? NonManifoldEdgeCount { get; set; }
 
     /// <summary>Runtime complexity bucket for the mesh.</summary>
+    [StringLength(40)]
     public string? Complexity { get; set; }
 }
 
@@ -448,11 +498,14 @@ public sealed class BrowserGeometryRuntimeMetrics
 public sealed class BrowserGeometryRuntimeBoundingBox
 {
     /// <summary>Width of the bounding box in millimeters.</summary>
+    [Range(0, 1_000_000)]
     public double? X { get; set; }
 
     /// <summary>Depth of the bounding box in millimeters.</summary>
+    [Range(0, 1_000_000)]
     public double? Y { get; set; }
 
     /// <summary>Height of the bounding box in millimeters.</summary>
+    [Range(0, 1_000_000)]
     public double? Z { get; set; }
 }

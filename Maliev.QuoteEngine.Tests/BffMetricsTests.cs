@@ -342,6 +342,22 @@ public sealed class BffMetricsTests
         Assert.Equal("up", tags["sentiment"]);
     }
 
+    [Fact]
+    public void Browser_runtime_metrics_collapse_untrusted_dimensions_to_bounded_values()
+    {
+        var measurements = CaptureCounterMeasurements(
+            "quote_browser_dfm_runtime_starts",
+            metrics => metrics.RecordBrowserDfmRuntimeStart(
+                "attacker-defined-process",
+                "attacker-defined-authority",
+                "attacker-defined-mode"));
+
+        var tags = Assert.Single(measurements);
+        Assert.Equal("other", tags["process_family"]);
+        Assert.Equal("other", tags["authority"]);
+        Assert.Equal("other", tags["execution_mode"]);
+    }
+
     private static List<Dictionary<string, object?>> CaptureCounterMeasurements(
         string instrumentName,
         Action<BffMetrics> record)

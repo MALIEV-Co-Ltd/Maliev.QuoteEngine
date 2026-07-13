@@ -117,6 +117,7 @@ public sealed class QuoteUploadHandoffRequest
     public string QuoteSessionId { get; set; } = string.Empty;
 
     /// <summary>Gets or sets the uploaded files from a verified handoff token.</summary>
+    [MaxLength(20)]
     public List<QuoteUploadHandoffFileDto> Files { get; set; } = [];
 }
 
@@ -373,12 +374,15 @@ public sealed class QuotePartDraftDto
 public sealed class QuoteEstimateRequest
 {
     [Required]
+    [MaxLength(80)]
     public string QuoteSessionId { get; set; } = string.Empty;
 
     [Required]
+    [MaxLength(40)]
     public string LeadTimeCode { get; set; } = "STANDARD";
 
     [MinLength(1)]
+    [MaxLength(20)]
     public List<QuotePartDraftDto> Parts { get; set; } = [];
 }
 
