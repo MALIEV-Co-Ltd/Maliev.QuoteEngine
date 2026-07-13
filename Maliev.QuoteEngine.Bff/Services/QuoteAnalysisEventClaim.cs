@@ -49,7 +49,8 @@ public sealed record QuoteGeometryCompletionUpdate(
     string? NonManifoldReason,
     Guid EventId,
     DateTimeOffset OccurredAtUtc,
-    DateTimeOffset ProcessedAtUtc);
+    DateTimeOffset ProcessedAtUtc,
+    string? ThumbnailStoragePath = null);
 
 public sealed record QuoteDfmAnalysisUpdate(
     QeFdmDfmReport? FdmReport,
@@ -62,7 +63,8 @@ public sealed record QuoteDfmAnalysisUpdate(
     Guid EventId,
     DateTimeOffset OccurredAtUtc,
     DateTimeOffset AnalyzedAtUtc,
-    int? BodyCount);
+    int? BodyCount,
+    IReadOnlyList<string>? OverlayStoragePaths = null);
 
 public abstract class QuoteAnalysisTransientException(string message, Exception? innerException = null)
     : InvalidOperationException(message, innerException);

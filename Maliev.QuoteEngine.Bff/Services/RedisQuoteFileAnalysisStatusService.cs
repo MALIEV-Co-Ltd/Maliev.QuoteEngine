@@ -145,7 +145,8 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
             update.NonManifoldReason,
             update.EventId,
             update.OccurredAtUtc,
-            update.ProcessedAtUtc);
+            update.ProcessedAtUtc,
+            update.ThumbnailStoragePath);
         return FinalizeUnderClaimAsync(
             claim,
             existing => QuoteFileAnalysisStatusTransitions.ApplyGlbReady(existing, transition),
@@ -171,7 +172,8 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
             update.EventId,
             update.OccurredAtUtc,
             update.AnalyzedAtUtc,
-            update.BodyCount);
+            update.BodyCount,
+            update.OverlayStoragePaths);
         return FinalizeUnderClaimAsync(
             claim,
             existing => QuoteFileAnalysisStatusTransitions.ApplyDfmReports(existing, transition),
@@ -275,7 +277,8 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
         string? nonManifoldReason = null,
         Guid? eventId = null,
         DateTimeOffset? occurredAtUtc = null,
-        DateTimeOffset? processedAtUtc = null)
+        DateTimeOffset? processedAtUtc = null,
+        string? thumbnailStoragePath = null)
     {
         var transition = new GeometryCompletionTransition(
             storagePath,
@@ -296,7 +299,8 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
             nonManifoldReason,
             eventId,
             occurredAtUtc,
-            processedAtUtc);
+            processedAtUtc,
+            thumbnailStoragePath);
         return UpdateAsync(
             storagePath,
             existing => QuoteFileAnalysisStatusTransitions.ApplyGlbReady(existing, transition),
@@ -358,7 +362,8 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
         Guid? eventId = null,
         DateTimeOffset? occurredAtUtc = null,
         DateTimeOffset? analyzedAtUtc = null,
-        int? bodyCount = null)
+        int? bodyCount = null,
+        IReadOnlyList<string>? overlayStoragePaths = null)
     {
         var transition = new DfmReportsTransition(
             storagePath,
@@ -372,7 +377,8 @@ internal sealed class RedisQuoteFileAnalysisStatusService : IQuoteFileAnalysisSt
             eventId,
             occurredAtUtc,
             analyzedAtUtc,
-            bodyCount);
+            bodyCount,
+            overlayStoragePaths);
         return UpdateAsync(
             storagePath,
             existing => QuoteFileAnalysisStatusTransitions.ApplyDfmReports(existing, transition),

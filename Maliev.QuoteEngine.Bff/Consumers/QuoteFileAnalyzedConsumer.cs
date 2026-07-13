@@ -52,6 +52,9 @@ public sealed class QuoteFileAnalyzedConsumer(
             await EnsureClaimAsync(status, claim, context.CancellationToken);
             string glbUrl = "";
             string? thumbnailUrl = null;
+            var thumbnailStoragePath = string.IsNullOrWhiteSpace(payload.ThumbnailStoragePath)
+                ? null
+                : payload.ThumbnailStoragePath.Trim();
             var viewerStoragePath = string.IsNullOrWhiteSpace(payload.ViewerStoragePath)
                 ? payload.GlbStoragePath
                 : payload.ViewerStoragePath;
@@ -89,10 +92,10 @@ public sealed class QuoteFileAnalyzedConsumer(
                     await EnsureClaimAsync(status, claim, context.CancellationToken);
                 }
 
-                if (!string.IsNullOrEmpty(payload.ThumbnailStoragePath))
+                if (thumbnailStoragePath is not null)
                 {
                     thumbnailUrl = await uploadClient.GetDownloadUrlByPathAsync(
-                        payload.ThumbnailStoragePath,
+                        thumbnailStoragePath,
                         ct: context.CancellationToken);
                 }
             }
@@ -126,7 +129,8 @@ public sealed class QuoteFileAnalyzedConsumer(
                     metrics?.NonManifoldReason,
                     context.Message.MessageId,
                     context.Message.OccurredAtUtc,
-                    payload.ProcessedAt),
+                    payload.ProcessedAt,
+                    thumbnailStoragePath),
                 context.CancellationToken);
             if (!finalized.Applied || finalized.Snapshot is null)
                 return;

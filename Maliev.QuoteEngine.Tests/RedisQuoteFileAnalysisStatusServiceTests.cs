@@ -199,7 +199,9 @@ public sealed class RedisQuoteFileAnalysisStatusServiceTests : IAsyncLifetime
         await service.SetGlbReadyAsync(
             StoragePath, "https://signed/part.glb", "https://signed/part.png", 1, true,
             volumeCc: 12.5m, fileId: FileId, eventId: Guid.NewGuid(),
-            occurredAtUtc: BaseTime, processedAtUtc: BaseTime);
+            occurredAtUtc: BaseTime, processedAtUtc: BaseTime,
+            viewerStoragePath: "processed/part.glb",
+            thumbnailStoragePath: "processed/part.png");
         Assert.True(await connection.GetDatabase().KeyDeleteAsync(
             RedisQuoteFileAnalysisStatusService.BuildPreviewKey(StoragePath)));
 
@@ -210,6 +212,30 @@ public sealed class RedisQuoteFileAnalysisStatusServiceTests : IAsyncLifetime
         Assert.Equal(12.5m, result.VolumeCc);
         Assert.Null(result.GlbUrl);
         Assert.Null(result.ThumbnailUrl);
+        Assert.Equal("processed/part.glb", result.ViewerStoragePath);
+        Assert.Equal("processed/part.png", result.ThumbnailStoragePath);
+    }
+
+    [Fact]
+    public async Task GetStatus_WhenOverlayPreviewExpires_PreservesAuthoritativeSourcePathsOnly()
+    {
+        await using var connection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        var service = new RedisQuoteFileAnalysisStatusService(connection);
+        await service.SetDfmReportsAsync(
+            StoragePath, Fdm(), null, null, ["https://signed/overlay.glb"], null, null,
+            fileId: FileId, eventId: Guid.NewGuid(),
+            overlayStoragePaths: ["processed/overlays/overlay.glb"]);
+        Assert.True(await connection.GetDatabase().KeyDeleteAsync(
+            RedisQuoteFileAnalysisStatusService.BuildOverlayKey(StoragePath)));
+
+        var result = await service.GetStatusAsync(StoragePath);
+
+        Assert.NotNull(result);
+        Assert.Empty(result.OverlayGlbUrls);
+        Assert.Equal(
+            ["processed/overlays/overlay.glb"],
+            result.AuthoritativeOverlayStoragePaths);
+        Assert.Empty(result.AdvisoryAnalysis?.OverlayGlbUrls ?? []);
     }
 
     [Fact]

@@ -366,6 +366,7 @@ public sealed class GeometryIngestionTests
                 StoragePath = StoragePath,
                 ProcessedAt = metricsAt.AddSeconds(1),
                 GlbStoragePath = "processed/part.glb",
+                ThumbnailStoragePath = " processed/part.png ",
                 Metrics = new FileAnalyzedEventPayloadMetrics
                 {
                     VolumeCm3 = 0,
@@ -397,6 +398,7 @@ public sealed class GeometryIngestionTests
         Assert.Equal(456, stored.TriangleCount);
         Assert.True(stored.IsManifold);
         Assert.Equal(1, stored.BodyCount);
+        Assert.Equal("processed/part.png", stored.ThumbnailStoragePath);
     }
 
     [Fact]
@@ -745,6 +747,9 @@ public sealed class GeometryIngestionTests
         Assert.NotNull(stored);
         Assert.Equal(2, stored.OverlayGlbUrls.Count);
         Assert.All(stored.OverlayGlbUrls, url => Assert.StartsWith("https://signed/", url, StringComparison.Ordinal));
+        Assert.Equal(
+            ["processed/overlays/thin-wall.glb", "processed/overlays/undercut.glb"],
+            stored.AuthoritativeOverlayStoragePaths);
     }
 
     [Fact]

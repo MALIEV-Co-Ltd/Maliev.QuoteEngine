@@ -97,7 +97,8 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
                     context.Message.MessageId,
                     context.Message.OccurredAtUtc,
                     payload.AnalyzedAt,
-                    payload.BodyCount),
+                    payload.BodyCount,
+                    rawOverlayPaths),
                 context.CancellationToken);
             if (!finalized.Applied || finalized.Snapshot is null)
                 return;

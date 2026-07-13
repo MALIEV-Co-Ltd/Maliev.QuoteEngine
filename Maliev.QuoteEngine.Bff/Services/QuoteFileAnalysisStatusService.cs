@@ -117,7 +117,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             update.NonManifoldReason,
             update.EventId,
             update.OccurredAtUtc,
-            update.ProcessedAtUtc);
+            update.ProcessedAtUtc,
+            update.ThumbnailStoragePath);
         return FinalizeAsync(
             claim,
             existing => QuoteFileAnalysisStatusTransitions.ApplyGlbReady(existing, transition),
@@ -142,7 +143,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             update.EventId,
             update.OccurredAtUtc,
             update.AnalyzedAtUtc,
-            update.BodyCount);
+            update.BodyCount,
+            update.OverlayStoragePaths);
         return FinalizeAsync(
             claim,
             existing => QuoteFileAnalysisStatusTransitions.ApplyDfmReports(existing, transition),
@@ -240,7 +242,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
         string? nonManifoldReason = null,
         Guid? eventId = null,
         DateTimeOffset? occurredAtUtc = null,
-        DateTimeOffset? processedAtUtc = null)
+        DateTimeOffset? processedAtUtc = null,
+        string? thumbnailStoragePath = null)
     {
         var transition = new GeometryCompletionTransition(
             storagePath,
@@ -261,7 +264,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             nonManifoldReason,
             eventId,
             occurredAtUtc,
-            processedAtUtc);
+            processedAtUtc,
+            thumbnailStoragePath);
         AddOrUpdate(
             storagePath,
             existing => QuoteFileAnalysisStatusTransitions.ApplyGlbReady(existing, transition));
@@ -321,7 +325,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
         Guid? eventId = null,
         DateTimeOffset? occurredAtUtc = null,
         DateTimeOffset? analyzedAtUtc = null,
-        int? bodyCount = null)
+        int? bodyCount = null,
+        IReadOnlyList<string>? overlayStoragePaths = null)
     {
         var transition = new DfmReportsTransition(
             storagePath,
@@ -335,7 +340,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             eventId,
             occurredAtUtc,
             analyzedAtUtc,
-            bodyCount);
+            bodyCount,
+            overlayStoragePaths);
         AddOrUpdate(
             storagePath,
             existing => QuoteFileAnalysisStatusTransitions.ApplyDfmReports(existing, transition));
