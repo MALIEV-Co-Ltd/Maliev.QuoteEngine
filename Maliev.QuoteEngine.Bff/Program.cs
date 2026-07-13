@@ -44,6 +44,7 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
+builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -190,6 +191,26 @@ builder.Services.AddSingleton<IGoogleDriveConnectorStore>(sp =>
     }
 
     return new InMemoryGoogleDriveConnectorStore();
+});
+builder.Services.AddSingleton<IGoogleDriveOAuthStateStore>(sp =>
+{
+    var redis = sp.GetService<IConnectionMultiplexer>();
+    if (redis is not null)
+    {
+        return new RedisGoogleDriveOAuthStateStore(
+            redis,
+            sp.GetRequiredService<IDataProtectionProvider>(),
+            sp.GetRequiredService<TimeProvider>(),
+            sp.GetRequiredService<ILogger<RedisGoogleDriveOAuthStateStore>>());
+    }
+
+    var environment = sp.GetRequiredService<IHostEnvironment>();
+    if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+    {
+        throw new InvalidOperationException("One-time Google Drive OAuth state requires Redis.");
+    }
+
+    return new InMemoryGoogleDriveOAuthStateStore();
 });
 builder.Services.AddScoped<IQuoteAgentService, QuoteAgentService>();
 builder.AddAuthenticatedServiceClient<IChatbotServiceClient, ChatbotServiceClient>("ChatbotService")

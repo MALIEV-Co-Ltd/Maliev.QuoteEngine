@@ -1,4 +1,8 @@
 using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
@@ -19,15 +23,21 @@ public sealed class GoogleDriveConnectorController(
     CustomerSessionResolver sessionResolver,
     IQuoteAgentSessionRequestAuthorizer agentSessionAccess,
     IGoogleDriveConnectorStore connectorStore,
+    IGoogleDriveOAuthStateStore oauthStateStore,
     QuoteEnginePrototypeStore store,
     QuoteUploadServiceClient uploadClient,
     IDataProtectionProvider dataProtectionProvider,
     IConfiguration configuration,
-    IHttpClientFactory httpClientFactory) : ControllerBase
+    IHttpClientFactory httpClientFactory,
+    TimeProvider timeProvider,
+    IHostEnvironment environment) : ControllerBase
 {
     private const string DriveScope = "https://www.googleapis.com/auth/drive.file";
+    private static readonly TimeSpan FlowLifetime = TimeSpan.FromMinutes(15);
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private const int MaxPickerFiles = 8;
-    private readonly IDataProtector _stateProtector = dataProtectionProvider.CreateProtector("quote-engine.google-drive.state.v1");
+    private readonly IDataProtector _browserFlowProtector = dataProtectionProvider.CreateProtector(
+        "quote-engine.google-drive.browser-flow.v1");
 
     /// <summary>
     /// Starts Google Drive incremental authorization for the signed-in customer.
@@ -36,7 +46,9 @@ public sealed class GoogleDriveConnectorController(
     [ProducesResponseType(StatusCodes.Status302Found)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status503ServiceUnavailable)]
-    public IActionResult Start([FromQuery] string? returnUrl = null)
+    public async Task<IActionResult> Start(
+        [FromQuery] string? returnUrl = null,
+        CancellationToken cancellationToken = default)
     {
         if (!sessionResolver.TryResolveCustomerId(out var customerId))
         {
@@ -52,20 +64,54 @@ public sealed class GoogleDriveConnectorController(
                 statusCode: StatusCodes.Status503ServiceUnavailable);
         }
 
-        var state = _stateProtector.Protect(System.Text.Json.JsonSerializer.Serialize(new GoogleDriveOAuthState(
+        var principalId = CurrentPrincipalId();
+        if (string.IsNullOrWhiteSpace(principalId))
+        {
+            return Unauthorized();
+        }
+
+        if (!TryResolveRedirectUri(out var redirectUri))
+        {
+            return Problem(
+                title: "Google Drive connector redirect is not configured safely.",
+                detail: "Configure the exact HTTPS Google Drive callback URI for Make Studio.",
+                statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
+
+        var stateNonce = RandomToken(32);
+        var browserSecret = TryReadBrowserSecret(out var existingBrowserSecret)
+            ? existingBrowserSecret
+            : RandomToken(32);
+        var codeVerifier = RandomToken(32);
+        var expiresAt = timeProvider.GetUtcNow().Add(FlowLifetime);
+        await oauthStateStore.SaveAsync(new GoogleDriveOAuthState(
+            stateNonce,
             customerId,
+            principalId,
+            HashToken(browserSecret),
+            codeVerifier,
+            redirectUri,
             NormalizeLocalReturnUrl(returnUrl),
-            DateTimeOffset.UtcNow.AddMinutes(15))));
+            expiresAt), cancellationToken);
+        Response.Cookies.Append(
+            GoogleDriveOAuthFlow.CookieName,
+            _browserFlowProtector.Protect(JsonSerializer.Serialize(
+                new GoogleDriveBrowserBinding(browserSecret),
+                JsonOptions)),
+            FlowCookieOptions(expiresAt));
         var query = new Dictionary<string, string?>
         {
             ["client_id"] = clientId,
-            ["redirect_uri"] = ResolveRedirectUri(),
+            ["redirect_uri"] = redirectUri,
             ["response_type"] = "code",
             ["scope"] = DriveScope,
             ["access_type"] = "offline",
             ["include_granted_scopes"] = "true",
             ["prompt"] = "consent",
-            ["state"] = state
+            ["state"] = stateNonce,
+            ["code_challenge"] = WebEncoders.Base64UrlEncode(
+                SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier))),
+            ["code_challenge_method"] = "S256"
         };
 
         return Redirect(QueryHelpers.AddQueryString(
@@ -85,37 +131,66 @@ public sealed class GoogleDriveConnectorController(
         [FromQuery] string? error,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(state) ||
+            state.Length > 128 ||
+            !TryReadBrowserSecret(out var browserSecret))
+        {
+            return InvalidCallback();
+        }
+
+        var currentPrincipalId = CurrentPrincipalId();
+        if (!sessionResolver.TryResolveCustomerId(out var currentCustomerId) ||
+            string.IsNullOrWhiteSpace(currentPrincipalId))
+        {
+            return InvalidCallback();
+        }
+
+        var browserSecretHash = HashToken(browserSecret);
+        var connectorState = await oauthStateStore.ConsumeAsync(
+            state,
+            currentCustomerId,
+            currentPrincipalId,
+            browserSecretHash,
+            cancellationToken);
+        if (connectorState is null)
+        {
+            return InvalidCallback();
+        }
+
+        if (!TryResolveRedirectUri(out var currentRedirectUri) ||
+            connectorState.ExpiresAt <= timeProvider.GetUtcNow() ||
+            currentCustomerId != connectorState.CustomerId ||
+            !FixedTimeEquals(currentPrincipalId, connectorState.PrincipalId) ||
+            !FixedTimeEquals(browserSecretHash, connectorState.BrowserSecretHash) ||
+            !string.Equals(connectorState.RedirectUri, currentRedirectUri, StringComparison.Ordinal))
+        {
+            return InvalidCallback();
+        }
+
         if (!string.IsNullOrWhiteSpace(error))
         {
-            return Redirect("/quotes?connector=google-drive&status=cancelled");
+            return Redirect(AppendConnectorStatus(connectorState.ReturnUrl, "cancelled"));
         }
 
-        if (string.IsNullOrWhiteSpace(code) || !TryReadState(state, out var connectorState))
+        if (string.IsNullOrWhiteSpace(code))
         {
-            return Problem(
-                title: "Invalid Google Drive connector callback.",
-                detail: "The connector authorization response could not be verified.",
-                statusCode: StatusCodes.Status400BadRequest);
+            return InvalidCallback();
         }
 
-        if (connectorState.ExpiresAt < DateTimeOffset.UtcNow)
-        {
-            return Problem(
-                title: "Expired Google Drive connector callback.",
-                detail: "Please start the Google Drive connection again.",
-                statusCode: StatusCodes.Status400BadRequest);
-        }
-
-        var tokenResponse = await ExchangeCodeAsync(code, cancellationToken);
+        var tokenResponse = await ExchangeCodeAsync(
+            code,
+            connectorState.RedirectUri,
+            connectorState.CodeVerifier,
+            cancellationToken);
         connectorStore.Save(new GoogleDriveConnection(
-            connectorState.CustomerId,
+            currentCustomerId,
             tokenResponse.AccessToken,
             tokenResponse.RefreshToken,
-            DateTimeOffset.UtcNow.AddSeconds(Math.Max(60, tokenResponse.ExpiresIn)),
+            timeProvider.GetUtcNow().AddSeconds(Math.Max(60, tokenResponse.ExpiresIn)),
             null,
-            DateTimeOffset.UtcNow));
+            timeProvider.GetUtcNow()));
 
-        return Redirect($"{connectorState.ReturnUrl}{(connectorState.ReturnUrl.Contains('?') ? '&' : '?')}connector=google-drive&status=connected");
+        return Redirect(AppendConnectorStatus(connectorState.ReturnUrl, "connected"));
     }
 
     /// <summary>
@@ -392,7 +467,11 @@ public sealed class GoogleDriveConnectorController(
         });
     }
 
-    private async Task<GoogleDriveTokenResponse> ExchangeCodeAsync(string code, CancellationToken cancellationToken)
+    private async Task<GoogleDriveTokenResponse> ExchangeCodeAsync(
+        string code,
+        string redirectUri,
+        string codeVerifier,
+        CancellationToken cancellationToken)
     {
         using var form = new FormUrlEncodedContent(new Dictionary<string, string?>
         {
@@ -400,15 +479,21 @@ public sealed class GoogleDriveConnectorController(
             ["client_secret"] = GoogleClientSecret(),
             ["code"] = code,
             ["grant_type"] = "authorization_code",
-            ["redirect_uri"] = ResolveRedirectUri()
+            ["redirect_uri"] = redirectUri,
+            ["code_verifier"] = codeVerifier
         });
         using var response = await httpClientFactory.CreateClient().PostAsync(
             "https://oauth2.googleapis.com/token",
             form,
             cancellationToken);
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<GoogleDriveTokenResponse>(cancellationToken)
-            ?? throw new InvalidOperationException("Google did not return an OAuth token response.");
+        var token = await response.Content.ReadFromJsonAsync<GoogleDriveTokenResponse>(cancellationToken);
+        if (token is null || string.IsNullOrWhiteSpace(token.AccessToken))
+        {
+            throw new InvalidOperationException("Google did not return a usable OAuth token response.");
+        }
+
+        return token;
     }
 
     private async Task<string?> GetUsableAccessTokenAsync(GoogleDriveConnection connection, CancellationToken cancellationToken)
@@ -684,23 +769,86 @@ public sealed class GoogleDriveConnectorController(
         return Path.HasExtension(fileName) ? fileName : $"{fileName}{extension}";
     }
 
-    private bool TryReadState(string? state, out GoogleDriveOAuthState value)
+    private bool TryReadBrowserSecret(out string browserSecret)
     {
-        value = default;
-        if (string.IsNullOrWhiteSpace(state))
+        browserSecret = string.Empty;
+        if (!Request.Cookies.TryGetValue(GoogleDriveOAuthFlow.CookieName, out var protectedFlow) ||
+            string.IsNullOrWhiteSpace(protectedFlow))
         {
             return false;
         }
 
         try
         {
-            value = System.Text.Json.JsonSerializer.Deserialize<GoogleDriveOAuthState>(_stateProtector.Unprotect(state));
-            return value.CustomerId != Guid.Empty;
+            var binding = JsonSerializer.Deserialize<GoogleDriveBrowserBinding>(
+                _browserFlowProtector.Unprotect(protectedFlow),
+                JsonOptions);
+            if (string.IsNullOrWhiteSpace(binding.BrowserSecret))
+            {
+                return false;
+            }
+
+            browserSecret = binding.BrowserSecret;
+            return true;
         }
-        catch (Exception ex) when (ex is System.Text.Json.JsonException or System.Security.Cryptography.CryptographicException)
+        catch (Exception ex) when (ex is JsonException or CryptographicException)
         {
             return false;
         }
+    }
+
+    private string? CurrentPrincipalId()
+    {
+        return User.FindFirstValue("principal_id") ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
+    }
+
+    private IActionResult InvalidCallback()
+    {
+        return Problem(
+            title: "Invalid Google Drive connector callback.",
+            detail: "The connector authorization response could not be verified. Please start the connection again.",
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    private CookieOptions FlowCookieOptions(DateTimeOffset expiresAt) => new()
+    {
+        HttpOnly = true,
+        Secure = true,
+        SameSite = SameSiteMode.Lax,
+        IsEssential = true,
+        Path = GoogleDriveOAuthFlow.CookiePath,
+        Expires = expiresAt
+    };
+
+    private static string AppendConnectorStatus(string returnUrl, string status)
+    {
+        return QueryHelpers.AddQueryString(returnUrl, new Dictionary<string, string?>
+        {
+            ["connector"] = "google-drive",
+            ["status"] = status
+        });
+    }
+
+    private static string RandomToken(int byteLength)
+    {
+        return WebEncoders.Base64UrlEncode(RandomNumberGenerator.GetBytes(byteLength));
+    }
+
+    private static string HashToken(string value)
+    {
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)));
+    }
+
+    private static bool FixedTimeEquals(string? left, string? right)
+    {
+        if (string.IsNullOrEmpty(left) || string.IsNullOrEmpty(right))
+        {
+            return false;
+        }
+
+        return CryptographicOperations.FixedTimeEquals(
+            SHA256.HashData(Encoding.UTF8.GetBytes(left)),
+            SHA256.HashData(Encoding.UTF8.GetBytes(right)));
     }
 
     private string? GoogleClientId()
@@ -713,30 +861,68 @@ public sealed class GoogleDriveConnectorController(
         return GoogleDriveOAuthConfiguration.ClientSecret(configuration);
     }
 
-    private string ResolveRedirectUri()
+    private bool TryResolveRedirectUri(out string redirectUri)
     {
-        if (!string.IsNullOrWhiteSpace(configuration["GoogleDrive:RedirectUri"]))
+        var configured = configuration["GoogleDrive:RedirectUri"]?.Trim();
+        if (string.IsNullOrWhiteSpace(configured))
         {
-            return configuration["GoogleDrive:RedirectUri"]!;
+            if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+            {
+                redirectUri = string.Empty;
+                return false;
+            }
+
+            configured = $"{Request.Scheme}://{Request.Host}/auth/google/drive/callback";
         }
 
-        return $"{Request.Scheme}://{Request.Host}/auth/google/drive/callback";
+        var isLocalEnvironment = environment.IsDevelopment() || environment.IsEnvironment("Testing");
+        if (!Uri.TryCreate(configured, UriKind.Absolute, out var uri) ||
+            !string.Equals(uri.AbsolutePath, "/auth/google/drive/callback", StringComparison.Ordinal) ||
+            !string.IsNullOrEmpty(uri.UserInfo) ||
+            !string.IsNullOrEmpty(uri.Query) ||
+            !string.IsNullOrEmpty(uri.Fragment) ||
+            (uri.Scheme != Uri.UriSchemeHttps &&
+             !(isLocalEnvironment && uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback)))
+        {
+            redirectUri = string.Empty;
+            return false;
+        }
+
+        var isLocalLoopback = isLocalEnvironment && uri.IsLoopback;
+        if (!isLocalLoopback)
+        {
+            var expectedOrigin = configuration["QuoteEngine:BaseUrl"]?.Trim();
+            if (!Uri.TryCreate(expectedOrigin, UriKind.Absolute, out var expectedUri) ||
+                !string.Equals(uri.Scheme, expectedUri.Scheme, StringComparison.OrdinalIgnoreCase) ||
+                !string.Equals(uri.Host, expectedUri.Host, StringComparison.OrdinalIgnoreCase) ||
+                uri.Port != expectedUri.Port)
+            {
+                redirectUri = string.Empty;
+                return false;
+            }
+        }
+
+        redirectUri = uri.AbsoluteUri;
+        return true;
     }
 
     private static string NormalizeLocalReturnUrl(string? returnUrl)
     {
-        if (string.IsNullOrWhiteSpace(returnUrl) || !returnUrl.StartsWith('/'))
+        if (string.IsNullOrWhiteSpace(returnUrl) ||
+            returnUrl.Length > 2048 ||
+            !returnUrl.StartsWith('/') ||
+            returnUrl.StartsWith("//", StringComparison.Ordinal) ||
+            returnUrl.Contains('\\') ||
+            returnUrl.Contains('#') ||
+            returnUrl.Any(char.IsControl))
         {
             return "/quotes";
         }
 
-        return returnUrl.StartsWith("//", StringComparison.Ordinal) ? "/quotes" : returnUrl;
+        return returnUrl;
     }
 
-    private readonly record struct GoogleDriveOAuthState(
-        Guid CustomerId,
-        string ReturnUrl,
-        DateTimeOffset ExpiresAt);
+    private readonly record struct GoogleDriveBrowserBinding(string BrowserSecret);
 
     private sealed class GoogleDriveTokenResponse
     {

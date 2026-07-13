@@ -7523,7 +7523,8 @@ Customer message:
         using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
         {
             HandleCookies = true,
-            AllowAutoRedirect = false
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
         });
         var signIn = await client.GetAsync("/test/sign-in?email=drive-connect@example.com");
         signIn.EnsureSuccessStatusCode();
@@ -7539,6 +7540,183 @@ Customer message:
         Assert.Contains("access_type=offline", redirect, StringComparison.Ordinal);
         Assert.Contains("include_granted_scopes=true", redirect, StringComparison.Ordinal);
         Assert.Contains("state=", redirect, StringComparison.Ordinal);
+        Assert.Contains("code_challenge=", redirect, StringComparison.Ordinal);
+        Assert.Contains("code_challenge_method=S256", redirect, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_callback_uses_pkce_and_rejects_replay()
+    {
+        var google = new FakeGoogleTokenHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(google);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-pkce@example.com", allowAutoRedirect: false);
+        var startResponse = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+        var authorizationQuery = QueryHelpers.ParseQuery(startResponse.Headers.Location!.Query);
+        var state = authorizationQuery["state"].ToString();
+        var challenge = authorizationQuery["code_challenge"].ToString();
+
+        var callbackUrl = $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state)}";
+        var firstResponse = await client.GetAsync(callbackUrl);
+        var replayResponse = await client.GetAsync(callbackUrl);
+
+        Assert.Equal(HttpStatusCode.Redirect, firstResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, replayResponse.StatusCode);
+        Assert.Equal(1, google.TokenRequestCount);
+        Assert.NotNull(google.LastTokenRequest);
+        var tokenForm = QueryHelpers.ParseQuery(google.LastTokenRequest);
+        var verifier = tokenForm["code_verifier"].ToString();
+        Assert.InRange(verifier.Length, 43, 128);
+        Assert.Equal(
+            challenge,
+            WebEncoders.Base64UrlEncode(SHA256.HashData(Encoding.ASCII.GetBytes(verifier))));
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_supports_two_concurrent_flows_in_the_same_browser()
+    {
+        var google = new FakeGoogleTokenHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(google);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-tabs@example.com", allowAutoRedirect: false);
+        var firstStart = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes?tab=first");
+        var secondStart = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes?tab=second");
+        var firstState = QueryHelpers.ParseQuery(firstStart.Headers.Location!.Query)["state"].ToString();
+        var secondState = QueryHelpers.ParseQuery(secondStart.Headers.Location!.Query)["state"].ToString();
+
+        var firstCallback = await client.GetAsync(
+            $"/auth/google/drive/callback?code=first-code&state={Uri.EscapeDataString(firstState)}");
+        var secondCallback = await client.GetAsync(
+            $"/auth/google/drive/callback?code=second-code&state={Uri.EscapeDataString(secondState)}");
+
+        Assert.Equal(HttpStatusCode.Redirect, firstCallback.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, secondCallback.StatusCode);
+        Assert.Equal(2, google.TokenRequestCount);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_callback_rejects_modified_state_without_consuming_owner_flow()
+    {
+        var google = new FakeGoogleTokenHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(google);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-state@example.com", allowAutoRedirect: false);
+        var startResponse = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+        var state = QueryHelpers.ParseQuery(startResponse.Headers.Location!.Query)["state"].ToString();
+
+        var tamperedResponse = await client.GetAsync(
+            $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state + "x")}");
+        var ownerResponse = await client.GetAsync(
+            $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state)}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, tamperedResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, ownerResponse.StatusCode);
+        Assert.Equal(1, google.TokenRequestCount);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_cancel_callback_consumes_one_time_state()
+    {
+        var google = new FakeGoogleTokenHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(google);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-cancel@example.com", allowAutoRedirect: false);
+        var startResponse = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+        var state = QueryHelpers.ParseQuery(startResponse.Headers.Location!.Query)["state"].ToString();
+
+        var cancelResponse = await client.GetAsync(
+            $"/auth/google/drive/callback?error=access_denied&state={Uri.EscapeDataString(state)}");
+        var replayResponse = await client.GetAsync(
+            $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state)}");
+
+        Assert.Equal(HttpStatusCode.Redirect, cancelResponse.StatusCode);
+        Assert.Contains("status=cancelled", cancelResponse.Headers.Location!.OriginalString, StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.BadRequest, replayResponse.StatusCode);
+        Assert.Equal(0, google.TokenRequestCount);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_callback_rejects_a_different_browser_session()
+    {
+        var google = new FakeGoogleTokenHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(google);
+        using var initiatingBrowser = await CreateSignedInClientAsync(scopedFactory, "drive-browser@example.com", allowAutoRedirect: false);
+        using var otherBrowser = await CreateSignedInClientAsync(scopedFactory, "drive-browser@example.com", allowAutoRedirect: false);
+        var startResponse = await initiatingBrowser.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+        var state = QueryHelpers.ParseQuery(startResponse.Headers.Location!.Query)["state"].ToString();
+
+        var callbackResponse = await otherBrowser.GetAsync(
+            $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state)}");
+        var ownerResponse = await initiatingBrowser.GetAsync(
+            $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state)}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, callbackResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Redirect, ownerResponse.StatusCode);
+        Assert.Equal(1, google.TokenRequestCount);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_callback_rejects_customer_session_replacement()
+    {
+        var google = new FakeGoogleTokenHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(google);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-owner@example.com", allowAutoRedirect: false);
+        var startResponse = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+        var state = QueryHelpers.ParseQuery(startResponse.Headers.Location!.Query)["state"].ToString();
+        (await client.GetAsync("/test/sign-in?email=drive-other@example.com")).EnsureSuccessStatusCode();
+
+        var callbackResponse = await client.GetAsync(
+            $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state)}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, callbackResponse.StatusCode);
+        Assert.Equal(0, google.TokenRequestCount);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_callback_rejects_expired_one_time_state()
+    {
+        var clock = new AdjustableTimeProvider(DateTimeOffset.Parse("2026-07-13T00:00:00Z", CultureInfo.InvariantCulture));
+        var google = new FakeGoogleTokenHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(google, clock);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-expired@example.com", allowAutoRedirect: false);
+        var startResponse = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+        var state = QueryHelpers.ParseQuery(startResponse.Headers.Location!.Query)["state"].ToString();
+        clock.Advance(TimeSpan.FromMinutes(16));
+
+        var callbackResponse = await client.GetAsync(
+            $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state)}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, callbackResponse.StatusCode);
+        Assert.Equal(0, google.TokenRequestCount);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_rejects_ambiguous_backslash_return_target()
+    {
+        var google = new FakeGoogleTokenHttpClientFactory();
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(google);
+        using var client = await CreateSignedInClientAsync(scopedFactory, "drive-return@example.com", allowAutoRedirect: false);
+        var startResponse = await client.GetAsync(
+            "/quote/v1/connectors/google-drive/start?returnUrl=%2F%5Cevil.example%2Fcapture");
+        var state = QueryHelpers.ParseQuery(startResponse.Headers.Location!.Query)["state"].ToString();
+
+        var callbackResponse = await client.GetAsync(
+            $"/auth/google/drive/callback?code=fake-code&state={Uri.EscapeDataString(state)}");
+
+        Assert.Equal(HttpStatusCode.Redirect, callbackResponse.StatusCode);
+        Assert.NotNull(callbackResponse.Headers.Location);
+        Assert.StartsWith("/quotes?", callbackResponse.Headers.Location.OriginalString, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Google_drive_connector_start_rejects_invalid_configured_redirect_audience()
+    {
+        await using var scopedFactory = CreateAgentFactoryWithGoogleDriveConfig(
+            redirectUri: "https://evil.example/auth/google/drive/callback");
+        using var client = await CreateSignedInClientAsync(
+            scopedFactory,
+            "drive-redirect-config@example.com",
+            allowAutoRedirect: false);
+
+        var response = await client.GetAsync("/quote/v1/connectors/google-drive/start?returnUrl=/quotes");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
     }
 
     [Fact]
@@ -7785,7 +7963,8 @@ Customer message:
         using var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions
         {
             HandleCookies = true,
-            AllowAutoRedirect = false
+            AllowAutoRedirect = false,
+            BaseAddress = new Uri("https://localhost")
         });
         var signIn = await client.GetAsync("/test/sign-in?email=drive-disconnect@example.com");
         signIn.EnsureSuccessStatusCode();
@@ -8835,9 +9014,20 @@ Customer message:
 
     private static async Task<HttpClient> CreateSignedInClientAsync(
         WebApplicationFactory<Program> scopedFactory,
-        string email)
+        string email,
+        bool allowAutoRedirect = true)
     {
-        var client = scopedFactory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
+        var options = new WebApplicationFactoryClientOptions
+        {
+            HandleCookies = true,
+            AllowAutoRedirect = allowAutoRedirect
+        };
+        if (!allowAutoRedirect)
+        {
+            options.BaseAddress = new Uri("https://localhost");
+        }
+
+        var client = scopedFactory.CreateClient(options);
         var signIn = await client.GetAsync($"/test/sign-in?email={Uri.EscapeDataString(email)}");
         signIn.EnsureSuccessStatusCode();
         return client;
@@ -8851,6 +9041,8 @@ Customer message:
         services.AddSingleton<IQuoteAgentConversationMap, InMemoryQuoteAgentConversationMap>();
         services.RemoveAll<IGoogleDriveConnectorStore>();
         services.AddSingleton<IGoogleDriveConnectorStore, InMemoryGoogleDriveConnectorStore>();
+        services.RemoveAll<IGoogleDriveOAuthStateStore>();
+        services.AddSingleton<IGoogleDriveOAuthStateStore, InMemoryGoogleDriveOAuthStateStore>();
     }
 
     private async Task<Guid> StartPricedCadSessionAsync(
@@ -9264,7 +9456,10 @@ Customer message:
         });
     }
 
-    private WebApplicationFactory<Program> CreateAgentFactoryWithGoogleDriveConfig(IHttpClientFactory? googleHttpClientFactory = null)
+    private WebApplicationFactory<Program> CreateAgentFactoryWithGoogleDriveConfig(
+        IHttpClientFactory? googleHttpClientFactory = null,
+        TimeProvider? timeProvider = null,
+        string redirectUri = "https://make.maliev.com/auth/google/drive/callback")
     {
         return factory.WithWebHostBuilder(builder =>
         {
@@ -9274,7 +9469,7 @@ Customer message:
                 {
                     ["Authentication:Google:ClientId"] = "quote-engine-google-client",
                     ["Authentication:Google:ClientSecret"] = "quote-engine-google-secret",
-                    ["GoogleDrive:RedirectUri"] = "https://make.maliev.com/auth/google/drive/callback",
+                    ["GoogleDrive:RedirectUri"] = redirectUri,
                     ["GoogleDrive:PickerApiKey"] = "quote-engine-picker-api-key",
                     ["GoogleDrive:PickerAppId"] = "1234567890"
                 });
@@ -9287,6 +9482,11 @@ Customer message:
                 {
                     services.RemoveAll<IHttpClientFactory>();
                     services.AddSingleton(googleHttpClientFactory);
+                }
+                if (timeProvider is not null)
+                {
+                    services.RemoveAll<TimeProvider>();
+                    services.AddSingleton(timeProvider);
                 }
             });
         });
@@ -9350,6 +9550,10 @@ Customer message:
     {
         private readonly FakeGoogleTokenHandler _handler = new();
 
+        public int TokenRequestCount => _handler.TokenRequestCount;
+
+        public string? LastTokenRequest => _handler.LastTokenRequest;
+
         public HttpClient CreateClient(string name)
         {
             return new HttpClient(_handler, disposeHandler: false);
@@ -9358,8 +9562,18 @@ Customer message:
 
     private sealed class FakeGoogleTokenHandler : HttpMessageHandler
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        public int TokenRequestCount { get; private set; }
+
+        public string? LastTokenRequest { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken)
         {
+            TokenRequestCount++;
+            LastTokenRequest = request.Content is null
+                ? null
+                : await request.Content.ReadAsStringAsync(cancellationToken);
             var response = new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = JsonContent.Create(new
@@ -9369,7 +9583,19 @@ Customer message:
                     expires_in = 3600
                 })
             };
-            return Task.FromResult(response);
+            return response;
+        }
+    }
+
+    private sealed class AdjustableTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        private DateTimeOffset _utcNow = utcNow;
+
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void Advance(TimeSpan duration)
+        {
+            _utcNow += duration;
         }
     }
 
