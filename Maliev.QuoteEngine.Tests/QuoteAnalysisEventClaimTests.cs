@@ -262,7 +262,7 @@ public sealed class QuoteAnalysisEventClaimTests : IAsyncLifetime
         ThumbnailUrl: "https://signed/part.png",
         BodyCount: 1,
         IsManifold: true,
-        ViewerStoragePath: "processed/part.glb",
+        ViewerStoragePath: StoragePath + "_viewer.glb",
         ViewerFileExtension: ".glb",
         VolumeCc: 12.5m,
         SurfaceAreaCm2: 42.5m,

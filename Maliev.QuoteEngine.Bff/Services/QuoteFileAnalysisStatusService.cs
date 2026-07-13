@@ -35,6 +35,30 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
         CancellationToken ct = default) =>
         Task.FromResult(_store.TryGetValue(storagePath, out var status) ? status : null);
 
+    public Task<QuoteFileAnalysisStatus?> RefreshPreviewUrlsAsync(
+        string storagePath,
+        QuoteAnalysisPreviewRefresh refresh,
+        CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        while (_store.TryGetValue(storagePath, out var existing))
+        {
+            if (!CanRefreshPreview(existing, refresh))
+                return Task.FromResult<QuoteFileAnalysisStatus?>(existing);
+
+            var next = existing with
+            {
+                GlbUrl = refresh.ViewerUrl,
+                ThumbnailUrl = refresh.ThumbnailUrl,
+                OverlayGlbUrls = [.. refresh.OverlayUrls]
+            };
+            if (_store.TryUpdate(storagePath, next, existing))
+                return Task.FromResult<QuoteFileAnalysisStatus?>(next);
+        }
+
+        return Task.FromResult<QuoteFileAnalysisStatus?>(null);
+    }
+
     public Task<QuoteAnalysisEventClaim> ClaimGeometryCompletionAsync(
         string storagePath,
         string fileId,
@@ -117,7 +141,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             update.NonManifoldReason,
             update.EventId,
             update.OccurredAtUtc,
-            update.ProcessedAtUtc);
+            update.ProcessedAtUtc,
+            update.ThumbnailStoragePath);
         return FinalizeAsync(
             claim,
             existing => QuoteFileAnalysisStatusTransitions.ApplyGlbReady(existing, transition),
@@ -142,7 +167,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             update.EventId,
             update.OccurredAtUtc,
             update.AnalyzedAtUtc,
-            update.BodyCount);
+            update.BodyCount,
+            update.OverlayStoragePaths);
         return FinalizeAsync(
             claim,
             existing => QuoteFileAnalysisStatusTransitions.ApplyDfmReports(existing, transition),
@@ -240,7 +266,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
         string? nonManifoldReason = null,
         Guid? eventId = null,
         DateTimeOffset? occurredAtUtc = null,
-        DateTimeOffset? processedAtUtc = null)
+        DateTimeOffset? processedAtUtc = null,
+        string? thumbnailStoragePath = null)
     {
         var transition = new GeometryCompletionTransition(
             storagePath,
@@ -261,7 +288,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             nonManifoldReason,
             eventId,
             occurredAtUtc,
-            processedAtUtc);
+            processedAtUtc,
+            thumbnailStoragePath);
         AddOrUpdate(
             storagePath,
             existing => QuoteFileAnalysisStatusTransitions.ApplyGlbReady(existing, transition));
@@ -321,7 +349,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
         Guid? eventId = null,
         DateTimeOffset? occurredAtUtc = null,
         DateTimeOffset? analyzedAtUtc = null,
-        int? bodyCount = null)
+        int? bodyCount = null,
+        IReadOnlyList<string>? overlayStoragePaths = null)
     {
         var transition = new DfmReportsTransition(
             storagePath,
@@ -335,7 +364,8 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
             eventId,
             occurredAtUtc,
             analyzedAtUtc,
-            bodyCount);
+            bodyCount,
+            overlayStoragePaths);
         AddOrUpdate(
             storagePath,
             existing => QuoteFileAnalysisStatusTransitions.ApplyDfmReports(existing, transition));
@@ -433,6 +463,32 @@ public sealed class QuoteFileAnalysisStatusService : IQuoteFileAnalysisStatusSer
                     : next with { Revision = existing.Revision + 1 };
             });
     }
+
+    internal static bool CanRefreshPreview(
+        QuoteFileAnalysisStatus status,
+        QuoteAnalysisPreviewRefresh refresh) =>
+        status.Revision == refresh.ExpectedRevision &&
+        string.Equals(status.ViewerStoragePath, refresh.ViewerStoragePath, StringComparison.Ordinal) &&
+        string.Equals(status.ThumbnailStoragePath, refresh.ThumbnailStoragePath, StringComparison.Ordinal) &&
+        status.AuthoritativeOverlayStoragePaths.SequenceEqual(
+            refresh.OverlayStoragePaths, StringComparer.Ordinal) &&
+        refresh.OverlayStoragePaths.Count == refresh.OverlayUrls.Count &&
+        QuoteAnalysisArtifactPathValidator.AreCanonicalGeometryPaths(
+            status.StoragePath,
+            refresh.ViewerStoragePath,
+            refresh.ThumbnailStoragePath) &&
+        QuoteAnalysisArtifactPathValidator.AreCanonicalOverlayPaths(
+            status.StoragePath,
+            refresh.OverlayStoragePaths) &&
+        HasBoundHttpsCapability(refresh.ViewerStoragePath, refresh.ViewerUrl) &&
+        HasBoundHttpsCapability(refresh.ThumbnailStoragePath, refresh.ThumbnailUrl) &&
+        refresh.OverlayUrls.All(IsHttpsCapability);
+
+    private static bool HasBoundHttpsCapability(string? storagePath, string? url) =>
+        storagePath is null ? string.IsNullOrEmpty(url) : IsHttpsCapability(url);
+
+    private static bool IsHttpsCapability(string? url) =>
+        QuoteAnalysisArtifactPathValidator.IsHttpsCapability(url);
 
     private async Task<QuoteAnalysisEventClaim> ClaimAsync(
         string storagePath,

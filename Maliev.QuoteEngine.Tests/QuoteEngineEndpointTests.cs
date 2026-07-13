@@ -2644,6 +2644,50 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task Analysis_status_checks_ownership_before_resolving_preview_urls_and_is_not_cacheable()
+    {
+        var resolver = new CountingPreviewUrlResolver();
+        await using var scopedFactory = factory.WithWebHostBuilder(builder =>
+            builder.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<IQuoteAnalysisPreviewUrlResolver>();
+                services.AddSingleton<IQuoteAnalysisPreviewUrlResolver>(resolver);
+            }));
+        using var owner = scopedFactory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var other = scopedFactory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        (await owner.GetAsync("/test/sign-in?email=preview-owner%40example.com")).EnsureSuccessStatusCode();
+        (await other.GetAsync("/test/sign-in?email=preview-other%40example.com")).EnsureSuccessStatusCode();
+
+        var initiation = await owner.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
+            FileName = "private-preview.step",
+            ContentType = "application/step",
+            FileSizeBytes = 512
+        });
+        initiation.EnsureSuccessStatusCode();
+        var upload = Assert.IsType<InitiateQuoteUploadResponse>(
+            await initiation.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>());
+        await scopedFactory.Services.GetRequiredService<IQuoteFileAnalysisStatusService>()
+            .SetProcessingAsync(upload.StoragePath);
+
+        var foreignResponse = await other.GetAsync(
+            $"/quote/v1/uploads/{upload.UploadId}/analysis-status");
+
+        Assert.Equal(HttpStatusCode.NotFound, foreignResponse.StatusCode);
+        Assert.Equal(0, resolver.CallCount);
+
+        var ownerResponse = await owner.GetAsync(
+            $"/quote/v1/uploads/{upload.UploadId}/analysis-status");
+
+        ownerResponse.EnsureSuccessStatusCode();
+        Assert.Equal(1, resolver.CallCount);
+        Assert.True(ownerResponse.Headers.CacheControl?.NoStore);
+    }
+
+    [Fact]
     public async Task Upload_uses_local_prototype_fallback_when_upload_service_is_unavailable_in_testing()
     {
         await using var fallbackFactory = factory.WithWebHostBuilder(builder =>
@@ -5050,6 +5094,23 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
             string storagePath,
             CancellationToken ct) =>
             throw new InvalidOperationException("UploadService is intentionally unavailable.");
+    }
+
+    private sealed class CountingPreviewUrlResolver : IQuoteAnalysisPreviewUrlResolver
+    {
+        private int _callCount;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        public Task<QuoteAnalysisPreviewResolution> ResolveAsync(
+            string ownedStoragePath,
+            QuoteFileAnalysisStatus status,
+            CancellationToken ct = default)
+        {
+            ct.ThrowIfCancellationRequested();
+            Interlocked.Increment(ref _callCount);
+            return Task.FromResult(new QuoteAnalysisPreviewResolution(status, "pending"));
+        }
     }
 
     private WebApplicationFactory<Program> CreateChatbotFactory()

@@ -357,6 +357,7 @@ builder.Services.Configure<DemoModeOptions>(
     builder.Configuration.GetSection(DemoModeOptions.Section));
 
 builder.Services.AddQuoteFileAnalysisStatus();
+builder.Services.AddScoped<IQuoteAnalysisPreviewUrlResolver, QuoteAnalysisPreviewUrlResolver>();
 
 // UploadService HTTP client (Aspire service discovery)
 builder.Services.AddHttpClient<QuoteUploadServiceClient>(client =>

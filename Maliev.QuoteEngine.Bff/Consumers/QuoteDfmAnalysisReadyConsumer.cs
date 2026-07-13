@@ -30,7 +30,8 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
         }
 
         var storagePath = payload.StoragePath;
-        if (string.IsNullOrWhiteSpace(storagePath) || string.IsNullOrWhiteSpace(payload.FileId))
+        if (!QuoteAnalysisArtifactPathValidator.IsCanonicalUploadPath(storagePath) ||
+            string.IsNullOrWhiteSpace(payload.FileId))
         {
             logger.LogWarning("DfmAnalysisReadyEvent received without a canonical file identity; skipping");
             return;
@@ -63,6 +64,13 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
 
             await EnsureClaimAsync(status, claim, context.CancellationToken);
             var rawOverlayPaths = ExtractStringList(payload.OverlayPaths);
+            if (!QuoteAnalysisArtifactPathValidator.AreCanonicalOverlayPaths(storagePath, rawOverlayPaths))
+            {
+                logger.LogWarning(
+                    "DfmAnalysisReadyEvent contained overlay paths outside {StoragePath}; skipping",
+                    storagePath);
+                return;
+            }
             IReadOnlyList<string> overlayUrls = [];
             if (rawOverlayPaths.Count > 0)
             {
@@ -71,6 +79,8 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
                     overlayUrls = await Task.WhenAll(
                         rawOverlayPaths.Select(p =>
                             uploadClient.GetDownloadUrlByPathAsync(p, ct: context.CancellationToken)));
+                    if (overlayUrls.Any(url => !QuoteAnalysisArtifactPathValidator.IsHttpsCapability(url)))
+                        throw new InvalidOperationException("UploadService returned an invalid overlay URL.");
                 }
                 catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
                 {
@@ -97,7 +107,8 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
                     context.Message.MessageId,
                     context.Message.OccurredAtUtc,
                     payload.AnalyzedAt,
-                    payload.BodyCount),
+                    payload.BodyCount,
+                    rawOverlayPaths),
                 context.CancellationToken);
             if (!finalized.Applied || finalized.Snapshot is null)
                 return;
@@ -297,8 +308,8 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
     }
 
     private static IReadOnlyList<string> NormalizePaths(IEnumerable<string?> paths) => paths
-        .Where(path => !string.IsNullOrWhiteSpace(path))
-        .Select(path => path!.Trim())
+        .Where(path => !string.IsNullOrEmpty(path))
+        .Select(path => path!)
         .Distinct(StringComparer.Ordinal)
         .ToArray();
 }

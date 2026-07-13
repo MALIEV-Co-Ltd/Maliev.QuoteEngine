@@ -241,6 +241,10 @@ public sealed class QuoteAnalysisStatusResponse
 
     public string? ThumbnailUrl { get; set; }
 
+    public string PreviewAvailability { get; set; } = "pending";
+
+    public int? PreviewRetryAfterSeconds { get; set; }
+
     public IReadOnlyList<DfmFindingDto> Findings { get; set; } = [];
 
     public bool IsManifold { get; set; } = true;

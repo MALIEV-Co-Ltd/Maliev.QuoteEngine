@@ -22,6 +22,7 @@ public sealed record QuoteFileAnalysisStatus
     public string? ViewerStoragePath { get; init; }
     public string? ViewerFileExtension { get; init; }
     public string? ThumbnailUrl { get; init; }
+    public string? ThumbnailStoragePath { get; init; }
     public decimal? VolumeCc { get; init; }
     public decimal? SupportVolumeCc { get; init; }
     public decimal? SurfaceAreaCm2 { get; init; }
@@ -37,6 +38,7 @@ public sealed record QuoteFileAnalysisStatus
     public QeSlaDfmReport? SlaReport { get; init; }
     public QeCncDfmReport? CncReport { get; init; }
     public IReadOnlyList<string> OverlayGlbUrls { get; init; } = [];
+    public IReadOnlyList<string> AuthoritativeOverlayStoragePaths { get; init; } = [];
     public QuoteFileAdvisoryAnalysis? AdvisoryAnalysis { get; init; }
     public Guid? LastGeometryEventId { get; init; }
     public DateTimeOffset? LastGeometryEventOccurredAtUtc { get; init; }

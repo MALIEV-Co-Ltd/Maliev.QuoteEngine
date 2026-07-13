@@ -18,15 +18,24 @@ public sealed class QuoteFileAnalysisStatusTransitionsTests
 
         var result = QuoteFileAnalysisStatusTransitions.ApplyDfmReports(
             glb,
-            Dfm(fdmReport: Fdm(), overlays: ["https://cdn/overhang.glb"]));
+            Dfm(
+                fdmReport: Fdm(),
+                overlays: ["https://cdn/overhang.glb"],
+                overlayStoragePaths:
+                [
+                    StoragePath + "_overhang_overlay.glb",
+                    StoragePath + "_overhang_overlay.glb"
+                ]));
 
         Assert.Equal("DfmAnalysisReady", result.Status);
         Assert.Equal("https://cdn/part.glb", result.GlbUrl);
-        Assert.Equal("processed/part.glb", result.ViewerStoragePath);
+        Assert.Equal(StoragePath + "_viewer.glb", result.ViewerStoragePath);
+        Assert.Equal(StoragePath + "_thumbnail_small.webp", result.ThumbnailStoragePath);
         Assert.Equal("https://cdn/part.png", result.ThumbnailUrl);
         Assert.Equal(12.5m, result.VolumeCc);
         Assert.NotNull(result.FdmReport);
         Assert.Equal(["https://cdn/overhang.glb"], result.OverlayGlbUrls);
+        Assert.Equal([StoragePath + "_overhang_overlay.glb"], result.AuthoritativeOverlayStoragePaths);
     }
 
     [Fact]
@@ -385,7 +394,7 @@ public sealed class QuoteFileAnalysisStatusTransitionsTests
         "https://cdn/part.png",
         1,
         true,
-        "processed/part.glb",
+        StoragePath + "_viewer.glb",
         ".glb",
         12.5m,
         42.5m,
@@ -398,7 +407,8 @@ public sealed class QuoteFileAnalysisStatusTransitionsTests
         null,
         eventId,
         BaseTime,
-        BaseTime.AddSeconds(1));
+        BaseTime.AddSeconds(1),
+        StoragePath + "_thumbnail_small.webp");
 
     private static GeometryMetricsTransition Metrics(Guid eventId, DateTimeOffset at) => new(
         StoragePath,
@@ -421,6 +431,7 @@ public sealed class QuoteFileAnalysisStatusTransitionsTests
         QeFdmDfmReport? fdmReport = null,
         QeCncDfmReport? cncReport = null,
         IReadOnlyList<string>? overlays = null,
+        IReadOnlyList<string>? overlayStoragePaths = null,
         Guid? eventId = null) => new(
             StoragePath,
             fdmReport,
@@ -433,7 +444,8 @@ public sealed class QuoteFileAnalysisStatusTransitionsTests
             eventId,
             BaseTime,
             BaseTime,
-            1);
+            1,
+            overlayStoragePaths);
 
     private static QeFdmDfmReport Fdm() => new(1, 2, 3.5m, true, 4, []);
 

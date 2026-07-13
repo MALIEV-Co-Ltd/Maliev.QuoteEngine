@@ -6,6 +6,8 @@ namespace Maliev.QuoteEngine.Bff.Services;
 public interface IQuoteFileAnalysisStatusService
 {
     Task<QuoteFileAnalysisStatus?> GetStatusAsync(string storagePath, CancellationToken ct = default);
+    Task<QuoteFileAnalysisStatus?> RefreshPreviewUrlsAsync(
+        string storagePath, QuoteAnalysisPreviewRefresh refresh, CancellationToken ct = default);
     Task<QuoteAnalysisEventClaim> ClaimGeometryCompletionAsync(
         string storagePath, string fileId, Guid eventId, DateTimeOffset occurredAtUtc,
         DateTimeOffset processedAtUtc, CancellationToken ct = default);
@@ -37,7 +39,8 @@ public interface IQuoteFileAnalysisStatusService
         decimal? boundingBoxXmm = null, decimal? boundingBoxYmm = null,
         decimal? boundingBoxZmm = null, int? triangleCount = null,
         string? nonManifoldReason = null, Guid? eventId = null,
-        DateTimeOffset? occurredAtUtc = null, DateTimeOffset? processedAtUtc = null);
+        DateTimeOffset? occurredAtUtc = null, DateTimeOffset? processedAtUtc = null,
+        string? thumbnailStoragePath = null);
     Task SetGeometryMetricsAsync(string storagePath, string fileId,
         decimal? volumeCc, decimal? supportVolumeCc, decimal? surfaceAreaCm2,
         decimal? boundingBoxXmm, decimal? boundingBoxYmm, decimal? boundingBoxZmm,
@@ -50,7 +53,7 @@ public interface IQuoteFileAnalysisStatusService
         string? analysisErrorCode, CancellationToken ct = default,
         string? fileId = null, Guid? eventId = null,
         DateTimeOffset? occurredAtUtc = null, DateTimeOffset? analyzedAtUtc = null,
-        int? bodyCount = null);
+        int? bodyCount = null, IReadOnlyList<string>? overlayStoragePaths = null);
     Task SetLocalGeometryMetricsAsync(string storagePath,
         decimal? volumeCc, decimal? surfaceAreaCm2, bool isManifold,
         string? nonManifoldReason, CancellationToken ct = default);

@@ -21,7 +21,8 @@ internal sealed record GeometryCompletionTransition(
     string? NonManifoldReason,
     Guid? EventId,
     DateTimeOffset? OccurredAtUtc,
-    DateTimeOffset? ProcessedAtUtc);
+    DateTimeOffset? ProcessedAtUtc,
+    string? ThumbnailStoragePath = null);
 
 internal sealed record GeometryMetricsTransition(
     string StoragePath,
@@ -52,7 +53,8 @@ internal sealed record DfmReportsTransition(
     Guid? EventId,
     DateTimeOffset? OccurredAtUtc,
     DateTimeOffset? AnalyzedAtUtc,
-    int? BodyCount);
+    int? BodyCount,
+    IReadOnlyList<string>? OverlayStoragePaths = null);
 
 internal sealed record LocalGeometryTransition(
     string StoragePath,
@@ -131,6 +133,10 @@ internal static class QuoteFileAnalysisStatusTransitions
         QuoteFileAnalysisStatus? existing,
         GeometryCompletionTransition transition)
     {
+        QuoteAnalysisArtifactPathValidator.RequireCanonicalGeometryPaths(
+            transition.StoragePath,
+            transition.ViewerStoragePath,
+            transition.ThumbnailStoragePath);
         var id = transition.EventId ?? Guid.Empty;
         var occurred = transition.OccurredAtUtc ?? DateTimeOffset.MinValue;
         var processed = transition.ProcessedAtUtc ?? occurred;
@@ -155,6 +161,7 @@ internal static class QuoteFileAnalysisStatusTransitions
                 ViewerStoragePath = transition.ViewerStoragePath,
                 ViewerFileExtension = transition.ViewerFileExtension,
                 ThumbnailUrl = transition.ThumbnailUrl,
+                ThumbnailStoragePath = transition.ThumbnailStoragePath,
                 VolumeCc = transition.VolumeCc,
                 SupportVolumeCc = transition.SupportVolumeCc,
                 SurfaceAreaCm2 = transition.SurfaceAreaCm2,
@@ -187,6 +194,8 @@ internal static class QuoteFileAnalysisStatusTransitions
             ViewerStoragePath = transition.ViewerStoragePath ?? existing.ViewerStoragePath,
             ViewerFileExtension = transition.ViewerFileExtension ?? existing.ViewerFileExtension,
             ThumbnailUrl = transition.ThumbnailUrl,
+            ThumbnailStoragePath = transition.ThumbnailStoragePath
+                ?? existing.ThumbnailStoragePath,
             VolumeCc = transition.VolumeCc ?? existing.VolumeCc,
             SupportVolumeCc = transition.SupportVolumeCc ?? existing.SupportVolumeCc,
             SurfaceAreaCm2 = transition.SurfaceAreaCm2 ?? existing.SurfaceAreaCm2,
@@ -324,8 +333,11 @@ internal static class QuoteFileAnalysisStatusTransitions
                 FdmReport = transition.FdmReport,
                 SlaReport = transition.SlaReport,
                 CncReport = transition.CncReport,
-                ViewerStoragePath = transition.StoragePath,
                 OverlayGlbUrls = [.. transition.OverlayGlbUrls],
+                AuthoritativeOverlayStoragePaths =
+                    QuoteAnalysisArtifactPathValidator.RequireCanonicalOverlayPaths(
+                        transition.StoragePath,
+                        transition.OverlayStoragePaths),
                 VolumeCc = null,
                 SurfaceAreaCm2 = null,
                 NonManifoldReason = transition.NonManifoldReason,
@@ -372,6 +384,10 @@ internal static class QuoteFileAnalysisStatusTransitions
                     .Distinct(StringComparer.Ordinal)
                     .ToArray()
                 : existing.OverlayGlbUrls,
+            AuthoritativeOverlayStoragePaths = MergeStoragePaths(
+                transition.StoragePath,
+                existing.AuthoritativeOverlayStoragePaths,
+                transition.OverlayStoragePaths),
             NonManifoldReason = transition.NonManifoldReason ?? existing.NonManifoldReason,
             AnalysisErrorCode = transition.AnalysisErrorCode ?? existing.AnalysisErrorCode,
             LastDfmEventId = transition.EventId ?? existing.LastDfmEventId,
@@ -583,6 +599,19 @@ internal static class QuoteFileAnalysisStatusTransitions
 
     private static string? NullIfWhiteSpace(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value;
+
+    private static IReadOnlyList<string> MergeStoragePaths(
+        string sourcePath,
+        IReadOnlyList<string> existing,
+        IEnumerable<string>? incoming)
+    {
+        var exact = QuoteAnalysisArtifactPathValidator.RequireCanonicalOverlayPaths(
+            sourcePath,
+            incoming);
+        return exact.Count == 0
+            ? existing
+            : existing.Concat(exact).Distinct(StringComparer.Ordinal).ToArray();
+    }
 
     private static bool HasCompleteGeometry(
         decimal? volumeCc,

@@ -1,8 +1,10 @@
 using DotNet.Testcontainers.Configurations;
+using Maliev.QuoteEngine.Bff.Clients;
 using Maliev.QuoteEngine.Bff.Services;
 using Maliev.QuoteEngine.Shared.Quotes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using StackExchange.Redis;
 using System.Text.Json.Nodes;
@@ -64,7 +66,7 @@ public sealed class RedisQuoteFileAnalysisStatusServiceTests : IAsyncLifetime
             gate.Wait();
             await first.SetGlbReadyAsync(
                 StoragePath, "https://signed/part.glb", "https://signed/part.png", 1, true,
-                viewerStoragePath: "processed/part.glb", viewerFileExtension: ".glb",
+                viewerStoragePath: StoragePath + "_viewer.glb", viewerFileExtension: ".glb",
                 volumeCc: 12.5m, surfaceAreaCm2: 42.5m, fileId: FileId,
                 boundingBoxXmm: 10m, boundingBoxYmm: 20m, boundingBoxZmm: 30m,
                 triangleCount: 456, eventId: completionId,
@@ -169,6 +171,227 @@ public sealed class RedisQuoteFileAnalysisStatusServiceTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task RefreshPreviewUrls_WritesOnlyEphemeralKeysAndIsVisibleAcrossInstances()
+    {
+        await using var firstConnection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        await using var secondConnection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        var first = new RedisQuoteFileAnalysisStatusService(firstConnection);
+        var second = new RedisQuoteFileAnalysisStatusService(secondConnection);
+        var viewerPath = StoragePath + "_viewer.glb";
+        var thumbnailPath = StoragePath + "_thumbnail_small.webp";
+        var overlayPath = StoragePath + "_thin_wall_overlay.glb";
+        await first.SetGlbReadyAsync(
+            StoragePath, "https://expired/part.glb", "https://expired/part.webp", 1, true,
+            viewerStoragePath: viewerPath, viewerFileExtension: ".glb", fileId: FileId,
+            thumbnailStoragePath: thumbnailPath);
+        await first.SetDfmReportsAsync(
+            StoragePath, Fdm(), null, null, ["https://expired/overlay.glb"], null, null,
+            fileId: FileId, eventId: Guid.NewGuid(), overlayStoragePaths: [overlayPath]);
+        var database = firstConnection.GetDatabase();
+        var durableKey = RedisQuoteFileAnalysisStatusService.BuildDurableKey(StoragePath);
+        var durableBefore = await database.StringGetAsync(durableKey);
+        var durableTtlBefore = await database.KeyTimeToLiveAsync(durableKey);
+        await database.KeyDeleteAsync([
+            RedisQuoteFileAnalysisStatusService.BuildPreviewKey(StoragePath),
+            RedisQuoteFileAnalysisStatusService.BuildOverlayKey(StoragePath)]);
+        var expired = Assert.IsType<QuoteFileAnalysisStatus>(await second.GetStatusAsync(StoragePath));
+        Assert.Null(expired.GlbUrl);
+        Assert.Empty(expired.OverlayGlbUrls);
+
+        var refreshed = await first.RefreshPreviewUrlsAsync(
+            StoragePath,
+            new QuoteAnalysisPreviewRefresh(
+                expired.Revision,
+                viewerPath,
+                "https://signed/part.glb",
+                thumbnailPath,
+                "https://signed/part.webp",
+                [overlayPath],
+                ["https://signed/overlay.glb"]));
+
+        Assert.NotNull(refreshed);
+        Assert.Equal(expired.Revision, refreshed.Revision);
+        Assert.Equal(durableBefore, await database.StringGetAsync(durableKey));
+        var durableTtlAfter = await database.KeyTimeToLiveAsync(durableKey);
+        Assert.NotNull(durableTtlBefore);
+        Assert.NotNull(durableTtlAfter);
+        Assert.True(durableTtlAfter <= durableTtlBefore);
+        var crossReplica = Assert.IsType<QuoteFileAnalysisStatus>(await second.GetStatusAsync(StoragePath));
+        Assert.Equal("https://signed/part.glb", crossReplica.GlbUrl);
+        Assert.Equal("https://signed/part.webp", crossReplica.ThumbnailUrl);
+        Assert.Equal(["https://signed/overlay.glb"], crossReplica.OverlayGlbUrls);
+    }
+
+    [Fact]
+    public async Task RefreshPreviewUrls_StaleRevisionDoesNotCreateEphemeralKeys()
+    {
+        await using var connection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        var service = new RedisQuoteFileAnalysisStatusService(connection);
+        var viewerPath = StoragePath + "_viewer.glb";
+        await service.SetGlbReadyAsync(
+            StoragePath, "https://expired/part.glb", null, 1, true,
+            viewerStoragePath: viewerPath, viewerFileExtension: ".glb", fileId: FileId);
+        var database = connection.GetDatabase();
+        await database.KeyDeleteAsync(RedisQuoteFileAnalysisStatusService.BuildPreviewKey(StoragePath));
+        var current = Assert.IsType<QuoteFileAnalysisStatus>(await service.GetStatusAsync(StoragePath));
+
+        var result = await service.RefreshPreviewUrlsAsync(
+            StoragePath,
+            new QuoteAnalysisPreviewRefresh(
+                current.Revision - 1,
+                viewerPath,
+                "https://signed/part.glb",
+                null,
+                null,
+                [],
+                []));
+
+        Assert.NotNull(result);
+        Assert.Equal(current.Revision, result.Revision);
+        Assert.Equal(current.StoragePath, result.StoragePath);
+        Assert.Null(result.GlbUrl);
+        Assert.False(await database.KeyExistsAsync(
+            RedisQuoteFileAnalysisStatusService.BuildPreviewKey(StoragePath)));
+    }
+
+    [Fact]
+    public async Task PreviewResolver_TwoReplicas_CoalesceSigningThroughRedisLease()
+    {
+        await using var firstConnection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        await using var secondConnection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        var firstStore = new RedisQuoteFileAnalysisStatusService(firstConnection);
+        var secondStore = new RedisQuoteFileAnalysisStatusService(secondConnection);
+        var viewerPath = StoragePath + "_viewer.glb";
+        await firstStore.SetGlbReadyAsync(
+            StoragePath, "https://expired/part.glb", null, 1, true,
+            viewerStoragePath: viewerPath, viewerFileExtension: ".glb", fileId: FileId);
+        await firstConnection.GetDatabase().KeyDeleteAsync(
+            RedisQuoteFileAnalysisStatusService.BuildPreviewKey(StoragePath));
+        var expired = Assert.IsType<QuoteFileAnalysisStatus>(await firstStore.GetStatusAsync(StoragePath));
+        var signer = new GatedPreviewSigner();
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Returns(CancellationToken.None);
+        var firstResolver = new QuoteAnalysisPreviewUrlResolver(
+            firstStore, signer, firstConnection, TimeProvider.System, lifetime,
+            NullLogger<QuoteAnalysisPreviewUrlResolver>.Instance);
+        var secondResolver = new QuoteAnalysisPreviewUrlResolver(
+            secondStore, signer, secondConnection, TimeProvider.System, lifetime,
+            NullLogger<QuoteAnalysisPreviewUrlResolver>.Instance);
+
+        var firstRequest = firstResolver.ResolveAsync(StoragePath, expired);
+        await signer.Started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        var secondRequest = secondResolver.ResolveAsync(StoragePath, expired);
+        await Task.Delay(100);
+        signer.Release("https://signed/part.glb");
+        var results = await Task.WhenAll(firstRequest, secondRequest).WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.All(results, result => Assert.Equal("ready", result.Availability));
+        Assert.Equal(1, signer.Attempts);
+        Assert.All(results, result => Assert.Equal("https://signed/part.glb", result.Status.GlbUrl));
+    }
+
+    [Fact]
+    public async Task PreviewResolver_SigningOutage_BackoffIsSharedAcrossReplicas()
+    {
+        await using var firstConnection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        await using var secondConnection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        var firstStore = new RedisQuoteFileAnalysisStatusService(firstConnection);
+        var secondStore = new RedisQuoteFileAnalysisStatusService(secondConnection);
+        var viewerPath = StoragePath + "_viewer.glb";
+        await firstStore.SetGlbReadyAsync(
+            StoragePath, "https://expired/part.glb", null, 1, true,
+            viewerStoragePath: viewerPath, viewerFileExtension: ".glb", fileId: FileId);
+        await firstConnection.GetDatabase().KeyDeleteAsync(
+            RedisQuoteFileAnalysisStatusService.BuildPreviewKey(StoragePath));
+        var expired = Assert.IsType<QuoteFileAnalysisStatus>(await firstStore.GetStatusAsync(StoragePath));
+        var signer = new FailingPreviewSigner();
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Returns(CancellationToken.None);
+        var firstResolver = new QuoteAnalysisPreviewUrlResolver(
+            firstStore, signer, firstConnection, TimeProvider.System, lifetime,
+            NullLogger<QuoteAnalysisPreviewUrlResolver>.Instance);
+        var secondResolver = new QuoteAnalysisPreviewUrlResolver(
+            secondStore, signer, secondConnection, TimeProvider.System, lifetime,
+            NullLogger<QuoteAnalysisPreviewUrlResolver>.Instance);
+
+        var first = await firstResolver.ResolveAsync(StoragePath, expired);
+        var second = await secondResolver.ResolveAsync(StoragePath, expired);
+
+        Assert.Equal("temporarily_unavailable", first.Availability);
+        Assert.Equal("temporarily_unavailable", second.Availability);
+        Assert.Equal(1, signer.Attempts);
+        Assert.True(await firstConnection.GetDatabase().KeyExistsAsync(
+            RedisQuoteFileAnalysisStatusService.BuildPreviewRefreshFailureKey(StoragePath)));
+    }
+
+    [Fact]
+    public async Task PreviewResolver_RedisDfmBeforeGeometry_DoesNotInventOrResignViewerSource()
+    {
+        await using var connection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        var store = new RedisQuoteFileAnalysisStatusService(connection);
+        await store.SetDfmReportsAsync(
+            StoragePath, Fdm(), null, null, [], null, null,
+            fileId: FileId, eventId: Guid.NewGuid());
+        var status = Assert.IsType<QuoteFileAnalysisStatus>(await store.GetStatusAsync(StoragePath));
+        var signer = new FailingPreviewSigner();
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Returns(CancellationToken.None);
+        var resolver = new QuoteAnalysisPreviewUrlResolver(
+            store, signer, connection, TimeProvider.System, lifetime,
+            NullLogger<QuoteAnalysisPreviewUrlResolver>.Instance);
+
+        var first = await resolver.ResolveAsync(StoragePath, status);
+        var second = await resolver.ResolveAsync(StoragePath, status);
+
+        Assert.Equal("unavailable", first.Availability);
+        Assert.Equal("unavailable", second.Availability);
+        Assert.Null(status.ViewerStoragePath);
+        Assert.Equal(0, signer.Attempts);
+    }
+
+    [Fact]
+    public async Task PreviewResolver_LeaseWaitRejectsChangedInternalStorageIdentityBeforeSigning()
+    {
+        await using var connection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        var store = new RedisQuoteFileAnalysisStatusService(connection);
+        var viewerPath = StoragePath + "_viewer.glb";
+        await store.SetGlbReadyAsync(
+            StoragePath, "https://expired/part.glb", null, 1, true,
+            viewerStoragePath: viewerPath, viewerFileExtension: ".glb", fileId: FileId);
+        var database = connection.GetDatabase();
+        await database.KeyDeleteAsync(RedisQuoteFileAnalysisStatusService.BuildPreviewKey(StoragePath));
+        var expired = Assert.IsType<QuoteFileAnalysisStatus>(await store.GetStatusAsync(StoragePath));
+        const string leaseToken = "test-held-lease";
+        Assert.True(await database.LockTakeAsync(
+            RedisQuoteFileAnalysisStatusService.BuildPreviewRefreshLockKey(StoragePath),
+            leaseToken,
+            TimeSpan.FromMinutes(1)));
+        var signer = new FailingPreviewSigner();
+        var lifetime = Substitute.For<IHostApplicationLifetime>();
+        lifetime.ApplicationStopping.Returns(CancellationToken.None);
+        var resolver = new QuoteAnalysisPreviewUrlResolver(
+            store, signer, connection, TimeProvider.System, lifetime,
+            NullLogger<QuoteAnalysisPreviewUrlResolver>.Instance);
+
+        var pending = resolver.ResolveAsync(StoragePath, expired);
+        await Task.Delay(100);
+        var durableKey = RedisQuoteFileAnalysisStatusService.BuildDurableKey(StoragePath);
+        var durable = JsonNode.Parse((await database.StringGetAsync(durableKey)).ToString());
+        Assert.NotNull(durable);
+        durable["status"]!["storagePath"] = "quotes/other/customer/private.step";
+        await database.StringSetAsync(durableKey, durable.ToJsonString());
+        Assert.True(await database.LockReleaseAsync(
+            RedisQuoteFileAnalysisStatusService.BuildPreviewRefreshLockKey(StoragePath),
+            leaseToken));
+
+        var result = await pending.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal("temporarily_unavailable", result.Availability);
+        Assert.Null(result.Status.ViewerStoragePath);
+        Assert.Equal(0, signer.Attempts);
+    }
+
+    [Fact]
     public async Task DfmWithoutNewOverlays_DoesNotExtendExistingOverlayExpiry()
     {
         await using var connection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
@@ -199,7 +422,9 @@ public sealed class RedisQuoteFileAnalysisStatusServiceTests : IAsyncLifetime
         await service.SetGlbReadyAsync(
             StoragePath, "https://signed/part.glb", "https://signed/part.png", 1, true,
             volumeCc: 12.5m, fileId: FileId, eventId: Guid.NewGuid(),
-            occurredAtUtc: BaseTime, processedAtUtc: BaseTime);
+            occurredAtUtc: BaseTime, processedAtUtc: BaseTime,
+            viewerStoragePath: StoragePath + "_viewer.glb",
+            thumbnailStoragePath: StoragePath + "_thumbnail_small.webp");
         Assert.True(await connection.GetDatabase().KeyDeleteAsync(
             RedisQuoteFileAnalysisStatusService.BuildPreviewKey(StoragePath)));
 
@@ -210,6 +435,30 @@ public sealed class RedisQuoteFileAnalysisStatusServiceTests : IAsyncLifetime
         Assert.Equal(12.5m, result.VolumeCc);
         Assert.Null(result.GlbUrl);
         Assert.Null(result.ThumbnailUrl);
+        Assert.Equal(StoragePath + "_viewer.glb", result.ViewerStoragePath);
+        Assert.Equal(StoragePath + "_thumbnail_small.webp", result.ThumbnailStoragePath);
+    }
+
+    [Fact]
+    public async Task GetStatus_WhenOverlayPreviewExpires_PreservesAuthoritativeSourcePathsOnly()
+    {
+        await using var connection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        var service = new RedisQuoteFileAnalysisStatusService(connection);
+        await service.SetDfmReportsAsync(
+            StoragePath, Fdm(), null, null, ["https://signed/overlay.glb"], null, null,
+            fileId: FileId, eventId: Guid.NewGuid(),
+            overlayStoragePaths: [StoragePath + "_thin_wall_overlay.glb"]);
+        Assert.True(await connection.GetDatabase().KeyDeleteAsync(
+            RedisQuoteFileAnalysisStatusService.BuildOverlayKey(StoragePath)));
+
+        var result = await service.GetStatusAsync(StoragePath);
+
+        Assert.NotNull(result);
+        Assert.Empty(result.OverlayGlbUrls);
+        Assert.Equal(
+            [StoragePath + "_thin_wall_overlay.glb"],
+            result.AuthoritativeOverlayStoragePaths);
+        Assert.Empty(result.AdvisoryAnalysis?.OverlayGlbUrls ?? []);
     }
 
     [Fact]
@@ -496,6 +745,44 @@ public sealed class RedisQuoteFileAnalysisStatusServiceTests : IAsyncLifetime
 
         internal void Advance(TimeSpan duration) => _utcNow += duration;
     }
+
+    private sealed class GatedPreviewSigner()
+        : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
+    {
+        private readonly TaskCompletionSource<string> _release =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Started { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Attempts { get; private set; }
+
+        public void Release(string url) => _release.TrySetResult(url);
+
+        public override async Task<string> GetDownloadUrlByPathAsync(
+            string storagePath,
+            int expirationMinutes = 60,
+            CancellationToken ct = default)
+        {
+            Attempts++;
+            Started.TrySetResult();
+            return await _release.Task.WaitAsync(ct);
+        }
+    }
+
+    private sealed class FailingPreviewSigner()
+        : QuoteUploadServiceClient(new HttpClient(), NullLogger<QuoteUploadServiceClient>.Instance)
+    {
+        public int Attempts { get; private set; }
+
+        public override Task<string> GetDownloadUrlByPathAsync(
+            string storagePath,
+            int expirationMinutes = 60,
+            CancellationToken ct = default)
+        {
+            Attempts++;
+            return Task.FromException<string>(new HttpRequestException("simulated signing outage"));
+        }
+    }
 }
 
 public sealed class QuoteFileAnalysisStatusRegistrationTests
@@ -546,6 +833,14 @@ public sealed class QuoteFileAnalysisStatusRegistrationTests
         Assert.Contains("builder.Services.AddQuoteFileAnalysisStatus();", program, StringComparison.Ordinal);
         Assert.DoesNotContain(
             "AddSingleton<IQuoteFileAnalysisStatusService, QuoteFileAnalysisStatusService>",
+            program,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "AddScoped<IQuoteAnalysisPreviewUrlResolver, QuoteAnalysisPreviewUrlResolver>",
+            program,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain(
+            "AddSingleton<IQuoteAnalysisPreviewUrlResolver, QuoteAnalysisPreviewUrlResolver>",
             program,
             StringComparison.Ordinal);
     }
