@@ -30,9 +30,18 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
         }
 
         var storagePath = payload.StoragePath;
-        if (string.IsNullOrEmpty(storagePath))
+        if (string.IsNullOrWhiteSpace(storagePath) || string.IsNullOrWhiteSpace(payload.FileId))
         {
-            logger.LogWarning("DfmAnalysisReadyEvent received with empty StoragePath — skipping");
+            logger.LogWarning("DfmAnalysisReadyEvent received without a canonical file identity; skipping");
+            return;
+        }
+
+        if (!await status.CanApplyDfmEventAsync(
+                storagePath,
+                payload.FileId,
+                context.Message.MessageId,
+                context.CancellationToken))
+        {
             return;
         }
 
@@ -40,6 +49,11 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
         var fdmReport = MapFdm(payload.FdmReport);
         var slaReport = MapSla(payload.SlaReport);
         var cncReport = MapCnc(payload.CncReport);
+        if (fdmReport is null && slaReport is null && cncReport is null)
+        {
+            logger.LogWarning("DfmAnalysisReadyEvent contained no valid reports for {StoragePath}; skipping", storagePath);
+            return;
+        }
         RecordServerDfmReports(fdmReport, slaReport, cncReport, bffMetrics);
 
         // Sign overlay GLB paths in parallel; silently skip on error (analysis still usable)
@@ -53,6 +67,10 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
                     rawOverlayPaths.Select(p =>
                         uploadClient.GetDownloadUrlByPathAsync(p, ct: context.CancellationToken)));
             }
+            catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to sign overlay URLs for {StoragePath}", storagePath);
@@ -63,7 +81,12 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
         await status.SetDfmReportsAsync(
             storagePath, fdmReport, slaReport, cncReport,
             overlayUrls, payload.NonManifoldReason, null,
-            context.CancellationToken);
+            context.CancellationToken,
+            payload.FileId,
+            context.Message.MessageId,
+            context.Message.OccurredAtUtc,
+            payload.AnalyzedAt,
+            payload.BodyCount);
 
         // Read back the merged state so the SignalR payload reflects all events received so far
         var merged = await status.GetStatusAsync(storagePath, context.CancellationToken);
@@ -111,13 +134,15 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
     {
         var src = Deserialize<FdmDfmReportPayload>(raw);
         if (src is null) return null;
+        var overhangAreaCm2 = GeometryMetricMapper.NonNegative(src.OverhangAreaCm2);
+        if (overhangAreaCm2 is null) return null;
         return new QeFdmDfmReport(
-            src.ThinWallCount,
-            src.OverhangFaceCount,
-            (decimal)src.OverhangAreaCm2,
+            Math.Max(0, src.ThinWallCount),
+            Math.Max(0, src.OverhangFaceCount),
+            overhangAreaCm2.Value,
             src.SupportRequired,
-            src.SmallDetailCount,
-            src.Issues.Select(i => new QeDfmIssueItem(i.Severity, i.Category, i.Description)).ToList());
+            Math.Max(0, src.SmallDetailCount),
+            (src.Issues ?? []).Select(i => new QeDfmIssueItem(i.Severity, i.Category, i.Description)).ToList());
     }
 
     private static QeSlaDfmReport? MapSla(object? raw)
@@ -127,11 +152,11 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
         // HollowRegions in the contract is a list of centroid coordinates, not a bool flag;
         // treat as "has hollow regions" when the list is non-empty.
         return new QeSlaDfmReport(
-            src.ThinWallCount,
+            Math.Max(0, src.ThinWallCount),
             src.ResinTrappingRisk,
             src.SuctionRisk,
-            src.HollowRegions.Count > 0,
-            src.Issues.Select(i => new QeDfmIssueItem(i.Severity, i.Category, i.Description)).ToList());
+            (src.HollowRegions?.Count ?? 0) > 0,
+            (src.Issues ?? []).Select(i => new QeDfmIssueItem(i.Severity, i.Category, i.Description)).ToList());
     }
 
     private static QeCncDfmReport? MapCnc(object? raw)
@@ -139,14 +164,14 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
         var src = Deserialize<CncDfmReportPayload>(raw);
         if (src is null) return null;
         return new QeCncDfmReport(
-            src.SharpCornerCount,
+            Math.Max(0, src.SharpCornerCount),
             src.HasUndercuts,
             src.HasDrillHoles,
-            src.DrillHoleCount,
+            Math.Max(0, src.DrillHoleCount),
             src.RequiresEdm,
             src.RequiresGrinding,
             src.IsTurnable,
-            src.Issues.Select(i => new QeDfmIssueItem(i.Severity, i.Category, i.Description)).ToList());
+            (src.Issues ?? []).Select(i => new QeDfmIssueItem(i.Severity, i.Category, i.Description)).ToList());
     }
 
     /// <summary>
@@ -155,31 +180,49 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
     /// </summary>
     private static T? Deserialize<T>(object? raw) where T : class
     {
-        return raw switch
+        try
         {
-            null => null,
-            T typed => typed,
-            JsonElement el => el.Deserialize<T>(JsonOpts),
-            _ => null
-        };
+            return raw switch
+            {
+                null => null,
+                T typed => typed,
+                JsonElement el => el.Deserialize<T>(JsonOpts),
+                _ => null
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
-    /// Extracts a list of strings from the <c>object</c>-typed OverlayPaths field,
-    /// handling both direct IEnumerable&lt;string&gt; and JsonElement array forms.
+    /// Extracts storage-path values from the object-typed OverlayPaths dictionary.
     /// </summary>
     private static IReadOnlyList<string> ExtractStringList(object? raw)
     {
         return raw switch
         {
             null => [],
-            IEnumerable<string> list => list.ToList(),
+            IReadOnlyDictionary<string, string> dictionary => NormalizePaths(dictionary.Values),
+            IDictionary<string, string> dictionary => NormalizePaths(dictionary.Values),
+            IEnumerable<KeyValuePair<string, string>> dictionary => NormalizePaths(dictionary.Select(pair => pair.Value)),
+            IEnumerable<string> legacyList => NormalizePaths(legacyList),
             JsonElement el when el.ValueKind == JsonValueKind.Array =>
-                el.EnumerateArray()
-                  .Select(e => e.GetString() ?? "")
-                  .Where(s => s.Length > 0)
-                  .ToList(),
+                NormalizePaths(el.EnumerateArray()
+                    .Where(element => element.ValueKind == JsonValueKind.String)
+                    .Select(element => element.GetString())),
+            JsonElement el when el.ValueKind == JsonValueKind.Object =>
+                NormalizePaths(el.EnumerateObject()
+                    .Where(property => property.Value.ValueKind == JsonValueKind.String)
+                    .Select(property => property.Value.GetString())),
             _ => []
         };
     }
+
+    private static IReadOnlyList<string> NormalizePaths(IEnumerable<string?> paths) => paths
+        .Where(path => !string.IsNullOrWhiteSpace(path))
+        .Select(path => path!.Trim())
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
 }

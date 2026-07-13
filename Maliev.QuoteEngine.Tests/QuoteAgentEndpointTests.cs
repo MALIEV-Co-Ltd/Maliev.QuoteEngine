@@ -3850,7 +3850,12 @@ Customer message:
             viewerStoragePath: "processed/analyzed-bracket.glb",
             viewerFileExtension: ".glb",
             volumeCc: 18.75m,
-            surfaceAreaCm2: 64.5m);
+            surfaceAreaCm2: 64.5m,
+            supportVolumeCc: 0m,
+            boundingBoxXmm: 10m,
+            boundingBoxYmm: 20m,
+            boundingBoxZmm: 30m,
+            triangleCount: 456);
         await analysisStatus.SetDfmReportsAsync(
             attachment.StoragePath!,
             new QeFdmDfmReport(0, 0, 0m, false, 0, []),
@@ -9150,7 +9155,12 @@ Customer message:
             viewerStoragePath: "processed/test-part.glb",
             viewerFileExtension: ".glb",
             volumeCc: 1m,
-            surfaceAreaCm2: 1m);
+            surfaceAreaCm2: 1m,
+            supportVolumeCc: 0m,
+            boundingBoxXmm: 10m,
+            boundingBoxYmm: 10m,
+            boundingBoxZmm: 10m,
+            triangleCount: 12);
         await analysisStatus.SetDfmReportsAsync(
             storagePath,
             new QeFdmDfmReport(0, 0, 0m, false, 0, []),
