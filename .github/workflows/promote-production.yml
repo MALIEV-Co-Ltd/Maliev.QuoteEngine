@@ -1,0 +1,122 @@
+name: Promote QuoteEngine to Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Verified SemVer image tag, for example v1.2.3
+        required: true
+        type: string
+      digest:
+        description: Verified staging sha256 digest
+        required: true
+        type: string
+
+concurrency:
+  group: quote-engine-production-promotion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    name: Promote approved staging digest
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BASE_IMAGE: asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact/maliev-quote-engine
+      STAGING_IMAGE: asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact-staging/maliev-quote-engine
+      PRODUCTION_IMAGE: asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact-prod/maliev-quote-engine
+      GITOPS_OVERLAY: 3-apps/maliev-quote-engine/overlays/production
+      RELEASE_VERSION: ${{ inputs.version }}
+      APPROVED_DIGEST: ${{ inputs.digest }}
+    steps:
+      - name: Validate promotion inputs
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          WIF_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$APPROVED_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test -n "$WIF_PROVIDER"
+          test -n "$WIF_SERVICE_ACCOUNT"
+
+      - name: Authenticate to Google Cloud with WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Artifact Registry authentication
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          project_id: maliev-website
+
+      - name: Configure Docker credential helper
+        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
+
+      - name: Verify and copy the exact approved digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          staging_digest="$(crane digest "${STAGING_IMAGE}:${RELEASE_VERSION}")"
+          test "$staging_digest" = "$APPROVED_DIGEST"
+          crane manifest "${STAGING_IMAGE}@${staging_digest}" \
+            | jq -e '[.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")] | length >= 2'
+          crane copy "${STAGING_IMAGE}@${staging_digest}" "${PRODUCTION_IMAGE}:${RELEASE_VERSION}"
+          test "$(crane digest "${PRODUCTION_IMAGE}:${RELEASE_VERSION}")" = "$staging_digest"
+          crane manifest "${PRODUCTION_IMAGE}@${staging_digest}" \
+            | jq -e '[.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")] | length >= 2'
+
+      - name: Checkout disabled GitOps definition
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: MALIEV-Co-Ltd/maliev-gitops
+          token: ${{ secrets.GITOPS_PAT }}
+          path: maliev-gitops
+
+      - name: Install Kustomize
+        uses: imranismail/setup-kustomize@2ba527d4d055ab63514ba50a99456fc35684947f # v2
+
+      - name: Update, render, and open the production GitOps pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_PAT }}
+        run: |
+          set -euo pipefail
+          cd "maliev-gitops/${GITOPS_OVERLAY}"
+          kustomize edit set image "${BASE_IMAGE}=${PRODUCTION_IMAGE}@${APPROVED_DIGEST}"
+          kustomize build . >/dev/null
+          cd ../../../../
+          test -f argocd/environments/_disabled_apps/prod/maliev-quote-engine.yaml
+          if grep -RIl '3-apps/maliev-quote-engine/overlays/production' argocd/environments \
+              | grep -v '/_disabled_apps/'; then
+            echo "Refusing promotion because an active ArgoCD Application references QuoteEngine."
+            exit 1
+          fi
+          if git diff --quiet; then
+            echo "Production overlay already points at ${APPROVED_DIGEST}."
+            exit 0
+          fi
+          test "$(git diff --name-only)" = "${GITOPS_OVERLAY}/kustomization.yaml"
+          branch="quote-engine/production-${RELEASE_VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$branch:refs/remotes/origin/$branch" || true
+          git switch -C "$branch"
+          git add -- "${GITOPS_OVERLAY}/kustomization.yaml"
+          git commit -m "chore(production): Promote QuoteEngine ${RELEASE_VERSION}"
+          git push --force-with-lease origin "$branch"
+          if ! gh pr list --repo MALIEV-Co-Ltd/maliev-gitops --head "$branch" --state open --json number --jq 'length > 0' | grep -q true; then
+            gh pr create --repo MALIEV-Co-Ltd/maliev-gitops --base main --head "$branch" \
+              --title "chore(production): Promote QuoteEngine ${RELEASE_VERSION}" \
+              --body "Promotes the exact staging digest ${APPROVED_DIGEST} after production environment approval; embedded SBOM and provenance are preserved and verified, and no image rebuild occurred. The ArgoCD Application remains intentionally disabled."
+          fi

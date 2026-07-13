@@ -1,0 +1,127 @@
+name: Promote QuoteEngine to Staging
+
+on:
+  push:
+    tags:
+      - release/v*.*.*
+
+concurrency:
+  group: quote-engine-staging-promotion
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    name: Promote verified development digest
+    runs-on: ubuntu-latest
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BASE_IMAGE: asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact/maliev-quote-engine
+      DEVELOPMENT_IMAGE: asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact-dev/maliev-quote-engine
+      STAGING_IMAGE: asia-southeast1-docker.pkg.dev/maliev-website/maliev-website-artifact-staging/maliev-quote-engine
+      GITOPS_OVERLAY: 3-apps/maliev-quote-engine/overlays/staging
+    steps:
+      - name: Validate tag and WIF configuration
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          WIF_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          [[ "$GITHUB_REF_NAME" =~ ^release/v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test -n "$WIF_PROVIDER"
+          test -n "$WIF_SERVICE_ACCOUNT"
+
+      - name: Resolve source and release identifiers
+        id: release
+        shell: bash
+        run: |
+          echo "source_tag=dev-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          echo "version=${GITHUB_REF_NAME#release/}" >> "$GITHUB_OUTPUT"
+
+      - name: Authenticate to Google Cloud with WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Configure Artifact Registry authentication
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with:
+          project_id: maliev-website
+
+      - name: Configure Docker credential helper
+        run: gcloud auth configure-docker asia-southeast1-docker.pkg.dev --quiet
+
+      - name: Install crane
+        uses: imjasonh/setup-crane@31b88efe9de28ae0ffa220711af4b60be9435f6e # v0.4
+
+      - name: Copy the exact development digest to staging
+        id: image
+        shell: bash
+        env:
+          SOURCE_TAG: ${{ steps.release.outputs.source_tag }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          source_ref="${DEVELOPMENT_IMAGE}:${SOURCE_TAG}"
+          source_digest="$(crane digest "$source_ref")"
+          crane manifest "${DEVELOPMENT_IMAGE}@${source_digest}" \
+            | jq -e '[.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")] | length >= 2'
+          crane copy "${DEVELOPMENT_IMAGE}@${source_digest}" "${STAGING_IMAGE}:${RELEASE_VERSION}"
+          promoted_digest="$(crane digest "${STAGING_IMAGE}:${RELEASE_VERSION}")"
+          test "$promoted_digest" = "$source_digest"
+          crane manifest "${STAGING_IMAGE}@${promoted_digest}" \
+            | jq -e '[.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")] | length >= 2'
+          echo "digest=$promoted_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout disabled GitOps definition
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          repository: MALIEV-Co-Ltd/maliev-gitops
+          token: ${{ secrets.GITOPS_PAT }}
+          path: maliev-gitops
+
+      - name: Install Kustomize
+        uses: imranismail/setup-kustomize@2ba527d4d055ab63514ba50a99456fc35684947f # v2
+
+      - name: Update, render, and open the staging GitOps pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITOPS_PAT }}
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          cd "maliev-gitops/${GITOPS_OVERLAY}"
+          kustomize edit set image "${BASE_IMAGE}=${STAGING_IMAGE}@${IMAGE_DIGEST}"
+          kustomize build . >/dev/null
+          cd ../../../../
+          test -f argocd/environments/_disabled_apps/staging/maliev-quote-engine.yaml
+          if grep -RIl '3-apps/maliev-quote-engine/overlays/staging' argocd/environments \
+              | grep -v '/_disabled_apps/'; then
+            echo "Refusing promotion because an active ArgoCD Application references QuoteEngine."
+            exit 1
+          fi
+          if git diff --quiet; then
+            echo "Staging overlay already points at ${IMAGE_DIGEST}."
+            exit 0
+          fi
+          test "$(git diff --name-only)" = "${GITOPS_OVERLAY}/kustomization.yaml"
+          branch="quote-engine/staging-${RELEASE_VERSION}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "$branch:refs/remotes/origin/$branch" || true
+          git switch -C "$branch"
+          git add -- "${GITOPS_OVERLAY}/kustomization.yaml"
+          git commit -m "chore(staging): Promote QuoteEngine ${RELEASE_VERSION}"
+          git push --force-with-lease origin "$branch"
+          if ! gh pr list --repo MALIEV-Co-Ltd/maliev-gitops --head "$branch" --state open --json number --jq 'length > 0' | grep -q true; then
+            gh pr create --repo MALIEV-Co-Ltd/maliev-gitops --base main --head "$branch" \
+              --title "chore(staging): Promote QuoteEngine ${RELEASE_VERSION}" \
+              --body "Promotes the exact verified digest ${IMAGE_DIGEST}; embedded SBOM and provenance are preserved and verified, and no image rebuild occurred. The ArgoCD Application remains intentionally disabled."
+          fi
