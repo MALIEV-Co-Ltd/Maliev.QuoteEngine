@@ -80,7 +80,7 @@ public sealed class RequireQuoteAgentSessionAccessAttribute(QuoteAgentSessionAcc
             }
         }
 
-        if (!TryAuthorizeAttachments(context, sessionId.Value))
+        if (!await TryAuthorizeAttachmentsAsync(context, sessionId.Value))
         {
             DisableStatusCodeBody(context.HttpContext);
             context.Result = new EmptyStatusCodeResult(StatusCodes.Status404NotFound);
@@ -135,7 +135,9 @@ public sealed class RequireQuoteAgentSessionAccessAttribute(QuoteAgentSessionAcc
         };
     }
 
-    private static bool TryAuthorizeAttachments(ActionExecutingContext context, Guid sessionId)
+    private static async Task<bool> TryAuthorizeAttachmentsAsync(
+        ActionExecutingContext context,
+        Guid sessionId)
     {
         var attachmentAccess = context.HttpContext.RequestServices
             .GetRequiredService<QuoteAgentAttachmentAccess>();
@@ -144,10 +146,11 @@ public sealed class RequireQuoteAgentSessionAccessAttribute(QuoteAgentSessionAcc
             switch (argument)
             {
                 case QuoteAgentMessageRequest message:
-                    if (!attachmentAccess.TryAuthorizeAndCanonicalize(
-                            sessionId,
-                            message.Attachments,
-                            out var messageAttachments))
+                    var messageAttachments = await attachmentAccess.AuthorizeAndCanonicalizeAsync(
+                        sessionId,
+                        message.Attachments,
+                        context.HttpContext.RequestAborted);
+                    if (messageAttachments is null)
                     {
                         return false;
                     }
@@ -155,10 +158,11 @@ public sealed class RequireQuoteAgentSessionAccessAttribute(QuoteAgentSessionAcc
                     message.Attachments = messageAttachments;
                     break;
                 case QuoteAgentAttachmentRegisterRequest registration:
-                    if (!attachmentAccess.TryAuthorizeAndCanonicalize(
-                            sessionId,
-                            registration.Attachments,
-                            out var registeredAttachments))
+                    var registeredAttachments = await attachmentAccess.AuthorizeAndCanonicalizeAsync(
+                        sessionId,
+                        registration.Attachments,
+                        context.HttpContext.RequestAborted);
+                    if (registeredAttachments is null)
                     {
                         return false;
                     }

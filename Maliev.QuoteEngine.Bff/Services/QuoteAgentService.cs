@@ -100,6 +100,7 @@ internal sealed class QuoteAgentService(
     IChatbotServiceClient chatbotClient,
     ICustomerServiceClient customerClient,
     QuoteEnginePrototypeStore prototypeStore,
+    IQuoteUploadStateStore uploadStore,
     QuoteAgentSessionStore sessionStore,
     IQuoteAgentConversationMap conversationMap,
     QuoteAgentContextToken contextToken,
@@ -1531,7 +1532,7 @@ internal sealed class QuoteAgentService(
             cancellationToken);
         var signedUrl = await ResolveSketchUrlAsync(storagePath);
         var caller = sessionAccess.GetCurrentCaller();
-        prototypeStore.TrackAgentUpload(
+        await uploadStore.TrackAgentUploadAsync(
             uploadId,
             Guid.NewGuid(),
             safeFileName,
@@ -1540,7 +1541,8 @@ internal sealed class QuoteAgentService(
             storagePath,
             sessionId,
             caller.CustomerId,
-            caller.VisitorId);
+            caller.VisitorId,
+            cancellationToken);
         var state = sessionStore.GetOrCreate(sessionId);
         sessionStore.AddAttachments(state,
         [
@@ -5012,12 +5014,13 @@ internal sealed class QuoteAgentService(
             }
         }
 
-        if (!attachmentAccess.TryAuthorizeAndCanonicalizeForOwner(
-                state.SessionId,
-                state.CustomerId,
-                state.VisitorId,
-                attachments,
-                out var authorizedAttachments))
+        var authorizedAttachments = await attachmentAccess.AuthorizeAndCanonicalizeForOwnerAsync(
+            state.SessionId,
+            state.CustomerId,
+            state.VisitorId,
+            attachments,
+            cancellationToken);
+        if (authorizedAttachments is null)
         {
             return new
             {

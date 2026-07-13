@@ -255,6 +255,25 @@ builder.Services.AddSingleton<IQuoteAgentSessionOwnerStore>(sp =>
 
     return new InMemoryQuoteAgentSessionOwnerStore();
 });
+builder.Services.AddSingleton<IQuoteUploadStateStore>(sp =>
+{
+    var redis = sp.GetService<IConnectionMultiplexer>();
+    if (redis is not null)
+    {
+        return new RedisQuoteUploadStateStore(
+            redis,
+            sp.GetRequiredService<IOptions<QuoteAgentRetentionOptions>>());
+    }
+
+    var environment = sp.GetRequiredService<IHostEnvironment>();
+    if (!environment.IsDevelopment() && !environment.IsEnvironment("Testing"))
+    {
+        throw new InvalidOperationException("Durable QuoteEngine upload ownership requires Redis.");
+    }
+
+    return new InMemoryQuoteUploadStateStore(
+        sp.GetRequiredService<QuoteEnginePrototypeStore>());
+});
 builder.Services.AddSingleton<IQuoteAgentConversationMap>(sp =>
 {
     var redis = sp.GetService<IConnectionMultiplexer>();

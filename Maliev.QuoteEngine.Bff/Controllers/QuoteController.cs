@@ -24,6 +24,7 @@ namespace Maliev.QuoteEngine.Bff.Controllers;
 [Route("quote/v{version:apiVersion}")]
 public sealed class QuoteController(
     QuoteEnginePrototypeStore store,
+    IQuoteUploadStateStore uploadStore,
     CustomerSessionResolver sessionResolver,
     AnonymousVisitorCookie anonymousVisitorCookie,
     IQuoteAgentSessionRequestAuthorizer agentSessionAccess,
@@ -135,7 +136,11 @@ public sealed class QuoteController(
             : (Guid?)null;
         var visitor = anonymousVisitorCookie.ResolveForRequest(HttpContext);
 
-        var upload = store.InitiateUpload(request, customerId, visitor.VisitorId);
+        var upload = await uploadStore.InitiateAsync(
+            request,
+            customerId,
+            visitor.VisitorId,
+            cancellationToken);
         try
         {
             var metadataTags = BuildBrowserPrimaryUploadMetadata(upload.FileName);
@@ -146,7 +151,10 @@ public sealed class QuoteController(
                 upload.StoragePath,
                 metadataTags,
                 cancellationToken);
-            upload = store.AttachDownstreamUpload(upload.UploadId, downstreamUploadId);
+            upload = await uploadStore.AttachDownstreamAsync(
+                upload.UploadId,
+                downstreamUploadId,
+                cancellationToken);
         }
         catch (Exception ex)
         {
@@ -156,7 +164,10 @@ public sealed class QuoteController(
                 return StatusCode(502, new ProblemDetails { Title = "Upload service unavailable." });
             }
 
-            upload = store.AttachDownstreamUpload(upload.UploadId, CreatePrototypeUploadId(upload.UploadId));
+            upload = await uploadStore.AttachDownstreamAsync(
+                upload.UploadId,
+                CreatePrototypeUploadId(upload.UploadId),
+                cancellationToken);
             logger.LogWarning(
                 ex,
                 "UploadService unavailable for quote upload {UploadId}; using local prototype upload fallback.",
@@ -175,7 +186,7 @@ public sealed class QuoteController(
     [EnableRateLimiting(BffRateLimiterPolicies.UploadStream)]
     public async Task<IActionResult> ResumeUpload(string uploadId, CancellationToken cancellationToken)
     {
-        var upload = store.GetUpload(uploadId);
+        var upload = await uploadStore.GetAsync(uploadId, cancellationToken);
         if (upload is null || !CanAccessUpload(upload))
         {
             return EmptyNotFound();
@@ -245,7 +256,11 @@ public sealed class QuoteController(
         if (IsPrototypeUpload(upload))
         {
             await Request.Body.CopyToAsync(Stream.Null, cancellationToken);
-            var prototypeProgress = store.TryAdvanceUpload(uploadId, rangeStart, rangeEnd + 1);
+            var prototypeProgress = await uploadStore.TryAdvanceAsync(
+                uploadId,
+                rangeStart,
+                rangeEnd + 1,
+                cancellationToken);
             return prototypeProgress is null
                 ? Conflict(new ProblemDetails { Title = "Upload progress changed. Retry from the current offset." })
                 : UploadProgressResult(prototypeProgress);
@@ -269,8 +284,15 @@ public sealed class QuoteController(
                     ex,
                     "UploadService stream failed for quote upload {UploadId}; using local prototype upload fallback.",
                     uploadId);
-                store.AttachDownstreamUpload(uploadId, CreatePrototypeUploadId(uploadId));
-                var fallbackProgress = store.TryAdvanceUpload(uploadId, rangeStart, rangeEnd + 1);
+                await uploadStore.AttachDownstreamAsync(
+                    uploadId,
+                    CreatePrototypeUploadId(uploadId),
+                    cancellationToken);
+                var fallbackProgress = await uploadStore.TryAdvanceAsync(
+                    uploadId,
+                    rangeStart,
+                    rangeEnd + 1,
+                    cancellationToken);
                 return fallbackProgress is null
                     ? Conflict(new ProblemDetails { Title = "Upload progress changed. Retry from the current offset." })
                     : UploadProgressResult(fallbackProgress);
@@ -302,7 +324,11 @@ public sealed class QuoteController(
             return StatusCode(502, new ProblemDetails { Title = "Upload progress could not be verified." });
         }
 
-        var progress = store.TryAdvanceUpload(uploadId, rangeStart, acknowledgedBytes);
+        var progress = await uploadStore.TryAdvanceAsync(
+            uploadId,
+            rangeStart,
+            acknowledgedBytes,
+            cancellationToken);
         return progress is null
             ? Conflict(new ProblemDetails { Title = "Upload progress changed. Retry from the current offset." })
             : UploadProgressResult(progress);
@@ -314,7 +340,7 @@ public sealed class QuoteController(
     public async Task<ActionResult<CompleteQuoteUploadResponse>> CompleteUpload(
         string uploadId, CancellationToken cancellationToken)
     {
-        var existingUpload = store.GetUpload(uploadId);
+        var existingUpload = await uploadStore.GetAsync(uploadId, cancellationToken);
         if (existingUpload is null || !CanAccessUpload(existingUpload))
         {
             return EmptyNotFound();
@@ -334,7 +360,7 @@ public sealed class QuoteController(
         if (demo.IsConfigured &&
             string.Equals(existingUpload.FileName, demo.SampleFileName, StringComparison.OrdinalIgnoreCase))
         {
-            var demoUpload = store.MarkDemoAnalyzed(uploadId, demo);
+            var demoUpload = await uploadStore.MarkDemoAnalyzedAsync(uploadId, demo, cancellationToken);
             await hubContext.Clients
                 .Group(QuoteNotificationsHub.FileGroup(demoUpload.StoragePath))
                 .SendAsync("GlbReady", new QeGlbReadyPayload(
@@ -347,14 +373,38 @@ public sealed class QuoteController(
 
         if (IsPrototypeUpload(existingUpload))
         {
-            var prototypeUpload = store.MarkAnalyzed(uploadId);
+            var prototypeUpload = await uploadStore.MarkAnalyzedAsync(uploadId, cancellationToken);
             return Ok(new CompleteQuoteUploadResponse(
                 prototypeUpload.UploadId, prototypeUpload.FileId, prototypeUpload.FileName,
                 prototypeUpload.StoragePath, prototypeUpload.Status));
         }
 
-        // Real pipeline: mark as Processing and wait for geometry events via MassTransit
-        var upload = store.MarkProcessing(uploadId);
+        QuoteUploadMetadata? completedMetadata;
+        try
+        {
+            completedMetadata = await uploadClient.GetCompletedFileMetadataAsync(
+                existingUpload.DownstreamUploadId!,
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Unable to verify completed UploadService metadata for quote upload {UploadId}.", uploadId);
+            return StatusCode(502, new ProblemDetails { Title = "Upload completion could not be verified." });
+        }
+
+        if (!QuoteUploadMetadataValidator.TryValidateCompletedUpload(
+                existingUpload,
+                completedMetadata,
+                out var canonicalFileId))
+        {
+            logger.LogError(
+                "UploadService completed metadata did not match quote upload {UploadId}.",
+                uploadId);
+            return StatusCode(502, new ProblemDetails { Title = "Upload completion could not be verified." });
+        }
+
+        // Real pipeline: only authoritative UploadService completion may enter geometry processing.
+        var upload = await uploadStore.MarkProcessingAsync(uploadId, canonicalFileId, cancellationToken);
         await statusService.SetProcessingAsync(upload.StoragePath, cancellationToken);
 
         return Ok(new CompleteQuoteUploadResponse(
@@ -451,7 +501,11 @@ public sealed class QuoteController(
             : (Guid?)null;
         var visitor = anonymousVisitorCookie.ResolveForRequest(HttpContext);
 
-        return Ok(store.ImportHandoff(canonicalRequest, customerId, visitor.VisitorId));
+        return Ok(await uploadStore.ImportHandoffAsync(
+            canonicalRequest,
+            customerId,
+            visitor.VisitorId,
+            cancellationToken));
     }
 
     private static bool TryBuildCanonicalHandoffFile(
@@ -515,7 +569,7 @@ public sealed class QuoteController(
         string uploadId,
         CancellationToken cancellationToken)
     {
-        var upload = store.GetUpload(uploadId);
+        var upload = await uploadStore.GetAsync(uploadId, cancellationToken);
         if (upload is null || !CanAccessUpload(upload))
         {
             return EmptyNotFound();
