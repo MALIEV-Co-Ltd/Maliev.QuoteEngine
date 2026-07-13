@@ -22,7 +22,7 @@ public sealed class AnalysisNotificationRevisionTracker
 
     /// <summary>
     /// Returns whether the notification should update client state.
-    /// Unversioned notifications remain compatible and are always accepted.
+    /// Unversioned notifications remain compatible only until a versioned baseline is observed.
     /// </summary>
     public bool ShouldApply(
         string storagePath,
@@ -32,18 +32,11 @@ public sealed class AnalysisNotificationRevisionTracker
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(storagePath);
 
-        if (revision <= 0)
-        {
-            return true;
-        }
-
         lock (_gate)
         {
-            if (!_cursors.TryGetValue(stream, out var streamCursors))
-            {
-                streamCursors = new Dictionary<string, NotificationCursor>(StringComparer.OrdinalIgnoreCase);
-                _cursors.Add(stream, streamCursors);
-            }
+            var streamCursors = GetOrCreateStream(stream);
+            if (revision <= 0)
+                return !streamCursors.ContainsKey(storagePath);
 
             if (streamCursors.TryGetValue(storagePath, out var current))
             {
@@ -61,6 +54,36 @@ public sealed class AnalysisNotificationRevisionTracker
             streamCursors[storagePath] = new NotificationCursor(revision, eventId);
             return true;
         }
+    }
+
+    /// <summary>
+    /// Seeds both analysis streams from an authoritative hydrated status snapshot.
+    /// </summary>
+    public void Seed(string storagePath, long revision)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(storagePath);
+        if (revision <= 0)
+            return;
+
+        lock (_gate)
+        {
+            foreach (var stream in Enum.GetValues<AnalysisNotificationStream>())
+            {
+                var cursors = GetOrCreateStream(stream);
+                if (!cursors.TryGetValue(storagePath, out var current) || revision > current.Revision)
+                    cursors[storagePath] = new NotificationCursor(revision, null);
+            }
+        }
+    }
+
+    private Dictionary<string, NotificationCursor> GetOrCreateStream(AnalysisNotificationStream stream)
+    {
+        if (_cursors.TryGetValue(stream, out var streamCursors))
+            return streamCursors;
+
+        streamCursors = new Dictionary<string, NotificationCursor>(StringComparer.OrdinalIgnoreCase);
+        _cursors.Add(stream, streamCursors);
+        return streamCursors;
     }
 
     private sealed record NotificationCursor(long Revision, Guid? EventId);

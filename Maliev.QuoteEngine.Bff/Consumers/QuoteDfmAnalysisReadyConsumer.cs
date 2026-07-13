@@ -36,15 +36,6 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
             return;
         }
 
-        if (!await status.CanApplyDfmEventAsync(
-                storagePath,
-                payload.FileId,
-                context.Message.MessageId,
-                context.CancellationToken))
-        {
-            return;
-        }
-
         // Map MessagingContracts object fields → typed QE report records
         var fdmReport = MapFdm(payload.FdmReport);
         var slaReport = MapSla(payload.SlaReport);
@@ -54,56 +45,141 @@ public sealed class QuoteDfmAnalysisReadyConsumer(
             logger.LogWarning("DfmAnalysisReadyEvent contained no valid reports for {StoragePath}; skipping", storagePath);
             return;
         }
-        RecordServerDfmReports(fdmReport, slaReport, cncReport, bffMetrics);
+        var claim = await status.ClaimDfmEventAsync(
+            storagePath,
+            payload.FileId,
+            context.Message.MessageId,
+            context.CancellationToken);
+        if (claim.Disposition == QuoteAnalysisClaimDisposition.DuplicateOrStale)
+            return;
 
-        // Sign overlay GLB paths in parallel; silently skip on error (analysis still usable)
-        var rawOverlayPaths = ExtractStringList(payload.OverlayPaths);
-        IReadOnlyList<string> overlayUrls = [];
-        if (rawOverlayPaths.Count > 0)
+        try
+        {
+            if (claim.Disposition == QuoteAnalysisClaimDisposition.PendingNotification)
+            {
+                await SendPendingNotificationAsync(status, claim, hub, context.CancellationToken);
+                return;
+            }
+
+            await EnsureClaimAsync(status, claim, context.CancellationToken);
+            var rawOverlayPaths = ExtractStringList(payload.OverlayPaths);
+            IReadOnlyList<string> overlayUrls = [];
+            if (rawOverlayPaths.Count > 0)
+            {
+                try
+                {
+                    overlayUrls = await Task.WhenAll(
+                        rawOverlayPaths.Select(p =>
+                            uploadClient.GetDownloadUrlByPathAsync(p, ct: context.CancellationToken)));
+                }
+                catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to sign overlay URLs for {StoragePath}", storagePath);
+                    throw new QuoteAnalysisPreviewSigningException(storagePath, ex);
+                }
+            }
+
+            await EnsureClaimAsync(status, claim, context.CancellationToken);
+            var finalized = await status.FinalizeDfmAnalysisAsync(
+                claim,
+                new QuoteDfmAnalysisUpdate(
+                    fdmReport,
+                    slaReport,
+                    cncReport,
+                    overlayUrls,
+                    payload.NonManifoldReason,
+                    null,
+                    payload.FileId,
+                    context.Message.MessageId,
+                    context.Message.OccurredAtUtc,
+                    payload.AnalyzedAt,
+                    payload.BodyCount),
+                context.CancellationToken);
+            if (!finalized.Applied || finalized.Snapshot is null)
+                return;
+
+            RecordServerDfmReports(fdmReport, slaReport, cncReport, bffMetrics);
+            await SendNotificationAsync(
+                status,
+                claim,
+                finalized.Revision,
+                finalized.Snapshot,
+                hub,
+                context.CancellationToken);
+        }
+        finally
         {
             try
             {
-                overlayUrls = await Task.WhenAll(
-                    rawOverlayPaths.Select(p =>
-                        uploadClient.GetDownloadUrlByPathAsync(p, ct: context.CancellationToken)));
-            }
-            catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
-            {
-                throw;
+                await status.ReleaseAnalysisClaimAsync(claim, CancellationToken.None);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Failed to sign overlay URLs for {StoragePath}", storagePath);
+                logger.LogWarning(ex, "Failed to release the DFM analysis claim for {StoragePath}", storagePath);
             }
         }
+    }
 
-        // Merge into status cache — prior reports from other process events survive
-        await status.SetDfmReportsAsync(
-            storagePath, fdmReport, slaReport, cncReport,
-            overlayUrls, payload.NonManifoldReason, null,
-            context.CancellationToken,
-            payload.FileId,
-            context.Message.MessageId,
-            context.Message.OccurredAtUtc,
-            payload.AnalyzedAt,
-            payload.BodyCount);
+    private static Task SendPendingNotificationAsync(
+        IQuoteFileAnalysisStatusService status,
+        QuoteAnalysisEventClaim claim,
+        IHubContext<QuoteNotificationsHub> hub,
+        CancellationToken ct) =>
+        claim.Snapshot is null || claim.Revision is null
+            ? throw new InvalidOperationException("The pending DFM notification is incomplete.")
+            : SendNotificationAsync(status, claim, claim.Revision.Value, claim.Snapshot, hub, ct);
 
-        // Read back the merged state so the SignalR payload reflects all events received so far
-        var merged = await status.GetStatusAsync(storagePath, context.CancellationToken);
-
+    private static async Task SendNotificationAsync(
+        IQuoteFileAnalysisStatusService status,
+        QuoteAnalysisEventClaim claim,
+        long revision,
+        QuoteFileAnalysisStatus snapshot,
+        IHubContext<QuoteNotificationsHub> hub,
+        CancellationToken ct)
+    {
+        await EnsureClaimAsync(status, claim, ct);
         var signalRPayload = new QeDfmAnalysisReadyPayload(
-            StoragePath: storagePath,
-            IsManifold: merged?.IsManifold ?? true,
-            NonManifoldReason: payload.NonManifoldReason,
-            FdmReport: merged?.FdmReport,
-            SlaReport: merged?.SlaReport,
-            CncReport: merged?.CncReport,
-            OverlayGlbUrls: merged?.OverlayGlbUrls ?? [],
-            AnalysisErrorCode: null);
+            StoragePath: claim.StoragePath,
+            IsManifold: snapshot.IsManifold,
+            NonManifoldReason: snapshot.NonManifoldReason,
+            FdmReport: snapshot.FdmReport,
+            SlaReport: snapshot.SlaReport,
+            CncReport: snapshot.CncReport,
+            OverlayGlbUrls: snapshot.OverlayGlbUrls,
+            AnalysisErrorCode: snapshot.AnalysisErrorCode,
+            EventId: claim.EventId,
+            Revision: revision);
+        try
+        {
+            await hub.Clients
+                .Group(QuoteNotificationsHub.FileGroup(claim.StoragePath))
+                .SendAsync("DfmAnalysisReady", signalRPayload, ct);
+            await status.MarkAnalysisNotificationDispatchedAsync(claim, revision, ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            throw new QuoteAnalysisNotificationDeliveryException(
+                claim.StoragePath,
+                claim.EventId,
+                ex);
+        }
+    }
 
-        await hub.Clients
-            .Group(QuoteNotificationsHub.FileGroup(storagePath))
-            .SendAsync("DfmAnalysisReady", signalRPayload, context.CancellationToken);
+    private static async Task EnsureClaimAsync(
+        IQuoteFileAnalysisStatusService status,
+        QuoteAnalysisEventClaim claim,
+        CancellationToken ct)
+    {
+        if (!await status.RenewAnalysisClaimAsync(claim, ct))
+            throw new QuoteAnalysisClaimLostException(claim.StoragePath, claim.EventId);
     }
 
     // ── Mapping helpers ──────────────────────────────────────────────────────

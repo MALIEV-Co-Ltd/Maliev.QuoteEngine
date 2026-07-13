@@ -2145,6 +2145,7 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
         Assert.False(status.IsAuthoritative);
         Assert.True(status.HasAdvisoryAnalysis);
         Assert.Equal("browser_local_advisory", status.AdvisoryAnalysisSource);
+        Assert.True(status.AnalysisRevision > 0);
     }
 
     [Fact]

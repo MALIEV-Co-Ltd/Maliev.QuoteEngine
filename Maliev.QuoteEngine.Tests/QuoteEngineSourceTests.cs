@@ -368,6 +368,24 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
+    public void QuoteAnalysisStatusResponse_round_trip_exposes_revision_cursor()
+    {
+        var response = new QuoteAnalysisStatusResponse
+        {
+            UploadId = "upload-123",
+            StoragePath = "quotes/temp/s/u/part.step",
+            AnalysisRevision = 42
+        };
+
+        var json = JsonSerializer.Serialize(response);
+        var deserialized = JsonSerializer.Deserialize<QuoteAnalysisStatusResponse>(json);
+
+        Assert.Contains("\"AnalysisRevision\":42", json, StringComparison.Ordinal);
+        Assert.NotNull(deserialized);
+        Assert.Equal(42, deserialized.AnalysisRevision);
+    }
+
+    [Fact]
     public void QeLocalDfmMapper_accepts_matching_browser_result_and_populates_current_report()
     {
         var part = new QuotePartViewModel
@@ -4287,7 +4305,7 @@ public sealed class QuoteEngineSourceTests
     }
 
     [Fact]
-    public async Task FileAnalyzedConsumer_url_signing_failure_marks_failed_and_still_pushes_GlbReady()
+    public async Task FileAnalyzedConsumer_url_signing_failure_is_retryable_and_does_not_mark_analysis_failed()
     {
         var statusSvc = new QuoteFileAnalysisStatusService();
         var uploadClient = new ThrowingQuoteUploadServiceClient();
@@ -4308,24 +4326,15 @@ public sealed class QuoteEngineSourceTests
         consumeCtx.Message.Returns(@event);
         consumeCtx.CancellationToken.Returns(CancellationToken.None);
 
-        await consumer.Consume(consumeCtx);
+        await Assert.ThrowsAsync<QuoteAnalysisPreviewSigningException>(() => consumer.Consume(consumeCtx));
 
         var stored = await statusSvc.GetStatusAsync("quotes/s/u/p.step");
-        Assert.Equal("Failed", stored!.Status);
-        Assert.Equal("GlbSigningFailed", stored.AnalysisErrorCode);
+        Assert.Null(stored);
 
-        // Assert — hub still called with Failed=true payload
         var calls = hubGroup.ReceivedCalls()
             .Where(c => c.GetMethodInfo().Name == "SendCoreAsync")
             .ToList();
-        Assert.Single(calls);
-        var args = calls[0].GetArguments();
-        Assert.Equal("GlbReady", args[0]);
-        var payloadArgs = (object?[])args[1]!;
-        var glbPayload = Assert.IsType<QeGlbReadyPayload>(payloadArgs[0]);
-        Assert.True(glbPayload.Failed);
-        Assert.Equal("GlbSigningFailed", glbPayload.ErrorCode);
-        Assert.Equal("", glbPayload.GlbUrl);  // empty string per contract when Failed=true
+        Assert.Empty(calls);
     }
 
     [Fact]

@@ -16,6 +16,33 @@ public sealed class AnalysisNotificationRevisionTrackerTests
     }
 
     [Fact]
+    public void ShouldApply_LegacyNotification_IsRejectedAfterVersionedBaseline()
+    {
+        var tracker = new AnalysisNotificationRevisionTracker();
+        Assert.True(tracker.ShouldApply(
+            StoragePath, AnalysisNotificationStream.GlbReady, Guid.NewGuid(), 4));
+
+        Assert.False(tracker.ShouldApply(
+            StoragePath, AnalysisNotificationStream.GlbReady, Guid.NewGuid(), 0));
+    }
+
+    [Fact]
+    public void Seed_HydratedRevisionProtectsBothStreamsFromDelayedNotifications()
+    {
+        var tracker = new AnalysisNotificationRevisionTracker();
+        tracker.Seed(StoragePath, 8);
+
+        Assert.False(tracker.ShouldApply(
+            StoragePath, AnalysisNotificationStream.GlbReady, Guid.NewGuid(), 7));
+        Assert.False(tracker.ShouldApply(
+            StoragePath, AnalysisNotificationStream.DfmAnalysisReady, Guid.NewGuid(), 8));
+        Assert.False(tracker.ShouldApply(
+            StoragePath, AnalysisNotificationStream.GlbReady, Guid.NewGuid(), 0));
+        Assert.True(tracker.ShouldApply(
+            StoragePath, AnalysisNotificationStream.DfmAnalysisReady, Guid.NewGuid(), 9));
+    }
+
+    [Fact]
     public void ShouldApply_RevisedNotifications_AcceptsOnlyStrictlyNewerRevision()
     {
         var tracker = new AnalysisNotificationRevisionTracker();

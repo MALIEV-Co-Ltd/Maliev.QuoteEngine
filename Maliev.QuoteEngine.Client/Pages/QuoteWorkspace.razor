@@ -1517,8 +1517,13 @@
         await TryApplyLocalViewerUrlAsync(part);
     }
 
-    private static void ApplyAnalysisStatus(QuotePartViewModel part, QuoteAnalysisStatusResponse status)
+    private void ApplyAnalysisStatus(QuotePartViewModel part, QuoteAnalysisStatusResponse status)
     {
+        var storagePath = string.IsNullOrWhiteSpace(part.StoragePath)
+            ? status.StoragePath
+            : part.StoragePath;
+        if (!string.IsNullOrWhiteSpace(storagePath))
+            _analysisNotificationRevisions.Seed(storagePath, status.AnalysisRevision);
         QeLocalDfmMapper.ApplyAnalysisStatus(part, status);
     }
 
