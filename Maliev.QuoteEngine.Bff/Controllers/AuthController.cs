@@ -65,6 +65,7 @@ public sealed class AuthController(
     public new async Task<IActionResult> SignOut()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        DeleteGoogleDriveFlowCookie();
         return NoContent();
     }
 
@@ -274,6 +275,7 @@ public sealed class AuthController(
 
     private async Task SignInCustomerAsync(AuthUser user)
     {
+        DeleteGoogleDriveFlowCookie();
         var principalId = user.PrincipalId ?? user.UserId;
         var claims = new List<Claim>
         {
@@ -317,6 +319,18 @@ public sealed class AuthController(
                 IsPersistent = true,
                 ExpiresUtc = DateTimeOffset.UtcNow.AddDays(14)
             });
+    }
+
+    private void DeleteGoogleDriveFlowCookie()
+    {
+        Response.Cookies.Delete(GoogleDriveOAuthFlow.CookieName, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Lax,
+            IsEssential = true,
+            Path = GoogleDriveOAuthFlow.CookiePath
+        });
     }
 
     private string NormalizeReturnUrl(string? returnUrl)

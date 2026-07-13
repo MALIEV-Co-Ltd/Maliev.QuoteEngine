@@ -1,5 +1,6 @@
 using DotNet.Testcontainers.Configurations;
 using Maliev.QuoteEngine.Bff.Services;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging.Abstractions;
 using StackExchange.Redis;
 using Testcontainers.Redis;
@@ -194,5 +195,72 @@ public sealed class QuoteAgentRedisConversationMapTests : IAsyncLifetime
             $"quote-agent:conversation-map:{quoteSessionId:D}");
         Assert.NotNull(timeToLive);
         Assert.InRange(timeToLive.Value, TimeSpan.FromDays(364), TimeSpan.FromDays(365));
+    }
+
+    [Fact]
+    public async Task Google_drive_oauth_state_is_encrypted_binding_scoped_and_atomically_consumed_once()
+    {
+        await using var connection = await ConnectionMultiplexer.ConnectAsync(_redis.GetConnectionString());
+        var dataProtection = new EphemeralDataProtectionProvider();
+        var firstStore = new RedisGoogleDriveOAuthStateStore(
+            connection,
+            dataProtection,
+            TimeProvider.System,
+            NullLogger<RedisGoogleDriveOAuthStateStore>.Instance);
+        var secondStore = new RedisGoogleDriveOAuthStateStore(
+            connection,
+            dataProtection,
+            TimeProvider.System,
+            NullLogger<RedisGoogleDriveOAuthStateStore>.Instance);
+        var state = new GoogleDriveOAuthState(
+            $"state-{Guid.NewGuid():N}",
+            Guid.NewGuid(),
+            $"principal-{Guid.NewGuid():N}",
+            $"browser-{Guid.NewGuid():N}",
+            $"verifier-{Guid.NewGuid():N}",
+            "https://make.maliev.com/auth/google/drive/callback",
+            "/quotes",
+            DateTimeOffset.UtcNow.AddMinutes(5));
+
+        await firstStore.SaveAsync(state, CancellationToken.None);
+
+        var server = connection.GetServer(connection.GetEndPoints().Single());
+        var key = Assert.Single(server.Keys(pattern: $"quote:oauth:google-drive:{state.Nonce}:*"));
+        var database = connection.GetDatabase();
+        var protectedValue = await database.StringGetAsync(key);
+        Assert.True(protectedValue.HasValue);
+        Assert.DoesNotContain(state.CodeVerifier, protectedValue.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(state.PrincipalId, protectedValue.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain(state.ReturnUrl, protectedValue.ToString(), StringComparison.Ordinal);
+        var timeToLive = await database.KeyTimeToLiveAsync(key);
+        Assert.NotNull(timeToLive);
+        Assert.InRange(timeToLive.Value, TimeSpan.FromMinutes(4), TimeSpan.FromMinutes(5));
+
+        var mismatched = await firstStore.ConsumeAsync(
+            state.Nonce,
+            state.CustomerId,
+            state.PrincipalId,
+            "different-browser-binding",
+            CancellationToken.None);
+        Assert.Null(mismatched);
+        Assert.True(await database.KeyExistsAsync(key));
+
+        var results = await Task.WhenAll(
+            firstStore.ConsumeAsync(
+                state.Nonce,
+                state.CustomerId,
+                state.PrincipalId,
+                state.BrowserSecretHash,
+                CancellationToken.None),
+            secondStore.ConsumeAsync(
+                state.Nonce,
+                state.CustomerId,
+                state.PrincipalId,
+                state.BrowserSecretHash,
+                CancellationToken.None));
+
+        Assert.Single(results, result => result is not null);
+        Assert.Equal(state, results.Single(result => result is not null));
+        Assert.False(await database.KeyExistsAsync(key));
     }
 }
