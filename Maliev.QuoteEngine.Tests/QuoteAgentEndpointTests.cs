@@ -9048,6 +9048,8 @@ Customer message:
         services.AddSingleton<IGoogleDriveConnectorStore, InMemoryGoogleDriveConnectorStore>();
         services.RemoveAll<IGoogleDriveOAuthStateStore>();
         services.AddSingleton<IGoogleDriveOAuthStateStore, InMemoryGoogleDriveOAuthStateStore>();
+        services.RemoveAll<IQuoteFileAnalysisStatusService>();
+        services.AddSingleton<IQuoteFileAnalysisStatusService, QuoteFileAnalysisStatusService>();
     }
 
     private async Task<Guid> StartPricedCadSessionAsync(

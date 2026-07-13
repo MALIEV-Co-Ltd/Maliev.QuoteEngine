@@ -356,8 +356,7 @@ builder.Services.AddSingleton<GeometryRuntimeFallbackProvider>();
 builder.Services.Configure<DemoModeOptions>(
     builder.Configuration.GetSection(DemoModeOptions.Section));
 
-// In-memory file analysis status cache (keyed by storagePath; Redis-upgradable)
-builder.Services.AddSingleton<IQuoteFileAnalysisStatusService, QuoteFileAnalysisStatusService>();
+builder.Services.AddQuoteFileAnalysisStatus();
 
 // UploadService HTTP client (Aspire service discovery)
 builder.Services.AddHttpClient<QuoteUploadServiceClient>(client =>
@@ -389,7 +388,8 @@ builder.AddMassTransitWithRabbitMq(
     {
         cfg.ReceiveEndpoint("quote-engine-geometry-analysis-v1", e =>
         {
-            // The in-process status reservation is sequential; Redis-backed cross-pod idempotency is a later slice.
+            // Status snapshots are now distributed, but consumer pre-checks and downstream side effects are not
+            // one atomic Redis claim. Keep this queue sequential and HPA disabled until that follow-up is complete.
             e.ConcurrentMessageLimit = 1;
             e.ConfigureConsumeTopology = false;
             e.ConfigureConsumer<QuoteFileMetricsReadyConsumer>(context);
