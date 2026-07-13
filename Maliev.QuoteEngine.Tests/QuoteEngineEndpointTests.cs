@@ -2148,6 +2148,41 @@ public sealed class QuoteEngineEndpointTests(QuoteEngineWebApplicationFactory fa
     }
 
     [Fact]
+    public async Task GeometryRuntime_telemetry_cannot_write_metrics_for_another_visitors_upload()
+    {
+        using var ownerClient = factory.CreateClient();
+        using var attackerClient = factory.CreateClient();
+        var initResponse = await ownerClient.PostAsJsonAsync("/quote/v1/uploads/resumable", new InitiateQuoteUploadRequest
+        {
+            QuoteSessionId = Guid.NewGuid().ToString("D"),
+            FileName = "owner-only.stl",
+            ContentType = "model/stl",
+            FileSizeBytes = 12
+        });
+        initResponse.EnsureSuccessStatusCode();
+        var upload = await initResponse.Content.ReadFromJsonAsync<InitiateQuoteUploadResponse>();
+        Assert.NotNull(upload);
+
+        var telemetryResponse = await attackerClient.PostAsJsonAsync(
+            "/quote/v1/geometry/runtime/telemetry",
+            new
+            {
+                storagePath = upload.StoragePath,
+                processCode = "CNC_MILL",
+                authority = "local_primary",
+                executionMode = "primary_interactive",
+                accepted = true,
+                metrics = new { volumeMm3 = 12_500, surfaceAreaMm2 = 6_200, isManifold = true }
+            });
+
+        Assert.Equal(HttpStatusCode.NotFound, telemetryResponse.StatusCode);
+        var status = await ownerClient.GetFromJsonAsync<QuoteAnalysisStatusResponse>(
+            $"/quote/v1/uploads/{upload.UploadId}/analysis-status");
+        Assert.NotNull(status);
+        Assert.False(status.HasAdvisoryAnalysis);
+    }
+
+    [Fact]
     public async Task GeometryRuntime_telemetry_accepts_browser_local_terminal_unavailable_without_auth()
     {
         using var client = factory.CreateClient();
