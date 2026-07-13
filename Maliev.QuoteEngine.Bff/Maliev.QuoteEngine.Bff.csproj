@@ -23,9 +23,12 @@
   <ItemGroup>
     <PackageReference Include="MassTransit" Version="8.5.8" />
     <PackageReference Include="MassTransit.RabbitMQ" Version="8.5.8" />
+    <!-- SignalR Redis 10.0.7 permits MessagePack 2.5.187, which is vulnerable; stay on the patched 2.x line. -->
+    <PackageReference Include="MessagePack" Version="2.5.302" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.7" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.7" />
     <PackageReference Include="Microsoft.AspNetCore.DataProtection.StackExchangeRedis" Version="10.0.7" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="10.0.7" />
   </ItemGroup>
 
   <ItemGroup>

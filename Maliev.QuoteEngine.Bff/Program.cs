@@ -45,7 +45,7 @@ else if (!builder.Environment.IsDevelopment() &&
 }
 
 builder.Services.AddControllers();
-builder.Services.AddSignalR();
+builder.Services.AddQuoteEngineSignalR(builder.Configuration);
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton(TimeProvider.System);
