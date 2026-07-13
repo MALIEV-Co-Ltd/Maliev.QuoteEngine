@@ -1,0 +1,24 @@
+# Keep the Docker build context limited to production source and restore inputs.
+**
+!Directory.Build.props
+!nuget.config
+!Maliev.QuoteEngine.Bff/
+!Maliev.QuoteEngine.Bff/**
+!Maliev.QuoteEngine.Client/
+!Maliev.QuoteEngine.Client/**
+!Maliev.QuoteEngine.Shared/
+!Maliev.QuoteEngine.Shared/**
+
+# Local/generated output must never enter the build context.
+**/bin/
+**/obj/
+**/node_modules/
+**/.vs/
+**/.idea/
+**/.vscode/
+**/*.user
+**/*.suo
+**/*.nupkg
+**/*.snupkg
+**/TestResults/
+Maliev.QuoteEngine.Bff/Dockerfile
