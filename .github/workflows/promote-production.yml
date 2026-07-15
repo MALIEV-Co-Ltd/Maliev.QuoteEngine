@@ -81,7 +81,7 @@ jobs:
             done
           )"
           grep -Fxq 'https://spdx.dev/Document' <<<"${source_predicates}"
-          grep -Fxq 'https://slsa.dev/provenance/v0.2' <<<"${source_predicates}"
+          grep -Fxq 'https://slsa.dev/provenance/v1' <<<"${source_predicates}"
           crane copy "${STAGING_IMAGE}@${staging_digest}" "${PRODUCTION_IMAGE}:${RELEASE_VERSION}"
           test "$(crane digest "${PRODUCTION_IMAGE}:${RELEASE_VERSION}")" = "$staging_digest"
 
