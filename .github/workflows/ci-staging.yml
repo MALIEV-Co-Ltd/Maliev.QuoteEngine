@@ -9,4 +9,7 @@ jobs:
   build-and-test:
     uses: ./.github/workflows/_build-and-test.yml
     with:
+      nuget_username: ${{ vars.NUGET_READ_USERNAME }}
       solution_file: Maliev.QuoteEngine.slnx
+    secrets:
+      nuget_read_token: ${{ secrets.NUGET_READ_TOKEN }}

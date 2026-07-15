@@ -1,6 +1,7 @@
 <Project>
   <PropertyGroup>
-    <SharedLibraryVersion Condition="'$(SharedLibraryVersion)' == ''">1.0.*-alpha*</SharedLibraryVersion>
+    <AspireServiceDefaultsVersion Condition="'$(AspireServiceDefaultsVersion)' == ''">1.0.83-alpha</AspireServiceDefaultsVersion>
+    <MessagingContractsVersion Condition="'$(MessagingContractsVersion)' == ''">1.0.93-alpha</MessagingContractsVersion>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

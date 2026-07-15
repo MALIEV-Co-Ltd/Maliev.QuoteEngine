@@ -11,18 +11,21 @@ concurrency:
 
 permissions:
   contents: read
-  packages: read
 
 jobs:
   build-and-test:
     uses: ./.github/workflows/_build-and-test.yml
     with:
+      nuget_username: ${{ vars.NUGET_READ_USERNAME }}
       solution_file: Maliev.QuoteEngine.slnx
+    secrets:
+      nuget_read_token: ${{ secrets.NUGET_READ_TOKEN }}
 
   publish-development-image:
     name: Publish immutable development image
     needs: build-and-test
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     permissions:
       contents: read
       id-token: write
@@ -33,8 +36,8 @@ jobs:
     steps:
       - name: Require WIF publication configuration
         env:
-          WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          WIF_SERVICE_ACCOUNT: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          WIF_PROVIDER: ${{ vars.GCP_DEVELOPMENT_WORKLOAD_IDENTITY_PROVIDER }}
+          WIF_SERVICE_ACCOUNT: ${{ vars.GCP_DEVELOPMENT_SERVICE_ACCOUNT }}
         run: |
           test -n "$WIF_PROVIDER"
           test -n "$WIF_SERVICE_ACCOUNT"
@@ -50,8 +53,8 @@ jobs:
       - name: Authenticate to Google Cloud with WIF
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
-          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_DEVELOPMENT_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEVELOPMENT_SERVICE_ACCOUNT }}
 
       - name: Configure Artifact Registry authentication
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
@@ -80,8 +83,8 @@ jobs:
           provenance: mode=max
           sbom: true
           secrets: |
-            nuget_username=${{ github.actor }}
-            nuget_password=${{ github.token }}
+            nuget_username=${{ vars.NUGET_READ_USERNAME }}
+            nuget_password=${{ secrets.NUGET_READ_TOKEN }}
 
       - name: Scan the published digest
         run: |
@@ -98,8 +101,20 @@ jobs:
         env:
           IMAGE_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" --raw \
-            | jq -e '[.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest")] | length >= 2'
+          set -euo pipefail
+          mapfile -t attestation_digests < <(
+            docker buildx imagetools inspect "${IMAGE}@${IMAGE_DIGEST}" --raw \
+              | jq -er '.manifests[] | select(.annotations["vnd.docker.reference.type"] == "attestation-manifest") | .digest'
+          )
+          test "${#attestation_digests[@]}" -gt 0
+          predicates="$(
+            for attestation_digest in "${attestation_digests[@]}"; do
+              docker buildx imagetools inspect "${IMAGE}@${attestation_digest}" --raw \
+                | jq -er '.layers[] | select(.mediaType == "application/vnd.in-toto+json") | .annotations["in-toto.io/predicate-type"]'
+            done
+          )"
+          grep -Fxq 'https://spdx.dev/Document' <<<"${predicates}"
+          grep -Fxq 'https://slsa.dev/provenance/v0.2' <<<"${predicates}"
 
       - name: Checkout disabled GitOps definition
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
